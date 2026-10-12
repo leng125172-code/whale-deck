@@ -66,10 +66,11 @@ def main() -> int:
         raise RuntimeError("The disposable ordinary user unexpectedly has management rights")
     if ordinary.get(endpoint, timeout=20, allow_redirects=False).status_code != 403:
         raise RuntimeError("Ordinary users can read process statistics")
-    for client in (anonymous, ordinary):
+    for kind, client in (("anonymous", anonymous), ("ordinary", ordinary)):
         for path in ("/openapi/v1.json", "/swagger/index.html"):
-            if client.get(f"{base}{path}", timeout=20, allow_redirects=False).status_code not in {401, 403}:
-                raise RuntimeError("Production debug documentation is accessible without administrator rights")
+            denied = client.get(f"{base}{path}", timeout=20, allow_redirects=False)
+            if denied.status_code not in {401, 403}:
+                raise RuntimeError(f"Unexpected debug access result: {kind} {path} HTTP {denied.status_code}")
     print(f"Host process validation passed: {page['total']} processes, real Agent PID, CPU/memory ordering, pinned identity, administrator-only OpenAPI/Swagger and anonymous/ordinary-user denial")
     return 0
 
