@@ -26,7 +26,7 @@ KEY = Path('/etc/whaledeck/agent-capability.key')
 CONFIGURATION = ('compose.yml', '.env', 'manifest.json')
 MAX_FILES = 200_000
 MAX_BYTES = 100 * 1024**3
-SLUG = re.compile(r'[a-z0-9][a-z0-9-]{0,47}\Z')
+SLUG = re.compile(r'[a-z0-9][a-z0-9-]{0,62}\Z')
 IDENTIFIER = re.compile(r'[a-f0-9]{64}\Z')
 JOB = re.compile(r'[a-f0-9]{32}\Z')
 

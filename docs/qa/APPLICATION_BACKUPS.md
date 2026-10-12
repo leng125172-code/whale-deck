@@ -29,6 +29,8 @@
 
 `python3 -m unittest discover -s tests -p test_application_backup_helper.py -v` 使用临时目录和 fake Engine，不调用真实 Docker 或 root helper。Windows 不支持的 POSIX symlink/flock 检查必须在 Linux 补测，不能把跳过记为通过。真实归档闭环仍待完成。
 
+2026-10-13 首轮 Linux 工作站隔离检查 16 项全部通过，包含真实 POSIX flock 和 symlink 检查；Windows 对应为 14 项通过、2 项跳过。测试只使用临时目录和 fake Engine，未安装 helper，未暂停或重建任何现有容器。之后对齐注册应用的 63 字符 slug 上限，新增对应边界检查，最终版本仍须重跑此命令。
+
 GLM Flash 仅定位公开源码。其“手动备份没有 BackupRecord”的结论与当前 `JobRepository.EnqueueAsync` 不符，已由 GPT 直接核实并拒绝采用；实现和安全边界均由 GPT 负责。
 
 本轮只读外援计量：`glm-5.3-flash`，一次成功、无重试，输入 1084105 Tokens（缓存命中 1024704），输出 6315，耗时 187897ms。资源包实际扣费未由响应返回，不记作 0；路由器已保存原始计量。

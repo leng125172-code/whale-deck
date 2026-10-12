@@ -88,6 +88,11 @@ class BackupHelperTests(unittest.TestCase):
         (self.config / '.env').write_text('KEY=changed')
         self.assertNotEqual(planned['fingerprint'], backup.plan('demo', 'quiesced')['fingerprint'])
 
+    def test_slug_bounds_match_registered_application_limits(self):
+        self.assertIsNotNone(backup.SLUG.fullmatch('a' * 63))
+        for value in ('a' * 64, '../demo', '/demo', 'Demo', 'demo_key', 'demo\n'):
+            self.assertIsNone(backup.SLUG.fullmatch(value))
+
     def test_archive_includes_configuration_bind_and_named_volume_and_resumes(self):
         planned = backup.plan('demo', 'quiesced')
         result = backup.run('demo', 'c' * 32, 'quiesced', planned['fingerprint'])
