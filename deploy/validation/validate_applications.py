@@ -7,6 +7,7 @@ import os
 import secrets
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 
 from validate_databases import Api
 from validate_oidc import authenticate, required_environment
@@ -26,6 +27,13 @@ def is_installed(api: Api, slug: str) -> bool:
     return any(item.get("id") == expected for item in list_applications(api))
 
 
+def current_maintenance_window() -> str:
+    day = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][
+        datetime.now(timezone(timedelta(hours=8))).weekday()
+    ]
+    return f"{day}@00:00-23:59"
+
+
 def main() -> int:
     base_url = os.environ.get("WHALEDECK_URL", "http://192.168.100.13:8080").rstrip("/")
     session, _ = authenticate(
@@ -41,7 +49,12 @@ def main() -> int:
         api.run(
             "install",
             "",
-            {"slug": slug, "image": "alpine:3.22", "autoupdate": "true"},
+            {
+                "slug": slug,
+                "image": "alpine:3.22",
+                "autoupdate": "true",
+                "maintenanceWindow": current_maintenance_window(),
+            },
             area="applications",
             confirmed=True,
             requires_plan=True,
