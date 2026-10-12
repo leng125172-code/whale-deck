@@ -129,25 +129,11 @@ try
     app.UseRateLimiter();
     app.UseAuthentication();
     app.Use(SameOriginWriteProtection.InvokeAsync);
+    // Run before authorization's OIDC challenge so debug clients receive a
+    // deterministic denial rather than following redirects to identity pages.
+    if (!app.Environment.IsDevelopment()) app.Use(DebugDocumentationProtection.InvokeAsync);
     app.UseAuthorization();
     app.UseAntiforgery();
-
-    if (!app.Environment.IsDevelopment())
-    {
-        app.Use(async (context, next) =>
-        {
-            if (context.Request.Path.StartsWithSegments("/swagger"))
-            {
-                var service = context.RequestServices.GetRequiredService<IAuthorizationService>();
-                if (!(await service.AuthorizeAsync(context.User, "Administrator")).Succeeded)
-                {
-                    await context.ChallengeAsync();
-                    return;
-                }
-            }
-            await next();
-        });
-    }
 
     app.UseSwaggerUI(options =>
     {
