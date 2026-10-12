@@ -93,6 +93,16 @@ class BackupHelperTests(unittest.TestCase):
         for value in ('a' * 64, '../demo', '/demo', 'Demo', 'demo_key', 'demo\n'):
             self.assertIsNone(backup.SLUG.fullmatch(value))
 
+    def test_cli_quiesce_requires_exact_job_specific_systemd_cgroup(self):
+        job = '4' * 32
+        self.assertTrue(backup.approved_service(job,
+            '0::/system.slice/whaledeck-application-backup-' + job + '.service'))
+        for cgroup in ('0::/user.slice/session.scope',
+            '0::/system.slice/whaledeck-application-backup-' + '5' * 32 + '.service',
+            '0::/system.slice/prefix-whaledeck-application-backup-' + job + '.service',
+            'malformed'):
+            self.assertFalse(backup.approved_service(job, cgroup))
+
     def test_archive_includes_configuration_bind_and_named_volume_and_resumes(self):
         planned = backup.plan('demo', 'quiesced')
         result = backup.run('demo', 'c' * 32, 'quiesced', planned['fingerprint'])

@@ -389,12 +389,21 @@ def run(slug, job, consistency, fingerprint, critical=90):
         return result
 
 
+def approved_service(job, cgroup):
+    require(JOB.fullmatch(job) is not None and len(cgroup) <= 16384)
+    expected = 'whaledeck-application-backup-' + job + '.service'
+    return any(expected in PurePosixPath(line.split(':', 2)[2]).parts
+        for line in cgroup.splitlines() if len(line.split(':', 2)) == 3)
+
+
 def main():
     require(os.geteuid() == 0)
     verb, *arguments = sys.argv[1:]
     if verb == 'plan' and len(arguments) == 2:
         result = plan(*arguments)
     elif verb == 'run' and len(arguments) == 5:
+        # Never pause from an ad-hoc sudo invocation without the systemd recovery contract.
+        require(approved_service(arguments[1], Path('/proc/self/cgroup').read_text()))
         signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(BackupError('Application backup canceled.')))
         result = run(*arguments[:4], critical=int(arguments[4]))
     elif verb == 'verify' and len(arguments) == 2:
