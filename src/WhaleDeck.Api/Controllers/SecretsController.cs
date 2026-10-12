@@ -19,8 +19,8 @@ public sealed class SecretsController(IOneTimeSecretStore secrets) : ControllerB
         var value = request.Generate
             ? Convert.ToBase64String(RandomNumberGenerator.GetBytes(24)).TrimEnd('=').Replace('+', '-').Replace('/', '_')
             : request.Value;
-        if (string.IsNullOrWhiteSpace(value) || value.Length is < 16 or > 8192)
-            return ValidationProblem("A staged secret must contain between 16 and 8192 characters.");
+        if (string.IsNullOrWhiteSpace(value) || value.Length is < 16 or > 65_536)
+            return ValidationProblem("A staged secret must contain between 16 and 65536 characters.");
         return Ok(await secrets.StoreAsync(User.RequireSubject(), value, cancellationToken));
     }
 

@@ -106,7 +106,8 @@ public sealed class OperationService(IJobRepository jobs)
         if (!document.RootElement.TryGetProperty("parameters", out var parameters) || parameters.ValueKind != JsonValueKind.Object) return;
         foreach (var property in parameters.EnumerateObject())
         {
-            if (property.Name.Contains("password", StringComparison.OrdinalIgnoreCase) ||
+            if (property.Name.Equals("environment", StringComparison.OrdinalIgnoreCase) ||
+                property.Name.Contains("password", StringComparison.OrdinalIgnoreCase) ||
                 property.Name.Contains("secret", StringComparison.OrdinalIgnoreCase) ||
                 property.Name.Contains("token", StringComparison.OrdinalIgnoreCase) ||
                 property.Name.Contains("credential", StringComparison.OrdinalIgnoreCase))

@@ -57,6 +57,9 @@ public interface ICatalogProvider
 public interface IOneTimeSecretStore
 {
     Task<OneTimeSecretTicketDto> StoreAsync(string ownerSubject, string secret, CancellationToken cancellationToken);
+    // Server-side preflight only; ownership and expiry still apply. No public read endpoint is added.
+    Task<string?> PeekAsync(string ownerSubject, string token, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Secret preflight is unavailable in this store.");
     Task<string?> ConsumeAsync(string ownerSubject, string token, CancellationToken cancellationToken);
 }
 

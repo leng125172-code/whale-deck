@@ -25,6 +25,14 @@ public sealed class ValkeyOneTimeSecretStore(IConnectionMultiplexer connection) 
         }
     }
 
+    public async Task<string?> PeekAsync(string ownerSubject, string token, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!MemoryOneTimeSecretStore.IsTokenValid(token)) return null;
+        var value = await connection.GetDatabase().StringGetAsync(MemoryOneTimeSecretStore.Key(ownerSubject, token));
+        return value.HasValue ? value.ToString() : null;
+    }
+
     public async Task<string?> ConsumeAsync(string ownerSubject, string token, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

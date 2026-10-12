@@ -145,6 +145,8 @@ public sealed class OperationServiceTests
     [InlineData("apiToken")]
     [InlineData("clientSecret")]
     [InlineData("credentialFile")]
+    [InlineData("environment")]
+    [InlineData("ENVIRONMENT")]
     public async Task JobParametersRejectSensitiveValues(string key)
     {
         var service = new OperationService(new RecordingJobRepository());
