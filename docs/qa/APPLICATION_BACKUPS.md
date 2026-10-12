@@ -2,7 +2,7 @@
 
 ## 状态
 
-宿主机归档适配器已接入固定 helper、独立 systemd 服务、Agent RPC/API/Worker 源码，包含取消与 Agent 重连、手动记录和只读校验。**当前新增源码尚待正式发布及真实归档验收，前端、自动策略和保留清理仍未完成。** 不把已有数据库备份或配置仓库快照称为普通应用完整备份。
+宿主机归档适配器已接入固定 helper、独立 systemd 服务、Agent RPC/API/Worker，运行时 `d7b7075` 已发布。真实临时应用验收通过配置/data/独占卷、手动记录、只读校验、取消后恢复及 Agent 重启后接续原任务。**前端、自动策略和保留清理仍未完成；强杀归档服务与断电恢复、真实普通用户/共享资源等扩大验收仍待补齐。** 不把已有数据库备份或配置仓库快照称为普通应用完整备份。
 
 归档设计覆盖三类批准数据：`compose.yml/.env/manifest.json`、本应用固定 `data` 目录、当前挂载或具有该 Compose 项目所有权标签的本地命名卷。容器可写层、tmpfs 与外部服务明确排除。HDD 固定目标为 `/data/DockerData/whaledeck/application-backups`，私有目录 0700、归档及元数据 0600；不提供恢复或文件下载入口。
 
@@ -19,8 +19,8 @@
 
 ## 必须完成后才开放入口
 
-1. 固定 root helper 枚举、独立 systemd 有界执行、ExecStopPost 与开机恢复源码已接线；仍须安装并实测 Agent 中断/强制退出后的解除暂停。
-2. Agent 原生预检/执行/校验/取消、单次计划绑定与 1.13 RPC 能力、Application 权限/确认/幂等/资源锁及 Worker 记录投影已接线；仍须真实依赖验收。
+1. 固定 root helper 枚举、独立 systemd 有界执行、ExecStopPost 与开机/定时恢复已安装；取消和 Agent 重启通过。尚须强杀归档服务/断电恢复演练，并在存活服务期间记录实际 CPU/内存/沙箱属性，不能把服务被 collect 后返回的默认属性当作运行证据。
+2. Agent 原生预检/执行/校验/取消、单次计划绑定与 1.13 RPC 能力、Application 权限/确认/幂等/资源锁及 Worker 记录投影已接线，真实 PostgreSQL 记录和匿名 401 通过。扩大真实权限与失败场景仍待完成。
 3. 应用卡片/详情备份入口、范围与一致性确认、任务进度、历史、校验及策略。暂停可能影响服务，必须二次确认。HDD 容量与失败提示不能省略。
 4. 自动策略、保留清理与告警；不能以手动归档代替计划任务功能。清理只针对验证过的本应用备份集合，不能删除应用运行数据。
 5. 独立临时应用真实 Env/Cmd/bind/卷数据、gzip 内容和 SHA256 对照；核心/普通用户拒绝、共享资源拒绝、失效指纹、取消、失败恢复、损坏归档、预算上限与数据不泄漏。
@@ -28,7 +28,7 @@
 
 ## 隔离验证
 
-`python3 -m unittest discover -s tests -p test_application_backup_helper.py -v` 使用临时目录和 fake Engine，不调用真实 Docker 或 root helper。Windows 不支持的 POSIX symlink/flock 检查必须在 Linux 补测，不能把跳过记为通过。真实归档闭环仍待完成。
+`python3 -m unittest discover -s tests -p test_application_backup_helper.py -v` 使用临时目录和 fake Engine，不调用真实 Docker 或 root helper。Windows 不支持的 POSIX symlink/flock 检查必须在 Linux 补测，不能把跳过记为通过。真实归档使用独立脚本 `deploy/validation/validate_application_backups.py`，不得以隔离检查代替。
 
 2026-10-13 最终源码 `f0c82a0` 在 Linux 工作站隔离检查 18 项全部通过，包含真实 POSIX flock、symlink、63 字符 slug 上限和专用 systemd cgroup 护栏检查；Windows 为 16 项通过、2 项跳过。测试只使用临时目录和 fake Engine，未安装 helper，未暂停或重建任何现有容器。工作站仍使用上一轮 `a3a7971` 运行时，11 个核心容器健康；本次源码同步不等同备份入口上线。
 
@@ -39,3 +39,13 @@ GLM Flash 仅定位公开源码。其“手动备份没有 BackupRecord”的结
 本轮后端接线 Release 构建 0 警告/0 错误，348 项单元测试与 62 项集成测试通过。Windows 归档隔离测试 21 项通过、2 项 POSIX 跳过；Linux 与真实系统服务仍须在发布后补测。只读外援 `glm-5.3-flash` 检查 Worker/JobRepository/GovernanceRepository 的现状，输入 195170 Tokens（缓存 156544）、输出 4773、125957ms、一次成功/无重试，实际费用未返回；所有实现与复核由 GPT 完成。
 
 `1a14b05` 已发布，Linux 隔离 23 项通过，真实配置/bind/卷归档、0600、SHA256、记录与校验已通过。取消验收发现 Worker 并发保存冲突后丢失 Agent handle，误报 CanceledBeforeDispatch，而原服务仍运行；当前正在修复发送前持久化稳定操作 ID 和取消收尾。该轮临时应用及其测试数据已精确清理，核心容器未改变。整条备份链路尚未验收通过，前端、策略与保留清理仍未实现。
+
+## 2026-10-13 修复后运行时验收
+
+- `d7b7075` Release 0 警告/0 错误，349 项单元测试 + 62 项集成测试通过；Linux 归档隔离 23 项通过，包含持锁时恢复不得 unpause、释放锁后恢复。
+- 固定 update 流程完成 Host 安装与 API/Worker/Gateway 覆盖部署，部署单元最终 inactive/dead、Result=success、ExecMainStatus=0。恢复 timer active，普通 user 全量 sudo 仍禁用；长期固定 helper 权限未扩大。
+- 临时 `wdv-backup-4d5d603f4144` 使用真实 Authentik Cookie/CSRF，经 API → Worker → Agent → UUID 绑定服务运行。配置 Secret 仅在测试私有归档内读取，任务/audit 的 synthetic marker 计数均 0。
+- 配置 `.env`、bind proof、独占命名卷 proof 与原文精确一致；归档/元数据 0600，SHA256、BackupRecord 和 verified 时间有效。原容器 ID/StartedAt 保持不变，无隐式重建。
+- 真实取消返回 Canceled 后容器已 unpause。Agent 受控重启时原归档单元被观察为 active，同一个 API job 最终 Succeeded，未创建替代归档任务。
+- 匿名备份记录 401。测试临时应用、命名卷、保留配置/data 和自己的 HDD 归档已精确清理，最终无 wdv-backup 容器/卷；11 个核心容器健康，Agent/Maintenance/恢复 timer active。
+- 未实测强杀归档服务、真实损坏/共享资源/普通用户拒绝与前端；未实现应用策略/保留/恢复/下载。当前可签收的是手动备份后端闭环，不是完整应用备份功能。
