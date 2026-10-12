@@ -4,7 +4,16 @@ export const TELEMETRY_INTERVAL_MS = 6000
 export const TELEMETRY_WINDOW_MS = 360_000
 export const TELEMETRY_SLOT_COUNT = TELEMETRY_WINDOW_MS / TELEMETRY_INTERVAL_MS + 1
 const MAX_SERIES = 256
-const supportedKinds = new Set(['network.receive', 'network.send', 'disk.read', 'disk.write'])
+const supportedKinds = new Set([
+  'network.receive',
+  'network.send',
+  'disk.read',
+  'disk.write',
+  'disk.read.iops',
+  'disk.write.iops',
+  'disk.read.latency',
+  'disk.write.latency',
+])
 
 type Point = MetricSeriesSnapshot['points'][number]
 
@@ -87,6 +96,29 @@ export function sumAlignedTelemetry(values: Array<Array<number | null>>) {
     return samples.some((value) => value === null || value === undefined)
       ? null
       : samples.reduce<number>((sum, value) => sum + (value ?? 0), 0)
+  })
+}
+
+/** Latency is weighted by completed I/O. An idle disk contributes no weight, not zero latency. */
+export function weightedAlignedLatency(
+  values: Array<Array<number | null>>,
+  weights: Array<Array<number | null>>,
+) {
+  const length = Math.max(0, ...values.map((item) => item.length))
+  return Array.from({ length }, (_, index) => {
+    let total = 0
+    let weighted = 0
+    for (let device = 0; device < values.length; device++) {
+      const weight = weights[device]?.[index]
+      const value = values[device]?.[index]
+      if (weight === null || weight === undefined || !Number.isFinite(weight) || weight < 0)
+        return null
+      if (weight === 0) continue
+      if (value === null || value === undefined || !Number.isFinite(value) || value < 0) return null
+      total += weight
+      weighted += value * weight
+    }
+    return total > 0 ? weighted / total : null
   })
 }
 

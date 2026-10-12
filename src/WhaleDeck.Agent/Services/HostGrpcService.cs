@@ -55,13 +55,11 @@ public sealed class HostGrpcService(HostReader host, OperationStore operations, 
         var interval = TimeSpan.FromSeconds(Math.Clamp(request.IntervalSeconds, 6, 60));
         while (!context.CancellationToken.IsCancellationRequested)
         {
-            var usage = host.ReadUsage();
-            var timestamp = Timestamp.FromDateTimeOffset(DateTimeOffset.UtcNow);
-            await responseStream.WriteAsync(new MetricPoint { MetricKind = "cpu.utilization", DeviceId = "host", Value = usage.CpuPercent, Unit = "percent", Quality = "Good", SampledAtUtc = timestamp });
-            await responseStream.WriteAsync(new MetricPoint { MetricKind = "memory.utilization", DeviceId = "host", Value = usage.MemoryPercent, Unit = "percent", Quality = "Good", SampledAtUtc = timestamp });
-            foreach (var metric in host.ReadDeviceMetrics())
+            var batch = host.SampleMetrics();
+            var timestamp = Timestamp.FromDateTimeOffset(batch.SampledAtUtc);
+            foreach (var metric in batch.Metrics)
             {
-                await responseStream.WriteAsync(new MetricPoint { MetricKind = metric.Kind, DeviceId = metric.DeviceId, Value = metric.Value, Unit = metric.Unit, Quality = "Good", SampledAtUtc = timestamp });
+                await responseStream.WriteAsync(new MetricPoint { MetricKind = metric.Kind, DeviceId = metric.DeviceId, Value = metric.Value, Unit = metric.Unit, Quality = metric.Quality, SampledAtUtc = timestamp });
             }
             await responseStream.WriteAsync(new MetricPoint { MetricKind = "batch.complete", DeviceId = "host", Unit = "none", Quality = "Good", SampledAtUtc = timestamp });
             if (singleBatch) return;

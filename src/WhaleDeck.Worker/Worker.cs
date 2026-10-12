@@ -89,23 +89,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             db.ManagedResources.Add(resource);
         }
         var snapshot = await agent.GetMetricsSnapshotAsync(cancellationToken);
-        // A host can report the same logical metric through overlapping kernel
-        // views in one sample. Collapse the batch before EF tracks new series,
-        // otherwise two not-yet-saved entities can race the unique index.
-        foreach (var metric in snapshot
-            .GroupBy(item => (item.Kind, item.DeviceId))
-            .Select(group => group.MaxBy(item => item.SampledAtUtc)!))
-        {
-            var dimensions = JsonSerializer.Serialize(new { metric.DeviceId });
-            var series = await db.MetricSeries.SingleOrDefaultAsync(item => item.ResourceId == resource.Id && item.MetricKind == metric.Kind && item.DimensionsJson == dimensions, cancellationToken);
-            if (series is null)
-            {
-                series = new MetricSeries { ResourceId = resource.Id, MetricKind = metric.Kind, Unit = metric.Unit, DimensionsJson = dimensions };
-                db.MetricSeries.Add(series);
-            }
-            series.LastSeenAtUtc = metric.SampledAtUtc;
-            db.MetricSamples.Add(new MetricSample { SeriesId = series.Id, SampledAtUtc = metric.SampledAtUtc, ValueDouble = metric.Value, Quality = metric.Quality });
-        }
+        await MetricSampleWriter.StageAsync(db, resource.Id, snapshot, cancellationToken);
         resource.LastSeenAtUtc = health.ObservedAtUtc;
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -962,33 +946,29 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
 
     private static async Task ApplyRollups(PlatformDbContext db, CancellationToken cancellationToken)
     {
-        var end = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var end = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 60 * 60);
         var start = end.AddHours(-2);
-        var samples = await db.MetricSamples.AsNoTracking()
-            .Where(item => item.SampledAtUtc >= start && item.SampledAtUtc < end && item.ValueDouble != null)
-            .ToArrayAsync(cancellationToken);
-        foreach (var group in samples.GroupBy(item => new
-        {
-            item.SeriesId,
-            Window = new DateTimeOffset(item.SampledAtUtc.Year, item.SampledAtUtc.Month, item.SampledAtUtc.Day,
-                         item.SampledAtUtc.Hour, item.SampledAtUtc.Minute, 0, TimeSpan.Zero)
-        }))
-        {
-            if (await db.MetricRollups.AnyAsync(item => item.SeriesId == group.Key.SeriesId &&
-                    item.WindowStartUtc == group.Key.Window && item.Resolution == "1m", cancellationToken)) continue;
-            var values = group.Select(item => item.ValueDouble!.Value).ToArray();
-            db.MetricRollups.Add(new MetricRollup
-            {
-                SeriesId = group.Key.SeriesId,
-                WindowStartUtc = group.Key.Window,
-                Resolution = "1m",
-                Minimum = values.Min(),
-                Maximum = values.Max(),
-                Average = values.Average(),
-                Sum = values.Sum(),
-                SampleCount = values.LongLength
-            });
-        }
-        await db.SaveChangesAsync(cancellationToken);
+        // Only complete minutes, no warmup/idle pseudo-values, and one bounded SQL operation.
+        // Upsert permits late persisted batches to correct the prior minute instead of freezing partial data.
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO metric_rollups (series_id, window_start_utc, resolution, minimum, maximum, average, sum, sample_count)
+            SELECT sample.series_id, date_bin(INTERVAL '1 minute', sample.sampled_at_utc, TIMESTAMPTZ '1970-01-01'), '1m',
+                MIN(sample.value_double), MAX(sample.value_double),
+                CASE WHEN source.metric_kind IN ('disk.read.latency', 'disk.write.latency') THEN
+                    SUM(sample.value_double * weight.value_double) / NULLIF(SUM(weight.value_double), 0)
+                ELSE AVG(sample.value_double) END,
+                SUM(sample.value_double), COUNT(*)
+            FROM metric_samples sample
+            JOIN metric_series source ON source.id = sample.series_id
+            LEFT JOIN metric_series weights ON weights.resource_id = source.resource_id AND weights.dimensions_json = source.dimensions_json
+                AND weights.metric_kind = CASE source.metric_kind WHEN 'disk.read.latency' THEN 'disk.read.iops' WHEN 'disk.write.latency' THEN 'disk.write.iops' ELSE NULL END
+            LEFT JOIN metric_samples weight ON weight.series_id = weights.id AND weight.sampled_at_utc = sample.sampled_at_utc AND weight.quality = 'Good'
+            WHERE sample.sampled_at_utc >= {start} AND sample.sampled_at_utc < {end} AND sample.value_double IS NOT NULL AND sample.quality = 'Good'
+            GROUP BY sample.series_id, source.metric_kind, date_bin(INTERVAL '1 minute', sample.sampled_at_utc, TIMESTAMPTZ '1970-01-01')
+            HAVING source.metric_kind NOT IN ('disk.read.latency', 'disk.write.latency') OR SUM(weight.value_double) > 0
+            ON CONFLICT (series_id, window_start_utc, resolution) DO UPDATE SET
+                minimum = EXCLUDED.minimum, maximum = EXCLUDED.maximum, average = EXCLUDED.average,
+                sum = EXCLUDED.sum, sample_count = EXCLUDED.sample_count
+            """, cancellationToken);
     }
 }

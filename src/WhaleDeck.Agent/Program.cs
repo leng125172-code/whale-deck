@@ -41,6 +41,7 @@ builder.Services.AddSingleton<PlanStore>();
 builder.Services.AddSingleton<ManagedResourcePlanner>();
 builder.Services.AddSingleton<ComposeProjectManager>();
 builder.Services.AddSingleton<HostReader>();
+builder.Services.AddHostedService<HostMetricCollector>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IHostProcessSource, HostProcessSource>();
 builder.Services.AddSingleton<HostProcessStore>();

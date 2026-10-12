@@ -91,7 +91,7 @@ public interface IManagementQuery
 
 public interface IMetricsQuery
 {
-    Task<IReadOnlyCollection<MetricSeriesSnapshotDto>> GetHistoryAsync(IReadOnlyCollection<string> kinds, int take, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<MetricSeriesSnapshotDto>> GetHistoryAsync(IReadOnlyCollection<string> kinds, int take, CancellationToken cancellationToken, string window = "live");
 }
 
 public interface IApplicationRepository

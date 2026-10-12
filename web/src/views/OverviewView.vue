@@ -25,6 +25,9 @@ import {
   type ContainerState,
   type RecommendedApplication,
   type ResourceKey,
+  type DiskMeasure,
+  type TelemetryWindow,
+  telemetryWindowLabels,
 } from '@/services/workstationOverview'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
@@ -41,6 +44,9 @@ const loadError = ref('')
 const monitorMode = ref<MonitorMode>('network')
 const networkFilter = ref('all')
 const diskFilter = ref('all')
+const monitorWindow = ref<TelemetryWindow>('live')
+const diskMeasure = ref<DiskMeasure>('throughput')
+const telemetryChanging = ref(false)
 const telemetryHistory = new RollingTelemetryHistory()
 let refreshTimer: number | undefined
 let request: AbortController | undefined
@@ -114,7 +120,10 @@ async function loadOverview() {
   loading.value = snapshot.value.sampledAtUtc === ''
   loadError.value = ''
   try {
-    const value = await fetchWorkstationOverview(telemetryHistory, controller.signal)
+    const value = await fetchWorkstationOverview(telemetryHistory, controller.signal, {
+      window: monitorWindow.value,
+      diskMeasure: diskMeasure.value,
+    })
     if (current === generation) snapshot.value = value
   } catch (reason) {
     if (current !== generation) return
@@ -127,10 +136,21 @@ async function loadOverview() {
     window.clearTimeout(timeout)
     if (current === generation) {
       loading.value = false
+      telemetryChanging.value = false
       inFlight = false
     }
   }
 }
+
+watch([monitorWindow, diskMeasure], () => {
+  generation++
+  request?.abort()
+  inFlight = false
+  const empty = createEmptyWorkstationOverview()
+  snapshot.value = { ...snapshot.value, network: empty.network, diskIo: empty.diskIo }
+  telemetryChanging.value = true
+  void loadOverview()
+})
 
 watch(
   () => [authSession.user.value?.subject, authSession.user.value?.isAdministrator],
@@ -357,11 +377,31 @@ onBeforeUnmount(() => {
           <header class="overview-panel__header monitoring-panel__header">
             <div>
               <span class="panel__eyebrow">TELEMETRY</span>
-              <h2>实时监控</h2>
+              <h2>{{ monitorWindow === 'live' ? '实时监控' : '历史监控' }}</h2>
             </div>
             <div class="monitoring-toolbar">
               <el-segmented v-model="monitorMode" :options="monitorOptions" />
-              <el-select v-model="selectedTelemetryFilter" class="monitoring-filter">
+              <el-select v-model="monitorWindow" class="monitoring-window" aria-label="监控时间窗口"
+                ><el-option
+                  v-for="(label, value) in telemetryWindowLabels"
+                  :key="value"
+                  :label="label"
+                  :value="value"
+              /></el-select>
+              <el-select
+                v-if="monitorMode === 'disk'"
+                v-model="diskMeasure"
+                class="monitoring-window"
+                aria-label="磁盘指标"
+                ><el-option label="读写速率" value="throughput" /><el-option
+                  label="IOPS"
+                  value="iops" /><el-option label="读写延迟" value="latency"
+              /></el-select>
+              <el-select
+                v-model="selectedTelemetryFilter"
+                class="monitoring-filter"
+                aria-label="监控设备"
+              >
                 <el-option
                   v-for="option in activeTelemetry.filters"
                   :key="option.value"
@@ -371,6 +411,23 @@ onBeforeUnmount(() => {
               </el-select>
             </div>
           </header>
+
+          <el-alert
+            v-if="snapshot.telemetryError"
+            :title="snapshot.telemetryError"
+            type="warning"
+            :closable="false"
+            show-icon
+          />
+          <p class="telemetry-note">
+            {{
+              monitorWindow === 'live'
+                ? '每 6 秒采集，缺失区间留空'
+                : `数据库按 ${snapshot.telemetryResolutionSeconds} 秒聚合，当前时间桶可能尚未结束，缺失区间留空`
+            }}<span v-if="monitorMode === 'disk' && diskMeasure === 'latency'">
+              · 延迟按完成 I/O 数加权；无 I/O 不记为零延迟</span
+            >
+          </p>
 
           <div class="telemetry-summary">
             <div
@@ -390,10 +447,12 @@ onBeforeUnmount(() => {
           </div>
 
           <TelemetryChart
-            :key="`${monitorMode}-${selectedTelemetryFilter}`"
+            v-loading="telemetryChanging"
+            :key="`${monitorMode}-${selectedTelemetryFilter}-${monitorWindow}-${diskMeasure}`"
             :labels="activeTelemetry.labels"
             :series="activeFilter.series"
             :unit="activeTelemetry.unit"
+            :window="monitorWindow"
           />
         </section>
       </div>
@@ -860,6 +919,28 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.monitoring-panel__header {
+  flex-wrap: wrap;
+}
+.monitoring-toolbar {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.monitoring-window {
+  width: 150px;
+  min-width: 0;
+}
+.telemetry-note {
+  margin: 12px 18px 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .monitoring-window {
+    width: 100%;
+  }
 }
 
 .monitoring-filter {

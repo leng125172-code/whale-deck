@@ -203,7 +203,8 @@ public sealed record PlanDto(
 public sealed record MetricValueDto(string Kind, string DeviceId, double Value, string Unit, string Quality, DateTimeOffset SampledAtUtc);
 
 public sealed record MetricPointDto(DateTimeOffset SampledAtUtc, double? Value, string Quality);
-public sealed record MetricSeriesSnapshotDto(string Kind, string DeviceId, string Unit, IReadOnlyCollection<MetricPointDto> Points);
+public sealed record MetricSeriesSnapshotDto(string Kind, string DeviceId, string Unit, IReadOnlyCollection<MetricPointDto> Points,
+    DateTimeOffset? WindowStartUtc = null, DateTimeOffset? WindowEndUtc = null, int ResolutionSeconds = 6);
 
 public sealed record AgentOperationDto(
     string OperationId,

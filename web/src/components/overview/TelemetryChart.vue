@@ -1,13 +1,26 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
-import type { TelemetrySeries } from '@/services/workstationOverview'
-import { TELEMETRY_SLOT_COUNT, telemetrySegments } from '@/services/rollingTelemetry'
+import type { TelemetrySeries, TelemetryWindow } from '@/services/workstationOverview'
+import { telemetrySegments } from '@/services/rollingTelemetry'
 
-const props = defineProps<{
-  labels: string[]
-  series: TelemetrySeries[]
-  unit: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    labels: string[]
+    series: TelemetrySeries[]
+    unit: string
+    window?: TelemetryWindow
+  }>(),
+  { window: 'live' },
+)
+const axis = computed(
+  () =>
+    ({
+      live: ['6 分钟前', '3 分钟前', '现在'],
+      '1h': ['1 小时前', '30 分钟前', '现在'],
+      '24h': ['24 小时前', '12 小时前', '现在'],
+      '7d': ['7 天前', '3.5 天前', '现在'],
+    })[props.window],
+)
 
 const chartId = useId().replace(/:/g, '')
 const root = ref<HTMLElement | null>(null)
@@ -49,7 +62,7 @@ const gridLines = computed(() =>
 )
 
 function point(value: number, index: number) {
-  const x = plot.value.left + (index / (TELEMETRY_SLOT_COUNT - 1)) * plot.value.width
+  const x = plot.value.left + (index / Math.max(1, props.labels.length - 1)) * plot.value.width
   const y = plot.value.top + plot.value.height - (value / maximum.value) * plot.value.height
   return { x, y }
 }
@@ -89,7 +102,7 @@ function formatTick(value: number) {
     ref="root"
     class="telemetry-chart"
     role="img"
-    :aria-label="`最近 6 分钟监控趋势，每 6 秒刷新，缺失数据留空，单位 ${unit}`"
+    :aria-label="`${axis[0]}至现在的监控趋势，每 6 秒刷新，缺失数据留空，单位 ${unit}`"
   >
     <svg :viewBox="`0 0 ${width} 224`" preserveAspectRatio="none" aria-hidden="true">
       <defs>
@@ -136,7 +149,9 @@ function formatTick(value: number) {
       />
     </svg>
     <div class="telemetry-chart__axis" aria-hidden="true">
-      <span>6 分钟前</span><span class="telemetry-chart__midpoint">3 分钟前</span><span>现在</span>
+      <span>{{ axis[0] }}</span
+      ><span class="telemetry-chart__midpoint">{{ axis[1] }}</span
+      ><span>{{ axis[2] }}</span>
     </div>
   </div>
 </template>

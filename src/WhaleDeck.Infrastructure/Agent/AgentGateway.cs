@@ -281,7 +281,7 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcess
 
     public async Task<IReadOnlyCollection<MetricValueDto>> GetMetricsSnapshotAsync(CancellationToken cancellationToken)
     {
-        // The Worker owns the six-second schedule. Ask the Agent for exactly
+        // The Agent owns the canonical six-second sample; Worker persists it. Ask for exactly
         // one batch so a normal sample does not end by canceling a live gRPC
         // stream and produce a stack trace every collection cycle.
         using var call = _host.StreamMetrics(new MetricsRequest { IntervalSeconds = 0 },

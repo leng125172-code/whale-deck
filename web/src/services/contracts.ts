@@ -178,6 +178,9 @@ export interface MetricSeriesSnapshot {
   deviceId: string
   unit: string
   points: Array<{ sampledAtUtc: string; value: number | null; quality: string }>
+  windowStartUtc?: string | null
+  windowEndUtc?: string | null
+  resolutionSeconds?: number
 }
 
 export interface CatalogApplication {

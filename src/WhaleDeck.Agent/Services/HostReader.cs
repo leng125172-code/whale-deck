@@ -18,13 +18,35 @@ public sealed record HostSnapshot(
 
 public sealed record HostAddressSnapshot(string InterfaceName, string Address);
 
-public sealed class HostReader
+public sealed class HostReader(TimeProvider? timeProvider = null)
 {
+    private readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     private readonly object _sync = new();
     private CpuCounters? _previousCpu;
-    private DateTimeOffset _previousIoAtUtc;
+    private long? _previousIoTimestamp;
+    private HostMetricBatch? _cachedMetrics;
     private Dictionary<string, (ulong Received, ulong Sent)> _previousNetwork = new(StringComparer.Ordinal);
-    private Dictionary<string, (ulong Read, ulong Written)> _previousDisk = new(StringComparer.Ordinal);
+    private Dictionary<string, DiskIoCounters> _previousDisk = new(StringComparer.Ordinal);
+
+    public HostMetricBatch SampleMetrics()
+    {
+        lock (_sync)
+        {
+            return _cachedMetrics ?? CollectMetrics();
+        }
+    }
+
+    public HostMetricBatch CollectMetrics()
+    {
+        lock (_sync)
+        {
+            var usage = ReadUsage();
+            var values = new List<HostMetric> { new("cpu.utilization", "host", usage.CpuPercent, "percent"), new("memory.utilization", "host", usage.MemoryPercent, "percent") };
+            values.AddRange(ReadDeviceMetrics());
+            _cachedMetrics = new(_clock.GetUtcNow(), values);
+            return _cachedMetrics;
+        }
+    }
 
     public HostSnapshot Read()
     {
@@ -41,42 +63,41 @@ public sealed class HostReader
             ReadHostAddresses());
     }
 
-    public (double CpuPercent, double MemoryPercent) ReadUsage()
+    private (double CpuPercent, double MemoryPercent) ReadUsage()
     {
         var memory = ReadMemoryInfo();
         var used = memory.Total == 0 ? 0 : (memory.Total - memory.Available) * 100d / memory.Total;
         return (ReadCpuPercent(), used);
     }
 
-    public IReadOnlyCollection<HostMetric> ReadDeviceMetrics()
+    private List<HostMetric> ReadDeviceMetrics()
     {
         lock (_sync)
         {
-            var now = DateTimeOffset.UtcNow;
-            var elapsed = _previousIoAtUtc == default ? 0 : Math.Max((now - _previousIoAtUtc).TotalSeconds, 0.001);
+            var timestamp = _clock.GetTimestamp();
+            var elapsed = _previousIoTimestamp is null ? 0 : _clock.GetElapsedTime(_previousIoTimestamp.Value, timestamp).TotalSeconds;
             var result = new List<HostMetric>();
             var network = ReadNetworkCounters();
             foreach (var (device, value) in network)
             {
-                var previous = _previousNetwork.GetValueOrDefault(device);
-                result.Add(new("network.receive", device, Rate(value.Received, previous.Received, elapsed), "bytesPerSecond"));
-                result.Add(new("network.send", device, Rate(value.Sent, previous.Sent, elapsed), "bytesPerSecond"));
+                var hasPrevious = _previousNetwork.TryGetValue(device, out var previous) && elapsed > 0 &&
+                    value.Received >= previous.Received && value.Sent >= previous.Sent;
+                result.Add(new("network.receive", device, hasPrevious ? Rate(value.Received, previous.Received, elapsed) : 0, "bytesPerSecond", hasPrevious ? "Good" : "Warmup"));
+                result.Add(new("network.send", device, hasPrevious ? Rate(value.Sent, previous.Sent, elapsed) : 0, "bytesPerSecond", hasPrevious ? "Good" : "Warmup"));
                 result.Add(new("network.receive.total", device, value.Received, "bytes"));
                 result.Add(new("network.send.total", device, value.Sent, "bytes"));
             }
             var disks = ReadDiskCounters();
             foreach (var (device, value) in disks)
             {
-                var previous = _previousDisk.GetValueOrDefault(device);
-                result.Add(new("disk.read", device, Rate(value.Read, previous.Read, elapsed), "bytesPerSecond"));
-                result.Add(new("disk.write", device, Rate(value.Written, previous.Written, elapsed), "bytesPerSecond"));
+                result.AddRange(DiskIoMetrics.Calculate(device, value, _previousDisk.GetValueOrDefault(device), elapsed));
             }
             foreach (var drive in DriveInfo.GetDrives().Where(item => item.IsReady && item.TotalSize > 0))
             {
                 var used = (drive.TotalSize - drive.AvailableFreeSpace) * 100d / drive.TotalSize;
                 result.Add(new("disk.utilization", drive.Name, used, "percent"));
             }
-            _previousIoAtUtc = now;
+            _previousIoTimestamp = timestamp;
             _previousNetwork = network;
             _previousDisk = disks;
             return result;
@@ -182,17 +203,16 @@ public sealed class HostReader
         return result;
     }
 
-    private static Dictionary<string, (ulong Read, ulong Written)> ReadDiskCounters()
+    private static Dictionary<string, DiskIoCounters> ReadDiskCounters()
     {
         if (!OperatingSystem.IsLinux() || !File.Exists("/proc/diskstats")) return [];
-        var result = new Dictionary<string, (ulong, ulong)>(StringComparer.Ordinal);
+        var result = new Dictionary<string, DiskIoCounters>(StringComparer.Ordinal);
         foreach (var line in File.ReadLines("/proc/diskstats"))
         {
-            var values = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (values.Length < 14 || !ulong.TryParse(values[5], out var readSectors) || !ulong.TryParse(values[9], out var writtenSectors)) continue;
-            var name = values[2];
-            if (name.StartsWith("loop", StringComparison.Ordinal) || name.StartsWith("ram", StringComparison.Ordinal)) continue;
-            result[name] = (readSectors * 512, writtenSectors * 512);
+            if (!DiskIoMetrics.TryParse(line, out var name, out var counters)) continue;
+            // Whole hardware devices only: summing partitions or device-mapper views double counts I/O.
+            if (File.Exists($"/sys/class/block/{name}/partition") || !Directory.Exists($"/sys/class/block/{name}/device")) continue;
+            result[name] = counters;
         }
         return result;
     }
@@ -214,4 +234,5 @@ public sealed class HostReader
     private sealed record CpuCounters(ulong Total, ulong Idle);
 }
 
-public sealed record HostMetric(string Kind, string DeviceId, double Value, string Unit);
+public sealed record HostMetric(string Kind, string DeviceId, double Value, string Unit, string Quality = "Good");
+public sealed record HostMetricBatch(DateTimeOffset SampledAtUtc, IReadOnlyCollection<HostMetric> Metrics);

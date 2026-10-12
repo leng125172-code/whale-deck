@@ -10,7 +10,7 @@
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
-- 当前协议版本为 `1.8`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 以兼容字段扩展容器摘要的端口、网络、地址与创建时间（`docker.container-summary`）；旧次版本按能力协商并安全降级。
+- 当前协议版本为 `1.9`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 以兼容字段扩展容器摘要的端口、网络、地址与创建时间（`docker.container-summary`），`1.9` 增加 `host.disk-io` 和独立 6 秒主机采样；旧次版本按能力协商并安全降级。
 
 ## 2. 通用消息
 
@@ -107,6 +107,12 @@ Agent 每次维护状态变化都原子写入 `/run/whaledeck/maintenance/status
 名称与内存直接来自固定 status 字段，不使用会间接读取 cmdline 的框架名称/进程信息补全路径。名称为内核 `Name`，可能按内核规则截短；内存按 kB 转字节，内核线程缺失地址空间字段时为 0，格式错误或整数溢出时跳过而非伪造值。
 
 指标使用单调计数器计算速率，包含采样起止时间和设备稳定 ID。Worker 负责聚合、降采样和 14 天清理，Agent 不为每次采样写 Info 日志。
+
+`1.9` 的主机指标后台采样器独立于 RPC 查询：同一批次共享采样时间，多个页面/API/Worker 读取不会推进计数器基线。首次采样、计数器重置返回 `Warmup`；磁盘无完成 I/O 时延迟返回 `Idle`，API 将非 `Good` 值投影为 `null`，不把缺失或空闲画成零延迟。仅汇总实际块设备，不重复计算分区、device-mapper 和虚拟磁盘。
+
+新增 `disk.read.iops`、`disk.write.iops`（operationsPerSecond）及 `disk.read.latency`、`disk.write.latency`（milliseconds）。磁盘速率按 sector 差值 × 512 / 单调时间差；延迟按读/写累计毫秒差 / 完成 I/O 数差，表示内核请求完成耗时而非磁盘设备自身纯服务耗时。历史延迟按匹配 IOPS 加权。字段依据 [Linux I/O statistics](https://docs.kernel.org/admin-guide/iostats.html)。
+
+`GET /api/v1/metrics` 的 `window=live|1h|24h|7d` 为管理员只读接口；历史分别按 30/300/1800 秒聚合，返回 121/289/337 个对齐时间桶和 `windowStartUtc/windowEndUtc/resolutionSeconds`，当前桶可能未结束。无采样桶为 `Missing/null`。实时保持最多 600 个原始点的旧 `take` 兼容范围；Vue 使用固定 6 分钟 61 槽。数据库端有界聚合，不把 7 天原始样本全部加载到 API 内存。每日分区及按分区清理仍未落地，不能用现有按行保留清理代替其验收。
 
 ## 5. systemd、日志与系统更新
 

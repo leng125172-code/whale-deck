@@ -1,9 +1,21 @@
 import { ApiError, apiRequest } from '@/services/apiClient'
 import type { MetricSeriesSnapshot, OverviewResponse, PortalItem } from '@/services/contracts'
-import { RollingTelemetryHistory, sumAlignedTelemetry } from '@/services/rollingTelemetry'
+import {
+  RollingTelemetryHistory,
+  sumAlignedTelemetry,
+  weightedAlignedLatency,
+} from '@/services/rollingTelemetry'
 
 export type ResourceKey = 'agents' | 'websites' | 'databases' | 'containers'
 export type ContainerState = 'available' | 'running' | 'stopped' | 'restarting'
+export type TelemetryWindow = 'live' | '1h' | '24h' | '7d'
+export type DiskMeasure = 'throughput' | 'iops' | 'latency'
+export const telemetryWindowLabels: Record<TelemetryWindow, string> = {
+  live: '实时 · 6 分钟',
+  '1h': '1 小时',
+  '24h': '24 小时',
+  '7d': '7 天',
+}
 
 export interface ResourceSummary {
   key: ResourceKey
@@ -38,6 +50,7 @@ export interface TelemetryFilter {
   label: string
   stats: TelemetryStat[]
   series: TelemetrySeries[]
+  weights?: Array<Array<number | null>>
 }
 
 export interface TelemetryDataset {
@@ -75,12 +88,15 @@ export interface WorkstationOverviewSnapshot {
   usage: UsageMetric[]
   network: TelemetryDataset
   diskIo: TelemetryDataset
+  telemetryWindow: TelemetryWindow
+  telemetryResolutionSeconds: number
+  telemetryError: string
   system: SystemInformation[]
   applications: RecommendedApplication[]
 }
 
-const emptyTelemetry = (): TelemetryDataset => ({
-  unit: 'MB/s',
+const emptyTelemetry = (unit = 'MB/s'): TelemetryDataset => ({
+  unit,
   labels: [],
   filters: [{ value: 'none', label: '暂无设备采样', stats: [], series: [] }],
 })
@@ -98,6 +114,9 @@ export function createEmptyWorkstationOverview(): WorkstationOverviewSnapshot {
     usage: [],
     network: emptyTelemetry(),
     diskIo: emptyTelemetry(),
+    telemetryWindow: 'live',
+    telemetryResolutionSeconds: 6,
+    telemetryError: '',
     system: [],
     applications: [],
   }
@@ -106,6 +125,7 @@ export function createEmptyWorkstationOverview(): WorkstationOverviewSnapshot {
 export async function fetchWorkstationOverview(
   rollingHistory = new RollingTelemetryHistory(),
   signal?: AbortSignal,
+  options: { window?: TelemetryWindow; diskMeasure?: DiskMeasure } = {},
 ): Promise<WorkstationOverviewSnapshot> {
   const response = await apiRequest<OverviewResponse>('overview', { signal })
   if (response.scope === 'Public') {
@@ -121,10 +141,13 @@ export async function fetchWorkstationOverview(
     }
   }
 
+  const window = options.window ?? 'live'
   let history: MetricSeriesSnapshot[] = []
+  let telemetryError = ''
   try {
     history = await apiRequest<MetricSeriesSnapshot[]>(
-      'metrics?kinds=network.receive&kinds=network.send&kinds=disk.read&kinds=disk.write&take=60',
+      'metrics?kinds=network.receive&kinds=network.send&kinds=disk.read&kinds=disk.write&kinds=disk.read.iops&kinds=disk.write.iops&kinds=disk.read.latency&kinds=disk.write.latency&take=60&window=' +
+        window,
       { signal },
     )
   } catch (reason) {
@@ -132,10 +155,14 @@ export async function fetchWorkstationOverview(
       rollingHistory.clear()
       throw reason
     }
-    // A fresh Agent snapshot is still useful while historical metrics recover.
+    telemetryError =
+      window === 'live'
+        ? '历史采样暂不可用，保留当前实时采样。'
+        : '历史查询失败，请稍后重试；主机当前状态仍可查看。'
   }
   signal?.throwIfAborted()
-  history = rollingHistory.update(history, response.metrics ?? [], response.sampledAtUtc)
+  if (window === 'live')
+    history = rollingHistory.update(history, response.metrics ?? [], response.sampledAtUtc)
 
   const resources = response.resources ?? []
   const containers = resources.filter((item) => item.type === 'Container')
@@ -224,8 +251,19 @@ export async function fetchWorkstationOverview(
         detail: '当前最高文件系统占用',
       },
     ],
-    network: makeTelemetry('network', history, metricValues),
-    diskIo: makeTelemetry('disk', history, metricValues),
+    network: makeTelemetry('network', history, metricValues, 'throughput', window),
+    diskIo: makeTelemetry(
+      'disk',
+      history,
+      metricValues,
+      options.diskMeasure ?? 'throughput',
+      window,
+    ),
+    telemetryWindow: window,
+    telemetryResolutionSeconds:
+      history[0]?.resolutionSeconds ??
+      ({ live: 6, '1h': 30, '24h': 300, '7d': 1800 } as const)[window],
+    telemetryError,
     system: response.host
       ? [
           { label: '主机名称', value: response.host.hostName },
@@ -253,13 +291,16 @@ function applicationState(installed: boolean, state: string | null): ContainerSt
   return 'running'
 }
 
-function makeTelemetry(
+export function makeTelemetry(
   mode: 'network' | 'disk',
   history: MetricSeriesSnapshot[],
   current: OverviewResponse['metrics'],
+  measure: DiskMeasure = 'throughput',
+  window: TelemetryWindow = 'live',
 ): TelemetryDataset {
-  const firstKind = mode === 'network' ? 'network.receive' : 'disk.read'
-  const secondKind = mode === 'network' ? 'network.send' : 'disk.write'
+  const suffix = measure === 'throughput' ? '' : '.' + measure
+  const firstKind = mode === 'network' ? 'network.receive' : 'disk.read' + suffix
+  const secondKind = mode === 'network' ? 'network.send' : 'disk.write' + suffix
   const devices = [
     ...new Set(
       history
@@ -269,7 +310,8 @@ function makeTelemetry(
   ]
     .filter((device) => mode === 'disk' || isHostNetworkDevice(device))
     .sort()
-  if (devices.length === 0) return emptyTelemetry()
+  if (devices.length === 0)
+    return emptyTelemetry(measure === 'throughput' ? 'MB/s' : measure === 'iops' ? 'IOPS' : 'ms')
 
   const source = history.find((series) => series.kind === firstKind) ?? history[0]
   const labels =
@@ -281,12 +323,12 @@ function makeTelemetry(
       }),
     ) ?? []
   const deviceFilters = devices.map((device) =>
-    telemetryFilter(mode, device, history, current ?? [], firstKind, secondKind),
+    telemetryFilter(mode, device, history, current ?? [], firstKind, secondKind, measure, window),
   )
   return {
-    unit: 'MB/s',
+    unit: measure === 'throughput' ? 'MB/s' : measure === 'iops' ? 'IOPS' : 'ms',
     labels,
-    filters: [aggregateTelemetry(mode, deviceFilters), ...deviceFilters],
+    filters: [aggregateTelemetry(mode, deviceFilters, measure, window), ...deviceFilters],
   }
 }
 
@@ -297,6 +339,8 @@ function telemetryFilter(
   current: NonNullable<OverviewResponse['metrics']>,
   firstKind: string,
   secondKind: string,
+  measure: DiskMeasure,
+  window: TelemetryWindow,
 ): TelemetryFilter {
   const first =
     history.find((item) => item.kind === firstKind && item.deviceId === device)?.points ?? []
@@ -309,38 +353,89 @@ function telemetryFilter(
   const stats: TelemetryStat[] =
     mode === 'network'
       ? [
-          { label: '当前下行', value: formatRate(firstValue), tone: 'success' },
-          { label: '当前上行', value: formatRate(secondValue), tone: 'primary' },
+          {
+            label: window === 'live' ? '当前下行' : '末端下行均值',
+            value: formatRate(firstValue),
+            tone: 'success',
+          },
+          {
+            label: window === 'live' ? '当前上行' : '末端上行均值',
+            value: formatRate(secondValue),
+            tone: 'primary',
+          },
           { label: '累计接收', value: formatBytes(total('network.receive.total')), tone: 'info' },
           { label: '累计发送', value: formatBytes(total('network.send.total')), tone: 'warning' },
         ]
       : [
-          { label: '读取', value: formatRate(firstValue), tone: 'success' },
-          { label: '写入', value: formatRate(secondValue), tone: 'warning' },
-          { label: '时间窗口', value: '6 分钟', tone: 'info' },
+          {
+            label: window === 'live' ? '读取' : '末端读取均值',
+            value: formatMetric(firstValue, measure, first[first.length - 1]?.quality === 'Idle'),
+            tone: 'success',
+          },
+          {
+            label: window === 'live' ? '写入' : '末端写入均值',
+            value: formatMetric(
+              secondValue,
+              measure,
+              second[second.length - 1]?.quality === 'Idle',
+            ),
+            tone: 'warning',
+          },
+          { label: '时间窗口', value: telemetryWindowLabels[window], tone: 'info' },
         ]
   return {
     value: device,
     label: device,
     stats,
+    weights:
+      measure === 'latency'
+        ? ['disk.read.iops', 'disk.write.iops'].map(
+            (kind) =>
+              history
+                .find((item) => item.kind === kind && item.deviceId === device)
+                ?.points.map((point) => point.value) ?? [],
+          )
+        : undefined,
     series: [
       {
         name: mode === 'network' ? '下行' : '读取',
         color: '#409eff',
-        values: first.map((point) => (point.value === null ? null : point.value / 1024 / 1024)),
+        values: first.map((point) =>
+          point.value === null
+            ? null
+            : measure === 'throughput'
+              ? point.value / 1024 / 1024
+              : point.value,
+        ),
       },
       {
         name: mode === 'network' ? '上行' : '写入',
         color: mode === 'network' ? '#67c23a' : '#e6a23c',
-        values: second.map((point) => (point.value === null ? null : point.value / 1024 / 1024)),
+        values: second.map((point) =>
+          point.value === null
+            ? null
+            : measure === 'throughput'
+              ? point.value / 1024 / 1024
+              : point.value,
+        ),
       },
     ],
   }
 }
 
-function aggregateTelemetry(mode: 'network' | 'disk', filters: TelemetryFilter[]): TelemetryFilter {
+function aggregateTelemetry(
+  mode: 'network' | 'disk',
+  filters: TelemetryFilter[],
+  measure: DiskMeasure,
+  window: TelemetryWindow,
+): TelemetryFilter {
   const sumSeries = (seriesIndex: number) =>
-    sumAlignedTelemetry(filters.map((item) => item.series[seriesIndex]?.values ?? []))
+    measure === 'latency'
+      ? weightedAlignedLatency(
+          filters.map((item) => item.series[seriesIndex]?.values ?? []),
+          filters.map((item) => item.weights?.[seriesIndex] ?? []),
+        )
+      : sumAlignedTelemetry(filters.map((item) => item.series[seriesIndex]?.values ?? []))
   const first = sumSeries(0)
   const second = sumSeries(1)
   return {
@@ -348,24 +443,46 @@ function aggregateTelemetry(mode: 'network' | 'disk', filters: TelemetryFilter[]
     label: mode === 'network' ? '全部网卡' : '全部磁盘',
     stats: [
       {
-        label: mode === 'network' ? '当前下行' : '读取',
-        value: formatRate(
+        label:
+          window !== 'live'
+            ? mode === 'network'
+              ? '末端下行均值'
+              : '末端读取均值'
+            : mode === 'network'
+              ? '当前下行'
+              : '读取',
+        value: formatMetric(
           first[first.length - 1] === null || first.length === 0
             ? null
-            : first[first.length - 1]! * 1024 * 1024,
+            : first[first.length - 1]! * (measure === 'throughput' ? 1024 * 1024 : 1),
+          measure,
+          measure === 'latency' && filters.every((item) => lastValue(item.weights?.[0]) === 0),
         ),
         tone: 'success',
       },
       {
-        label: mode === 'network' ? '当前上行' : '写入',
-        value: formatRate(
+        label:
+          window !== 'live'
+            ? mode === 'network'
+              ? '末端上行均值'
+              : '末端写入均值'
+            : mode === 'network'
+              ? '当前上行'
+              : '写入',
+        value: formatMetric(
           second[second.length - 1] === null || second.length === 0
             ? null
-            : second[second.length - 1]! * 1024 * 1024,
+            : second[second.length - 1]! * (measure === 'throughput' ? 1024 * 1024 : 1),
+          measure,
+          measure === 'latency' && filters.every((item) => lastValue(item.weights?.[1]) === 0),
         ),
         tone: mode === 'network' ? 'primary' : 'warning',
       },
-      { label: '设备', value: String(filters.length), tone: 'info' },
+      {
+        label: '设备 / 窗口',
+        value: `${filters.length} · ${telemetryWindowLabels[window]}`,
+        tone: 'info',
+      },
     ],
     series: [
       { name: mode === 'network' ? '下行' : '读取', color: '#409eff', values: first },
@@ -384,6 +501,16 @@ function formatSampleTime(value: string) {
 
 function formatRate(bytesPerSecond: number | null) {
   return bytesPerSecond === null ? '暂无采样' : `${(bytesPerSecond / 1024 / 1024).toFixed(2)} MB/s`
+}
+
+function formatMetric(value: number | null, measure: DiskMeasure, idle = false) {
+  if (measure === 'throughput') return formatRate(value)
+  if (value === null) return idle ? '无 I/O' : '暂无有效采样'
+  return measure === 'iops' ? `${value.toFixed(1)} 次/s` : `${value.toFixed(2)} ms`
+}
+
+function lastValue(values: Array<number | null> | undefined) {
+  return values?.[values.length - 1]
 }
 
 function formatBytes(value: number) {
