@@ -950,6 +950,11 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                     b.HasKey("SeriesId", "SampledAtUtc");
 
+                    b.HasIndex("SampledAtUtc")
+                        .HasDatabaseName("IX_metric_samples_sampled_at_utc_brin");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SampledAtUtc"), "brin");
+
                     b.HasIndex("SeriesId", "SampledAtUtc");
 
                     b.ToTable("metric_samples", (string)null);

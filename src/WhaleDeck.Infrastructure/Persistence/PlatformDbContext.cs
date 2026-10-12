@@ -231,6 +231,7 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             entity.ToTable("metric_samples");
             entity.HasKey(item => new { item.SeriesId, item.SampledAtUtc });
             entity.HasIndex(item => new { item.SeriesId, item.SampledAtUtc });
+            entity.HasIndex(item => item.SampledAtUtc).HasMethod("brin").HasDatabaseName("IX_metric_samples_sampled_at_utc_brin");
         });
         modelBuilder.Entity<MetricRollup>(entity =>
         {

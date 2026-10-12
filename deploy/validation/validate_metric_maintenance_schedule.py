@@ -19,7 +19,7 @@ def main() -> int:
         created = request(api, 'POST', 'schedules', payload={
             'taskType':kind,'name':f'wdv-metric-maintenance-{uuid.uuid4().hex[:12]}',
             'scheduleKind':'Cron','scheduleExpression':'17 3 * * *','timezone':'UTC',
-            'parametersJson':'{}','concurrencyPolicy':'Forbid','timeoutSeconds':300,'isEnabled':False,'expectedVersion':None
+            'parametersJson':'{}','concurrencyPolicy':'Forbid','timeoutSeconds':300,'isEnabled':True,'expectedVersion':None
         }).json()
         try:
             request(api,'POST',f"schedules/{created['id']}/run",payload={},expected=202)

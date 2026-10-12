@@ -15,7 +15,7 @@ CONTAINER = 'database-platform-postgres'
 
 
 def sql(database: str, statement: str, role: str | None = None, *, failure: str | None = None, transaction: bool = True):
-    if not re.fullmatch(r'wdv_metric_[a-f0-9]{12}|postgres|whaledeck', database):
+    if not re.fullmatch(r'wdv_metric_[a-f0-9]{12}|postgres', database):
         raise RuntimeError('Unexpected database scope')
     prefix = f'SET ROLE {role};\n' if role else ''
     body = prefix + (f'BEGIN;\n{statement}\nCOMMIT;' if transaction else statement)
@@ -82,6 +82,8 @@ def main() -> int:
                 raise RuntimeError('Downgrade/re-upgrade lost reader grants')
         if scalar(database, "SELECT count(*) FROM pg_partitioned_table WHERE partrelid IN ('metric_samples'::regclass,'metric_rollups'::regclass)", role) != 2:
             raise RuntimeError('Both metric tables are not true declarative range parents')
+        if scalar(database, "SELECT a.amname FROM pg_class c JOIN pg_am a ON a.oid=c.relam WHERE c.oid='\"IX_metric_samples_sampled_at_utc_brin\"'::regclass", role)!='brin':
+            raise RuntimeError('EF migration did not create the time BRIN index')
         sql(database, "INSERT INTO metric_samples SELECT * FROM expected_samples LIMIT 1;", role, failure='duplicate key')
         before = scalar(database, "SELECT count(*) FROM pg_inherits WHERE inhparent IN ('metric_samples'::regclass,'metric_rollups'::regclass)", role)
         dropped = scalar(database, f"public.wd_maintain_metric_partitions('{stamp}'::timestamptz)", role)

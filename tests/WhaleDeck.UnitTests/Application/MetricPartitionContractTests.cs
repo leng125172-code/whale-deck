@@ -1,9 +1,22 @@
+using Microsoft.EntityFrameworkCore;
+using WhaleDeck.Domain.Entities;
 using WhaleDeck.Infrastructure.Persistence;
 
 namespace WhaleDeck.UnitTests.Application;
 
 public sealed class MetricPartitionContractTests
 {
+    [Fact]
+    public void EfModelKeepsTheTimeBrinIndexInItsMigrationSnapshot()
+    {
+        var options = new DbContextOptionsBuilder<PlatformDbContext>().UseNpgsql("Host=localhost;Database=whaledeck_design;Username=whaledeck_design").Options;
+        using var db = new PlatformDbContext(options);
+        var index = Assert.Single(db.Model.FindEntityType(typeof(MetricSample))!.GetIndexes(),
+            item => item.GetDatabaseName() == "IX_metric_samples_sampled_at_utc_brin");
+        Assert.Equal("brin", index.FindAnnotation("Npgsql:IndexMethod")!.Value);
+        Assert.Equal(nameof(MetricSample.SampledAtUtc), Assert.Single(index.Properties).Name);
+    }
+
     [Fact]
     public void MigrationResourcesAreEmbeddedAndPreserveDataBeforeDroppingLegacyTables()
     {

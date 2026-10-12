@@ -56,6 +56,9 @@ def main() -> int:
     capability = query("SELECT json_build_object('definer',prosecdef,'owner',pg_get_userbyid(proowner),'publicExecute',coalesce((SELECT bool_or(grantee=0 AND privilege_type='EXECUTE') FROM aclexplode(proacl)),false)) FROM pg_proc WHERE oid='public.wd_maintain_metric_partitions(timestamptz)'::regprocedure;")
     if capability['definer'] or capability['owner'] != 'whaledeck' or capability['publicExecute']:
         raise RuntimeError('Live maintenance permissions are incorrect')
+    index = query("SELECT json_build_object('method',a.amname,'valid',i.indisvalid,'children',(SELECT count(*) FROM pg_inherits WHERE inhparent=c.oid)) FROM pg_class c JOIN pg_index i ON i.indexrelid=c.oid JOIN pg_am a ON a.oid=c.relam WHERE c.oid='public.\"IX_metric_samples_sampled_at_utc_brin\"'::regclass;")
+    if index['method']!='brin' or not index['valid'] or index['children']!=17:
+        raise RuntimeError('Live inherited time BRIN index is invalid or incomplete')
     plan_end = dt.datetime.now(dt.timezone.utc)
     plan_start = plan_end-dt.timedelta(hours=2)
     plan = query(f"EXPLAIN (FORMAT JSON) SELECT value_double FROM metric_samples WHERE sampled_at_utc >= '{plan_start.isoformat()}'::timestamptz AND sampled_at_utc < '{plan_end.isoformat()}'::timestamptz ORDER BY sampled_at_utc DESC LIMIT 10;")
