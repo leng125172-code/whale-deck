@@ -21,7 +21,7 @@
 - HDD 使用率和最小空闲容量在写入期间每秒或每 16 MiB 压缩输出重新检查，越过阈值停止写入、清理本任务 partial 并恢复原暂停成员，不能仅在开头检查容量。
 - `.partial` 在失败时精确清理；已完成归档不自动删除。恢复只处理本任务 journal 中仍存在、仍归属原项目且未受保护的容器。
 
-## 必须完成后才开放入口
+## 已验证约束与剩余扩大验收
 
 1. 固定 root helper 枚举、独立 systemd 有界执行、ExecStopPost 与开机/定时恢复已安装；取消和 Agent 重启通过。已在存活服务期间记录实际 CPU/内存/沙箱属性，不能把服务被 collect 后返回的默认属性当作运行证据；强杀归档服务/断电恢复演练仍待完成。
 2. Agent 原生预检/执行/校验/取消、单次计划绑定与 1.14 RPC 能力、Application 权限/确认/幂等/资源锁及 Worker 记录投影已接线，真实 PostgreSQL 记录、匿名 401、普通用户记录/策略/配置读取 403 通过。扩大真实权限与失败场景仍待完成。
@@ -52,4 +52,14 @@ GLM Flash 仅定位公开源码。其“手动备份没有 BackupRecord”的结
 - 配置 `.env`、bind proof、独占命名卷 proof 与原文精确一致；归档/元数据 0600，SHA256、BackupRecord 和 verified 时间有效。原容器 ID/StartedAt 保持不变，无隐式重建。
 - 真实取消返回 Canceled 后容器已 unpause。Agent 受控重启时原归档单元被观察为 active，同一个 API job 最终 Succeeded，未创建替代归档任务。
 - 匿名备份记录 401。测试临时应用、命名卷、保留配置/data 和自己的 HDD 归档已精确清理，最终无 wdv-backup 容器/卷；11 个核心容器健康，Agent/Maintenance/恢复 timer active。
-- 未实测强杀归档服务、真实损坏/共享资源/普通用户拒绝与前端；未实现应用策略/保留/恢复/下载。当前可签收的是手动备份后端闭环，不是完整应用备份功能。
+- 该版本未实测强杀归档服务、真实损坏/共享资源/普通用户拒绝与前端；当时未实现应用策略/保留/恢复/下载。该轮可签收的是手动备份后端闭环，不是完整应用备份功能。
+
+## 2026-10-13 应用策略、保留与前端验收
+
+- `adf5068` 已覆盖发布并安装，部署单元最终 inactive/dead、Result=success、ExecMainStatus=0；随后提交仅增加验收脚本及文档，没有再次构建镜像。原生 `/api/v1/agents` 返回协议 1.14 和 applications.backup-retention，PostgreSQL consistency 非空列及 quiesced 默认已应用；生产管理员 OpenAPI 包含一致性/确认字段，没有 restore 入口。
+- Release 构建 0 警告/0 错误，363 Unit + 62 Integration 项目测试通过；该 Integration 项目并不证明真实 PostgreSQL 行为。Python 隔离检查 Windows 29 通过/2 POSIX 跳过，Linux 31 项全部通过。
+- 前端 43 项单元测试、TypeScript/Oxlint/ESLint 与生产构建通过；完整浏览器回归 84 项全部通过，新增应用备份专项 17 项。浏览器验收清单指导了手机弹窗高度、固定 footer、中文日期和校验按钮布局调整；已直接查看 320px/844px 高度深色与 1920px 浅色截图。浏览器使用 fixture，不能记为真实归档。
+- 独立临时 `wdv-policy-ea67c7a450db` 真实验收：普通用户记录/策略/配置读取 403；未经确认启用策略返回 400；两次手动 live 归档、份数 1 清理只删除旧归档，保留最新记录，旧记录变为 Expired。确认后的分钟策略创建成功备份，备份完成后的清理投影正确；禁用及版本递增通过。清理保持归档历史，不删除审计。
+- `wdv-backup-47ae2a14a397` 对配置/bind/独占卷和 SHA256 再次逐项核对，0600、原容器 ID/StartedAt、校验、取消后 unpause、Agent 重启接续原任务全部通过。存活归档服务记录 CPUQuotaPerSecUSec=500ms、MemoryMax=268435456、IOWeight=50、NoNewPrivileges=yes、ProtectSystem=strict、ProtectHome/PrivateTmp/PrivateDevices=yes、RestrictAddressFamilies=AF_UNIX；非 collect 后默认值。
+- Synthetic Secret 在 PostgreSQL 任务及审计中的计数均 0。两套临时应用、命名卷、保留配置/data、各自 HDD 归档和临时用户均已清理；该轮已删除的成功归档记录也标为 Expired，失败/取消历史不伪造成成功。最终 11 个核心容器健康，Agent/Maintenance/恢复 timer active，普通 user 全量 sudo 仍禁用。
+- 强杀/断电、真实共享资源/损坏/失效计划及每策略容量预警完整触发/恢复仍须补充；不将源码保护或隔离测试扩大为这些原生场景已经验收。
