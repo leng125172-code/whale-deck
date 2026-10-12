@@ -74,6 +74,8 @@ The current workstation entry points are:
 
 - Whale Deck: `http://<reachable-workstation-address>:8080`
 - Authentik: `http://<reachable-workstation-address>:8081`
+
+Use the Authentik root address for normal login, not `/setup`. Initial setup is a one-time flow. The installer finalizes an already configured administrator and Whale Deck OIDC instance with a guarded, idempotent setup-completion check; it never resets the administrator password. `deploy/validation/inspect_authentik_setup.py` reports non-secret setup state through `ak shell` for troubleshooting.
 - GitLab: deferred; no port is currently published
 
 The host-side MaintenanceHost binds `0.0.0.0` on ports `8080/8081`, so wired, USB and future workstation interfaces can use the same service without hard-coded interface addresses. The gateway publishes only loopback upstream ports (`18080` and `18081`). API, Worker, databases, cache and Authentik do not publish host ports. API and Worker must never mount `/var/run/docker.sock`; container operations use the Agent Unix socket and an allow-listed resource registry.

@@ -24,6 +24,9 @@ for key in \
   WHALEDECK_AUTHENTIK_API_TOKEN WHALEDECK_AUTHENTIK_ADMIN_GROUP_ID; do
   grep -q "^${key}='[^']\+'$" "$temporary" || { echo "Authentik did not produce $key." >&2; exit 1; }
 done
+docker exec -e WHALEDECK_COMPLETE_SETUP=true -i database-platform-authentik-server ak shell --no-startup --no-imports \
+  < "$script_dir/complete-authentik-setup.py" 2>/dev/null \
+  | grep '^AUTHENTIK_SETUP='
 chmod 0600 "$temporary"
 mv -T "$temporary" "$output"
 trap - EXIT

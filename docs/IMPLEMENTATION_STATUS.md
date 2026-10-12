@@ -43,6 +43,7 @@
 
 ## 安全与恢复入口
 
+- 2026-10-12 修复 Authentik 已配置管理员/OIDC 但租户 `setup` 标记缺失导致 `/setup` 500 的问题。安装阶段仅在已有可用管理员密码、两个 Whale Deck OIDC 应用和登录流程时补齐官方初始化收尾；不会重置密码。脚本默认只读，显式启用修复，重复运行无变更。
 - Agent capability 最长 60 秒，绑定调用方法并使用一次性 nonce；UDS 同时校验 Unix peer credentials。
 - 普通管理操作不能停止或删除 Whale Deck/`database-platform` 受保护资源；删除 Docker 标签不能解除宿主机注册表保护。
 - 一次性 Secret 使用 Valkey `GETDEL`，按 Authentik subject 隔离并设置 5 分钟 TTL，不进入 PostgreSQL、URL、审计或日志。
