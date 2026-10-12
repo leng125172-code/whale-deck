@@ -9,7 +9,7 @@ namespace WhaleDeck.Api.Controllers;
 [ApiController]
 [Authorize(Policy = "Administrator")]
 [Route("api/v1/jobs")]
-public sealed class JobsController(OperationService operations) : ControllerBase
+public sealed class JobsController(OperationService operations, JobRetryService retries) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] int take = 50, CancellationToken cancellationToken = default) =>
@@ -48,4 +48,27 @@ public sealed class JobsController(OperationService operations) : ControllerBase
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
     }
+
+    /// <summary>Describes a retry and whether a new one-time secret is required.</summary>
+    [HttpGet("{id:guid}/retry-context")]
+    public async Task<IActionResult> RetryContext(Guid id, CancellationToken cancellationToken) =>
+        Ok(await retries.GetContextAsync(id, cancellationToken));
+
+    /// <summary>Preflights the failed operation against current resources; old plans are not reused.</summary>
+    [HttpPost("{id:guid}/retry/plan")]
+    public async Task<IActionResult> RetryPlan(Guid id, [FromBody] RetryPlanRequest request, CancellationToken cancellationToken) =>
+        Ok(await retries.PlanAsync(id, request.InputTicket, cancellationToken));
+
+    /// <summary>Creates a new task linked to the failed task, with explicit confirmation and an idempotency key.</summary>
+    [HttpPost("{id:guid}/retry")]
+    public async Task<IActionResult> Retry(Guid id, [FromBody] RetryRequest request, CancellationToken cancellationToken)
+    {
+        var key = Request.Headers["Idempotency-Key"].FirstOrDefault() ?? request.IdempotencyKey;
+        var job = await retries.RetryAsync(id, User.RequireSubject(), HttpContext.TraceIdentifier, key,
+            request.PlanHash, request.InputTicket, request.Confirmed, cancellationToken);
+        return AcceptedAtAction(nameof(Get), new { id = job.Id }, job);
+    }
+
+    public sealed record RetryPlanRequest(string? InputTicket);
+    public sealed record RetryRequest(string IdempotencyKey, string? PlanHash, string? InputTicket, bool Confirmed);
 }

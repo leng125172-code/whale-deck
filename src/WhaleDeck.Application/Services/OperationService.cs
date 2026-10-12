@@ -63,7 +63,8 @@ public sealed class OperationService(IJobRepository jobs)
             Result = "Accepted",
             JobId = job.Id,
             TraceId = traceId,
-            DetailJson = "{}"
+            DetailJson = command.RetriedFromJobId is { } sourceJobId
+                ? JsonSerializer.Serialize(new { retriedFromJobId = sourceJobId }) : "{}"
         };
         return Map(await jobs.EnqueueAsync(job, outbox, audit, cancellationToken));
     }
@@ -89,7 +90,7 @@ public sealed class OperationService(IJobRepository jobs)
         "network-delete" or "volume-delete" or
         "batch-start" or "batch-stop" or "batch-restart" or "batch-delete";
 
-    private static bool RequiresPlan(OperationCommand command) => command.Action is
+    internal static bool RequiresPlan(OperationCommand command) => command.Action is
         "create" or "delete" or "delete-principal" or "prune" or "apply-settings" or "install" or "update" or "rebuild" or "reinstall" or "uninstall" or
         "update-install" or "reboot" or "commit-push" or "apply-update" or "rollback" or
         "network-create" or "network-delete" or "volume-delete" or

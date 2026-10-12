@@ -165,7 +165,11 @@ public sealed record OperationCommand(
     string IdempotencyKey,
     string RequestJson,
     string? PlanHash,
-    bool Confirmed);
+    bool Confirmed,
+    Guid? RetriedFromJobId = null);
+
+public sealed record JobRetryContextDto(Guid JobId, string JobType, string? ResourceId, bool RequiresInput, string? InputKind);
+public sealed record JobRetryPlanDto(JobRetryContextDto Context, PlanDto? Plan);
 
 public sealed record JobDto(
     Guid Id,

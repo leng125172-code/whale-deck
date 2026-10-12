@@ -1,12 +1,12 @@
 # 实施状态与恢复入口
 
-截至 2026-10-11（Asia/Shanghai），Whale Deck 的当前非 `HOLD` 范围已完成主体开发。本文分别记录源码、已部署运行时和待切换发布物，避免把“已经构建”误写成“已经上线”。
+截至 2026-10-12（Asia/Shanghai），Whale Deck 的 MVP 与 P1 主体已部署，仍有功能细项和验收缺口。本文分别记录源码、已部署运行时和剩余功能；模块拥有页面或通过构建不等于全部功能完成。
 
 ## 当前运行状态
 
 - 工作站仓库：`/data/GitRepos/whale-deck`，分支 `dev`，已快进到当前远端提交。
 - `whaledeck-agent` 与 `whaledeck-maintenance` 由 systemd 管理并开机自启；Agent 仅监听 `/run/whaledeck/agent.sock`，不监听 TCP。
-- `whaledeck-api`、`whaledeck-worker`、`whaledeck-gateway` 已以容器运行。新版镜像已经在工作站完成构建，数据库的四个增量 migration 已执行；镜像会在新版 Host Agent 安装后统一切换。Gateway 只向宿主机回环发布 `18080/18081`，稳定入口由 MaintenanceHost 在 `0.0.0.0:8080/8081` 提供。
+- `whaledeck-api`、`whaledeck-worker`、`whaledeck-gateway` 已完成强制重建与切换，均健康。Host Agent/MaintenanceHost 已安装并运行，数据库 migration 已执行。Gateway 只向宿主机回环发布 `18080/18081`，稳定入口由 MaintenanceHost 在 `0.0.0.0:8080/8081` 提供。
 - 8 个 `database-platform-*` 依赖容器健康：PostgreSQL、MariaDB、SQL Server、MongoDB、Valkey 9、Valkey 7.2、Authentik Server 和 Authentik Worker。
 - 数据库、缓存、Authentik、API 与 Worker 都没有直接向局域网发布容器端口。API/Worker 不挂载 `docker.sock`，所有宿主机与 Docker 操作均通过 Agent。
 - Docker 使用有界 `local` 日志驱动（单文件 10 MiB、最多 5 个、压缩）并启用 `live-restore`。
@@ -36,8 +36,8 @@
 ## 自动化验证基线
 
 - `.NET 10` Release 构建：0 警告、0 错误。
-- 自动化测试：141 项 UnitTests、29 项 IntegrationTests 通过。
-- 前端：Prettier、Oxlint、ESLint、Vue TypeScript 检查、5 项 Vitest 和 Vite 生产构建通过。
+- 自动化测试：164 项 UnitTests、34 项 IntegrationTests 通过（含任务重试服务新增测试）。
+- 前端：Prettier、Oxlint、ESLint、Vue TypeScript 检查、7 项 Vitest 和 Vite 生产构建通过。
 - Agent 协议当前为 `1.6`；除容器日志和统计外，提供普通 Docker 资源管理、镜像元数据、有界事件时间线，以及注册资源与 Docker 资源相互隔离的预检计划能力。
 - 工作站健康入口与 systemd 服务已复验；最近一次真实主机验收返回 40 个网络接口、8 条存储记录、20 条系统日志及有效诊断包。
 
@@ -51,9 +51,22 @@
 
 ## 尚未收尾
 
-1. 在工作站交互式执行新版 Host Agent/MaintenanceHost 安装，随后切换 API/Worker/Gateway 到已构建镜像并完成真实运行时回归；该步骤不会使用历史密码或临时全量免密 sudo。
+1. 任务重试新增 API、前端确认与预检流程已实现并通过本地测试，待发布后以临时容器完成真实依赖验收。治理、门户、告警与身份回归，以及 Docker 配置原值应用后的受控重启已在 2026-10-12 通过。
 2. 最终发布前使用正式账号再复核危险操作确认；匿名登录、Authentik 跳转、明暗主题、1045px 导航断点、600px 搜索图标、390px 手机布局和普通用户菜单裁剪已完成浏览器走查。
 3. 决定并实施局域网正式入口：将 Whale Deck 切换到 `http://precision-7920-tower.local` 的 80 端口前，先确认与现有服务无冲突；其他服务继续按端口区分。
-4. 创建稳定发布时再把 `dev` 通过 PR 合并到 `master`，并为正式镜像记录不可变摘要。
+4. 当前使用 `dev` 开发、测试、修复后覆盖发布流程；部署问题修复后覆盖，不自动回退开发版本。稳定发布和合入 `master` 属于后续发布节点。
+
+## 功能细项缺口
+
+以下是对源码与页面的核对结果，仍需逐项实现和验收，不能用上方模块级描述替代：
+
+- Compose 项目的配置差异、拉取、重部署和项目生命周期完整闭环。
+- 主机进程列表与详情，路由、监听端口、防火墙只读视图，大目录扫描与清理建议。
+- 镜像更新检查、构建缓存详情、卷容量与依赖图的完整展示。
+- 异地备份复制与状态；数据库配置差异；公共门户引用/隐藏和完整可用性探测。
+- 通知已读/未读和历史；会话续期提示、最近登录与安全事件展示。
+- 所有管理页面的操作、空/错误/过期状态及普通用户拒绝访问，需完成最终浏览器回归。
+
+P2 的镜像安全扫描/SBOM、Compose Git 同步、数据库专用工具入口、受控结束进程、反向代理路由和多 Agent 尚未形成完整实现。macvlan/ipvlan 与 Web Shell 在功能基线中仍明确为设计预留；不因 P2 标签而解除其预留状态。最终交付须以已确认的非预留范围逐项验收。
 
 主机重启、系统更新安装和平台自身回滚属于高风险入口，代码与计划流程已提供，但不会为了验收而无故执行。GitLab、数据库恢复、容器终端、文件管理、防火墙/网络写入、外部通知、多主机、域名/HTTPS 仍为 `HOLD` 或 P2，不属于本阶段缺口。

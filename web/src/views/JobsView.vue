@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiRequest, apiUrl } from '@/services/apiClient'
-import { subscribeToJob } from '@/services/operations'
+import { apiRequest, apiUrl, createIdempotencyKey } from '@/services/apiClient'
+import { stageSecret, subscribeToJob, type OperationPlan } from '@/services/operations'
 import type { Job, JobEvent } from '@/services/contracts'
 
 const jobs = ref<Job[]>([])
@@ -14,6 +14,24 @@ let timer: number | undefined
 let unsubscribe: (() => void) | undefined
 const terminalStates = new Set(['Succeeded', 'Failed', 'Canceled', 'RolledBack'])
 const canCancel = computed(() => selected.value && !terminalStates.has(selected.value.state))
+const canRetry = computed(
+  () => selected.value && ['Failed', 'Canceled', 'RolledBack'].includes(selected.value.state),
+)
+interface RetryContext {
+  jobId: string
+  jobType: string
+  resourceId: string | null
+  requiresInput: boolean
+  inputKind: string | null
+}
+const retryContext = ref<RetryContext | null>(null)
+const retryVisible = ref(false)
+const retryBusy = ref(false)
+const retryInput = ref('')
+const retryInputTicket = ref<string | null>(null)
+const retryPlan = ref<{ context: RetryContext; plan: OperationPlan | null } | null>(null)
+const retryKey = ref('')
+const retryError = ref('')
 const diagnosticBundleId = computed(() => {
   if (selected.value?.jobType !== 'platform.diagnostic-bundle' || !selected.value.resultJson)
     return ''
@@ -77,6 +95,79 @@ async function cancelJob() {
   await load()
 }
 
+async function openRetry() {
+  if (!selected.value) return
+  try {
+    retryContext.value = await apiRequest<RetryContext>(`jobs/${selected.value.id}/retry-context`)
+    retryInput.value = ''
+    retryInputTicket.value = null
+    retryPlan.value = null
+    retryError.value = ''
+    retryKey.value = createIdempotencyKey()
+    retryVisible.value = true
+  } catch {
+    ElMessage.error('当前任务无法重试，请检查任务状态后刷新')
+  }
+}
+
+async function previewRetry() {
+  if (!retryContext.value) return
+  retryBusy.value = true
+  retryError.value = ''
+  try {
+    if (retryContext.value.requiresInput) {
+      if (!retryInput.value) {
+        ElMessage.warning('请重新输入本次操作所需的凭据或环境变量')
+        return
+      }
+      retryInputTicket.value = (await stageSecret(retryInput.value)).token
+      retryInput.value = ''
+    }
+    retryPlan.value = await apiRequest<{ context: RetryContext; plan: OperationPlan | null }>(
+      `jobs/${retryContext.value.jobId}/retry/plan`,
+      { method: 'POST', body: JSON.stringify({ inputTicket: retryInputTicket.value }) },
+    )
+  } catch {
+    retryError.value = '预检未通过，请检查目标资源及操作条件后重新预检。'
+    retryInputTicket.value = null
+  } finally {
+    retryBusy.value = false
+  }
+}
+
+async function submitRetry() {
+  if (!retryContext.value || !retryPlan.value) return
+  retryBusy.value = true
+  retryError.value = ''
+  try {
+    const job = await apiRequest<Job>(`jobs/${retryContext.value.jobId}/retry`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': retryKey.value },
+      body: JSON.stringify({
+        idempotencyKey: retryKey.value,
+        inputTicket: retryInputTicket.value,
+        planHash: retryPlan.value.plan?.planHash ?? null,
+        confirmed: true,
+      }),
+    })
+    retryVisible.value = false
+    retryInputTicket.value = null
+    ElMessage.success('已创建重试任务，原任务记录已保留')
+    await load()
+    await openJob(job)
+  } catch {
+    retryError.value = '提交失败，请检查资源状态。若计划或凭据已过期，请重新预检。'
+    retryPlan.value = null
+  } finally {
+    retryBusy.value = false
+  }
+}
+
+function clearRetryInput() {
+  retryInput.value = ''
+  retryInputTicket.value = null
+}
+
 function downloadDiagnosticBundle() {
   if (!diagnosticBundleId.value) return
   const anchor = document.createElement('a')
@@ -103,7 +194,7 @@ onBeforeUnmount(() => {
       <div>
         <span class="panel__eyebrow">OPERATIONS</span>
         <h1>任务中心</h1>
-        <p>查看异步任务的实时阶段、结果和错误；任务进度使用 SSE 持续更新。</p>
+        <p>查看任务进度与结果，取消进行中的任务，或重新预检并重试失败任务。</p>
       </div>
       <el-button :loading="loading" @click="load">刷新</el-button>
     </header>
@@ -180,11 +271,68 @@ onBeforeUnmount(() => {
         </el-timeline>
       </template>
       <template #footer
+        ><el-button v-if="canRetry" type="primary" @click="openRetry">重新预检并重试</el-button
         ><el-button v-if="canCancel" type="danger" plain @click="cancelJob"
           >取消任务</el-button
         ></template
       >
     </el-drawer>
+    <el-dialog
+      v-model="retryVisible"
+      title="重试任务"
+      width="min(560px, 94vw)"
+      :close-on-click-modal="false"
+      @closed="clearRetryInput"
+    >
+      <template v-if="retryContext">
+        <el-alert v-if="retryError" :title="retryError" type="error" :closable="false" />
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="原任务">{{ retryContext.jobId }}</el-descriptions-item>
+          <el-descriptions-item label="操作">{{ retryContext.jobType }}</el-descriptions-item>
+          <el-descriptions-item label="资源">{{
+            retryContext.resourceId || '新资源'
+          }}</el-descriptions-item>
+        </el-descriptions>
+        <p>重试会新建任务，并按当前资源状态重新校验。请确认之前的操作结果和本次影响。</p>
+        <el-form v-if="retryContext.requiresInput && !retryPlan" label-position="top">
+          <el-form-item
+            :label="
+              retryContext.inputKind === 'environment' ? '重新输入环境变量（JSON）' : '重新输入密码'
+            "
+          >
+            <el-input
+              v-model="retryInput"
+              :type="retryContext.inputKind === 'environment' ? 'textarea' : 'password'"
+              :rows="5"
+              :show-password="retryContext.inputKind !== 'environment'"
+              autocomplete="new-password"
+            />
+          </el-form-item>
+        </el-form>
+        <template v-if="retryPlan">
+          <el-alert title="预检完成，请确认后提交新的任务" type="info" :closable="false" />
+          <ul v-if="retryPlan.plan?.changes.length">
+            <li v-for="change in retryPlan.plan.changes" :key="change">{{ change }}</li>
+          </ul>
+          <el-alert
+            v-for="warning in retryPlan.plan?.warnings"
+            :key="warning"
+            :title="warning"
+            type="warning"
+            :closable="false"
+          />
+        </template>
+      </template>
+      <template #footer>
+        <el-button :disabled="retryBusy" @click="retryVisible = false">取消</el-button>
+        <el-button v-if="!retryPlan" type="primary" :loading="retryBusy" @click="previewRetry"
+          >重新预检</el-button
+        >
+        <el-button v-else type="primary" :loading="retryBusy" @click="submitRetry"
+          >确认重试</el-button
+        >
+      </template>
+    </el-dialog>
   </div>
 </template>
 

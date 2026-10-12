@@ -84,6 +84,7 @@ public static class DependencyInjection
         services.AddScoped<PortalService>();
         services.AddScoped<OverviewService>();
         services.AddScoped<OperationService>();
+        services.AddScoped<JobRetryService>();
         services.AddScoped<GovernanceService>();
         services.AddScoped<ApplicationService>();
         services.AddScoped<ContainerUpdateService>();
