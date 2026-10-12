@@ -259,6 +259,39 @@ export interface ApplicationImageMetadata {
   labels: Record<string, string>
 }
 
+export interface ApplicationConfigurationMount {
+  type: string
+  source: string
+  target: string
+  readOnly: boolean
+}
+export interface ApplicationServiceConfiguration {
+  name: string
+  image: string
+  cpus: number
+  memoryMb: number
+  restartPolicy: string
+  ports: string[]
+  commandPresent: boolean
+  entrypointPresent: boolean
+  environmentNames: string[]
+  mounts: ApplicationConfigurationMount[]
+  networks: string[]
+  networkMode: string
+}
+export interface ApplicationConfiguration {
+  resourceId: string
+  fingerprint: string
+  services: ApplicationServiceConfiguration[]
+  environmentNames: string[]
+  autoUpdate: boolean
+  versionPolicy: string
+  maintenanceWindow: string
+  dependencies: string[]
+  approvedNetworks: string[]
+  ownedDataDirectory: string
+}
+
 export interface OverviewResponse {
   scope: 'Public' | 'Administrator'
   platformStatus: string

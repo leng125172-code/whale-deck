@@ -297,7 +297,11 @@ onBeforeUnmount(() => {
         <el-form v-if="retryContext.requiresInput && !retryPlan" label-position="top">
           <el-form-item
             :label="
-              retryContext.inputKind === 'environment' ? '重新输入环境变量（JSON）' : '重新输入密码'
+              retryContext.jobType === 'applications.configure'
+                ? '重新输入应用配置补丁（JSON）'
+                : retryContext.inputKind === 'environment'
+                  ? '重新输入环境变量（JSON）'
+                  : '重新输入密码'
             "
           >
             <el-input

@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import { enqueueOperation, planOperation, stageSecret } from '@/services/operations'
 import { authSession } from '@/services/authSession'
+import ApplicationConfigurationEditor from '@/components/applications/ApplicationConfigurationEditor.vue'
 import type {
   ApplicationImageMetadata,
   ApplicationDetail,
@@ -21,6 +22,13 @@ const installed = ref<ManagedResource[]>([])
 const installations = ref<ApplicationInstallation[]>([])
 const detail = ref<ApplicationDetail | null>(null)
 const detailVisible = ref(false)
+const configurationVisible = ref(false)
+const configurationResourceId = ref('')
+function openConfiguration(item: ManagedResource) {
+  if (!isManaged(item)) return
+  configurationResourceId.value = item.id
+  configurationVisible.value = true
+}
 const detailLoading = ref(false)
 const stale = ref(false)
 const loading = ref(false)
@@ -292,6 +300,8 @@ function clearPrivateData() {
   installVisible.value = false
   imageMetadata.value = null
   form.environment = ''
+  configurationVisible.value = false
+  configurationResourceId.value = ''
   loading.value = false
 }
 watch(
@@ -345,6 +355,15 @@ onMounted(async () => {
     if (item && !item.installed) openInstall(item)
   }
   await syncDetailFromRoute()
+  if (typeof route.query.configure === 'string') {
+    const item = installed.value.find(
+      (candidate) => candidate.id === route.query.configure && isManaged(candidate),
+    )
+    if (item) {
+      configurationResourceId.value = item.id
+      configurationVisible.value = true
+    }
+  }
 })
 
 watch(
@@ -478,6 +497,13 @@ watch(
               >详情</el-button
             >
             <template v-if="isManaged(item)">
+              <el-button
+                link
+                type="primary"
+                :disabled="!!pendingAction"
+                @click="openConfiguration(item)"
+                >参数</el-button
+              >
               <el-button
                 link
                 :type="isRunning(item) ? 'danger' : 'primary'"
@@ -663,6 +689,11 @@ watch(
         </template>
       </div>
     </el-drawer>
+    <ApplicationConfigurationEditor
+      v-model="configurationVisible"
+      :resource-id="configurationResourceId"
+      @submitted="load"
+    />
   </div>
 </template>
 
