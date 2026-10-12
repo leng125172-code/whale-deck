@@ -36,7 +36,7 @@
 ## 自动化验证基线
 
 - `.NET 10` Release 构建：0 警告、0 错误。
-- 自动化测试：164 项 UnitTests、34 项 IntegrationTests 通过（含任务重试服务新增测试）。
+- 自动化测试：179 项 UnitTests、39 项 IntegrationTests 通过（含任务重试服务、Agent 错误分类与 Worker 重试策略测试）。
 - 前端：Prettier、Oxlint、ESLint、Vue TypeScript 检查、7 项 Vitest 和 Vite 生产构建通过。
 - Agent 协议当前为 `1.6`；除容器日志和统计外，提供普通 Docker 资源管理、镜像元数据、有界事件时间线，以及注册资源与 Docker 资源相互隔离的预检计划能力。
 - 工作站健康入口与 systemd 服务已复验；最近一次真实主机验收返回 40 个网络接口、8 条存储记录、20 条系统日志及有效诊断包。

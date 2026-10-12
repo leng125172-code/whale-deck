@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
+# Read-only Git commands can refresh the index as an optional optimization.
+# Root must not replace the development user's index with a root-owned 0600 file.
+export GIT_OPTIONAL_LOCKS=0
 
 [[ $EUID -eq 0 ]] || { echo 'Platform maintenance must run as root.' >&2; exit 1; }
 action=${1:-}

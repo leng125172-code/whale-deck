@@ -487,12 +487,9 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             catch (Exception exception)
             {
                 message.Attempts++;
-                var secretExpired = exception is InvalidOperationException && exception.Message.Contains("staged secret expired", StringComparison.Ordinal);
-                var providerRejected = exception is HttpRequestException { StatusCode: { } status } &&
-                    (int)status is >= 400 and < 500 and not 408 and not 429;
-                var terminal = secretExpired || providerRejected || message.Attempts >= 8;
-                message.LastErrorCode = secretExpired ? "ONE_TIME_SECRET_EXPIRED" :
-                    providerRejected ? "IDENTITY_PROVIDER_REJECTED" : "OUTBOX_DISPATCH_FAILED";
+                var failure = DispatchFailurePolicy.Classify(exception, message.Attempts);
+                var terminal = failure.Terminal;
+                message.LastErrorCode = failure.ErrorCode;
                 if (terminal)
                 {
                     message.ProcessedAtUtc = DateTimeOffset.UtcNow;
@@ -501,8 +498,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                         using var failedPayload = JsonDocument.Parse(message.PayloadJson);
                         var failedJobId = failedPayload.RootElement.GetProperty("jobId").GetGuid();
                         var failedJob = await db.OperationJobs.SingleAsync(item => item.Id == failedJobId, cancellationToken);
-                        var phase = secretExpired ? "SecretExpired" : providerRejected ? "ProviderRejected" : "DispatchRetriesExhausted";
-                        await Complete(db, failedJob, "Failed", phase, message.LastErrorCode, cancellationToken);
+                        await Complete(db, failedJob, "Failed", failure.Phase, message.LastErrorCode, cancellationToken);
                     }
                 }
                 else
@@ -510,7 +506,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                     message.AvailableAtUtc = DateTimeOffset.UtcNow.AddSeconds(Math.Min(300, 5 * Math.Pow(2, message.Attempts)));
                 }
                 await db.SaveChangesAsync(cancellationToken);
-                if (providerRejected) LogIdentityProviderRejected(logger, message.Id, exception.Message, null);
+                if (failure.ErrorCode == "IDENTITY_PROVIDER_REJECTED") LogIdentityProviderRejected(logger, message.Id, failure.ErrorCode, null);
                 if (!terminal) LogOutboxRetry(logger, message.Id, message.Attempts, null);
             }
         }

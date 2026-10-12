@@ -24,7 +24,11 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ListenUnixSocket(socketPath, listen => listen.Protocols = HttpProtocols.Http2);
 });
 
-builder.Services.AddGrpc(options => options.Interceptors.Add<CapabilityInterceptor>());
+builder.Services.AddGrpc(options =>
+{
+    options.Interceptors.Add<CapabilityInterceptor>();
+    options.Interceptors.Add<AgentErrorInterceptor>();
+});
 builder.Services.AddSingleton<CapabilityValidator>();
 builder.Services.AddSingleton<PeerCredentialPolicy>();
 builder.Services.AddSingleton<DockerEngine>();

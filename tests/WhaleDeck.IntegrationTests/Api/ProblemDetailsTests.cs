@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using WhaleDeck.Api.Middleware;
+using Grpc.Core;
 
 namespace WhaleDeck.IntegrationTests.Api;
 
@@ -31,6 +32,11 @@ public sealed class ProblemDetailsTests
 
     public static TheoryData<Exception, int, string> ExpectedMappings => new()
     {
+        { new RpcException(new Status(StatusCode.InvalidArgument, "private")), StatusCodes.Status400BadRequest, "AGENT_INVALID_ARGUMENT" },
+        { new RpcException(new Status(StatusCode.NotFound, "private")), StatusCodes.Status404NotFound, "AGENT_RESOURCE_NOT_FOUND" },
+        { new RpcException(new Status(StatusCode.PermissionDenied, "private")), StatusCodes.Status403Forbidden, "AGENT_OPERATION_FORBIDDEN" },
+        { new RpcException(new Status(StatusCode.FailedPrecondition, "private")), StatusCodes.Status409Conflict, "AGENT_PRECONDITION_FAILED" },
+        { new RpcException(new Status(StatusCode.Unavailable, "private")), StatusCodes.Status503ServiceUnavailable, "AGENT_UNAVAILABLE" },
         { new DbUpdateConcurrencyException(), StatusCodes.Status409Conflict, "CONCURRENCY_CONFLICT" },
         { new InvalidOperationException(), StatusCodes.Status409Conflict, "OPERATION_CONFLICT" },
         { new ArgumentException(), StatusCodes.Status400BadRequest, "VALIDATION_FAILED" },
