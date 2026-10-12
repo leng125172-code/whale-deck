@@ -81,6 +81,18 @@ def docker(*arguments):
     return completed.stdout
 
 
+def capacity():
+    # Same approved HDD tree as application archives and database-platform backups.
+    registry()
+    destination = safe_path(TARGET, directory=True)
+    base = safe_path(TARGET.parents[1], directory=True)
+    require(destination.is_dir() and base.is_dir() and destination.stat().st_dev == base.stat().st_dev)
+    usage = shutil.disk_usage(destination)
+    require(usage.total > 0 and 0 <= usage.used <= usage.total and 0 <= usage.free <= usage.total)
+    return {'targetDirectoryId': 'database-platform.backup.hdd', 'totalBytes': usage.total,
+        'usedBytes': usage.used, 'freeBytes': usage.free, 'observedAtUnixMs': time.time_ns() // 1_000_000}
+
+
 def inspect_all():
     ids = docker('ps', '--no-trunc', '-aq').decode().split()
     require(len(ids) <= 1024 and all(IDENTIFIER.fullmatch(item) for item in ids))
@@ -585,6 +597,8 @@ def main():
                 'phase': 'Canceled' if CANCELED else 'Failed', 'slug': arguments[0], 'job': arguments[1],
                 'errorCode': 'APPLICATION_BACKUP_CANCELED' if CANCELED else 'APPLICATION_BACKUP_FAILED'})
             raise
+    elif verb == 'capacity' and not arguments:
+        result = capacity()
     elif verb == 'cleanup-plan' and len(arguments) == 3:
         result = cleanup_plan(arguments[0], int(arguments[1]), int(arguments[2]))
     elif verb == 'verify-plan' and len(arguments) == 2:

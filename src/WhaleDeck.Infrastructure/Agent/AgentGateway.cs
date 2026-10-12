@@ -303,6 +303,23 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcess
         return new PlanDto(response.PlanHash, response.ExpiresAtUtc.ToDateTimeOffset(), response.Changes, response.Warnings);
     }
 
+    public async Task<BackupTargetCapacityDto> GetBackupTargetCapacityAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _resources.GetBackupTargetCapacityAsync(new Empty(),
+                Headers("/whaledeck.agent.v1.ManagedResourceService/GetBackupTargetCapacity"),
+                deadline: DateTime.UtcNow.AddSeconds(15), cancellationToken: cancellationToken);
+            var capacity = new BackupTargetCapacityDto(response.TargetDirectoryId, response.Available, response.TotalBytes,
+                response.UsedBytes, response.FreeBytes, response.ObservedAtUtc?.ToDateTimeOffset(), string.IsNullOrEmpty(response.ErrorCode) ? null : "BACKUP_CAPACITY_UNAVAILABLE");
+            return capacity.IsCurrent(DateTimeOffset.UtcNow) ? capacity : BackupTargetCapacityDto.Unknown("BACKUP_CAPACITY_UNAVAILABLE");
+        }
+        catch (RpcException exception) when (exception.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded or StatusCode.Unimplemented)
+        {
+            return BackupTargetCapacityDto.Unknown("BACKUP_CAPACITY_UNAVAILABLE");
+        }
+    }
+
     public async Task<ApplicationConfigurationDto> GetApplicationConfigurationAsync(string resourceId, CancellationToken cancellationToken)
     {
         var response = await _resources.GetApplicationConfigurationAsync(new RegisteredResourceRequest

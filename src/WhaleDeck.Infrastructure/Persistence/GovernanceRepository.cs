@@ -188,6 +188,7 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
         {
             item = await db.AlertRules.SingleOrDefaultAsync(value => value.Id == id, cancellationToken)
                 ?? throw new KeyNotFoundException("Alert rule was not found.");
+            if (item.RuleType == BackupCapacityPolicy.RuleType) throw new InvalidOperationException("Backup capacity rules are managed by their backup policy.");
             RequireVersion(command.ExpectedVersion, item.Version);
             item.RuleType = command.RuleType;
             item.ResourceSelectorJson = command.ResourceSelectorJson;
@@ -233,6 +234,7 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
     {
         var item = await db.AlertEvents.SingleOrDefaultAsync(value => value.Id == id, cancellationToken)
             ?? throw new KeyNotFoundException("Alert event was not found.");
+        if (item.State == "Recovered") throw new InvalidOperationException("Recovered alerts cannot be acknowledged or silenced again.");
         item.AcknowledgedBySubject = actorSubject;
         item.AcknowledgedAtUtc = DateTimeOffset.UtcNow;
         item.SilencedUntilUtc = silencedUntilUtc;

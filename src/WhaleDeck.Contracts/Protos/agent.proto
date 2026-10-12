@@ -471,7 +471,18 @@ service DockerService {
   rpc RunAction(RegisteredActionRequest) returns (OperationHandle);
 }
 
+message BackupTargetCapacityResponse {
+  string target_directory_id = 1;
+  bool available = 2;
+  int64 total_bytes = 3;
+  int64 used_bytes = 4;
+  int64 free_bytes = 5;
+  google.protobuf.Timestamp observed_at_utc = 6;
+  string error_code = 7;
+}
+
 service ManagedResourceService {
+  rpc GetBackupTargetCapacity(google.protobuf.Empty) returns (BackupTargetCapacityResponse);
   rpc GetApplicationConfiguration(RegisteredResourceRequest) returns (ApplicationConfigurationResponse);
   rpc PlanAction(RegisteredActionRequest) returns (PlanResponse);
   rpc ListDatabaseInstances(google.protobuf.Empty) returns (ResourceCollectionResponse);

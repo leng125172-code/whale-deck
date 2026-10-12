@@ -241,6 +241,10 @@ case "$action" in
     [[ "$unit" == whaledeck-agent.service && "$verb" == restart ]] || exit 2
     exec /usr/bin/systemd-run --unit=whaledeck-agent-restart --collect --on-active=3s /usr/bin/systemctl restart "$unit"
     ;;
+  backup-target-capacity)
+    [[ $# -eq 1 ]] || exit 2
+    exec /usr/bin/python3 /usr/local/libexec/whaledeck-application-backup.py capacity
+    ;;
   application-backup-plan|application-backup-verify-plan)
     [[ $# -ge 3 && "$2" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || exit 2
     if [[ "$action" == application-backup-plan ]]; then

@@ -10,8 +10,12 @@ namespace WhaleDeck.Api.Controllers;
 [ApiController]
 [Authorize(Policy = "Administrator")]
 [Route("api/v1")]
-public sealed class GovernanceController(GovernanceService governance) : ControllerBase
+public sealed class GovernanceController(GovernanceService governance, WhaleDeck.Application.Abstractions.IAgentGateway agent) : ControllerBase
 {
+    /// <summary>Reads the approved HDD backup filesystem; unknown capacity is never reported as zero usage.</summary>
+    [HttpGet("backups/capacity")]
+    public async Task<IActionResult> BackupCapacity(CancellationToken cancellationToken) =>
+        Ok(await agent.GetBackupTargetCapacityAsync(cancellationToken));
     [HttpGet("schedules")]
     public async Task<IActionResult> Schedules(CancellationToken cancellationToken) => Ok(await governance.ListSchedulesAsync(cancellationToken));
 

@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\WhaleDeck.Api\WhaleDeck.Api.csproj" />
     <ProjectReference Include="..\..\src\WhaleDeck.Infrastructure\WhaleDeck.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\WhaleDeck.Worker\WhaleDeck.Worker.csproj" />
   </ItemGroup>
 
 </Project>

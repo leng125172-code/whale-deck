@@ -177,7 +177,7 @@ public sealed class GovernanceService(IGovernanceRepository repository)
         item.ThresholdJson, item.EvaluationWindowSeconds, item.Severity, item.IsEnabled, item.Version);
     private static AlertEventDto Map(Domain.Entities.AlertEvent item) => new(item.Id, item.RuleId, item.ResourceId, item.State,
         item.Severity, item.OccurrenceCount, item.FirstOccurredAtUtc, item.LastOccurredAtUtc, item.RecoveredAtUtc,
-        item.AcknowledgedBySubject, item.AcknowledgedAtUtc, item.SilencedUntilUtc, item.SummaryCode);
+        item.AcknowledgedBySubject, item.AcknowledgedAtUtc, item.SilencedUntilUtc, item.SummaryCode, BackupCapacityPolicy.ReadDetail(item));
 
     private static void ValidateName(string value)
     {

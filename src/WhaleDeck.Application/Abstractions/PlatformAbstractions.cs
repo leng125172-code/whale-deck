@@ -37,6 +37,8 @@ public interface IAgentGateway
     Task<ApplicationImageMetadataDto> InspectApplicationImageAsync(string image, bool pullIfMissing, CancellationToken cancellationToken);
     Task<ApplicationConfigurationDto> GetApplicationConfigurationAsync(string resourceId, CancellationToken cancellationToken) =>
         throw new NotSupportedException("This Agent does not support application configuration.");
+    Task<BackupTargetCapacityDto> GetBackupTargetCapacityAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(BackupTargetCapacityDto.Unknown("AGENT_CAPACITY_UNSUPPORTED"));
     Task<PlanDto> PlanAsync(string area, string action, string? resourceId, IReadOnlyDictionary<string, string> parameters, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<MetricValueDto>> GetMetricsSnapshotAsync(CancellationToken cancellationToken);
     Task<AgentOperationDto> ExecuteAsync(string area, string action, string resourceId, IReadOnlyDictionary<string, string> parameters, string? planHash, Guid jobId, string idempotencyKey, CancellationToken cancellationToken);

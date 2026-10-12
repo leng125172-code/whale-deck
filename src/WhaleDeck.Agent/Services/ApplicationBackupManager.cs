@@ -11,11 +11,49 @@ public sealed record ApplicationBackupRecovery(string OperationId, string Slug, 
 
 /// <summary>Fixed root helper adapter. Independent services survive Agent restart; no paths or secrets cross RPC.</summary>
 public sealed class ApplicationBackupManager(ResourceRegistry registry, BoundedProcessRunner processes,
-    OperationStore operations, IConfiguration configuration)
+    OperationStore operations, IConfiguration configuration) : IDisposable
 {
     private const string Helper = "/usr/local/libexec/whaledeck-privileged";
+    private readonly SemaphoreSlim _capacityGate = new(1, 1);
+    private BackupTargetCapacityResponse? _capacity;
+    private DateTimeOffset _nextCapacityRead;
     private readonly string _directory = Path.Combine(configuration["Agent:OperationDirectory"] ??
         "/var/lib/whaledeck-agent/operations", "application-backups");
+
+    public async Task<BackupTargetCapacityResponse> ReadCapacityAsync(CancellationToken cancellationToken)
+    {
+        await _capacityGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (_capacity is not null && DateTimeOffset.UtcNow < _nextCapacityRead) return _capacity.Clone();
+            var response = new BackupTargetCapacityResponse { TargetDirectoryId = "database-platform.backup.hdd", ErrorCode = "BACKUP_CAPACITY_UNAVAILABLE" };
+            try
+            {
+                var output = await RunHelperAsync(["backup-target-capacity"], TimeSpan.FromSeconds(10), cancellationToken);
+                using var document = JsonDocument.Parse(output);
+                var root = document.RootElement;
+                response.TotalBytes = root.GetProperty("totalBytes").GetInt64();
+                response.UsedBytes = root.GetProperty("usedBytes").GetInt64();
+                response.FreeBytes = root.GetProperty("freeBytes").GetInt64();
+                if (root.GetProperty("targetDirectoryId").GetString() != response.TargetDirectoryId || response.TotalBytes <= 0 ||
+                    response.UsedBytes < 0 || response.UsedBytes > response.TotalBytes || response.FreeBytes < 0 || response.FreeBytes > response.TotalBytes) throw Invalid();
+                response.ObservedAtUtc = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTimeOffset(
+                    DateTimeOffset.FromUnixTimeMilliseconds(root.GetProperty("observedAtUnixMs").GetInt64()));
+                response.Available = true;
+                response.ErrorCode = string.Empty;
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or IOException or JsonException or ArgumentException or KeyNotFoundException)
+            {
+                response = new BackupTargetCapacityResponse { TargetDirectoryId = "database-platform.backup.hdd", ErrorCode = "BACKUP_CAPACITY_UNAVAILABLE" };
+            }
+            _capacity = response;
+            _nextCapacityRead = DateTimeOffset.UtcNow.AddSeconds(30);
+            return response.Clone();
+        }
+        finally { _capacityGate.Release(); }
+    }
+
+    public void Dispose() => _capacityGate.Dispose();
 
     public async Task<ApplicationBackupPreview> PreviewAsync(RegisteredActionRequest request, CancellationToken cancellationToken)
     {

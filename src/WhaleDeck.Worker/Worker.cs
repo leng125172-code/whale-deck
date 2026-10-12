@@ -72,6 +72,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         await DispatchBackupPolicies(db, cancellationToken);
         await DispatchOutbox(db, agent, secrets, identityDirectory, identity, leases, _workerInstanceId, logger, cancellationToken);
         await ReconcileAgentOperations(db, agent, leases, _workerInstanceId, cancellationToken);
+        await BackupCapacityAlerts.EvaluateAsync(db, agent, cancellationToken);
         await EvaluateAlerts(db, cancellationToken);
 
         if (_nextCatalogRefresh <= DateTimeOffset.UtcNow)
@@ -665,7 +666,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
     private static async Task EvaluateAlerts(PlatformDbContext db, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
-        var rules = await db.AlertRules.Where(item => item.IsEnabled).ToArrayAsync(cancellationToken);
+        var rules = await db.AlertRules.Where(item => item.IsEnabled && item.RuleType != BackupCapacityPolicy.RuleType).ToArrayAsync(cancellationToken);
         foreach (var rule in rules)
         {
             var triggeredResources = new List<Guid?>();

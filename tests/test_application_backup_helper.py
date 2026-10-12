@@ -108,6 +108,14 @@ class BackupHelperTests(unittest.TestCase):
         with self.assertRaises(backup.BackupError): backup.verify_plan('demo', identities[0])
         self.assertEqual(len(list((self.target / 'demo').glob('*.tar.gz'))), 2)
 
+    def test_capacity_uses_the_fixed_target_without_inspecting_containers_or_secrets(self):
+        result = backup.capacity()
+        self.assertEqual(result['targetDirectoryId'], 'database-platform.backup.hdd')
+        self.assertGreater(result['totalBytes'], 0)
+        self.assertGreaterEqual(result['freeBytes'], 0)
+        self.assertEqual(self.calls, [])
+        self.assertNotIn(self.marker, json.dumps(result))
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='wd-backup-unit-')
         self.addCleanup(self.temporary.cleanup)

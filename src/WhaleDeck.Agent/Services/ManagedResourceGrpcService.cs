@@ -21,6 +21,8 @@ public sealed class ManagedResourceGrpcService(
     : ManagedResourceService.ManagedResourceServiceBase
 {
     private const string PrivilegedHelper = "/usr/local/libexec/whaledeck-privileged";
+    public override Task<BackupTargetCapacityResponse> GetBackupTargetCapacity(Empty request, ServerCallContext context) =>
+        applicationBackups.ReadCapacityAsync(context.CancellationToken);
     private static readonly string[] EditableDockerSettings =
         ["registry-mirrors", "log-driver", "log-opts", "live-restore", "features", "dns", "proxies"];
 

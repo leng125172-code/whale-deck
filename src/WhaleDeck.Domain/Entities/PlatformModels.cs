@@ -296,7 +296,7 @@ public sealed class AlertEvent
     public Guid? ResourceId { get; init; }
     public required string Fingerprint { get; init; }
     public string State { get; set; } = "Active";
-    public required string Severity { get; init; }
+    public required string Severity { get; set; }
     public int OccurrenceCount { get; set; } = 1;
     public DateTimeOffset FirstOccurredAtUtc { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset LastOccurredAtUtc { get; set; } = DateTimeOffset.UtcNow;
