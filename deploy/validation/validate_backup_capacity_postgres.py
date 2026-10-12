@@ -26,7 +26,7 @@ def main():
     container = 'whaledeck-native-capacity-' + uuid.uuid4().hex[:12]
     assert re.fullmatch(r'wdv_capacity_[a-f0-9]{16}', database)
     values = container_environment()
-    connection = values['ConnectionStrings__Postgres']
+    connection = values['ConnectionStrings__WhaleDeck']
     connection, changed = re.subn(r'(?i)\bDatabase=[^;]*', 'Database=' + database, connection)
     assert changed == 1 and '\n' not in connection and '\r' not in connection
     sql_arguments = ['docker', 'exec', '-i', '-u', 'postgres', 'database-platform-postgres',
