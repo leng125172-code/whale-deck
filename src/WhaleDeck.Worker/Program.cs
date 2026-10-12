@@ -4,6 +4,11 @@ using Serilog.Formatting.Json;
 using WhaleDeck.Infrastructure;
 using WhaleDeck.Worker;
 
+if (args.Contains("--health-check", StringComparer.Ordinal))
+{
+    return WorkerHeartbeat.IsFresh(TimeSpan.FromSeconds(45)) ? 0 : 1;
+}
+
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddSerilog((services, configuration) => configuration
     .ReadFrom.Services(services)
@@ -17,3 +22,4 @@ builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
 await host.RunAsync();
+return 0;

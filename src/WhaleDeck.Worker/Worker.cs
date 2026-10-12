@@ -37,6 +37,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             try
             {
                 await RunCycle(stoppingToken);
+                WorkerHeartbeat.Report();
             }
             catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
             {

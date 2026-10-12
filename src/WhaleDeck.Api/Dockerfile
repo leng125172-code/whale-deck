@@ -26,7 +26,7 @@ WORKDIR /app
 ENV DOTNET_EnableDiagnostics=0
 EXPOSE 8080
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && apt-get install -y --no-install-recommends curl libgssapi-krb5-2 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 RUN install -d -o "$APP_UID" -g "$APP_UID" -m 0700 /var/lib/whaledeck/data-protection
