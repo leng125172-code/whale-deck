@@ -58,6 +58,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         var leases = scope.ServiceProvider.GetRequiredService<ResourceLeaseManager>();
         await CollectMetrics(db, agent, cancellationToken);
         await SyncManagedResources(db, agent, cancellationToken);
+        await CollectContainerMetrics(db, agent, cancellationToken);
         await SyncDockerEvents(db, agent, cancellationToken);
         await DispatchScheduledTasks(db, agent, cancellationToken);
         await DispatchBackupPolicies(db, cancellationToken);
@@ -91,6 +92,21 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         var snapshot = await agent.GetMetricsSnapshotAsync(cancellationToken);
         await MetricSampleWriter.StageAsync(db, resource.Id, snapshot, cancellationToken);
         resource.LastSeenAtUtc = health.ObservedAtUtc;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task CollectContainerMetrics(PlatformDbContext db, IAgentGateway agent, CancellationToken cancellationToken)
+    {
+        var snapshot = await agent.GetContainerUsageAsync(cancellationToken);
+        if (snapshot.IsStale || snapshot.Items.Count == 0) return;
+        var externalIds = snapshot.Items.Select(item => item.ContainerId).ToArray();
+        var resources = await db.ManagedResources.Where(item => item.ResourceType == "Container" && externalIds.Contains(item.ExternalId))
+            .Select(item => new { item.Id, item.ExternalId }).ToArrayAsync(cancellationToken);
+        var identities = resources.ToDictionary(item => item.ExternalId, item => item.Id, StringComparer.Ordinal);
+        var now = DateTimeOffset.UtcNow;
+        var values = snapshot.Items.Where(item => identities.ContainsKey(item.ContainerId))
+            .SelectMany(item => ContainerMetricProjection.Project(item, now).Select(metric => new ResourceMetric(identities[item.ContainerId], metric))).ToArray();
+        await MetricSampleWriter.StageManyAsync(db, values, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
     }
 

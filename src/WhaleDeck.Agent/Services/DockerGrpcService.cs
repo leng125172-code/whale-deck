@@ -9,8 +9,12 @@ public sealed class DockerGrpcService(
     DockerEngine docker,
     DockerEventBuffer events,
     ResourceRegistry registry,
-    BoundedProcessRunner processes) : DockerService.DockerServiceBase
+    BoundedProcessRunner processes,
+    ContainerUsageStore usage) : DockerService.DockerServiceBase
 {
+    public override Task<ContainerUsageBatch> GetContainerUsage(Empty request, ServerCallContext context) =>
+        Task.FromResult(usage.Snapshot());
+
     public override async Task<ImageMetadataResponse> InspectImage(ImageMetadataRequest request, ServerCallContext context)
     {
         var metadata = await docker.InspectImageAsync(request.Image, request.PullIfMissing, context.CancellationToken);

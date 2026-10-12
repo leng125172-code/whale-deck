@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Box, Delete, Plus, RefreshRight, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError, apiRequest, apiUrl } from '@/services/apiClient'
 import { enqueueOperation, planOperation, stageSecret } from '@/services/operations'
+import ContainerUsageCell from '@/components/containers/ContainerUsageCell.vue'
+import { authSession } from '@/services/authSession'
 import type {
   ContainerInspect,
   ContainerLogs,
   ContainerStats,
+  ContainerUsageBatch,
   ContainerUpdateRun,
   DockerEvent,
 } from '@/services/contracts'
@@ -89,9 +92,36 @@ const visibleItems = computed(() =>
 const selectedIds = ref<string[]>([])
 const loading = ref(false)
 const loadError = ref('')
+const usageError = ref('')
+const usage = ref<ContainerUsageBatch | null>(null)
+const usageById = computed(
+  () => new Map(usage.value?.items.map((item) => [item.containerId, item]) ?? []),
+)
+const now = ref(Date.now())
+const usageStale = computed(
+  () =>
+    Boolean(usageError.value) ||
+    Boolean(usage.value?.isStale) ||
+    (usage.value?.sampledAtUtc ? now.value - Date.parse(usage.value.sampledAtUtc) > 18_000 : false),
+)
+const refreshInterval = ref(6000)
+function sampleStale(id: string) {
+  const sampledAt = usageById.value.get(id)?.sampledAtUtc
+  return sampledAt ? now.value - Date.parse(sampledAt) > 18_000 : false
+}
+let refreshTimer: number | undefined
+let staleTimer: number | undefined
+let loadRequest: AbortController | undefined
+let loadInFlight = false
 let loadGeneration = 0
+let detailGeneration = 0
 onUnmounted(() => {
   loadGeneration++
+  detailGeneration++
+  loadRequest?.abort()
+  window.clearInterval(refreshTimer)
+  window.clearInterval(staleTimer)
+  document.removeEventListener('visibilitychange', visibilityChanged)
 })
 const batchBusy = ref(false)
 const createVisible = ref(false)
@@ -155,35 +185,95 @@ function openCreate() {
   createVisible.value = true
 }
 
-async function load() {
+function clearPrivateData() {
+  loadGeneration++
+  loadRequest?.abort()
+  loadInFlight = false
+  loading.value = false
+  detailGeneration++
+  items.value = []
+  usage.value = null
+  selectedIds.value = []
+  detailVisible.value = false
+  selected.value = null
+  inspect.value = null
+  logs.value = { lines: [], truncated: false }
+  eventTimeline.value = []
+  stats.value = {}
+  updateHistory.value = []
+  form.environment = ''
+  createVisible.value = false
+}
+
+async function load(manual = true) {
+  if (loadInFlight) return
+  loadInFlight = true
   const generation = ++loadGeneration
-  loading.value = true
+  loadRequest = new AbortController()
+  const controller = loadRequest
+  const timeout = window.setTimeout(() => controller.abort(), 30_000)
+  loading.value = manual || items.value.length === 0
   loadError.value = ''
+  usageError.value = ''
   try {
-    const result = await apiRequest<Container[]>('containers?includeStopped=true')
+    const [result, latestUsage] = await Promise.all([
+      apiRequest<Container[]>('containers?includeStopped=true', { signal: controller.signal }),
+      apiRequest<ContainerUsageBatch>('containers/usage', { signal: controller.signal }).catch(
+        (error) => {
+          if (error instanceof ApiError && [401, 403].includes(error.status)) throw error
+          if (controller.signal.aborted) throw error
+          if (generation === loadGeneration)
+            usageError.value = '容器资源采样暂不可用，旧采样不作为实时数据展示。'
+          return null
+        },
+      ),
+    ])
     if (generation !== loadGeneration) return
+    now.value = Date.now()
     items.value = result
-    selectedIds.value = selectedIds.value.filter((id) => items.value.some((item) => item.id === id))
+    usage.value = latestUsage
+    selectedIds.value = selectedIds.value.filter((id) =>
+      items.value.some((item) => item.id === id && !item.isProtected),
+    )
   } catch (error) {
     if (generation !== loadGeneration) return
     loadError.value = error instanceof Error ? error.message : '无法加载容器'
     if (error instanceof ApiError && [401, 403].includes(error.status)) {
-      items.value = []
-      selectedIds.value = []
-      detailVisible.value = false
-      selected.value = null
-      inspect.value = null
-      logs.value = { lines: [], truncated: false }
-      eventTimeline.value = []
-      stats.value = {}
-      updateHistory.value = []
-      form.environment = ''
-      createVisible.value = false
+      refreshInterval.value = 0
+      clearPrivateData()
     }
   } finally {
-    if (generation === loadGeneration) loading.value = false
+    window.clearTimeout(timeout)
+    if (generation === loadGeneration) {
+      loading.value = false
+      loadInFlight = false
+    }
   }
 }
+
+function startRefresh() {
+  window.clearInterval(refreshTimer)
+  if (refreshInterval.value > 0)
+    refreshTimer = window.setInterval(() => {
+      now.value = Date.now()
+      if (!document.hidden) void load(false)
+    }, refreshInterval.value)
+}
+function visibilityChanged() {
+  if (!document.hidden && refreshInterval.value > 0) void load(false)
+}
+watch(refreshInterval, startRefresh)
+watch(
+  () => [authSession.user.value?.subject, authSession.user.value?.isAdministrator],
+  () => {
+    loadGeneration++
+    loadRequest?.abort()
+    loadInFlight = false
+    clearPrivateData()
+    if (authSession.user.value?.isAdministrator) void load()
+    else refreshInterval.value = 0
+  },
+)
 
 function toggleSelected(id: string, selected: boolean) {
   selectedIds.value = selected
@@ -380,6 +470,7 @@ async function createContainer() {
 }
 
 async function openDetails(item: Container) {
+  const generation = ++detailGeneration
   selected.value = item
   detailVisible.value = true
   detailLoading.value = true
@@ -401,13 +492,22 @@ async function openDetails(item: Container) {
       ),
       apiRequest<DockerEvent[]>(`containers/events?containerId=${id}&take=50`),
     ])
+    if (generation !== detailGeneration || !detailVisible.value || selected.value?.id !== item.id)
+      return
     logs.value = logResult
     stats.value = statsResult.values
     inspect.value = inspectResult
     updateHistory.value = historyResult
     eventTimeline.value = eventResult
+  } catch (error) {
+    if (generation !== detailGeneration) return
+    if (error instanceof ApiError && [401, 403].includes(error.status)) {
+      refreshInterval.value = 0
+      clearPrivateData()
+    }
+    ElMessage.error(error instanceof Error ? error.message : '读取容器详情失败')
   } finally {
-    detailLoading.value = false
+    if (generation === detailGeneration) detailLoading.value = false
   }
 }
 
@@ -452,7 +552,14 @@ function copyContainer() {
     ElMessage.info('环境变量值不会复制，请在创建前重新填写。')
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  startRefresh()
+  staleTimer = window.setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
+  document.addEventListener('visibilitychange', visibilityChanged)
+})
 </script>
 
 <template>
@@ -464,7 +571,14 @@ onMounted(load)
         <p>受保护的基础容器不会出现在普通生命周期操作中。</p>
       </div>
       <div class="page-heading__actions">
-        <el-button :loading="loading" @click="load"
+        <el-select v-model="refreshInterval" class="container-refresh" aria-label="容器自动刷新">
+          <el-option label="不自动刷新" :value="0" /><el-option label="每 6 秒刷新" :value="6000" />
+          <el-option label="每 30 秒刷新" :value="30000" /><el-option
+            label="每 60 秒刷新"
+            :value="60000"
+          />
+        </el-select>
+        <el-button :loading="loading" @click="load()"
           ><el-icon><RefreshRight /></el-icon>刷新</el-button
         ><el-button type="primary" @click="openCreate"
           ><el-icon><Plus /></el-icon>创建容器</el-button
@@ -472,6 +586,15 @@ onMounted(load)
       </div>
     </header>
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+    <el-alert v-if="usageError" :title="usageError" type="warning" :closable="false" show-icon />
+    <p
+      v-else-if="usage?.isTruncated || usage?.skippedCount || usageStale"
+      class="container-sampling-note"
+    >
+      {{ usageStale ? '采样已过期，等待 Agent 恢复。' : '' }}
+      {{ usage?.isTruncated ? `采集上限 256 个，实际 ${usage.totalCount} 个。` : '' }}
+      {{ usage?.skippedCount ? `${usage.skippedCount} 个采样未取得，未伪造资源使用率。` : '' }}
+    </p>
     <section class="panel container-filters">
       <el-radio-group v-model="stateFilter" aria-label="筛选容器状态">
         <el-radio-button value="all">全部 {{ counts.all }}</el-radio-button>
@@ -537,6 +660,14 @@ onMounted(load)
             }}</el-tag></template
           ></el-table-column
         >
+        <el-table-column label="资源使用率" min-width="210">
+          <template #default="{ row }"
+            ><ContainerUsageCell
+              :sample="usageById.get(row.id)"
+              :state="row.state"
+              :stale="usageStale || sampleStale(row.id)"
+          /></template>
+        </el-table-column>
         <el-table-column label="项目 / 保护" min-width="180" show-overflow-tooltip
           ><template #default="{ row }"
             ><div>{{ row.labels['com.docker.compose.project'] || '独立容器' }}</div>
@@ -613,12 +744,20 @@ onMounted(load)
             >
           </div>
         </div>
-        <el-tag :type="item.state === 'running' ? 'success' : 'info'" effect="light">{{
-          item.state
-        }}</el-tag>
-        <el-tag v-if="item.isProtected" type="warning" effect="plain">{{
-          item.protectionLevel
-        }}</el-tag>
+        <div class="container-card__states">
+          <el-tag :type="item.state === 'running' ? 'success' : 'info'" effect="light">{{
+            item.state
+          }}</el-tag>
+          <el-tag v-if="item.isProtected" type="warning" effect="plain">{{
+            item.protectionLevel
+          }}</el-tag>
+        </div>
+        <ContainerUsageCell
+          class="container-card__usage"
+          :sample="usageById.get(item.id)"
+          :state="item.state"
+          :stale="usageStale || sampleStale(item.id)"
+        />
         <div class="container-card__actions">
           <el-button link type="primary" @click="openDetails(item)">详情</el-button>
           <el-button v-if="canUpdate(item)" link type="primary" @click="updateContainer(item)"
@@ -893,6 +1032,27 @@ onMounted(load)
   gap: 10px;
   min-height: 240px;
 }
+.container-refresh {
+  width: 152px;
+}
+.page-heading__actions {
+  flex-wrap: wrap;
+}
+.container-sampling-note {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.container-card__usage {
+  width: 210px;
+  max-width: 100%;
+}
+.container-card__states {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 .container-filters {
   display: flex;
   flex-wrap: wrap;
@@ -1079,11 +1239,21 @@ onMounted(load)
   overflow-wrap: anywhere;
 }
 @media (max-width: 760px) {
-  .container-card {
-    grid-template-columns: auto auto minmax(0, 1fr) auto;
+  .container-refresh {
+    width: 100%;
   }
-  .container-card > .el-tag:nth-of-type(2) {
-    display: none;
+  .page-heading__actions {
+    width: 100%;
+  }
+  .container-card__usage {
+    grid-column: 3 / -1;
+    width: 100%;
+  }
+  .container-card {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+  .container-card__states {
+    grid-column: 3 / -1;
   }
   .container-card__actions {
     grid-column: 3 / -1;

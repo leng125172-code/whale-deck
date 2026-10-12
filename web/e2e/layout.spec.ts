@@ -59,6 +59,15 @@ for (const width of [1100, 390]) {
   })
 }
 const fixtures: Record<string, unknown> = {
+  'containers/usage': {
+    items: [],
+    sampledAtUtc: new Date().toISOString(),
+    isStale: false,
+    isTruncated: false,
+    skippedCount: 0,
+    totalCount: 2,
+    intervalSeconds: 6,
+  },
   'host/processes': {
     items: [hostProcess],
     total: 1,

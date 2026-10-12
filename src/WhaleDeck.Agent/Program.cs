@@ -32,6 +32,9 @@ builder.Services.AddGrpc(options =>
 builder.Services.AddSingleton<CapabilityValidator>();
 builder.Services.AddSingleton<PeerCredentialPolicy>();
 builder.Services.AddSingleton<DockerEngine>();
+builder.Services.AddSingleton<IContainerUsageSource>(services => services.GetRequiredService<DockerEngine>());
+builder.Services.AddSingleton<ContainerUsageStore>();
+builder.Services.AddHostedService<ContainerUsageSampler>();
 builder.Services.AddSingleton<DockerEventBuffer>();
 builder.Services.AddSingleton<OperationStore>();
 builder.Services.AddSingleton<OperationCoordinator>();

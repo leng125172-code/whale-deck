@@ -121,6 +121,11 @@ public sealed record ContainerDto(
 public sealed record ContainerLogsDto(IReadOnlyCollection<string> Lines, bool Truncated);
 
 public sealed record ContainerStatsDto(IReadOnlyDictionary<string, string> Values);
+public sealed record ContainerUsageDto(string ContainerId, string State, DateTimeOffset? SampledAtUtc,
+    double? CpuPercent, double CpuWindowSeconds, ulong? MemoryUsedBytes, ulong? MemoryLimitBytes, double? MemoryPercent,
+    ulong? NetworkReceiveBytes, ulong? NetworkSendBytes, ulong? BlockReadBytes, ulong? BlockWriteBytes, ulong? Pids, string Quality);
+public sealed record ContainerUsageBatchDto(IReadOnlyCollection<ContainerUsageDto> Items, DateTimeOffset? SampledAtUtc,
+    bool IsStale, bool IsTruncated, int SkippedCount, int TotalCount, int IntervalSeconds);
 public sealed record DockerEventDto(
     string Fingerprint,
     DateTimeOffset OccurredAtUtc,

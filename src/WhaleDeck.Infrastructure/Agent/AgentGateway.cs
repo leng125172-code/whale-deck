@@ -153,6 +153,21 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcess
         return new ContainerStatsDto(response.Values);
     }
 
+    public async Task<ContainerUsageBatchDto> GetContainerUsageAsync(CancellationToken cancellationToken)
+    {
+        var capabilities = await GetCapabilitiesAsync(cancellationToken);
+        if (capabilities.ProtocolMajor != 1 || !capabilities.Capabilities.Contains("docker.usage"))
+            throw new RpcException(new Status(StatusCode.Unimplemented, "Agent container usage capability is unavailable."));
+        var response = await _docker.GetContainerUsageAsync(new Empty(), Headers("/whaledeck.agent.v1.DockerService/GetContainerUsage"), cancellationToken: cancellationToken);
+        return new(response.Items.Select(item => new ContainerUsageDto(item.ContainerId, item.State, item.SampledAtUtc?.ToDateTimeOffset(),
+            item.HasCpuPercent ? item.CpuPercent : null, item.CpuWindowSeconds,
+            item.HasMemoryUsedBytes ? item.MemoryUsedBytes : null, item.HasMemoryLimitBytes ? item.MemoryLimitBytes : null,
+            item.HasMemoryPercent ? item.MemoryPercent : null, item.HasNetworkReceiveBytes ? item.NetworkReceiveBytes : null,
+            item.HasNetworkSendBytes ? item.NetworkSendBytes : null, item.HasBlockReadBytes ? item.BlockReadBytes : null,
+            item.HasBlockWriteBytes ? item.BlockWriteBytes : null, item.HasPids ? item.Pids : null, item.Quality)).ToArray(),
+            response.SampledAtUtc?.ToDateTimeOffset(), response.IsStale, response.IsTruncated, response.SkippedCount, response.TotalCount, response.IntervalSeconds);
+    }
+
     public async Task<IReadOnlyCollection<DockerEventDto>> ListDockerEventsAsync(
         DateTimeOffset sinceUtc,
         int take,

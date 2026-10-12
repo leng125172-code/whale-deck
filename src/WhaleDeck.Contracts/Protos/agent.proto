@@ -174,6 +174,33 @@ message ContainerStatsResponse {
   map<string, string> values = 1;
 }
 
+message ContainerUsageSnapshot {
+  string container_id = 1;
+  string state = 2;
+  google.protobuf.Timestamp sampled_at_utc = 3;
+  optional double cpu_percent = 4;
+  double cpu_window_seconds = 5;
+  optional uint64 memory_used_bytes = 6;
+  optional uint64 memory_limit_bytes = 7;
+  optional double memory_percent = 8;
+  optional uint64 network_receive_bytes = 9;
+  optional uint64 network_send_bytes = 10;
+  optional uint64 block_read_bytes = 11;
+  optional uint64 block_write_bytes = 12;
+  optional uint64 pids = 13;
+  string quality = 14;
+}
+
+message ContainerUsageBatch {
+  repeated ContainerUsageSnapshot items = 1;
+  google.protobuf.Timestamp sampled_at_utc = 2;
+  bool is_stale = 3;
+  bool is_truncated = 4;
+  int32 skipped_count = 5;
+  int32 total_count = 6;
+  int32 interval_seconds = 7;
+}
+
 message DockerEventsRequest {
   int64 since_unix_seconds = 1;
   uint32 take = 2;
@@ -356,6 +383,7 @@ service DockerService {
   rpc ListContainers(ListContainersRequest) returns (ListContainersResponse);
   rpc GetContainerLogs(ContainerLogsRequest) returns (ContainerLogsResponse);
   rpc GetContainerStats(ResourceReference) returns (ContainerStatsResponse);
+  rpc GetContainerUsage(google.protobuf.Empty) returns (ContainerUsageBatch);
   rpc ListEvents(DockerEventsRequest) returns (DockerEventsResponse);
   rpc InspectContainer(ResourceReference) returns (ContainerInspectResponse);
   rpc ChangeContainerState(ChangeContainerStateRequest) returns (OperationHandle);

@@ -7,7 +7,7 @@ using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Agent.Services;
 
-public sealed class DockerEngine : IDisposable
+public sealed class DockerEngine : IDisposable, IContainerUsageSource
 {
     private static readonly Regex ContainerNamePattern = new("^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$", RegexOptions.CultureInvariant);
     private static readonly Regex ImagePattern = new("^[a-zA-Z0-9][a-zA-Z0-9./_:@-]{0,254}$", RegexOptions.CultureInvariant);
@@ -37,6 +37,19 @@ public sealed class DockerEngine : IDisposable
 
     public Task<IList<ContainerListResponse>> ListContainersAsync(bool all, CancellationToken cancellationToken) =>
         _client.Containers.ListContainersAsync(new ContainersListParameters { All = all }, cancellationToken);
+
+    public async Task<Docker.DotNet.Models.ContainerStatsResponse> ReadContainerUsageAsync(string id, CancellationToken cancellationToken)
+    {
+        var progress = new NativeStatsProgress();
+        await _client.Containers.GetContainerStatsAsync(id, new ContainerStatsParameters { Stream = false, OneShot = true }, progress, cancellationToken);
+        return progress.Value ?? throw new InvalidOperationException("Docker did not provide container statistics.");
+    }
+
+    private sealed class NativeStatsProgress : IProgress<Docker.DotNet.Models.ContainerStatsResponse>
+    {
+        public Docker.DotNet.Models.ContainerStatsResponse? Value { get; private set; }
+        public void Report(Docker.DotNet.Models.ContainerStatsResponse value) => Value = value;
+    }
 
     public Task MonitorEventsAsync(IProgress<Message> progress, CancellationToken cancellationToken) =>
         _client.System.MonitorEventsAsync(new ContainerEventsParameters(), progress, cancellationToken);

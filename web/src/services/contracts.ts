@@ -107,6 +107,33 @@ export interface ContainerStats {
   values: Record<string, string>
 }
 
+export interface ContainerUsage {
+  containerId: string
+  state: string
+  sampledAtUtc: string | null
+  cpuPercent: number | null
+  cpuWindowSeconds: number
+  memoryUsedBytes: number | null
+  memoryLimitBytes: number | null
+  memoryPercent: number | null
+  networkReceiveBytes: number | null
+  networkSendBytes: number | null
+  blockReadBytes: number | null
+  blockWriteBytes: number | null
+  pids: number | null
+  quality: string
+}
+
+export interface ContainerUsageBatch {
+  items: ContainerUsage[]
+  sampledAtUtc: string | null
+  isStale: boolean
+  isTruncated: boolean
+  skippedCount: number
+  totalCount: number
+  intervalSeconds: number
+}
+
 export interface ContainerInspect {
   id: string
   name: string

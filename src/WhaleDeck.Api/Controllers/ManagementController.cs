@@ -38,6 +38,11 @@ public sealed class ManagementController(
     public async Task<IActionResult> ContainerStats(string containerId, CancellationToken cancellationToken = default) =>
         Ok(await agent.GetContainerStatsAsync(containerId, cancellationToken));
 
+    /// <summary>Reads the bounded Agent container usage cache; reading does not trigger Docker sampling.</summary>
+    [HttpGet("containers/usage")]
+    public async Task<IActionResult> ContainerUsage(CancellationToken cancellationToken) =>
+        Ok(await agent.GetContainerUsageAsync(cancellationToken));
+
     [HttpGet("containers/{containerId}/inspect")]
     public async Task<IActionResult> ContainerInspect(string containerId, CancellationToken cancellationToken = default) =>
         Ok(await agent.InspectContainerAsync(containerId, cancellationToken));

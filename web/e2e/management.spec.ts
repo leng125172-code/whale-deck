@@ -23,6 +23,15 @@ const ordinary = {
   ports: ['0.0.0.0:8088 → 8080/tcp'],
 }
 const fixtures: Record<string, unknown> = {
+  'containers/usage': {
+    items: [],
+    sampledAtUtc: new Date().toISOString(),
+    isStale: false,
+    isTruncated: false,
+    skippedCount: 0,
+    totalCount: 2,
+    intervalSeconds: 6,
+  },
   containers: [core, ordinary],
   'containers/core/inspect': {
     id: 'core',

@@ -28,6 +28,7 @@ public interface IAgentGateway
     Task<IReadOnlyCollection<ContainerDto>> ListContainersAsync(bool includeStopped, CancellationToken cancellationToken);
     Task<ContainerLogsDto> GetContainerLogsAsync(string containerId, int tail, int sinceMinutes, CancellationToken cancellationToken);
     Task<ContainerStatsDto> GetContainerStatsAsync(string containerId, CancellationToken cancellationToken);
+    Task<ContainerUsageBatchDto> GetContainerUsageAsync(CancellationToken cancellationToken);
     Task<IReadOnlyCollection<DockerEventDto>> ListDockerEventsAsync(DateTimeOffset sinceUtc, int take, CancellationToken cancellationToken);
     Task<ContainerInspectDto> InspectContainerAsync(string containerId, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<ManagedResourceDto>> ListResourcesAsync(string kind, CancellationToken cancellationToken);

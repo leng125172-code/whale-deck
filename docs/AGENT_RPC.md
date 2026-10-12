@@ -10,7 +10,15 @@
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
-- 当前协议版本为 `1.9`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 以兼容字段扩展容器摘要的端口、网络、地址与创建时间（`docker.container-summary`），`1.9` 增加 `host.disk-io` 和独立 6 秒主机采样；旧次版本按能力协商并安全降级。
+- 当前协议版本为 `1.10`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 以兼容字段扩展容器摘要的端口、网络、地址与创建时间（`docker.container-summary`），`1.9` 增加 `host.disk-io` 和独立 6 秒主机采样，`1.10` 增加容器后台采样缓存能力 `docker.usage`；旧次版本按能力协商并安全降级。
+
+### 容器资源采样（1.10）
+
+`DockerService.GetContainerUsage(Empty)` 返回 `ContainerUsageBatch`，只读缓存，不触发 Engine 采样。Agent 每 6 秒通过 Docker Engine `stream=false&one-shot=true` 采样；每轮总预算 5 秒、最多 8 个并发请求、最多 256 个容器，并返回总数、截断及跳过计数。超过 18 秒未更新标记 stale，前端同时检查每个容器自身时间戳。
+
+CPU 用相邻原生计数器差值计算，100% 代表一个逻辑核心（可超过 100%）。首次、重启、计数器重置、无效或超长窗口返回 Warmup/null。内存扣除 cgroup 可回收文件缓存；缺失字段保持 null。停止容器返回 Stopped/null，读取失败返回 Unavailable/null。网络与块 I/O 是累计字节而非速率。RPC 不推进计数器基线，不启动逐用户/逐页面 Docker 统计流。
+
+Worker 将同一缓存批次的 CPU、内存、累计网络/块 I/O 和 PID 指标批量写入现有指标存储；按资源、设备、类型和 PostgreSQL 微秒时间戳去重，权限仍限管理员。没有成功逐样本 Info 日志。
 
 ## 2. 通用消息
 

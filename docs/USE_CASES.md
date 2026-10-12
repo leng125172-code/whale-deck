@@ -12,6 +12,14 @@
 - 写操作记录审计事件；敏感值、完整环境变量和数据库密码不得进入审计详情。
 - 同一资源上的互斥操作使用资源锁，避免更新、删除、备份和重启并发执行。
 
+### 容器资源查询与刷新
+
+管理员 `GET /api/v1/containers/usage` 获取 Agent 的统一缓存批次，不触发原生采样。CPU 100% 为一个逻辑核心，内存扣除可回收文件缓存；网络/块 I/O 为累计字节。首次或计数器重置为 Warmup，停止和失败保持空值，超过 18 秒显示过期状态。未登录返回 401，普通用户返回 403。
+
+容器页面默认每 6 秒刷新，支持关闭及 30/60 秒周期、手动刷新。后台刷新不覆盖整个面板，慢请求不重叠；标签页隐藏或离开页面停止轮询，权限丢失取消请求并清除管理数据。卡片与表格共用同一资源组件。
+
+Worker 批量保存 `container.cpu.utilization`、`container.memory.used/limit/utilization`、`container.network.receive.total/send.total`、`container.block.read.total/write.total`、`container.pids.count`；历史窗口遵循既有指标策略。设备 ID 为 Docker 完整容器 ID，资源 ID 为登记资源 UUID。重复读取缓存按 PostgreSQL 微秒精度去重，不把 Warmup 的内部占位值作为实测零值展示。
+
 ## 2. 身份与会话
 
 | 用例 ID | 用例 | 参与者 | 结果 |

@@ -9,7 +9,9 @@ public static class MetricHistoryPolicy
     {
         "cpu.utilization", "memory.utilization", "disk.utilization", "disk.read", "disk.write",
         "disk.read.iops", "disk.write.iops", "disk.read.latency", "disk.write.latency",
-        "network.receive", "network.send", "network.receive.total", "network.send.total"
+        "network.receive", "network.send", "network.receive.total", "network.send.total",
+        "container.cpu.utilization", "container.memory.used", "container.memory.limit", "container.memory.utilization",
+        "container.network.receive.total", "container.network.send.total", "container.block.read.total", "container.block.write.total", "container.pids.count"
     };
 
     public static MetricHistoryPlan Create(IReadOnlyCollection<string> kinds, string window, int take, DateTimeOffset now)
