@@ -7,6 +7,7 @@ import { ApiError, apiRequest } from '@/services/apiClient'
 import { enqueueOperation, planOperation, stageSecret } from '@/services/operations'
 import { authSession } from '@/services/authSession'
 import ApplicationConfigurationEditor from '@/components/applications/ApplicationConfigurationEditor.vue'
+import ApplicationBackups from '@/components/applications/ApplicationBackups.vue'
 import type {
   ApplicationImageMetadata,
   ApplicationDetail,
@@ -24,6 +25,13 @@ const detail = ref<ApplicationDetail | null>(null)
 const detailVisible = ref(false)
 const configurationVisible = ref(false)
 const configurationResourceId = ref('')
+const backupsVisible = ref(false)
+const backupsResourceId = ref('')
+function openBackups(item: ManagedResource) {
+  if (!isManaged(item)) return
+  backupsResourceId.value = item.id
+  backupsVisible.value = true
+}
 function openConfiguration(item: ManagedResource) {
   if (!isManaged(item)) return
   configurationResourceId.value = item.id
@@ -302,6 +310,8 @@ function clearPrivateData() {
   form.environment = ''
   configurationVisible.value = false
   configurationResourceId.value = ''
+  backupsVisible.value = false
+  backupsResourceId.value = ''
   loading.value = false
 }
 watch(
@@ -504,6 +514,9 @@ watch(
                 @click="openConfiguration(item)"
                 >参数</el-button
               >
+              <el-button link type="primary" :disabled="!!pendingAction" @click="openBackups(item)"
+                >备份</el-button
+              >
               <el-button
                 link
                 :type="isRunning(item) ? 'danger' : 'primary'"
@@ -539,6 +552,7 @@ watch(
       </div>
     </section>
 
+    <ApplicationBackups v-model="backupsVisible" :resource-id="backupsResourceId" />
     <el-dialog v-model="installVisible" title="安装应用" width="min(640px, calc(100vw - 32px))">
       <el-form label-position="top"
         ><el-form-item label="应用标识"

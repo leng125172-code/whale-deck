@@ -407,6 +407,24 @@ export interface BackupPolicy {
   capacityWarningPercent: number
   capacityCriticalPercent: number
   version: number
+  consistency?: 'live' | 'quiesced'
+}
+
+export interface BackupRecord {
+  id: string
+  instanceResourceId: string
+  policyId: string | null
+  jobId: string
+  status: string
+  relativePath: string | null
+  sizeBytes: number | null
+  checksumAlgorithm: string | null
+  checksum: string | null
+  startedAtUtc: string
+  completedAtUtc: string | null
+  verifiedAtUtc: string | null
+  expiresAtUtc: string | null
+  errorCode: string | null
 }
 
 export interface ApplicationInstallation {
