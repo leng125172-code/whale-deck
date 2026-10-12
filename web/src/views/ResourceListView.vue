@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import {
   Delete,
   Download,
@@ -13,6 +13,7 @@ import { useRoute } from 'vue-router'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import type { ManagedResource } from '@/services/contracts'
 import { enqueueOperation, planOperation } from '@/services/operations'
+import { authSession } from '@/services/authSession'
 
 const route = useRoute()
 const loading = ref(false)
@@ -30,6 +31,41 @@ const isImages = computed(() => endpoint.value === 'images')
 const isNetworks = computed(() => endpoint.value === 'networks')
 const isVolumes = computed(() => endpoint.value === 'volumes')
 const isSystemd = computed(() => endpoint.value === 'systemd')
+const search = ref('')
+const resourceFocus = computed(() =>
+  typeof route.query.resourceId === 'string' ? route.query.resourceId : '',
+)
+const visibleResources = computed(() =>
+  resources.value.filter(
+    (resource) =>
+      (!resourceFocus.value || resource.id === resourceFocus.value) &&
+      (!search.value.trim() ||
+        [resource.name, resource.id, resource.version, resource.attributes.tags || '']
+          .join(' ')
+          .toLowerCase()
+          .includes(search.value.trim().toLowerCase())),
+  ),
+)
+let generation = 0
+let controller: AbortController | undefined
+function clearPrivateData() {
+  generation++
+  controller?.abort()
+  resources.value = []
+  loading.value = false
+  pullDialogVisible.value = false
+  networkDialogVisible.value = false
+  imageReference.value = ''
+  networkForm.value = { name: '', internal: false, attachable: true }
+}
+onBeforeUnmount(clearPrivateData)
+watch(
+  () => [authSession.user.value?.subject, authSession.user.value?.isAdministrator],
+  () => {
+    clearPrivateData()
+    if (authSession.user.value?.isAdministrator) void load()
+  },
+)
 
 function formatBytes(value?: string) {
   const bytes = Number(value)
@@ -54,18 +90,27 @@ function actionsFor(resource: ManagedResource) {
 async function load() {
   const endpoint = route.meta.endpoint
   if (!endpoint) return
+  controller?.abort()
+  controller = new AbortController()
+  const current = ++generation
   loading.value = true
   error.value = ''
+  traceId.value = ''
+  resources.value = []
   try {
     const value = await apiRequest<ManagedResource[] | { applications: ManagedResource[] }>(
       endpoint,
+      { signal: controller.signal },
     )
+    if (current !== generation) return
     resources.value = Array.isArray(value) ? value : value.applications
   } catch (reason) {
+    if (current !== generation) return
+    if (reason instanceof ApiError && [401, 403].includes(reason.status)) clearPrivateData()
     error.value = reason instanceof Error ? reason.message : '读取资源失败'
     traceId.value = reason instanceof ApiError ? reason.problem.traceId || '' : ''
   } finally {
-    loading.value = false
+    if (current === generation) loading.value = false
   }
 }
 
@@ -196,7 +241,14 @@ async function changeSystemd(resource: ManagedResource, verb: 'start' | 'stop' |
 }
 
 onMounted(load)
-watch(() => route.fullPath, load)
+watch(
+  () => route.meta.endpoint,
+  () => {
+    clearPrivateData()
+    search.value = ''
+    void load()
+  },
+)
 </script>
 
 <template>
@@ -232,13 +284,29 @@ watch(() => route.fullPath, load)
       show-icon
       :closable="false"
     />
+    <div class="resource-filter">
+      <el-input
+        v-model="search"
+        placeholder="搜索名称、资源标识或版本"
+        clearable
+        aria-label="搜索资源"
+      />
+      <div v-if="resourceFocus" class="resource-focus">
+        已按关联资源筛选：<code>{{ resourceFocus }}</code>
+        <router-link :to="{ path: route.path }">显示全部</router-link>
+      </div>
+    </div>
     <section class="panel resource-table-panel" v-loading="loading">
       <el-empty
-        v-if="!loading && !error && resources.length === 0"
-        description="没有可显示的资源"
+        v-if="!loading && !error && visibleResources.length === 0"
+        :description="
+          resourceFocus
+            ? '关联资源不存在或已被移除，请显示全部或返回刷新容器详情'
+            : '没有可显示的资源'
+        "
       />
-      <el-table v-else :data="resources" row-key="id">
-        <el-table-column prop="name" label="名称" min-width="220" />
+      <el-table v-else :data="visibleResources" row-key="id">
+        <el-table-column prop="name" label="名称" min-width="220" show-overflow-tooltip />
         <el-table-column prop="type" label="类型" min-width="150" />
         <el-table-column prop="state" label="状态" min-width="120"
           ><template #default="scope"
@@ -281,12 +349,17 @@ watch(() => route.fullPath, load)
           ></el-table-column
         >
         <el-table-column
-          v-if="isSystemd || isNetworks || isVolumes"
+          v-if="isSystemd || isImages || isNetworks || isVolumes"
           label="操作"
           min-width="210"
           fixed="right"
         >
           <template #default="scope">
+            <router-link
+              v-if="isImages || isNetworks || isVolumes"
+              :to="{ path: '/containers', query: { resourceId: scope.row.id } }"
+              >关联容器</router-link
+            >
             <el-button
               v-if="actionsFor(scope.row).includes('systemd-start')"
               text
@@ -379,6 +452,26 @@ watch(() => route.fullPath, load)
 .resource-page {
   display: grid;
   gap: 18px;
+  min-width: 0;
+}
+.resource-filter,
+.resource-focus {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.resource-filter > .el-input {
+  max-width: 420px;
+}
+.resource-focus {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.resource-focus code {
+  white-space: normal;
+}
+.resource-page a {
+  color: var(--el-color-primary);
 }
 .resource-table-panel {
   min-height: 280px;

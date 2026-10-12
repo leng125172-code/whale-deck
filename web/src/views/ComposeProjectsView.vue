@@ -1,12 +1,24 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { RefreshRight } from '@element-plus/icons-vue'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import type { ManagedResource } from '@/services/contracts'
 import { enqueueOperation, planOperation, type OperationPlan } from '@/services/operations'
+import { authSession } from '@/services/authSession'
 
 const resources = ref<ManagedResource[]>([])
+const route = useRoute()
+const projectFocus = computed(() =>
+  typeof route?.query.project === 'string' ? route.query.project : '',
+)
+const visibleResources = computed(() =>
+  resources.value.filter(
+    (item) =>
+      !projectFocus.value || (item.attributes.composeProject || item.name) === projectFocus.value,
+  ),
+)
 const loading = ref(false)
 const busy = ref(false)
 const error = ref('')
@@ -31,6 +43,19 @@ const stateLabels: Record<string, string> = {
   Restarting: '重启中',
 }
 let generation = 0
+watch(
+  () => [authSession.user.value?.subject, authSession.user.value?.isAdministrator],
+  () => {
+    generation++
+    resources.value = []
+    selected.value = null
+    plan.value = null
+    dialog.value = false
+    lastJob.value = ''
+    loading.value = false
+    if (authSession.user.value?.isAdministrator) void load()
+  },
+)
 
 function failure(reason: unknown) {
   if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
@@ -154,11 +179,14 @@ onBeforeUnmount(() => {
       <router-link to="/jobs">前往任务中心查看进度</router-link>
     </el-alert>
     <section class="compose-list" v-loading="loading">
+      <el-alert v-if="projectFocus" type="info" :closable="false" title="已按关联项目筛选">
+        {{ projectFocus }} · <router-link to="/compose-projects">显示全部</router-link>
+      </el-alert>
       <el-empty
-        v-if="!loading && !error && !resources.length"
-        description="没有发现 Compose 项目"
+        v-if="!loading && !error && !visibleResources.length"
+        :description="projectFocus ? '关联项目已移除或没有可见容器' : '没有发现 Compose 项目'"
       />
-      <article v-for="item in resources" :key="item.id" class="panel compose-project">
+      <article v-for="item in visibleResources" :key="item.id" class="panel compose-project">
         <header class="compose-project__heading">
           <h2>{{ item.name }}</h2>
           <el-tag :type="item.state === 'Running' ? 'success' : 'info'" effect="plain">{{
@@ -186,6 +214,20 @@ onBeforeUnmount(() => {
             <dd>{{ item.attributes.workingDirectory }}</dd></template
           >
         </dl>
+        <div class="compose-actions">
+          <router-link
+            :to="{
+              path: '/containers',
+              query: { project: item.attributes.composeProject || item.name },
+            }"
+            >关联容器</router-link
+          >
+          <router-link
+            v-if="item.id.startsWith('application:') && item.type === 'ComposeApplication'"
+            :to="'/applications/' + encodeURIComponent(item.id)"
+            >应用详情</router-link
+          >
+        </div>
         <footer v-if="actionsFor(item).length" class="compose-actions">
           <el-button :disabled="busy" @click="prepare(item, 'redeploy')">配置差异</el-button>
           <el-button

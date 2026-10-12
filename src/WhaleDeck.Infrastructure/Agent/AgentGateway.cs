@@ -130,7 +130,7 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcess
         var response = await _docker.ListContainersAsync(new ListContainersRequest { IncludeStopped = includeStopped }, Headers("/whaledeck.agent.v1.DockerService/ListContainers"), cancellationToken: cancellationToken);
         return response.Containers.Select(item => new ContainerDto(item.Id, item.Name, item.Image, item.State, item.Status,
             item.ProtectedResource, item.ProtectionLevel, item.Labels, item.Ports, item.Networks, item.Addresses,
-            item.CreatedAtUtc?.ToDateTimeOffset())).ToArray();
+            item.CreatedAtUtc?.ToDateTimeOffset(), item.ImageId, item.VolumeNames, item.NetworkIds)).ToArray();
     }
 
     public async Task<ContainerLogsDto> GetContainerLogsAsync(string containerId, int tail, int sinceMinutes, CancellationToken cancellationToken)
@@ -207,7 +207,16 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcess
             response.Command.ToArray(), response.Entrypoint.ToArray(), response.Labels, response.Ports.ToArray(),
             response.Volumes.ToArray(), response.Networks.ToArray(), response.RestartPolicy, response.Cpus,
             response.MemoryMb, response.HealthCommand.ToArray(), response.HealthIntervalSeconds,
-            response.HealthTimeoutSeconds, response.HealthRetries);
+            response.HealthTimeoutSeconds, response.HealthRetries, response.Relationships is { } relation
+                ? new ContainerRelationshipsDto(relation.ImageId, relation.ComposeProject, relation.ComposeService,
+                    relation.NetworkMode, relation.Endpoints.Select(item => new ContainerNetworkEndpointDto(item.Name,
+                        item.NetworkId, item.Ipv4Address, item.Ipv4PrefixLength, item.Ipv4Gateway, item.Ipv6Address,
+                        item.Ipv6PrefixLength, item.Ipv6Gateway, item.MacAddress)).ToArray(),
+                    relation.Mounts.Select(item => new ContainerMountDto(item.Type, item.Name, item.Source,
+                        item.Destination, item.ReadWrite)).ToArray(),
+                    relation.PortBindings.Select(item => new ContainerPortBindingDto(item.ContainerPort,
+                        item.HostAddress, item.HostPort, item.Published)).ToArray(), relation.IsTruncated)
+                : null);
     }
 
     public async Task<IReadOnlyCollection<ManagedResourceDto>> ListResourcesAsync(string kind, CancellationToken cancellationToken)

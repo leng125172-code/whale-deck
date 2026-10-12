@@ -153,6 +153,9 @@ message ContainerSummary {
   repeated string networks = 10;
   repeated string addresses = 11;
   google.protobuf.Timestamp created_at_utc = 12;
+  string image_id = 13;
+  repeated string volume_names = 14;
+  repeated string network_ids = 15;
 }
 
 message ListContainersResponse {
@@ -239,6 +242,43 @@ message ContainerInspectResponse {
   int64 health_interval_seconds = 15;
   int64 health_timeout_seconds = 16;
   int64 health_retries = 17;
+  ContainerRelationships relationships = 18;
+}
+
+// Read-only, bounded native metadata. No environment values, driver options or arbitrary configuration.
+message ContainerRelationships {
+  string image_id = 1;
+  string compose_project = 2;
+  string compose_service = 3;
+  string network_mode = 4;
+  repeated ContainerNetworkEndpoint endpoints = 5;
+  repeated ContainerMount mounts = 6;
+  repeated ContainerPortBinding port_bindings = 7;
+  bool is_truncated = 8;
+}
+message ContainerNetworkEndpoint {
+  string name = 1;
+  string network_id = 2;
+  string ipv4_address = 3;
+  int64 ipv4_prefix_length = 4;
+  string ipv4_gateway = 5;
+  string ipv6_address = 6;
+  int64 ipv6_prefix_length = 7;
+  string ipv6_gateway = 8;
+  string mac_address = 9;
+}
+message ContainerMount {
+  string type = 1;
+  string name = 2;
+  string source = 3;
+  string destination = 4;
+  bool read_write = 5;
+}
+message ContainerPortBinding {
+  string container_port = 1;
+  string host_address = 2;
+  string host_port = 3;
+  bool published = 4;
 }
 
 message ImageMetadataRequest {

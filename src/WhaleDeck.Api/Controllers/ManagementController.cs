@@ -23,6 +23,7 @@ public sealed class ManagementController(
     DockerEventService dockerEvents) : ControllerBase
 {
     [HttpGet("containers")]
+    [ProducesResponseType<IReadOnlyCollection<ContainerDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Containers([FromQuery] bool includeStopped = true, CancellationToken cancellationToken = default) =>
         Ok(await agent.ListContainersAsync(includeStopped, cancellationToken));
 
@@ -44,6 +45,7 @@ public sealed class ManagementController(
         Ok(await agent.GetContainerUsageAsync(cancellationToken));
 
     [HttpGet("containers/{containerId}/inspect")]
+    [ProducesResponseType<ContainerInspectDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ContainerInspect(string containerId, CancellationToken cancellationToken = default) =>
         Ok(await agent.InspectContainerAsync(containerId, cancellationToken));
 

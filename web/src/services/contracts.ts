@@ -152,6 +152,33 @@ export interface ContainerInspect {
   healthIntervalSeconds: number
   healthTimeoutSeconds: number
   healthRetries: number
+  relationships?: ContainerRelationships | null
+}
+
+export interface ContainerRelationships {
+  imageId: string
+  composeProject: string
+  composeService: string
+  networkMode: string
+  endpoints: {
+    name: string
+    networkId: string
+    ipv4Address: string
+    ipv4PrefixLength: number
+    ipv4Gateway: string
+    ipv6Address: string
+    ipv6PrefixLength: number
+    ipv6Gateway: string
+    macAddress: string
+  }[]
+  mounts: { type: string; name: string; source: string; destination: string; readWrite: boolean }[]
+  portBindings: {
+    containerPort: string
+    hostAddress: string
+    hostPort: string
+    published: boolean
+  }[]
+  isTruncated: boolean
 }
 
 export interface ContainerUpdateRun {

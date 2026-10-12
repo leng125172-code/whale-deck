@@ -69,8 +69,15 @@ public sealed class DockerGrpcService(
             State = container.State,
             Status = container.Status,
             ProtectedResource = protectedResource,
-            ProtectionLevel = protectionLevel
+            ProtectionLevel = protectionLevel,
+            ImageId = container.ImageID ?? string.Empty
         };
+        summary.VolumeNames.AddRange((container.Mounts ?? []).Where(mount => mount.Type == "volume")
+            .Select(mount => mount.Name).Where(value => !string.IsNullOrEmpty(value))
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(256));
+        summary.NetworkIds.AddRange((container.NetworkSettings?.Networks?.Values ?? [])
+            .Select(endpoint => endpoint.NetworkID).Where(value => !string.IsNullOrEmpty(value))
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(128));
         summary.Ports.AddRange((container.Ports ?? []).Select(port => port.PublicPort > 0
             ? $"{port.IP}:{port.PublicPort} → {port.PrivatePort}/{port.Type}"
             : $"{port.PrivatePort}/{port.Type}").Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
@@ -172,7 +179,8 @@ public sealed class DockerGrpcService(
             MemoryMb = (metadata.HostConfig?.Memory ?? 0) / (1024 * 1024),
             HealthIntervalSeconds = checked((long)(metadata.Config?.Healthcheck?.Interval.TotalSeconds ?? 0)),
             HealthTimeoutSeconds = checked((long)(metadata.Config?.Healthcheck?.Timeout.TotalSeconds ?? 0)),
-            HealthRetries = metadata.Config?.Healthcheck?.Retries ?? 0
+            HealthRetries = metadata.Config?.Healthcheck?.Retries ?? 0,
+            Relationships = ContainerRelationshipProjection.Build(metadata)
         };
         response.EnvironmentNames.AddRange((metadata.Config?.Env ?? [])
             .Select(item => item.Split('=', 2)[0]).Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.Ordinal));

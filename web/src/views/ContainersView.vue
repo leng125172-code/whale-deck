@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError, apiRequest, apiUrl } from '@/services/apiClient'
 import { enqueueOperation, planOperation, stageSecret } from '@/services/operations'
 import ContainerUsageCell from '@/components/containers/ContainerUsageCell.vue'
+import ContainerRelationships from '@/components/containers/ContainerRelationships.vue'
 import { authSession } from '@/services/authSession'
 import type {
   ContainerInspect,
@@ -29,6 +30,9 @@ interface Container {
   networks?: string[]
   addresses?: string[]
   createdAtUtc?: string | null
+  imageId?: string
+  volumeNames?: string[]
+  networkIds?: string[]
 }
 
 const items = ref<Container[]>([])
@@ -43,6 +47,15 @@ onMounted(() => window.addEventListener('resize', syncTableWidth))
 onUnmounted(() => window.removeEventListener('resize', syncTableWidth))
 const stateFilter = ref('all')
 const projectFilter = ref(typeof route.query.project === 'string' ? route.query.project : '')
+watch(
+  () => route.query.project,
+  (value) => {
+    projectFilter.value = typeof value === 'string' ? value : ''
+  },
+)
+const relatedResource = computed(() =>
+  typeof route.query.resourceId === 'string' ? route.query.resourceId : '',
+)
 const counts = computed(() => ({
   all: items.value.length,
   running: items.value.filter((item) => item.state === 'running').length,
@@ -85,11 +98,21 @@ const visibleItems = computed(() =>
     return (
       matchesText &&
       matchesState &&
-      (!projectFilter.value || item.labels['com.docker.compose.project'] === projectFilter.value)
+      (!projectFilter.value || item.labels['com.docker.compose.project'] === projectFilter.value) &&
+      (!relatedResource.value ||
+        (relatedResource.value.startsWith('image:') &&
+          item.imageId === relatedResource.value.slice(6)) ||
+        (relatedResource.value.startsWith('network:') &&
+          item.networkIds?.includes(relatedResource.value.slice(8))) ||
+        (relatedResource.value.startsWith('volume:') &&
+          item.volumeNames?.includes(relatedResource.value.slice(7))))
     )
   }),
 )
 const selectedIds = ref<string[]>([])
+watch([search, stateFilter, projectFilter, relatedResource], () => {
+  selectedIds.value = []
+})
 const loading = ref(false)
 const loadError = ref('')
 const usageError = ref('')
@@ -564,6 +587,11 @@ onMounted(() => {
 
 <template>
   <div class="containers-page">
+    <el-alert v-if="relatedResource" type="info" :closable="false" title="仅显示关联容器">
+      <code class="related-resource-id">{{ relatedResource }}</code>
+      <router-link to="/containers">显示全部</router-link>
+      <p>筛选使用真实资源标识；空列表可能表示资源已移除、没有引用或 Agent 尚未提供关联摘要。</p>
+    </el-alert>
     <header class="page-heading">
       <div>
         <span class="panel__eyebrow">DOCKER</span>
@@ -941,15 +969,24 @@ onMounted(() => {
               >{{ inspect.cpus || '默认' }} CPU ·
               {{ inspect.memoryMb || '默认' }} MiB</el-descriptions-item
             >
-            <el-descriptions-item label="端口" :span="wideTable ? 2 : 1">{{
-              inspect.ports.join(', ') || '无'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="网络" :span="wideTable ? 2 : 1">{{
-              inspect.networks.join(', ') || '无'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="挂载" :span="wideTable ? 2 : 1">{{
-              inspect.volumes.join(', ') || '无'
-            }}</el-descriptions-item>
+            <el-descriptions-item
+              v-if="!inspect.relationships"
+              label="端口"
+              :span="wideTable ? 2 : 1"
+              >{{ inspect.ports.join(', ') || '无' }}</el-descriptions-item
+            >
+            <el-descriptions-item
+              v-if="!inspect.relationships"
+              label="网络"
+              :span="wideTable ? 2 : 1"
+              >{{ inspect.networks.join(', ') || '无' }}</el-descriptions-item
+            >
+            <el-descriptions-item
+              v-if="!inspect.relationships"
+              label="挂载"
+              :span="wideTable ? 2 : 1"
+              >{{ inspect.volumes.join(', ') || '无' }}</el-descriptions-item
+            >
             <el-descriptions-item label="环境变量名" :span="wideTable ? 2 : 1">{{
               inspect.environmentNames.join(', ') || '无'
             }}</el-descriptions-item>
@@ -964,6 +1001,7 @@ onMounted(() => {
             }}</el-descriptions-item>
           </template>
         </el-descriptions>
+        <ContainerRelationships v-if="inspect" :inspect="inspect" />
         <div class="log-heading">
           <h3>更新历史</h3>
         </div>
@@ -1026,6 +1064,11 @@ onMounted(() => {
 .containers-page {
   display: grid;
   gap: 18px;
+}
+.related-resource-id {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .container-grid {
   display: grid;

@@ -116,7 +116,10 @@ public sealed record ContainerDto(
     IReadOnlyCollection<string>? Ports = null,
     IReadOnlyCollection<string>? Networks = null,
     IReadOnlyCollection<string>? Addresses = null,
-    DateTimeOffset? CreatedAtUtc = null);
+    DateTimeOffset? CreatedAtUtc = null,
+    string? ImageId = null,
+    IReadOnlyCollection<string>? VolumeNames = null,
+    IReadOnlyCollection<string>? NetworkIds = null);
 
 public sealed record ContainerLogsDto(IReadOnlyCollection<string> Lines, bool Truncated);
 
@@ -153,7 +156,18 @@ public sealed record ContainerInspectDto(
     IReadOnlyCollection<string> HealthCommand,
     long HealthIntervalSeconds,
     long HealthTimeoutSeconds,
-    long HealthRetries);
+    long HealthRetries,
+    ContainerRelationshipsDto? Relationships = null);
+
+public sealed record ContainerRelationshipsDto(string ImageId, string ComposeProject, string ComposeService,
+    string NetworkMode, IReadOnlyCollection<ContainerNetworkEndpointDto> Endpoints,
+    IReadOnlyCollection<ContainerMountDto> Mounts, IReadOnlyCollection<ContainerPortBindingDto> PortBindings,
+    bool IsTruncated);
+public sealed record ContainerNetworkEndpointDto(string Name, string NetworkId, string Ipv4Address,
+    long Ipv4PrefixLength, string Ipv4Gateway, string Ipv6Address, long Ipv6PrefixLength,
+    string Ipv6Gateway, string MacAddress);
+public sealed record ContainerMountDto(string Type, string Name, string Source, string Destination, bool ReadWrite);
+public sealed record ContainerPortBindingDto(string ContainerPort, string HostAddress, string HostPort, bool Published);
 
 public sealed record OverviewDto(
     string Scope,
