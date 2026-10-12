@@ -50,7 +50,7 @@ def main():
     ordinary, profile = authenticate(base, required_environment('VALIDATION_MANAGED_USERNAME'),
         required_environment('VALIDATION_MANAGED_PASSWORD'), require_administrator=False)
     assert profile['isAdministrator'] is False
-    for endpoint in ['backups/policies', 'backups/records', 'applications/configuration?resourceId=' + resource]:
+    for endpoint in ['backups/capacity', 'backups/policies', 'backups/records', 'applications/configuration?resourceId=' + resource]:
         assert ordinary.get(base + '/api/v1/' + endpoint, timeout=20).status_code == 403
     print(json.dumps({'ordinaryBackupPermissions': '403-read-and-policy'}))
     try:
