@@ -1663,6 +1663,39 @@ a {
   }
 }
 
+@media (max-width: 400px) {
+  .brand {
+    gap: 6px;
+    padding: 0 4px 0 10px;
+  }
+
+  .topbar__workspace {
+    gap: 4px;
+    padding-right: 8px;
+  }
+
+  .topbar .el-button.is-circle {
+    width: 28px;
+    height: 28px;
+    margin-left: 0;
+    padding: 6px;
+  }
+
+  .command-search {
+    width: 28px;
+    min-width: 28px;
+    flex-shrink: 0;
+  }
+
+  .topbar__actions {
+    gap: 2px;
+  }
+
+  .theme-switch {
+    margin: 0 2px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

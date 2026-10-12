@@ -152,6 +152,14 @@ async function expectViewportFit(page: Page) {
     expect(rect.left).toBeGreaterThanOrEqual(0)
     expect(rect.right).toBeLessThanOrEqual(rect.viewport + 1)
   }
+  const controls = page.locator('.topbar button:visible, .topbar .el-switch')
+  for (const control of await controls.all()) {
+    const box = await control.boundingBox()
+    if (box)
+      expect(box.x + box.width).toBeLessThanOrEqual(
+        await page.evaluate(() => document.documentElement.clientWidth),
+      )
+  }
 }
 
 for (const width of [1920, 1280, 1100, 1046, 1045, 900, 760, 600, 390, 320]) {
