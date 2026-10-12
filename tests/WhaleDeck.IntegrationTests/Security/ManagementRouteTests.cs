@@ -34,4 +34,19 @@ public sealed class ManagementRouteTests
 
         Assert.Equal(expected, OidcChallengeBehavior.ShouldReturnUnauthorized(context.Request));
     }
+
+    [Theory]
+    [InlineData("/api/v1/auth/me", "192.168.100.13", "Cookies")]
+    [InlineData("/api/v1/auth/csrf", "192.168.22.19", "Cookies")]
+    [InlineData("/api/v1/containers", "192.168.100.13", "Cookies")]
+    [InlineData("/api/v1/auth/logout", "192.168.100.13", "Cookies")]
+    [InlineData("/api/v1/auth/login", "192.168.100.13", "AuthentikExternal")]
+    [InlineData("/signin-oidc/internal/prepare", "192.168.22.19", "AuthentikInternal")]
+    public void ApiChallengesNeverEnterOidcAndMintTransientCookies(string path, string host, string expected)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Path = path;
+        context.Request.Host = new HostString(host, 8080);
+        Assert.Equal(expected, OidcChallengeBehavior.SelectChallengeScheme(context.Request));
+    }
 }

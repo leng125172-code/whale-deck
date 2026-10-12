@@ -96,10 +96,20 @@ try
             options.Cookie.SecurePolicy = CookieSecurePolicy.None;
             options.SlidingExpiration = true;
             options.ExpireTimeSpan = TimeSpan.FromHours(8);
+            options.Events.OnRedirectToLogin = context =>
+            {
+                if (OidcChallengeBehavior.ShouldReturnUnauthorized(context.Request))
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                else
+                    context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            };
         })
         .AddPolicyScheme("WhaleDeckOidc", "Whale Deck Authentik endpoint", options =>
-            options.ForwardDefaultSelector = context => context.Request.Host.Host == "192.168.22.19"
-                ? "AuthentikInternal" : "AuthentikExternal")
+            // Returning 401 in the OIDC redirect event is too late: the
+            // handler has already minted nonce/correlation cookies. Anonymous
+            // API calls must challenge Cookies, never enter the OIDC handler.
+            options.ForwardDefaultSelector = context => OidcChallengeBehavior.SelectChallengeScheme(context.Request))
         .AddOpenIdConnect("AuthentikInternal", options => ConfigureOidc(options, oidcSettings.Internal, "AuthentikInternal"))
         .AddOpenIdConnect("AuthentikExternal", options => ConfigureOidc(options, oidcSettings.External, "AuthentikExternal"));
     }

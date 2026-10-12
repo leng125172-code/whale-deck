@@ -252,6 +252,12 @@ def main() -> int:
     base_url = os.environ.get("WHALEDECK_URL", "http://192.168.100.13:8080").rstrip("/")
     username = required_environment("VALIDATION_USERNAME")
     password = required_environment("VALIDATION_PASSWORD")
+    anonymous = requests.Session()
+    anonymous.trust_env = False
+    for _ in range(3):
+        denied = anonymous.get(f"{base_url}/api/v1/auth/me", allow_redirects=False, timeout=20)
+        if denied.status_code != 401 or "Set-Cookie" in denied.headers:
+            raise RuntimeError("Anonymous API requests must not generate OIDC transient cookies.")
     session, _ = authenticate(base_url, username, password)
 
     containers = session.get(f"{base_url}/api/v1/containers", timeout=20)
