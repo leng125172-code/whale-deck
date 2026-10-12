@@ -15,7 +15,8 @@ public sealed class OperationCoordinator(OperationStore store, ILogger<Operation
         OperationHandle operation,
         string errorCode,
         Func<CancellationToken, Task<string?>> action,
-        string? maintenanceMessage = null)
+        string? maintenanceMessage = null,
+        bool completionWinsCancellation = false)
     {
         var cancellation = new CancellationTokenSource();
         if (!_running.TryAdd(operation.OperationId, cancellation))
@@ -35,7 +36,7 @@ public sealed class OperationCoordinator(OperationStore store, ILogger<Operation
                 operation.ProgressPercent = 20;
                 store.Save(operation, maintenanceMessage);
                 operation.ResultJson = await action(cancellation.Token) ?? string.Empty;
-                cancellation.Token.ThrowIfCancellationRequested();
+                if (!completionWinsCancellation) cancellation.Token.ThrowIfCancellationRequested();
                 operation.State = OperationState.Succeeded;
                 operation.Phase = "Completed";
                 operation.ProgressPercent = 100;
@@ -73,7 +74,7 @@ public sealed class OperationCoordinator(OperationStore store, ILogger<Operation
     public bool RequestCancellation(string operationId)
     {
         if (!_running.TryGetValue(operationId, out var cancellation)) return false;
-        cancellation.Cancel();
-        return true;
+        try { cancellation.Cancel(); return true; }
+        catch (ObjectDisposedException) { return false; }
     }
 }

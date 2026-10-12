@@ -29,7 +29,9 @@ public sealed class OperationStore
                 var operation = JsonSerializer.Deserialize<OperationHandle>(File.ReadAllText(file));
                 if (operation is not null)
                 {
-                    if (operation.State is OperationState.Queued or OperationState.Running or OperationState.WaitingForHealth or OperationState.RollingBack)
+                    var recoverableBackup = Guid.TryParse(operation.OperationId, out _) &&
+                        ApplicationBackupManager.ReadRecovery(Path.Combine(_directory, "application-backups", operation.OperationId + ".json")) is not null;
+                    if (!recoverableBackup && (operation.State is OperationState.Queued or OperationState.Running or OperationState.WaitingForHealth or OperationState.RollingBack))
                     {
                         operation.State = OperationState.Failed;
                         operation.Phase = "InterruptedByAgentRestart";

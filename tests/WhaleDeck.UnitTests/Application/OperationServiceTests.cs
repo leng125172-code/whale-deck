@@ -8,6 +8,18 @@ namespace WhaleDeck.UnitTests.Application;
 public sealed class OperationServiceTests
 {
     [Theory]
+    [InlineData("backup")]
+    [InlineData("verify-backup")]
+    public async Task ApplicationBackupsRequireConfirmationAndCurrentPlan(string action)
+    {
+        var service = new OperationService(new RecordingJobRepository());
+        var command = new OperationCommand("applications", action, "application:demo", "backup-one", "{}", null, false);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.EnqueueAsync("subject", "trace", command, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.EnqueueAsync("subject", "trace", command with { Confirmed = true }, default));
+        var result = await service.EnqueueAsync("subject", "trace", command with { Confirmed = true, PlanHash = new string('a', 64) }, default);
+        Assert.Equal("applications." + action, result.JobType);
+    }
+    [Theory]
     [InlineData("start")]
     [InlineData("stop")]
     [InlineData("restart")]

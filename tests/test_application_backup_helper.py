@@ -7,6 +7,7 @@ import json
 import os
 import tarfile
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -70,7 +71,7 @@ class BackupHelperTests(unittest.TestCase):
         if arguments[:3] == ('inspect', '--type', 'container'):
             return json.dumps([item for item in self.containers if item['Id'] in arguments[3:]]).encode()
         if arguments[:2] == ('volume', 'ls'):
-            return self.volume_name.encode()
+            return self.volume_name.encode() if self.volume['Labels'].get('com.docker.compose.project') == 'whaledeck-app-demo' else b''
         if arguments[:2] == ('volume', 'inspect'):
             return json.dumps([self.volume]).encode()
         if arguments[0] in ('pause', 'unpause'):
@@ -135,6 +136,42 @@ class BackupHelperTests(unittest.TestCase):
         with self.assertRaises(backup.BackupError):
             backup.plan('demo', 'quiesced')
 
+    def test_bind_alias_or_ancestor_cannot_bypass_shared_volume_guard(self):
+        foreign = {'Id': 'e' * 64, 'Name': '/other', 'Config': {'Labels': {}},
+            'State': {'Running': False}, 'Mounts': []}
+        self.containers.append(foreign)
+        for source in (self.config / 'data/child', self.apps, self.volume_path):
+            foreign['Mounts'] = [{'Type': 'bind', 'Source': str(source)}]
+            with self.assertRaises(backup.BackupError):
+                backup.plan('demo', 'quiesced')
+
+    def test_member_restart_changes_plan_fingerprint(self):
+        original = backup.plan('demo', 'live')['fingerprint']
+        self.member['State']['StartedAt'] = '2026-10-13T01:00:00Z'
+        self.assertNotEqual(original, backup.plan('demo', 'live')['fingerprint'])
+
+    def test_stopped_unit_with_unresolved_pause_remains_running_until_recovery(self):
+        job = '6' * 32
+        self.member['State']['Paused'] = True
+        backup.private_json(self.state / (job + '.json'), {'slug': 'demo', 'job': job, 'paused': [self.identity]})
+        backup.private_json(self.state / (job + '.done.json'), {'slug': 'demo', 'job': job, 'state': 'Failed'})
+        stopped = subprocess.CompletedProcess([], 0, stdout=b'ActiveState=inactive\nSubState=dead\nLoadState=loaded\n', stderr=b'')
+        with patch.object(backup.subprocess, 'run', return_value=stopped):
+            self.assertEqual(backup.status('demo', job)['phase'], 'WaitingForApplicationResume')
+            partial = self.target / 'demo' / (job + '.partial')
+            partial.parent.mkdir(parents=True)
+            partial.write_bytes(b'partial-archive')
+            backup.recover_job(job)
+            self.assertFalse(partial.exists())
+            self.assertEqual(backup.status('demo', job)['state'], 'Failed')
+        self.assertFalse(self.member['State']['Paused'])
+
+    def test_status_observation_error_is_not_a_terminal_job(self):
+        failed = subprocess.CompletedProcess([], 1, stdout=b'', stderr=b'systemd unavailable')
+        with patch.object(backup.subprocess, 'run', return_value=failed):
+            with self.assertRaises(backup.BackupError):
+                backup.status('demo', '7' * 32)
+
     def test_protected_container_driver_options_and_wrong_owner_are_denied(self):
         self.member['Config']['Labels']['io.whaledeck.protected'] = 'true'
         with self.assertRaises(backup.BackupError):
@@ -173,7 +210,7 @@ class BackupHelperTests(unittest.TestCase):
         backup.private_json(self.state / ('1' * 32 + '.json'), {'slug': 'demo', 'paused': [self.identity]})
         backup.recover_job('1' * 32)
         self.assertFalse(self.member['State']['Paused'])
-        self.assertEqual(backup.read_json(self.state / ('1' * 32 + '.json'))['paused'], [])
+        self.assertFalse((self.state / ('1' * 32 + '.json')).exists())
 
     def test_recovery_clears_deleted_container_only_after_successful_engine_listing(self):
         self.containers.clear()
@@ -184,10 +221,21 @@ class BackupHelperTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'posix', 'POSIX flock semantics')
     def test_real_project_lock_serializes_and_rejects_path_traversal(self):
+        self.member['State']['Paused'] = True
+        journal = self.state / ('2' * 32 + '.json')
+        backup.private_json(journal, {'slug': 'demo', 'paused': [self.identity]})
         with REAL_LOCK('demo'):
             with self.assertRaises(BlockingIOError):
                 with REAL_LOCK('demo', blocking=False):
                     self.fail('A second project lock was unexpectedly granted')
+            with patch.object(backup, 'lock', REAL_LOCK):
+                backup.recover_job('2' * 32)
+            self.assertTrue(self.member['State']['Paused'])
+            self.assertTrue(journal.exists())
+        with patch.object(backup, 'lock', REAL_LOCK):
+            backup.recover_job('2' * 32)
+        self.assertFalse(self.member['State']['Paused'])
+        self.assertFalse(journal.exists())
         with REAL_LOCK('demo', blocking=False):
             pass
         with self.assertRaises(backup.BackupError):
@@ -197,6 +245,17 @@ class BackupHelperTests(unittest.TestCase):
     def test_unmounted_owned_volume_is_included(self):
         self.member['Mounts'] = [self.member['Mounts'][0]]
         self.assertEqual(backup.plan('demo', 'live')['namedVolumes'], [self.volume_name])
+
+    def test_mounted_anonymous_image_volume_is_captured_but_not_inferred_from_orphan_name(self):
+        anonymous = '8' * 64
+        self.volume_path.parent.rename(self.volume_path.parent.with_name(anonymous))
+        self.volume_path = self.volume_path.parent.with_name(anonymous) / '_data'
+        self.volume_name = anonymous
+        self.volume.update(Name=anonymous, Mountpoint=str(self.volume_path), Labels={})
+        self.member['Mounts'][1]['Name'] = anonymous
+        self.assertEqual(backup.plan('demo', 'live')['namedVolumes'], [anonymous])
+        self.member['Mounts'] = [self.member['Mounts'][0]]
+        self.assertEqual(backup.plan('demo', 'live')['namedVolumes'], [])
 
     def test_tampered_archive_fails_checksum_and_does_not_extract(self):
         planned = backup.plan('demo', 'live')

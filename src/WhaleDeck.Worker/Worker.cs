@@ -765,6 +765,22 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                 backup.VerifiedAtUtc = backupResult.Verified ? DateTimeOffset.UtcNow : null;
             }
         }
+        if (job.JobType == "applications.verify-backup" && state is "Succeeded" or "Failed")
+        {
+            using var verificationRequest = JsonDocument.Parse(job.RequestJson);
+            var parameters = verificationRequest.RootElement.GetProperty("parameters");
+            var resource = verificationRequest.RootElement.GetProperty("resourceId").GetString();
+            if (parameters.TryGetProperty("backupId", out var backupId) && Guid.TryParseExact(backupId.GetString(), "N", out var originalJob))
+            {
+                var original = await db.BackupRecords.SingleOrDefaultAsync(item => item.JobId == originalJob &&
+                    db.ManagedResources.Any(managed => managed.Id == item.InstanceResourceId && managed.ExternalId == resource), cancellationToken);
+                if (original is not null)
+                {
+                    original.VerifiedAtUtc = state == "Succeeded" ? DateTimeOffset.UtcNow : null;
+                    original.ErrorCode = state == "Succeeded" ? null : "APPLICATION_BACKUP_VERIFICATION_FAILED";
+                }
+            }
+        }
         var scheduleRun = await db.ScheduledTaskRuns.SingleOrDefaultAsync(item => item.JobId == job.Id, cancellationToken);
         if (scheduleRun is not null && state is "Succeeded" or "Failed" or "Canceled")
         {
@@ -816,6 +832,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
     {
         if (!job.JobType.StartsWith("applications.", StringComparison.Ordinal)) return;
         var action = job.JobType["applications.".Length..];
+        if (action is "backup" or "verify-backup") return;
         using var request = JsonDocument.Parse(job.RequestJson);
         var parameters = request.RootElement.TryGetProperty("parameters", out var values) && values.ValueKind == JsonValueKind.Object
             ? values.EnumerateObject().ToDictionary(item => item.Name, item => item.Value.ToString(), StringComparer.Ordinal)
@@ -957,8 +974,8 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
-            if (!root.TryGetProperty("primaryRelativePath", out var path) ||
-                !root.TryGetProperty("totalSizeBytes", out var size) ||
+            if (!(root.TryGetProperty("primaryRelativePath", out var path) || root.TryGetProperty("relativePath", out path)) ||
+                !(root.TryGetProperty("totalSizeBytes", out var size) || root.TryGetProperty("sizeBytes", out size)) ||
                 !root.TryGetProperty("checksumAlgorithm", out var algorithm) ||
                 !root.TryGetProperty("checksum", out var checksum)) return false;
             result = new BackupResult(

@@ -16,7 +16,8 @@ public sealed class ManagedResourceGrpcService(
     DockerEngine docker,
     BoundedProcessRunner processes,
     ComposeProjectManager composeProjects,
-    ApplicationConfigurationManager applicationConfiguration)
+    ApplicationConfigurationManager applicationConfiguration,
+    ApplicationBackupManager applicationBackups)
     : ManagedResourceService.ManagedResourceServiceBase
 {
     private const string PrivilegedHelper = "/usr/local/libexec/whaledeck-privileged";
@@ -25,6 +26,15 @@ public sealed class ManagedResourceGrpcService(
 
     public override async Task<PlanResponse> PlanAction(RegisteredActionRequest request, ServerCallContext context)
     {
+        if (request.Resource.ResourceType == "applications" && request.Action is "backup" or "verify-backup")
+        {
+            var backupPreview = await applicationBackups.PreviewAsync(request, context.CancellationToken);
+            var backupPlan = plans.Create(request.Resource.ResourceId, request.Action, request.Parameters, backupPreview.Fingerprint);
+            backupPlan.Changes.Clear();
+            backupPlan.Changes.AddRange(backupPreview.Changes);
+            backupPlan.Warnings.Add(backupPreview.Warning);
+            return backupPlan;
+        }
         if (request.Resource.ResourceType == "applications" && request.Action == "configure")
         {
             var candidate = await applicationConfiguration.PreviewAsync(request, context.CancellationToken);
@@ -220,6 +230,28 @@ public sealed class ManagedResourceGrpcService(
 
     public override async Task<OperationHandle> RunComposeAction(RegisteredActionRequest request, ServerCallContext context)
     {
+        if (request.Resource.ResourceType == "applications" && request.Action is "backup" or "verify-backup")
+        {
+            var backupKey = BuildIdempotencyKey(request.Context, "ApplicationBackup", request.Action, request.Resource.ResourceId);
+            var backupOperation = operations.GetOrCreate(backupKey, "ApplicationBackup:" + request.Action, out var backupCreated);
+            if (!backupCreated) return backupOperation;
+            try
+            {
+                var backupPreview = await applicationBackups.PreviewAsync(request, context.CancellationToken);
+                plans.VerifyAndConsume(request.PlanHash, request.Resource.ResourceId, request.Action, request.Parameters, backupPreview.Fingerprint);
+                coordinator.Start(backupOperation, "APPLICATION_BACKUP_FAILED", token => applicationBackups.ExecuteAsync(request, backupPreview, backupOperation, token),
+                    completionWinsCancellation: true);
+                return backupOperation;
+            }
+            catch
+            {
+                backupOperation.State = OperationState.Failed;
+                backupOperation.Phase = "ValidationFailed";
+                backupOperation.ErrorCode = "APPLICATION_BACKUP_PLAN_INVALID";
+                operations.Save(backupOperation);
+                throw;
+            }
+        }
         if (request.Resource.ResourceType == "applications" && request.Action == "configure")
         {
             var configurationKey = BuildIdempotencyKey(request.Context, "ApplicationConfiguration", request.Action, request.Resource.ResourceId);

@@ -241,6 +241,44 @@ case "$action" in
     [[ "$unit" == whaledeck-agent.service && "$verb" == restart ]] || exit 2
     exec /usr/bin/systemd-run --unit=whaledeck-agent-restart --collect --on-active=3s /usr/bin/systemctl restart "$unit"
     ;;
+  application-backup-plan|application-backup-verify-plan)
+    [[ $# -ge 3 && "$2" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || exit 2
+    if [[ "$action" == application-backup-plan ]]; then
+      [[ $# -eq 4 && "$4" =~ ^[0-9]+$ && "$4" -ge 51 && "$4" -le 99 ]] || exit 2
+      [[ "$3" == live || "$3" == quiesced ]] || exit 2
+      exec /usr/bin/python3 /usr/local/libexec/whaledeck-application-backup.py plan "$2" "$3" "$4"
+    fi
+    [[ $# -eq 3 && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    exec /usr/bin/python3 /usr/local/libexec/whaledeck-application-backup.py verify-plan "$2" "$3"
+    ;;
+  application-backup-run)
+    [[ $# -eq 6 && "$2" =~ ^[a-z0-9][a-z0-9-]{0,62}$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    [[ "$4" == live || "$4" == quiesced ]] || exit 2
+    [[ "$5" =~ ^[a-f0-9]{64}$ && "$6" =~ ^[0-9]+$ && "$6" -ge 51 && "$6" -le 99 ]] || exit 2
+    exec /usr/bin/systemd-run --quiet --no-block --collect --service-type=exec \
+      --unit="whaledeck-application-backup-$3" \
+      --property=RuntimeMaxSec=7200 --property=TimeoutStopSec=120 --property=UMask=0077 \
+      --property=KillMode=control-group --property=Restart=no \
+      --property=NoNewPrivileges=yes --property=ProtectSystem=strict --property=ProtectHome=yes \
+      --property=PrivateTmp=yes --property=PrivateDevices=yes --property=RestrictAddressFamilies=AF_UNIX \
+      --property="ReadWritePaths=/data/DockerData/whaledeck/application-backups /var/lib/whaledeck-application-backup" \
+      --property="CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE" \
+      --property=CPUQuota=50% --property=MemoryMax=256M --property=IOWeight=50 \
+      --property="ExecStopPost=/usr/bin/python3 /usr/local/libexec/whaledeck-application-backup.py recover-job $3" \
+      /usr/bin/python3 /usr/local/libexec/whaledeck-application-backup.py run "$2" "$3" "$4" "$5" "$6"
+    ;;
+  application-backup-status)
+    [[ $# -eq 3 && "$2" =~ ^[a-z0-9][a-z0-9-]{0,62}$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    exec /usr/bin/python3 /usr/local/libexec/whaledeck-application-backup.py status "$2" "$3"
+    ;;
+  application-backup-cancel)
+    [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    exec /usr/bin/systemctl stop "whaledeck-application-backup-$2.service"
+    ;;
+  application-backup-verify)
+    [[ $# -eq 4 && "$2" =~ ^[a-z0-9][a-z0-9-]{0,62}$ && "$3" =~ ^[a-f0-9]{32}$ && "$4" =~ ^[a-f0-9]{64}$ ]] || exit 2
+    exec /usr/bin/python3 /usr/local/libexec/whaledeck-application-backup.py verify "$2" "$3" "$4"
+    ;;
   database-backup)
     [[ $# -eq 7 ]] || exit 2
     engine=$2

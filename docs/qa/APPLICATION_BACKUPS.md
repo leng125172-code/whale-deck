@@ -2,13 +2,13 @@
 
 ## 状态
 
-宿主机归档适配器源码与隔离测试正在实现。**尚未安装、未接入 Agent RPC/API/Worker，也没有前端可用入口。** 不把已有数据库备份或配置仓库快照称为普通应用完整备份。
+宿主机归档适配器已接入固定 helper、独立 systemd 服务、Agent RPC/API/Worker 源码，包含取消与 Agent 重连、手动记录和只读校验。**当前新增源码尚待正式发布及真实归档验收，前端、自动策略和保留清理仍未完成。** 不把已有数据库备份或配置仓库快照称为普通应用完整备份。
 
 归档设计覆盖三类批准数据：`compose.yml/.env/manifest.json`、本应用固定 `data` 目录、当前挂载或具有该 Compose 项目所有权标签的本地命名卷。容器可写层、tmpfs 与外部服务明确排除。HDD 固定目标为 `/data/DockerData/whaledeck/application-backups`，私有目录 0700、归档及元数据 0600；不提供恢复或文件下载入口。
 
 ## 当前代码约束
 
-- `whaledeck-application-backup.py` 只接受固定 verb、slug、UUID、模式和指纹，不接收任意路径、命令或 Compose 文本。根权限只在正式固定 helper 安装后提供；当前脚本尚不可由 Agent 调用。
+- `whaledeck-application-backup.py` 只接受固定 verb、slug、UUID、模式和指纹，不接收任意路径、命令或 Compose 文本。根权限只在正式固定 helper 安装后提供；正式安装前不能将源码接线视为运行时可用。
 - CLI `run` 还必须属于与 job UUID 完全匹配的专用 systemd cgroup；普通临时 sudo 命令不能绕过正式恢复接线直接暂停应用。
 - 根注册表与 Docker 名称/标签双重拒绝核心容器。共享卷、跨应用挂载、带 driver options 的卷、符号链接配置/路径均拒绝；未挂载卷的名称前缀不足以证明所有权，还须项目标签一致。
 - 计划使用私有能力密钥 HMAC 绑定源文件和资源，不公开 Secret 的低熵散列或配置值。预检不暂停、无归档写入。
@@ -19,8 +19,8 @@
 
 ## 必须完成后才开放入口
 
-1. 固定 root helper 枚举、独立 systemd 有界执行、ExecStopPost 与开机恢复接线；实测 Agent 中断/强制退出后的解除暂停。当前源码注释描述的 systemd 接线还不是已部署事实。
-2. Agent 原生预检/执行/校验/取消、单次计划绑定与 RPC 版本能力；API Application 权限、确认、幂等、资源锁和无 Secret 日志；Worker 记录与状态投影。
+1. 固定 root helper 枚举、独立 systemd 有界执行、ExecStopPost 与开机恢复源码已接线；仍须安装并实测 Agent 中断/强制退出后的解除暂停。
+2. Agent 原生预检/执行/校验/取消、单次计划绑定与 1.13 RPC 能力、Application 权限/确认/幂等/资源锁及 Worker 记录投影已接线；仍须真实依赖验收。
 3. 应用卡片/详情备份入口、范围与一致性确认、任务进度、历史、校验及策略。暂停可能影响服务，必须二次确认。HDD 容量与失败提示不能省略。
 4. 自动策略、保留清理与告警；不能以手动归档代替计划任务功能。清理只针对验证过的本应用备份集合，不能删除应用运行数据。
 5. 独立临时应用真实 Env/Cmd/bind/卷数据、gzip 内容和 SHA256 对照；核心/普通用户拒绝、共享资源拒绝、失效指纹、取消、失败恢复、损坏归档、预算上限与数据不泄漏。
@@ -35,3 +35,5 @@
 GLM Flash 仅定位公开源码。其“手动备份没有 BackupRecord”的结论与当前 `JobRepository.EnqueueAsync` 不符，已由 GPT 直接核实并拒绝采用；实现和安全边界均由 GPT 负责。
 
 本轮只读外援计量：`glm-5.3-flash`，一次成功、无重试，输入 1084105 Tokens（缓存命中 1024704），输出 6315，耗时 187897ms。资源包实际扣费未由响应返回，不记作 0；路由器已保存原始计量。
+
+本轮后端接线 Release 构建 0 警告/0 错误，348 项单元测试与 62 项集成测试通过。Windows 归档隔离测试 21 项通过、2 项 POSIX 跳过；Linux 与真实系统服务仍须在发布后补测。只读外援 `glm-5.3-flash` 检查 Worker/JobRepository/GovernanceRepository 的现状，输入 195170 Tokens（缓存 156544）、输出 4773、125957ms、一次成功/无重试，实际费用未返回；所有实现与复核由 GPT 完成。

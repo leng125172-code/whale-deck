@@ -1,0 +1,21 @@
+[Unit]
+Description=Recover Whale Deck application backup pauses
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/whaledeck-application-backup.py recover-all
+TimeoutStartSec=10min
+User=root
+Group=root
+UMask=0077
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/whaledeck-application-backup /data/DockerData/whaledeck/application-backups
+PrivateTmp=true
+NoNewPrivileges=true
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

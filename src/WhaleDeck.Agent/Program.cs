@@ -44,6 +44,8 @@ builder.Services.AddSingleton<PlanStore>();
 builder.Services.AddSingleton<ManagedResourcePlanner>();
 builder.Services.AddSingleton<ComposeProjectManager>();
 builder.Services.AddSingleton<ApplicationConfigurationManager>();
+builder.Services.AddSingleton<ApplicationBackupManager>();
+builder.Services.AddHostedService<ApplicationBackupRecoveryService>();
 builder.Services.AddSingleton<HostReader>();
 builder.Services.AddHostedService<HostMetricCollector>();
 builder.Services.AddSingleton(TimeProvider.System);

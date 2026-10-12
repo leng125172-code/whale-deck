@@ -41,6 +41,11 @@ printf 'Agent__AllowedPeerGid=%s\n' "$(getent group whaledeck | cut -d: -f3)" > 
 chown root:whaledeck /etc/whaledeck/agent.env
 chmod 0640 /etc/whaledeck/agent.env
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-privileged" /usr/local/libexec/whaledeck-privileged
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-application-backup.py" /usr/local/libexec/whaledeck-application-backup.py
+install -d -o root -g root -m 0700 /var/lib/whaledeck-application-backup /data/DockerData/whaledeck/application-backups
+for unit in whaledeck-application-backup-recovery.service whaledeck-application-backup-recovery.timer; do
+  install -o root -g root -m 0644 "$(dirname "$0")/$unit" "/etc/systemd/system/$unit"
+done
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-platform-maintenance" /usr/local/libexec/whaledeck-platform-maintenance
 printf '%s\n' 'whaledeck-agent ALL=(root) NOPASSWD: /usr/local/libexec/whaledeck-privileged *' > /etc/sudoers.d/whaledeck-agent
 chmod 0440 /etc/sudoers.d/whaledeck-agent
@@ -50,6 +55,7 @@ install -o root -g root -m 0644 "$(dirname "$0")/whaledeck-agent.service" /etc/s
 install -o root -g root -m 0644 "$(dirname "$0")/whaledeck-maintenance.service" /etc/systemd/system/whaledeck-maintenance.service
 systemctl daemon-reload
 systemctl enable whaledeck-agent.service whaledeck-maintenance.service
+systemctl enable --now whaledeck-application-backup-recovery.timer
 # `enable --now` does not restart an already active service after an upgrade.
 # Explicit restart guarantees the copied binaries and settings become active.
 systemctl restart whaledeck-agent.service whaledeck-maintenance.service

@@ -29,6 +29,7 @@ MAX_BYTES = 100 * 1024**3
 SLUG = re.compile(r'[a-z0-9][a-z0-9-]{0,62}\Z')
 IDENTIFIER = re.compile(r'[a-f0-9]{64}\Z')
 JOB = re.compile(r'[a-f0-9]{32}\Z')
+CANCELED = False
 
 
 class BackupError(Exception):
@@ -75,7 +76,7 @@ def private_json(path: Path, value):
 def docker(*arguments):
     completed = subprocess.run(['/usr/bin/docker', *arguments], stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, timeout=30, check=False,
-        env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root', 'LANG': 'C.UTF-8'})
+        env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': str(STATE), 'LANG': 'C.UTF-8'})
     require(completed.returncode == 0 and len(completed.stdout) <= 4 * 1024**2)
     return completed.stdout
 
@@ -125,7 +126,7 @@ def scope(slug):
     require(members and len(members) <= 64 and not any(protected(item, entries) for item in members))
     volumes = {}
     def include_volume(name, *, mounted=False):
-        require(name.startswith(project + '-') and
+        require((name.startswith(project + '-') or mounted and IDENTIFIER.fullmatch(name)) and
             re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}', name))
         inspected = json.loads(docker('volume', 'inspect', name))[0]
         labels = inspected.get('Labels') or {}
@@ -135,7 +136,9 @@ def scope(slug):
         require(inspected.get('Driver') == 'local' and not inspected.get('Options'))
         path = safe_path(Path(inspected['Mountpoint']), directory=True)
         require(path.name == '_data' and path.parent.name == name and path.parent.parent.name == 'volumes')
-        volumes[name] = {'path': str(path), 'createdAt': inspected.get('CreatedAt', '')}
+        require(path.is_dir())
+        volumes[name] = {'path': str(path), 'createdAt': inspected.get('CreatedAt', ''),
+            'identity': [path.stat().st_dev, path.stat().st_ino]}
 
     # Include owned but currently unmounted volumes too; prefix alone is not proof of ownership.
     names = docker('volume', 'ls', '--filter', 'label=com.docker.compose.project=' + project,
@@ -154,16 +157,19 @@ def scope(slug):
             else:
                 require(mount['Type'] == 'tmpfs')
     own_ids = {item['Id'] for item in members}
+    sources = [data, *(Path(volume['path']) for volume in volumes.values())]
     for container in all_containers:
         if container['Id'] in own_ids:
             continue
         require(not any(mount.get('Name') in volumes or
-            (mount.get('Type') == 'bind' and Path(mount['Source']) == data)
+            (mount.get('Type') == 'bind' and any(paths_overlap(Path(mount['Source']).resolve(), source) for source in sources))
             for mount in container.get('Mounts', [])))
     material = {'slug': slug, 'configuration': configuration, 'data': str(data),
         'dataIdentity': [data.stat().st_dev, data.stat().st_ino] if data.exists() else None,
         'volumes': volumes, 'members': sorted([{'id': item['Id'],
             'image': item.get('Image', ''), 'running': item['State'].get('Running', False),
+            'startedAt': item['State'].get('StartedAt', ''), 'restartCount': item.get('RestartCount', 0),
+            'composeConfigHash': (item.get('Config', {}).get('Labels') or {}).get('com.docker.compose.config-hash', ''),
             'mounts': item.get('Mounts', [])} for item in members], key=lambda item: item['id'])}
     key = KEY.read_bytes()
     require(len(key) >= 32)
@@ -171,17 +177,25 @@ def scope(slug):
     return directory, members, volumes, fingerprint
 
 
-def plan(slug, consistency):
+def paths_overlap(left, right):
+    return left == right or left in right.parents or right in left.parents
+
+
+def plan(slug, consistency, critical=90):
     require(consistency in ('live', 'quiesced'))
-    _, members, volumes, fingerprint = scope(slug)
+    require(51 <= critical <= 99)
+    directory, members, volumes, fingerprint = scope(slug)
     require(not any(item['State'].get('Paused') for item in members))
     capacity = shutil.disk_usage(TARGET if TARGET.exists() else TARGET.parent.parent)
-    return {'fingerprint': fingerprint, 'configurationFiles': list(CONFIGURATION), 'includeDataDirectory': True,
+    require(capacity.used * 100 < capacity.total * critical and capacity.free >= 256 * 1024**2)
+    data_exists = (directory / 'data').exists()
+    return {'fingerprint': fingerprint, 'configurationFiles': list(CONFIGURATION), 'includeDataDirectory': data_exists,
         'namedVolumes': sorted(volumes), 'excluded': ['container writable layers', 'tmpfs', 'external services'],
         'consistency': consistency, 'runningServices': sum(item['State'].get('Running', False) for item in members),
         'freeBytes': capacity.free, 'targetDirectoryId': 'database-platform.backup.hdd',
         'warning': 'Filesystem archive only; use a database-native backup for transaction consistency. '
-            + ('Services are paused temporarily.' if consistency == 'quiesced' else 'Live files can change during the backup.')}
+            + ('Services are paused temporarily.' if consistency == 'quiesced' else 'Live files can change during the backup.')
+            + ('' if data_exists or volumes else ' No persistent data was found; configuration only.')}
 
 
 @contextlib.contextmanager
@@ -235,7 +249,9 @@ def recover_job(job):
     try:
         with lock(journal['slug'], blocking=False):
             require(resume(journal))
-            private_json(path, journal)
+            partial = safe_path(TARGET / journal['slug'] / (job + '.partial'))
+            partial.unlink(missing_ok=True)
+            path.unlink(missing_ok=True)
     except BlockingIOError:
         return  # A live helper owns the project; do not interfere.
 
@@ -327,6 +343,41 @@ def verify(slug, job):
     return metadata
 
 
+def verify_plan(slug, job):
+    require(SLUG.fullmatch(slug) is not None and JOB.fullmatch(job) is not None)
+    directory = safe_path(TARGET / slug, directory=True)
+    metadata = read_json(directory / (job + '.json'))
+    artifact = safe_path(directory / (job + '.tar.gz'))
+    require(metadata.get('slug') == slug and metadata.get('backupId') == job and artifact.is_file())
+    material = json.dumps(metadata, sort_keys=True).encode() + str(artifact.stat().st_size).encode()
+    return {'fingerprint': hmac.new(KEY.read_bytes(), material, hashlib.sha256).hexdigest(),
+        'backupId': job, 'consistency': metadata.get('consistency', 'unknown'),
+        'sizeBytes': artifact.stat().st_size, 'targetDirectoryId': 'database-platform.backup.hdd',
+        'warning': 'Read-only archive and SHA256 verification. No restore is performed.'}
+
+
+def status(slug, job):
+    require(SLUG.fullmatch(slug) is not None and JOB.fullmatch(job) is not None)
+    receipt = safe_path(STATE / (job + '.done.json'))
+    unit = 'whaledeck-application-backup-' + job + '.service'
+    completed = subprocess.run(['/usr/bin/systemctl', 'show', unit, '--property=ActiveState',
+        '--property=SubState', '--property=LoadState'], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        timeout=20, check=False, env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8'})
+    fields = dict(line.split('=', 1) for line in completed.stdout.decode().splitlines() if '=' in line)
+    if fields.get('ActiveState') in ('active', 'activating', 'deactivating'):
+        return {'state': 'Running', 'phase': fields.get('SubState', 'Executing')}
+    # A polling/daemon error does not prove that the independent service stopped.
+    require(fields.get('LoadState') in ('loaded', 'not-found'))
+    journal = safe_path(journal_path(job))
+    if journal.exists() and read_json(journal).get('paused'):
+        return {'state': 'Running', 'phase': 'WaitingForApplicationResume'}
+    if receipt.exists():
+        result = read_json(receipt)
+        require(result.get('slug') == slug and result.get('job') == job)
+        return result
+    return {'state': 'Failed', 'phase': 'Interrupted', 'errorCode': 'APPLICATION_BACKUP_NO_RECEIPT'}
+
+
 def run(slug, job, consistency, fingerprint, critical=90):
     require(JOB.fullmatch(job) is not None and IDENTIFIER.fullmatch(fingerprint) is not None and 51 <= critical <= 99)
     require(consistency in ('live', 'quiesced'))
@@ -374,6 +425,8 @@ def run(slug, job, consistency, fingerprint, critical=90):
                 'sizeBytes': artifact.stat().st_size, 'checksumAlgorithm': 'SHA256', 'checksum': digest,
                 'verified': True, 'compression': 'gzip', 'consistency': consistency, 'transactionConsistent': False,
                 'createdAtUnix': int(time.time()), 'namedVolumes': sorted(volumes), 'dataIncluded': data.exists(),
+                'runtimeServices': [{'service': (member.get('Config', {}).get('Labels') or {}).get('com.docker.compose.service', ''),
+                    'imageId': member.get('Image', ''), 'wasRunning': member['State'].get('Running', False)} for member in members],
                 'configurationIncluded': list(CONFIGURATION), 'excluded': ['container writable layers', 'tmpfs', 'external services']}
             private_json(metadata_path, result)
         finally:
@@ -399,22 +452,44 @@ def approved_service(job, cgroup):
 def main():
     require(os.geteuid() == 0)
     verb, *arguments = sys.argv[1:]
-    if verb == 'plan' and len(arguments) == 2:
-        result = plan(*arguments)
+    if verb == 'plan' and len(arguments) == 3:
+        result = plan(*arguments[:2], critical=int(arguments[2]))
     elif verb == 'run' and len(arguments) == 5:
         # Never pause from an ad-hoc sudo invocation without the systemd recovery contract.
         require(approved_service(arguments[1], Path('/proc/self/cgroup').read_text()))
-        signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(BackupError('Application backup canceled.')))
-        result = run(*arguments[:4], critical=int(arguments[4]))
-    elif verb == 'verify' and len(arguments) == 2:
-        result = verify(*arguments)
+        def cancel(*_):
+            global CANCELED
+            CANCELED = True
+            raise BackupError('Application backup canceled.')
+        signal.signal(signal.SIGTERM, cancel)
+        try:
+            result = run(*arguments[:4], critical=int(arguments[4]))
+            private_json(STATE / (arguments[1] + '.done.json'),
+                {'state': 'Succeeded', 'phase': 'Completed', 'slug': arguments[0], 'job': arguments[1], 'result': result})
+        except BaseException:
+            private_json(STATE / (arguments[1] + '.done.json'), {'state': 'Canceled' if CANCELED else 'Failed',
+                'phase': 'Canceled' if CANCELED else 'Failed', 'slug': arguments[0], 'job': arguments[1],
+                'errorCode': 'APPLICATION_BACKUP_CANCELED' if CANCELED else 'APPLICATION_BACKUP_FAILED'})
+            raise
+    elif verb == 'verify-plan' and len(arguments) == 2:
+        result = verify_plan(*arguments)
+    elif verb == 'verify' and len(arguments) == 3:
+        require(hmac.compare_digest(verify_plan(*arguments[:2])['fingerprint'], arguments[2]))
+        result = verify(*arguments[:2])
+    elif verb == 'status' and len(arguments) == 2:
+        result = status(*arguments)
     elif verb == 'recover-job' and len(arguments) == 1:
         recover_job(*arguments)
         return
     elif verb == 'recover-all' and not arguments:
+        failed = False
         for path in STATE.glob('*.json'):
             if JOB.fullmatch(path.stem):
-                recover_job(path.stem)
+                try:
+                    recover_job(path.stem)
+                except (BackupError, OSError, ValueError, subprocess.TimeoutExpired):
+                    failed = True
+        require(not failed)
         return
     else:
         raise BackupError('Application backup action is invalid.')

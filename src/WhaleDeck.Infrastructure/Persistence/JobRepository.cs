@@ -25,12 +25,13 @@ public sealed class JobRepository(PlatformDbContext dbContext) : IJobRepository
         });
         dbContext.OutboxMessages.Add(outbox);
         dbContext.AuditEvents.Add(audit);
-        if (job.JobType == "backups.run")
+        if (job.JobType is "backups.run" or "applications.backup")
         {
             using var request = JsonDocument.Parse(job.RequestJson);
             var resourceExternalId = request.RootElement.GetProperty("resourceId").GetString();
             var resource = await dbContext.ManagedResources
-                .Where(item => (item.ResourceType == "Database" || item.ResourceType == "Container") &&
+                .Where(item => (item.ResourceType == "Database" || item.ResourceType == "Container" ||
+                                job.JobType == "applications.backup" && item.ResourceType == "ComposeApplication") &&
                                item.ExternalId == resourceExternalId)
                 .OrderByDescending(item => item.ResourceType == "Database")
                 .FirstOrDefaultAsync(cancellationToken)

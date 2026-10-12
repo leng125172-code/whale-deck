@@ -109,7 +109,7 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
         if (!string.IsNullOrWhiteSpace(instanceResourceId))
         {
             var resourceId = await db.ManagedResources
-                .Where(item => (item.ResourceType == "Database" || item.ResourceType == "Container") &&
+                .Where(item => (item.ResourceType == "Database" || item.ResourceType == "Container" || item.ResourceType == "ComposeApplication") &&
                                item.ExternalId == instanceResourceId)
                 .OrderByDescending(item => item.ResourceType == "Database")
                 .Select(item => (Guid?)item.Id)
