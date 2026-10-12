@@ -30,7 +30,7 @@ function event(available = true, state = 'Active') {
       policyId: 'policy',
       targetDirectoryId: 'database-platform.backup.hdd',
       available,
-      usedPercent: available ? 82.4 : null,
+      usedPercent: available ? (state === 'Recovered' ? 79 : 82.4) : null,
       freeBytes: available ? 19 * 1024 ** 3 : null,
       warningPercent: 80,
       criticalPercent: 90,
@@ -67,8 +67,12 @@ for (const width of [320, 390, 1045, 1440])
       )
       await page.screenshot({ path: info.outputPath('capacity.png'), scale: 'css' })
       await page.getByRole('tab', { name: '告警规则', exact: true }).click()
+      await expect(
+        page.getByText('HDD 备份容量规则跟随备份策略；阈值请在备份策略中调整。'),
+      ).toBeVisible()
       await expect(page.getByText('跟随备份策略', { exact: true })).toBeVisible()
       await expect(page.getByRole('button', { name: '编辑', exact: true })).toHaveCount(0)
+      await page.screenshot({ path: info.outputPath('managed-rule.png'), scale: 'css' })
     })
 test('unknown capacity and recovered controls never imply a healthy zero sample', async ({
   page,
@@ -76,12 +80,16 @@ test('unknown capacity and recovered controls never imply a healthy zero sample'
   await page.route('**/api/v1/alerts?**', (route) => route.fulfill({ json: [event(false)] }))
   await page.goto('/alerts')
   await expect(page.getByText('容量未知 · 不会因此解除风险')).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('unknown.png'), scale: 'css' })
   await page.route('**/api/v1/alerts?**', (route) =>
     route.fulfill({ json: [event(true, 'Recovered')] }),
   )
   await page.getByRole('button', { name: '刷新', exact: true }).click()
   await expect(page.getByRole('button', { name: '确认', exact: true })).toBeDisabled()
   await expect(page.getByRole('button', { name: '静默', exact: true })).toBeDisabled()
+  await expect(page.getByText('已恢复', { exact: true })).toBeVisible()
+  await expect(page.locator('.el-loading-mask')).toBeHidden()
+  await page.screenshot({ path: test.info().outputPath('recovered.png'), scale: 'css' })
 })
 test('403 clears private capacity and blocks another refresh', async ({ page }) => {
   await page.goto('/alerts')

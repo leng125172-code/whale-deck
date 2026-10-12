@@ -396,6 +396,12 @@ onUnmounted(() => {
           </el-table>
         </el-tab-pane>
         <el-tab-pane name="rules" label="告警规则">
+          <p
+            v-if="rules.some((rule) => rule.ruleType === 'BackupStorageCapacity')"
+            class="managed-note"
+          >
+            HDD 备份容量规则跟随备份策略；阈值请在备份策略中调整。
+          </p>
           <el-empty v-if="!rules.length && !loading" description="暂无告警规则" />
           <el-table v-else :data="rules" row-key="id">
             <el-table-column label="类型" min-width="180"
@@ -534,6 +540,12 @@ td small {
 .alert-card__actions {
   display: flex;
   gap: 20px;
+}
+.managed-note {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 680px) {
   .form-grid {
