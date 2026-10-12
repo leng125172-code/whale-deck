@@ -17,5 +17,7 @@ builder.Services.AddDbContext<PlatformDbContext>(options =>
 using var host = builder.Build();
 await using var scope = host.Services.CreateAsyncScope();
 var database = scope.ServiceProvider.GetRequiredService<PlatformDbContext>();
+// Data-preserving metric repartitioning has a bounded five-minute statement budget.
+database.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
 await database.Database.MigrateAsync();
 Console.WriteLine("Whale Deck database migrations completed.");

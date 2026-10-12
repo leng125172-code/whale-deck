@@ -27,6 +27,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
 
     private DateTimeOffset _nextCatalogRefresh = DateTimeOffset.MinValue;
     private DateTimeOffset _nextRetentionSweep = DateTimeOffset.MinValue;
+    private DateTimeOffset _nextMetricPartitionMaintenance = DateTimeOffset.MinValue;
     private readonly string _workerInstanceId = $"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}";
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -56,6 +57,13 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         var identityDirectory = scope.ServiceProvider.GetRequiredService<IIdentityDirectory>();
         var identity = scope.ServiceProvider.GetRequiredService<IIdentityManager>();
         var leases = scope.ServiceProvider.GetRequiredService<ResourceLeaseManager>();
+        // Prepare current/future UTC partitions before the first insert, including after long downtime.
+        var now = DateTimeOffset.UtcNow;
+        if (_nextMetricPartitionMaintenance <= now)
+        {
+            if (await MetricPartitions.MaintainAsync(db, now, cancellationToken) < 0) return;
+            _nextMetricPartitionMaintenance = now.AddHours(1);
+        }
         await CollectMetrics(db, agent, cancellationToken);
         await SyncManagedResources(db, agent, cancellationToken);
         await CollectContainerMetrics(db, agent, cancellationToken);
@@ -271,7 +279,8 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                 RequestJson = JsonSerializer.Serialize(new { resourceId, parameters, planHash })
             };
             db.OperationJobs.Add(job);
-            db.ScheduledTaskRuns.Add(new ScheduledTaskRun { ScheduleId = schedule.Id, JobId = job.Id, ScheduledForUtc = scheduledFor });
+            var scheduleRun = new ScheduledTaskRun { ScheduleId = schedule.Id, JobId = job.Id, ScheduledForUtc = scheduledFor };
+            db.ScheduledTaskRuns.Add(scheduleRun);
             db.AuditEvents.Add(new AuditEvent
             {
                 ActorSubject = "system:scheduler",
@@ -290,7 +299,10 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                 job.Phase = "Completed";
                 job.ProgressPercent = 100;
                 job.StartedAtUtc = now;
-                job.CompletedAtUtc = now;
+                job.CompletedAtUtc = DateTimeOffset.UtcNow;
+                scheduleRun.StartedAtUtc = job.StartedAtUtc;
+                scheduleRun.CompletedAtUtc = job.CompletedAtUtc;
+                scheduleRun.Result = job.State;
             }
             else
             {
@@ -954,8 +966,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
     {
         var metricCutoff = DateTimeOffset.UtcNow.AddDays(-14);
         var eventCutoff = DateTimeOffset.UtcNow.AddDays(-90);
-        await db.MetricSamples.Where(item => item.SampledAtUtc < metricCutoff).ExecuteDeleteAsync(cancellationToken);
-        await db.MetricRollups.Where(item => item.WindowStartUtc < metricCutoff).ExecuteDeleteAsync(cancellationToken);
+        await MetricPartitions.MaintainAsync(db, DateTimeOffset.UtcNow, cancellationToken);
         await db.OperationJobEvents.Where(item => item.OccurredAtUtc < eventCutoff).ExecuteDeleteAsync(cancellationToken);
         await db.DockerEvents.Where(item => item.OccurredAtUtc < metricCutoff).ExecuteDeleteAsync(cancellationToken);
     }
