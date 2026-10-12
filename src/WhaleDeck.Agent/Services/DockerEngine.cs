@@ -53,10 +53,22 @@ public sealed class DockerEngine : IDisposable
         var containers = await ListContainersAsync(true, cancellationToken);
         var members = containers.Where(item => item.Names.Any(name =>
             string.Equals(name.TrimStart('/'), expectedName, StringComparison.Ordinal))).ToArray();
-        return members.Length > 0 && members.All(item =>
+        if (members.Length == 0 || !members.All(item =>
             string.Equals(item.State, "running", StringComparison.OrdinalIgnoreCase) &&
-            !(item.Status ?? string.Empty).Contains("unhealthy", StringComparison.OrdinalIgnoreCase));
+            !(item.Status ?? string.Empty).Contains("unhealthy", StringComparison.OrdinalIgnoreCase) &&
+            !(item.Status ?? string.Empty).Contains("health: starting", StringComparison.OrdinalIgnoreCase))) return false;
+        foreach (var member in members)
+            if (!IsStableContainerState((await _client.Containers.InspectContainerAsync(member.ID, cancellationToken)).State, DateTimeOffset.UtcNow))
+                return false;
+        return true;
     }
+
+    public static bool IsStableContainerState(Docker.DotNet.Models.ContainerState? state, DateTimeOffset now) =>
+        state?.Running == true && !state.Restarting && !state.Dead && !state.Paused &&
+        DateTimeOffset.TryParse(state.StartedAt, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var startedAt) &&
+        now - startedAt >= TimeSpan.FromSeconds(6) &&
+        (state.Health is null || string.Equals(state.Health.Status, "healthy", StringComparison.OrdinalIgnoreCase));
 
     public Task<IList<ImagesListResponse>> ListImagesAsync(CancellationToken cancellationToken) =>
         _client.Images.ListImagesAsync(new ImagesListParameters { All = true }, cancellationToken);
@@ -636,7 +648,8 @@ public sealed class DockerEngine : IDisposable
             var state = (await _client.Containers.InspectContainerAsync(containerId, cancellationToken)).State;
             if (state?.Running != true) throw new InvalidOperationException("The replacement container stopped during startup.");
             var health = state.Health?.Status;
-            if (!hasHealthcheck || string.Equals(health, "healthy", StringComparison.OrdinalIgnoreCase)) return;
+            if (IsStableContainerState(state, DateTimeOffset.UtcNow) &&
+                (!hasHealthcheck || string.Equals(health, "healthy", StringComparison.OrdinalIgnoreCase))) return;
             if (string.Equals(health, "unhealthy", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("The replacement container became unhealthy.");
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);

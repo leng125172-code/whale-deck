@@ -58,10 +58,24 @@ public sealed partial class ComposeProjectManager(ResourceRegistry registry, Doc
         await CommandAsync(current.Directory, arguments, TimeSpan.FromHours(2), cancellationToken);
         if (request.Action is "start" or "restart" or "redeploy")
         {
+            var consecutiveHealthy = 0;
             for (var attempt = 0; attempt < 20; attempt++)
             {
                 var observed = Members(await docker.ListContainersAsync(true, cancellationToken), current.Project);
-                if (IsHealthy(observed, current.Services)) break;
+                var healthy = IsHealthy(observed, current.Services);
+                if (healthy)
+                {
+                    foreach (var member in observed.Where(item => current.Services.Contains(Label(item, "com.docker.compose.service"), StringComparer.Ordinal)))
+                    {
+                        if (!DockerEngine.IsStableContainerState((await docker.InspectContainerAsync(member.ID, cancellationToken)).State, DateTimeOffset.UtcNow))
+                        {
+                            healthy = false;
+                            break;
+                        }
+                    }
+                }
+                consecutiveHealthy = healthy ? consecutiveHealthy + 1 : 0;
+                if (consecutiveHealthy >= 3) break;
                 if (attempt == 19) throw new InvalidOperationException("Compose services did not become healthy; configuration and volumes are retained.");
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
             }

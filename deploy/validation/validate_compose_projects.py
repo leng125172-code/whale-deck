@@ -33,7 +33,7 @@ def main() -> int:
     resource = f"application:{slug}"
     installed = False
     try:
-        api.run("install", "", {"slug": slug, "image": "nginx:alpine", "autoupdate": "false"},
+        api.run("install", "", {"slug": slug, "image": "nginxinc/nginx-unprivileged:alpine", "autoupdate": "false"},
                 area="applications", confirmed=True, requires_plan=True, timeout=600)
         installed = True
         items = [item for item in inventory(api) if item["id"] == resource]

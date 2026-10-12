@@ -429,9 +429,11 @@ public sealed partial class ManagedActionExecutor(
 
     private async Task EnsureApplicationHealthyAsync(string slug, CancellationToken cancellationToken)
     {
+        var consecutiveHealthy = 0;
         for (var attempt = 0; attempt < 20; attempt++)
         {
-            if (await docker.IsApplicationHealthyAsync(slug, cancellationToken)) return;
+            consecutiveHealthy = await docker.IsApplicationHealthyAsync(slug, cancellationToken) ? consecutiveHealthy + 1 : 0;
+            if (consecutiveHealthy >= 3) return;
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
         throw new InvalidOperationException("The application did not become healthy before the timeout.");
