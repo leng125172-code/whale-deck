@@ -91,7 +91,7 @@ def ensure_provider(slug: str, address: str, callback: str, signout_callback: st
         defaults={
             "name": provider_name,
             "provider": provider,
-            "meta_launch_url": f"http://{address}:8080/",
+            "meta_launch_url": f"http://{address}:8080/api/v1/auth/login?returnUrl=%2F",
             "open_in_new_tab": False,
         },
     )

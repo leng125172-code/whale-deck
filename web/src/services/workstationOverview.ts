@@ -124,7 +124,7 @@ export async function fetchWorkstationOverview(
   let history: MetricSeriesSnapshot[] = []
   try {
     history = await apiRequest<MetricSeriesSnapshot[]>(
-      'metrics?kinds=network.receive&kinds=network.send&kinds=network.receive.total&kinds=network.send.total&kinds=disk.read&kinds=disk.write&kinds=disk.utilization&take=60',
+      'metrics?kinds=network.receive&kinds=network.send&kinds=disk.read&kinds=disk.write&take=60',
       { signal },
     )
   } catch (reason) {

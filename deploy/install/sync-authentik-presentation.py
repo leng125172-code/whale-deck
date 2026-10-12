@@ -75,12 +75,12 @@ def main() -> None:
         changed.raise_for_status()
         changed = session.patch(app_url, json={
             "name": title, "meta_description": description, "meta_icon": filename,
-            "meta_launch_url": f"http://{address}:8080/",
+            "meta_launch_url": f"http://{address}:8080/api/v1/auth/login?returnUrl=%2F",
         }, timeout=20)
         changed.raise_for_status()
         updated = changed.json()
         icon_url = updated["meta_icon_url"]
-        if not icon_url or updated["meta_launch_url"] != f"http://{address}:8080/":
+        if not icon_url or updated["meta_launch_url"] != f"http://{address}:8080/api/v1/auth/login?returnUrl=%2F":
             raise RuntimeError("Application presentation verification failed.")
         # Assert media is reachable without depending on Whale Deck/Gateway.
         verified = session.get(requests.compat.urljoin("http://127.0.0.1:8081/", icon_url), timeout=20)

@@ -5,6 +5,7 @@ using Serilog;
 using Serilog.Formatting.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestHeadersTotalSize = 64 * 1024);
 builder.WebHost.UseUrls(builder.Configuration["Maintenance:Urls"]
     ?? "http://0.0.0.0:8080;http://0.0.0.0:8081");
 builder.Host.UseSerilog((context, services, configuration) => configuration

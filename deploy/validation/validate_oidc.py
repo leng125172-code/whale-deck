@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html.parser
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -259,6 +260,19 @@ def main() -> int:
     if not isinstance(container_payload, list):
         raise RuntimeError("Administrator container endpoint returned an unexpected payload")
     print(f"Administrator policy passed: {len(container_payload)} containers visible")
+
+    metrics = session.get(f"{base_url}/api/v1/metrics", params={
+        "kinds": ["network.receive", "network.send", "disk.read", "disk.write"], "take": 60,
+    }, timeout=20)
+    metrics.raise_for_status()
+    history = metrics.json()
+    physical_network = [item for item in history if item["kind"].startswith("network.") and
+                        not re.match(r"^(lo|veth|docker|br-|virbr|cni|flannel|tun|tap)", item["deviceId"])]
+    if not physical_network or {item["kind"] for item in physical_network} != {"network.receive", "network.send"}:
+        raise RuntimeError("Live physical network history was displaced by old virtual interfaces.")
+    if any(len(item["points"]) < 2 for item in physical_network):
+        raise RuntimeError("Physical network history is not initialized.")
+    print(f"Metrics history passed: {len(history)} active series, {len(physical_network)} physical network directions")
 
     csrf = session.get(f"{base_url}/api/v1/auth/csrf", timeout=20)
     csrf.raise_for_status()

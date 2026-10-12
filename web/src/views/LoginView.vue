@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ArrowRight, Key, Lock, UserFilled } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ref } from 'vue'
 import AppTopbar from '@/components/AppTopbar.vue'
 import { authSession } from '@/services/authSession'
 
@@ -8,8 +9,11 @@ const route = useRoute()
 const router = useRouter()
 const isPreviewMode = import.meta.env.DEV
 const loginIllustrationUrl = '/images/whaledeck-login-illustration.png'
+const authenticating = ref(false)
 
 async function authenticate() {
+  if (authenticating.value) return
+  authenticating.value = true
   const requestedReturnUrl = typeof route.query.returnUrl === 'string' ? route.query.returnUrl : '/'
   const returnUrl =
     requestedReturnUrl.startsWith('/') && !requestedReturnUrl.startsWith('//')
@@ -66,6 +70,13 @@ async function authenticate() {
           <span class="login-card__eyebrow">WELCOME BACK</span>
           <h2>使用工作站账号登录</h2>
           <p>用户名、密码及多因素认证均由 Authentik 直接核验。</p>
+          <el-alert
+            v-if="route.query.reason === 'auth-expired'"
+            title="登录验证已失效，临时登录信息已清理，请重新登录。"
+            type="warning"
+            :closable="false"
+            show-icon
+          />
 
           <div class="identity-provider">
             <span class="identity-provider__mark"
@@ -78,7 +89,13 @@ async function authenticate() {
             <el-tag type="success" size="small" effect="light" round>受信任</el-tag>
           </div>
 
-          <el-button class="authentik-login" type="primary" size="large" @click="authenticate">
+          <el-button
+            class="authentik-login"
+            type="primary"
+            size="large"
+            :loading="authenticating"
+            @click="authenticate"
+          >
             使用用户名和密码登录
             <el-icon><ArrowRight /></el-icon>
           </el-button>

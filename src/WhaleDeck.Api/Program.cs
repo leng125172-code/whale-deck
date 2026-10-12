@@ -22,6 +22,7 @@ Log.Logger = new LoggerConfiguration().Enrich.FromLogContext().WriteTo.Console(n
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+    builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestHeadersTotalSize = 64 * 1024);
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services)
@@ -224,8 +225,12 @@ static void ConfigureOidc(OpenIdConnectOptions options, OidcEndpointSettings set
     // for the form_post callback without producing unusable Secure cookies.
     options.NonceCookie.SecurePolicy = CookieSecurePolicy.None;
     options.NonceCookie.SameSite = SameSiteMode.Lax;
+    options.NonceCookie.Name = $"whaledeck.oidc.{scheme}.nonce.";
+    options.NonceCookie.Path = settings.CallbackPath;
     options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.None;
     options.CorrelationCookie.SameSite = SameSiteMode.Lax;
+    options.CorrelationCookie.Name = $"whaledeck.oidc.{scheme}.correlation.";
+    options.CorrelationCookie.Path = settings.CallbackPath;
     options.TokenValidationParameters.NameClaimType = "name";
     options.TokenValidationParameters.RoleClaimType = "groups";
     options.Events.OnRedirectToIdentityProvider = context =>
@@ -276,6 +281,13 @@ static void ConfigureOidc(OpenIdConnectOptions options, OidcEndpointSettings set
             Host = host,
             Port = 8081
         }.Uri.AbsoluteUri;
+        return Task.CompletedTask;
+    };
+    options.Events.OnRemoteFailure = context =>
+    {
+        OidcTransientCookieCleanup.Apply(context.Request, context.Response, settings.CallbackPath);
+        context.Response.Redirect("/login?reason=auth-expired");
+        context.HandleResponse();
         return Task.CompletedTask;
     };
 }

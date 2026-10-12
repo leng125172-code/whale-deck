@@ -17,7 +17,23 @@ public sealed class AuthController(IIdentityDirectory identityDirectory, IAntifo
     public IActionResult Login([FromQuery] string returnUrl = "/")
     {
         var safeReturnUrl = Url.IsLocalUrl(returnUrl) ? returnUrl : "/";
-        return Challenge(new AuthenticationProperties { RedirectUri = safeReturnUrl }, "WhaleDeckOidc");
+        if (User.Identity?.IsAuthenticated == true) return LocalRedirect(safeReturnUrl);
+        var network = Request.Host.Host == "192.168.22.19" ? "internal" : "external";
+        // Callback-scoped cookies are not sent to /api/v1/auth/login. Visit a
+        // path beneath the callback first so old interrupted-login cookies can
+        // be removed before creating a fresh OIDC challenge.
+        return Redirect($"/signin-oidc/{network}/prepare?returnUrl={Uri.EscapeDataString(safeReturnUrl)}");
+    }
+
+    [AllowAnonymous]
+    [HttpGet("/signin-oidc/{network}/prepare")]
+    public IActionResult PrepareLogin(string network, [FromQuery] string returnUrl = "/")
+    {
+        if (network is not ("internal" or "external")) return NotFound();
+        var safeReturnUrl = Url.IsLocalUrl(returnUrl) ? returnUrl : "/";
+        OidcTransientCookieCleanup.Apply(Request, Response, $"/signin-oidc/{network}");
+        return Challenge(new AuthenticationProperties { RedirectUri = safeReturnUrl },
+            network == "internal" ? "AuthentikInternal" : "AuthentikExternal");
     }
 
     [HttpPost("logout")]
