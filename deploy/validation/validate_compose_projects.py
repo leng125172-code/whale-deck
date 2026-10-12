@@ -47,7 +47,7 @@ def main() -> int:
             observed = next(item for item in inventory(api) if item["id"] == resource)
             expected = "Stopped" if action == "stop" else "Running"
             if observed["state"] != expected:
-                raise RuntimeError(f"Compose {action} did not leave the expected state.")
+                raise RuntimeError(f"Compose {action} state={observed['state']}, expected={expected}.")
         # A consumed plan cannot be used for a second independently keyed job.
         plan = api.plan("restart", resource, {}, area="compose-projects")
         first = api.post("compose-projects/restart", {
