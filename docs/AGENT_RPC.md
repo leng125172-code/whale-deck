@@ -6,7 +6,7 @@
 
 - 协议：gRPC，包名 `whaledeck.agent.v1`。
 - 传输：Unix Domain Socket `/run/whaledeck/agent.sock`，不监听 TCP。
-- Socket：`root:whaledeck`、`0660`；仅 API/Worker 的专用宿主机组可以连接。
+- Socket：`whaledeck-agent:whaledeck`、`0660`，由非 root 的 Agent 服务创建；仅 Agent 与 API/Worker 的专用宿主机组可以连接。能力密钥与注册表仍由 root 所有且 Agent 只读。
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
