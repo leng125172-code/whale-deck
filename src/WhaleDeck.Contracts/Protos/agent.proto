@@ -324,6 +324,42 @@ message ResourceCollectionResponse {
   repeated ResourceSnapshot resources = 1;
 }
 
+// Deliberately excludes existing environment values, command and entrypoint contents.
+message ApplicationConfigurationResponse {
+  string resource_id = 1;
+  string fingerprint = 2;
+  repeated ApplicationServiceConfiguration services = 3;
+  repeated string environment_names = 4;
+  bool auto_update = 5;
+  string version_policy = 6;
+  string maintenance_window = 7;
+  repeated string dependencies = 8;
+  repeated string approved_networks = 9;
+  string owned_data_directory = 10;
+}
+
+message ApplicationServiceConfiguration {
+  string name = 1;
+  string image = 2;
+  double cpus = 3;
+  int64 memory_mb = 4;
+  string restart_policy = 5;
+  repeated string ports = 6;
+  bool command_present = 7;
+  bool entrypoint_present = 8;
+  repeated string environment_names = 9;
+  repeated ApplicationConfigurationMount mounts = 10;
+  repeated string networks = 11;
+  string network_mode = 12;
+}
+
+message ApplicationConfigurationMount {
+  string type = 1;
+  string source = 2;
+  string target = 3;
+  bool read_only = 4;
+}
+
 message ResourceSnapshot {
   string resource_id = 1;
   string display_name = 2;
@@ -436,6 +472,7 @@ service DockerService {
 }
 
 service ManagedResourceService {
+  rpc GetApplicationConfiguration(RegisteredResourceRequest) returns (ApplicationConfigurationResponse);
   rpc PlanAction(RegisteredActionRequest) returns (PlanResponse);
   rpc ListDatabaseInstances(google.protobuf.Empty) returns (ResourceCollectionResponse);
   rpc RunDatabaseAction(RegisteredActionRequest) returns (OperationHandle);

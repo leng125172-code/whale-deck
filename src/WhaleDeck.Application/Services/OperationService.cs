@@ -17,7 +17,7 @@ public sealed class OperationService(IJobRepository jobs)
             // Active backups are canceled through the job cancellation API so
             // cancellation targets a concrete persisted Agent operation.
             ["backups"] = new(StringComparer.OrdinalIgnoreCase) { "run", "verify", "save-policy" },
-            ["applications"] = new(StringComparer.OrdinalIgnoreCase) { "install", "start", "stop", "restart", "update", "reinstall", "uninstall" },
+            ["applications"] = new(StringComparer.OrdinalIgnoreCase) { "install", "start", "stop", "restart", "update", "reinstall", "uninstall", "configure" },
             ["compose-projects"] = new(StringComparer.OrdinalIgnoreCase) { "start", "stop", "restart", "pull", "redeploy" },
             ["host"] = new(StringComparer.OrdinalIgnoreCase) { "update-check", "update-install", "reboot", "systemd-start", "systemd-stop", "systemd-restart" },
             ["config-repository"] = new(StringComparer.OrdinalIgnoreCase) { "snapshot", "commit-push" },
@@ -86,13 +86,13 @@ public sealed class OperationService(IJobRepository jobs)
         jobs.RequestCancellationAsync(id, actorSubject, cancellationToken);
 
     private static bool RequiresConfirmation(OperationCommand command) => command.Area == "compose-projects" || command.Action is
-        "stop" or "restart" or "delete" or "delete-principal" or "prune" or "apply-settings" or "uninstall" or
+        "configure" or "stop" or "restart" or "delete" or "delete-principal" or "prune" or "apply-settings" or "uninstall" or
         "update" or "rebuild" or "reinstall" or "reboot" or "update-install" or "commit-push" or "apply-update" or "rollback" or
         "network-delete" or "volume-delete" or
         "batch-start" or "batch-stop" or "batch-restart" or "batch-delete";
 
     internal static bool RequiresPlan(OperationCommand command) => command.Area == "compose-projects" || command.Action is
-        "create" or "delete" or "delete-principal" or "prune" or "apply-settings" or "install" or "update" or "rebuild" or "reinstall" or "uninstall" or
+        "configure" or "create" or "delete" or "delete-principal" or "prune" or "apply-settings" or "install" or "update" or "rebuild" or "reinstall" or "uninstall" or
         "update-install" or "reboot" or "commit-push" or "apply-update" or "rollback" or
         "network-create" or "network-delete" or "volume-delete" or
         "batch-start" or "batch-stop" or "batch-restart" or "batch-delete";

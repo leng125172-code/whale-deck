@@ -278,7 +278,7 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcess
     {
         var normalizedParameters = new Dictionary<string, string>(parameters, StringComparer.Ordinal);
         normalizedParameters.Remove("password");
-        normalizedParameters.Remove("environment");
+        if (!(area == "applications" && action == "configure")) normalizedParameters.Remove("environment");
         normalizedParameters.Remove("inputTicket");
         if (area.Equals("containers", StringComparison.OrdinalIgnoreCase) && action.Equals("delete", StringComparison.OrdinalIgnoreCase))
         {
@@ -301,6 +301,20 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcess
             ? await _docker.PlanActionAsync(request, Headers("/whaledeck.agent.v1.DockerService/PlanAction"), cancellationToken: cancellationToken)
             : await _resources.PlanActionAsync(request, Headers("/whaledeck.agent.v1.ManagedResourceService/PlanAction"), cancellationToken: cancellationToken);
         return new PlanDto(response.PlanHash, response.ExpiresAtUtc.ToDateTimeOffset(), response.Changes, response.Warnings);
+    }
+
+    public async Task<ApplicationConfigurationDto> GetApplicationConfigurationAsync(string resourceId, CancellationToken cancellationToken)
+    {
+        var response = await _resources.GetApplicationConfigurationAsync(new RegisteredResourceRequest
+        {
+            Resource = new ResourceReference { ResourceId = resourceId, ResourceType = "applications" }
+        }, Headers("/whaledeck.agent.v1.ManagedResourceService/GetApplicationConfiguration"), cancellationToken: cancellationToken);
+        return new ApplicationConfigurationDto(response.ResourceId, response.Fingerprint, response.Services.Select(item =>
+            new ApplicationServiceConfigurationDto(item.Name, item.Image, item.Cpus, item.MemoryMb, item.RestartPolicy,
+                item.Ports, item.CommandPresent, item.EntrypointPresent, item.EnvironmentNames,
+                item.Mounts.Select(mount => new ApplicationConfigurationMountDto(mount.Type, mount.Source, mount.Target, mount.ReadOnly)).ToArray(),
+                item.Networks, item.NetworkMode)).ToArray(), response.EnvironmentNames, response.AutoUpdate, response.VersionPolicy,
+            response.MaintenanceWindow, response.Dependencies, response.ApprovedNetworks, response.OwnedDataDirectory);
     }
 
     public async Task<IReadOnlyCollection<MetricValueDto>> GetMetricsSnapshotAsync(CancellationToken cancellationToken)

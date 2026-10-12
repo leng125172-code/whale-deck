@@ -18,6 +18,7 @@ public sealed class ManagementController(
     IIdentityDirectory identity,
     OperationService operations,
     ApplicationService applications,
+    ApplicationConfigurationService applicationConfiguration,
     ContainerUpdateService containerUpdates,
     ContainerDiagnosticService containerDiagnostics,
     DockerEventService dockerEvents) : ControllerBase
@@ -85,6 +86,23 @@ public sealed class ManagementController(
         return application is null ? NotFound() : Ok(application);
     }
 
+    /// <summary>Returns registered application parameters and environment names, never secret values or existing commands.</summary>
+    [HttpGet("applications/configuration")]
+    [ProducesResponseType<ApplicationConfigurationDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ApplicationConfiguration([FromQuery] string resourceId, CancellationToken cancellationToken)
+    {
+        Response.Headers.CacheControl = "no-store";
+        return Ok(await applicationConfiguration.ReadAsync(resourceId, cancellationToken));
+    }
+
+    [HttpPost("applications/configuration/plan")]
+    public async Task<IActionResult> ApplicationConfigurationPlan([FromBody] ApplicationConfigurationPlanRequest request, CancellationToken cancellationToken)
+    {
+        Response.Headers.CacheControl = "no-store";
+        return Ok(await applicationConfiguration.PlanAsync(User.RequireSubject(), request.ResourceId, request.ExpectedFingerprint,
+            request.InputTicket, cancellationToken));
+    }
+
     [HttpGet("users")]
     public async Task<IActionResult> Users(CancellationToken cancellationToken) => Ok(await identity.ListUsersAsync(cancellationToken));
 
@@ -111,7 +129,8 @@ public sealed class ManagementController(
 
     [HttpPost("{area:regex(^(containers|docker|databases|backups|applications|compose-projects|host|config-repository|platform)$)}/{operation}/plan")]
     public async Task<IActionResult> Plan(string area, string operation, [FromBody] PlanRequest request, CancellationToken cancellationToken) =>
-        Ok(await agent.PlanAsync(area, operation, request.ResourceId, request.Parameters ?? new Dictionary<string, string>(), cancellationToken));
+        area == "applications" && operation == "configure" ? BadRequest() :
+            Ok(await agent.PlanAsync(area, operation, request.ResourceId, request.Parameters ?? new Dictionary<string, string>(), cancellationToken));
 
     [HttpPost("{area:regex(^(containers|docker|databases|backups|applications|compose-projects|host|config-repository|platform|identity)$)}/{operation}")]
     public async Task<IActionResult> Enqueue(string area, string operation, [FromBody] OperationRequest request, CancellationToken cancellationToken)
@@ -126,4 +145,5 @@ public sealed class ManagementController(
     public sealed record OperationRequest(string? ResourceId, string IdempotencyKey, IReadOnlyDictionary<string, string>? Parameters, string? PlanHash, bool Confirmed);
     public sealed record PlanRequest(string? ResourceId, IReadOnlyDictionary<string, string>? Parameters);
     public sealed record ImageMetadataRequest(string Image, bool PullIfMissing = false);
+    public sealed record ApplicationConfigurationPlanRequest(string ResourceId, string ExpectedFingerprint, string InputTicket);
 }

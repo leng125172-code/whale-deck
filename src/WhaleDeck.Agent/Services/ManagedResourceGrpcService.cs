@@ -15,7 +15,8 @@ public sealed class ManagedResourceGrpcService(
     ManagedActionExecutor executor,
     DockerEngine docker,
     BoundedProcessRunner processes,
-    ComposeProjectManager composeProjects)
+    ComposeProjectManager composeProjects,
+    ApplicationConfigurationManager applicationConfiguration)
     : ManagedResourceService.ManagedResourceServiceBase
 {
     private const string PrivilegedHelper = "/usr/local/libexec/whaledeck-privileged";
@@ -24,6 +25,28 @@ public sealed class ManagedResourceGrpcService(
 
     public override async Task<PlanResponse> PlanAction(RegisteredActionRequest request, ServerCallContext context)
     {
+        if (request.Resource.ResourceType == "applications" && request.Action == "configure")
+        {
+            var candidate = await applicationConfiguration.PreviewAsync(request, context.CancellationToken);
+            var configurationPlan = plans.Create(request.Resource.ResourceId, request.Action,
+                ManagedResourcePlanner.SanitizeParameters(request.Parameters), candidate.Fingerprint);
+            configurationPlan.Changes.Clear();
+            configurationPlan.Changes.AddRange(candidate.Candidate.Changes);
+            configurationPlan.Changes.Add(candidate.Candidate.ApplyImmediately ? "Save configuration and redeploy services" : "Save configuration only; running services are unchanged");
+            configurationPlan.Warnings.Add("Existing secrets are not displayed. Data is retained; failed dev edits are repaired by a new confirmed edit, not automatic rollback.");
+            return configurationPlan;
+        }
+        if (request.Resource.ResourceType == "applications" && request.Action != "install")
+        {
+            var lifecyclePreview = await PreviewApplicationLifecycleAsync(request, context.CancellationToken);
+            var lifecyclePlan = plans.Create(request.Resource.ResourceId, request.Action,
+                ManagedResourcePlanner.SanitizeParameters(request.Parameters), lifecyclePreview.Fingerprint);
+            lifecyclePlan.Changes.Clear();
+            lifecyclePlan.Changes.Add($"{request.Action}: {lifecyclePreview.Project}; current configuration and members bound");
+            lifecyclePlan.Changes.AddRange(lifecyclePreview.Changes);
+            if (request.Action == "uninstall") lifecyclePlan.Warnings.Add("Bind data and configuration are retained; named volumes are removed only when explicitly requested.");
+            return lifecyclePlan;
+        }
         if (request.Resource.ResourceType != "compose-projects") return planner.Create(request);
         var preview = await composeProjects.PreviewAsync(request, context.CancellationToken);
         var response = plans.Create(request.Resource.ResourceId, request.Action, request.Parameters, preview.Fingerprint);
@@ -33,6 +56,9 @@ public sealed class ManagedResourceGrpcService(
         response.Warnings.Add("Existing volumes, configuration and orphan services are retained. Pull does not restart services; redeploy does not pull images.");
         return response;
     }
+
+    public override Task<ApplicationConfigurationResponse> GetApplicationConfiguration(RegisteredResourceRequest request, ServerCallContext context) =>
+        applicationConfiguration.ReadAsync(request.Resource.ResourceId, context.CancellationToken);
 
     public override async Task<ResourceCollectionResponse> ListDatabaseInstances(Empty request, ServerCallContext context)
     {
@@ -102,7 +128,7 @@ public sealed class ManagedResourceGrpcService(
                     DisplayName = slug,
                     ResourceType = "ComposeApplication",
                     State = state,
-                    Version = image,
+                    Version = members.FirstOrDefault()?.Image ?? image,
                     ProtectedResource = protectedResource
                 };
                 snapshot.Attributes["composeProject"] = project;
@@ -110,6 +136,7 @@ public sealed class ManagedResourceGrpcService(
                 snapshot.Attributes["containerCount"] = members.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 snapshot.Attributes["autoUpdate"] = manifest.RootElement.TryGetProperty("autoUpdate", out var autoUpdate) && autoUpdate.GetBoolean() ? "true" : "false";
                 snapshot.Attributes["versionPolicy"] = manifest.RootElement.TryGetProperty("versionPolicy", out var versionPolicy) ? versionPolicy.GetString() ?? "*" : "*";
+                snapshot.Attributes["desiredImage"] = image;
                 snapshot.Attributes["maintenanceWindow"] = manifest.RootElement.TryGetProperty("maintenanceWindow", out var maintenanceWindow) ? maintenanceWindow.GetString() ?? string.Empty : string.Empty;
                 snapshot.Attributes["configurationSource"] = "compose.yml";
                 snapshot.Attributes["workingDirectory"] = directory;
@@ -193,6 +220,56 @@ public sealed class ManagedResourceGrpcService(
 
     public override async Task<OperationHandle> RunComposeAction(RegisteredActionRequest request, ServerCallContext context)
     {
+        if (request.Resource.ResourceType == "applications" && request.Action == "configure")
+        {
+            var configurationKey = BuildIdempotencyKey(request.Context, "ApplicationConfiguration", request.Action, request.Resource.ResourceId);
+            var configurationOperation = operations.GetOrCreate(configurationKey, "ApplicationConfiguration:configure", out var configurationCreated);
+            if (!configurationCreated) return configurationOperation;
+            try
+            {
+                var candidate = await applicationConfiguration.PreviewAsync(request, context.CancellationToken);
+                plans.VerifyAndConsume(request.PlanHash, request.Resource.ResourceId, request.Action,
+                    ManagedResourcePlanner.SanitizeParameters(request.Parameters), candidate.Fingerprint);
+                coordinator.Start(configurationOperation, "APPLICATION_CONFIGURATION_FAILED",
+                    token => applicationConfiguration.ExecuteAsync(request, candidate, token));
+                return configurationOperation;
+            }
+            catch
+            {
+                configurationOperation.State = OperationState.Failed;
+                configurationOperation.Phase = "ValidationFailed";
+                configurationOperation.ErrorCode = "APPLICATION_CONFIGURATION_PLAN_INVALID";
+                operations.Save(configurationOperation);
+                throw;
+            }
+        }
+        if (request.Resource.ResourceType == "applications" && request.Action != "install")
+        {
+            var lifecycleKey = BuildIdempotencyKey(request.Context, "ApplicationLifecycle", request.Action, request.Parameters.GetValueOrDefault("slug", ""));
+            var lifecycleOperation = operations.GetOrCreate(lifecycleKey, "ApplicationLifecycle:" + request.Action, out var lifecycleCreated);
+            if (!lifecycleCreated) return lifecycleOperation;
+            try
+            {
+                var lifecyclePreview = await PreviewApplicationLifecycleAsync(request, context.CancellationToken);
+                if (ManagedResourcePlanner.RequiresPlan(request.Action)) plans.VerifyAndConsume(request.PlanHash,
+                    request.Resource.ResourceId, request.Action, ManagedResourcePlanner.SanitizeParameters(request.Parameters), lifecyclePreview.Fingerprint);
+                coordinator.Start(lifecycleOperation, "APPLICATION_LIFECYCLE_FAILED", async token =>
+                {
+                    if ((await PreviewApplicationLifecycleAsync(request, token)).Fingerprint != lifecyclePreview.Fingerprint)
+                        throw new InvalidOperationException("Application changed after lifecycle confirmation.");
+                    return await executor.ExecuteAsync("Compose", registry.Require("whaledeck.apps", request.Action), request.Action, request.Parameters, token);
+                });
+                return lifecycleOperation;
+            }
+            catch
+            {
+                lifecycleOperation.State = OperationState.Failed;
+                lifecycleOperation.Phase = "ValidationFailed";
+                lifecycleOperation.ErrorCode = "APPLICATION_LIFECYCLE_PLAN_INVALID";
+                operations.Save(lifecycleOperation);
+                throw;
+            }
+        }
         if (request.Resource.ResourceType != "compose-projects") return QueueRegistered(request, "Compose");
         var key = BuildIdempotencyKey(request.Context, "ComposeProject", request.Action, request.Resource.ResourceId);
         var operation = operations.GetOrCreate(key, $"ComposeProject:{request.Action}", out var created);
@@ -213,6 +290,19 @@ public sealed class ManagedResourceGrpcService(
             operations.Save(operation);
             throw;
         }
+    }
+
+    private Task<ComposeProjectPreview> PreviewApplicationLifecycleAsync(RegisteredActionRequest request, CancellationToken cancellationToken)
+    {
+        registry.Require("whaledeck.apps", request.Action);
+        var resourceId = "application:" + (request.Parameters.GetValueOrDefault("slug") ?? throw new InvalidOperationException("An application slug is required."));
+        _ = ComposeProjectManager.ParseResourceId(resourceId);
+        if (request.Resource.ResourceId.Length > 0 && request.Resource.ResourceId != resourceId)
+            throw new InvalidOperationException("The application resource and slug differ.");
+        return composeProjects.PreviewAsync(new RegisteredActionRequest
+        {
+            Action = "redeploy", Resource = new ResourceReference { ResourceId = resourceId, ResourceType = "compose-projects" }
+        }, cancellationToken);
     }
 
     public override Task<OperationHandle> RunConfigRepositoryAction(RegisteredActionRequest request, ServerCallContext context) =>

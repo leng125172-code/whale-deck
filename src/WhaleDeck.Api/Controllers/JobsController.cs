@@ -57,7 +57,7 @@ public sealed class JobsController(OperationService operations, JobRetryService 
     /// <summary>Preflights the failed operation against current resources; old plans are not reused.</summary>
     [HttpPost("{id:guid}/retry/plan")]
     public async Task<IActionResult> RetryPlan(Guid id, [FromBody] RetryPlanRequest request, CancellationToken cancellationToken) =>
-        Ok(await retries.PlanAsync(id, request.InputTicket, cancellationToken));
+        Ok(await retries.PlanAsync(id, request.InputTicket, cancellationToken, User.RequireSubject()));
 
     /// <summary>Creates a new task linked to the failed task, with explicit confirmation and an idempotency key.</summary>
     [HttpPost("{id:guid}/retry")]

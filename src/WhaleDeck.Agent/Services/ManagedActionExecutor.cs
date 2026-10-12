@@ -305,12 +305,13 @@ public sealed partial class ManagedActionExecutor(
             case "reinstall":
                 return await UpdateApplicationAsync(slug, directory, parameters, cancellationToken);
             case "uninstall":
-                var args = parameters.TryGetValue("deleteVolumes", out var delete) && bool.TryParse(delete, out var deleteVolumes) && deleteVolumes
+                var removeNamedVolumes = parameters.TryGetValue("deleteVolumes", out var delete) && bool.TryParse(delete, out var deleteVolumes) && deleteVolumes;
+                var args = removeNamedVolumes
                     ? new[] { "down", "--volumes", "--remove-orphans" }
                     : ["down", "--remove-orphans"];
                 await ComposeAsync(directory, args, cancellationToken);
-                Directory.Delete(directory, recursive: true);
-                return JsonSerializer.Serialize(new { slug, state = "Uninstalled" });
+                RetainUninstalledApplication(AppsRoot, slug);
+                return JsonSerializer.Serialize(new { slug, state = "Uninstalled", bindDataRetained = true, configurationRetained = true, namedVolumesRemoved = removeNamedVolumes });
             default: throw new InvalidOperationException("The application action is unsupported.");
         }
         using (var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "manifest.json"), cancellationToken)))
@@ -320,6 +321,19 @@ public sealed partial class ManagedActionExecutor(
             var versionPolicy = manifest.RootElement.TryGetProperty("versionPolicy", out var policy) ? policy.GetString() ?? "*" : "*";
             return await BuildApplicationResultAsync(slug, image, null, false, autoUpdate, versionPolicy, cancellationToken);
         }
+    }
+
+    internal static string RetainUninstalledApplication(string root, string slug)
+    {
+        var directory = ComposeProjectManager.ResolveDirectory(root, slug);
+        var retained = Path.Combine(Path.GetFullPath(root), ".retained");
+        if (Directory.Exists(retained) && (new DirectoryInfo(retained).Attributes & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidOperationException("Linked application retention directories are not allowed.");
+        Directory.CreateDirectory(retained);
+        var target = Path.Combine(retained, slug + "-" + Guid.NewGuid().ToString("N"));
+        // Rename, not recursive deletion: root-owned files written by application containers remain recoverable.
+        Directory.Move(directory, target);
+        return target;
     }
 
     private async Task<string> UpdateApplicationAsync(
@@ -724,6 +738,18 @@ public sealed partial class ManagedActionExecutor(
         if (policy.StartsWith(">=", StringComparison.Ordinal) && Version.TryParse(policy[2..].TrimStart('v'), out var minimum))
             return candidate >= minimum;
         return Version.TryParse(policy.TrimStart('v'), out var exact) && candidate == exact;
+    }
+    internal static void ValidateVersionPolicy(string policy)
+    {
+        if (policy == "*") return;
+        if (policy.EndsWith(".*", StringComparison.Ordinal))
+        {
+            var parts = policy[..^2].Split('.');
+            if (parts.Length is 1 or 2 && parts.All(part => part.Length > 0 && part.All(char.IsAsciiDigit) &&
+                int.TryParse(part, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _))) return;
+        }
+        else if (Version.TryParse(policy.StartsWith(">=", StringComparison.Ordinal) ? policy[2..].TrimStart('v') : policy.TrimStart('v'), out _)) return;
+        throw new InvalidOperationException("The version policy must be *, a numeric wildcard, an exact version or >=version.");
     }
     internal static void ValidateMaintenanceWindow(string window)
     {

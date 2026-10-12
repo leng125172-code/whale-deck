@@ -169,6 +169,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             }
             installation.DisplayName = item.Name;
             installation.InstalledVersion = item.Version;
+            installation.DesiredVersion = item.Attributes.GetValueOrDefault("desiredImage", item.Version);
             installation.State = item.State;
             installation.AutoUpdateEnabled = item.Attributes.TryGetValue("autoUpdate", out var enabled) &&
                 bool.TryParse(enabled, out var parsed) && parsed;
@@ -841,6 +842,27 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
 
         var terminal = state is "Succeeded" or "Failed" or "Canceled";
         var result = ReadJsonObject(job.ResultJson);
+        if (action == "configure")
+        {
+            if (state == "Succeeded")
+            {
+                installation.State = ReadString(result, "state") ?? installation.State;
+                installation.AutoUpdateEnabled = ReadBoolean(result, "autoUpdate");
+                installation.DesiredVersion = ReadString(result, "desiredImage") ?? installation.DesiredVersion;
+                if (ReadBoolean(result, "applied")) installation.InstalledVersion = ReadString(result, "actualImage") ?? installation.InstalledVersion;
+                var summary = System.Text.Json.Nodes.JsonNode.Parse(installation.ConfigSummaryJson)?.AsObject() ?? new System.Text.Json.Nodes.JsonObject();
+                summary["desiredImage"] = installation.DesiredVersion;
+                summary["autoUpdate"] = installation.AutoUpdateEnabled;
+                summary["versionPolicy"] = ReadString(result, "versionPolicy") ?? "*";
+                summary["maintenanceWindow"] = ReadString(result, "maintenanceWindow");
+                summary["configurationSaved"] = true;
+                summary["applied"] = ReadBoolean(result, "applied");
+                installation.ConfigSummaryJson = summary.ToJsonString();
+                installation.UpdatedAtUtc = DateTimeOffset.UtcNow;
+                installation.Version++;
+            }
+            return;
+        }
         var rolledBack = ReadBoolean(result, "rolledBack");
         installation.State = terminal
             ? state switch

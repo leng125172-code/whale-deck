@@ -5,15 +5,24 @@ using WhaleDeck.Application.Models;
 namespace WhaleDeck.Application.Services;
 
 /// <summary>Retries a terminal operation as a new, independently authorized job.</summary>
-public sealed class JobRetryService(IJobRepository jobs, IAgentGateway agent, OperationService operations)
+public sealed class JobRetryService(IJobRepository jobs, IAgentGateway agent, OperationService operations,
+    ApplicationConfigurationService? applicationConfiguration = null)
 {
     public async Task<JobRetryContextDto> GetContextAsync(Guid id, CancellationToken cancellationToken) =>
         (await ReadAsync(id, cancellationToken)).Context;
 
-    public async Task<JobRetryPlanDto> PlanAsync(Guid id, string? inputTicket, CancellationToken cancellationToken)
+    public async Task<JobRetryPlanDto> PlanAsync(Guid id, string? inputTicket, CancellationToken cancellationToken, string? actorSubject = null)
     {
         var retry = await ReadAsync(id, cancellationToken);
         var parameters = PrepareParameters(retry.Context, retry.Parameters, inputTicket);
+        if (retry.Area == "applications" && retry.Action == "configure")
+        {
+            if (applicationConfiguration is null || actorSubject is null || inputTicket is null || retry.Context.ResourceId is null)
+                throw new InvalidOperationException("A new configuration input and current administrator are required.");
+            var snapshot = await applicationConfiguration.ReadAsync(retry.Context.ResourceId, cancellationToken);
+            return new JobRetryPlanDto(retry.Context, await applicationConfiguration.PlanAsync(actorSubject,
+                retry.Context.ResourceId, snapshot.Fingerprint, inputTicket, cancellationToken));
+        }
         var command = new OperationCommand(retry.Area, retry.Action, retry.Context.ResourceId, "preview", "{}", null, true);
         var plan = OperationService.RequiresPlan(command)
             ? await agent.PlanAsync(retry.Area, retry.Action, retry.Context.ResourceId, parameters, cancellationToken)
@@ -29,6 +38,11 @@ public sealed class JobRetryService(IJobRepository jobs, IAgentGateway agent, Op
         if (idempotencyKey == retry.OriginalKey)
             throw new ArgumentException("A retry must use a new idempotency key.");
         var parameters = PrepareParameters(retry.Context, retry.Parameters, inputTicket);
+        if (retry.Area == "applications" && retry.Action == "configure")
+        {
+            if (applicationConfiguration is null || retry.Context.ResourceId is null) throw new InvalidOperationException("Application configuration is unavailable.");
+            parameters["expectedFingerprint"] = (await applicationConfiguration.ReadAsync(retry.Context.ResourceId, cancellationToken)).Fingerprint;
+        }
         // The failed task and its events stay intact. A new job/outbox/audit record
         // receives a fresh Agent operation ID and passes the ordinary safety checks.
         var request = JsonSerializer.Serialize(new { resourceId = retry.Context.ResourceId, parameters, planHash, retriedFromJobId = id });

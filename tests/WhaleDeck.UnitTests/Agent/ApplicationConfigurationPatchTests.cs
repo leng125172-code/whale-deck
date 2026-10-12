@@ -79,6 +79,33 @@ public sealed class ApplicationConfigurationPatchTests
     }
 
     [Fact]
+    public void CommandOverridesEscapeComposeInterpolationAndAreMarkedPrivate()
+    {
+        var result = Build("""
+            {"services":{"app":{"command":["printf","$BASE ${BASE} $$"],"entrypoint":["/bin/$APP"]}}}
+            """);
+        Assert.Equal("$$BASE $${BASE} $$$$", result.Model["services"]!["app"]!["command"]![1]!.GetValue<string>());
+        Assert.Equal("/bin/$$APP", result.Model["services"]!["app"]!["entrypoint"]![0]!.GetValue<string>());
+        Assert.Equal("true", result.Model["services"]!["app"]!["labels"]!["io.whaledeck.runtime-overrides-private"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("*")]
+    [InlineData("1.*")]
+    [InlineData("1.2.*")]
+    [InlineData("1.2.3")]
+    [InlineData(">=1.2.3")]
+    public void ApprovedVersionPoliciesAreAccepted(string policy) =>
+        Assert.Equal(policy, Build("{\"versionPolicy\":\"" + policy + "\"}").Manifest["versionPolicy"]!.GetValue<string>());
+
+    [Theory]
+    [InlineData("latest")]
+    [InlineData("1.* || true")]
+    [InlineData("../1.2.3")]
+    public void UnsupportedVersionPoliciesAreRejected(string policy) =>
+        Assert.Throws<InvalidOperationException>(() => Build("{\"versionPolicy\":\"" + policy + "\"}"));
+
+    [Fact]
     public void ClearingCommandOverridesInheritsImageAndZeroLimitsRemoveConflictingDeployLimits()
     {
         var result = Build("{\"services\":{\"app\":{\"command\":null,\"entrypoint\":null,\"cpus\":0,\"memoryMb\":0}}}");

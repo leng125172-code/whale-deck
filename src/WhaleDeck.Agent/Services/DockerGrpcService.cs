@@ -184,8 +184,11 @@ public sealed class DockerGrpcService(
         };
         response.EnvironmentNames.AddRange((metadata.Config?.Env ?? [])
             .Select(item => item.Split('=', 2)[0]).Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.Ordinal));
-        response.Command.AddRange((metadata.Config?.Cmd ?? []).Select(RedactArgument));
-        response.Entrypoint.AddRange((metadata.Config?.Entrypoint ?? []).Select(RedactArgument));
+        if (metadata.Config?.Labels?.TryGetValue("io.whaledeck.runtime-overrides-private", out var privateOverrides) != true || privateOverrides != "true")
+        {
+            response.Command.AddRange((metadata.Config?.Cmd ?? []).Select(RedactArgument));
+            response.Entrypoint.AddRange((metadata.Config?.Entrypoint ?? []).Select(RedactArgument));
+        }
         response.HealthCommand.AddRange((metadata.Config?.Healthcheck?.Test ?? []).Select(RedactArgument));
         if (metadata.Config?.Labels is not null)
         {

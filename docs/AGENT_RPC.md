@@ -12,6 +12,12 @@
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
 - 当前源码协议版本为 `1.11`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`；旧次版本按能力协商并安全降级。
 
+### 应用参数编辑（1.12）
+
+当前实现增加 `applications.configuration` 能力与 `ManagedResourceService.GetApplicationConfiguration`。快照只返回结构化资源、现有环境变量名称及命令覆盖存在标记，不返回环境值、Cmd 或 Entrypoint 原文。
+
+`applications/configure` 预检由 API 所有者绑定短时票据提供候选；计划绑定源文件、服务成员、候选内容、已缓存镜像与批准网络。执行消费一次票据并再次核对指纹。仅保存不重启；保存并重部署禁止隐式 build/pull，数据卷不自动清理。核心资源、任意宿主路径与受保护网络不能通过此入口修改。配置预检使用清空继承环境后的固定 CLI 环境，文件权限 `0600`。
+
 ### 容器资源关联（1.11）
 
 既有 `InspectContainer` 增加可选 `relationships`，包含实际 image ID、Compose project/service、network mode、结构化网络端点、挂载与端口映射。网络最多 128，挂载/端口各最多 256，单字符串最多 4096 字符，所有文本合计最多 262144 字符；超限标记 `is_truncated`。只投影固定字段，不返回 Env 值、driver options 或原始 Config。宿主机映射配置不代表正在监听；运行时已解析端口优先，停止容器可退回配置值，未指定 host port 展示自动分配。

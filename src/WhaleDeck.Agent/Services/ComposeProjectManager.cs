@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Docker.DotNet.Models;
 using WhaleDeck.Contracts.Agent.V1;
 
@@ -29,6 +30,14 @@ public sealed partial class ComposeProjectManager(ResourceRegistry registry, Doc
         var fileFingerprint = ConfigurationFingerprint(directory);
         var model = await CommandAsync(directory, ["config", "--format", "json"], TimeSpan.FromSeconds(30), cancellationToken);
         ValidateProjectIdentity(model.StandardOutput, project, registry);
+        var normalized = JsonNode.Parse(model.StandardOutput)?.AsObject() ?? throw new InvalidOperationException("Invalid Compose model.");
+        ApplicationConfigurationPatch.ValidateSafety(normalized, directory, slug);
+        var protectedNetworkNames = containers.Where(item => item.Names.Any(name => registry.IsProtectedContainer(name, item.Labels)))
+            .SelectMany(item => item.NetworkSettings?.Networks?.Keys ?? []).ToHashSet(StringComparer.Ordinal);
+        foreach (var service in normalized["services"]!.AsObject().Select(item => item.Value!.AsObject()))
+            foreach (var network in service["networks"]?.AsObject() ?? [])
+                if (protectedNetworkNames.Contains(normalized["networks"]?[network.Key]?["name"]?.ToString() ?? project + "_" + network.Key))
+                    throw new InvalidOperationException("Protected networks cannot be controlled through an application project.");
         var result = await CommandAsync(directory, ["config", "--hash", "*"], TimeSpan.FromSeconds(30), cancellationToken);
         var desired = ParseServiceHashes(result.StandardOutput);
         if (fileFingerprint != ConfigurationFingerprint(directory))

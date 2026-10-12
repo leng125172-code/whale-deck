@@ -17,7 +17,8 @@ public sealed class BoundedProcessRunner
         string errorCode,
         CancellationToken cancellationToken,
         string? workingDirectory = null,
-        IReadOnlyDictionary<string, string>? environment = null)
+        IReadOnlyDictionary<string, string>? environment = null,
+        bool clearEnvironment = false)
     {
         var start = new ProcessStartInfo(executable)
         {
@@ -29,6 +30,7 @@ public sealed class BoundedProcessRunner
             WorkingDirectory = workingDirectory ?? string.Empty
         };
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        if (clearEnvironment) start.Environment.Clear();
         if (environment is not null)
         {
             foreach (var item in environment) start.Environment[item.Key] = item.Value;

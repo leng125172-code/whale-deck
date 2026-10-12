@@ -62,7 +62,10 @@ public static class ApplicationConfigurationPatch
                     case "command":
                     case "entrypoint":
                         if (value is null) service.Remove(field);
-                        else service[field] = new JsonArray(Strings(value, 256, 4096).Select(item => (JsonNode?)JsonValue.Create(item)).ToArray());
+                        else service[field] = new JsonArray(Strings(value, 256, 4096).Select(item => (JsonNode?)JsonValue.Create(item.Replace("$", "$$", StringComparison.Ordinal))).ToArray());
+                        var runtimeLabels = service["labels"] as JsonObject;
+                        if (runtimeLabels is null) { runtimeLabels = new JsonObject(); service["labels"] = runtimeLabels; }
+                        runtimeLabels["io.whaledeck.runtime-overrides-private"] = "true";
                         break;
                     case "volumes":
                         var volumes = value?.AsArray() ?? throw Invalid();
@@ -128,6 +131,7 @@ public static class ApplicationConfigurationPatch
                 var value = Text(setting, 128);
                 if (value.Any(char.IsControl)) throw Invalid();
                 if (field == "maintenanceWindow") ManagedActionExecutor.ValidateMaintenanceWindow(value);
+                if (field == "versionPolicy") ManagedActionExecutor.ValidateVersionPolicy(value);
                 nextManifest[field] = value;
                 changes.Add("Application " + field + " changed");
             }
@@ -136,6 +140,7 @@ public static class ApplicationConfigurationPatch
             var values = Strings(dependencies, 64, 64);
             foreach (var dependency in values) _ = ComposeProjectManager.ParseResourceId("application:" + dependency);
             if (values.Contains(slug, StringComparer.Ordinal)) throw Invalid();
+            if (values.Distinct(StringComparer.Ordinal).Count() != values.Length) throw Invalid();
             nextManifest["dependencies"] = new JsonArray(values.Select(item => (JsonNode?)JsonValue.Create(item)).ToArray());
             changes.Add("Application dependencies changed");
         }
@@ -155,6 +160,7 @@ public static class ApplicationConfigurationPatch
                 service["devices"] is JsonArray { Count: > 0 } || service["cap_add"] is JsonArray { Count: > 0 } ||
                 service["device_cgroup_rules"] is JsonArray { Count: > 0 } ||
                 service["pid"]?.ToString() == "host" || service["ipc"]?.ToString() == "host" ||
+                service["uts"]?.ToString() == "host" || service["userns_mode"]?.ToString() == "host" ||
                 service["network_mode"] is { } mode && mode.ToString() is not ("none" or "bridge")) throw Invalid();
             foreach (var file in service["env_file"]?.AsArray() ?? [])
             {
@@ -181,7 +187,7 @@ public static class ApplicationConfigurationPatch
         var type = Text(requested["type"], 16);
         var source = requested["source"]?.GetValue<string>() ?? "";
         var target = Text(requested["target"], 1024);
-        if (!target.StartsWith('/') || target.Contains('\0') || target.Contains("..", StringComparison.Ordinal)) throw Invalid();
+        if (!target.StartsWith('/') || target.Any(char.IsControl) || target.Contains('$') || target.Contains("..", StringComparison.Ordinal)) throw Invalid();
         var mount = new JsonObject { ["type"] = type, ["target"] = target, ["read_only"] = requested["readOnly"]?.GetValue<bool>() ?? false };
         if (type == "volume" && source.Length > 0)
         {
