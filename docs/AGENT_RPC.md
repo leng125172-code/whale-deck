@@ -10,7 +10,13 @@
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
-- 当前源码协议版本为 `1.14`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`；旧次版本按能力协商并安全降级。
+- 当前源码协议版本为 `1.15`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`，`1.15` 增加 `backups.capacity`；旧次版本按能力协商并安全降级。
+
+### 备份目标容量（1.15）
+
+`ManagedResourceService.GetBackupTargetCapacity(Empty)` 仅返回批准 HDD 目标的 logical ID、可用标志、总/已用/可用字节、采样 UTC 时间及稳定错误码，不接受任意路径。Unix peer credentials 与绑定方法的签名 capability 仍生效。固定 root helper 无参数只读查询，验证目录无 symlink、与 HDD 基目录同文件系统；Agent 缓存 30 秒以限制 sudo 日志，客户端拒绝超过 90 秒或非法容量样本。
+
+Worker 按策略创建只读 `BackupStorageCapacity` 规则，告警去重、升级、静默到期及恢复写现有表。未知容量不能恢复或降低已有临界风险，低于 256 MiB 空闲触发临界；禁用策略可显式收尾告警。该规则不能由通用告警编辑入口覆盖。存储模型不变，本阶段无新 migration；真实隔离库仍通过完整 migration 验证。
 
 ### 应用归档保留（1.14）
 
