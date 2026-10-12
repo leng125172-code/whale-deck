@@ -27,6 +27,17 @@ def query(sql: str, **parameters: str):
 def main() -> int:
     base = os.environ.get("WHALEDECK_URL", "http://192.168.100.13:8080").rstrip("/")
     session, _ = authenticate(base, required_environment("VALIDATION_USERNAME"), required_environment("VALIDATION_PASSWORD"))
+    response = session.get(f"{base}/api/v1/agents", timeout=30)
+    response.raise_for_status()
+    capabilities = response.json()["capabilities"]
+    if capabilities["protocolMajor"] != 1 or capabilities["protocolMinor"] < 9 or "host.disk-io" not in capabilities["capabilities"]:
+        raise RuntimeError("The installed Agent lacks canonical disk I/O sampling")
+    for _ in range(3):
+        response = session.get(f"{base}/api/v1/overview", timeout=30)
+        response.raise_for_status()
+        metrics = response.json()["metrics"]
+        if not metrics or len({metric["sampledAtUtc"] for metric in metrics}) != 1:
+            raise RuntimeError("Concurrent metric readers did not receive a consistent canonical batch")
     checked = 0
     observed_disk_kinds: set[str] = set()
     for window, resolution, count in [("live", 6, None), ("1h", 30, 121), ("24h", 300, 289), ("7d", 1800, 337)]:
@@ -40,6 +51,10 @@ def main() -> int:
             kind = item["kind"]
             if device.startswith(("veth", "docker", "br-", "loop", "dm-")):
                 raise RuntimeError("Virtual/partition telemetry leaked into physical-device totals")
+            if kind.startswith("disk.") and (not os.path.isdir(f"/sys/class/block/{device}/device") or os.path.exists(f"/sys/class/block/{device}/partition")):
+                raise RuntimeError("Disk totals include a nonphysical or partition device")
+            if kind.endswith(".latency") and item["unit"] != "milliseconds" or kind.endswith(".iops") and item["unit"] != "operationsPerSecond":
+                raise RuntimeError("Native disk metric units are incorrect")
             if item["resolutionSeconds"] != resolution:
                 raise RuntimeError("Metric resolution does not match the requested window")
             points = item["points"]
