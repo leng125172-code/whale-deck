@@ -81,6 +81,6 @@ public sealed class ResourceRegistry
         new("whaledeck.docker", "DockerEngine", "docker", "ControlPlane", AllowedActions: ["validate-settings", "apply-settings", "rollback"]),
         new("whaledeck.platform", "Platform", "whaledeck", "ControlPlane", AllowedActions: ["diagnose", "diagnostic-bundle", "plan-update", "apply-update", "rollback"]),
         new("database-platform.repository", "GitRepository", "database-platform", "CriticalData", "/data/GitRepos/database-platform", ["status", "snapshot", "commit-push"]),
-        new("whaledeck.apps", "ManagedDirectory", "whaledeck-apps", "Managed", "/data/WhaleDeck/apps", ["install", "start", "stop", "restart", "update", "reinstall", "uninstall", "pull", "redeploy", "configure", "backup", "verify-backup"])
+        new("whaledeck.apps", "ManagedDirectory", "whaledeck-apps", "Managed", "/data/WhaleDeck/apps", ["install", "start", "stop", "restart", "update", "reinstall", "uninstall", "pull", "redeploy", "configure", "backup", "verify-backup", "cleanup-backups"])
     ];
 }

@@ -10,6 +10,7 @@ public sealed class OperationServiceTests
     [Theory]
     [InlineData("backup")]
     [InlineData("verify-backup")]
+    [InlineData("cleanup-backups")]
     public async Task ApplicationBackupsRequireConfirmationAndCurrentPlan(string action)
     {
         var service = new OperationService(new RecordingJobRepository());

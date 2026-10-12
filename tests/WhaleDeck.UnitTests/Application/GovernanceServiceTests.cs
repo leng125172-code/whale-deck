@@ -25,6 +25,26 @@ public sealed class GovernanceServiceTests
     }
 
     [Theory]
+    [InlineData("gzip", true, "quiesced", false)]
+    [InlineData("zstd", true, "quiesced", true)]
+    [InlineData("gzip", false, "quiesced", true)]
+    [InlineData("gzip", true, "shell", true)]
+    public async Task ApplicationPolicyRejectsUnconfirmedOrUnsupportedArchiveModes(string compression, bool verify, string consistency, bool confirmed)
+    {
+        var command = new SaveBackupPolicyCommand(null, "application:demo", true, "0 2 * * *", "Asia/Shanghai", 14, 14,
+            "database-platform.backup.hdd", compression, verify, 80, 90, null, consistency, confirmed);
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.SaveBackupPolicyAsync(command, default));
+    }
+
+    [Fact]
+    public async Task BackupPolicyRejectsInvalidTimezoneBeforePersistence()
+    {
+        var command = new SaveBackupPolicyCommand(null, "database-platform.postgres", true, "0 2 * * *", "Not/AZone", 14, 14,
+            "database-platform.backup.hdd", "Default", true, 80, 90, null);
+        await Assert.ThrowsAsync<TimeZoneNotFoundException>(() => _service.SaveBackupPolicyAsync(command, default));
+    }
+
+    [Theory]
     [InlineData("secret.value")]
     [InlineData("unknown")]
     public async Task SettingsUseAllowList(string key)

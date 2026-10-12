@@ -52,7 +52,7 @@ public sealed class GovernanceService(IGovernanceRepository repository)
             result.Add(new BackupPolicyDto(item.Id,
                 await repository.ResolveResourceExternalIdAsync(item.InstanceResourceId, cancellationToken), item.IsEnabled,
                 item.ScheduleExpression, item.Timezone, item.RetentionCount, item.RetentionDays, item.TargetDirectoryId,
-                item.Compression, item.VerifyAfterBackup, item.CapacityWarningPercent, item.CapacityCriticalPercent, item.Version));
+                item.Compression, item.VerifyAfterBackup, item.CapacityWarningPercent, item.CapacityCriticalPercent, item.Version, item.Consistency));
         }
         return result;
     }
@@ -90,6 +90,14 @@ public sealed class GovernanceService(IGovernanceRepository repository)
         if (string.IsNullOrWhiteSpace(command.InstanceResourceId) || command.InstanceResourceId.Length > 160)
             throw new ArgumentException("Managed database resource id is invalid.");
         ValidateSchedule("Cron", command.ScheduleExpression);
+        _ = ScheduleCalculator.NextUtc("Cron", command.ScheduleExpression, command.Timezone, DateTimeOffset.UtcNow);
+        if (command.Consistency is not ("live" or "quiesced")) throw new ArgumentException("Backup consistency is unsupported.");
+        if (command.InstanceResourceId.StartsWith("application:", StringComparison.Ordinal))
+        {
+            if (command.Compression != "gzip" || !command.VerifyAfterBackup)
+                throw new ArgumentException("Application archives require gzip and mandatory SHA256 verification.");
+            if (command.IsEnabled && !command.Confirmed) throw new ArgumentException("Application backup policy requires confirmation.");
+        }
         if (command.RetentionCount is < 1 or > 365 || command.RetentionDays is < 1 or > 3650) throw new ArgumentException("Backup retention is out of range.");
         if (!string.Equals(command.TargetDirectoryId, "database-platform.backup.hdd", StringComparison.Ordinal)) throw new ArgumentException("Backup target is not approved.");
         if (command.CapacityWarningPercent is < 50 or > 95 || command.CapacityCriticalPercent <= command.CapacityWarningPercent || command.CapacityCriticalPercent > 99)
@@ -97,7 +105,7 @@ public sealed class GovernanceService(IGovernanceRepository repository)
         var item = await repository.SaveBackupPolicyAsync(command, cancellationToken);
         return new BackupPolicyDto(item.Id, await repository.ResolveResourceExternalIdAsync(item.InstanceResourceId, cancellationToken), item.IsEnabled, item.ScheduleExpression, item.Timezone,
             item.RetentionCount, item.RetentionDays, item.TargetDirectoryId, item.Compression, item.VerifyAfterBackup,
-            item.CapacityWarningPercent, item.CapacityCriticalPercent, item.Version);
+            item.CapacityWarningPercent, item.CapacityCriticalPercent, item.Version, item.Consistency);
     }
 
     public async Task<IReadOnlyCollection<AlertRuleDto>> ListAlertRulesAsync(CancellationToken cancellationToken) =>

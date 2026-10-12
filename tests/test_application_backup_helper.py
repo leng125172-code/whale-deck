@@ -20,6 +20,94 @@ REAL_LOCK = backup.lock
 
 
 class BackupHelperTests(unittest.TestCase):
+    def create_archives(self, count=3):
+        identities = [str(index) * 32 for index in range(1, count + 1)]
+        for identity in identities:
+            backup.run('demo', identity, 'live', backup.plan('demo', 'live')['fingerprint'])
+        return identities
+
+    def test_retention_removes_only_expired_sealed_pairs_and_keeps_newest(self):
+        identities = self.create_archives()
+        unknown = self.target / 'demo/unrelated.txt'
+        unknown.write_text('retain me')
+        planned = backup.cleanup_plan('demo', 14, 1)
+        self.assertEqual(set(planned['removeBackupIds']), set(identities[:-1]))
+        result = backup.cleanup('demo', 'd' * 32, 14, 1, planned['fingerprint'])
+        self.assertEqual(set(result['removedBackupIds']), set(identities[:-1]))
+        self.assertEqual(backup.archive_catalog('demo')[0]['backupId'], identities[-1])
+        self.assertTrue(unknown.exists())
+        self.assertEqual((self.config / 'data/probe.txt').read_text(), 'bind-proof')
+        self.assertIn(self.marker, (self.config / '.env').read_text())
+        self.assertFalse(self.member['State']['Paused'])
+
+    def test_age_retention_still_preserves_one_archive(self):
+        identities = self.create_archives()
+        for index, identity in enumerate(identities):
+            path = self.target / 'demo' / (identity + '.json')
+            metadata = backup.read_json(path)
+            metadata['createdAtUnix'] = int(backup.time.time()) - 30 * 86400 + index
+            metadata['createdAtUnixNs'] = metadata['createdAtUnix'] * 1_000_000_000
+            backup.private_json(path, metadata)
+        planned = backup.cleanup_plan('demo', 14, 14)
+        self.assertEqual(set(planned['removeBackupIds']), set(identities[:-1]))
+        self.assertEqual(planned['retainedCount'], 1)
+
+    def test_stale_retention_plan_does_not_delete_any_archive(self):
+        identities = self.create_archives(2)
+        planned = backup.cleanup_plan('demo', 14, 1)
+        backup.run('demo', '3' * 32, 'live', backup.plan('demo', 'live')['fingerprint'])
+        with self.assertRaises(backup.BackupError): backup.cleanup('demo', 'd' * 32, 14, 1, planned['fingerprint'])
+        self.assertTrue((self.target / 'demo' / (identities[0] + '.tar.gz')).exists())
+
+    def test_unverified_or_mismatched_metadata_blocks_retention(self):
+        identities = self.create_archives(2)
+        path = self.target / 'demo' / (identities[0] + '.json')
+        metadata = backup.read_json(path)
+        metadata['verified'] = False
+        backup.private_json(path, metadata)
+        with self.assertRaises(backup.BackupError): backup.cleanup_plan('demo', 14, 1)
+        self.assertTrue((self.target / 'demo' / (identities[0] + '.tar.gz')).exists())
+
+    def test_cleanup_recovery_finishes_only_the_started_pair_and_preserves_remaining(self):
+        identities = self.create_archives()
+        candidate = backup.archive_catalog('demo')[-1]
+        job = 'd' * 32
+        backup.private_json(backup.journal_path(job), {'slug': 'demo', 'job': job, 'paused': [], 'cleanup': True,
+            'pendingCleanup': candidate, 'removedBackupIds': [], 'retentionDays': 14, 'retentionCount': 1})
+        (self.target / 'demo' / (candidate['backupId'] + '.tar.gz')).unlink()
+        backup.recover_job(job)
+        receipt = backup.read_json(self.state / (job + '.done.json'))
+        self.assertEqual(receipt['state'], 'Failed')
+        self.assertEqual(receipt['result']['removedBackupIds'], [identities[0]])
+        self.assertFalse((self.target / 'demo' / (identities[0] + '.json')).exists())
+        self.assertEqual(len(backup.archive_catalog('demo')), 2)
+
+    def test_recovery_refuses_a_replaced_archive_identity(self):
+        self.create_archives(2)
+        candidate = backup.archive_catalog('demo')[-1]
+        artifact = self.target / 'demo' / (candidate['backupId'] + '.tar.gz')
+        artifact.write_bytes(artifact.read_bytes() + b'changed')
+        journal = {'slug': 'demo', 'pendingCleanup': candidate, 'removedBackupIds': []}
+        with self.assertRaises(backup.BackupError): backup.finish_cleanup_entry(journal)
+        self.assertTrue(artifact.exists())
+
+    def test_invalid_archive_timestamp_blocks_retention_without_deletion(self):
+        identities = self.create_archives(2)
+        path = self.target / 'demo' / (identities[0] + '.json')
+        for timestamp in ('invalid', -1, 0, True):
+            metadata = backup.read_json(path)
+            metadata['createdAtUnixNs'] = timestamp
+            backup.private_json(path, metadata)
+            with self.assertRaises(backup.BackupError): backup.cleanup_plan('demo', 14, 1)
+            self.assertTrue((self.target / 'demo' / (identities[0] + '.tar.gz')).exists())
+
+    def test_invalid_capability_key_blocks_cleanup_and_verification_plans(self):
+        identities = self.create_archives(2)
+        backup.KEY.write_bytes(b'invalid')
+        with self.assertRaises(backup.BackupError): backup.cleanup_plan('demo', 14, 1)
+        with self.assertRaises(backup.BackupError): backup.verify_plan('demo', identities[0])
+        self.assertEqual(len(list((self.target / 'demo').glob('*.tar.gz'))), 2)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='wd-backup-unit-')
         self.addCleanup(self.temporary.cleanup)
@@ -70,6 +158,9 @@ class BackupHelperTests(unittest.TestCase):
             return '\n'.join(item['Id'] for item in self.containers).encode()
         if arguments[:3] == ('inspect', '--type', 'container'):
             return json.dumps([item for item in self.containers if item['Id'] in arguments[3:]]).encode()
+        if arguments[:2] == ('inspect', '--format'):
+            return '\n'.join(json.dumps({**item, 'Config': {'Labels': item['Config']['Labels']}})
+                for item in self.containers if item['Id'] in arguments[5:]).encode()
         if arguments[:2] == ('volume', 'ls'):
             return self.volume_name.encode() if self.volume['Labels'].get('com.docker.compose.project') == 'whaledeck-app-demo' else b''
         if arguments[:2] == ('volume', 'inspect'):

@@ -126,12 +126,21 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
 
     public async Task<BackupPolicy> SaveBackupPolicyAsync(SaveBackupPolicyCommand command, CancellationToken cancellationToken)
     {
+        var resource = await db.ManagedResources
+            .Where(value => (value.ResourceType == "Database" || value.ResourceType == "Container" || value.ResourceType == "ComposeApplication") &&
+                value.ExternalId == command.InstanceResourceId)
+            .OrderByDescending(value => value.ResourceType == "Database").FirstOrDefaultAsync(cancellationToken)
+            ?? throw new KeyNotFoundException("Managed backup resource was not found.");
+        if (resource.ResourceType == "ComposeApplication" && (resource.ProtectionLevel != "Managed" ||
+            !resource.ExternalId.StartsWith("application:", StringComparison.Ordinal)))
+            throw new InvalidOperationException("Only registered unprotected applications accept backup policies.");
         BackupPolicy item;
         if (command.Id is { } id)
         {
             item = await db.BackupPolicies.SingleOrDefaultAsync(value => value.Id == id, cancellationToken)
                 ?? throw new KeyNotFoundException("Backup policy was not found.");
             RequireVersion(command.ExpectedVersion, item.Version);
+            if (item.InstanceResourceId != resource.Id) throw new InvalidOperationException("Backup policy resource cannot be changed.");
             item.IsEnabled = command.IsEnabled;
             item.ScheduleExpression = command.ScheduleExpression;
             item.Timezone = command.Timezone;
@@ -140,6 +149,7 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
             item.TargetDirectoryId = command.TargetDirectoryId;
             item.Compression = command.Compression;
             item.VerifyAfterBackup = command.VerifyAfterBackup;
+            item.Consistency = command.Consistency;
             item.CapacityWarningPercent = command.CapacityWarningPercent;
             item.CapacityCriticalPercent = command.CapacityCriticalPercent;
             item.UpdatedAtUtc = DateTimeOffset.UtcNow;
@@ -147,15 +157,9 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
         }
         else
         {
-            var resourceId = await db.ManagedResources
-                .Where(value => (value.ResourceType == "Database" || value.ResourceType == "Container") &&
-                                value.ExternalId == command.InstanceResourceId)
-                .OrderByDescending(value => value.ResourceType == "Database")
-                .Select(value => (Guid?)value.Id).FirstOrDefaultAsync(cancellationToken)
-                ?? throw new KeyNotFoundException("Managed database resource was not found.");
             item = new BackupPolicy
             {
-                InstanceResourceId = resourceId,
+                InstanceResourceId = resource.Id,
                 IsEnabled = command.IsEnabled,
                 ScheduleExpression = command.ScheduleExpression,
                 Timezone = command.Timezone,
@@ -164,6 +168,7 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
                 TargetDirectoryId = command.TargetDirectoryId,
                 Compression = command.Compression,
                 VerifyAfterBackup = command.VerifyAfterBackup,
+                Consistency = command.Consistency,
                 CapacityWarningPercent = command.CapacityWarningPercent,
                 CapacityCriticalPercent = command.CapacityCriticalPercent
             };

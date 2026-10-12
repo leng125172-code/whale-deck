@@ -251,6 +251,7 @@ public sealed class BackupPolicy
     public required string TargetDirectoryId { get; set; }
     public string Compression { get; set; } = "Default";
     public bool VerifyAfterBackup { get; set; } = true;
+    public string Consistency { get; set; } = "quiesced";
     public int CapacityWarningPercent { get; set; } = 80;
     public int CapacityCriticalPercent { get; set; } = 85;
     public long Version { get; set; }

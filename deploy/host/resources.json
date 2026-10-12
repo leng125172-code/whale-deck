@@ -17,5 +17,5 @@
   { "id": "whaledeck.docker", "type": "DockerEngine", "externalId": "docker", "protectionLevel": "ControlPlane", "allowedActions": ["validate-settings", "apply-settings", "rollback"] },
   { "id": "whaledeck.platform", "type": "Platform", "externalId": "whaledeck", "protectionLevel": "ControlPlane", "allowedActions": ["diagnose", "diagnostic-bundle", "plan-update", "apply-update", "rollback"] },
   { "id": "database-platform.repository", "type": "GitRepository", "externalId": "database-platform", "protectionLevel": "CriticalData", "path": "/data/GitRepos/database-platform", "allowedActions": ["status", "snapshot", "commit-push"] },
-  { "id": "whaledeck.apps", "type": "ManagedDirectory", "externalId": "whaledeck-apps", "protectionLevel": "Managed", "path": "/data/WhaleDeck/apps", "allowedActions": ["install", "start", "stop", "restart", "update", "reinstall", "uninstall", "pull", "redeploy", "configure", "backup", "verify-backup"] }
+  { "id": "whaledeck.apps", "type": "ManagedDirectory", "externalId": "whaledeck-apps", "protectionLevel": "Managed", "path": "/data/WhaleDeck/apps", "allowedActions": ["install", "start", "stop", "restart", "update", "reinstall", "uninstall", "pull", "redeploy", "configure", "backup", "verify-backup", "cleanup-backups"] }
 ]

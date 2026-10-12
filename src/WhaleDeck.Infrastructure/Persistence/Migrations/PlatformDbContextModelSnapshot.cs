@@ -431,6 +431,14 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("compression");
 
+                    b.Property<string>("Consistency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("quiesced")
+                        .HasColumnName("consistency");
+
                     b.Property<Guid>("InstanceResourceId")
                         .HasColumnType("uuid")
                         .HasColumnName("instance_resource_id");

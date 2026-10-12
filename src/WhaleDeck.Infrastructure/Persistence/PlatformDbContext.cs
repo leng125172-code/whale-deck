@@ -242,7 +242,7 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     private static void ConfigureBackupsAlertsAndConfiguration(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<BackupPolicy>(entity => { entity.ToTable("backup_policies"); entity.HasKey(item => item.Id); entity.Property(item => item.Version).IsConcurrencyToken(); });
+        modelBuilder.Entity<BackupPolicy>(entity => { entity.ToTable("backup_policies"); entity.HasKey(item => item.Id); entity.Property(item => item.Version).IsConcurrencyToken(); entity.Property(item => item.Consistency).HasMaxLength(16).HasDefaultValue("quiesced"); });
         modelBuilder.Entity<BackupRecord>(entity => { entity.ToTable("backup_records"); entity.HasKey(item => item.Id); entity.HasIndex(item => new { item.InstanceResourceId, item.StartedAtUtc }); });
         modelBuilder.Entity<AlertRule>(entity =>
         {

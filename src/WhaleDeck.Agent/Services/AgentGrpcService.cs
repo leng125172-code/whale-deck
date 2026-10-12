@@ -12,7 +12,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = 13,
+            ProtocolMinor = 14,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
@@ -20,6 +20,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
             "docker.relationships",
             "applications.configuration",
             "applications.backups",
+            "applications.backup-retention",
             "host.read", "host.addresses", "host.metrics", "host.disk-io", "host.processes", "docker.read", "docker.container-summary", "docker.lifecycle", "docker.resource-management", "docker.image-metadata", "docker.logs", "docker.stats", "docker.events",
             "database.registered", "backup.registered", "compose.registered", "compose.projects", "managed.plan",
             "systemd.registered", "config-repository.registered", "maintenance.registered"

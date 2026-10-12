@@ -5,7 +5,7 @@ using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Agent.Services;
 
-public sealed record ApplicationBackupOptions(string Slug, string Consistency, string? BackupId, int CriticalPercent);
+public sealed record ApplicationBackupOptions(string Slug, string Consistency, string? BackupId, int CriticalPercent, int RetentionDays = 14, int RetentionCount = 14);
 public sealed record ApplicationBackupPreview(ApplicationBackupOptions Options, string Fingerprint, string[] Changes, string Warning);
 public sealed record ApplicationBackupRecovery(string OperationId, string Slug, string JobId);
 
@@ -21,7 +21,10 @@ public sealed class ApplicationBackupManager(ResourceRegistry registry, BoundedP
     {
         registry.Require("whaledeck.apps", request.Action);
         var options = Parse(request);
-        var output = request.Action == "backup"
+        var output = request.Action == "cleanup-backups"
+            ? await RunHelperAsync(["application-backup-cleanup-plan", options.Slug,
+                options.RetentionDays.ToString(CultureInfo.InvariantCulture), options.RetentionCount.ToString(CultureInfo.InvariantCulture)], TimeSpan.FromMinutes(2), cancellationToken)
+            : request.Action == "backup"
             ? await RunHelperAsync(["application-backup-plan", options.Slug, options.Consistency,
                 options.CriticalPercent.ToString(CultureInfo.InvariantCulture)], TimeSpan.FromMinutes(2), cancellationToken)
             : await RunHelperAsync(["application-backup-verify-plan", options.Slug, options.BackupId!], TimeSpan.FromMinutes(2), cancellationToken);
@@ -29,7 +32,10 @@ public sealed class ApplicationBackupManager(ResourceRegistry registry, BoundedP
         var root = document.RootElement;
         var fingerprint = root.GetProperty("fingerprint").GetString() ?? throw Invalid();
         if (fingerprint.Length != 64 || !fingerprint.All(Uri.IsHexDigit)) throw Invalid();
-        var changes = request.Action == "backup"
+        var changes = request.Action == "cleanup-backups"
+            ? new[] { "Remove expired private archives: " + root.GetProperty("removeBackupIds").GetArrayLength(),
+                "Retain at least the newest archive; application runtime data is not touched" }
+            : request.Action == "backup"
             ? new[] { "Archive compose.yml, .env, manifest.json and application data", "Named volumes: " +
                 string.Join(", ", root.GetProperty("namedVolumes").EnumerateArray().Select(item => item.GetString())),
                 "Consistency: " + options.Consistency, "HDD target; private gzip archive; SHA256 verification" }
@@ -53,8 +59,12 @@ public sealed class ApplicationBackupManager(ResourceRegistry registry, BoundedP
         {
             try
             {
-                await RunHelperAsync(["application-backup-run", recovery.Slug, recovery.JobId, approved.Options.Consistency,
-                    approved.Fingerprint, approved.Options.CriticalPercent.ToString(CultureInfo.InvariantCulture)], TimeSpan.FromMinutes(2), CancellationToken.None);
+                var arguments = request.Action == "cleanup-backups"
+                    ? new[] { "application-backup-cleanup-run", recovery.Slug, recovery.JobId,
+                        approved.Options.RetentionDays.ToString(CultureInfo.InvariantCulture), approved.Options.RetentionCount.ToString(CultureInfo.InvariantCulture), approved.Fingerprint }
+                    : new[] { "application-backup-run", recovery.Slug, recovery.JobId, approved.Options.Consistency,
+                        approved.Fingerprint, approved.Options.CriticalPercent.ToString(CultureInfo.InvariantCulture) };
+                await RunHelperAsync(arguments, TimeSpan.FromMinutes(2), CancellationToken.None);
             }
             catch (InvalidOperationException) { /* Inspect the same independent unit; never start a replacement. */ }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
@@ -103,7 +113,7 @@ public sealed class ApplicationBackupManager(ResourceRegistry registry, BoundedP
                 if (state is "Failed" or "Canceled")
                 {
                     DeleteRecovery(recovery.OperationId);
-                    throw new InvalidOperationException("Application backup service failed; data and completed archives are retained.");
+                    throw new RecordedOperationFailureException(status["result"]?.ToJsonString() ?? "{}");
                 }
                 var phase = status["phase"]?.ToString() ?? "Executing";
                 if (phase != operation.Phase)
@@ -131,7 +141,11 @@ public sealed class ApplicationBackupManager(ResourceRegistry registry, BoundedP
                     TimeSpan.FromSeconds(30), CancellationToken.None));
                 var state = status.RootElement.GetProperty("state").GetString();
                 if (state == "Succeeded") return status.RootElement.GetProperty("result").GetRawText();
-                if (state is "Failed" or "Canceled") return null;
+                if (state is "Failed" or "Canceled")
+                {
+                    operation.ResultJson = status.RootElement.TryGetProperty("result", out var result) ? result.GetRawText() : "{}";
+                    return null;
+                }
             }
             catch (InvalidOperationException) { }
             catch (JsonException) { }
@@ -189,8 +203,14 @@ public sealed class ApplicationBackupManager(ResourceRegistry registry, BoundedP
 
     internal static ApplicationBackupOptions Parse(RegisteredActionRequest request)
     {
-        if (request.Resource.ResourceType != "applications" || request.Action is not ("backup" or "verify-backup") ||
-            request.Parameters.Any(item => item.Key is not ("slug" or "consistency" or "backupId" or "capacityCriticalPercent"))) throw Invalid();
+        if (request.Resource.ResourceType != "applications" || request.Action is not ("backup" or "verify-backup" or "cleanup-backups")) throw Invalid();
+        var allowed = request.Action switch
+        {
+            "backup" => new[] { "slug", "consistency", "capacityCriticalPercent" },
+            "verify-backup" => new[] { "slug", "backupId" },
+            _ => new[] { "slug", "retentionDays", "retentionCount" }
+        };
+        if (request.Parameters.Any(item => !allowed.Contains(item.Key, StringComparer.Ordinal))) throw Invalid();
         var slug = ComposeProjectManager.ParseResourceId(request.Resource.ResourceId);
         if (request.Parameters.TryGetValue("slug", out var provided) && provided != slug) throw Invalid();
         var consistency = request.Parameters.GetValueOrDefault("consistency", "quiesced");
@@ -201,14 +221,25 @@ public sealed class ApplicationBackupManager(ResourceRegistry registry, BoundedP
         var backupId = request.Parameters.GetValueOrDefault("backupId");
         if (request.Action == "verify-backup" && (backupId is null || !Guid.TryParseExact(backupId, "N", out _)) ||
             request.Action == "backup" && backupId is not null) throw Invalid();
-        return new(slug, consistency, backupId, critical);
+        var retentionDays = ParseRetention(request, "retentionDays", 14, 3650);
+        var retentionCount = ParseRetention(request, "retentionCount", 14, 365);
+        return new(slug, consistency, backupId, critical, retentionDays, retentionCount);
     }
+
+    private static int ParseRetention(RegisteredActionRequest request, string key, int defaultValue, int maximum) =>
+        !request.Parameters.TryGetValue(key, out var value) ? defaultValue :
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number >= 1 && number <= maximum ? number : throw Invalid();
 
     private async Task<string> RunHelperAsync(string[] arguments, TimeSpan timeout, CancellationToken cancellationToken) =>
         (await processes.RunAsync("/usr/bin/sudo", [Helper, .. arguments], null, timeout,
             "APPLICATION_BACKUP_HELPER_FAILED", cancellationToken)).StandardOutput.Trim();
 
     private static InvalidOperationException Invalid() => new("Application backup request is outside its approved scope.");
+}
+
+public sealed class RecordedOperationFailureException(string resultJson) : Exception("Independent operation failed; only approved partial results are recorded.")
+{
+    public string ResultJson { get; } = resultJson;
 }
 
 public sealed class ApplicationBackupRecoveryService(ApplicationBackupManager backups, OperationStore operations,

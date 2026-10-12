@@ -267,6 +267,21 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             var parameters = root.TryGetProperty("parameters", out var parameterValue) && parameterValue.ValueKind == JsonValueKind.Object
                 ? parameterValue.EnumerateObject().ToDictionary(item => item.Name, item => item.Value.ToString(), StringComparer.Ordinal)
                 : new Dictionary<string, string>();
+            ManagedResource? backupResource = null;
+            if (schedule.TaskType == "Backup")
+            {
+                backupResource = await db.ManagedResources.Where(item => item.ExternalId == resourceId &&
+                    (item.ResourceType == "Database" || item.ResourceType == "Container" || item.ResourceType == "ComposeApplication"))
+                    .OrderByDescending(item => item.ResourceType == "Database").FirstOrDefaultAsync(cancellationToken)
+                    ?? throw new InvalidOperationException("Scheduled backup resource is unavailable.");
+                if (backupResource.ResourceType == "ComposeApplication")
+                {
+                    if (backupResource.ProtectionLevel != "Managed") throw new InvalidOperationException("Protected application backup is forbidden.");
+                    area = "applications";
+                    action = "backup";
+                    parameters.TryAdd("consistency", "quiesced");
+                }
+            }
             if (schedule.TaskType is "ApplicationUpdate" or "ContainerUpdate") parameters["automatic"] = "true";
             string? planHash = null;
             if (action is "update" or "update-install")
@@ -280,6 +295,8 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                 RequestJson = JsonSerializer.Serialize(new { resourceId, parameters, planHash })
             };
             db.OperationJobs.Add(job);
+            if (backupResource is not null)
+                db.BackupRecords.Add(new BackupRecord { InstanceResourceId = backupResource.Id, JobId = job.Id, ExpiresAtUtc = now.AddDays(14) });
             var scheduleRun = new ScheduledTaskRun { ScheduleId = schedule.Id, JobId = job.Id, ScheduledForUtc = scheduledFor };
             db.ScheduledTaskRuns.Add(scheduleRun);
             db.AuditEvents.Add(new AuditEvent
@@ -322,28 +339,50 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             .OrderBy(item => item.Id).Take(50).ToArrayAsync(cancellationToken);
         foreach (var policy in policies)
         {
+            var resource = await db.ManagedResources.SingleOrDefaultAsync(item => item.Id == policy.InstanceResourceId, cancellationToken);
+            if (resource is null) continue;
+            var application = resource.ResourceType == "ComposeApplication";
+            if (application && (resource.ProtectionLevel != "Managed" || !resource.ExternalId.StartsWith("application:", StringComparison.Ordinal))) continue;
+            if (application)
+            {
+                var cleanupKey = $"application-retention:{policy.Id:D}:{now:yyyyMMdd}";
+                if (!await db.OperationJobs.AnyAsync(item => item.ActorSubject == "system:backup-policy" && item.IdempotencyKey == cleanupKey, cancellationToken))
+                {
+                    var cleanupJob = new OperationJob { JobType = "applications.cleanup-backups", ActorSubject = "system:backup-policy",
+                        ResourceId = resource.Id, IdempotencyKey = cleanupKey, RequestJson = JsonSerializer.Serialize(new {
+                            resourceId = resource.ExternalId, policyId = policy.Id, policyVersion = policy.Version, parameters = new Dictionary<string, string> {
+                                ["retentionDays"] = policy.RetentionDays.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                                ["retentionCount"] = policy.RetentionCount.ToString(System.Globalization.CultureInfo.InvariantCulture) }, planHash = (string?)null }) };
+                    db.OperationJobs.Add(cleanupJob);
+                    db.OutboxMessages.Add(new OutboxMessage { MessageType = "OperationRequested", PayloadJson = JsonSerializer.Serialize(new { jobId = cleanupJob.Id }) });
+                    db.AuditEvents.Add(new AuditEvent { ActorSubject = cleanupJob.ActorSubject, Action = cleanupJob.JobType,
+                        TargetType = "backup-policy", TargetId = policy.Id.ToString("D"), Result = "Accepted", JobId = cleanupJob.Id, TraceId = cleanupJob.Id.ToString("N") });
+                }
+            }
             var latest = await db.BackupRecords.Where(item => item.PolicyId == policy.Id)
                 .OrderByDescending(item => item.StartedAtUtc).Select(item => (DateTimeOffset?)item.StartedAtUtc).FirstOrDefaultAsync(cancellationToken);
             var after = latest ?? policy.UpdatedAtUtc.AddMinutes(-1);
             var next = ScheduleCalculator.NextUtc("Cron", policy.ScheduleExpression, policy.Timezone, after);
             if (next > now) continue;
-            var resource = await db.ManagedResources.SingleOrDefaultAsync(item => item.Id == policy.InstanceResourceId, cancellationToken);
-            if (resource is null) continue;
+            var policyParameters = application ? new Dictionary<string, string> { ["consistency"] = policy.Consistency,
+                ["capacityCriticalPercent"] = policy.CapacityCriticalPercent.ToString(System.Globalization.CultureInfo.InvariantCulture) } :
+                new Dictionary<string, string> {
+                    ["retentionDays"] = policy.RetentionDays.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["retentionCount"] = policy.RetentionCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["capacityCriticalPercent"] = policy.CapacityCriticalPercent.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["verifyAfterBackup"] = policy.VerifyAfterBackup.ToString().ToLowerInvariant() };
             var job = new OperationJob
             {
-                JobType = "backups.run",
+                JobType = application ? "applications.backup" : "backups.run",
+                ResourceId = resource.Id,
                 ActorSubject = "system:backup-policy",
                 IdempotencyKey = $"backup-policy:{policy.Id:D}:{next.ToUnixTimeSeconds()}",
                 RequestJson = JsonSerializer.Serialize(new
                 {
                     resourceId = resource.ExternalId,
-                    parameters = new Dictionary<string, string>
-                    {
-                        ["retentionDays"] = policy.RetentionDays.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                        ["retentionCount"] = policy.RetentionCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                        ["capacityCriticalPercent"] = policy.CapacityCriticalPercent.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                        ["verifyAfterBackup"] = policy.VerifyAfterBackup.ToString().ToLowerInvariant()
-                    },
+                    policyId = policy.Id,
+                    policyVersion = policy.Version,
+                    parameters = policyParameters,
                     planHash = (string?)null
                 })
             };
@@ -359,7 +398,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             db.AuditEvents.Add(new AuditEvent
             {
                 ActorSubject = "system:backup-policy",
-                Action = "backups.run",
+                Action = job.JobType,
                 TargetType = "backup-policy",
                 TargetId = policy.Id.ToString("D"),
                 Result = "Accepted",
@@ -423,6 +462,19 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                     {
                         var split = job.JobType.Split('.', 2);
                         using var request = JsonDocument.Parse(job.RequestJson);
+                        if (job.ActorSubject == "system:backup-policy" && request.RootElement.TryGetProperty("policyId", out var policyIdValue))
+                        {
+                            var policyId = policyIdValue.GetGuid();
+                            var expectedVersion = request.RootElement.GetProperty("policyVersion").GetInt64();
+                            if (!await db.BackupPolicies.AnyAsync(item => item.Id == policyId && item.IsEnabled && item.Version == expectedVersion, cancellationToken))
+                            {
+                                await Complete(db, job, "Canceled", "BackupPolicyChanged", null, cancellationToken);
+                                message.ProcessedAtUtc = DateTimeOffset.UtcNow;
+                                await leases.ReleaseAsync(lockKey, job.Id, workerInstanceId, cancellationToken);
+                                await db.SaveChangesAsync(cancellationToken);
+                                continue;
+                            }
+                        }
                         var resourceId = request.RootElement.TryGetProperty("resourceId", out var resource) ? resource.GetString() ?? string.Empty : string.Empty;
                         var parameters = request.RootElement.TryGetProperty("parameters", out var values) && values.ValueKind == JsonValueKind.Object
                             ? values.EnumerateObject().ToDictionary(item => item.Name, item => item.Value.ToString(), StringComparer.Ordinal)
@@ -430,6 +482,9 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                         var planHash = request.RootElement.TryGetProperty("planHash", out var planHashElement) && planHashElement.ValueKind == JsonValueKind.String
                             ? planHashElement.GetString()
                             : null;
+                        if (job.ActorSubject is "system:backup-policy" or "system:scheduler" &&
+                            job.JobType is "applications.backup" or "applications.cleanup-backups")
+                            planHash = (await agent.PlanAsync(split[0], split[1], resourceId, parameters, cancellationToken)).PlanHash;
                         if (parameters.TryGetValue("inputTicket", out var inputTicket))
                         {
                             var secret = await secrets.ConsumeAsync(job.ActorSubject, inputTicket, cancellationToken)
@@ -451,7 +506,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                         job.StartedAtUtc ??= DateTimeOffset.UtcNow;
                         // A reply can be lost or SaveChanges can conflict with a concurrent
                         // cancellation. Keep the original backup handle BEFORE sending RPC.
-                        if (job.JobType is "applications.backup" or "applications.verify-backup")
+                        if (job.JobType is "applications.backup" or "applications.verify-backup" or "applications.cleanup-backups")
                             job.AgentOperationId = job.Id;
                         job.Version++;
                         await db.SaveChangesAsync(cancellationToken);
@@ -657,6 +712,9 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                 case "BackupFailure":
                     triggeredResources.AddRange(await db.BackupRecords.Where(item => item.Status == "Failed" && item.CompletedAtUtc >= now.AddSeconds(-rule.EvaluationWindowSeconds))
                         .Select(item => (Guid?)item.InstanceResourceId).Distinct().ToArrayAsync(cancellationToken));
+                    triggeredResources.AddRange(await db.OperationJobs.Where(item => item.JobType == "applications.cleanup-backups" &&
+                        item.State == "Failed" && item.CompletedAtUtc >= now.AddSeconds(-rule.EvaluationWindowSeconds) && item.ResourceId != null)
+                        .Select(item => item.ResourceId).Distinct().ToArrayAsync(cancellationToken));
                     break;
             }
 
@@ -771,6 +829,23 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                 backup.Checksum = backupResult.Checksum;
                 backup.VerifiedAtUtc = backupResult.Verified ? DateTimeOffset.UtcNow : null;
             }
+            if (state == "Succeeded" && job.JobType == "applications.backup" && backup.PolicyId is { } policyId)
+            {
+                var policy = await db.BackupPolicies.SingleOrDefaultAsync(item => item.Id == policyId && item.IsEnabled, cancellationToken);
+                var resource = await db.ManagedResources.SingleOrDefaultAsync(item => item.Id == backup.InstanceResourceId, cancellationToken);
+                if (policy is not null && resource is not null && resource.ProtectionLevel == "Managed")
+                {
+                    var cleanupJob = new OperationJob { JobType = "applications.cleanup-backups", ActorSubject = "system:backup-policy",
+                        ResourceId = resource.Id, IdempotencyKey = "application-retention-after:" + job.Id.ToString("D"),
+                        RequestJson = JsonSerializer.Serialize(new { resourceId = resource.ExternalId, policyId = policy.Id, policyVersion = policy.Version, parameters = new Dictionary<string, string> {
+                            ["retentionDays"] = policy.RetentionDays.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                            ["retentionCount"] = policy.RetentionCount.ToString(System.Globalization.CultureInfo.InvariantCulture) }, planHash = (string?)null }) };
+                    db.OperationJobs.Add(cleanupJob);
+                    db.OutboxMessages.Add(new OutboxMessage { MessageType = "OperationRequested", PayloadJson = JsonSerializer.Serialize(new { jobId = cleanupJob.Id }) });
+                    db.AuditEvents.Add(new AuditEvent { ActorSubject = cleanupJob.ActorSubject, Action = cleanupJob.JobType,
+                        TargetType = "backup-policy", TargetId = policy.Id.ToString("D"), Result = "Accepted", JobId = cleanupJob.Id, TraceId = cleanupJob.Id.ToString("N") });
+                }
+            }
         }
         if (job.JobType == "applications.verify-backup" && state is "Succeeded" or "Failed")
         {
@@ -789,6 +864,21 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             }
         }
         var scheduleRun = await db.ScheduledTaskRuns.SingleOrDefaultAsync(item => item.JobId == job.Id, cancellationToken);
+        if (job.JobType == "applications.cleanup-backups" && state is "Succeeded" or "Failed" or "Canceled" && !string.IsNullOrWhiteSpace(job.ResultJson))
+        {
+            using var cleanupRequest = JsonDocument.Parse(job.RequestJson);
+            using var cleanupResult = JsonDocument.Parse(job.ResultJson);
+            if (cleanupResult.RootElement.TryGetProperty("removedBackupIds", out var removed) && removed.ValueKind == JsonValueKind.Array)
+            {
+                var resource = cleanupRequest.RootElement.GetProperty("resourceId").GetString();
+                var removedJobs = removed.EnumerateArray().Take(1024).Select(item =>
+                    Guid.TryParseExact(item.GetString(), "N", out var parsed) ? (Guid?)parsed : null)
+                    .Where(item => item.HasValue).Select(item => item!.Value).Distinct().ToArray();
+                var expired = await db.BackupRecords.Where(item => removedJobs.Contains(item.JobId) &&
+                    db.ManagedResources.Any(managed => managed.Id == item.InstanceResourceId && managed.ExternalId == resource)).ToArrayAsync(cancellationToken);
+                foreach (var record in expired) record.Status = "Expired";
+            }
+        }
         if (scheduleRun is not null && state is "Succeeded" or "Failed" or "Canceled")
         {
             scheduleRun.Result = state;
@@ -839,7 +929,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
     {
         if (!job.JobType.StartsWith("applications.", StringComparison.Ordinal)) return;
         var action = job.JobType["applications.".Length..];
-        if (action is "backup" or "verify-backup") return;
+        if (action is "backup" or "verify-backup" or "cleanup-backups") return;
         using var request = JsonDocument.Parse(job.RequestJson);
         var parameters = request.RootElement.TryGetProperty("parameters", out var values) && values.ValueKind == JsonValueKind.Object
             ? values.EnumerateObject().ToDictionary(item => item.Name, item => item.Value.ToString(), StringComparer.Ordinal)

@@ -26,7 +26,7 @@ public sealed class ManagedResourceGrpcService(
 
     public override async Task<PlanResponse> PlanAction(RegisteredActionRequest request, ServerCallContext context)
     {
-        if (request.Resource.ResourceType == "applications" && request.Action is "backup" or "verify-backup")
+        if (request.Resource.ResourceType == "applications" && request.Action is "backup" or "verify-backup" or "cleanup-backups")
         {
             var backupPreview = await applicationBackups.PreviewAsync(request, context.CancellationToken);
             var backupPlan = plans.Create(request.Resource.ResourceId, request.Action, request.Parameters, backupPreview.Fingerprint);
@@ -230,7 +230,7 @@ public sealed class ManagedResourceGrpcService(
 
     public override async Task<OperationHandle> RunComposeAction(RegisteredActionRequest request, ServerCallContext context)
     {
-        if (request.Resource.ResourceType == "applications" && request.Action is "backup" or "verify-backup")
+        if (request.Resource.ResourceType == "applications" && request.Action is "backup" or "verify-backup" or "cleanup-backups")
         {
             var backupKey = BuildIdempotencyKey(request.Context, "ApplicationBackup", request.Action, request.Resource.ResourceId);
             if (!Guid.TryParse(request.Context.JobId, out var backupJobId))

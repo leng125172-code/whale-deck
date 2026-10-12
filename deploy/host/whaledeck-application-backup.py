@@ -50,9 +50,9 @@ def safe_path(path: Path, *, directory=False):
     return path
 
 
-def read_json(path: Path):
+def read_json(path: Path, *, limit=65536):
     safe_path(path)
-    require(path.stat().st_size <= 65536)
+    require(path.stat().st_size <= limit)
     try:
         return json.loads(path.read_bytes())
     except (ValueError, UnicodeError):
@@ -85,8 +85,11 @@ def inspect_all():
     ids = docker('ps', '--no-trunc', '-aq').decode().split()
     require(len(ids) <= 1024 and all(IDENTIFIER.fullmatch(item) for item in ids))
     result = []
-    for start in range(0, len(ids), 64):
-        result.extend(json.loads(docker('inspect', '--type', 'container', *ids[start:start + 64])))
+    # Do not capture Env/Cmd/Entrypoint for unrelated containers into Python stdout.
+    projection = '{"Id":{{json .Id}},"Name":{{json .Name}},"Image":{{json .Image}},"State":{"Running":{{json .State.Running}},"Paused":{{json .State.Paused}},"Restarting":{{json .State.Restarting}},"Dead":{{json .State.Dead}},"StartedAt":{{json .State.StartedAt}}},"RestartCount":{{json .RestartCount}},"Mounts":{{json .Mounts}},"Config":{"Labels":{"com.docker.compose.project":{{json (index .Config.Labels "com.docker.compose.project")}},"com.docker.compose.service":{{json (index .Config.Labels "com.docker.compose.service")}},"com.docker.compose.config-hash":{{json (index .Config.Labels "com.docker.compose.config-hash")}},"io.whaledeck.protected":{{json (index .Config.Labels "io.whaledeck.protected")}}}}}'
+    for start in range(0, len(ids), 8):
+        result.extend(json.loads(line) for line in docker('inspect', '--format', projection, '--type', 'container',
+            *ids[start:start + 8]).decode().splitlines() if line)
     return result
 
 
@@ -244,11 +247,21 @@ def recover_job(job):
     path = safe_path(journal_path(job))
     if not path.exists():
         return
-    journal = read_json(path)
+    journal = read_json(path, limit=1024 * 1024)
     require(SLUG.fullmatch(journal.get('slug', '')) is not None)
     try:
         with lock(journal['slug'], blocking=False):
             require(resume(journal))
+            if journal.get('cleanup'):
+                if journal.get('pendingCleanup'):
+                    finish_cleanup_entry(journal)
+                    private_json(path, journal)
+                receipt_path = STATE / (job + '.done.json')
+                receipt = read_json(receipt_path) if receipt_path.exists() else {
+                    'state': 'Failed', 'phase': 'Interrupted', 'slug': journal['slug'], 'job': job,
+                    'errorCode': 'APPLICATION_BACKUP_CLEANUP_INTERRUPTED'}
+                receipt['result'] = cleanup_result(journal)
+                private_json(receipt_path, receipt)
             partial = safe_path(TARGET / journal['slug'] / (job + '.partial'))
             partial.unlink(missing_ok=True)
             path.unlink(missing_ok=True)
@@ -331,13 +344,108 @@ def target(slug):
     return directory
 
 
+def archive_catalog(slug):
+    """Only sealed root-owned archive pairs. Orphan/unknown files are retained, never guessed."""
+    require(SLUG.fullmatch(slug) is not None)
+    directory = safe_path(TARGET / slug, directory=True)
+    if not directory.exists(): return []
+    files = list(directory.glob('*.json'))
+    require(len(files) <= 1024)
+    entries = []
+    for metadata_path in files:
+        if not JOB.fullmatch(metadata_path.stem): continue
+        safe_path(metadata_path)
+        metadata = read_json(metadata_path)
+        identity = metadata_path.stem
+        artifact = safe_path(directory / (identity + '.tar.gz'))
+        require(artifact.is_file() and metadata.get('slug') == slug and metadata.get('backupId') == identity and
+            metadata.get('relativePath') == slug + '/' + identity + '.tar.gz' and metadata.get('verified') is True and
+            IDENTIFIER.fullmatch(metadata.get('checksum', '')) is not None and metadata.get('checksumAlgorithm') == 'SHA256')
+        archive_stat, metadata_stat = artifact.stat(), metadata_path.stat()
+        require(archive_stat.st_size == metadata.get('sizeBytes') and
+            isinstance(metadata.get('createdAtUnix'), int) and 0 <= metadata['createdAtUnix'] <= int(time.time()) + 300)
+        created_ns = metadata.get('createdAtUnixNs', metadata['createdAtUnix'] * 1_000_000_000)
+        require(type(created_ns) is int and metadata['createdAtUnix'] * 1_000_000_000 <= created_ns <
+            (metadata['createdAtUnix'] + 1) * 1_000_000_000)
+        if os.name == 'posix':
+            require(archive_stat.st_uid == metadata_stat.st_uid == os.geteuid() and
+                stat.S_IMODE(archive_stat.st_mode) == stat.S_IMODE(metadata_stat.st_mode) == 0o600)
+        entries.append({'backupId': identity, 'createdAtUnix': metadata['createdAtUnix'],
+            'createdAtUnixNs': created_ns,
+            'identity': [archive_stat.st_dev, archive_stat.st_ino, archive_stat.st_size],
+            'changedAtNs': archive_stat.st_ctime_ns,
+            'metadataDigest': hashlib.sha256(metadata_path.read_bytes()).hexdigest()})
+    return sorted(entries, key=lambda item: (item['createdAtUnixNs'], item['backupId']), reverse=True)
+
+
+def cleanup_plan(slug, retention_days, retention_count):
+    require(1 <= retention_days <= 3650 and 1 <= retention_count <= 365)
+    require(SLUG.fullmatch(slug) is not None)
+    entries = registry()
+    members = [item for item in inspect_all() if (item.get('Config', {}).get('Labels') or {}).get('com.docker.compose.project') == 'whaledeck-app-' + slug]
+    require(not any(protected(item, entries) for item in members))
+    source = {'slug': slug, 'registry': entries, 'memberIds': sorted(item['Id'] for item in members)}
+    catalog = archive_catalog(slug)
+    cutoff = int(time.time()) - retention_days * 86400
+    candidates = [entry for index, entry in enumerate(catalog) if index > 0 and
+        (index >= retention_count or entry['createdAtUnix'] < cutoff)]
+    material = json.dumps({'source': source, 'catalog': catalog, 'candidates': candidates,
+        'retentionDays': retention_days, 'retentionCount': retention_count}, sort_keys=True).encode()
+    key = KEY.read_bytes()
+    require(len(key) == 32)
+    return {'fingerprint': hmac.new(key, material, hashlib.sha256).hexdigest(),
+        'removeBackupIds': [entry['backupId'] for entry in candidates], 'retainedCount': len(catalog) - len(candidates),
+        'warning': 'Only verified private archives of this application are removed; newest archive is always retained. Runtime data is untouched.'}
+
+
+def cleanup_result(journal):
+    removed = journal.get('removedBackupIds', [])
+    require(isinstance(removed, list) and len(removed) <= 1024 and all(JOB.fullmatch(item) for item in removed))
+    return {'removedBackupIds': removed, 'retentionDays': journal['retentionDays'], 'retentionCount': journal['retentionCount']}
+
+
+def finish_cleanup_entry(journal):
+    entry = journal['pendingCleanup']
+    identity = entry['backupId']
+    require(JOB.fullmatch(identity) is not None and SLUG.fullmatch(journal['slug']) is not None)
+    directory = safe_path(TARGET / journal['slug'], directory=True)
+    artifact = safe_path(directory / (identity + '.tar.gz'))
+    metadata = safe_path(directory / (identity + '.json'))
+    if metadata.exists():
+        require(hmac.compare_digest(hashlib.sha256(metadata.read_bytes()).hexdigest(), entry['metadataDigest']))
+    if artifact.exists():
+        info = artifact.stat()
+        require([info.st_dev, info.st_ino, info.st_size] == entry['identity'] and info.st_ctime_ns == entry['changedAtNs'])
+    artifact.unlink(missing_ok=True)
+    metadata.unlink(missing_ok=True)
+    if identity not in journal['removedBackupIds']: journal['removedBackupIds'].append(identity)
+    journal['pendingCleanup'] = None
+
+
+def cleanup(slug, job, retention_days, retention_count, fingerprint):
+    require(JOB.fullmatch(job) is not None and IDENTIFIER.fullmatch(fingerprint) is not None)
+    with lock(slug):
+        planned = cleanup_plan(slug, retention_days, retention_count)
+        require(hmac.compare_digest(planned['fingerprint'], fingerprint))
+        candidates = {entry['backupId']: entry for entry in archive_catalog(slug)}
+        journal = {'slug': slug, 'job': job, 'paused': [], 'cleanup': True, 'pendingCleanup': None,
+            'removedBackupIds': [], 'retentionDays': retention_days, 'retentionCount': retention_count}
+        private_json(journal_path(job), journal)
+        for identity in planned['removeBackupIds']:
+            journal['pendingCleanup'] = candidates[identity]
+            private_json(journal_path(job), journal)  # Intent persisted before either unlink.
+            finish_cleanup_entry(journal)
+            private_json(journal_path(job), journal)
+        return cleanup_result(journal)
+
+
 def verify(slug, job):
     require(SLUG.fullmatch(slug) is not None and JOB.fullmatch(job) is not None)
     directory = safe_path(TARGET / slug, directory=True)
     metadata = read_json(directory / (job + '.json'))
     path = directory / (job + '.tar.gz')
     require(metadata.get('backupId') == job and metadata.get('slug') == slug and
-        metadata.get('relativePath') == str(path.relative_to(TARGET)))
+        metadata.get('relativePath') == path.relative_to(TARGET).as_posix())
     require(hmac.compare_digest(verify_archive(path), metadata.get('checksum', '')))
     metadata['verified'] = True
     return metadata
@@ -350,7 +458,9 @@ def verify_plan(slug, job):
     artifact = safe_path(directory / (job + '.tar.gz'))
     require(metadata.get('slug') == slug and metadata.get('backupId') == job and artifact.is_file())
     material = json.dumps(metadata, sort_keys=True).encode() + str(artifact.stat().st_size).encode()
-    return {'fingerprint': hmac.new(KEY.read_bytes(), material, hashlib.sha256).hexdigest(),
+    key = KEY.read_bytes()
+    require(len(key) == 32)
+    return {'fingerprint': hmac.new(key, material, hashlib.sha256).hexdigest(),
         'backupId': job, 'consistency': metadata.get('consistency', 'unknown'),
         'sizeBytes': artifact.stat().st_size, 'targetDirectoryId': 'database-platform.backup.hdd',
         'warning': 'Read-only archive and SHA256 verification. No restore is performed.'}
@@ -369,8 +479,10 @@ def status(slug, job):
     # A polling/daemon error does not prove that the independent service stopped.
     require(fields.get('LoadState') in ('loaded', 'not-found'))
     journal = safe_path(journal_path(job))
-    if journal.exists() and read_json(journal).get('paused'):
-        return {'state': 'Running', 'phase': 'WaitingForApplicationResume'}
+    if journal.exists():
+        snapshot = read_json(journal, limit=1024 * 1024)
+        if snapshot.get('paused') or snapshot.get('cleanup'):
+            return {'state': 'Running', 'phase': 'WaitingForBackupCleanup' if snapshot.get('cleanup') else 'WaitingForApplicationResume'}
     if receipt.exists():
         result = read_json(receipt)
         require(result.get('slug') == slug and result.get('job') == job)
@@ -421,10 +533,11 @@ def run(slug, job, consistency, fingerprint, critical=90):
             require(hmac.compare_digest(scope(slug)[3], fingerprint))
             digest = verify_archive(temporary)
             os.replace(temporary, artifact)
-            result = {'backupId': job, 'slug': slug, 'relativePath': str(artifact.relative_to(TARGET)),
+            created_ns = time.time_ns()
+            result = {'backupId': job, 'slug': slug, 'relativePath': artifact.relative_to(TARGET).as_posix(),
                 'sizeBytes': artifact.stat().st_size, 'checksumAlgorithm': 'SHA256', 'checksum': digest,
                 'verified': True, 'compression': 'gzip', 'consistency': consistency, 'transactionConsistent': False,
-                'createdAtUnix': int(time.time()), 'namedVolumes': sorted(volumes), 'dataIncluded': data.exists(),
+                'createdAtUnix': created_ns // 1_000_000_000, 'createdAtUnixNs': created_ns, 'namedVolumes': sorted(volumes), 'dataIncluded': data.exists(),
                 'runtimeServices': [{'service': (member.get('Config', {}).get('Labels') or {}).get('com.docker.compose.service', ''),
                     'imageId': member.get('Image', ''), 'wasRunning': member['State'].get('Running', False)} for member in members],
                 'configurationIncluded': list(CONFIGURATION), 'excluded': ['container writable layers', 'tmpfs', 'external services']}
@@ -454,7 +567,7 @@ def main():
     verb, *arguments = sys.argv[1:]
     if verb == 'plan' and len(arguments) == 3:
         result = plan(*arguments[:2], critical=int(arguments[2]))
-    elif verb == 'run' and len(arguments) == 5:
+    elif verb in ('run', 'cleanup-run') and len(arguments) == 5:
         # Never pause from an ad-hoc sudo invocation without the systemd recovery contract.
         require(approved_service(arguments[1], Path('/proc/self/cgroup').read_text()))
         def cancel(*_):
@@ -463,7 +576,8 @@ def main():
             raise BackupError('Application backup canceled.')
         signal.signal(signal.SIGTERM, cancel)
         try:
-            result = run(*arguments[:4], critical=int(arguments[4]))
+            result = (run(*arguments[:4], critical=int(arguments[4])) if verb == 'run' else
+                cleanup(arguments[0], arguments[1], int(arguments[2]), int(arguments[3]), arguments[4]))
             private_json(STATE / (arguments[1] + '.done.json'),
                 {'state': 'Succeeded', 'phase': 'Completed', 'slug': arguments[0], 'job': arguments[1], 'result': result})
         except BaseException:
@@ -471,6 +585,8 @@ def main():
                 'phase': 'Canceled' if CANCELED else 'Failed', 'slug': arguments[0], 'job': arguments[1],
                 'errorCode': 'APPLICATION_BACKUP_CANCELED' if CANCELED else 'APPLICATION_BACKUP_FAILED'})
             raise
+    elif verb == 'cleanup-plan' and len(arguments) == 3:
+        result = cleanup_plan(arguments[0], int(arguments[1]), int(arguments[2]))
     elif verb == 'verify-plan' and len(arguments) == 2:
         result = verify_plan(*arguments)
     elif verb == 'verify' and len(arguments) == 3:

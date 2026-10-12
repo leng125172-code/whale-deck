@@ -12,11 +12,12 @@ public sealed record SaveScheduledTaskCommand(Guid? Id, string TaskType, string 
 
 public sealed record BackupPolicyDto(Guid Id, string InstanceResourceId, bool IsEnabled, string ScheduleExpression,
     string Timezone, int RetentionCount, int RetentionDays, string TargetDirectoryId, string Compression,
-    bool VerifyAfterBackup, int CapacityWarningPercent, int CapacityCriticalPercent, long Version);
+    bool VerifyAfterBackup, int CapacityWarningPercent, int CapacityCriticalPercent, long Version, string Consistency = "quiesced");
 
 public sealed record SaveBackupPolicyCommand(Guid? Id, string InstanceResourceId, bool IsEnabled, string ScheduleExpression,
     string Timezone, int RetentionCount, int RetentionDays, string TargetDirectoryId, string Compression,
-    bool VerifyAfterBackup, int CapacityWarningPercent, int CapacityCriticalPercent, long? ExpectedVersion);
+    bool VerifyAfterBackup, int CapacityWarningPercent, int CapacityCriticalPercent, long? ExpectedVersion,
+    string Consistency = "quiesced", bool Confirmed = false);
 
 public sealed record BackupRecordDto(
     Guid Id,

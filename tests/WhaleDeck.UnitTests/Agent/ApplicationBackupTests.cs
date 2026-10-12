@@ -67,6 +67,34 @@ public sealed class ApplicationBackupTests
         Assert.Throws<InvalidOperationException>(() => ApplicationBackupManager.Parse(request));
     }
 
+    [Fact]
+    public void RetentionUsesOnlyBoundedDaysAndCountForTheSameApplication()
+    {
+        var request = Request("cleanup-backups");
+        request.Parameters["retentionDays"] = "3650";
+        request.Parameters["retentionCount"] = "365";
+        var options = ApplicationBackupManager.Parse(request);
+        Assert.Equal("demo", options.Slug);
+        Assert.Equal(3650, options.RetentionDays);
+        Assert.Equal(365, options.RetentionCount);
+    }
+
+    [Theory]
+    [InlineData("retentionDays", "0")]
+    [InlineData("retentionDays", "3651")]
+    [InlineData("retentionDays", "14;true")]
+    [InlineData("retentionCount", "0")]
+    [InlineData("retentionCount", "366")]
+    [InlineData("source", "/etc")]
+    [InlineData("backupId", "11111111111111111111111111111111")]
+    public void RetentionRejectsUnapprovedParametersWithoutEcho(string key, string value)
+    {
+        var request = Request("cleanup-backups");
+        request.Parameters[key] = value;
+        var exception = Assert.Throws<InvalidOperationException>(() => ApplicationBackupManager.Parse(request));
+        Assert.DoesNotContain(value, exception.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
