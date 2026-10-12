@@ -8,6 +8,8 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
+import requests
+from run_with_ephemeral_admin import container_environment
 from validate_databases import Api
 from validate_governance import request
 from validate_oidc import authenticate, required_environment
@@ -37,6 +39,20 @@ def main():
             if value['state'] in {'Succeeded', 'Failed', 'Canceled'}: return value
             time.sleep(2)
         raise RuntimeError('Original policy operation still nonterminal: ' + job)
+    identity = requests.Session(); identity.trust_env = False
+    identity.headers['Authorization'] = 'Bearer ' + container_environment()['Authentication__Authentik__ApiToken']
+    created = identity.post('http://127.0.0.1:8081/api/v3/core/users/', json={
+        'username': required_environment('VALIDATION_MANAGED_USERNAME'), 'name': 'Whale Deck temporary ordinary backup validation',
+        'is_active': True, 'groups': []}, timeout=20)
+    created.raise_for_status()
+    identity.post('http://127.0.0.1:8081/api/v3/core/users/' + str(created.json()['pk']) + '/set_password/',
+        json={'password': required_environment('VALIDATION_MANAGED_PASSWORD')}, timeout=20).raise_for_status()
+    ordinary, profile = authenticate(base, required_environment('VALIDATION_MANAGED_USERNAME'),
+        required_environment('VALIDATION_MANAGED_PASSWORD'), require_administrator=False)
+    assert profile['isAdministrator'] is False
+    for endpoint in ['backups/policies', 'backups/records', 'applications/configuration?resourceId=' + resource]:
+        assert ordinary.get(base + '/api/v1/' + endpoint, timeout=20).status_code == 403
+    print(json.dumps({'ordinaryBackupPermissions': '403-read-and-policy'}))
     try:
         api.run('install', '', {'slug': slug, 'image': 'nginxinc/nginx-unprivileged:alpine', 'autoupdate': 'false'},
             area='applications', confirmed=True, requires_plan=True, timeout=160)

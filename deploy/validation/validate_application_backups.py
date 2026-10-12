@@ -129,6 +129,15 @@ def main():
             if observe(reconnect_id)['state'] in {'Failed', 'Succeeded', 'Canceled'}: break
             time.sleep(1)
         assert live, 'The exact independent backup unit was not observed live'
+        properties = ['ActiveState', 'MemoryMax', 'CPUQuotaPerSecUSec', 'IOWeight', 'NoNewPrivileges',
+            'ProtectSystem', 'ProtectHome', 'PrivateTmp', 'PrivateDevices', 'RestrictAddressFamilies']
+        output = subprocess.run(['systemctl', 'show', unit, *['--property=' + name for name in properties]],
+            check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15).stdout
+        sandbox = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
+        assert sandbox['ActiveState'] == 'active' and sandbox['MemoryMax'] == str(256 * 1024**2)
+        assert sandbox['CPUQuotaPerSecUSec'] == '500ms' and sandbox['IOWeight'] == '50'
+        assert all(sandbox[name] == 'yes' for name in ['NoNewPrivileges', 'ProtectHome', 'PrivateTmp', 'PrivateDevices'])
+        assert sandbox['ProtectSystem'] == 'strict' and sandbox['RestrictAddressFamilies'] == 'AF_UNIX'
         api.run('systemd-restart', 'whaledeck.agent', {}, area='host', confirmed=True, timeout=120)
         reconnected = terminal(reconnect_id)
         assert reconnected['state'] == 'Succeeded', reconnected.get('errorCode')
@@ -139,7 +148,7 @@ def main():
         assert anonymous.get(base + '/api/v1/backups/records?instanceResourceId=' + resource, timeout=20).status_code == 401
         print(json.dumps({'applicationBackups': 'passed', 'archiveConfigurationAndDataAndVolume': 'native-exact',
             'archivePrivateModes': '0600', 'runtimeIdentity': 'retained', 'recordAndChecksum': 'passed',
-            'verify': 'passed', 'cancel': canceled['state'], 'agentRestart': 'same-backup-job-completed',
+            'verify': 'passed', 'cancel': canceled['state'], 'agentRestart': 'same-backup-job-completed', 'liveSandbox': sandbox,
             'nativePostgresMarkerCounts': count, 'anonymous': '401'}))
     finally:
         # Never tear down an application while its independent task is still running.
