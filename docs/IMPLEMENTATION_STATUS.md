@@ -37,7 +37,7 @@
 ## 自动化验证基线
 
 - `.NET 10` Release 构建：0 警告、0 错误。
-- 自动化测试：203 项 UnitTests、49 项 IntegrationTests 通过（含进程差分 CPU、PID 复用、部分/过期快照、参数边界、只读管理员路由与错误分类，以及调试文档管理员授权、401/403 Problem Details、无重定向和路径边界）。
+- 自动化测试：209 项 UnitTests、49 项 IntegrationTests 通过（含进程差分 CPU、PID 复用、部分/过期快照、参数边界、固定 status 字段解析、内存溢出防护、只读管理员路由与错误分类，以及调试文档管理员授权、401/403 Problem Details、无重定向和路径边界）。
 - 前端：Prettier、Oxlint、ESLint、Vue TypeScript 检查、11 项 Vitest 和 Vite 生产构建通过；进程权限失效会清空旧数据并作废在途响应。
 - 页面水平溢出修复：Grid 卡片最小宽度、日志筛选栏容器断点与长资源名换行已补齐；22 项浏览器回归覆盖 320–1920px、1045px 断点、明暗主题、10 个有数据的管理页面切换（含进程详情抽屉）及空/错误状态，保留表格内部横向滚动。320px 顶栏收紧间距，额外断言工具栏按钮不能被裁切。
 - Agent 协议为 `1.7`，新增 `host.processes` 只读能力，已随 `e1660f4` 部署并通过真实工作站进程验收；此前协议 `1.6` 提供普通 Docker 资源管理、镜像元数据、有界事件时间线，以及注册资源与 Docker 资源相互隔离的预检计划能力。
@@ -45,6 +45,7 @@
 
 ## 安全与恢复入口
 
+- 生产调试文档入口已统一返回匿名 401、普通用户 403 的 Problem Details，含稳定错误码与追踪号，不触发 OIDC 重定向；管理员 OpenAPI/Swagger UI 真实验收通过。进程名称/内存取数已改为固定 `/proc/<pid>/status` 字段，避免框架补全进程名时读取 cmdline；这项 IO 修正的工作站复验待本轮发布完成。
 - 2026-10-12 修复 Authentik 已配置管理员/OIDC 但租户 `setup` 标记缺失导致 `/setup` 500 的问题。安装阶段仅在已有可用管理员密码、两个 Whale Deck OIDC 应用和登录流程时补齐官方初始化收尾；不会重置密码。脚本默认只读，显式启用修复，重复运行无变更。
 - Agent capability 最长 60 秒，绑定调用方法并使用一次性 nonce；UDS 同时校验 Unix peer credentials。
 - 普通管理操作不能停止或删除 Whale Deck/`database-platform` 受保护资源；删除 Docker 标签不能解除宿主机注册表保护。

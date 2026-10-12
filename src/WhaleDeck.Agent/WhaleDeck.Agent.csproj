@@ -9,5 +9,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WhaleDeck.Contracts\WhaleDeck.Contracts.csproj" />
+    <InternalsVisibleTo Include="WhaleDeck.UnitTests" />
   </ItemGroup>
 </Project>

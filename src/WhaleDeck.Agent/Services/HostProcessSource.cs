@@ -50,9 +50,9 @@ public sealed class HostProcessSource : IHostProcessSource
         var started = new DateTimeOffset(process.StartTime.ToUniversalTime());
         var status = ReadStatus(pid);
         var sample = new HostProcessSample(pid, status.ParentPid, status.UserId,
-            new string(process.ProcessName.Where(character => !char.IsControl(character)).Take(128).ToArray()),
+            status.Name,
             status.State, status.ThreadCount, started, process.TotalProcessorTime.TotalSeconds,
-            Math.Max(0, process.WorkingSet64), Math.Max(0, process.VirtualMemorySize64));
+            status.MemoryBytes, status.VirtualMemoryBytes);
         using var current = Process.GetProcessById(pid);
         if (current.StartTime.ToUniversalTime() != started.UtcDateTime)
             throw new KeyNotFoundException("The process identity changed during collection.");
@@ -62,9 +62,14 @@ public sealed class HostProcessSource : IHostProcessSource
     public static bool IsUnavailable(Exception exception) =>
         exception is IOException or UnauthorizedAccessException or Win32Exception or InvalidOperationException or ArgumentException or KeyNotFoundException;
 
-    private static (int ParentPid, uint UserId, string State, int ThreadCount) ReadStatus(int pid)
+    private static HostProcessStatus ReadStatus(int pid)
     {
         using var reader = new StreamReader(string.Create(CultureInfo.InvariantCulture, $"/proc/{pid}/status"));
+        return ParseStatus(reader);
+    }
+
+    internal static HostProcessStatus ParseStatus(TextReader reader)
+    {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var count = 0; count < 128 && reader.ReadLine() is { } line; count++)
         {
@@ -72,17 +77,33 @@ public sealed class HostProcessSource : IHostProcessSource
             var separator = line.IndexOf(':');
             if (separator <= 0) continue;
             var name = line[..separator];
-            if (name is "PPid" or "Uid" or "State" or "Threads")
+            if (name is "Name" or "PPid" or "Uid" or "State" or "Threads" or "VmRSS" or "VmSize")
             {
-                var tokens = line[(separator + 1)..].Trim().Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+                var value = line[(separator + 1)..].Trim();
+                if (name == "Name") { values[name] = value; continue; }
+                var tokens = value.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
                 if (tokens.Length > 0) values[name] = tokens[0];
             }
         }
         if (!int.TryParse(values.GetValueOrDefault("PPid"), NumberStyles.None, CultureInfo.InvariantCulture, out var parent) ||
             !uint.TryParse(values.GetValueOrDefault("Uid"), NumberStyles.None, CultureInfo.InvariantCulture, out var uid) ||
             !int.TryParse(values.GetValueOrDefault("Threads"), NumberStyles.None, CultureInfo.InvariantCulture, out var threads) ||
-            !values.TryGetValue("State", out var state))
+            !values.TryGetValue("State", out var state) || !values.TryGetValue("Name", out var processName))
             throw new IOException("Process statistics disappeared during collection.");
-        return (parent, uid, state, threads);
+        return new(parent, uid, state, threads,
+            new string(processName.Where(character => !char.IsControl(character)).Take(128).ToArray()),
+            MemoryBytes("VmRSS"), MemoryBytes("VmSize"));
+
+        long MemoryBytes(string field)
+        {
+            // Kernel threads do not have address-space entries in status.
+            if (!values.TryGetValue(field, out var raw)) return 0;
+            if (!ulong.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var kilobytes) || kilobytes > long.MaxValue / 1024)
+                throw new IOException("Process memory statistics are invalid.");
+            return checked((long)kilobytes * 1024);
+        }
     }
 }
+
+internal sealed record HostProcessStatus(int ParentPid, uint UserId, string State, int ThreadCount,
+    string Name, long MemoryBytes, long VirtualMemoryBytes);
