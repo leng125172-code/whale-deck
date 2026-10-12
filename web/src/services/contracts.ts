@@ -363,6 +363,16 @@ export interface AlertRule {
 }
 
 export interface AlertEvent {
+  capacity?: {
+    policyId: string
+    targetDirectoryId: string
+    available: boolean
+    usedPercent: number | null
+    freeBytes: number | null
+    warningPercent: number
+    criticalPercent: number
+    observedAtUtc: string | null
+  } | null
   id: string
   ruleId: string
   resourceId: string | null

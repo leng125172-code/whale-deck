@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { BellFilled, Edit, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import type { AlertEvent, AlertEventHistory, AlertRule } from '@/services/contracts'
+import { authSession } from '@/services/authSession'
 
 const events = ref<AlertEvent[]>([])
 const history = ref<AlertEventHistory[]>([])
@@ -15,6 +16,44 @@ const traceId = ref('')
 const activeTab = ref('events')
 const dialogVisible = ref(false)
 const editing = ref<AlertRule | null>(null)
+const compact = ref(window.innerWidth <= 680)
+function updateViewport() {
+  compact.value = window.innerWidth <= 680
+}
+let generation = 0
+const denied = ref(false)
+const canManage = computed(() => authSession.user.value?.isAdministrator === true && !denied.value)
+function clearPrivate() {
+  generation++
+  denied.value = true
+  events.value = []
+  history.value = []
+  rules.value = []
+  dialogVisible.value = false
+  editing.value = null
+  loading.value = false
+}
+function readableState(state: string) {
+  return (
+    (
+      {
+        Active: '未处置',
+        Acknowledged: '已确认',
+        Silenced: '已静默',
+        Recovered: '已恢复',
+        SeverityChanged: '级别变更',
+        SilenceExpired: '静默到期',
+      } as Record<string, string>
+    )[state] || state
+  )
+}
+function capacityText(item: AlertEvent) {
+  const value = item.capacity
+  if (!value) return ''
+  if (!value.available || value.usedPercent == null) return '容量未知 · 不会因此解除风险'
+  const free = value.freeBytes == null ? '—' : `${(value.freeBytes / 1024 ** 3).toFixed(1)} GiB`
+  return `HDD 已用 ${value.usedPercent.toFixed(1)}% · 可用 ${free}`
+}
 const form = reactive({
   ruleType: 'CpuUtilization',
   resourceSelectorJson: '{}',
@@ -39,32 +78,48 @@ function severityType(value: AlertEvent['severity'] | AlertRule['severity']) {
 }
 
 function formatDate(value: string | null) {
-  return value ? new Date(value).toLocaleString() : '—'
+  return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'
+}
+function reportWriteError(reason: unknown) {
+  if (reason instanceof ApiError && [401, 403].includes(reason.status)) clearPrivate()
+  error.value = reason instanceof Error ? reason.message : '告警操作失败'
+  traceId.value = reason instanceof ApiError ? reason.problem.traceId || '' : ''
 }
 
 function ruleLabel(ruleId: string) {
   const rule = rules.value.find((item) => item.id === ruleId)
-  return rule ? ruleNames[rule.ruleType] || rule.ruleType : ruleId
+  return rule
+    ? rule.ruleType === 'BackupStorageCapacity'
+      ? 'HDD 备份容量 · 跟随备份策略'
+      : ruleNames[rule.ruleType] || rule.ruleType
+    : ruleId
 }
 
 async function load() {
+  if (!canManage.value) return
+  const version = ++generation
   loading.value = true
   error.value = ''
   try {
-    ;[events.value, rules.value, history.value] = await Promise.all([
+    const values = await Promise.all([
       apiRequest<AlertEvent[]>('alerts?includeRecovered=true'),
       apiRequest<AlertRule[]>('alerts/rules'),
       apiRequest<AlertEventHistory[]>('alerts/history?take=500'),
     ])
+    if (version !== generation || !canManage.value) return
+    ;[events.value, rules.value, history.value] = values
   } catch (reason) {
+    if (version !== generation) return
+    if (reason instanceof ApiError && [401, 403].includes(reason.status)) clearPrivate()
     error.value = reason instanceof Error ? reason.message : '读取告警失败'
     traceId.value = reason instanceof ApiError ? reason.problem.traceId || '' : ''
   } finally {
-    loading.value = false
+    if (version === generation) loading.value = false
   }
 }
 
 function openRule(item?: AlertRule) {
+  if (!canManage.value || item?.ruleType === 'BackupStorageCapacity') return
   editing.value = item || null
   Object.assign(
     form,
@@ -90,8 +145,15 @@ function openRule(item?: AlertRule) {
 }
 
 async function saveRule() {
-  JSON.parse(form.resourceSelectorJson)
-  JSON.parse(form.thresholdJson)
+  if (!canManage.value) return
+  const version = generation
+  try {
+    JSON.parse(form.resourceSelectorJson)
+    JSON.parse(form.thresholdJson)
+  } catch {
+    ElMessage.error('规则 JSON 格式无效')
+    return
+  }
   saving.value = true
   try {
     await apiRequest<AlertRule>('alerts/rules', {
@@ -99,44 +161,74 @@ async function saveRule() {
       body: JSON.stringify({
         id: editing.value?.id || null,
         ...form,
-        expectedVersion: editing.value?.version || null,
+        expectedVersion: editing.value?.version ?? null,
       }),
     })
+    if (version !== generation || !canManage.value) return
     dialogVisible.value = false
     ElMessage.success('告警规则已保存')
     await load()
+  } catch (reason) {
+    if (version === generation) reportWriteError(reason)
   } finally {
     saving.value = false
   }
 }
 
 async function acknowledge(item: AlertEvent) {
-  await apiRequest<AlertEvent>(`alerts/${item.id}/acknowledge`, {
-    method: 'POST',
-    body: '{}',
-  })
-  ElMessage.success('告警已确认')
-  await load()
+  if (!canManage.value || item.state === 'Recovered') return
+  const version = generation
+  try {
+    await apiRequest<AlertEvent>(`alerts/${item.id}/acknowledge`, {
+      method: 'POST',
+      body: '{}',
+    })
+    if (version !== generation || !canManage.value) return
+    ElMessage.success('告警已确认')
+    await load()
+  } catch (reason) {
+    reportWriteError(reason)
+  }
 }
 
 async function silence(item: AlertEvent) {
+  if (!canManage.value || item.state === 'Recovered') return
+  const version = generation
   const result = await ElMessageBox.prompt('输入静默小时数（1–720）', '静默告警', {
     inputValue: '4',
     inputPattern: /^(?:[1-9]|[1-9]\d|[1-6]\d{2}|7[01]\d|720)$/,
     inputErrorMessage: '请输入 1 到 720 之间的整数',
     confirmButtonText: '开始静默',
     cancelButtonText: '取消',
-  })
+  }).catch(() => null)
+  if (!result) return
+  if (version !== generation || !canManage.value) return
   const untilUtc = new Date(Date.now() + Number(result.value) * 60 * 60 * 1000).toISOString()
-  await apiRequest<AlertEvent>(`alerts/${item.id}/silence`, {
-    method: 'POST',
-    body: JSON.stringify({ untilUtc }),
-  })
-  ElMessage.success(`已静默至 ${formatDate(untilUtc)}`)
-  await load()
+  try {
+    await apiRequest<AlertEvent>(`alerts/${item.id}/silence`, {
+      method: 'POST',
+      body: JSON.stringify({ untilUtc }),
+    })
+    if (version !== generation || !canManage.value) return
+    ElMessage.success(`已静默至 ${formatDate(untilUtc)}`)
+    await load()
+  } catch (reason) {
+    reportWriteError(reason)
+  }
 }
 
-onMounted(load)
+onMounted(() => {
+  window.addEventListener('resize', updateViewport)
+  void load()
+})
+watch(
+  () => [authSession.user.value?.subject, authSession.user.value?.isAdministrator],
+  clearPrivate,
+)
+onUnmounted(() => {
+  window.removeEventListener('resize', updateViewport)
+  generation++
+})
 </script>
 
 <template>
@@ -148,9 +240,9 @@ onMounted(load)
         <p>当前有 {{ activeCount }} 条未恢复告警；确认和静默操作都会进入审计日志。</p>
       </div>
       <div class="page-heading__actions">
-        <el-button :loading="loading" @click="load"
+        <el-button :loading="loading" :disabled="!canManage" @click="load"
           ><el-icon><RefreshRight /></el-icon>刷新</el-button
-        ><el-button type="primary" @click="openRule()">新增规则</el-button>
+        ><el-button type="primary" :disabled="!canManage" @click="openRule()">新增规则</el-button>
       </div>
     </header>
     <el-alert
@@ -168,6 +260,47 @@ onMounted(load)
             ><el-icon><BellFilled /></el-icon>&nbsp;告警事件</template
           >
           <el-empty v-if="!events.length && !loading" description="暂无告警事件" />
+          <div v-else-if="compact" class="alert-cards">
+            <article v-for="item in events" :key="item.id" class="alert-card">
+              <header>
+                <strong>{{ item.capacity ? 'HDD 备份容量' : item.summaryCode }}</strong
+                ><el-tag :type="severityType(item.severity)">{{
+                  item.severity === 'Critical'
+                    ? '严重'
+                    : item.severity === 'Warning'
+                      ? '预警'
+                      : '信息'
+                }}</el-tag>
+              </header>
+              <p v-if="item.capacity" class="capacity-detail">{{ capacityText(item) }}</p>
+              <p v-if="item.capacity">
+                预警 {{ item.capacity.warningPercent }}% / 临界 {{ item.capacity.criticalPercent }}%
+              </p>
+              <p>{{ readableState(item.state) }} · {{ item.occurrenceCount }} 次</p>
+              <small>{{ formatDate(item.lastOccurredAtUtc) }}</small>
+              <small v-if="item.silencedUntilUtc"
+                >静默至 {{ formatDate(item.silencedUntilUtc) }}</small
+              >
+              <div class="alert-card__actions">
+                <el-button
+                  link
+                  type="primary"
+                  :disabled="
+                    !canManage || item.state === 'Recovered' || Boolean(item.acknowledgedAtUtc)
+                  "
+                  @click="acknowledge(item)"
+                  >确认</el-button
+                >
+                <el-button
+                  link
+                  type="warning"
+                  :disabled="!canManage || item.state === 'Recovered'"
+                  @click="silence(item)"
+                  >静默</el-button
+                >
+              </div>
+            </article>
+          </div>
           <el-table v-else :data="events" row-key="id">
             <el-table-column label="级别" width="100">
               <template #default="scope">
@@ -181,10 +314,21 @@ onMounted(load)
                 <div class="event-title">
                   <strong>{{ scope.row.summaryCode }}</strong
                   ><small>{{ ruleLabel(scope.row.ruleId) }}</small>
+                  <small v-if="scope.row.capacity" class="capacity-detail">{{
+                    capacityText(scope.row)
+                  }}</small>
+                  <small v-if="scope.row.capacity"
+                    >预警 {{ scope.row.capacity.warningPercent }}% / 临界
+                    {{ scope.row.capacity.criticalPercent }}%</small
+                  >
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="state" label="状态" width="110" />
+            <el-table-column label="状态" width="110"
+              ><template #default="scope">{{
+                readableState(scope.row.state)
+              }}</template></el-table-column
+            >
             <el-table-column prop="occurrenceCount" label="次数" width="80" />
             <el-table-column label="最近发生" min-width="180"
               ><template #default="scope">{{
@@ -206,13 +350,17 @@ onMounted(load)
                 ><el-button
                   link
                   type="primary"
-                  :disabled="Boolean(scope.row.acknowledgedAtUtc)"
+                  :disabled="
+                    !canManage ||
+                    scope.row.state === 'Recovered' ||
+                    Boolean(scope.row.acknowledgedAtUtc)
+                  "
                   @click="acknowledge(scope.row)"
                   >确认</el-button
                 ><el-button
                   link
                   type="warning"
-                  :disabled="scope.row.state === 'Recovered'"
+                  :disabled="!canManage || scope.row.state === 'Recovered'"
                   @click="silence(scope.row)"
                   >静默</el-button
                 ></template
@@ -229,7 +377,11 @@ onMounted(load)
                 scope.row.alertEventId
               }}</template>
             </el-table-column>
-            <el-table-column prop="state" label="状态" width="130" />
+            <el-table-column label="状态" width="130"
+              ><template #default="scope">{{
+                readableState(scope.row.state)
+              }}</template></el-table-column
+            >
             <el-table-column
               prop="actorSubject"
               label="操作者"
@@ -249,7 +401,9 @@ onMounted(load)
             <el-table-column label="类型" min-width="180"
               ><template #default="scope"
                 ><strong>{{
-                  ruleNames[scope.row.ruleType] || scope.row.ruleType
+                  scope.row.ruleType === 'BackupStorageCapacity'
+                    ? 'HDD 备份容量'
+                    : ruleNames[scope.row.ruleType] || scope.row.ruleType
                 }}</strong></template
               ></el-table-column
             >
@@ -270,7 +424,13 @@ onMounted(load)
             >
             <el-table-column label="操作" width="100"
               ><template #default="scope"
-                ><el-button link type="primary" @click="openRule(scope.row)"
+                ><span v-if="scope.row.ruleType === 'BackupStorageCapacity'">跟随备份策略</span>
+                <el-button
+                  v-else
+                  link
+                  type="primary"
+                  :disabled="!canManage"
+                  @click="openRule(scope.row)"
                   ><el-icon><Edit /></el-icon>编辑</el-button
                 ></template
               ></el-table-column
@@ -343,6 +503,37 @@ td small {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0 14px;
+}
+.alert-cards {
+  display: grid;
+  gap: 12px;
+}
+.alert-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 10px;
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+.alert-card header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.alert-card p {
+  margin: 0;
+  font-size: 13px;
+}
+.alert-card small {
+  color: var(--el-text-color-secondary);
+}
+.alert-card__actions {
+  display: flex;
+  gap: 20px;
 }
 @media (max-width: 680px) {
   .form-grid {
