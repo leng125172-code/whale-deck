@@ -40,7 +40,9 @@ def main():
         db_networks = json.loads(command(['docker', 'inspect', '--format', '{{json .NetworkSettings.Networks}}', 'database-platform-postgres']))
         common = sorted(set(api_networks) & set(db_networks))
         assert common, 'API and PostgreSQL have no shared internal network'
-        sdk = 'mcr.microsoft.com/dotnet/sdk:10.0'
+        version = json.loads((repository / 'global.json').read_text())['sdk']['version']
+        assert re.fullmatch(r'10\.0\.[0-9]{3}', version)
+        sdk = 'mcr.microsoft.com/dotnet/sdk:' + version
         try: command(['docker', 'image', 'inspect', sdk])
         except subprocess.CalledProcessError: command(['docker', 'pull', sdk], timeout=240)
         sdk_identity = command(['docker', 'image', 'inspect', '--format', '{{.Id}}', sdk]).strip()
@@ -71,7 +73,9 @@ def main():
                 '--configuration', 'Release', '--artifacts-path', '/scratch/build', '--filter', 'FullyQualifiedName~NativeBackupCapacityTests']).strip()
             assert re.fullmatch(r'[a-f0-9]{64}', identity)
             command(['docker', 'network', 'connect', common[0], identity])
-            output = command(['docker', 'start', '-a', identity], timeout=600)
+            completed = subprocess.run(['docker', 'start', '-a', identity], check=False, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
+            output = completed.stdout + completed.stderr
             status = command(['docker', 'inspect', '--format', '{{.State.ExitCode}}', identity]).strip()
             if status != '0':
                 diagnostics = [line for line in output.splitlines() if re.search(r': error (?:CS|CA|IDE|NU)\d+', line)][:8]
