@@ -19,6 +19,13 @@ install -d -o root -g whaledeck -m 0750 "$(dirname "$status_file")"
 exec 9>"$lock_file"
 flock -n 9 || { echo 'Another platform maintenance operation is active.' >&2; exit 1; }
 
+# The checkout intentionally remains owned by the non-root development user.
+# Maintenance runs as root, so trust only this exact checkout for each Git
+# invocation instead of weakening the machine-wide safe.directory policy.
+git_source() {
+  /usr/bin/git -c "safe.directory=$source_root" -C "$source_root" "$@"
+}
+
 write_status() {
   local state=$1 message=$2
   printf '{"state":"%s","message":"%s","updatedAtUtc":"%s"}\n' \
@@ -26,6 +33,15 @@ write_status() {
   chown root:whaledeck "$status_file"
   chmod 0640 "$status_file"
 }
+
+report_failure() {
+  local exit_code=$?
+  trap - ERR
+  write_status failed 'Whale Deck 发布失败；请修复问题后重新发布。' || true
+  exit "$exit_code"
+}
+
+trap report_failure ERR
 
 compose_for() {
   local project_root=$1
@@ -48,15 +64,15 @@ deploy_revision() {
 
 case "$action" in
   update)
-    [[ -z $(git -C "$source_root" status --porcelain) ]] || { echo 'Whale Deck checkout has local changes.' >&2; exit 1; }
-    branch=$(git -C "$source_root" branch --show-current)
+    [[ -z $(git_source status --porcelain) ]] || { echo 'Whale Deck checkout has local changes.' >&2; exit 1; }
+    branch=$(git_source branch --show-current)
     [[ $branch =~ ^[A-Za-z0-9._/-]{1,120}$ ]] || { echo 'The current update branch is invalid.' >&2; exit 1; }
-    before=$(git -C "$source_root" rev-parse HEAD)
+    before=$(git_source rev-parse HEAD)
     write_status updating '正在获取并部署 Whale Deck 更新。'
-    timeout 60 git -C "$source_root" fetch origin "$branch"
-    git -C "$source_root" merge-base --is-ancestor "$before" FETCH_HEAD || { echo 'The update is not a fast-forward.' >&2; exit 1; }
+    /usr/bin/timeout 60 /usr/bin/git -c "safe.directory=$source_root" -C "$source_root" fetch origin "$branch"
+    git_source merge-base --is-ancestor "$before" FETCH_HEAD || { echo 'The update is not a fast-forward.' >&2; exit 1; }
     printf '%s\n' "$before" > "$previous_file"
-    git -C "$source_root" merge --ff-only FETCH_HEAD
+    git_source merge --ff-only FETCH_HEAD
     deploy_revision "$source_root" true
     write_status healthy 'Whale Deck 更新完成。'
     ;;
@@ -64,15 +80,15 @@ case "$action" in
     [[ -r $previous_file ]] || { echo 'No previous Whale Deck revision is recorded.' >&2; exit 1; }
     revision=$(<"$previous_file")
     [[ $revision =~ ^[a-f0-9]{40}$ ]] || { echo 'The recorded rollback revision is invalid.' >&2; exit 1; }
-    git -C "$source_root" cat-file -e "$revision^{commit}"
+    git_source cat-file -e "$revision^{commit}"
     rollback_root="$state_root/rollback-src"
-    [[ ! -e $rollback_root ]] || git -C "$source_root" worktree remove --force "$rollback_root"
+    [[ ! -e $rollback_root ]] || git_source worktree remove --force "$rollback_root"
     write_status rollingBack '正在回退 Whale Deck；数据库迁移不会降级。'
-    git -C "$source_root" worktree add --detach "$rollback_root" "$revision"
-    trap 'git -C "$source_root" worktree remove --force "$rollback_root" >/dev/null 2>&1 || true' EXIT
+    git_source worktree add --detach "$rollback_root" "$revision"
+    trap 'git_source worktree remove --force "$rollback_root" >/dev/null 2>&1 || true' EXIT
     install -o root -g root -m 0600 "$source_root/.images.env" "$rollback_root/.images.env"
     deploy_revision "$rollback_root" false
-    git -C "$source_root" worktree remove --force "$rollback_root"
+    git_source worktree remove --force "$rollback_root"
     trap - EXIT
     write_status healthy 'Whale Deck 已回退到上一版本。'
     ;;
