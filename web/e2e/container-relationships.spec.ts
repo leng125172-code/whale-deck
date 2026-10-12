@@ -94,6 +94,27 @@ test('image, volume and Compose links use exact identities and unregistered proj
 })
 
 test('only a registered ComposeApplication offers application details', async ({ page }) => {
+  const installationId = 'c6f1fa10-cf97-43b3-a3aa-9e43d5bab7cb'
+  const installation = {
+    id: installationId,
+    catalogAppId: 'demo',
+    templateId: 'custom-oci',
+    templateVersion: '1',
+    displayName: 'Demo application',
+    installedVersion: '1.0',
+    desiredVersion: '1.0',
+    state: 'Running',
+    autoUpdateEnabled: false,
+    configSummaryJson: '{}',
+    installedBySubject: 'preview-user',
+    installedAtUtc: '2026-10-13T00:00:00Z',
+    updatedAtUtc: '2026-10-13T00:00:00Z',
+    version: 1,
+  }
+  const requests: string[] = []
+  page.on('request', (request) => {
+    if (request.url().includes('/applications/installations/')) requests.push(request.url())
+  })
   await page.route('**/api/v1/compose-projects', (route) =>
     route.fulfill({
       json: [
@@ -120,4 +141,48 @@ test('only a registered ComposeApplication offers application details', async ({
     'href',
     '/applications/application%3Ademo',
   )
+  await page.route('**/api/v1/applications', (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: 'application:demo',
+          name: 'demo',
+          type: 'ComposeApplication',
+          state: 'Running',
+          version: 'nginx:alpine',
+          isProtected: false,
+          attributes: { composeProject: 'whaledeck-app-demo' },
+        },
+      ],
+    }),
+  )
+  await page.route('**/api/v1/applications/installations', (route) =>
+    route.fulfill({ json: [installation] }),
+  )
+  await page.route('**/api/v1/applications/installations/' + installationId, (route) =>
+    route.fulfill({ json: { installation, resources: [], updateHistory: [] } }),
+  )
+  await page.getByRole('link', { name: '应用详情', exact: true }).click()
+  await expect(page).toHaveURL(new RegExp('/applications/' + installationId + '$'))
+  await expect(page.locator('.application-detail')).toContainText('Demo application')
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toContain(installationId)
+  // Changing viewport with a drawer already open must not freeze its intrinsic table width.
+  for (const width of [1440, 1045, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 })
+    const drawer = page.getByRole('dialog', { name: '应用详情', exact: true })
+    await expect(drawer).toBeVisible()
+    await expect
+      .poll(() =>
+        drawer.evaluate((element) => {
+          const body = element.querySelector('.el-drawer__body')!
+          return body.scrollWidth - body.clientWidth
+        }),
+      )
+      .toBeLessThanOrEqual(1)
+    await expect(page.locator('.application-detail')).toContainText('Demo application')
+  }
+  await page.goBack()
+  await expect(page).toHaveURL(/\/compose-projects\?project=whaledeck-app-demo$/)
+  await expect(page.getByRole('dialog', { name: '应用详情', exact: true })).toHaveCount(0)
 })

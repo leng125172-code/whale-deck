@@ -618,7 +618,7 @@ public sealed partial class ManagedActionExecutor(
         return path.StartsWith(normalizedRoot, StringComparison.Ordinal) ? path : throw new InvalidOperationException("The managed path is outside the approved root.");
     }
 
-    private static void ValidateImage(string image)
+    internal static void ValidateImage(string image)
     {
         if (!ImagePattern().IsMatch(image) || image.Contains("..", StringComparison.Ordinal)) throw new InvalidOperationException("The image reference is invalid.");
         var first = image.Split('/')[0];
@@ -725,7 +725,7 @@ public sealed partial class ManagedActionExecutor(
             return candidate >= minimum;
         return Version.TryParse(policy.TrimStart('v'), out var exact) && candidate == exact;
     }
-    private static void ValidateMaintenanceWindow(string window)
+    internal static void ValidateMaintenanceWindow(string window)
     {
         if (!TryParseMaintenanceWindow(window, out _, out _, out _))
             throw new InvalidOperationException("maintenanceWindow must use Day@HH:mm-HH:mm, for example Sun@20:00-23:59.");

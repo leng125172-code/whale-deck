@@ -34,6 +34,14 @@ const managed = {
 const wrappers: ReturnType<typeof mount>[] = []
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn<() => void>(),
+      removeEventListener: vi.fn<() => void>(),
+    })),
+  )
   request.mockImplementation(async (path: string) =>
     path === 'applications/popular'
       ? { applications: [], isStale: false }
@@ -53,13 +61,23 @@ beforeEach(() => {
         : [],
   )
 })
-afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()))
+afterEach(() => {
+  wrappers.splice(0).forEach((wrapper) => wrapper.unmount())
+  vi.unstubAllGlobals()
+})
 function create() {
   const wrapper = mount(ApplicationsView, { global: { plugins: [ElementPlus] } })
   wrappers.push(wrapper)
   return wrapper
 }
 describe('Installed applications', () => {
+  it('reports an invalid catalog response instead of rendering broken private cards', async () => {
+    request.mockResolvedValue([])
+    const wrapper = create()
+    await flushPromises()
+    expect(wrapper.findAll('.installed-row')).toHaveLength(0)
+    expect(wrapper.text()).toContain('应用接口响应格式无效')
+  })
   it('clears private cards after permission expires', async () => {
     const wrapper = create()
     await flushPromises()

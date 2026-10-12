@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import { enqueueOperation, planOperation, stageSecret } from '@/services/operations'
+import { authSession } from '@/services/authSession'
 import type {
   ApplicationImageMetadata,
   ApplicationDetail,
@@ -33,8 +34,16 @@ const sort = ref('name')
 const pendingAction = ref('')
 const loadError = ref('')
 let loadGeneration = 0
+let detailGeneration = 0
+const detailMedia = window.matchMedia('(max-width: 600px)')
+const compactDetail = ref(detailMedia.matches)
+function updateDetailLayout() {
+  compactDetail.value = detailMedia.matches
+}
 onUnmounted(() => {
   loadGeneration++
+  detailGeneration++
+  detailMedia.removeEventListener('change', updateDetailLayout)
 })
 const visibleInstalled = computed(() =>
   installed.value
@@ -124,6 +133,8 @@ async function load() {
       apiRequest<ApplicationInstallation[]>('applications/installations'),
     ])
     if (generation !== loadGeneration) return
+    if (!Array.isArray(popular.applications) || !Array.isArray(apps) || !Array.isArray(records))
+      throw new Error('应用接口响应格式无效，请重试或检查后端状态。')
     catalog.value = popular.applications
     stale.value = popular.isStale
     installed.value = apps
@@ -132,13 +143,7 @@ async function load() {
     if (generation !== loadGeneration) return
     loadError.value = error instanceof Error ? error.message : '无法加载应用'
     if (error instanceof ApiError && [401, 403].includes(error.status)) {
-      catalog.value = []
-      installed.value = []
-      installations.value = []
-      detail.value = null
-      detailVisible.value = false
-      installVisible.value = false
-      form.environment = ''
+      clearPrivateData()
     }
   } finally {
     if (generation === loadGeneration) loading.value = false
@@ -231,26 +236,71 @@ function installationFor(item: ManagedResource) {
 }
 
 async function openDetail(id: string) {
+  if (detailVisible.value && detail.value?.installation.id === id) return
+  const generation = ++detailGeneration
   detailLoading.value = true
   detailVisible.value = true
+  detail.value = null
   try {
-    detail.value = await apiRequest<ApplicationDetail>(`applications/installations/${id}`)
-    if (route.params.id !== id) await router.push({ name: 'application-detail', params: { id } })
+    const response = await apiRequest<ApplicationDetail>(
+      `applications/installations/${encodeURIComponent(id)}`,
+    )
+    if (generation !== detailGeneration || !detailVisible.value) return
+    detail.value = response
+    if (route.params.id !== id) {
+      const target = { name: 'application-detail', params: { id } }
+      if (route.name === 'application-detail') await router.replace(target)
+      else await router.push(target)
+    }
+  } catch (error) {
+    if (generation !== detailGeneration) return
+    if (error instanceof ApiError && [401, 403].includes(error.status)) clearPrivateData()
+    ElMessage.error(error instanceof Error ? error.message : '应用详情读取失败')
   } finally {
-    detailLoading.value = false
+    if (generation === detailGeneration) detailLoading.value = false
   }
 }
 
 async function syncDetailFromRoute() {
   const id = typeof route.params.id === 'string' ? route.params.id : ''
-  if (id) await openDetail(id)
+  if (!id || loadError.value || loading.value) return
+  const resource = installed.value.find((item) => item.id === id && isManaged(item))
+  const record = resource
+    ? installationFor(resource)
+    : installations.value.find((item) => item.id === id)
+  if (record) await openDetail(record.id)
+  else ElMessage.warning('应用安装记录尚未同步或已被移除，请刷新后重试。')
 }
 
 async function closeDetail() {
+  detailGeneration++
+  detailLoading.value = false
   detailVisible.value = false
   detail.value = null
   if (route.name === 'application-detail') await router.push({ name: 'applications' })
 }
+
+function clearPrivateData() {
+  loadGeneration++
+  detailGeneration++
+  catalog.value = []
+  installed.value = []
+  installations.value = []
+  detail.value = null
+  detailVisible.value = false
+  detailLoading.value = false
+  installVisible.value = false
+  imageMetadata.value = null
+  form.environment = ''
+  loading.value = false
+}
+watch(
+  () => [authSession.user.value?.subject, authSession.user.value?.isAdministrator],
+  () => {
+    clearPrivateData()
+    if (authSession.user.value?.isAdministrator) void load()
+  },
+)
 
 async function lifecycle(
   item: ManagedResource,
@@ -288,6 +338,7 @@ async function lifecycle(
 }
 
 onMounted(async () => {
+  detailMedia.addEventListener('change', updateDetailLayout)
   await load()
   if (route.query.action === 'install' && typeof route.query.app === 'string') {
     const item = catalog.value.find((candidate) => candidate.id === route.query.app)
@@ -300,6 +351,7 @@ watch(
   () => route.params.id,
   async () => {
     if (route.name === 'application-detail') await syncDetailFromRoute()
+    else await closeDetail()
   },
 )
 </script>
@@ -549,7 +601,7 @@ watch(
     >
       <div v-loading="detailLoading" class="application-detail">
         <template v-if="detail">
-          <el-descriptions :column="2" border>
+          <el-descriptions :column="compactDetail ? 1 : 2" border>
             <el-descriptions-item label="应用">{{
               detail.installation.displayName
             }}</el-descriptions-item>
@@ -762,8 +814,21 @@ watch(
 }
 .application-detail {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
   min-height: 180px;
+}
+.application-detail > * {
+  min-width: 0;
+}
+.application-detail :deep(.el-descriptions__table) {
+  table-layout: fixed;
+}
+.application-detail :deep(.el-descriptions__label) {
+  width: 90px;
+}
+.application-detail :deep(.el-descriptions__content) {
+  overflow-wrap: anywhere;
 }
 .application-detail h3 {
   margin: 0 0 10px;

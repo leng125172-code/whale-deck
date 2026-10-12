@@ -139,6 +139,7 @@ export const relationshipResources = {
 export function relationshipResponse(path) {
   const key = path.split('/api/v1/')[1]?.split('?')[0] || ''
   if (key === 'containers') return relationshipContainers
+  if (key === 'applications/popular') return { applications: [], isStale: false }
   if (key === 'containers/usage')
     return { items: [], sampledAtUtc: new Date().toISOString(), intervalSeconds: 6 }
   if (key.endsWith('/inspect')) return relationshipInspect
