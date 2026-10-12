@@ -37,8 +37,8 @@
 ## 自动化验证基线
 
 - `.NET 10` Release 构建：0 警告、0 错误。
-- 自动化测试：209 项 UnitTests、49 项 IntegrationTests 通过（含进程差分 CPU、PID 复用、部分/过期快照、参数边界、固定 status 字段解析、内存溢出防护、只读管理员路由与错误分类，以及调试文档管理员授权、401/403 Problem Details、无重定向和路径边界）。
-- 前端：Prettier、Oxlint、ESLint、Vue TypeScript 检查、11 项 Vitest 和 Vite 生产构建通过；进程权限失效会清空旧数据并作废在途响应。
+- 自动化测试：209 项 UnitTests、60 项 IntegrationTests 通过（含进程差分 CPU、PID 复用、部分/过期快照、参数边界、固定 status 字段解析、内存溢出防护、只读管理员路由与错误分类、调试文档管理员授权，以及服务端会话票据、临时登录 Cookie 清理和匿名 API 不进入 OIDC 的路由约束）。
+- 前端：Prettier、Oxlint、ESLint、Vue TypeScript 检查、23 项 Vitest 和 Vite 生产构建通过；新增滚动监控与 CSRF POST 退出测试，进程权限失效会清空旧数据并作废在途响应。
 - 页面水平溢出修复：Grid 卡片最小宽度、日志筛选栏容器断点与长资源名换行已补齐；22 项浏览器回归覆盖 320–1920px、1045px 断点、明暗主题、10 个有数据的管理页面切换（含进程详情抽屉）及空/错误状态，保留表格内部横向滚动。320px 顶栏收紧间距，额外断言工具栏按钮不能被裁切。
 - Agent 协议为 `1.7`，新增 `host.processes` 只读能力，最新运行时源码为 `eeaf38b`，已完成工作站部署、进程与 OIDC/Origin/CSRF 复验；此前协议 `1.6` 提供普通 Docker 资源管理、镜像元数据、有界事件时间线，以及注册资源与 Docker 资源相互隔离的预检计划能力。
 - 工作站健康入口与 systemd 服务已复验；本轮真实主机回归返回 33 个网络接口、8 条存储记录、20 条系统日志及有效诊断包；OIDC、Origin、CSRF 与容器管理员查询回归通过。
@@ -46,6 +46,9 @@
 ## 安全与恢复入口
 
 - 生产调试文档入口已统一返回匿名 401、普通用户 403 的 Problem Details，含稳定错误码与追踪号，不触发 OIDC 重定向；管理员 OpenAPI/Swagger UI 真实验收通过。进程名称/内存取数已改为固定 `/proc/<pid>/status` 字段，避免框架补全进程名时读取 cmdline；IO 修正已部署并通过工作站复验。
+- 2026-10-12 登录/退出与监控修复：浏览器 CSRF POST 顶层导航完整注销 Authentik，最终 `/login`，两侧会话分别返回 401/403；ID token 仅存 Valkey 加密、带 TTL 的服务器票据，浏览器 Cookie 仅含随机引用。匿名 API 在挑战选择阶段直接返回 401，不再由 OIDC 处理器生成 nonce/correlation Cookie。
+- Dashboard 两个入口图标上传至 Authentik 媒体，内网绿色网络角标、外网侧局域网蓝色地球角标；入口直接启动 OIDC 登录而非再显示工作台登录页。回调前准备端点按实际 Cookie 路径清理遗留登录数据，网关/维护入口/ API 请求头和代理响应缓冲仍保留有界限制。浏览器模拟 24 枚约 14 KB 遗留 Cookie 后，Dashboard 成功进入主页；匿名连续 3 次请求无 `Set-Cookie`、Cookie 增长为 0。
+- 实时监控改为 6 秒无蒙层刷新、固定 6 分钟 61 槽、相对时间轴与缺失断线；首次填充后台历史，后续按时间合并，权限变化清空。历史查询按 `LastSeenAtUtc` 排除旧接口并优先活跃序列，用一条相关投影 SQL 替代 N+1 查询；工作站返回 24 条活跃序列、6 个真实网卡收发方向。浏览器确认连续刷新不清空曲线，390/1440px 明暗主题无重叠或水平滚动，单磁盘筛选正常。
 - 2026-10-12 修复 Authentik 已配置管理员/OIDC 但租户 `setup` 标记缺失导致 `/setup` 500 的问题。安装阶段仅在已有可用管理员密码、两个 Whale Deck OIDC 应用和登录流程时补齐官方初始化收尾；不会重置密码。脚本默认只读，显式启用修复，重复运行无变更。
 - Agent capability 最长 60 秒，绑定调用方法并使用一次性 nonce；UDS 同时校验 Unix peer credentials。
 - 普通管理操作不能停止或删除 Whale Deck/`database-platform` 受保护资源；删除 Docker 标签不能解除宿主机注册表保护。

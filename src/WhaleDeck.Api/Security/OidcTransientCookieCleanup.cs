@@ -9,8 +9,6 @@ public static class OidcTransientCookieCleanup
         foreach (var name in request.Cookies.Keys.Where(IsTransient).Take(128))
         {
             response.Cookies.Delete(name, new CookieOptions { Path = callbackPath, HttpOnly = true, SameSite = SameSiteMode.Lax });
-            if (name.StartsWith("whaledeck.oidc.", StringComparison.Ordinal))
-                response.Cookies.Delete(name, new CookieOptions { Path = "/", HttpOnly = true, SameSite = SameSiteMode.Lax });
         }
     }
 

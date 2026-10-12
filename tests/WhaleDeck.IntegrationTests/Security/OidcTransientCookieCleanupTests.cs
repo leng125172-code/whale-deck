@@ -16,6 +16,10 @@ public sealed class OidcTransientCookieCleanupTests
         Assert.Contains(".AspNetCore.Correlation.old=", values);
         Assert.Contains("whaledeck.oidc.AuthentikExternal.nonce.old=", values);
         Assert.Contains("path=/signin-oidc/external", values);
+        // Delete(name) replaces an existing Set-Cookie for the same name;
+        // deleting a second path would silently discard the actual callback
+        // path deletion and leave interrupted-login cookies in the browser.
+        Assert.All(context.Response.Headers.SetCookie, header => Assert.Contains("path=/signin-oidc/external", header));
         Assert.DoesNotContain("whaledeck.session", values);
         Assert.DoesNotContain("authentik_session", values);
         Assert.DoesNotContain("other=", values);
