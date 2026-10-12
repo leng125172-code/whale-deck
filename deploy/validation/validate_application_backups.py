@@ -148,6 +148,16 @@ def main():
             if value['state'] not in {'Succeeded', 'Failed', 'Canceled', 'RolledBack'}:
                 session.post(base + '/api/v1/jobs/' + job_id + '/cancel', headers=api.headers, json={}, timeout=30)
                 terminal(job_id, timeout=360)
+            # The acceptance script must not trust a faulty DB projection enough
+            # to remove files while the original independent archive still runs.
+            unit = 'whaledeck-application-backup-' + uuid.UUID(job_id).hex + '.service'
+            deadline = time.monotonic() + 360
+            while True:
+                active = subprocess.run(['systemctl', 'show', unit, '--property=ActiveState', '--value'],
+                    check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10).stdout.strip()
+                if active not in {'active', 'activating', 'deactivating'}: break
+                if time.monotonic() >= deadline: raise RuntimeError('Original archive service is still active; application data retained')
+                time.sleep(2)
         if installed:
             api.run('uninstall', '', {'slug': slug, 'deleteVolumes': 'true'}, area='applications', confirmed=True, requires_plan=True, timeout=120)
             installed = False

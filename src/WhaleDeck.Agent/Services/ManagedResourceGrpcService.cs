@@ -233,7 +233,9 @@ public sealed class ManagedResourceGrpcService(
         if (request.Resource.ResourceType == "applications" && request.Action is "backup" or "verify-backup")
         {
             var backupKey = BuildIdempotencyKey(request.Context, "ApplicationBackup", request.Action, request.Resource.ResourceId);
-            var backupOperation = operations.GetOrCreate(backupKey, "ApplicationBackup:" + request.Action, out var backupCreated);
+            if (!Guid.TryParse(request.Context.JobId, out var backupJobId))
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Application backup requires a persisted job ID."));
+            var backupOperation = operations.GetOrCreate(backupKey, "ApplicationBackup:" + request.Action, out var backupCreated, backupJobId);
             if (!backupCreated) return backupOperation;
             try
             {

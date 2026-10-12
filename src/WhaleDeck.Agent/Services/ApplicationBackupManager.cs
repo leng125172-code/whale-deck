@@ -54,7 +54,7 @@ public sealed class ApplicationBackupManager(ResourceRegistry registry, BoundedP
             try
             {
                 await RunHelperAsync(["application-backup-run", recovery.Slug, recovery.JobId, approved.Options.Consistency,
-                    approved.Fingerprint, approved.Options.CriticalPercent.ToString(CultureInfo.InvariantCulture)], TimeSpan.FromMinutes(2), cancellationToken);
+                    approved.Fingerprint, approved.Options.CriticalPercent.ToString(CultureInfo.InvariantCulture)], TimeSpan.FromMinutes(2), CancellationToken.None);
             }
             catch (InvalidOperationException) { /* Inspect the same independent unit; never start a replacement. */ }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }

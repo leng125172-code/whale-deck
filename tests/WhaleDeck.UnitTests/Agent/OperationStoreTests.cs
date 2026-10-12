@@ -7,6 +7,31 @@ namespace WhaleDeck.UnitTests.Agent;
 public sealed class OperationStoreTests
 {
     [Fact]
+    public void StableBackupHandleSurvivesALostIndexAndRequiresIdempotency()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"whaledeck-operation-store-{Guid.NewGuid():N}");
+        try
+        {
+            var configuration = BuildConfiguration(root);
+            var store = new OperationStore(configuration);
+            var jobId = Guid.NewGuid();
+            Assert.Throws<InvalidOperationException>(() => store.GetOrCreate("", "ApplicationBackup", out _, jobId));
+            var operation = store.GetOrCreate("backup-job", "ApplicationBackup", out var created, jobId);
+            Assert.True(created);
+            Assert.Equal(jobId.ToString("D"), operation.OperationId);
+            operation.State = OperationState.Succeeded;
+            store.Save(operation);
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "operations", "idempotency"))) File.Delete(file);
+            var restarted = new OperationStore(configuration);
+            var recovered = restarted.GetOrCreate("backup-job", "ApplicationBackup", out var recreated, jobId);
+            Assert.False(recreated);
+            Assert.Equal(operation.OperationId, recovered.OperationId);
+            Assert.Equal(OperationState.Succeeded, recovered.State);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public void ReusesIdempotentOperationAcrossProcessRestart()
     {
         var root = Path.Combine(Path.GetTempPath(), $"whaledeck-operation-store-{Guid.NewGuid():N}");

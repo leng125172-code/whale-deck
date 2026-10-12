@@ -16,18 +16,21 @@ public sealed class OperationGrpcService(OperationStore store, OperationCoordina
     {
         var operation = store.Get(request.OperationId)
             ?? throw new RpcException(new Status(StatusCode.NotFound, "Operation was not found."));
+        if (operation.State == OperationState.Canceled) return Task.FromResult(operation);
         if (operation.State is OperationState.Succeeded or OperationState.Failed or OperationState.RolledBack)
         {
             throw new RpcException(new Status(StatusCode.FailedPrecondition, "Completed operations cannot be canceled."));
         }
         if (!coordinator.RequestCancellation(operation.OperationId))
         {
+            if (operation.State is OperationState.Succeeded or OperationState.Failed or OperationState.RolledBack or OperationState.Canceled)
+                return Task.FromResult(operation);
             operation.State = OperationState.Failed;
             operation.Phase = "ExecutorUnavailable";
             operation.ErrorCode = "AGENT_OPERATION_INTERRUPTED";
             store.Save(operation);
         }
-        else
+        else if (operation.State is OperationState.Queued or OperationState.Running or OperationState.WaitingForHealth or OperationState.RollingBack)
         {
             operation.Phase = "CancellationRequested";
             store.Save(operation);

@@ -414,7 +414,10 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                     }
                     if (job.CancelRequestedAtUtc is not null)
                     {
-                        await Complete(db, job, "Canceled", "Canceled", null, cancellationToken);
+                        if (job.AgentOperationId is { } activeId)
+                            await ApplyAgentState(db, job, await agent.CancelOperationAsync(activeId.ToString("D"), cancellationToken), cancellationToken);
+                        else
+                            await Complete(db, job, "Canceled", "Canceled", null, cancellationToken);
                     }
                     else
                     {
@@ -446,6 +449,10 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
                         job.State = "Running";
                         job.Phase = "DispatchingToAgent";
                         job.StartedAtUtc ??= DateTimeOffset.UtcNow;
+                        // A reply can be lost or SaveChanges can conflict with a concurrent
+                        // cancellation. Keep the original backup handle BEFORE sending RPC.
+                        if (job.JobType is "applications.backup" or "applications.verify-backup")
+                            job.AgentOperationId = job.Id;
                         job.Version++;
                         await db.SaveChangesAsync(cancellationToken);
                         if (split[0] == "identity")

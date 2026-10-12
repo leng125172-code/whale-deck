@@ -49,11 +49,11 @@ public sealed class OperationStore
         }
     }
 
-    public OperationHandle Create(string phase)
+    public OperationHandle Create(string phase, Guid? stableId = null)
     {
         var operation = new OperationHandle
         {
-            OperationId = Guid.NewGuid().ToString("D"),
+            OperationId = (stableId ?? Guid.NewGuid()).ToString("D"),
             State = OperationState.Queued,
             Phase = phase,
             ProgressPercent = 0
@@ -62,10 +62,11 @@ public sealed class OperationStore
         return operation;
     }
 
-    public OperationHandle GetOrCreate(string idempotencyKey, string phase, out bool created)
+    public OperationHandle GetOrCreate(string idempotencyKey, string phase, out bool created, Guid? stableId = null)
     {
         if (string.IsNullOrWhiteSpace(idempotencyKey))
         {
+            if (stableId is not null) throw new InvalidOperationException("A stable operation requires a job idempotency key.");
             created = true;
             return Create(phase);
         }
@@ -80,7 +81,15 @@ public sealed class OperationStore
                 return existing;
             }
 
-            var operation = Create(phase);
+            // Application backup IDs are persisted by Worker before RPC dispatch.
+            // Repair the index after a crash without creating another root service.
+            if (stableId is { } identity && Get(identity.ToString("D")) is { } recovered)
+            {
+                AtomicWrite(indexPath, recovered.OperationId);
+                created = false;
+                return recovered;
+            }
+            var operation = Create(phase, stableId);
             AtomicWrite(indexPath, operation.OperationId);
             created = true;
             return operation;

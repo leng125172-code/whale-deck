@@ -16,7 +16,7 @@
 
 `applications/backup` 与 `applications/verify-backup` 使用既有 `ManagedResourceService.PlanAction/RunCompose`、短时 capability、确认、资源锁和单次计划。范围固定为批准的普通应用配置、data bind 与独占本地卷，禁止核心与共享资源；预检使用私有 HMAC，不返回 Secret 值或其公开散列。默认 quiesced 仅提供文件系统暂停，不保证数据库事务一致性；不提供恢复或下载。
 
-备份由 UUID 绑定的独立、限时 systemd 服务执行。Agent 保存恢复标记，重启后只观察原服务，不重启或复制任务。取消须等待原服务停止且暂停成员恢复；已完成归档可优先于迟到的取消。ExecStopPost 与定时恢复使用项目 flock，不能干扰存活备份。Worker 将归档结果写入 BackupRecord，校验任务只更新原记录的校验状态，不写应用更新历史。
+备份由 UUID 绑定的独立、限时 systemd 服务执行。应用备份/校验的 Agent operation ID 固定等于 API job ID，Worker 在发送 RPC 前持久化它，防止响应丢失或并发取消保存冲突造成“尚未执行”的误判。Agent 保存恢复标记，重启后只观察原服务，不重启或复制任务。取消须等待原服务停止且暂停成员恢复；已完成归档可优先于迟到的取消。ExecStopPost 与定时恢复使用项目 flock，不能干扰存活备份。Worker 将归档结果写入 BackupRecord，校验任务只更新原记录的校验状态，不写应用更新历史。
 
 ### 应用参数编辑（1.12）
 
