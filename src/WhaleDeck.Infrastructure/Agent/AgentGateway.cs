@@ -237,7 +237,12 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IDisposable
             Resource = new ResourceReference { ResourceId = resourceId ?? string.Empty, ResourceType = area }
         };
         request.Parameters.Add(normalizedParameters);
-        var response = await _docker.PlanActionAsync(request, Headers("/whaledeck.agent.v1.DockerService/PlanAction"), cancellationToken: cancellationToken);
+        var useDockerPlanner = area.Equals("containers", StringComparison.OrdinalIgnoreCase) ||
+            area.Equals("docker", StringComparison.OrdinalIgnoreCase) && action.ToLowerInvariant() is
+                "network-create" or "network-delete" or "volume-delete";
+        var response = useDockerPlanner
+            ? await _docker.PlanActionAsync(request, Headers("/whaledeck.agent.v1.DockerService/PlanAction"), cancellationToken: cancellationToken)
+            : await _resources.PlanActionAsync(request, Headers("/whaledeck.agent.v1.ManagedResourceService/PlanAction"), cancellationToken: cancellationToken);
         return new PlanDto(response.PlanHash, response.ExpiresAtUtc.ToDateTimeOffset(), response.Changes, response.Warnings);
     }
 

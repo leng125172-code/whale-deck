@@ -10,7 +10,7 @@
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
-- 当前协议版本为 `1.5`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`；旧次版本按能力协商并安全降级。
+- 当前协议版本为 `1.6`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`；旧次版本按能力协商并安全降级。
 
 ## 2. 通用消息
 
@@ -162,6 +162,7 @@ Agent 不提供“执行命令”“执行脚本”或任意 unit 名称接口�
 
 | RPC ID | Service/Method | 类型 | 说明 |
 | --- | --- | --- | --- |
+| `RPC-MGD-001` | `ManagedResourceService.PlanAction` | Unary | 对注册资源执行只读预检并签发短时、单次计划哈希；不会解释为 Docker 容器创建 |
 | `RPC-DB-001` | `DatabaseService.ListInstances` | Unary | 注册实例、引擎、版本、健康、容量和存储摘要 |
 | `RPC-DB-002` | `DatabaseService.ListResources` | Unary | 数据库/Schema、账号/角色、权限和连接摘要 |
 | `RPC-DB-003` | `DatabaseService.CreateDatabase` | Operation | 引擎适配器参数化创建 |

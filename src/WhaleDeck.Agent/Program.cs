@@ -34,6 +34,7 @@ builder.Services.AddSingleton<OperationCoordinator>();
 builder.Services.AddSingleton<BoundedProcessRunner>();
 builder.Services.AddSingleton<ManagedActionExecutor>();
 builder.Services.AddSingleton<PlanStore>();
+builder.Services.AddSingleton<ManagedResourcePlanner>();
 builder.Services.AddSingleton<HostReader>();
 builder.Services.AddSingleton<ResourceRegistry>();
 builder.Services.AddHostedService<SocketPermissionService>();

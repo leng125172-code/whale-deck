@@ -10,6 +10,7 @@ public sealed class ManagedResourceGrpcService(
     ResourceRegistry registry,
     OperationStore operations,
     PlanStore plans,
+    ManagedResourcePlanner planner,
     OperationCoordinator coordinator,
     ManagedActionExecutor executor,
     DockerEngine docker,
@@ -19,6 +20,9 @@ public sealed class ManagedResourceGrpcService(
     private const string PrivilegedHelper = "/usr/local/libexec/whaledeck-privileged";
     private static readonly string[] EditableDockerSettings =
         ["registry-mirrors", "log-driver", "log-opts", "live-restore", "features", "dns", "proxies"];
+
+    public override Task<PlanResponse> PlanAction(RegisteredActionRequest request, ServerCallContext context) =>
+        Task.FromResult(planner.Create(request));
 
     public override async Task<ResourceCollectionResponse> ListDatabaseInstances(Empty request, ServerCallContext context)
     {
@@ -193,16 +197,17 @@ public sealed class ManagedResourceGrpcService(
 
     private OperationHandle QueueRegistered(RegisteredActionRequest request, string category, bool maintenance = false)
     {
-        var resourceId = NormalizeResourceId(category, request.Action, request.Resource.ResourceId);
+        var resourceId = ManagedResourcePlanner.NormalizeResourceId(category, request.Action, request.Resource.ResourceId);
         var resource = registry.Require(resourceId, request.Action);
         var idempotencyKey = BuildIdempotencyKey(request.Context, category, request.Action, request.Resource.ResourceId);
         var operation = operations.GetOrCreate(idempotencyKey, $"{category}:{request.Action}", out var created);
         if (!created) return operation;
         try
         {
-            if (RequiresPlan(request.Action))
+            if (ManagedResourcePlanner.RequiresPlan(request.Action))
             {
-                plans.VerifyAndConsume(request.PlanHash, request.Resource.ResourceId, request.Action, PlanParameters(request.Parameters));
+                plans.VerifyAndConsume(request.PlanHash, request.Resource.ResourceId, request.Action,
+                    ManagedResourcePlanner.SanitizeParameters(request.Parameters));
             }
             coordinator.Start(
                 operation,
@@ -227,30 +232,6 @@ public sealed class ManagedResourceGrpcService(
         context is null || string.IsNullOrWhiteSpace(context.JobId)
             ? string.Empty
             : $"{context.JobId}:{context.IdempotencyKey}:{category}:{action}:{resourceId}";
-
-    private static bool RequiresPlan(string action) => action is
-        "delete" or "delete-principal" or "prune" or "apply-settings" or "install" or "update" or "reinstall" or "uninstall" or
-        "update-install" or "reboot" or "commit-push" or "apply-update" or "rollback";
-
-    private static Dictionary<string, string> PlanParameters(IReadOnlyDictionary<string, string> parameters) =>
-        parameters.Where(item => !string.Equals(item.Key, "password", StringComparison.OrdinalIgnoreCase) &&
-                                 !string.Equals(item.Key, "environment", StringComparison.OrdinalIgnoreCase) &&
-                                 !string.Equals(item.Key, "inputTicket", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-
-    private static string NormalizeResourceId(string category, string action, string resourceId)
-    {
-        if (!string.IsNullOrWhiteSpace(resourceId)) return resourceId;
-        return category switch
-        {
-            "Systemd" => "whaledeck.host",
-            "Compose" => "whaledeck.apps",
-            "ConfigRepository" => "database-platform.repository",
-            "PlatformMaintenance" when action is "validate-settings" or "apply-settings" => "whaledeck.docker",
-            "PlatformMaintenance" => "whaledeck.platform",
-            _ => resourceId
-        };
-    }
 
     private static ResourceCollectionResponse ToCollection(IEnumerable<RegisteredResource> resources)
     {

@@ -322,6 +322,7 @@ service DockerService {
 }
 
 service ManagedResourceService {
+  rpc PlanAction(RegisteredActionRequest) returns (PlanResponse);
   rpc ListDatabaseInstances(google.protobuf.Empty) returns (ResourceCollectionResponse);
   rpc RunDatabaseAction(RegisteredActionRequest) returns (OperationHandle);
   rpc ListSystemdUnits(google.protobuf.Empty) returns (ResourceCollectionResponse);
