@@ -320,6 +320,10 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
+.process-detail :deep(.el-descriptions__label) {
+  width: 112px;
+  min-width: 112px;
+}
 @container page (max-width: 800px) {
   .process-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
