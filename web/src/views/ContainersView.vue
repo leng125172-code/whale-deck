@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { Box, Delete, Plus, RefreshRight, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiRequest, apiUrl } from '@/services/apiClient'
+import { ApiError, apiRequest, apiUrl } from '@/services/apiClient'
 import { enqueueOperation, planOperation, stageSecret } from '@/services/operations'
 import type {
   ContainerInspect,
@@ -21,11 +22,77 @@ interface Container {
   isProtected: boolean
   protectionLevel: string
   labels: Record<string, string>
+  ports?: string[]
+  networks?: string[]
+  addresses?: string[]
+  createdAtUtc?: string | null
 }
 
 const items = ref<Container[]>([])
+const route = useRoute()
+const search = ref('')
+const viewMode = ref('cards')
+const wideTable = ref(window.innerWidth > 1045)
+function syncTableWidth() {
+  wideTable.value = window.innerWidth > 1045
+}
+onMounted(() => window.addEventListener('resize', syncTableWidth))
+onUnmounted(() => window.removeEventListener('resize', syncTableWidth))
+const stateFilter = ref('all')
+const projectFilter = ref(typeof route.query.project === 'string' ? route.query.project : '')
+const counts = computed(() => ({
+  all: items.value.length,
+  running: items.value.filter((item) => item.state === 'running').length,
+  stopped: items.value.filter((item) => ['exited', 'created', 'dead'].includes(item.state)).length,
+  abnormal: items.value.filter(
+    (item) =>
+      ['restarting', 'dead', 'paused'].includes(item.state) || item.status.includes('unhealthy'),
+  ).length,
+}))
+const projects = computed(() =>
+  [
+    ...new Set(
+      items.value
+        .map((item) => item.labels['com.docker.compose.project'])
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ].sort(),
+)
+const visibleItems = computed(() =>
+  items.value.filter((item) => {
+    const keyword = search.value.trim().toLowerCase()
+    const matchesText =
+      !keyword ||
+      [
+        item.name,
+        item.image,
+        ...Object.entries(item.labels).map(([key, value]) => key + '=' + value),
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(keyword)
+    const matchesState =
+      stateFilter.value === 'all' ||
+      (stateFilter.value === 'running'
+        ? item.state === 'running'
+        : stateFilter.value === 'abnormal'
+          ? ['restarting', 'dead', 'paused'].includes(item.state) ||
+            item.status.includes('unhealthy')
+          : ['exited', 'created', 'dead'].includes(item.state))
+    return (
+      matchesText &&
+      matchesState &&
+      (!projectFilter.value || item.labels['com.docker.compose.project'] === projectFilter.value)
+    )
+  }),
+)
 const selectedIds = ref<string[]>([])
 const loading = ref(false)
+const loadError = ref('')
+let loadGeneration = 0
+onUnmounted(() => {
+  loadGeneration++
+})
 const batchBusy = ref(false)
 const createVisible = ref(false)
 const submitting = ref(false)
@@ -89,12 +156,32 @@ function openCreate() {
 }
 
 async function load() {
+  const generation = ++loadGeneration
   loading.value = true
+  loadError.value = ''
   try {
-    items.value = await apiRequest<Container[]>('containers?includeStopped=true')
+    const result = await apiRequest<Container[]>('containers?includeStopped=true')
+    if (generation !== loadGeneration) return
+    items.value = result
     selectedIds.value = selectedIds.value.filter((id) => items.value.some((item) => item.id === id))
+  } catch (error) {
+    if (generation !== loadGeneration) return
+    loadError.value = error instanceof Error ? error.message : '无法加载容器'
+    if (error instanceof ApiError && [401, 403].includes(error.status)) {
+      items.value = []
+      selectedIds.value = []
+      detailVisible.value = false
+      selected.value = null
+      inspect.value = null
+      logs.value = { lines: [], truncated: false }
+      eventTimeline.value = []
+      stats.value = {}
+      updateHistory.value = []
+      form.environment = ''
+      createVisible.value = false
+    }
   } finally {
-    loading.value = false
+    if (generation === loadGeneration) loading.value = false
   }
 }
 
@@ -384,6 +471,35 @@ onMounted(load)
         >
       </div>
     </header>
+    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+    <section class="panel container-filters">
+      <el-radio-group v-model="stateFilter" aria-label="筛选容器状态">
+        <el-radio-button value="all">全部 {{ counts.all }}</el-radio-button>
+        <el-radio-button value="running">运行中 {{ counts.running }}</el-radio-button>
+        <el-radio-button value="stopped">已停止 {{ counts.stopped }}</el-radio-button>
+        <el-radio-button value="abnormal">异常 {{ counts.abnormal }}</el-radio-button>
+      </el-radio-group>
+      <el-radio-group v-model="viewMode" aria-label="容器显示方式"
+        ><el-radio-button value="cards">卡片</el-radio-button
+        ><el-radio-button value="table">列表</el-radio-button></el-radio-group
+      >
+      <div class="container-filters__search">
+        <el-select
+          v-model="projectFilter"
+          placeholder="全部 Compose 项目"
+          clearable
+          aria-label="筛选 Compose 项目"
+        >
+          <el-option v-for="project in projects" :key="project" :value="project" :label="project" />
+        </el-select>
+        <el-input
+          v-model="search"
+          clearable
+          placeholder="搜索名称、镜像或标签"
+          aria-label="搜索容器"
+        />
+      </div>
+    </section>
     <section v-if="selectedIds.length" class="panel batch-toolbar">
       <strong>已选择 {{ selectedIds.length }} 个容器</strong>
       <div>
@@ -396,10 +512,87 @@ onMounted(load)
         <el-button link @click="selectedIds = []">清除选择</el-button>
       </div>
     </section>
-    <section class="container-grid" v-loading="loading">
-      <article v-for="item in items" :key="item.id" class="panel container-card">
+    <section v-if="viewMode === 'table'" class="panel container-table" v-loading="loading">
+      <el-table :data="visibleItems" empty-text="没有符合筛选条件的容器" row-key="id">
+        <el-table-column width="48"
+          ><template #default="{ row }"
+            ><el-checkbox
+              :model-value="selectedIds.includes(row.id)"
+              :disabled="row.isProtected"
+              :aria-label="`选择容器 ${row.name}`"
+              @change="toggleSelected(row.id, Boolean($event))" /></template
+        ></el-table-column>
+        <el-table-column prop="name" label="名称" min-width="220" sortable show-overflow-tooltip
+          ><template #default="{ row }"
+            ><el-button link type="primary" @click="openDetails(row)">{{
+              row.name
+            }}</el-button></template
+          ></el-table-column
+        >
+        <el-table-column prop="image" label="镜像" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="state" label="状态" width="130" sortable
+          ><template #default="{ row }"
+            ><el-tag size="small" :type="row.state === 'running' ? 'success' : 'info'">{{
+              row.state
+            }}</el-tag></template
+          ></el-table-column
+        >
+        <el-table-column label="项目 / 保护" min-width="180" show-overflow-tooltip
+          ><template #default="{ row }"
+            ><div>{{ row.labels['com.docker.compose.project'] || '独立容器' }}</div>
+            <el-tag v-if="row.isProtected" size="small" type="warning" effect="plain">{{
+              row.protectionLevel
+            }}</el-tag></template
+          ></el-table-column
+        >
+        <el-table-column label="IP 地址" min-width="160" show-overflow-tooltip
+          ><template #default="{ row }">{{
+            row.addresses?.join(', ') || '—'
+          }}</template></el-table-column
+        >
+        <el-table-column label="端口" min-width="220" show-overflow-tooltip
+          ><template #default="{ row }">{{
+            row.ports?.join(', ') || '—'
+          }}</template></el-table-column
+        >
+        <el-table-column label="操作" width="210" :fixed="wideTable ? 'right' : undefined"
+          ><template #default="{ row }"
+            ><div class="container-table__actions">
+              <el-button link type="primary" @click="openDetails(row)">详情 / 日志</el-button
+              ><el-dropdown
+                v-if="!row.isProtected"
+                trigger="click"
+                @command="
+                  (action: string) =>
+                    action === 'delete'
+                      ? removeContainer(row)
+                      : lifecycle(row, action as 'start' | 'stop' | 'restart')
+                "
+                ><el-button link type="primary">更多</el-button
+                ><template #dropdown
+                  ><el-dropdown-menu
+                    ><el-dropdown-item :command="row.state === 'running' ? 'stop' : 'start'">{{
+                      row.state === 'running' ? '停止' : '启动'
+                    }}</el-dropdown-item
+                    ><el-dropdown-item command="restart" :disabled="row.state !== 'running'"
+                      >重启</el-dropdown-item
+                    ><el-dropdown-item command="delete" divided
+                      >删除</el-dropdown-item
+                    ></el-dropdown-menu
+                  ></template
+                ></el-dropdown
+              >
+            </div></template
+          ></el-table-column
+        >
+      </el-table>
+    </section>
+    <section v-else class="container-grid" v-loading="loading">
+      <el-empty v-if="!loading && !visibleItems.length" description="没有符合筛选条件的容器" />
+      <article v-for="item in visibleItems" :key="item.id" class="panel container-card">
         <el-checkbox
           :model-value="selectedIds.includes(item.id)"
+          :disabled="item.isProtected"
           :aria-label="`选择容器 ${item.name}`"
           @change="toggleSelected(item.id, Boolean($event))"
         />
@@ -410,6 +603,15 @@ onMounted(load)
           <strong>{{ item.name }}</strong
           ><small>{{ item.image }}</small
           ><span>{{ item.status }}</span>
+          <div class="container-card__metadata">
+            <span v-if="item.labels['com.docker.compose.project']"
+              >项目：{{ item.labels['com.docker.compose.project'] }}</span
+            >
+            <span v-if="item.addresses?.length">IP：{{ item.addresses.join(', ') }}</span>
+            <span v-if="item.ports?.length" :title="item.ports.join(', ')"
+              >端口：{{ item.ports.join(', ') }}</span
+            >
+          </div>
         </div>
         <el-tag :type="item.state === 'running' ? 'success' : 'info'" effect="light">{{
           item.state
@@ -423,14 +625,14 @@ onMounted(load)
             ><el-icon><RefreshRight /></el-icon>更新</el-button
           >
           <el-button
-            v-if="item.state !== 'running'"
+            v-if="!item.isProtected && item.state !== 'running'"
             link
             type="primary"
             :disabled="item.isProtected"
             @click="lifecycle(item, 'start')"
             ><el-icon><VideoPlay /></el-icon>启动</el-button
           >
-          <template v-else
+          <template v-else-if="!item.isProtected"
             ><el-button
               link
               type="danger"
@@ -445,7 +647,7 @@ onMounted(load)
               ><el-icon><RefreshRight /></el-icon>重启</el-button
             ></template
           >
-          <el-button link type="danger" :disabled="item.isProtected" @click="removeContainer(item)"
+          <el-button v-if="!item.isProtected" link type="danger" @click="removeContainer(item)"
             ><el-icon><Delete /></el-icon>删除</el-button
           >
         </div>
@@ -649,9 +851,21 @@ onMounted(load)
             }}</template>
           </el-table-column>
           <el-table-column prop="eventType" label="类型" width="100" />
-          <el-table-column label="动作" min-width="150">
+          <el-table-column label="动作" min-width="180">
             <template #default="scope"
-              ><el-tag effect="plain">{{ scope.row.action }}</el-tag></template
+              ><el-popover trigger="click" placement="top" :width="300">
+                <template #reference
+                  ><button
+                    type="button"
+                    class="docker-event-action"
+                    :title="scope.row.action"
+                    :aria-label="'查看完整动作：' + scope.row.action"
+                  >
+                    {{ scope.row.action }}
+                  </button></template
+                >
+                <div class="docker-event-action-full">{{ scope.row.action }}</div>
+              </el-popover></template
             >
           </el-table-column>
           <el-table-column prop="image" label="镜像" min-width="200" show-overflow-tooltip />
@@ -676,6 +890,68 @@ onMounted(load)
   display: grid;
   gap: 10px;
   min-height: 240px;
+}
+.container-filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+}
+.container-filters :deep(.el-radio-group) {
+  flex-wrap: wrap;
+  row-gap: 8px;
+  max-width: 100%;
+}
+.container-table {
+  padding: 16px;
+  min-width: 0;
+}
+.container-table__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.container-filters__search {
+  display: flex;
+  flex-wrap: wrap;
+  flex: 1 1 420px;
+  gap: 12px;
+  min-width: 0;
+  max-width: 600px;
+}
+.container-filters__search > * {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.container-card__metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  min-width: 0;
+}
+.container-card__metadata span {
+  overflow-wrap: anywhere;
+}
+.docker-event-action {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border: 1px solid var(--el-color-primary-light-5);
+  border-radius: 4px;
+  color: var(--el-color-primary);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.docker-event-action-full {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 12px;
 }
 .batch-toolbar {
   display: flex;

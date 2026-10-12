@@ -129,7 +129,8 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcess
     {
         var response = await _docker.ListContainersAsync(new ListContainersRequest { IncludeStopped = includeStopped }, Headers("/whaledeck.agent.v1.DockerService/ListContainers"), cancellationToken: cancellationToken);
         return response.Containers.Select(item => new ContainerDto(item.Id, item.Name, item.Image, item.State, item.Status,
-            item.ProtectedResource, item.ProtectionLevel, item.Labels)).ToArray();
+            item.ProtectedResource, item.ProtectionLevel, item.Labels, item.Ports, item.Networks, item.Addresses,
+            item.CreatedAtUtc?.ToDateTimeOffset())).ToArray();
     }
 
     public async Task<ContainerLogsDto> GetContainerLogsAsync(string containerId, int tail, int sinceMinutes, CancellationToken cancellationToken)

@@ -106,6 +106,7 @@ public sealed class ManagedResourceGrpcService(
                     ProtectedResource = protectedResource
                 };
                 snapshot.Attributes["composeProject"] = project;
+                snapshot.Attributes["ports"] = string.Join(", ", members.SelectMany(item => DockerGrpcService.BuildContainerSummary(item, registry).Ports).Distinct(StringComparer.Ordinal).Take(32));
                 snapshot.Attributes["containerCount"] = members.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 snapshot.Attributes["autoUpdate"] = manifest.RootElement.TryGetProperty("autoUpdate", out var autoUpdate) && autoUpdate.GetBoolean() ? "true" : "false";
                 snapshot.Attributes["versionPolicy"] = manifest.RootElement.TryGetProperty("versionPolicy", out var versionPolicy) ? versionPolicy.GetString() ?? "*" : "*";
@@ -131,9 +132,12 @@ public sealed class ManagedResourceGrpcService(
             {
                 ResourceId = "compose:" + project.Key, DisplayName = project.Key, ResourceType = "ComposeProject",
                 State = ComposeProjectManager.State(project.ToArray()),
+                Version = string.Join(", ", project.Select(item => item.Image).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(16)),
                 ProtectedResource = project.Any(item => item.Names.Any(name => registry.IsProtectedContainer(name, item.Labels)))
             };
             snapshot.Attributes["containerCount"] = project.Count().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            snapshot.Attributes["composeProject"] = project.Key;
+            snapshot.Attributes["ports"] = string.Join(", ", project.SelectMany(item => DockerGrpcService.BuildContainerSummary(item, registry).Ports).Distinct(StringComparer.Ordinal).Take(32));
             snapshot.Attributes["services"] = string.Join(',', project.Select(item => ComposeProjectManager.Label(item, "com.docker.compose.service", "unknown")).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
             snapshot.Attributes["configurationSource"] = "Unregistered (read-only)";
             snapshot.Attributes["allowedActions"] = string.Empty;

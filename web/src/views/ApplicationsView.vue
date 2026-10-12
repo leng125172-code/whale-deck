@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { Box } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiRequest } from '@/services/apiClient'
+import { ApiError, apiRequest } from '@/services/apiClient'
 import { enqueueOperation, planOperation, stageSecret } from '@/services/operations'
 import type {
   ApplicationImageMetadata,
@@ -26,6 +27,80 @@ const installVisible = ref(false)
 const submitting = ref(false)
 const inspectingImage = ref(false)
 const imageMetadata = ref<ApplicationImageMetadata | null>(null)
+const activeTab = ref('installed')
+const search = ref('')
+const sort = ref('name')
+const pendingAction = ref('')
+const loadError = ref('')
+let loadGeneration = 0
+onUnmounted(() => {
+  loadGeneration++
+})
+const visibleInstalled = computed(() =>
+  installed.value
+    .filter((item) => {
+      const record = installationFor(item)
+      const text = [item.name, item.version, record?.displayName, item.attributes.composeProject]
+        .join(' ')
+        .toLowerCase()
+      return (
+        text.includes(search.value.trim().toLowerCase()) &&
+        (activeTab.value !== 'updates' || hasUpgrade(item))
+      )
+    })
+    .sort((left, right) =>
+      sort.value === 'recent'
+        ? (installationFor(right)?.installedAtUtc || '').localeCompare(
+            installationFor(left)?.installedAtUtc || '',
+          )
+        : left.name.localeCompare(right.name),
+    ),
+)
+const visibleCatalog = computed(() =>
+  catalog.value.filter((item) =>
+    `${item.name} ${item.description} ${item.image}`
+      .toLowerCase()
+      .includes(search.value.trim().toLowerCase()),
+  ),
+)
+function isManaged(item: ManagedResource) {
+  return (
+    !item.isProtected && item.type === 'ComposeApplication' && item.id.startsWith('application:')
+  )
+}
+function hasUpgrade(item: ManagedResource) {
+  const record = installationFor(item)
+  return (
+    isManaged(item) && !!record?.desiredVersion && record.desiredVersion !== record.installedVersion
+  )
+}
+function isRunning(item: ManagedResource) {
+  return item.state.toLowerCase() === 'running'
+}
+function stateLabel(item: ManagedResource) {
+  return (
+    (
+      {
+        running: '已启动',
+        stopped: '已停止',
+        exited: '已停止',
+        restarting: '重启中',
+        degraded: '异常',
+      } as Record<string, string>
+    )[item.state.toLowerCase()] || item.state
+  )
+}
+function catalogFor(item: ManagedResource) {
+  return catalog.value.find((entry) => entry.id === installationFor(item)?.catalogAppId)
+}
+function relatedContainers(item: ManagedResource) {
+  return router.push({
+    path: '/containers',
+    query: {
+      project: item.attributes.composeProject || item.id.replace(/^(application|compose):/, ''),
+    },
+  })
+}
 const form = reactive({
   slug: '',
   displayName: '',
@@ -39,19 +114,34 @@ const form = reactive({
 })
 
 async function load() {
+  const generation = ++loadGeneration
   loading.value = true
+  loadError.value = ''
   try {
     const [popular, apps, records] = await Promise.all([
       apiRequest<{ applications: CatalogApplication[]; isStale: boolean }>('applications/popular'),
       apiRequest<ManagedResource[]>('applications'),
       apiRequest<ApplicationInstallation[]>('applications/installations'),
     ])
+    if (generation !== loadGeneration) return
     catalog.value = popular.applications
     stale.value = popular.isStale
     installed.value = apps
     installations.value = records
+  } catch (error) {
+    if (generation !== loadGeneration) return
+    loadError.value = error instanceof Error ? error.message : '无法加载应用'
+    if (error instanceof ApiError && [401, 403].includes(error.status)) {
+      catalog.value = []
+      installed.value = []
+      installations.value = []
+      detail.value = null
+      detailVisible.value = false
+      installVisible.value = false
+      form.environment = ''
+    }
   } finally {
-    loading.value = false
+    if (generation === loadGeneration) loading.value = false
   }
 }
 
@@ -166,26 +256,35 @@ async function lifecycle(
   item: ManagedResource,
   action: 'start' | 'stop' | 'restart' | 'update' | 'reinstall' | 'uninstall',
 ) {
-  const slug = item.id.replace(/^application:/, '')
-  const parameters = { slug, deleteVolumes: 'false' }
-  let planHash: string | null = null
-  if (['update', 'reinstall', 'uninstall'].includes(action)) {
-    const plan = await planOperation('applications', action, '', parameters)
-    planHash = plan.planHash
-    await ElMessageBox.confirm(
-      [...plan.changes, ...plan.warnings].join('\n') || `${action} ${slug}，卸载默认保留数据卷。`,
-      '应用操作确认',
-      { type: action === 'uninstall' ? 'error' : 'warning' },
-    )
-  } else if (action !== 'start') {
-    await ElMessageBox.confirm(
-      `确认${action === 'stop' ? '停止' : '重启'} ${slug}？`,
-      '应用操作确认',
-      { type: 'warning' },
-    )
+  if (!isManaged(item) || pendingAction.value) return
+  pendingAction.value = item.id
+  try {
+    const slug = item.id.replace(/^application:/, '')
+    const parameters = { slug, deleteVolumes: 'false' }
+    let planHash: string | null = null
+    if (['update', 'reinstall', 'uninstall'].includes(action)) {
+      const plan = await planOperation('applications', action, '', parameters)
+      planHash = plan.planHash
+      await ElMessageBox.confirm(
+        [...plan.changes, ...plan.warnings].join('\n') || `${action} ${slug}，卸载默认保留数据卷。`,
+        '应用操作确认',
+        { type: action === 'uninstall' ? 'error' : 'warning' },
+      )
+    } else if (action !== 'start') {
+      await ElMessageBox.confirm(
+        `确认${action === 'stop' ? '停止' : '重启'} ${slug}？`,
+        '应用操作确认',
+        { type: 'warning' },
+      )
+    }
+    const job = await enqueueOperation('applications', action, '', parameters, true, planHash)
+    ElMessage.success(`任务已提交：${job.id}`)
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close')
+      ElMessage.error(error instanceof Error ? error.message : '应用操作失败')
+  } finally {
+    pendingAction.value = ''
   }
-  const job = await enqueueOperation('applications', action, '', parameters, true, planHash)
-  ElMessage.success(`任务已提交：${job.id}`)
 }
 
 onMounted(async () => {
@@ -218,6 +317,7 @@ watch(
         ><el-button type="primary" @click="openInstall()">自定义安装</el-button>
       </div>
     </header>
+    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
     <el-alert
       v-if="stale"
       title="热门目录当前使用最近一次有效快照"
@@ -225,7 +325,20 @@ watch(
       show-icon
       :closable="false"
     />
-    <section class="panel app-section">
+    <section class="panel app-toolbar">
+      <el-radio-group v-model="activeTab" aria-label="应用视图">
+        <el-radio-button value="installed">已安装</el-radio-button>
+        <el-radio-button value="catalog">热门目录</el-radio-button>
+        <el-radio-button value="updates">待更新</el-radio-button>
+      </el-radio-group>
+      <div class="app-toolbar__search">
+        <el-select v-if="activeTab !== 'catalog'" v-model="sort" aria-label="应用排序"
+          ><el-option label="名称排序" value="name" /><el-option label="最近安装" value="recent"
+        /></el-select>
+        <el-input v-model="search" placeholder="搜索名称或镜像" clearable aria-label="搜索应用" />
+      </div>
+    </section>
+    <section v-if="activeTab === 'catalog'" class="panel app-section">
       <div class="panel__header">
         <div>
           <span class="panel__eyebrow">XUANYUAN</span>
@@ -233,11 +346,11 @@ watch(
         </div>
       </div>
       <div class="catalog-grid">
-        <article v-for="item in catalog" :key="item.id" class="catalog-card">
+        <article v-for="item in visibleCatalog" :key="item.id" class="catalog-card">
           <div class="catalog-card__icon">
-            <img v-if="item.iconUrl" :src="item.iconUrl" alt="" /><span v-else>{{
-              item.name.slice(0, 1)
-            }}</span>
+            <img v-if="item.iconUrl" :src="item.iconUrl" alt="" /><el-icon v-else :size="28"
+              ><Box
+            /></el-icon>
           </div>
           <div>
             <strong>{{ item.name }}</strong>
@@ -250,22 +363,61 @@ watch(
         </article>
       </div>
     </section>
-    <section class="panel app-section">
+    <section v-else class="panel app-section">
       <div class="panel__header">
         <div>
           <span class="panel__eyebrow">INSTALLED</span>
-          <h2>已安装应用</h2>
+          <h2>
+            {{ activeTab === 'updates' ? '待更新应用' : '已安装应用' }}
+            <small>{{ visibleInstalled.length }}</small>
+          </h2>
         </div>
       </div>
-      <el-empty v-if="!loading && installed.length === 0" description="暂无已安装应用" />
+      <el-empty
+        v-if="!loading && visibleInstalled.length === 0"
+        :description="activeTab === 'updates' ? '暂无已确认的版本变更' : '没有匹配的应用'"
+      />
       <div v-else class="installed-list">
-        <article v-for="item in installed" :key="item.id" class="installed-row">
-          <div>
-            <strong>{{ item.name }}</strong
-            ><small>{{ item.version }}</small>
+        <article v-for="item in visibleInstalled" :key="item.id" class="installed-row">
+          <div class="installed-row__icon catalog-card__icon">
+            <img
+              v-if="catalogFor(item)?.iconUrl"
+              :src="catalogFor(item)?.iconUrl || undefined"
+              alt=""
+            /><el-icon v-else :size="30"><Box /></el-icon>
           </div>
-          <el-tag>{{ item.state }}</el-tag>
+          <div class="installed-row__content">
+            <div class="installed-row__title">
+              <strong>{{ installationFor(item)?.displayName || item.name }}</strong>
+              <el-tag size="small" :type="isRunning(item) ? 'success' : 'info'">{{
+                stateLabel(item)
+              }}</el-tag>
+              <el-tag v-if="!isManaged(item)" size="small" type="warning" effect="plain">{{
+                item.isProtected ? '受保护' : '未注册 · 只读'
+              }}</el-tag>
+            </div>
+            <p v-if="catalogFor(item)?.description">{{ catalogFor(item)?.description }}</p>
+            <small class="installed-row__image" :title="item.version"
+              >镜像 / 版本：{{
+                installationFor(item)?.installedVersion || item.version || '未提供'
+              }}</small
+            >
+            <small v-if="item.attributes.containerCount"
+              >关联容器：{{ item.attributes.containerCount }}</small
+            >
+            <small
+              v-if="item.attributes.ports"
+              :title="item.attributes.ports"
+              class="installed-row__image"
+              >端口：{{ item.attributes.ports }}</small
+            >
+            <small v-if="installationFor(item)"
+              >安装于 {{ new Date(installationFor(item)!.installedAtUtc).toLocaleString() }} ·
+              自动更新{{ installationFor(item)!.autoUpdateEnabled ? '已开启' : '已关闭' }}</small
+            >
+          </div>
           <div class="installed-row__actions">
+            <el-button link type="primary" @click="relatedContainers(item)">关联容器</el-button>
             <el-button
               v-if="installationFor(item)"
               link
@@ -273,12 +425,37 @@ watch(
               @click="openDetail(installationFor(item)?.id || '')"
               >详情</el-button
             >
-            <el-button link @click="lifecycle(item, 'start')">启动</el-button
-            ><el-button link type="danger" @click="lifecycle(item, 'stop')">停止</el-button
-            ><el-button link @click="lifecycle(item, 'restart')">重启</el-button
-            ><el-button link @click="lifecycle(item, 'update')">更新</el-button
-            ><el-button link @click="lifecycle(item, 'reinstall')">重装</el-button
-            ><el-button link type="danger" @click="lifecycle(item, 'uninstall')">卸载</el-button>
+            <template v-if="isManaged(item)">
+              <el-button
+                link
+                :type="isRunning(item) ? 'danger' : 'primary'"
+                :disabled="!!pendingAction"
+                @click="lifecycle(item, isRunning(item) ? 'stop' : 'start')"
+                >{{ isRunning(item) ? '停止' : '启动' }}</el-button
+              >
+              <el-button
+                link
+                :disabled="!isRunning(item) || !!pendingAction"
+                @click="lifecycle(item, 'restart')"
+                >重启</el-button
+              >
+              <el-dropdown
+                trigger="click"
+                :disabled="!!pendingAction"
+                @command="lifecycle(item, $event)"
+              >
+                <el-button link type="primary">更多</el-button>
+                <template #dropdown
+                  ><el-dropdown-menu
+                    ><el-dropdown-item command="update">更新</el-dropdown-item
+                    ><el-dropdown-item command="reinstall">重装</el-dropdown-item
+                    ><el-dropdown-item command="uninstall" divided
+                      >卸载（保留数据卷）</el-dropdown-item
+                    ></el-dropdown-menu
+                  ></template
+                >
+              </el-dropdown>
+            </template>
           </div>
         </article>
       </div>
@@ -441,6 +618,31 @@ watch(
 .applications-page {
   display: grid;
   gap: 18px;
+  min-width: 0;
+}
+.app-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+}
+.app-toolbar__search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 500px;
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.app-toolbar__search .el-select {
+  flex: 1 1 130px;
+  min-width: 0;
+}
+.app-toolbar__search .el-input {
+  flex: 2 1 180px;
+  min-width: 0;
 }
 .app-section {
   overflow: hidden;
@@ -449,8 +651,7 @@ watch(
 .installed-list {
   display: grid;
 }
-.catalog-card,
-.installed-row {
+.catalog-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -458,8 +659,7 @@ watch(
   padding: 14px 18px;
   border-bottom: 1px solid var(--el-border-color-extra-light);
 }
-.catalog-card:last-child,
-.installed-row:last-child {
+.catalog-card:last-child {
   border-bottom: 0;
 }
 .catalog-card__icon {
@@ -489,14 +689,65 @@ watch(
   color: var(--el-text-color-placeholder);
   font-size: 11px;
 }
-.installed-row > div:first-child {
+.installed-list {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 16px;
+  padding: 18px;
+}
+.installed-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  min-width: 0;
+}
+.installed-row__content {
   display: grid;
   gap: 5px;
+  min-width: 0;
 }
-.installed-row__actions {
+.installed-row__title {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+.installed-row__title strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.installed-row__title .el-tag {
+  flex: 0 0 auto;
+}
+.installed-row__content p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  overflow-wrap: anywhere;
+}
+.installed-row__image {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.installed-row small {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.installed-row__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-extra-light);
+}
+.installed-row__actions .el-button + .el-button {
+  margin-left: 0;
 }
 .image-metadata {
   margin-bottom: 14px;
@@ -519,13 +770,14 @@ watch(
   font-size: 14px;
 }
 @media (max-width: 760px) {
-  .catalog-card,
-  .installed-row {
+  .catalog-card {
     grid-template-columns: auto minmax(0, 1fr);
   }
-  .catalog-card > .el-button,
-  .installed-row__actions {
+  .catalog-card > .el-button {
     grid-column: 2;
+  }
+  .installed-list {
+    padding: 12px;
   }
 }
 </style>

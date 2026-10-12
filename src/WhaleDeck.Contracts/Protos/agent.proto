@@ -149,6 +149,10 @@ message ContainerSummary {
   bool protected_resource = 6;
   string protection_level = 7;
   map<string, string> labels = 8;
+  repeated string ports = 9;
+  repeated string networks = 10;
+  repeated string addresses = 11;
+  google.protobuf.Timestamp created_at_utc = 12;
 }
 
 message ListContainersResponse {

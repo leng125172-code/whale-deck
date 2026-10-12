@@ -44,31 +44,47 @@ public sealed class DockerGrpcService(
         var response = new ListContainersResponse();
         foreach (var container in containers)
         {
-            var name = container.Names.FirstOrDefault()?.TrimStart('/') ?? container.ID[..Math.Min(12, container.ID.Length)];
-            var protectedResource = registry.IsProtectedContainer(name, container.Labels);
-            var protectionLevel = container.Labels is not null && container.Labels.TryGetValue("io.whaledeck.protection-level", out var configuredLevel)
-                ? configuredLevel
-                : protectedResource ? "CriticalData" : "Managed";
-            var summary = new ContainerSummary
-            {
-                Id = container.ID,
-                Name = name,
-                Image = container.Image,
-                State = container.State,
-                Status = container.Status,
-                ProtectedResource = protectedResource,
-                ProtectionLevel = protectionLevel
-            };
-            if (container.Labels is not null)
-            {
-                foreach (var label in container.Labels.Where(item => !IsSensitiveLabel(item.Key)))
-                {
-                    summary.Labels[label.Key] = label.Value;
-                }
-            }
-            response.Containers.Add(summary);
+            response.Containers.Add(BuildContainerSummary(container, registry));
         }
         return response;
+    }
+
+    public static ContainerSummary BuildContainerSummary(Docker.DotNet.Models.ContainerListResponse container, ResourceRegistry registry)
+    {
+        var name = container.Names.FirstOrDefault()?.TrimStart('/') ?? container.ID[..Math.Min(12, container.ID.Length)];
+        var protectedResource = registry.IsProtectedContainer(name, container.Labels);
+        var registered = registry.All.FirstOrDefault(item => item.Type == "Container" && item.ExternalId == name);
+        var protectionLevel = registered?.ProtectionLevel ??
+            (container.Labels is not null && container.Labels.TryGetValue("io.whaledeck.protection-level", out var configuredLevel)
+                ? configuredLevel : protectedResource ? "CriticalData" : "Managed");
+        var summary = new ContainerSummary
+        {
+            Id = container.ID,
+            Name = name,
+            Image = container.Image,
+            State = container.State,
+            Status = container.Status,
+            ProtectedResource = protectedResource,
+            ProtectionLevel = protectionLevel
+        };
+        summary.Ports.AddRange((container.Ports ?? []).Select(port => port.PublicPort > 0
+            ? $"{port.IP}:{port.PublicPort} → {port.PrivatePort}/{port.Type}"
+            : $"{port.PrivatePort}/{port.Type}").Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        if (container.NetworkSettings?.Networks is not null)
+        {
+            summary.Networks.AddRange(container.NetworkSettings.Networks.Keys.Order(StringComparer.Ordinal));
+            summary.Addresses.AddRange(container.NetworkSettings.Networks.Values.Select(item => item.IPAddress)
+                .Where(address => !string.IsNullOrWhiteSpace(address)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        }
+        if (container.Created != default) summary.CreatedAtUtc = Timestamp.FromDateTime(container.Created.ToUniversalTime());
+        if (container.Labels is not null)
+        {
+            foreach (var label in container.Labels.Where(item => !IsSensitiveLabel(item.Key)))
+            {
+                summary.Labels[label.Key] = label.Value;
+            }
+        }
+        return summary;
     }
 
     public override async Task<ContainerLogsResponse> GetContainerLogs(ContainerLogsRequest request, ServerCallContext context)

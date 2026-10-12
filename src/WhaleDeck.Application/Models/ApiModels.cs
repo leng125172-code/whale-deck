@@ -112,7 +112,11 @@ public sealed record ContainerDto(
     string Status,
     bool IsProtected,
     string ProtectionLevel,
-    IReadOnlyDictionary<string, string> Labels);
+    IReadOnlyDictionary<string, string> Labels,
+    IReadOnlyCollection<string>? Ports = null,
+    IReadOnlyCollection<string>? Networks = null,
+    IReadOnlyCollection<string>? Addresses = null,
+    DateTimeOffset? CreatedAtUtc = null);
 
 public sealed record ContainerLogsDto(IReadOnlyCollection<string> Lines, bool Truncated);
 
