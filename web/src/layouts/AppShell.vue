@@ -19,6 +19,7 @@ import {
   UploadFilled,
 } from '@element-plus/icons-vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import AppTopbar from '@/components/AppTopbar.vue'
 import { authSession } from '@/services/authSession'
 import { apiRequest } from '@/services/apiClient'
@@ -278,7 +279,13 @@ async function selectNavigation(index: string) {
 
 async function userCommand(command: string) {
   if (command === 'portal') await router.push('/portal')
-  if (command === 'logout') await authSession.logout()
+  if (command === 'logout') {
+    try {
+      await authSession.logout()
+    } catch {
+      ElMessage.error('退出失败，身份服务暂时不可用，请稍后重试')
+    }
+  }
 }
 </script>
 

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Whale Deck 外网侧局域网入口">
+  <image href="whaledeck-mark.png" x="0" y="-35" width="256" height="300"/>
+  <circle cx="210" cy="210" r="43" fill="#fff"/>
+  <circle cx="210" cy="210" r="37" fill="#409eff"/>
+  <g fill="none" stroke="#fff" stroke-width="4.5">
+    <circle cx="210" cy="210" r="23"/>
+    <ellipse cx="210" cy="210" rx="10" ry="23"/>
+    <path d="M187 210h46m-42-12h38m-38 24h38"/>
+  </g>
+</svg>

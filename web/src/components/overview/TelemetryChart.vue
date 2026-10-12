@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import type { TelemetrySeries } from '@/services/workstationOverview'
+import { TELEMETRY_SLOT_COUNT, telemetrySegments } from '@/services/rollingTelemetry'
 
 const props = defineProps<{
   labels: string[]
@@ -9,10 +10,31 @@ const props = defineProps<{
 }>()
 
 const chartId = useId().replace(/:/g, '')
-const plot = { left: 58, top: 18, width: 912, height: 190 }
+const root = ref<HTMLElement | null>(null)
+const width = ref(1000)
+let observer: ResizeObserver | undefined
+const plot = computed(() => ({
+  left: 46,
+  top: 18,
+  width: Math.max(1, width.value - 60),
+  height: 190,
+}))
+onMounted(() => {
+  if (typeof ResizeObserver === 'undefined' || !root.value) return
+  observer = new ResizeObserver(([entry]) => {
+    if (entry && entry.contentRect.width > 0) width.value = entry.contentRect.width
+  })
+  observer.observe(root.value)
+})
+onBeforeUnmount(() => observer?.disconnect())
 
 const maximum = computed(() => {
-  const highest = Math.max(1, ...props.series.flatMap((item) => item.values))
+  const highest = Math.max(
+    1,
+    ...props.series.flatMap((item) =>
+      item.values.filter((value): value is number => value !== null),
+    ),
+  )
   return Math.ceil(highest * 1.15)
 })
 
@@ -20,32 +42,39 @@ const gridLines = computed(() =>
   Array.from({ length: 5 }, (_, index) => {
     const ratio = index / 4
     return {
-      y: plot.top + ratio * plot.height,
+      y: plot.value.top + ratio * plot.value.height,
       value: maximum.value * (1 - ratio),
     }
   }),
 )
 
-function point(value: number, index: number, count: number) {
-  const x = plot.left + (count <= 1 ? 0 : (index / (count - 1)) * plot.width)
-  const y = plot.top + plot.height - (value / maximum.value) * plot.height
+function point(value: number, index: number) {
+  const x = plot.value.left + (index / (TELEMETRY_SLOT_COUNT - 1)) * plot.value.width
+  const y = plot.value.top + plot.value.height - (value / maximum.value) * plot.value.height
   return { x, y }
 }
 
-function linePath(values: number[]) {
-  return values
-    .map((value, index) => {
-      const current = point(value, index, values.length)
+function segmentPath(segment: ReturnType<typeof telemetrySegments>[number]) {
+  return segment
+    .map((sample, index) => {
+      const current = point(sample.value, sample.index)
       return `${index === 0 ? 'M' : 'L'} ${current.x.toFixed(2)} ${current.y.toFixed(2)}`
     })
     .join(' ')
 }
 
-function areaPath(values: number[]) {
-  if (values.length === 0) return ''
-  const first = point(values[0] ?? 0, 0, values.length)
-  const last = point(values[values.length - 1] ?? 0, values.length - 1, values.length)
-  return `${linePath(values)} L ${last.x.toFixed(2)} ${(plot.top + plot.height).toFixed(2)} L ${first.x.toFixed(2)} ${(plot.top + plot.height).toFixed(2)} Z`
+function linePath(values: Array<number | null>) {
+  return telemetrySegments(values).map(segmentPath).join(' ')
+}
+
+function areaPath(values: Array<number | null>) {
+  return telemetrySegments(values)
+    .map((segment) => {
+      const first = point(segment[0]!.value, segment[0]!.index)
+      const last = point(segment[segment.length - 1]!.value, segment[segment.length - 1]!.index)
+      return `${segmentPath(segment)} L ${last.x.toFixed(2)} ${(plot.value.top + plot.value.height).toFixed(2)} L ${first.x.toFixed(2)} ${(plot.value.top + plot.value.height).toFixed(2)} Z`
+    })
+    .join(' ')
 }
 
 function formatTick(value: number) {
@@ -56,8 +85,13 @@ function formatTick(value: number) {
 </script>
 
 <template>
-  <div class="telemetry-chart" role="img" :aria-label="`监控趋势图，单位 ${unit}`">
-    <svg viewBox="0 0 1000 250" preserveAspectRatio="none" aria-hidden="true">
+  <div
+    ref="root"
+    class="telemetry-chart"
+    role="img"
+    :aria-label="`最近 6 分钟监控趋势，每 6 秒刷新，缺失数据留空，单位 ${unit}`"
+  >
+    <svg :viewBox="`0 0 ${width} 224`" preserveAspectRatio="none" aria-hidden="true">
       <defs>
         <linearGradient
           v-for="(item, index) in series"
@@ -81,7 +115,7 @@ function formatTick(value: number) {
           :y1="grid.y"
           :y2="grid.y"
         />
-        <text class="telemetry-chart__tick" x="49" :y="grid.y + 4" text-anchor="end">
+        <text class="telemetry-chart__tick" x="37" :y="grid.y + 4" text-anchor="end">
           {{ formatTick(grid.value) }}
         </text>
       </g>
@@ -100,32 +134,24 @@ function formatTick(value: number) {
         fill="none"
         :stroke="item.color"
       />
-
-      <g v-for="(label, index) in labels" :key="`${label}-${index}`">
-        <text
-          class="telemetry-chart__label"
-          :x="point(0, index, labels.length).x"
-          y="236"
-          text-anchor="middle"
-        >
-          {{ label }}
-        </text>
-      </g>
     </svg>
+    <div class="telemetry-chart__axis" aria-hidden="true">
+      <span>6 分钟前</span><span class="telemetry-chart__midpoint">3 分钟前</span><span>现在</span>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .telemetry-chart {
-  overflow-x: auto;
+  overflow: hidden;
   width: 100%;
+  min-width: 0;
 }
 
 .telemetry-chart svg {
   display: block;
-  min-width: 680px;
   width: 100%;
-  height: 250px;
+  height: 224px;
 }
 
 .telemetry-chart__grid {
@@ -141,16 +167,24 @@ function formatTick(value: number) {
   vector-effect: non-scaling-stroke;
 }
 
-.telemetry-chart__tick,
-.telemetry-chart__label {
+.telemetry-chart__tick {
   fill: var(--el-text-color-secondary);
   font-family: var(--whaledeck-font-family);
   font-size: 11px;
 }
 
-@media (max-width: 680px) {
-  .telemetry-chart svg {
-    height: 220px;
+.telemetry-chart__axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 14px 14px 46px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@media (max-width: 480px) {
+  .telemetry-chart__midpoint {
+    display: none;
   }
 }
 </style>

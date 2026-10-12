@@ -286,7 +286,34 @@ def main() -> int:
     if logout.status_code not in REDIRECT_STATUSES:
         raise RuntimeError(f"Authenticated logout returned HTTP {logout.status_code}")
 
-    print("OIDC validation passed: administrator policy, origin and CSRF protections verified")
+    logout_target = urljoin(logout.url, logout.headers["Location"])
+    if "/application/o/whaledeck-external/end-session/" not in logout_target:
+        raise RuntimeError("Logout did not navigate to the expected OIDC provider.")
+    if not parse_qs(urlparse(logout_target).query).get("id_token_hint"):
+        raise RuntimeError("RP logout is missing its server-side ID token hint.")
+    response = follow_redirects(session, logout)
+    for _ in range(8):
+        if "/if/flow/" not in response.url:
+            break
+        parsed = urlparse(response.url)
+        slug = parsed.path.rstrip("/").split("/")[-1]
+        executor = f"{parsed.scheme}://{parsed.netloc}/api/v3/flows/executor/{slug}/"
+        stage = session.get(executor, params={"query": parsed.query}, timeout=20)
+        stage.raise_for_status()
+        challenge = stage.json()
+        if challenge.get("component") != "xak-flow-redirect":
+            raise RuntimeError(f"Unexpected logout stage: {challenge.get('component')}")
+        target = urljoin(response.url, challenge["to"])
+        response = follow_redirects(session, session.get(target, allow_redirects=False, timeout=20))
+    if urlparse(response.url).path != "/login":
+        raise RuntimeError("Logout did not return to the Whale Deck login page.")
+    if session.get(f"{base_url}/api/v1/auth/me", timeout=20).status_code != 401:
+        raise RuntimeError("Whale Deck session is still authenticated after logout.")
+    identity_url = f"{urlparse(base_url).scheme}://{urlparse(base_url).hostname}:8081/api/v3/core/users/me/"
+    if session.get(identity_url, timeout=20).status_code not in {401, 403}:
+        raise RuntimeError("Authentik session is still authenticated after logout.")
+
+    print("OIDC validation passed: administrator, Origin/CSRF, full Authentik logout and /login redirect verified")
     return 0
 
 

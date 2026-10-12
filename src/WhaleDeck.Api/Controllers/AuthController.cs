@@ -25,14 +25,15 @@ public sealed class AuthController(IIdentityDirectory identityDirectory, IAntifo
     {
         var scheme = User.FindFirst("whaledeck:oidc-scheme")?.Value;
         if (scheme is not ("AuthentikInternal" or "AuthentikExternal")) scheme = "AuthentikExternal";
-        return SignOut(new AuthenticationProperties { RedirectUri = "/" }, CookieAuthenticationDefaults.AuthenticationScheme, scheme);
+        return SignOut(new AuthenticationProperties { RedirectUri = "/login" }, CookieAuthenticationDefaults.AuthenticationScheme, scheme);
     }
 
     [HttpGet("csrf")]
     public IActionResult Csrf()
     {
         var tokens = antiforgery.GetAndStoreTokens(HttpContext);
-        return Ok(new { headerName = tokens.HeaderName, token = tokens.RequestToken });
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new { headerName = tokens.HeaderName, formFieldName = tokens.FormFieldName, token = tokens.RequestToken });
     }
 
     [HttpGet("me")]

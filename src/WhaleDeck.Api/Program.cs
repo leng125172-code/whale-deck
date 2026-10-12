@@ -79,6 +79,9 @@ try
 
     if (oidcSettings.Enabled)
     {
+        builder.Services.AddSingleton<ServerSideTicketStore>();
+        builder.Services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme)
+            .Configure<ServerSideTicketStore>((options, store) => options.SessionStore = store);
         builder.Services.AddAuthentication(options =>
         {
             options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -253,6 +256,26 @@ static void ConfigureOidc(OpenIdConnectOptions options, OidcEndpointSettings set
     {
         if (context.Principal?.Identity is ClaimsIdentity identity)
             identity.AddClaim(new Claim("whaledeck:oidc-scheme", scheme));
+        // Only the ID token is needed for RP-initiated logout. SaveTokens stays
+        // false, so access/refresh tokens are not retained. The cookie ticket
+        // store above keeps this token in Valkey, never in browser storage.
+        var idToken = context.TokenEndpointResponse?.IdToken ?? context.ProtocolMessage.IdToken;
+        if (string.IsNullOrWhiteSpace(idToken)) throw new InvalidOperationException("OIDC did not supply a logout ID token.");
+        (context.Properties ??= new AuthenticationProperties()).StoreTokens([new AuthenticationToken { Name = "id_token", Value = idToken }]);
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToIdentityProviderForSignOut = context =>
+    {
+        // Match the browser's actual workstation NIC, just like login does.
+        var host = context.Request.Host.Host;
+        if (!string.Equals(host, "precision-7920-tower.local", StringComparison.OrdinalIgnoreCase) &&
+            (!IPAddress.TryParse(host, out var address) || address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any)))
+            throw new InvalidOperationException("Whale Deck OIDC requires an approved workstation IP address or mDNS host name.");
+        context.ProtocolMessage.IssuerAddress = new UriBuilder(context.ProtocolMessage.IssuerAddress)
+        {
+            Host = host,
+            Port = 8081
+        }.Uri.AbsoluteUri;
         return Task.CompletedTask;
     };
 }

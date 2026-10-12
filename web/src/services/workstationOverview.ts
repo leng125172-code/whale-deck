@@ -1,5 +1,6 @@
-import { apiRequest } from '@/services/apiClient'
+import { ApiError, apiRequest } from '@/services/apiClient'
 import type { MetricSeriesSnapshot, OverviewResponse, PortalItem } from '@/services/contracts'
+import { RollingTelemetryHistory, sumAlignedTelemetry } from '@/services/rollingTelemetry'
 
 export type ResourceKey = 'agents' | 'websites' | 'databases' | 'containers'
 export type ContainerState = 'available' | 'running' | 'stopped' | 'restarting'
@@ -29,7 +30,7 @@ export interface TelemetryStat {
 export interface TelemetrySeries {
   name: string
   color: string
-  values: number[]
+  values: Array<number | null>
 }
 
 export interface TelemetryFilter {
@@ -102,9 +103,13 @@ export function createEmptyWorkstationOverview(): WorkstationOverviewSnapshot {
   }
 }
 
-export async function fetchWorkstationOverview(): Promise<WorkstationOverviewSnapshot> {
-  const response = await apiRequest<OverviewResponse>('overview')
+export async function fetchWorkstationOverview(
+  rollingHistory = new RollingTelemetryHistory(),
+  signal?: AbortSignal,
+): Promise<WorkstationOverviewSnapshot> {
+  const response = await apiRequest<OverviewResponse>('overview', { signal })
   if (response.scope === 'Public') {
+    rollingHistory.clear()
     return {
       ...createEmptyWorkstationOverview(),
       scope: 'Public',
@@ -120,10 +125,17 @@ export async function fetchWorkstationOverview(): Promise<WorkstationOverviewSna
   try {
     history = await apiRequest<MetricSeriesSnapshot[]>(
       'metrics?kinds=network.receive&kinds=network.send&kinds=network.receive.total&kinds=network.send.total&kinds=disk.read&kinds=disk.write&kinds=disk.utilization&take=60',
+      { signal },
     )
-  } catch {
+  } catch (reason) {
+    if (signal?.aborted || (reason instanceof ApiError && [401, 403].includes(reason.status))) {
+      rollingHistory.clear()
+      throw reason
+    }
     // A fresh Agent snapshot is still useful while historical metrics recover.
   }
+  signal?.throwIfAborted()
+  history = rollingHistory.update(history, response.metrics ?? [], response.sampledAtUtc)
 
   const resources = response.resources ?? []
   const containers = resources.filter((item) => item.type === 'Container')
@@ -290,8 +302,8 @@ function telemetryFilter(
     history.find((item) => item.kind === firstKind && item.deviceId === device)?.points ?? []
   const second =
     history.find((item) => item.kind === secondKind && item.deviceId === device)?.points ?? []
-  const firstValue = first[first.length - 1]?.value ?? 0
-  const secondValue = second[second.length - 1]?.value ?? 0
+  const firstValue = first[first.length - 1]?.value ?? null
+  const secondValue = second[second.length - 1]?.value ?? null
   const total = (kind: string) =>
     current.find((item) => item.kind === kind && item.deviceId === device)?.value ?? 0
   const stats: TelemetryStat[] =
@@ -305,7 +317,7 @@ function telemetryFilter(
       : [
           { label: '读取', value: formatRate(firstValue), tone: 'success' },
           { label: '写入', value: formatRate(secondValue), tone: 'warning' },
-          { label: '采样点', value: String(Math.max(first.length, second.length)), tone: 'info' },
+          { label: '时间窗口', value: '6 分钟', tone: 'info' },
         ]
   return {
     value: device,
@@ -315,26 +327,20 @@ function telemetryFilter(
       {
         name: mode === 'network' ? '下行' : '读取',
         color: '#409eff',
-        values: first.map((point) => (point.value ?? 0) / 1024 / 1024),
+        values: first.map((point) => (point.value === null ? null : point.value / 1024 / 1024)),
       },
       {
         name: mode === 'network' ? '上行' : '写入',
         color: mode === 'network' ? '#67c23a' : '#e6a23c',
-        values: second.map((point) => (point.value ?? 0) / 1024 / 1024),
+        values: second.map((point) => (point.value === null ? null : point.value / 1024 / 1024)),
       },
     ],
   }
 }
 
 function aggregateTelemetry(mode: 'network' | 'disk', filters: TelemetryFilter[]): TelemetryFilter {
-  const length = Math.max(
-    0,
-    ...filters.flatMap((item) => item.series.map((series) => series.values.length)),
-  )
   const sumSeries = (seriesIndex: number) =>
-    Array.from({ length }, (_, index) =>
-      filters.reduce((sum, item) => sum + (item.series[seriesIndex]?.values[index] ?? 0), 0),
-    )
+    sumAlignedTelemetry(filters.map((item) => item.series[seriesIndex]?.values ?? []))
   const first = sumSeries(0)
   const second = sumSeries(1)
   return {
@@ -343,12 +349,20 @@ function aggregateTelemetry(mode: 'network' | 'disk', filters: TelemetryFilter[]
     stats: [
       {
         label: mode === 'network' ? '当前下行' : '读取',
-        value: `${(first[first.length - 1] ?? 0).toFixed(2)} MB/s`,
+        value: formatRate(
+          first[first.length - 1] === null || first.length === 0
+            ? null
+            : first[first.length - 1]! * 1024 * 1024,
+        ),
         tone: 'success',
       },
       {
         label: mode === 'network' ? '当前上行' : '写入',
-        value: `${(second[second.length - 1] ?? 0).toFixed(2)} MB/s`,
+        value: formatRate(
+          second[second.length - 1] === null || second.length === 0
+            ? null
+            : second[second.length - 1]! * 1024 * 1024,
+        ),
         tone: mode === 'network' ? 'primary' : 'warning',
       },
       { label: '设备', value: String(filters.length), tone: 'info' },
@@ -368,8 +382,8 @@ function formatSampleTime(value: string) {
   return value ? new Date(value).toLocaleTimeString() : '未知'
 }
 
-function formatRate(bytesPerSecond: number) {
-  return `${(bytesPerSecond / 1024 / 1024).toFixed(2)} MB/s`
+function formatRate(bytesPerSecond: number | null) {
+  return bytesPerSecond === null ? '暂无采样' : `${(bytesPerSecond / 1024 / 1024).toFixed(2)} MB/s`
 }
 
 function formatBytes(value: number) {

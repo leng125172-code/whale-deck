@@ -1,6 +1,7 @@
 import { readonly, ref } from 'vue'
 import { runtimeConfig } from '@/config/runtime'
 import { ApiError, apiRequest } from '@/services/apiClient'
+import { navigateToLogout } from '@/services/logoutNavigation'
 import type { CurrentUser } from '@/services/contracts'
 
 const previewStorageKey = 'whaledeck-preview-authenticated'
@@ -80,10 +81,10 @@ async function logout() {
     window.location.assign('/login')
     return
   }
-  await apiRequest<void>('auth/logout', { method: 'POST' })
-  authenticated.value = false
-  user.value = null
-  window.location.assign('/login')
+  // OIDC logout must be a top-level navigation: fetch follows the provider's
+  // redirect in the background, where cross-origin identity pages are not JSON.
+  // A same-origin POST form preserves CSRF protection and the browser session.
+  await navigateToLogout()
 }
 
 export const authSession = {

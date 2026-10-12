@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -26,7 +26,9 @@ import {
   type RecommendedApplication,
   type ResourceKey,
 } from '@/services/workstationOverview'
-import { apiRequest } from '@/services/apiClient'
+import { ApiError, apiRequest } from '@/services/apiClient'
+import { authSession } from '@/services/authSession'
+import { RollingTelemetryHistory } from '@/services/rollingTelemetry'
 import { enqueueOperation } from '@/services/operations'
 import type { Job } from '@/services/contracts'
 
@@ -39,6 +41,11 @@ const loadError = ref('')
 const monitorMode = ref<MonitorMode>('network')
 const networkFilter = ref('all')
 const diskFilter = ref('all')
+const telemetryHistory = new RollingTelemetryHistory()
+let refreshTimer: number | undefined
+let request: AbortController | undefined
+let generation = 0
+let inFlight = false
 
 const resourceIcons = {
   agents: MagicStick,
@@ -98,16 +105,46 @@ function gaugeColor(percentage: number) {
 }
 
 async function loadOverview() {
-  loading.value = true
+  if (inFlight) return
+  inFlight = true
+  const current = ++generation
+  request = new AbortController()
+  const controller = request
+  const timeout = window.setTimeout(() => controller.abort(), 30_000)
+  loading.value = snapshot.value.sampledAtUtc === ''
   loadError.value = ''
   try {
-    snapshot.value = await fetchWorkstationOverview()
+    const value = await fetchWorkstationOverview(telemetryHistory, controller.signal)
+    if (current === generation) snapshot.value = value
   } catch (reason) {
+    if (current !== generation) return
+    if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
+      telemetryHistory.clear()
+      snapshot.value = createEmptyWorkstationOverview()
+    }
     loadError.value = reason instanceof Error ? reason.message : '读取工作站状态失败'
   } finally {
-    loading.value = false
+    window.clearTimeout(timeout)
+    if (current === generation) {
+      loading.value = false
+      inFlight = false
+    }
   }
 }
+
+watch(
+  () => [authSession.user.value?.subject, authSession.user.value?.isAdministrator],
+  () => {
+    generation++
+    request?.abort()
+    inFlight = false
+    telemetryHistory.clear()
+    snapshot.value = createEmptyWorkstationOverview()
+    networkFilter.value = 'all'
+    diskFilter.value = 'all'
+    if (authSession.authenticated.value) void loadOverview()
+  },
+)
 
 function showDeferredAction(action: 'details' | 'install' | 'manage', app: RecommendedApplication) {
   void router.push({ name: 'applications', query: { app: app.id, action } })
@@ -183,6 +220,15 @@ async function waitForJob(jobId: string) {
 
 onMounted(() => {
   void loadOverview()
+  refreshTimer = window.setInterval(() => {
+    if (!document.hidden) void loadOverview()
+  }, 6000)
+})
+onBeforeUnmount(() => {
+  generation++
+  request?.abort()
+  telemetryHistory.clear()
+  window.clearInterval(refreshTimer)
 })
 </script>
 

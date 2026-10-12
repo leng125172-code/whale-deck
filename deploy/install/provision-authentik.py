@@ -70,7 +70,8 @@ def ensure_provider(slug: str, address: str, callback: str, signout_callback: st
         )
     provider.authentication_flow = None
     provider.authorization_flow = require_flow("default-provider-authorization-explicit-consent")
-    provider.invalidation_flow = require_flow("default-provider-invalidation-flow")
+    # End the Authentik session too, not just this provider's application session.
+    provider.invalidation_flow = require_flow("default-invalidation-flow")
     provider.client_type = "confidential"
     provider.grant_types = ["authorization_code", "refresh_token"]
     provider._redirect_uris = redirect_uris
