@@ -15,8 +15,8 @@ KINDS = ["network.receive", "network.send", "disk.read", "disk.write", "disk.rea
 
 
 def query(sql: str, **parameters: str):
-    command = ["docker", "exec", "-i", "database-platform-postgres", "sh", "-c",
-               'exec psql -X -U "$POSTGRES_USER" -d whaledeck -t -A -v ON_ERROR_STOP=1 "$@"', "sh"]
+    command = ["docker", "exec", "-i", "-u", "postgres", "database-platform-postgres",
+               "psql", "-X", "-d", "whaledeck", "-t", "-A", "-v", "ON_ERROR_STOP=1"]
     for key, value in parameters.items():
         command.extend(["-v", f"{key}={value}"])
     result = subprocess.run(command, input=sql, check=True, text=True, stdout=subprocess.PIPE,
