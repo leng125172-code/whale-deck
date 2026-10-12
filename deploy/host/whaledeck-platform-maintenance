@@ -49,7 +49,9 @@ trap report_failure ERR
 compose_for() {
   local project_root=$1
   shift
-  docker compose --project-name whale-deck --project-directory "$project_root" \
+  # compose.yml owns the stable project name (`whaledeck`). Do not override it
+  # here or Compose will treat the running control plane as an unrelated stack.
+  docker compose --project-directory "$project_root" \
     --env-file "$source_root/.env" --env-file "$source_root/.images.env" \
     -f "$project_root/compose.yml" "$@"
 }
