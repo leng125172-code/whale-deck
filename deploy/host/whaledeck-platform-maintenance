@@ -64,7 +64,10 @@ deploy_revision() {
   if [[ $migrate == true ]]; then
     compose_for "$project_root" --profile tools run --rm --no-deps migrator
   fi
-  compose_for "$project_root" up -d --wait --wait-timeout 180
+  # Development publishes must replace every runtime container even when the
+  # Compose configuration hash is unchanged; otherwise a newly built frontend
+  # image can remain hidden behind the previous Gateway container.
+  compose_for "$project_root" up -d --force-recreate --wait --wait-timeout 180
 }
 
 case "$action" in
