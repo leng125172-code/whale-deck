@@ -39,6 +39,7 @@ def main() -> int:
         if not metrics or len({metric["sampledAtUtc"] for metric in metrics}) != 1:
             raise RuntimeError("Concurrent metric readers did not receive a consistent canonical batch")
     checked = 0
+    partial_only = 0
     observed_disk_kinds: set[str] = set()
     for window, resolution, count in [("live", 6, None), ("1h", 30, 121), ("24h", 300, 289), ("7d", 1800, 337)]:
         response = session.get(f"{base}/api/v1/metrics", params=[*(('kinds', kind) for kind in KINDS), ('window', window), ('take', '60')], timeout=60)
@@ -74,7 +75,13 @@ def main() -> int:
                     continue
                 raise RuntimeError("History unexpectedly lacks all real observations")
             # Pick a completed populated bucket so concurrent sampling cannot alter its contents.
-            selected = next((point for point in reversed(valid) if point != points[-1]), valid[0])
+            selected = next((point for point in reversed(valid) if point["sampledAtUtc"] != points[-1]["sampledAtUtc"]), None)
+            if selected is None:
+                # New kinds may only have a current 30-minute bucket. Its average is allowed to change:
+                # Worker can persist a canonical batch sampled before windowEnd after this API response.
+                # Do not compare that mutable bucket to a later independent database snapshot.
+                partial_only += 1
+                continue
             expected = query("""
                 SELECT to_json(CASE WHEN :'kind' IN ('disk.read.latency','disk.write.latency') THEN
                     SUM(sample.value_double * weight.value_double) / NULLIF(SUM(weight.value_double),0)
@@ -100,7 +107,7 @@ def main() -> int:
         response = session.get(f"{base}/api/v1/metrics", params=parameters, timeout=30)
         if response.status_code != 400 or not response.json().get("traceId"):
             raise RuntimeError("Invalid history queries did not return bounded Problem Details")
-    print(f"Historical telemetry acceptance passed: {checked} buckets independently compared with PostgreSQL; throughput, IOPS, latency, gaps and invalid-query rejection verified")
+    print(f"Historical telemetry acceptance passed: {checked} completed buckets independently compared with PostgreSQL; {partial_only} newly introduced partial-only series verified for shape/quality without cross-snapshot value comparison; throughput, IOPS, latency, gaps and invalid-query rejection verified")
     return 0
 
 
