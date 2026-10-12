@@ -141,12 +141,12 @@ onMounted(load)
   padding: 14px;
   min-height: 360px;
 }
-@media (max-width: 900px) {
+@container page (max-width: 860px) {
   .filter-panel {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-@media (max-width: 560px) {
+@container page (max-width: 520px) {
   .filter-panel {
     grid-template-columns: 1fr;
   }

@@ -52,3 +52,14 @@ npm run test:unit
 ```sh
 npm run lint
 ```
+
+### Responsive layout regression
+
+```sh
+pnpm exec playwright install chromium
+pnpm test:layout
+```
+
+The suite uses the local Vite development session and mocked API responses, never production credentials or write operations. It checks page switching, long resource names, wide tables, filters, search dialogs, empty/error states and light/dark layouts at 320–1920px, including the 1045px navigation breakpoint. Wide tables must scroll within their cards; the document itself must not scroll horizontally. Screenshots are saved under ignored `test-results/`.
+
+To use an existing browser without downloading Chromium, set `PLAYWRIGHT_EXECUTABLE_PATH` to its absolute executable path for the test process.

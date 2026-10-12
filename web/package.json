@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
+    "test:layout": "playwright test",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "lint": "run-s lint:oxlint lint:eslint",
@@ -27,6 +28,7 @@
     "vue-router": "5.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@tsconfig/node24": "^24.0.5",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^24.13.4",

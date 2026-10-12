@@ -251,6 +251,8 @@ onMounted(load)
 }
 .database-card__heading > div {
   display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
   gap: 5px;
 }
 .database-card small,

@@ -708,6 +708,7 @@ onMounted(load)
 .container-card > div:nth-child(3) {
   display: grid;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .container-card small {
   overflow: hidden;

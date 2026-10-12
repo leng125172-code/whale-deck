@@ -642,16 +642,31 @@ a {
 
 .page-content {
   width: min(100%, var(--whaledeck-content-width));
+  min-width: 0;
+  container: page / inline-size;
   margin: 0 auto;
   padding: var(--whaledeck-page-padding);
 }
 
+/* A grid item's automatic minimum otherwise lets table column widths grow
+   the whole page. Keep scrolling inside Element Plus tables, not the shell. */
+.page-content > * {
+  min-width: 0;
+}
+
 .page-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: 28px;
   margin-bottom: 26px;
+}
+
+.page-heading > div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .page-heading__meta {
@@ -677,7 +692,12 @@ a {
 
 .page-heading__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+.page-heading__actions .el-button + .el-button {
+  margin-left: 0;
 }
 
 .metric-grid {
@@ -789,6 +809,7 @@ a {
 }
 
 .panel {
+  min-width: 0;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: var(--whaledeck-panel-radius);
   background: var(--whaledeck-panel-bg);
