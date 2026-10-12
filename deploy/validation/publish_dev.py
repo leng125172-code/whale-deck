@@ -8,6 +8,7 @@ expected to overwrite it. It never requests the optional rollback action.
 
 from __future__ import annotations
 
+import os
 import sys
 
 from validate_databases import Api
@@ -15,8 +16,10 @@ from validate_oidc import authenticate, required_environment
 
 
 def main() -> int:
-    base_url, username, password = required_environment()
-    session = authenticate(base_url, username, password)
+    base_url = os.environ.get("WHALEDECK_URL", "http://192.168.100.13:8080").rstrip("/")
+    username = required_environment("VALIDATION_USERNAME")
+    password = required_environment("VALIDATION_PASSWORD")
+    session, _ = authenticate(base_url, username, password)
     api = Api(base_url, session)
     job = api.run(
         "apply-update",
