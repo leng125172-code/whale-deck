@@ -39,13 +39,14 @@ public static partial class ApplicationEnvironmentPatch
                 .Replace("\t", "\\t", StringComparison.Ordinal);
             output.Append(name).Append("=\"").Append(encoded).Append("\"\n");
         }
-        if (output.Length > 65_536) throw Invalid();
-        return output.ToString();
+        var result = output.ToString();
+        if (Encoding.UTF8.GetByteCount(result) > 65_536) throw Invalid();
+        return result;
     }
 
     private static List<Entry> Entries(string source)
     {
-        if (source.Length > 65_536 || source.Contains('\0')) throw Invalid();
+        if (Encoding.UTF8.GetByteCount(source) > 65_536 || source.Contains('\0')) throw Invalid();
         var lines = source.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
         var entries = new List<Entry>();
         var names = new HashSet<string>(StringComparer.Ordinal);

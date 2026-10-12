@@ -5,6 +5,17 @@ namespace WhaleDeck.UnitTests.Agent;
 
 public sealed class ApplicationEnvironmentPatchTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FileBoundsUseUtf8BytesRatherThanCharacterCount(bool existing)
+    {
+        var value = new string('鲸', 30_000);
+        var source = existing ? "KEY=" + value + "\n" : "";
+        var patch = new JsonObject { ["set"] = new JsonObject { ["KEY"] = existing ? "small" : value } };
+        Assert.Throws<InvalidOperationException>(() => ApplicationEnvironmentPatch.Apply(source, patch));
+    }
+
     [Fact]
     public void NamesExcludeValuesAndCommentsAndUnderstandQuotedMultilineEntries()
     {
