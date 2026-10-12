@@ -200,8 +200,15 @@ def main():
                 '--security-opt', 'no-new-privileges', '--memory', '128m', '--cpus', '0.5', '--pids-limit', '32',
                 '--log-driver', 'local', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=2',
                 '--entrypoint', 'python3', image_id, '-', str(pid), start, slug, killed_hex],
-                input=Path(__file__).with_name('kill_bound_backup.py').read_text(), check=True,
+                input=Path(__file__).with_name('kill_bound_backup.py').read_text(), check=False,
                 text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+            if capsule.returncode:
+                try:
+                    diagnostic = json.loads(capsule.stdout)
+                    detail = str(diagnostic.get('errorType')) + '/' + str(diagnostic.get('errno'))
+                except ValueError:
+                    detail = 'capsule-exit-' + str(capsule.returncode)
+                raise RuntimeError('No successful bound signal receipt: ' + detail)
             assert json.loads(capsule.stdout)['boundBackupSignal'] == 'SIGKILL'
             interrupted = terminal(killed_id)
             assert interrupted['state'] == 'Failed', interrupted['state']

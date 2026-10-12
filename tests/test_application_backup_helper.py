@@ -91,6 +91,37 @@ class BackupHelperTests(unittest.TestCase):
         with self.assertRaises(backup.BackupError): backup.finish_cleanup_entry(journal)
         self.assertTrue(artifact.exists())
 
+    def test_recover_all_continues_past_corrupt_journal_and_keeps_it_for_retry(self):
+        bad, good = 'a' * 32, 'b' * 32
+        broken = backup.journal_path(bad)
+        broken.write_text('{corrupt', encoding='utf-8')
+        backup.private_json(backup.journal_path(good),
+            {'slug': 'demo', 'job': good, 'paused': [self.identity]})
+        self.member['State']['Paused'] = True
+        destination = backup.target('demo')
+        partial = destination / (good + '.partial')
+        partial.write_bytes(b'incomplete')
+        ignored = self.state / 'unrelated.json'
+        ignored.write_text('{not-a-job', encoding='utf-8')
+        with patch.object(backup.os, 'geteuid', return_value=0, create=True), \
+             patch.object(backup.sys, 'argv', ['helper', 'recover-all']):
+            with self.assertRaises(backup.BackupError):
+                backup.main()
+        self.assertTrue(broken.exists())
+        self.assertTrue(ignored.exists())
+        self.assertFalse(backup.journal_path(good).exists())
+        self.assertFalse(partial.exists())
+        self.assertFalse(self.member['State']['Paused'])
+        self.assertEqual(self.calls.count(('unpause', self.identity)), 1)
+
+    def test_recover_does_not_unpause_manually_paused_members_not_in_journal(self):
+        job = 'd' * 32
+        self.member['State']['Paused'] = True
+        backup.private_json(backup.journal_path(job), {'slug': 'demo', 'job': job, 'paused': []})
+        backup.recover_job(job)
+        self.assertTrue(self.member['State']['Paused'])
+        self.assertFalse(any(call[0] == 'unpause' for call in self.calls))
+
     def test_invalid_archive_timestamp_blocks_retention_without_deletion(self):
         identities = self.create_archives(2)
         path = self.target / 'demo' / (identities[0] + '.json')

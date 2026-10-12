@@ -43,5 +43,11 @@ def kill_bound_process(pid: int, start: str, slug: str, job: str) -> None:
 if __name__ == '__main__':
     if len(sys.argv) != 5:
         raise SystemExit('Usage: capsule PID START_TICKS TEMP_SLUG JOB_HEX')
-    kill_bound_process(int(sys.argv[1]), *sys.argv[2:])
+    try:
+        kill_bound_process(int(sys.argv[1]), *sys.argv[2:])
+    except Exception as error:
+        # No command line, configuration, fingerprint or private environment in diagnostics.
+        print(json.dumps({'boundBackupSignal': 'rejected', 'errorType': type(error).__name__,
+                          'errno': getattr(error, 'errno', None)}))
+        raise SystemExit(1)
     print(json.dumps({'boundBackupSignal': 'SIGKILL'}))
