@@ -6,8 +6,14 @@ using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Agent.Services;
 
-public sealed class HostGrpcService(HostReader host, OperationStore operations, BoundedProcessRunner processes) : HostService.HostServiceBase
+public sealed class HostGrpcService(HostReader host, OperationStore operations, BoundedProcessRunner processes, HostProcessStore hostProcesses) : HostService.HostServiceBase
 {
+    public override Task<HostProcessesResponse> ListProcesses(HostProcessesRequest request, ServerCallContext context) =>
+        Task.FromResult(hostProcesses.Query(request));
+
+    public override Task<HostProcessSnapshot> GetProcess(HostProcessRequest request, ServerCallContext context) =>
+        Task.FromResult(hostProcesses.Get(request));
+
     private const string PrivilegedHelper = "/usr/local/libexec/whaledeck-privileged";
     private static readonly HashSet<string> JournalUnits = new(StringComparer.Ordinal)
     {

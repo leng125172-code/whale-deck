@@ -42,6 +42,12 @@ public interface IAgentGateway
     Task<byte[]> DownloadDiagnosticBundleAsync(string bundleId, CancellationToken cancellationToken);
 }
 
+public interface IHostProcessGateway
+{
+    Task<HostProcessPageDto> ListProcessesAsync(HostProcessQuery query, CancellationToken cancellationToken);
+    Task<HostProcessDto> GetProcessAsync(int pid, string instanceId, CancellationToken cancellationToken);
+}
+
 public interface ICatalogProvider
 {
     Task<CatalogResultDto> GetPopularAsync(CancellationToken cancellationToken);

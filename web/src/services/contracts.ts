@@ -76,6 +76,33 @@ export interface ContainerLogs {
   truncated: boolean
 }
 
+export interface HostProcess {
+  pid: number
+  parentPid: number
+  userId: number
+  instanceId: string
+  name: string
+  state: string
+  threadCount: number
+  startedAtUtc: string
+  cpuTimeSeconds: number
+  cpuPercent: number | null
+  memoryBytes: number
+  virtualMemoryBytes: number
+}
+
+export interface HostProcessPage {
+  items: HostProcess[]
+  total: number
+  page: number
+  pageSize: number
+  sampledAtUtc: string
+  cpuWindowSeconds: number
+  isStale: boolean
+  isTruncated: boolean
+  skippedCount: number
+}
+
 export interface ContainerStats {
   values: Record<string, string>
 }

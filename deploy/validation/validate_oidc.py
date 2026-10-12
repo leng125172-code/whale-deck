@@ -172,6 +172,8 @@ def authenticate(
     base_url: str,
     username: str,
     password: str,
+    *,
+    require_administrator: bool = True,
 ) -> tuple[requests.Session, dict[str, object]]:
     session = requests.Session()
     # Workstation shell profiles may point HTTP(S)_PROXY at a local desktop
@@ -239,8 +241,8 @@ def authenticate(
             "administrator": profile.get("administrator"),
         },
     )
-    if not profile.get("subject") or not profile.get("isAdministrator"):
-        raise RuntimeError("OIDC session is not an authenticated administrator")
+    if not profile.get("subject") or (require_administrator and not profile.get("isAdministrator")):
+        raise RuntimeError("OIDC session does not have the expected authentication level")
 
     return session, profile
 

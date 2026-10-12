@@ -37,6 +37,7 @@ public sealed class ProblemDetailsTests
         { new RpcException(new Status(StatusCode.PermissionDenied, "private")), StatusCodes.Status403Forbidden, "AGENT_OPERATION_FORBIDDEN" },
         { new RpcException(new Status(StatusCode.FailedPrecondition, "private")), StatusCodes.Status409Conflict, "AGENT_PRECONDITION_FAILED" },
         { new RpcException(new Status(StatusCode.Unavailable, "private")), StatusCodes.Status503ServiceUnavailable, "AGENT_UNAVAILABLE" },
+        { new RpcException(new Status(StatusCode.Unimplemented, "private")), StatusCodes.Status503ServiceUnavailable, "AGENT_CAPABILITY_UNSUPPORTED" },
         { new DbUpdateConcurrencyException(), StatusCodes.Status409Conflict, "CONCURRENCY_CONFLICT" },
         { new InvalidOperationException(), StatusCodes.Status409Conflict, "OPERATION_CONFLICT" },
         { new ArgumentException(), StatusCodes.Status400BadRequest, "VALIDATION_FAILED" },

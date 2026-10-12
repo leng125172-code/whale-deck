@@ -302,7 +302,49 @@ service HostService {
   rpc ListNetworkInterfaces(google.protobuf.Empty) returns (ResourceCollectionResponse);
   rpc ListStorageDevices(google.protobuf.Empty) returns (ResourceCollectionResponse);
   rpc QueryJournal(JournalRequest) returns (JournalResponse);
+  rpc ListProcesses(HostProcessesRequest) returns (HostProcessesResponse);
+  rpc GetProcess(HostProcessRequest) returns (HostProcessSnapshot);
   rpc RebootHost(RegisteredActionRequest) returns (OperationHandle);
+}
+
+message HostProcessesRequest {
+  uint32 page = 1;
+  uint32 page_size = 2;
+  string sort = 3;
+  bool descending = 4;
+  string filter = 5;
+}
+
+message HostProcessRequest {
+  int32 pid = 1;
+  string instance_id = 2;
+}
+
+message HostProcessSnapshot {
+  int32 pid = 1;
+  int32 parent_pid = 2;
+  uint32 user_id = 3;
+  string instance_id = 4;
+  string name = 5;
+  string state = 6;
+  int32 thread_count = 7;
+  google.protobuf.Timestamp started_at_utc = 8;
+  double cpu_time_seconds = 9;
+  optional double cpu_percent = 10;
+  int64 memory_bytes = 11;
+  int64 virtual_memory_bytes = 12;
+}
+
+message HostProcessesResponse {
+  repeated HostProcessSnapshot items = 1;
+  int32 total = 2;
+  uint32 page = 3;
+  uint32 page_size = 4;
+  google.protobuf.Timestamp sampled_at_utc = 5;
+  double cpu_window_seconds = 6;
+  bool is_stale = 7;
+  bool is_truncated = 8;
+  int32 skipped_count = 9;
 }
 
 service DockerService {

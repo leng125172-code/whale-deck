@@ -93,6 +93,7 @@
 | `PAGE-HOST-002` | `/host/logs` | `MVP` | journald 和容器日志，时间、级别、来源、关键字 | 查询、实时追踪、下载受限诊断片段 |
 | `PAGE-HOST-003` | `/host/updates` | `MVP/P1` | 周日 20:00 timer、可用更新、上次/下次运行和待重启状态 | 检查、执行普通更新、管理员确认重启主机 |
 | `PAGE-HOST-004` | `/host/storage` | `MVP/P1` | 磁盘、分区、文件系统、挂载、inode、NVMe/HDD 和 SMART | 查看、扫描大目录和清理建议 |
+| `PAGE-HOST-005` | `/host/processes` | `P1` | 每 6 秒只读采样、CPU/常驻内存排序、名称/PID 过滤、分页、过期/部分快照 | 查看绑定启动身份的详情；不提供结束进程 |
 | `PAGE-MNT-001` | `/platform/maintenance` | `P1` | WhaleDeck 版本、组件兼容、自检、更新计划和最近回滚 | 自检、导出脱敏诊断包、受控自更新 |
 
 主机重启时页面显示连接中断和自动重连。远程关机按钮不实现。

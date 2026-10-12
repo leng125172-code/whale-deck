@@ -80,11 +80,13 @@ public static class DependencyInjection
         services.AddScoped<ICatalogProvider, XuanyuanCatalogProvider>();
         services.AddSingleton<AgentGateway>();
         services.AddSingleton<IAgentGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddSingleton<IHostProcessGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IManagementQuery>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<PortalService>();
         services.AddScoped<OverviewService>();
         services.AddScoped<OperationService>();
         services.AddScoped<JobRetryService>();
+        services.AddScoped<HostProcessService>();
         services.AddScoped<GovernanceService>();
         services.AddScoped<ApplicationService>();
         services.AddScoped<ContainerUpdateService>();

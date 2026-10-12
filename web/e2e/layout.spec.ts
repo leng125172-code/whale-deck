@@ -13,6 +13,21 @@ const resource = {
   attributes: {},
 }
 
+const hostProcess = {
+  pid: 42,
+  parentPid: 1,
+  userId: 1000,
+  instanceId: '42:638957376000000000',
+  name: longName,
+  state: 'S',
+  threadCount: 8,
+  startedAtUtc: now,
+  cpuTimeSeconds: 8,
+  cpuPercent: null,
+  memoryBytes: 1048576,
+  virtualMemoryBytes: 4194304,
+}
+
 for (const width of [1100, 390]) {
   test(`${width}px: empty and dependency-error states also fit`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
@@ -44,6 +59,18 @@ for (const width of [1100, 390]) {
   })
 }
 const fixtures: Record<string, unknown> = {
+  'host/processes': {
+    items: [hostProcess],
+    total: 1,
+    page: 1,
+    pageSize: 50,
+    sampledAtUtc: now,
+    cpuWindowSeconds: 6,
+    isStale: false,
+    isTruncated: false,
+    skippedCount: 0,
+  },
+  'host/processes/42': hostProcess,
   'host/journal': [
     {
       occurredAtUtc: now,
@@ -119,6 +146,7 @@ const pages = [
   ['数据库', '/databases'],
   ['容器', '/containers'],
   ['主机设备', '/host/resources'],
+  ['主机进程', '/host/processes'],
   ['任务中心', '/jobs'],
   ['身份用户', '/identity/users'],
   ['平台设置', '/settings'],
@@ -208,6 +236,23 @@ for (const width of [1920, 1280, 1100, 1046, 1045, 900, 760, 600, 390, 320]) {
           await expectViewportFit(page)
           await checkboxLabel.click()
           await expect(checkbox).not.toBeChecked()
+        }
+        if (path === '/host/processes') {
+          if ([1100, 390].includes(width))
+            await page.screenshot({
+              path: `test-results/processes-${width}-${colorScheme}.png`,
+              scale: 'css',
+            })
+          await page.getByRole('button', { name: '详情', exact: true }).click()
+          await expect(page.getByRole('dialog')).toBeVisible()
+          await expectViewportFit(page)
+          if ([1100, 390].includes(width))
+            await page.screenshot({
+              path: `test-results/process-details-${width}-${colorScheme}.png`,
+              scale: 'css',
+            })
+          await page.getByRole('dialog').getByRole('button', { name: 'Close this dialog' }).click()
+          await expect(page.getByRole('dialog')).not.toBeVisible()
         }
       }
       await navigate(page, '系统日志')

@@ -17,6 +17,7 @@ public static class TraceAndErrors
             RpcException { StatusCode: StatusCode.PermissionDenied } => (StatusCodes.Status403Forbidden, "AGENT_OPERATION_FORBIDDEN", "The Agent operation is not permitted."),
             RpcException { StatusCode: StatusCode.FailedPrecondition } => (StatusCodes.Status409Conflict, "AGENT_PRECONDITION_FAILED", "The Agent operation prerequisites are not satisfied."),
             RpcException { StatusCode: StatusCode.Unavailable or StatusCode.DeadlineExceeded } => (StatusCodes.Status503ServiceUnavailable, "AGENT_UNAVAILABLE", "The Agent is temporarily unavailable."),
+            RpcException { StatusCode: StatusCode.Unimplemented } => (StatusCodes.Status503ServiceUnavailable, "AGENT_CAPABILITY_UNSUPPORTED", "The Agent does not support this capability."),
             UnauthorizedAccessException => (StatusCodes.Status403Forbidden, "AUTH_FORBIDDEN", "The operation is not permitted."),
             KeyNotFoundException => (StatusCodes.Status404NotFound, "RESOURCE_NOT_FOUND", "The requested resource was not found."),
             DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "CONCURRENCY_CONFLICT", "The resource was changed by another request."),

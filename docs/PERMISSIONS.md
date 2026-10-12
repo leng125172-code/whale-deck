@@ -85,6 +85,7 @@
 | `PERM-APPLICATION-UNINSTALL` | 否 | 是 | 二次确认，明确卷保留策略 |
 | `PERM-SERVICE-READ` | 否 | 是 | 普通用户只通过首页门户访问已发布入口 |
 | `PERM-HOST-READ` | 否 | 是 | IP、设备、日志仅管理员 |
+| `PERM-HOST-PROCESS-READ` | 否 | 是 | 列表/详情只读；不暴露命令行、环境变量或可执行路径；无结束进程动作 |
 | `PERM-SYSTEMD-MANAGE` | 否 | 是 | 仅白名单 unit |
 | `PERM-SYSTEM-UPDATE` | 否 | 是 | 普通更新，不自动重启 |
 | `PERM-HOST-REBOOT` | 否 | 是 | 二次确认、任务排空、无关机能力 |

@@ -121,6 +121,8 @@
 | `UC-HOST-002` | 查询 systemd 服务 | 管理员 | `RPC-SVC-001` |
 | `UC-HOST-003` | 启停/重启白名单服务 | 管理员 | `RPC-SVC-002` |
 | `UC-HOST-004` | 查询 journald | 管理员 | `RPC-LOG-001` |
+| `UC-HOST-005` | 查询进程列表 | 管理员 | `GET /api/v1/host/processes` → `RPC-HOST-006`；稳定排序、过滤、分页和过期标记 |
+| `UC-HOST-006` | 查询进程详情 | 管理员 | `GET /api/v1/host/processes/{pid}?instanceId=...` → `RPC-HOST-007`；退出/PID 复用返回 404，不提供命令行/环境变量 |
 | `UC-UPD-001` | 查询系统更新 | 管理员 | `RPC-UPD-001` |
 | `UC-UPD-002` | 执行普通更新 | 管理员 | `RPC-UPD-002` |
 | `UC-UPD-003` | 重启主机 | 管理员 | `RPC-HOST-005` |

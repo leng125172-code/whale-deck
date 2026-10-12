@@ -10,7 +10,7 @@
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
-- 当前协议版本为 `1.6`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`；旧次版本按能力协商并安全降级。
+- 当前协议版本为 `1.7`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`；旧次版本按能力协商并安全降级。
 
 ## 2. 通用消息
 
@@ -99,6 +99,10 @@ Agent 每次维护状态变化都原子写入 `/run/whaledeck/maintenance/status
 | `RPC-HOST-003` | `HostService.ListNetworkInterfaces` | Unary | 网卡、地址、链路、速率、路由摘要和累计流量 |
 | `RPC-HOST-004` | `HostService.ListStorageDevices` | Unary | 磁盘、分区、文件系统、挂载、inode 和 SMART 摘要 |
 | `RPC-HOST-005` | `HostService.RebootHost` | Operation | 管理员确认后重启；拒绝关机请求 |
+| `RPC-HOST-006` | `HostService.ListProcesses` | Unary | 有界进程快照、CPU/内存/PID/名称排序、过滤及分页 |
+| `RPC-HOST-007` | `HostService.GetProcess` | Unary | 通过 PID 与启动身份读取当前只读详情；PID 复用返回不存在 |
+
+进程采样每 6 秒一次，不记录成功采样日志。CPU 根据单调时间和累计 CPU 时间差分，100% 为一个逻辑核心；首次采样或新进程返回 `null`，不伪造 0%。返回采样时间、窗口、18 秒过期标记、截断标记与跳过数量；采样上限 32768，每页 1–500，过滤最长 128。只返回 PID、父 PID、UID、名称、状态、线程、启动时间和 CPU/内存统计，不读取或返回 argv、环境变量及可执行路径。详情的 `instance_id` 为 `pid:启动时间UTC ticks`，不能用新进程替代已退出实例。API 在未知主版本或未声明能力时返回 503 `AGENT_CAPABILITY_UNSUPPORTED`，不降级为伪空列表。
 
 指标使用单调计数器计算速率，包含采样起止时间和设备稳定 ID。Worker 负责聚合、降采样和 14 天清理，Agent 不为每次采样写 Info 日志。
 

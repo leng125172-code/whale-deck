@@ -11,7 +11,7 @@ using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Infrastructure.Agent;
 
-public sealed class AgentGateway : IAgentGateway, IManagementQuery, IDisposable
+public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcessGateway, IDisposable
 {
     private readonly GrpcChannel _channel;
     private readonly AgentService.AgentServiceClient _agent;
@@ -71,6 +71,38 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IDisposable
             checked((int)response.LogicalProcessorCount), response.TotalMemoryBytes,
             response.Addresses.Select(item => new HostAddressDto(item.InterfaceName, item.Address)).ToArray());
     }
+
+    public async Task<HostProcessPageDto> ListProcessesAsync(HostProcessQuery query, CancellationToken cancellationToken)
+    {
+        await EnsureProcessCapabilityAsync(cancellationToken);
+        var response = await _host.ListProcessesAsync(new HostProcessesRequest
+        {
+            Page = checked((uint)query.Page), PageSize = checked((uint)query.PageSize), Sort = query.Sort,
+            Descending = query.Descending, Filter = query.Filter ?? string.Empty
+        }, Headers("/whaledeck.agent.v1.HostService/ListProcesses"), cancellationToken: cancellationToken);
+        return new(response.Items.Select(MapProcess).ToArray(), response.Total, checked((int)response.Page), checked((int)response.PageSize),
+            response.SampledAtUtc.ToDateTimeOffset(), response.CpuWindowSeconds, response.IsStale, response.IsTruncated, response.SkippedCount);
+    }
+
+    public async Task<HostProcessDto> GetProcessAsync(int pid, string instanceId, CancellationToken cancellationToken)
+    {
+        await EnsureProcessCapabilityAsync(cancellationToken);
+        var response = await _host.GetProcessAsync(new HostProcessRequest { Pid = pid, InstanceId = instanceId },
+            Headers("/whaledeck.agent.v1.HostService/GetProcess"), cancellationToken: cancellationToken);
+        return MapProcess(response);
+    }
+
+    private async Task EnsureProcessCapabilityAsync(CancellationToken cancellationToken)
+    {
+        var capabilities = await GetCapabilitiesAsync(cancellationToken);
+        if (capabilities.ProtocolMajor != 1 || !capabilities.Capabilities.Contains("host.processes"))
+            throw new RpcException(new Status(StatusCode.Unimplemented, "Agent process capability is unavailable."));
+    }
+
+    private static HostProcessDto MapProcess(HostProcessSnapshot item) =>
+        new(item.Pid, item.ParentPid, item.UserId, item.InstanceId, item.Name, item.State, item.ThreadCount,
+            item.StartedAtUtc.ToDateTimeOffset(), item.CpuTimeSeconds, item.HasCpuPercent ? item.CpuPercent : null,
+            item.MemoryBytes, item.VirtualMemoryBytes);
 
     public async Task<IReadOnlyCollection<JournalEntryDto>> QueryJournalAsync(
         string? unit,

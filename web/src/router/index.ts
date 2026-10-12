@@ -22,6 +22,7 @@ const AlertsView = () => import('@/views/AlertsView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
 const HostResourcesView = () => import('@/views/HostResourcesView.vue')
 const HostLogsView = () => import('@/views/HostLogsView.vue')
+const HostProcessesView = () => import('@/views/HostProcessesView.vue')
 const HostUpdatesView = () => import('@/views/HostUpdatesView.vue')
 const ServicesView = () => import('@/views/ServicesView.vue')
 const AgentStatusView = () => import('@/views/AgentStatusView.vue')
@@ -122,6 +123,12 @@ const router = createRouter({
           name: 'host-logs',
           component: HostLogsView,
           meta: { administratorOnly: true, title: '系统日志' },
+        },
+        {
+          path: 'host/processes',
+          name: 'host-processes',
+          component: HostProcessesView,
+          meta: { administratorOnly: true, title: '主机进程' },
         },
         {
           path: 'host/updates',
