@@ -9,13 +9,54 @@ expected to overwrite it. It never requests the optional rollback action.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
+from pathlib import Path
 
 from validate_databases import Api
 from validate_oidc import authenticate, required_environment
 
 
+def update_checkout() -> str:
+    repository = Path(__file__).resolve().parents[2]
+    status = subprocess.run(
+        ["git", "-C", str(repository), "status", "--porcelain"],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        timeout=30,
+    )
+    if status.stdout.strip():
+        raise RuntimeError("The Whale Deck checkout has local changes")
+
+    branch = subprocess.run(
+        ["git", "-C", str(repository), "branch", "--show-current"],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        timeout=30,
+    ).stdout.strip()
+    if branch != "dev":
+        raise RuntimeError(f"Development deployment requires the dev branch, found {branch or 'detached HEAD'}")
+
+    subprocess.run(
+        ["git", "-C", str(repository), "pull", "--ff-only", "origin", "dev"],
+        check=True,
+        timeout=180,
+    )
+    revision = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "--short=12", "HEAD"],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        timeout=30,
+    ).stdout.strip()
+    print(f"Publishing dev revision {revision}")
+    return revision
+
+
 def main() -> int:
+    update_checkout()
     base_url = os.environ.get("WHALEDECK_URL", "http://192.168.100.13:8080").rstrip("/")
     username = required_environment("VALIDATION_USERNAME")
     password = required_environment("VALIDATION_PASSWORD")
