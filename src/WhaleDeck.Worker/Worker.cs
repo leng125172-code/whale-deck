@@ -692,6 +692,15 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             ? resource.GetString()
             : null;
         var area = job.JobType.Split('.', 2)[0];
+        if (area is "applications" or "compose-projects")
+        {
+            var slug = resourceId?.StartsWith("application:", StringComparison.Ordinal) == true ? resourceId["application:".Length..] :
+                request.RootElement.TryGetProperty("parameters", out var values) && values.TryGetProperty("slug", out var slugValue) ? slugValue.GetString() : null;
+            // Compose controls and application updates must serialize against
+            // the same installation, even though their REST areas differ.
+            area = "applications";
+            resourceId = slug ?? resourceId;
+        }
         var identity = $"{area}:{resourceId ?? "global"}";
         return $"{area}:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))}";
     }

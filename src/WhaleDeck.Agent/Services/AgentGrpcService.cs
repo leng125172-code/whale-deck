@@ -17,7 +17,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         };
         response.Capabilities.AddRange([
             "host.read", "host.addresses", "host.metrics", "host.processes", "docker.read", "docker.lifecycle", "docker.resource-management", "docker.image-metadata", "docker.logs", "docker.stats", "docker.events",
-            "database.registered", "backup.registered", "compose.registered", "managed.plan",
+            "database.registered", "backup.registered", "compose.registered", "compose.projects", "managed.plan",
             "systemd.registered", "config-repository.registered", "maintenance.registered"
         ]);
         return Task.FromResult(response);

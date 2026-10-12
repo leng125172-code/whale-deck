@@ -328,7 +328,7 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcess
                     "containers" => await _docker.RunActionAsync(request, Headers("/whaledeck.agent.v1.DockerService/RunAction"), cancellationToken: cancellationToken),
                     "databases" or "backups" => await _resources.RunDatabaseActionAsync(request, Headers("/whaledeck.agent.v1.ManagedResourceService/RunDatabaseAction"), cancellationToken: cancellationToken),
                     "host" => await _resources.RunSystemdActionAsync(request, Headers("/whaledeck.agent.v1.ManagedResourceService/RunSystemdAction"), cancellationToken: cancellationToken),
-                    "applications" => await _resources.RunComposeActionAsync(request, Headers("/whaledeck.agent.v1.ManagedResourceService/RunComposeAction"), cancellationToken: cancellationToken),
+                    "applications" or "compose-projects" => await _resources.RunComposeActionAsync(request, Headers("/whaledeck.agent.v1.ManagedResourceService/RunComposeAction"), cancellationToken: cancellationToken),
                     "config-repository" => await _resources.RunConfigRepositoryActionAsync(request, Headers("/whaledeck.agent.v1.ManagedResourceService/RunConfigRepositoryAction"), cancellationToken: cancellationToken),
                     "platform" or "docker" => await _resources.RunPlatformMaintenanceAsync(request, Headers("/whaledeck.agent.v1.ManagedResourceService/RunPlatformMaintenance"), cancellationToken: cancellationToken),
                     _ => throw new InvalidOperationException("The Agent does not support this operation area.")

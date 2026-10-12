@@ -18,6 +18,7 @@ public sealed class OperationService(IJobRepository jobs)
             // cancellation targets a concrete persisted Agent operation.
             ["backups"] = new(StringComparer.OrdinalIgnoreCase) { "run", "verify", "save-policy" },
             ["applications"] = new(StringComparer.OrdinalIgnoreCase) { "install", "start", "stop", "restart", "update", "reinstall", "uninstall" },
+            ["compose-projects"] = new(StringComparer.OrdinalIgnoreCase) { "start", "stop", "restart", "pull", "redeploy" },
             ["host"] = new(StringComparer.OrdinalIgnoreCase) { "update-check", "update-install", "reboot", "systemd-start", "systemd-stop", "systemd-restart" },
             ["config-repository"] = new(StringComparer.OrdinalIgnoreCase) { "snapshot", "commit-push" },
             ["platform"] = new(StringComparer.OrdinalIgnoreCase) { "diagnose", "plan-update", "apply-update", "rollback", "diagnostic-bundle" },
@@ -84,13 +85,13 @@ public sealed class OperationService(IJobRepository jobs)
     public Task CancelAsync(Guid id, string actorSubject, CancellationToken cancellationToken) =>
         jobs.RequestCancellationAsync(id, actorSubject, cancellationToken);
 
-    private static bool RequiresConfirmation(OperationCommand command) => command.Action is
+    private static bool RequiresConfirmation(OperationCommand command) => command.Area == "compose-projects" || command.Action is
         "stop" or "restart" or "delete" or "delete-principal" or "prune" or "apply-settings" or "uninstall" or
         "update" or "rebuild" or "reinstall" or "reboot" or "update-install" or "commit-push" or "apply-update" or "rollback" or
         "network-delete" or "volume-delete" or
         "batch-start" or "batch-stop" or "batch-restart" or "batch-delete";
 
-    internal static bool RequiresPlan(OperationCommand command) => command.Action is
+    internal static bool RequiresPlan(OperationCommand command) => command.Area == "compose-projects" || command.Action is
         "create" or "delete" or "delete-principal" or "prune" or "apply-settings" or "install" or "update" or "rebuild" or "reinstall" or "uninstall" or
         "update-install" or "reboot" or "commit-push" or "apply-update" or "rollback" or
         "network-create" or "network-delete" or "volume-delete" or

@@ -85,7 +85,7 @@ const router = createRouter({
         {
           path: 'compose-projects',
           name: 'compose-projects',
-          component: ResourceListView,
+          component: () => import('@/views/ComposeProjectsView.vue'),
           meta: { administratorOnly: true, title: 'Compose 项目', endpoint: 'compose-projects' },
         },
         {

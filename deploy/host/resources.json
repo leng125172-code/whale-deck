@@ -1,4 +1,7 @@
 [
+  { "id": "whaledeck.api", "type": "Container", "externalId": "whaledeck-api", "protectionLevel": "ControlPlane" },
+  { "id": "whaledeck.worker", "type": "Container", "externalId": "whaledeck-worker", "protectionLevel": "ControlPlane" },
+  { "id": "whaledeck.gateway", "type": "Container", "externalId": "whaledeck-gateway", "protectionLevel": "ControlPlane" },
   { "id": "database-platform.postgres", "type": "Container", "externalId": "database-platform-postgres", "protectionLevel": "CriticalData" },
   { "id": "database-platform.mariadb", "type": "Container", "externalId": "database-platform-mariadb", "protectionLevel": "CriticalData" },
   { "id": "database-platform.mongodb", "type": "Container", "externalId": "database-platform-mongodb", "protectionLevel": "CriticalData" },
@@ -14,5 +17,5 @@
   { "id": "whaledeck.docker", "type": "DockerEngine", "externalId": "docker", "protectionLevel": "ControlPlane", "allowedActions": ["validate-settings", "apply-settings", "rollback"] },
   { "id": "whaledeck.platform", "type": "Platform", "externalId": "whaledeck", "protectionLevel": "ControlPlane", "allowedActions": ["diagnose", "diagnostic-bundle", "plan-update", "apply-update", "rollback"] },
   { "id": "database-platform.repository", "type": "GitRepository", "externalId": "database-platform", "protectionLevel": "CriticalData", "path": "/data/GitRepos/database-platform", "allowedActions": ["status", "snapshot", "commit-push"] },
-  { "id": "whaledeck.apps", "type": "ManagedDirectory", "externalId": "whaledeck-apps", "protectionLevel": "Managed", "path": "/data/WhaleDeck/apps", "allowedActions": ["install", "start", "stop", "restart", "update", "reinstall", "uninstall"] }
+  { "id": "whaledeck.apps", "type": "ManagedDirectory", "externalId": "whaledeck-apps", "protectionLevel": "Managed", "path": "/data/WhaleDeck/apps", "allowedActions": ["install", "start", "stop", "restart", "update", "reinstall", "uninstall", "pull", "redeploy"] }
 ]

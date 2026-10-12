@@ -63,6 +63,9 @@ public sealed class ResourceRegistry
 
     private static RegisteredResource[] DefaultResources() =>
     [
+        new("whaledeck.api", "Container", "whaledeck-api", "ControlPlane"),
+        new("whaledeck.worker", "Container", "whaledeck-worker", "ControlPlane"),
+        new("whaledeck.gateway", "Container", "whaledeck-gateway", "ControlPlane"),
         new("database-platform.postgres", "Container", "database-platform-postgres", "CriticalData"),
         new("database-platform.mariadb", "Container", "database-platform-mariadb", "CriticalData"),
         new("database-platform.mongodb", "Container", "database-platform-mongodb", "CriticalData"),
@@ -78,6 +81,6 @@ public sealed class ResourceRegistry
         new("whaledeck.docker", "DockerEngine", "docker", "ControlPlane", AllowedActions: ["validate-settings", "apply-settings", "rollback"]),
         new("whaledeck.platform", "Platform", "whaledeck", "ControlPlane", AllowedActions: ["diagnose", "diagnostic-bundle", "plan-update", "apply-update", "rollback"]),
         new("database-platform.repository", "GitRepository", "database-platform", "CriticalData", "/data/GitRepos/database-platform", ["status", "snapshot", "commit-push"]),
-        new("whaledeck.apps", "ManagedDirectory", "whaledeck-apps", "Managed", "/data/WhaleDeck/apps", ["install", "start", "stop", "restart", "update", "reinstall", "uninstall"])
+        new("whaledeck.apps", "ManagedDirectory", "whaledeck-apps", "Managed", "/data/WhaleDeck/apps", ["install", "start", "stop", "restart", "update", "reinstall", "uninstall", "pull", "redeploy"])
     ];
 }

@@ -39,6 +39,7 @@ builder.Services.AddSingleton<BoundedProcessRunner>();
 builder.Services.AddSingleton<ManagedActionExecutor>();
 builder.Services.AddSingleton<PlanStore>();
 builder.Services.AddSingleton<ManagedResourcePlanner>();
+builder.Services.AddSingleton<ComposeProjectManager>();
 builder.Services.AddSingleton<HostReader>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IHostProcessSource, HostProcessSource>();

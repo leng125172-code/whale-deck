@@ -14,15 +14,25 @@ public sealed class ManagedResourceGrpcService(
     OperationCoordinator coordinator,
     ManagedActionExecutor executor,
     DockerEngine docker,
-    BoundedProcessRunner processes)
+    BoundedProcessRunner processes,
+    ComposeProjectManager composeProjects)
     : ManagedResourceService.ManagedResourceServiceBase
 {
     private const string PrivilegedHelper = "/usr/local/libexec/whaledeck-privileged";
     private static readonly string[] EditableDockerSettings =
         ["registry-mirrors", "log-driver", "log-opts", "live-restore", "features", "dns", "proxies"];
 
-    public override Task<PlanResponse> PlanAction(RegisteredActionRequest request, ServerCallContext context) =>
-        Task.FromResult(planner.Create(request));
+    public override async Task<PlanResponse> PlanAction(RegisteredActionRequest request, ServerCallContext context)
+    {
+        if (request.Resource.ResourceType != "compose-projects") return planner.Create(request);
+        var preview = await composeProjects.PreviewAsync(request, context.CancellationToken);
+        var response = plans.Create(request.Resource.ResourceId, request.Action, request.Parameters, preview.Fingerprint);
+        response.Changes.Clear();
+        response.Changes.Add($"{request.Action}: {preview.Project}; source: compose.yml; environment: .env (redacted)");
+        response.Changes.AddRange(preview.Changes);
+        response.Warnings.Add("Existing volumes, configuration and orphan services are retained. Pull does not restart services; redeploy does not pull images.");
+        return response;
+    }
 
     public override async Task<ResourceCollectionResponse> ListDatabaseInstances(Empty request, ServerCallContext context)
     {
@@ -69,28 +79,23 @@ public sealed class ManagedResourceGrpcService(
     {
         var response = new ResourceCollectionResponse();
         var root = registry.All.SingleOrDefault(item => item.Id == "whaledeck.apps")?.Path;
-        if (root is null || !Directory.Exists(root)) return response;
         var containers = await docker.ListContainersAsync(true, context.CancellationToken);
-        foreach (var directory in Directory.EnumerateDirectories(root).Order(StringComparer.Ordinal))
+        var managedProjects = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var directory in root is not null && Directory.Exists(root)
+                     ? Directory.EnumerateDirectories(root).Order(StringComparer.Ordinal).Take(256) : [])
         {
             var manifestPath = Path.Combine(directory, "manifest.json");
             if (!File.Exists(manifestPath)) continue;
             try
             {
-                using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
                 var slug = Path.GetFileName(directory);
+                ComposeProjectManager.ResolveDirectory(root!, slug);
+                using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
                 var image = manifest.RootElement.TryGetProperty("image", out var imageValue) ? imageValue.GetString() ?? string.Empty : string.Empty;
                 var project = $"whaledeck-app-{slug}";
-                var members = containers.Where(item => item.Labels.TryGetValue("com.docker.compose.project", out var value) &&
-                                                       (string.Equals(value, project, StringComparison.Ordinal) ||
-                                                        string.Equals(value, slug, StringComparison.Ordinal))).ToArray();
-                var state = members.Length == 0
-                    ? "Stopped"
-                    : members.Any(item => string.Equals(item.State, "restarting", StringComparison.OrdinalIgnoreCase))
-                        ? "Restarting"
-                        : members.All(item => string.Equals(item.State, "running", StringComparison.OrdinalIgnoreCase))
-                            ? "Running"
-                            : "Stopped";
+                var members = ComposeProjectManager.Members(containers, project);
+                var state = ComposeProjectManager.State(members);
+                var protectedResource = members.Any(item => item.Names.Any(name => registry.IsProtectedContainer(name, item.Labels)));
                 var snapshot = new ResourceSnapshot
                 {
                     ResourceId = $"application:{slug}",
@@ -98,19 +103,41 @@ public sealed class ManagedResourceGrpcService(
                     ResourceType = "ComposeApplication",
                     State = state,
                     Version = image,
-                    ProtectedResource = false
+                    ProtectedResource = protectedResource
                 };
                 snapshot.Attributes["composeProject"] = project;
                 snapshot.Attributes["containerCount"] = members.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 snapshot.Attributes["autoUpdate"] = manifest.RootElement.TryGetProperty("autoUpdate", out var autoUpdate) && autoUpdate.GetBoolean() ? "true" : "false";
                 snapshot.Attributes["versionPolicy"] = manifest.RootElement.TryGetProperty("versionPolicy", out var versionPolicy) ? versionPolicy.GetString() ?? "*" : "*";
                 snapshot.Attributes["maintenanceWindow"] = manifest.RootElement.TryGetProperty("maintenanceWindow", out var maintenanceWindow) ? maintenanceWindow.GetString() ?? string.Empty : string.Empty;
+                snapshot.Attributes["configurationSource"] = "compose.yml";
+                snapshot.Attributes["workingDirectory"] = directory;
+                snapshot.Attributes["services"] = string.Join(',', members.Select(item => ComposeProjectManager.Label(item, "com.docker.compose.service", "unknown")).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+                snapshot.Attributes["allowedActions"] = protectedResource ? string.Empty : string.Join(',', ComposeProjectManager.Actions);
+                managedProjects.Add(project);
                 response.Resources.Add(snapshot);
             }
             catch (JsonException)
             {
                 // Invalid manifests stay invisible to normal management and are handled by diagnostics.
             }
+            catch (InvalidOperationException) { /* Unapproved installations remain non-manageable. */ }
+        }
+        foreach (var project in containers.Where(item => item.Labels.ContainsKey("com.docker.compose.project"))
+                     .GroupBy(item => item.Labels["com.docker.compose.project"], StringComparer.Ordinal)
+                     .Where(group => !managedProjects.Contains(group.Key)).OrderBy(group => group.Key, StringComparer.Ordinal).Take(256))
+        {
+            var snapshot = new ResourceSnapshot
+            {
+                ResourceId = "compose:" + project.Key, DisplayName = project.Key, ResourceType = "ComposeProject",
+                State = ComposeProjectManager.State(project.ToArray()),
+                ProtectedResource = project.Any(item => item.Names.Any(name => registry.IsProtectedContainer(name, item.Labels)))
+            };
+            snapshot.Attributes["containerCount"] = project.Count().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            snapshot.Attributes["services"] = string.Join(',', project.Select(item => ComposeProjectManager.Label(item, "com.docker.compose.service", "unknown")).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+            snapshot.Attributes["configurationSource"] = "Unregistered (read-only)";
+            snapshot.Attributes["allowedActions"] = string.Empty;
+            response.Resources.Add(snapshot);
         }
         return response;
     }
@@ -160,8 +187,29 @@ public sealed class ManagedResourceGrpcService(
     public override Task<OperationHandle> RunSystemdAction(RegisteredActionRequest request, ServerCallContext context) =>
         Task.FromResult(QueueRegistered(request, "Systemd"));
 
-    public override Task<OperationHandle> RunComposeAction(RegisteredActionRequest request, ServerCallContext context) =>
-        Task.FromResult(QueueRegistered(request, "Compose"));
+    public override async Task<OperationHandle> RunComposeAction(RegisteredActionRequest request, ServerCallContext context)
+    {
+        if (request.Resource.ResourceType != "compose-projects") return QueueRegistered(request, "Compose");
+        var key = BuildIdempotencyKey(request.Context, "ComposeProject", request.Action, request.Resource.ResourceId);
+        var operation = operations.GetOrCreate(key, $"ComposeProject:{request.Action}", out var created);
+        if (!created) return operation;
+        try
+        {
+            var preview = await composeProjects.PreviewAsync(request, context.CancellationToken);
+            plans.VerifyAndConsume(request.PlanHash, request.Resource.ResourceId, request.Action, request.Parameters, preview.Fingerprint);
+            coordinator.Start(operation, "AGENT_COMPOSE_PROJECT_FAILED",
+                cancellationToken => composeProjects.ExecuteAsync(request, preview, cancellationToken));
+            return operation;
+        }
+        catch
+        {
+            operation.State = OperationState.Failed;
+            operation.Phase = "ValidationFailed";
+            operation.ErrorCode = "AGENT_COMPOSE_PLAN_INVALID";
+            operations.Save(operation);
+            throw;
+        }
+    }
 
     public override Task<OperationHandle> RunConfigRepositoryAction(RegisteredActionRequest request, ServerCallContext context) =>
         Task.FromResult(QueueRegistered(request, "ConfigRepository"));

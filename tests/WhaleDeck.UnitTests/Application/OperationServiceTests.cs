@@ -7,6 +7,22 @@ namespace WhaleDeck.UnitTests.Application;
 
 public sealed class OperationServiceTests
 {
+    [Theory]
+    [InlineData("start")]
+    [InlineData("stop")]
+    [InlineData("restart")]
+    [InlineData("pull")]
+    [InlineData("redeploy")]
+    public async Task EveryComposeWriteRequiresConfirmationAndPlan(string action)
+    {
+        var service = new OperationService(new RecordingJobRepository());
+        var command = new OperationCommand("compose-projects", action, "application:demo", "key-1", "{}", null, false);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.EnqueueAsync("subject", "trace", command, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.EnqueueAsync("subject", "trace", command with { Confirmed = true }, default));
+        var result = await service.EnqueueAsync("subject", "trace", command with { Confirmed = true, PlanHash = new string('a', 64) }, default);
+        Assert.Equal("compose-projects." + action, result.JobType);
+    }
+
     [Fact]
     public async Task DeleteRequiresConfirmationAndPlan()
     {

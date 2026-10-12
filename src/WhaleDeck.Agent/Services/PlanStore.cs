@@ -17,13 +17,13 @@ public sealed class PlanStore
         Directory.CreateDirectory(_directory);
     }
 
-    public PlanResponse Create(string resourceId, string action, IReadOnlyDictionary<string, string> parameters)
+    public PlanResponse Create(string resourceId, string action, IReadOnlyDictionary<string, string> parameters, string? resourceFingerprint = null)
     {
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
         var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
-        var canonical = Canonical(resourceId, action, parameters, expiresAt, nonce);
+        var canonical = Canonical(resourceId, action, parameters, expiresAt, nonce, resourceFingerprint);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
-        var record = new StoredPlan(resourceId, action, new Dictionary<string, string>(parameters, StringComparer.Ordinal), expiresAt, nonce);
+        var record = new StoredPlan(resourceId, action, new Dictionary<string, string>(parameters, StringComparer.Ordinal), expiresAt, nonce, resourceFingerprint);
         Save(hash, record);
 
         var response = new PlanResponse
@@ -35,7 +35,7 @@ public sealed class PlanStore
         return response;
     }
 
-    public void VerifyAndConsume(string planHash, string resourceId, string action, IReadOnlyDictionary<string, string> parameters)
+    public void VerifyAndConsume(string planHash, string resourceId, string action, IReadOnlyDictionary<string, string> parameters, string? resourceFingerprint = null)
     {
         if (string.IsNullOrWhiteSpace(planHash)) throw new InvalidOperationException("A current plan hash is required.");
         var path = Resolve(planHash);
@@ -50,7 +50,9 @@ public sealed class PlanStore
                 throw new InvalidOperationException("The plan has expired.");
             }
 
-            var canonical = Canonical(resourceId, action, parameters, record.ExpiresAtUtc, record.Nonce);
+            if (!string.Equals(record.ResourceFingerprint, resourceFingerprint, StringComparison.Ordinal))
+                throw new InvalidOperationException("The resource changed after this plan was confirmed.");
+            var canonical = Canonical(resourceId, action, parameters, record.ExpiresAtUtc, record.Nonce, resourceFingerprint);
             var expected = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
             if (!CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(planHash.ToLowerInvariant())))
             {
@@ -78,9 +80,10 @@ public sealed class PlanStore
         return Path.Combine(_directory, hash.ToLowerInvariant() + ".json");
     }
 
-    private static string Canonical(string resourceId, string action, IReadOnlyDictionary<string, string> parameters, DateTimeOffset expiresAt, string nonce) =>
+    private static string Canonical(string resourceId, string action, IReadOnlyDictionary<string, string> parameters, DateTimeOffset expiresAt, string nonce, string? resourceFingerprint) =>
         string.Join('\n', new[] { resourceId, action, expiresAt.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture), nonce }
-            .Concat(parameters.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => $"{item.Key}={item.Value}")));
+            .Concat(parameters.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => $"{item.Key}={item.Value}"))
+            .Concat(resourceFingerprint is null ? [] : new[] { "resource-fingerprint:" + resourceFingerprint }));
 
-    private sealed record StoredPlan(string ResourceId, string Action, Dictionary<string, string> Parameters, DateTimeOffset ExpiresAtUtc, string Nonce);
+    private sealed record StoredPlan(string ResourceId, string Action, Dictionary<string, string> Parameters, DateTimeOffset ExpiresAtUtc, string Nonce, string? ResourceFingerprint = null);
 }

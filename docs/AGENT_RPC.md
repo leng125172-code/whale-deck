@@ -207,3 +207,14 @@ Agent 不提供“执行命令”“执行脚本”或任意 unit 名称接口�
 - Agent 只在状态变化、失败和管理操作时记录结构化日志；6 秒指标不写逐样本 Info 日志。
 - 所有 Secret 字段在 protobuf 中使用明确类型，日志拦截器默认丢弃这些字段。
 - Agent 重启后扫描未完成操作：可恢复则继续，不可恢复则标记失败并给出安全诊断码。
+
+## 11. Compose 项目能力补充
+
+现有 ManagedResourceService 宣告 compose.projects 能力，沿用协议 1.7 和现有 wire 消息：
+
+- ListComposeProjects 同时发现 Docker Compose 项目与批准目录中的安装；未注册项目只读，核心资源按注册表和标签双重保护。
+- PlanAction 使用 resource_type=compose-projects、resource_id=application:<slug>，动作允许 start/stop/restart/pull/redeploy。不接受客户端路径、命令、配置或额外参数。
+- 预检比较 Compose 原生服务 hash 与现有容器标签，只输出服务级差异与受影响容器数量，不输出规范化配置、环境变量或 Secret。计划绑定配置输入及容器成员指纹，五分钟内一次性消费。
+- RunComposeAction 执行前再次验证指纹、项目名称和受保护容器名称；启停/重启、拉取与重部署全部要求计划和管理员确认。与应用生命周期共享资源锁。
+- pull 不重启服务；redeploy 不隐式拉取或构建镜像。孤立服务、配置和数据卷不自动删除；启动/重启/重部署等待所有目标服务健康。
+- 当前提供服务级配置变化摘要，不提供原文编辑或逐字段 diff；项目移除和数据卷选择继续使用现有应用卸载用例。Git 同步属于独立后续能力。

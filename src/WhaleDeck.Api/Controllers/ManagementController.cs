@@ -102,11 +102,11 @@ public sealed class ManagementController(
     [HttpGet("{area:regex(^(images|networks|volumes|compose-projects|databases|applications|systemd)$)}")]
     public async Task<IActionResult> Resources(string area, CancellationToken cancellationToken) => Ok(await queries.ListAsync(area, cancellationToken));
 
-    [HttpPost("{area:regex(^(containers|docker|databases|backups|applications|host|config-repository|platform)$)}/{operation}/plan")]
+    [HttpPost("{area:regex(^(containers|docker|databases|backups|applications|compose-projects|host|config-repository|platform)$)}/{operation}/plan")]
     public async Task<IActionResult> Plan(string area, string operation, [FromBody] PlanRequest request, CancellationToken cancellationToken) =>
         Ok(await agent.PlanAsync(area, operation, request.ResourceId, request.Parameters ?? new Dictionary<string, string>(), cancellationToken));
 
-    [HttpPost("{area:regex(^(containers|docker|databases|backups|applications|host|config-repository|platform|identity)$)}/{operation}")]
+    [HttpPost("{area:regex(^(containers|docker|databases|backups|applications|compose-projects|host|config-repository|platform|identity)$)}/{operation}")]
     public async Task<IActionResult> Enqueue(string area, string operation, [FromBody] OperationRequest request, CancellationToken cancellationToken)
     {
         var idempotencyKey = Request.Headers["Idempotency-Key"].FirstOrDefault() ?? request.IdempotencyKey;
