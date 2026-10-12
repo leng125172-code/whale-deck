@@ -20,6 +20,10 @@ def main() -> int:
     endpoint = f"{base}/api/v1/host/processes"
     documentation = session.get(f"{base}/openapi/v1.json", timeout=20)
     documentation.raise_for_status()
+    debug_page = session.get(f"{base}/swagger/index.html", timeout=20)
+    debug_page.raise_for_status()
+    if "Whale Deck API" not in debug_page.text:
+        raise RuntimeError("The administrator did not receive the actual Swagger UI")
     paths = documentation.json().get("paths", {})
     for path in ("/api/v1/host/processes", "/api/v1/host/processes/{pid}"):
         if set(paths.get(path, {})) != {"get"}:
@@ -69,8 +73,12 @@ def main() -> int:
     for kind, client in (("anonymous", anonymous), ("ordinary", ordinary)):
         for path in ("/openapi/v1.json", "/swagger/index.html"):
             denied = client.get(f"{base}{path}", timeout=20, allow_redirects=False)
-            if denied.status_code not in {401, 403}:
+            expected_status = 401 if kind == "anonymous" else 403
+            if denied.status_code != expected_status or "Location" in denied.headers:
                 raise RuntimeError(f"Unexpected debug access result: {kind} {path} HTTP {denied.status_code}")
+            problem = denied.json()
+            if problem.get("status") != expected_status or not problem.get("traceId") or problem.get("code") != ("AUTH_REQUIRED" if kind == "anonymous" else "AUTH_FORBIDDEN"):
+                raise RuntimeError("Debug access denial did not contain the expected Problem Details")
     print(f"Host process validation passed: {page['total']} processes, real Agent PID, CPU/memory ordering, pinned identity, administrator-only OpenAPI/Swagger and anonymous/ordinary-user denial")
     return 0
 
