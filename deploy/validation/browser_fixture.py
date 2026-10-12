@@ -4,14 +4,20 @@
 Only a numeric user ID is returned. Caller must delete the fixture after QA.
 """
 import json
+import base64
 import re
+import secrets
 import sys
 import requests
 from run_with_ephemeral_admin import container_environment
 
 
 def main() -> None:
-    data = json.load(sys.stdin)
+    bootstrap = len(sys.argv) == 2
+    data = {
+        "action": "create", "username": "whaledeck-browser-" + secrets.token_hex(8),
+        "password": "Wd!" + secrets.token_urlsafe(20) + "9Aa",
+    } if bootstrap else json.load(sys.stdin)
     username = data["username"]
     if not re.fullmatch(r"whaledeck-browser-[a-f0-9]{16}", username):
         raise RuntimeError("Unexpected fixture identity.")
@@ -33,7 +39,18 @@ def main() -> None:
         except Exception:
             client.delete(api + f"{user_id}/", timeout=20)
             raise
-        print(json.dumps({"userId": user_id}))
+        if bootstrap:
+            # For browser runtimes without native SSH child-process support,
+            # return only an RSA-OAEP encrypted transient credential envelope.
+            # The private key exists solely in the caller's browser-QA memory.
+            from cryptography.hazmat.primitives import hashes, serialization
+            from cryptography.hazmat.primitives.asymmetric import padding
+            key = serialization.load_der_public_key(base64.b64decode(sys.argv[1], validate=True))
+            payload = json.dumps({"userId": user_id, "username": username, "password": data["password"]}).encode()
+            encrypted = key.encrypt(payload, padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None))
+            print(base64.b64encode(encrypted).decode())
+        else:
+            print(json.dumps({"userId": user_id}))
     elif data["action"] == "delete":
         user_id = int(data["userId"])
         response = client.get(api + f"{user_id}/", timeout=20)
