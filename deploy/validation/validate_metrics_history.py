@@ -88,7 +88,7 @@ def main() -> int:
                     AND sample.sampled_at_utc<=:'end'::timestamptz AND sample.quality='Good';
                 """, kind=kind, device=device, start=selected["sampledAtUtc"], end=item["windowEndUtc"], resolution=str(resolution))
             if expected is None or not math.isclose(selected["value"], expected, rel_tol=1e-9, abs_tol=1e-9):
-                raise RuntimeError("API history does not match native PostgreSQL aggregation")
+                raise RuntimeError(f"API/native mismatch: {window} {kind} {device}, bucket={selected['sampledAtUtc']}, end={item['windowEndUtc']}, api={selected['value']}, native={expected}")
             checked += 1
         if window == "7d" and not any(point["quality"] == "Missing" and point["value"] is None for item in series for point in item["points"]):
             raise RuntimeError("Uncollected historical periods were not left empty")
