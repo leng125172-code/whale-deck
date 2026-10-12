@@ -13,6 +13,8 @@ logs
 **/obj
 **/node_modules
 **/dist
+**/test-results
+**/playwright-report
 TestResults
 coverage
 *.md

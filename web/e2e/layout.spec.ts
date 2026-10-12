@@ -165,6 +165,11 @@ async function expectViewportFit(page: Page) {
 for (const width of [1920, 1280, 1100, 1046, 1045, 900, 760, 600, 390, 320]) {
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`${width}px ${colorScheme}: page changes keep overflow inside cards`, async ({ page }) => {
+      const unresolvedComponents: string[] = []
+      page.on('console', (message) => {
+        if (message.text().includes('Failed to resolve component:'))
+          unresolvedComponents.push(message.text())
+      })
       await page.setViewportSize({ width, height: 900 })
       await page.emulateMedia({ colorScheme })
       await page.addInitScript(() =>
@@ -194,10 +199,21 @@ for (const width of [1920, 1280, 1100, 1046, 1045, 900, 760, 600, 390, 320]) {
         await navigate(page, label)
         await expect(page).toHaveURL(path)
         await expectViewportFit(page)
+        if (path === '/containers') {
+          const checkbox = page.getByRole('checkbox', { name: `选择容器 ${longName}` })
+          const checkboxLabel = page.locator('.container-card .el-checkbox').first()
+          await checkboxLabel.click()
+          await expect(checkbox).toBeChecked()
+          await expect(page.locator('.batch-toolbar')).toBeVisible()
+          await expectViewportFit(page)
+          await checkboxLabel.click()
+          await expect(checkbox).not.toBeChecked()
+        }
       }
       await navigate(page, '系统日志')
       await page.getByPlaceholder('筛选消息关键字').fill('a'.repeat(160))
       await expectViewportFit(page)
+      expect(unresolvedComponents).toEqual([])
       await page.screenshot({
         path: `test-results/layout-${width}-${colorScheme}.png`,
         scale: 'css',

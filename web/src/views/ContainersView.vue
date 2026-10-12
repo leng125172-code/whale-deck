@@ -722,6 +722,11 @@ onMounted(load)
 }
 .container-card__actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.container-card__actions .el-button + .el-button {
+  margin-left: 0;
 }
 .container-form {
   margin-top: 18px;
