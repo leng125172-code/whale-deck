@@ -18,6 +18,12 @@ def main() -> int:
     session, _ = authenticate(base, required_environment("VALIDATION_USERNAME"), required_environment("VALIDATION_PASSWORD"))
     api = Api(base, session)
     endpoint = f"{base}/api/v1/host/processes"
+    documentation = session.get(f"{base}/openapi/v1.json", timeout=20)
+    documentation.raise_for_status()
+    paths = documentation.json().get("paths", {})
+    for path in ("/api/v1/host/processes", "/api/v1/host/processes/{pid}"):
+        if set(paths.get(path, {})) != {"get"}:
+            raise RuntimeError("OpenAPI does not expose the expected read-only process contract")
     page = request(api, "GET", "host/processes?page=1&pageSize=100&sort=memory").json()
     if not page.get("items") or page.get("total", 0) < 1 or page.get("isStale"):
         raise RuntimeError("The host process snapshot was unavailable or stale")
@@ -60,7 +66,11 @@ def main() -> int:
         raise RuntimeError("The disposable ordinary user unexpectedly has management rights")
     if ordinary.get(endpoint, timeout=20, allow_redirects=False).status_code != 403:
         raise RuntimeError("Ordinary users can read process statistics")
-    print(f"Host process validation passed: {page['total']} processes, real Agent PID, CPU/memory ordering, pinned identity and anonymous/ordinary-user denial")
+    for client in (anonymous, ordinary):
+        for path in ("/openapi/v1.json", "/swagger/index.html"):
+            if client.get(f"{base}{path}", timeout=20, allow_redirects=False).status_code not in {401, 403}:
+                raise RuntimeError("Production debug documentation is accessible without administrator rights")
+    print(f"Host process validation passed: {page['total']} processes, real Agent PID, CPU/memory ordering, pinned identity, administrator-only OpenAPI/Swagger and anonymous/ordinary-user denial")
     return 0
 
 
