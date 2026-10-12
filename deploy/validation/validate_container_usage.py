@@ -95,8 +95,11 @@ def main() -> int:
             raise RuntimeError("Native sampling did not recover after restart")
         print(f"Container usage native acceptance passed: {len(samples[0]['items'])} real cached rows, six-second sampling, isolated 0.25-core CPU/native comparison, memory accounting, stopped state and restart recovery")
     finally:
-        if any(item["name"] == name for item in request(api, "GET", "containers?includeStopped=true").json()):
-            api.run("delete", name, {"volumes": "false"}, area="containers", requires_plan=True, confirmed=True)
+        cleanup = next((item for item in request(api, "GET", "containers?includeStopped=true").json() if item["name"] == name), None)
+        if cleanup is not None:
+            if cleanup["state"] in {"running", "paused", "restarting"}:
+                api.run("stop", cleanup["id"], {}, area="containers", confirmed=True)
+            api.run("delete", cleanup["id"], {"timeoutSeconds": "10", "preserveVolumes": "true"}, area="containers", requires_plan=True, confirmed=True)
             if any(item["name"] == name for item in request(api, "GET", "containers?includeStopped=true").json()):
                 raise RuntimeError("Disposable usage container was not removed")
 
