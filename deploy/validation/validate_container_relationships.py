@@ -94,7 +94,9 @@ def main() -> int:
     changed = identity.post(identity_base + f"core/users/{created.json()['pk']}/set_password/",
         json={"password": required_environment("VALIDATION_MANAGED_PASSWORD")}, timeout=20)
     changed.raise_for_status()
-    ordinary, _ = authenticate(base, required_environment("VALIDATION_MANAGED_USERNAME"), required_environment("VALIDATION_MANAGED_PASSWORD"))
+    ordinary, ordinary_profile = authenticate(base, required_environment("VALIDATION_MANAGED_USERNAME"),
+        required_environment("VALIDATION_MANAGED_PASSWORD"), require_administrator=False)
+    assert ordinary_profile["isAdministrator"] is False
     for endpoint in ["containers", "images", "networks", "volumes", f"containers/{containers[0]['id']}/inspect"]:
         assert ordinary.get(f"{base}/api/v1/{endpoint}", timeout=20).status_code == 403
     print(json.dumps({"containerRelationships": "passed", "containers": checked, "networkEndpoints": endpoints,
