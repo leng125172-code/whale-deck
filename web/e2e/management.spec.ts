@@ -158,6 +158,27 @@ for (const width of [1440, 320]) {
         .getByRole('button', { name: '详情', exact: true })
         .click()
       const actionButton = page.locator('.docker-event-action')
+      const details = await page.locator('.container-detail').boundingBox()
+      const actionBounds = await page
+        .locator('.container-detail__actions button')
+        .evaluateAll((elements) =>
+          elements.map((element) => ({
+            left: element.getBoundingClientRect().left,
+            right: element.getBoundingClientRect().right,
+          })),
+        )
+      expect(actionBounds.every((bounds) => bounds.left >= 0 && bounds.right <= width)).toBe(true)
+      expect(details!.x).toBeGreaterThanOrEqual(0)
+      expect(details!.x + details!.width).toBeLessThanOrEqual(width)
+      const labels = await page
+        .locator('.container-detail .el-descriptions__label')
+        .evaluateAll((elements) =>
+          elements.map((element) => ({
+            x: element.getBoundingClientRect().x,
+            width: element.getBoundingClientRect().width,
+          })),
+        )
+      expect(labels.every((label) => label.x >= 0 && label.width >= 60)).toBe(true)
       await actionButton.scrollIntoViewIfNeeded()
       await expect(actionButton).toHaveAttribute('title', action)
       expect(await actionButton.evaluate((element) => getComputedStyle(element).textOverflow)).toBe(

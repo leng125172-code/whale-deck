@@ -779,8 +779,10 @@ onMounted(load)
             >复制配置创建</el-button
           >
         </div>
-        <el-descriptions v-if="selected" :column="2" border>
-          <el-descriptions-item label="镜像" :span="2">{{ selected.image }}</el-descriptions-item>
+        <el-descriptions v-if="selected" :column="wideTable ? 2 : 1" border>
+          <el-descriptions-item label="镜像" :span="wideTable ? 2 : 1">{{
+            selected.image
+          }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ selected.status }}</el-descriptions-item>
           <el-descriptions-item label="保护级别">{{
             selected.protectionLevel
@@ -800,25 +802,25 @@ onMounted(load)
               >{{ inspect.cpus || '默认' }} CPU ·
               {{ inspect.memoryMb || '默认' }} MiB</el-descriptions-item
             >
-            <el-descriptions-item label="端口" :span="2">{{
+            <el-descriptions-item label="端口" :span="wideTable ? 2 : 1">{{
               inspect.ports.join(', ') || '无'
             }}</el-descriptions-item>
-            <el-descriptions-item label="网络" :span="2">{{
+            <el-descriptions-item label="网络" :span="wideTable ? 2 : 1">{{
               inspect.networks.join(', ') || '无'
             }}</el-descriptions-item>
-            <el-descriptions-item label="挂载" :span="2">{{
+            <el-descriptions-item label="挂载" :span="wideTable ? 2 : 1">{{
               inspect.volumes.join(', ') || '无'
             }}</el-descriptions-item>
-            <el-descriptions-item label="环境变量名" :span="2">{{
+            <el-descriptions-item label="环境变量名" :span="wideTable ? 2 : 1">{{
               inspect.environmentNames.join(', ') || '无'
             }}</el-descriptions-item>
-            <el-descriptions-item label="命令" :span="2">{{
+            <el-descriptions-item label="命令" :span="wideTable ? 2 : 1">{{
               inspect.command.join(' ') || '继承镜像'
             }}</el-descriptions-item>
-            <el-descriptions-item label="Entrypoint" :span="2">{{
+            <el-descriptions-item label="Entrypoint" :span="wideTable ? 2 : 1">{{
               inspect.entrypoint.join(' ') || '继承镜像'
             }}</el-descriptions-item>
-            <el-descriptions-item label="健康检查" :span="2">{{
+            <el-descriptions-item label="健康检查" :span="wideTable ? 2 : 1">{{
               inspect.healthCommand.join(' ') || '未配置'
             }}</el-descriptions-item>
           </template>
@@ -1026,12 +1028,27 @@ onMounted(load)
 }
 .container-detail__actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
+}
+.container-detail__actions .el-button + .el-button {
+  margin-left: 0;
 }
 .container-detail {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 18px;
   min-height: 320px;
+}
+.container-detail :deep(.el-descriptions__label) {
+  width: 96px;
+  word-break: keep-all;
+}
+.container-detail :deep(.el-descriptions__content) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .log-heading {
   display: flex;
