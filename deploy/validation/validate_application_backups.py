@@ -6,6 +6,8 @@ import re
 import subprocess
 import time
 import uuid
+import sys
+from pathlib import Path
 
 import requests
 from validate_databases import Api
@@ -20,6 +22,8 @@ def native(arguments, timeout=60):
 
 
 def main():
+    failure_scenarios = '--failure-scenarios' in sys.argv[1:]
+    assert all(value == '--failure-scenarios' for value in sys.argv[1:])
     base = os.environ.get('WHALEDECK_URL', 'http://192.168.100.13:8080').rstrip('/')
     session, _ = authenticate(base, required_environment('VALIDATION_USERNAME'), required_environment('VALIDATION_PASSWORD'))
     api = Api(base, session)
@@ -33,9 +37,11 @@ def main():
     ever_installed = False
     configured = False
     jobs = []
+    sharing_id = None
+    failures = {}
 
-    def enqueue(action, parameters):
-        plan = api.plan(action, resource, parameters, area='applications')
+    def enqueue(action, parameters, existing_plan=None):
+        plan = existing_plan or api.plan(action, resource, parameters, area='applications')
         job = api.post('applications/' + action, {'resourceId': resource, 'parameters': parameters,
             'confirmed': True, 'planHash': plan, 'idempotencyKey': 'backup-validation:' + uuid.uuid4().hex}, 202).json()
         jobs.append(job['id'])
@@ -103,6 +109,29 @@ def main():
         verify_id = enqueue('verify-backup', {'slug': slug, 'backupId': archive_id})
         assert terminal(verify_id)['state'] == 'Succeeded'
 
+        if failure_scenarios:
+            # Stopped foreign containers also count as sharing; no foreign data is created.
+            sharing_id = native(['create', '--name', slug + '-share', '--network', 'none', '--read-only',
+                '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--label', 'wd.validation=' + slug,
+                '--mount', 'type=volume,source=' + volume + ',target=/shared,readonly',
+                original['Image']]).strip()
+            assert re.fullmatch(r'[a-f0-9]{64}', sharing_id)
+            rejected = session.post(base + '/api/v1/applications/backup/plan', headers=api.headers,
+                json={'resourceId': resource, 'parameters': {'slug': slug, 'consistency': 'quiesced'}}, timeout=30)
+            assert rejected.status_code in {400, 409}, rejected.status_code
+            assert not json.loads(native(['inspect', container]))[0]['State']['Paused']
+            native(['rm', sharing_id]); sharing_id = None
+            old_plan = api.plan('backup', resource, {'slug': slug, 'consistency': 'quiesced'}, area='applications')
+            directory = str(Path(snapshot['ownedDataDirectory']).parent)
+            assert directory == '/data/WhaleDeck/apps/' + slug
+            native(['run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--user', '997:975',
+                '--mount', 'type=bind,source=' + directory + '/compose.yml,target=/compose',
+                'alpine:3.22', '/bin/sh', '-c', "printf '\\n# isolated-stale-plan-proof\\n' >> /compose"])
+            stale = terminal(enqueue('backup', {'slug': slug, 'consistency': 'quiesced'}, old_plan))
+            assert stale['state'] == 'Failed', stale['state']
+            assert not json.loads(native(['inspect', container]))[0]['State']['Paused']
+            failures.update(sharedVolume='preflight-rejected', stalePlan='failed-before-pause')
+
         # One bounded incompressible file makes the pause and cancellation/restart windows observable.
         native(['exec', '--user', '0', container, '/bin/sh', '-c',
             'dd if=/dev/urandom of=/tmp/probe-data/large.bin bs=1M count=256 2>/dev/null'], timeout=90)
@@ -142,6 +171,56 @@ def main():
         reconnected = terminal(reconnect_id)
         assert reconnected['state'] == 'Succeeded', reconnected.get('errorCode')
         assert not json.loads(native(['inspect', '--type', 'container', container]))[0]['State']['Paused']
+        if failure_scenarios:
+            # Snapshot every pre-existing non-test container so a successful cleanup
+            # cannot hide accidental restart/pause of any unrelated application.
+            protected_before = {item['Id']: (item['State']['StartedAt'], item['State']['Paused'])
+                for item in json.loads(native(['inspect', *native(['ps', '-aq']).splitlines()]))
+                if item['Name'] != '/' + container}
+            killed_id = enqueue('backup', {'slug': slug, 'consistency': 'quiesced'})
+            killed_hex = uuid.UUID(killed_id).hex
+            unit = 'whaledeck-application-backup-' + killed_hex + '.service'
+            deadline = time.monotonic() + 60
+            while True:
+                state = json.loads(native(['inspect', container]))[0]['State']
+                properties = subprocess.run(['systemctl', 'show', unit, '-p', 'ActiveState', '-p', 'MainPID'],
+                    check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10).stdout
+                properties = dict(line.split('=', 1) for line in properties.splitlines() if '=' in line)
+                if state['Paused'] and properties.get('ActiveState') == 'active' and int(properties.get('MainPID', '0')) > 1:
+                    pid = int(properties['MainPID'])
+                    start = Path('/proc/' + str(pid) + '/stat').read_text().rsplit(')', 1)[1].split()[19]
+                    break
+                if observe(killed_id)['state'] in {'Succeeded', 'Failed', 'Canceled'} or time.monotonic() >= deadline:
+                    raise RuntimeError('Exact backup was not observed live and paused; no signal sent')
+                time.sleep(0.25)
+            image_id = json.loads(native(['inspect', 'database-platform-authentik-server']))[0]['Image']
+            assert re.fullmatch(r'sha256:[a-f0-9]{64}', image_id)
+            capsule = subprocess.run(['docker', 'run', '--rm', '-i', '--network', 'none', '--read-only',
+                '--user', '0:0', '--pid', 'host', '--cap-drop', 'ALL', '--cap-add', 'KILL',
+                '--security-opt', 'no-new-privileges', '--memory', '128m', '--cpus', '0.5', '--pids-limit', '32',
+                '--log-driver', 'local', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=2',
+                '--entrypoint', 'python3', image_id, '-', str(pid), start, slug, killed_hex],
+                input=Path(__file__).with_name('kill_bound_backup.py').read_text(), check=True,
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+            assert json.loads(capsule.stdout)['boundBackupSignal'] == 'SIGKILL'
+            interrupted = terminal(killed_id)
+            assert interrupted['state'] == 'Failed', interrupted['state']
+            restored = json.loads(native(['inspect', container]))[0]
+            assert not restored['State']['Paused'] and restored['Id'] == original['Id']
+            assert restored['State']['StartedAt'] == original['State']['StartedAt']
+            assert reader(['find', '/backup', '-maxdepth', '1', '-name', killed_hex + '.*']).strip() == ''
+            records = request(api, 'GET', 'backups/records?instanceResourceId=' + resource).json()
+            assert next(item for item in records if item['jobId'] == killed_id)['status'] != 'Succeeded'
+            for item in json.loads(native(['inspect', *protected_before.keys()])):
+                assert (item['State']['StartedAt'], item['State']['Paused']) == protected_before[item['Id']]
+            # Damage only the explicitly completed archive from this test installation.
+            native(['run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+                '--mount', 'type=bind,source=' + archive_root + '/' + archive_id + '.tar.gz,target=/archive',
+                'alpine:3.22', 'truncate', '-s', '3', '/archive'])
+            damaged = terminal(enqueue('verify-backup', {'slug': slug, 'backupId': archive_id}))
+            assert damaged['state'] == 'Failed', damaged['state']
+            failures.update(sigkill='original-job-failed-and-unpaused', partial='removed',
+                damagedArchive='verification-failed', unrelatedContainers='identity-unchanged')
         count = query(f"SELECT json_build_object('jobs',(SELECT count(*) FROM operation_jobs WHERE request_json::text LIKE '%{marker}%'), 'audit',(SELECT count(*) FROM audit_events WHERE detail_json::text LIKE '%{marker}%'));")
         assert count == {'jobs': 0, 'audit': 0}
         anonymous = requests.Session(); anonymous.trust_env = False
@@ -149,8 +228,11 @@ def main():
         print(json.dumps({'applicationBackups': 'passed', 'archiveConfigurationAndDataAndVolume': 'native-exact',
             'archivePrivateModes': '0600', 'runtimeIdentity': 'retained', 'recordAndChecksum': 'passed',
             'verify': 'passed', 'cancel': canceled['state'], 'agentRestart': 'same-backup-job-completed', 'liveSandbox': sandbox,
-            'nativePostgresMarkerCounts': count, 'anonymous': '401'}))
+            'nativePostgresMarkerCounts': count, 'anonymous': '401', 'failureScenarios': failures}))
     finally:
+        if sharing_id:
+            assert re.fullmatch(r'[a-f0-9]{64}', sharing_id)
+            native(['rm', sharing_id])
         # Never tear down an application while its independent task is still running.
         for job_id in jobs:
             value = observe(job_id)
