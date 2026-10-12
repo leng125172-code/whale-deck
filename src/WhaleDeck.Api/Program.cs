@@ -118,11 +118,14 @@ try
 
     var app = builder.Build();
     app.UseForwardedHeaders();
-    app.UseExceptionHandler(error => error.Run(TraceAndErrors.WriteProblemAsync));
+    // Keep request logging outside the exception handler. Expected conflicts
+    // are converted to their final Problem Details response before Serilog
+    // observes the status, so a normal 409 is not emitted as a 500 stack trace.
     app.UseSerilogRequestLogging(options => options.GetLevel = (context, _, exception) =>
         exception is not null || context.Response.StatusCode >= 500
             ? Serilog.Events.LogEventLevel.Error
             : Serilog.Events.LogEventLevel.Debug);
+    app.UseExceptionHandler(error => error.Run(TraceAndErrors.WriteProblemAsync));
     app.UseRateLimiter();
     app.UseAuthentication();
     app.Use(SameOriginWriteProtection.InvokeAsync);
