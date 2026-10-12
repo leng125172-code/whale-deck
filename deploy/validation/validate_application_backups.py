@@ -185,6 +185,9 @@ def main():
             native(['run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--mount',
                 'type=bind,source=/data/DockerData/whaledeck/application-backups,target=/backups',
                 'alpine:3.22', 'rm', '-rf', '--', '/backups/' + slug])
+            subprocess.run(['docker', 'exec', '-i', '-u', 'postgres', 'database-platform-postgres', 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-d', 'whaledeck'],
+                input=f"UPDATE backup_records SET status='Expired' WHERE status='Succeeded' AND instance_resource_id IN (SELECT id FROM managed_resources WHERE external_id='{resource}');",
+                check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
         print(json.dumps({'temporaryApplicationBackupCleanup': 'passed'}))
 
 

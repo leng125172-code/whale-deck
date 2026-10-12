@@ -10,7 +10,13 @@
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
-- 当前源码协议版本为 `1.13`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`；旧次版本按能力协商并安全降级。
+- 当前源码协议版本为 `1.14`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`；旧次版本按能力协商并安全降级。
+
+### 应用归档保留（1.14）
+
+`applications/cleanup-backups` 使用既有计划/执行 RPC，参数仅允许 slug、retentionDays（1–3650）和 retentionCount（1–365），计划绑定 root 所有的已校验归档集合。清理不会改变应用运行数据，始终保留最新一份；普通停止/删除保护不能通过清理入口绕过。清理也使用 API job UUID 对应的独立 systemd 单元，删除每对归档/元数据之前先持久化 intent；恢复仅收尾已经开始的一对，不擅自继续其余候选。终态结果携带真正删除的 backup ID，Worker 在成功、失败或取消时按原资源更新 Expired 历史，不删除审计记录。
+
+应用策略强制 gzip/SHA256，启用需管理员确认，并持久化 live/quiesced 一致性。Worker 调度及备份完成后分别安排有幂等键的清理；签发前检查策略仍启用且版本一致，并生成新计划，不复用排队前的过期计划。
 
 ### 应用归档（1.13）
 

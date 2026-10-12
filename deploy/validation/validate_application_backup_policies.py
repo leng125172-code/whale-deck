@@ -132,7 +132,7 @@ def main():
                 'type=bind,source=/data/DockerData/whaledeck/application-backups,target=/backups', 'alpine:3.22', 'rm', '-rf', '--', '/backups/' + slug])
             # Remove only the policy created by this test; preserve immutable job/audit history.
             policy_id = str(uuid.UUID(policy['id'])) if policy is not None else None
-            statement = f"BEGIN; UPDATE backup_records SET status='Expired' WHERE instance_resource_id IN (SELECT id FROM managed_resources WHERE external_id='{resource}');"
+            statement = f"BEGIN; UPDATE backup_records SET status='Expired' WHERE status='Succeeded' AND instance_resource_id IN (SELECT id FROM managed_resources WHERE external_id='{resource}');"
             if policy_id: statement += f"DELETE FROM backup_policies WHERE id='{policy_id}' AND instance_resource_id IN (SELECT id FROM managed_resources WHERE external_id='{resource}');"
             subprocess.run(['docker', 'exec', '-i', '-u', 'postgres', 'database-platform-postgres', 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-d', 'whaledeck'],
                 input=statement + 'COMMIT;', check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
