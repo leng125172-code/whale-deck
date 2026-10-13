@@ -8,8 +8,11 @@ import json
 import math
 import os
 import subprocess
+import requests
+import time
 
 from validate_oidc import authenticate, required_environment
+from validate_databases import Api
 
 KINDS = ["network.receive", "network.send", "disk.read", "disk.write", "disk.read.iops", "disk.write.iops", "disk.read.latency", "disk.write.latency"]
 
@@ -42,8 +45,12 @@ def main() -> int:
     partial_only = 0
     observed_disk_kinds: set[str] = set()
     for window, resolution, count in [("live", 6, None), ("1h", 30, 121), ("24h", 300, 289), ("7d", 3600, 169)]:
+        started = time.monotonic()
         response = session.get(f"{base}/api/v1/metrics", params=[*(('kinds', kind) for kind in KINDS), ('window', window), ('take', '60')], timeout=60)
         response.raise_for_status()
+        elapsed = time.monotonic() - started
+        if elapsed >= 30:
+            raise RuntimeError('Historical metric query exceeded the production query budget')
         series = response.json()
         if not series:
             raise RuntimeError("No telemetry series returned")
@@ -99,7 +106,7 @@ def main() -> int:
             checked += 1
         if window == "7d" and not any(point["quality"] == "Missing" and point["value"] is None for item in series for point in item["points"]):
             raise RuntimeError("Uncollected historical periods were not left empty")
-        print(f"Telemetry window {window}: {len(series)} real series, bounded/aligned buckets verified")
+        print(f"Telemetry window {window}: {len(series)} real series, bounded/aligned buckets verified, API {elapsed:.3f}s")
     required = {"disk.read", "disk.write", "disk.read.iops", "disk.write.iops", "disk.read.latency", "disk.write.latency"}
     if not required.issubset(observed_disk_kinds):
         raise RuntimeError("Agent disk IOPS/latency capability did not produce persisted series")
@@ -108,6 +115,19 @@ def main() -> int:
         if response.status_code != 400 or not response.json().get("traceId"):
             raise RuntimeError("Invalid history queries did not return bounded Problem Details")
     print(f"Historical telemetry acceptance passed: {checked} completed buckets independently compared with PostgreSQL; {partial_only} newly introduced partial-only series verified for shape/quality without cross-snapshot value comparison; throughput, IOPS, latency, gaps and invalid-query rejection verified")
+    anonymous = requests.Session()
+    anonymous.trust_env = False
+    endpoint = f"{base}/api/v1/metrics"
+    if anonymous.get(endpoint, params={'kinds': 'disk.read', 'window': '7d'}, timeout=20, allow_redirects=False).status_code != 401:
+        raise RuntimeError('Anonymous metric history was not denied')
+    api = Api(base, session)
+    ticket = api.stage_secret(required_environment('VALIDATION_MANAGED_PASSWORD'))
+    api.run('create-user', '', {'username': required_environment('VALIDATION_MANAGED_USERNAME'),
+        'name': 'Temporary ordinary metric-validation user', 'email': '', 'inputTicket': ticket, 'inputKind': 'password'}, area='identity')
+    ordinary, profile = authenticate(base, required_environment('VALIDATION_MANAGED_USERNAME'), required_environment('VALIDATION_MANAGED_PASSWORD'), require_administrator=False)
+    if profile.get('isAdministrator') is not False or ordinary.get(endpoint, params={'kinds': 'disk.read', 'window': '7d'}, timeout=20, allow_redirects=False).status_code != 403:
+        raise RuntimeError('Ordinary users can access administrator metric history')
+    print('Metric permissions passed: anonymous 401, ordinary 403, administrator real history; wrapper cleans temporary users')
     return 0
 
 
