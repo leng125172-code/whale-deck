@@ -20,6 +20,7 @@ public sealed class NativeNotificationInboxTests
         var options = new DbContextOptionsBuilder<PlatformDbContext>().UseNpgsql(connection.ConnectionString).Options;
         await using var db = new PlatformDbContext(options);
         await db.Database.MigrateAsync();
+        Console.WriteLine("INBOX_PHASE=migrated");
         Assert.False(db.Database.HasPendingModelChanges());
         var now = DateTimeOffset.UtcNow;
         var adminA = new NotificationContext("admin-a", true, "native-admin-a");
@@ -50,6 +51,7 @@ public sealed class NativeNotificationInboxTests
             await transaction.RollbackAsync();
         }
         db.ChangeTracker.Clear(); Assert.Equal(1, await db.NotificationEvents.CountAsync()); Assert.Equal(1, await db.OperationJobs.CountAsync());
+        Console.WriteLine("INBOX_PHASE=atomic-source");
 
         // Real alert history produces a broadcast in the same transaction. Muted recovery stays quiet.
         var rule = new AlertRule { RuleType = "AgentOffline" };
@@ -81,6 +83,7 @@ public sealed class NativeNotificationInboxTests
         Assert.Empty((await service.ListAsync(adminA, new(Status: "unread"), default)).Items);
         await service.SetReadAsync(adminA, broadcast.Id, false, default);
         Assert.Equal(1, (await service.SummaryAsync(adminA, default)).UnreadCount);
+        Console.WriteLine("INBOX_PHASE=scoped-read");
 
         // Concurrent retries create exactly one personal read/audit, not a shared global read flag.
         async Task ReadConcurrently()
@@ -92,6 +95,7 @@ public sealed class NativeNotificationInboxTests
         Assert.Equal(1, await db.NotificationReadStates.CountAsync(item => item.Subject == userA.Subject));
         Assert.Equal(1, await db.AuditEvents.CountAsync(item => item.ActorSubject == userA.Subject && item.Action == "notifications.read"));
         Assert.All(await db.AuditEvents.Where(item => item.TargetType == "notification").ToArrayAsync(), item => Assert.Null(item.DetailJson));
+        Console.WriteLine("INBOX_PHASE=concurrent-read");
 
         static NotificationEvent Event(string subject, DateTimeOffset expiry) => new()
         {
@@ -116,6 +120,7 @@ public sealed class NativeNotificationInboxTests
         Assert.Equal(1, (await service.SummaryAsync(batchContext, default)).UnreadCount);
         Assert.Equal(0, (await service.MarkAllReadAsync(batchContext, cutoff, default)).ChangedCount);
         await Assert.ThrowsAsync<ArgumentException>(() => service.MarkAllReadAsync(batchContext, long.MaxValue, default));
+        Console.WriteLine("INBOX_PHASE=batch-snapshot");
 
         // DB uniqueness, event immutability, bounded retention and FK read-state cascade.
         await using (var collision = new PlatformDbContext(options))
@@ -138,5 +143,6 @@ public sealed class NativeNotificationInboxTests
         Assert.Equal(0, await NotificationRetention.PruneAsync(db, now, default));
         Assert.False(await db.NotificationReadStates.AnyAsync(item => item.NotificationId == expired[0].Id));
         Assert.Equal(1008, await db.NotificationEvents.CountAsync());
+        Console.WriteLine("INBOX_PHASE=retained");
     }
 }

@@ -80,8 +80,18 @@ def main(suite='capacity'):
                 'FullyQualifiedName~' + {'capacity': 'NativeBackupCapacityTests', 'metrics': 'NativeMetricAggregationTests', 'alerts': 'NativeMonitoringAlertsTests', 'notifications': 'NativeNotificationInboxTests'}[suite]]).strip()
             assert re.fullmatch(r'[a-f0-9]{64}', identity)
             command(['docker', 'network', 'connect', common[0], identity])
-            completed = subprocess.run(['docker', 'start', '-a', identity], check=False, text=True,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
+            try:
+                completed = subprocess.run(['docker', 'start', '-a', identity], check=False, text=True,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
+            except subprocess.TimeoutExpired as error:
+                partial = error.stdout or ''
+                if isinstance(partial, bytes): partial = partial.decode('utf-8', errors='replace')
+                phases = re.findall(r'INBOX_PHASE=([a-z-]+)', partial)
+                # Public progress only: never print the captured exception/SQL/connection payload.
+                progress = {'restoredProjects': partial.count('Restored '),
+                    'testExecutionStarted': 'Starting test execution' in partial,
+                    'inboxPhases': phases[-8:]}
+                raise RuntimeError('Isolated native ' + suite + ' deadline expired; public progress=' + json.dumps(progress)) from None
             output = completed.stdout + completed.stderr
             status = command(['docker', 'inspect', '--format', '{{.State.ExitCode}}', identity]).strip()
             if status != '0':
@@ -89,8 +99,10 @@ def main(suite='capacity'):
                 # Only stable exception/code tokens; never connection strings or native SQL values.
                 error_types = sorted(set(re.findall(r'\b(?:[A-Za-z]+\.)*(?:PostgresException|InvalidOperationException|EqualException|TrueException|SingleException|NotNullException|NullException|InRangeException)\b', output)))
                 sql_states = sorted(set(re.findall(r'\b([0-9A-Z]{5}):\s', output)))
+                source_lines = re.findall(r'NativeNotificationInboxTests.cs:line ([0-9]+)', output)
                 raise RuntimeError('Isolated native ' + suite + ' test failed: ' + ('\n'.join(diagnostics) if diagnostics else
-                    'native failure types=' + ','.join(error_types) + ' SQLSTATE=' + ','.join(sql_states) + '; private output withheld'))
+                    'native failure types=' + ','.join(error_types) + ' SQLSTATE=' + ','.join(sql_states) +
+                    ' inboxSourceLines=' + ','.join(source_lines[:8]) + '; private output withheld'))
             results = ET.parse(scratch_path / 'results/native.trx').getroot()
             namespace = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
             counters = results.find('t:ResultSummary/t:Counters', namespace)
