@@ -1,6 +1,6 @@
 # P0-07 持久指标聚合验收
 
-日期：2026-10-13。状态：`6c165e5` 已覆盖发布，原始数据/迁移/健康验证通过；生产 7d 回填期查询发生 503，性能修复 `fd77fa3` 已完成，`acb48fe` 百万级原生负载验收通过、准备覆盖发布。**尚未签收最终生产历史接口/回填**。
+日期：2026-10-13。状态：指标子项已在运行时 **`3b5b3d9`** 覆盖部署、14 天回填与生产历史/权限/数据保留验收通过。Source 后续测试/证据提交不等于再次部署；不代表 P0-07 的所有告警或整个 P0–P5 已完成。
 
 ## 实现范围
 
@@ -15,7 +15,7 @@
 
 ## 自动化与真实验收
 
-源码 `6c165e5`：本机 Release 构建 0 警告/0 错误；380 Unit 与 62 现有 Integration 通过，容量与指标两个原生 Fact 在本机显式跳过。前端 44 单元、类型检查、lint 与生产构建通过。新增跨盘有效采样权重/权重缺失测试。后续源码修改需重新验证，不能据此提前签收运行时。
+源码 `6c165e5` 及性能修复/负载测试源码再次本机 Release 构建 0 警告/0 错误；380 Unit 与 62 现有 Integration 通过，容量与指标两个原生 Fact 在本机显式跳过。前端 44 单元、类型检查、lint 与生产构建通过。新增跨盘有效采样权重/权重缺失测试。后续源码修改需重新验证，不能据此提前签收新运行时。
 
 `NativeMetricAggregationTests` 已在真实 PostgreSQL 18 的 `wdv_metrics_<16hex>` 隔离库通过，两轮分别验证 `1b0303a` 与最终 `6c165e5`。从旧 migration 升级，验证旧值/原始数据保留、14 天边缘回填、上下文重启、小时/minute、首末时间、非有限值/空值/质量、完成 IOPS 加权和权重字段、累计计数器 last、当前部分时间桶、7d/24h 查询、派生 fixture 变更证明聚合读取、迟到脏桶原始回退/重算、质量更新、真实同一分钟并发提交发生在 ACK 前且未丢 revision、advisory 锁与手动 down/up。原生 Fact 未跳过，临时库/SDK 容器/凭据文件清理。测试数据是合成时间序列，但 SQL/迁移/并发来自真实 PostgreSQL，不伪称生产负载压测。
 
@@ -26,6 +26,18 @@
 生产发布前已只读抓取 13 天内、2 分钟前冻结窗口的 **4,133,024 条原始样本** 计数/摘要，保存在主机私有 `deploy/artifacts/metric-aggregation-6c165e5.before.json`（0600），第一轮发布后比对通过。派生聚合会合法重算，不能把旧 `row::text`（含新增列）的摘要当不变性断言。覆盖发布 job `7d0a5c6c-b098-424e-81b5-e9dfe3ffe559` 先完成调度，随后实际服务结束；调度成功不能独立证明更新完成。下面记录生产结果及失败继续点。
 
 ## 生产发布与已发现问题
+
+### 最终生产签收
+
+- 覆盖修复运行时 `3b5b3d9`，调度 job `ea416b17-aa52-49e2-be8b-e8a89c4724e4`；实际 update service inactive/dead、Result=success、ExecMainStatus=0。不进行自动 dev 回滚。
+- 11 核心容器健康、Agent/Maintenance active、user 开发 sudo 按授权保留；无 native SDK 验收容器残留。Agent 协议仍 1.15，未增加 TCP/socket 挂载或扩大 Agent helper 权限。
+- 14 天回填完成：336 个完成小时 receipt、8,413 条持久小时 rollup、`nextHour=2026-10-13T03:00:00Z`、`backfillComplete=true`；仍有当前未完成分钟 dirty 是正常采样，不算未处理历史。原始/rollup 的 UTC 日分区 14 天保留逻辑未更改。
+- 再次冻结原始证据验证，4,133,024 条身份/数值/质量的计数/摘要相同，transition trigger 的 invoker/owner/statement-level 校验通过。
+- `6af4f30` 验收脚本使用真实管理员 Cookie 和生产数据库：四窗口每个 30 series，78 个完成时间桶独立对照通过；当前桶/缺失/单位、物理设备筛选、无效输入 Problem Details 通过。请求耗时 live **0.069s**、1h **0.165s**、24h **3.120s**、7d **2.951s**，均低于 30 秒预算，不用此热/已回填结果代替上面的 276 万冷查询测试。
+- 新增真实普通用户无管理员身份，历史读取 403；匿名 401；管理员正常读取。创建普通验证用户 job `38fc430c` 成功，wrapper 最后清理普通/管理员临时用户，凭据只进临时内存/一次性票据。GitHub TLS 瞬时失败后，仅本次 fetch 使用 HTTP/1.1 重试成功，没有更改系统代理/长期 Git 配置。
+- 以下是第一轮问题与修复历史，不代表最终仍有 7d 503 或回填未完成。
+
+### 第一轮问题与修复记录
 
 - 第一轮覆盖已实际结束：`whaledeck-platform-update.service` inactive/dead、Result=success、ExecMainStatus=0；11 核心容器健康，Agent/Maintenance active，user sudo 授权保留。4,133,024 条冻结原始记录计数/摘要相同，transition trigger 的 invoker/owner/statement-level 验证通过。
 - 后台进度从 16 增至 155 完成小时，仍处于空历史日期回填，`backfillComplete=false`。不能用 Native 边缘数据测试代替生产全部 14 天回填签收。
