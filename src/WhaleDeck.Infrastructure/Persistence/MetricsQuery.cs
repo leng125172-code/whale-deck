@@ -52,19 +52,27 @@ public sealed class MetricsQuery(PlatformDbContext db) : IMetricsQuery
                     AND w.start + make_interval(secs => {plan.ResolutionSeconds}) <= {plan.EndUtc}
                     AND NOT EXISTS(SELECT 1 FROM metric_aggregation_pending p WHERE p.window_start_utc >= w.start
                         AND p.window_start_utc < w.start + make_interval(secs => {plan.ResolutionSeconds}))
+            ), missing AS (
+                SELECT w.start, w.start - ROW_NUMBER() OVER(ORDER BY w.start) * make_interval(secs => {plan.ResolutionSeconds}) AS island
+                FROM wanted w WHERE NOT EXISTS(SELECT 1 FROM eligible e WHERE e.start = w.start)
+            ), ranges AS MATERIALIZED (
+                SELECT MIN(start) AS start, MAX(start) + make_interval(secs => {plan.ResolutionSeconds}) AS finish
+                FROM missing GROUP BY island
             ), raw AS MATERIALIZED (
-                SELECT sample.*, source.metric_kind, w.start,
+                SELECT sample.*, source.metric_kind,
+                    date_bin(make_interval(secs => {plan.ResolutionSeconds}), sample.sampled_at_utc, TIMESTAMPTZ '1970-01-01') AS start,
                     sample.quality = 'Good' AND sample.value_double > '-Infinity'::float8 AND sample.value_double < 'Infinity'::float8
                         AND (source.metric_kind NOT IN ('disk.read.latency', 'disk.write.latency')
                             OR (weight.quality = 'Good' AND weight.value_double > 0 AND weight.value_double < 'Infinity'::float8)) AS valid,
                     CASE WHEN source.metric_kind IN ('disk.read.latency', 'disk.write.latency') THEN weight.value_double ELSE 1.0 END AS weight
-                FROM wanted w JOIN metric_samples sample ON sample.sampled_at_utc >= w.start
-                    AND sample.sampled_at_utc < w.start + make_interval(secs => {plan.ResolutionSeconds}) AND sample.sampled_at_utc <= {plan.EndUtc}
+                FROM ranges r JOIN metric_samples sample ON sample.sampled_at_utc >= r.start
+                    AND sample.sampled_at_utc < r.finish AND sample.sampled_at_utc <= {plan.EndUtc}
                 JOIN metric_series source ON source.id = sample.series_id
                 LEFT JOIN metric_series weights ON weights.resource_id = source.resource_id AND weights.dimensions_json = source.dimensions_json
                     AND weights.metric_kind = CASE source.metric_kind WHEN 'disk.read.latency' THEN 'disk.read.iops' WHEN 'disk.write.latency' THEN 'disk.write.iops' END
                 LEFT JOIN metric_samples weight ON weight.series_id = weights.id AND weight.sampled_at_utc = sample.sampled_at_utc
-                WHERE sample.series_id = ANY({ids}) AND NOT EXISTS(SELECT 1 FROM eligible e WHERE e.start = w.start)
+                    AND weight.sampled_at_utc >= {plan.StartUtc} AND weight.sampled_at_utc <= {plan.EndUtc}
+                WHERE sample.series_id = ANY({ids}) AND sample.sampled_at_utc >= {plan.StartUtc} AND sample.sampled_at_utc <= {plan.EndUtc}
             ), combined AS (
                 SELECT r.series_id AS "SeriesId", e.start AS "SampledAtUtc",
                     CASE WHEN source.metric_kind LIKE '%.total' THEN
