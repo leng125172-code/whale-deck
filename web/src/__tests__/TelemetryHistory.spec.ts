@@ -85,4 +85,21 @@ describe('History and disk metrics', () => {
     expect(latency.filters[0]!.stats[0]!.value).toBe('无 I/O')
     expect(makeTelemetry('disk', [], [], 'latency').unit).toBe('ms')
   })
+  it('uses actual completed-I/O weights for history with unequal per-disk sample counts', () => {
+    const first = sample('disk.read.latency', 'sda', 10)
+    first.points[0]!.aggregationWeight = 100
+    const second = sample('disk.read.latency', 'sdb', 100)
+    second.points[0]!.aggregationWeight = 10
+    const chart = makeTelemetry(
+      'disk',
+      [first, second, sample('disk.read.iops', 'sda', 1), sample('disk.read.iops', 'sdb', 1)],
+      [],
+      'latency',
+      '7d',
+    )
+    expect(chart.filters[0]!.series[0]!.values[0]).toBeCloseTo(2000 / 110)
+    second.points[0]!.aggregationWeight = null
+    const missing = makeTelemetry('disk', [first, second], [], 'latency', '7d')
+    expect(missing.filters[0]!.series[0]!.values).toEqual([null])
+  })
 })

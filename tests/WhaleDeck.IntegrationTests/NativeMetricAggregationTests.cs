@@ -95,6 +95,7 @@ public sealed class NativeMetricAggregationTests
         Assert.Equal(15, sevenDays.Single(item => item.Kind == gauge.MetricKind).Points.Single(item => item.SampledAtUtc == hour).Value);
         Assert.Equal(300, sevenDays.Single(item => item.Kind == counter.MetricKind).Points.Single(item => item.SampledAtUtc == hour).Value);
         Assert.Equal(91, sevenDays.Single(item => item.Kind == latency.MetricKind).Points.Single(item => item.SampledAtUtc == hour).Value);
+        Assert.Equal(10, sevenDays.Single(item => item.Kind == latency.MetricKind).Points.Single(item => item.SampledAtUtc == hour).AggregationWeight);
         Assert.Equal("Idle", sevenDays.Single(item => item.Kind == idle.MetricKind).Points.Single(item => item.SampledAtUtc == hour).Quality);
         Assert.Equal("Warmup", sevenDays.Single(item => item.Kind == warmup.MetricKind).Points.Single(item => item.SampledAtUtc == hour).Quality);
         Assert.Equal("Unavailable", sevenDays.Single(item => item.Kind == unavailable.MetricKind).Points.Single(item => item.SampledAtUtc == hour).Quality);

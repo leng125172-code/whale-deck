@@ -70,7 +70,8 @@ public sealed class MetricsQuery(PlatformDbContext db) : IMetricsQuery
                     CASE WHEN source.metric_kind LIKE '%.total' THEN
                         (ARRAY_AGG(r.last ORDER BY r.last_sampled_at_utc DESC) FILTER(WHERE r.last IS NOT NULL))[1]
                     ELSE SUM(r.weighted_sum) / NULLIF(SUM(r.weight_sum), 0) END AS "Value",
-                    SUM(r.idle_count)::bigint AS "IdleCount", SUM(r.warmup_count)::bigint AS "WarmupCount", SUM(r.unavailable_count)::bigint AS "UnavailableCount"
+                    SUM(r.idle_count)::bigint AS "IdleCount", SUM(r.warmup_count)::bigint AS "WarmupCount", SUM(r.unavailable_count)::bigint AS "UnavailableCount",
+                    CASE WHEN source.metric_kind IN ('disk.read.latency', 'disk.write.latency') THEN SUM(r.weight_sum) END AS "AggregationWeight"
                 FROM eligible e JOIN metric_rollups r ON r.window_start_utc >= e.start
                     AND r.window_start_utc < e.start + make_interval(secs => {plan.ResolutionSeconds}) AND r.resolution = {persistedResolution}
                 JOIN metric_series source ON source.id = r.series_id
@@ -82,7 +83,8 @@ public sealed class MetricsQuery(PlatformDbContext db) : IMetricsQuery
                         (ARRAY_AGG(value_double ORDER BY sampled_at_utc DESC) FILTER(WHERE valid))[1]
                     ELSE SUM(value_double * weight) FILTER(WHERE valid) / NULLIF(SUM(weight) FILTER(WHERE valid), 0) END,
                     COUNT(*) FILTER(WHERE quality = 'Idle'), COUNT(*) FILTER(WHERE quality = 'Warmup'),
-                    COUNT(*) FILTER(WHERE quality IN ('Unavailable', 'Stopped') OR (quality = 'Good' AND NOT COALESCE(valid, false)))
+                    COUNT(*) FILTER(WHERE quality IN ('Unavailable', 'Stopped') OR (quality = 'Good' AND NOT COALESCE(valid, false))),
+                    CASE WHEN metric_kind IN ('disk.read.latency', 'disk.write.latency') THEN SUM(weight) FILTER(WHERE valid) END
                 FROM raw GROUP BY series_id, metric_kind, start
             ) SELECT * FROM combined
             ORDER BY "SampledAtUtc"
@@ -93,8 +95,9 @@ public sealed class MetricsQuery(PlatformDbContext db) : IMetricsQuery
             {
                 var timestamp = plan.StartUtc.AddSeconds(index * plan.ResolutionSeconds);
                 var bucket = indexed.GetValueOrDefault((item.Id, timestamp));
-                return new MetricPointDto(timestamp, bucket?.Value,
-                    bucket?.Value is not null ? "Good" : bucket?.IdleCount > 0 ? "Idle" : bucket?.WarmupCount > 0 ? "Warmup" : bucket?.UnavailableCount > 0 ? "Unavailable" : "Missing");
+                var quality = bucket?.Value is not null ? "Good" : bucket?.UnavailableCount > 0 ? "Unavailable" : bucket?.WarmupCount > 0 ? "Warmup" : bucket?.IdleCount > 0 ? "Idle" : "Missing";
+                return new MetricPointDto(timestamp, bucket?.Value, quality,
+                    quality == "Good" ? bucket?.AggregationWeight : quality == "Idle" ? 0 : null);
             }).ToArray(), plan.StartUtc, plan.EndUtc, plan.ResolutionSeconds)).ToArray();
     }
 
@@ -120,4 +123,5 @@ public sealed class MetricBucketRow
     public long IdleCount { get; set; }
     public long WarmupCount { get; set; }
     public long UnavailableCount { get; set; }
+    public double? AggregationWeight { get; set; }
 }

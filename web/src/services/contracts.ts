@@ -231,7 +231,12 @@ export interface MetricSeriesSnapshot {
   kind: string
   deviceId: string
   unit: string
-  points: Array<{ sampledAtUtc: string; value: number | null; quality: string }>
+  points: Array<{
+    sampledAtUtc: string
+    value: number | null
+    quality: string
+    aggregationWeight?: number | null
+  }>
   windowStartUtc?: string | null
   windowEndUtc?: string | null
   resolutionSeconds?: number

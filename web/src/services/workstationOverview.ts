@@ -389,12 +389,18 @@ function telemetryFilter(
     stats,
     weights:
       measure === 'latency'
-        ? ['disk.read.iops', 'disk.write.iops'].map(
-            (kind) =>
-              history
-                .find((item) => item.kind === kind && item.deviceId === device)
-                ?.points.map((point) => point.value) ?? [],
-          )
+        ? [first, second].map((points, direction) => {
+            const rates = history.find(
+              (item) =>
+                item.kind === (direction === 0 ? 'disk.read.iops' : 'disk.write.iops') &&
+                item.deviceId === device,
+            )?.points
+            return points.map((point, index) =>
+              window !== 'live' && Object.prototype.hasOwnProperty.call(point, 'aggregationWeight')
+                ? (point.aggregationWeight ?? null)
+                : (rates?.[index]?.value ?? null),
+            )
+          })
         : undefined,
     series: [
       {

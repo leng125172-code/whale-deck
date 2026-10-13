@@ -13,9 +13,9 @@ export const telemetryKinds = [
 
 export function telemetryFixture(window: string) {
   const resolution =
-    ({ live: 6, '1h': 30, '24h': 300, '7d': 1800 } as Record<string, number>)[window] ?? 6
+    ({ live: 6, '1h': 30, '24h': 300, '7d': 3600 } as Record<string, number>)[window] ?? 6
   const count =
-    ({ live: 61, '1h': 121, '24h': 289, '7d': 337 } as Record<string, number>)[window] ?? 61
+    ({ live: 61, '1h': 121, '24h': 289, '7d': 169 } as Record<string, number>)[window] ?? 61
   const end = Math.floor(Date.now() / (resolution * 1000)) * resolution * 1000
   return telemetryKinds.flatMap((kind) =>
     (kind.startsWith('network.') ? ['enp4s0', 'enxusb'] : ['nvme0n1', 'sda']).map((deviceId) => ({
@@ -40,6 +40,10 @@ export function telemetryFixture(window: string) {
                 ? 10 + (index % 30)
                 : (2 + (index % 8)) * 1024 * 1024,
         quality: index % 17 === 8 ? 'Missing' : 'Good',
+        aggregationWeight:
+          window !== 'live' && kind.endsWith('.latency') && index % 17 !== 8
+            ? (10 + (index % 30)) * (resolution / 6)
+            : null,
       })),
     })),
   )
