@@ -270,3 +270,9 @@ Valkey 清空后系统必须能从 PostgreSQL、Agent 和外部服务重建，�
 | `DM-ALERT-*` | `UC-ALT-*` |
 | `DM-CONFIG-*` | `UC-CFG-*` |
 | `DM-DEV-*`（待实现） | `UC-DEV-001..010`，具体实体/约束以开发空间专用设计为准 |
+
+## 消息中心增量模型（开发中，尚未上线）
+
+- `notification_events`：不可变 typed 事实，唯一 SourceKey 与 bigint 自增 Sequence；来源告警历史/任务终态，与源事务同存。管理员广播或精确 Authentik subject 受众；正文由固定代码模板生成，不复制 JSON/错误/Secret。
+- `notification_read_states`：复合主键 subject + notification_id，FK 级联删除。管理员也各自已读；无平台本地用户资料表。
+- 默认 180 天有效，独立每分钟清理最多 1000 条过期事实；读状态随事件级联清理。详见 [消息模型与验收](NOTIFICATIONS.md)。

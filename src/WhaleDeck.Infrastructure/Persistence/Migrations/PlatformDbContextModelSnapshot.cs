@@ -1105,6 +1105,115 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.ToTable("metric_series", (string)null);
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("audience");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<string>("MessageCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("message_code");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<DateTimeOffset>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at_utc");
+
+                    b.Property<string>("RecipientSubject")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("recipient_subject");
+
+                    b.Property<Guid?>("ResourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resource_id");
+
+                    b.Property<long>("Sequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("sequence");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Sequence"));
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("severity");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("SourceKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("source_key");
+
+                    b.Property<string>("SourceKind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("source_kind");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("Sequence")
+                        .IsUnique();
+
+                    b.HasIndex("SourceKey")
+                        .IsUnique();
+
+                    b.HasIndex("Audience", "RecipientSubject", "Sequence");
+
+                    b.ToTable("notification_events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_audience", "(audience = 'Administrator' AND recipient_subject IS NULL) OR (audience = 'Subject' AND recipient_subject IS NOT NULL AND length(recipient_subject) > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationReadState", b =>
+                {
+                    b.Property<string>("Subject")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("subject");
+
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("notification_id");
+
+                    b.Property<DateTimeOffset>("ReadAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at_utc");
+
+                    b.HasKey("Subject", "NotificationId");
+
+                    b.HasIndex("NotificationId");
+
+                    b.ToTable("notification_read_states", (string)null);
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.OperationJob", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1624,6 +1733,15 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.HasIndex("ScheduleId", "ScheduledForUtc");
 
                     b.ToTable("scheduled_task_runs", (string)null);
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationReadState", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.NotificationEvent", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

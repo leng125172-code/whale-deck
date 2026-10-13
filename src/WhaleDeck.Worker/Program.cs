@@ -20,6 +20,7 @@ builder.Services.AddSerilog((services, configuration) => configuration
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddHostedService<MonitoringAlertWorker>();
+builder.Services.AddHostedService<NotificationRetentionWorker>();
 
 var host = builder.Build();
 await host.RunAsync();

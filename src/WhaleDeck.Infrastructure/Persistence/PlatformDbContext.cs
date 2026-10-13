@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using WhaleDeck.Domain.Entities;
+using WhaleDeck.Application.Services;
 
 namespace WhaleDeck.Infrastructure.Persistence;
 
@@ -37,6 +38,37 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
     public DbSet<ConfigSnapshot> ConfigSnapshots => Set<ConfigSnapshot>();
     public DbSet<ConfigSyncRun> ConfigSyncRuns => Set<ConfigSyncRun>();
     public DbSet<CatalogSnapshot> CatalogSnapshots => Set<CatalogSnapshot>();
+    public DbSet<NotificationEvent> NotificationEvents => Set<NotificationEvent>();
+    public DbSet<NotificationReadState> NotificationReadStates => Set<NotificationReadState>();
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        StageNotifications(); return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StageNotifications(); return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    private void StageNotifications()
+    {
+        ChangeTracker.DetectChanges();
+        if (ChangeTracker.Entries<NotificationEvent>().Any(item => item.State == EntityState.Modified))
+            throw new InvalidOperationException("Notification facts are immutable.");
+        var staged = ChangeTracker.Entries<NotificationEvent>().Select(item => item.Entity.SourceKey).ToHashSet(StringComparer.Ordinal);
+        void Add(NotificationEvent? item) { if (item is not null && staged.Add(item.SourceKey)) NotificationEvents.Add(item); }
+        foreach (var history in ChangeTracker.Entries<AlertEventHistory>().Where(item => item.State == EntityState.Added).Select(item => item.Entity).ToArray())
+        {
+            var source = ChangeTracker.Entries<AlertEvent>().SingleOrDefault(item => item.Entity.Id == history.AlertEventId);
+            if (source is null) throw new InvalidOperationException("Notification alert history requires its tracked source event.");
+            var wasSilenced = source.OriginalValues.GetValue<string>(nameof(AlertEvent.State)) == "Silenced" &&
+                source.OriginalValues.GetValue<DateTimeOffset?>(nameof(AlertEvent.SilencedUntilUtc)) > history.OccurredAtUtc;
+            Add(NotificationSources.Alert(source.Entity, history, wasSilenced));
+        }
+        foreach (var job in ChangeTracker.Entries<OperationJob>().Where(item => item.State == EntityState.Added ||
+            item.State == EntityState.Modified && item.Property(nameof(OperationJob.State)).IsModified).ToArray()) Add(NotificationSources.Job(job.Entity));
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -45,6 +77,7 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
         ConfigureResourcesAndApplications(modelBuilder);
         ConfigureJobsAndMetrics(modelBuilder);
         ConfigureBackupsAlertsAndConfiguration(modelBuilder);
+        ConfigureNotifications(modelBuilder);
 
         foreach (var entity in modelBuilder.Model.GetEntityTypes())
         {
@@ -53,6 +86,30 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
                 property.SetColumnName(ToSnakeCase(property.Name));
             }
         }
+    }
+
+    private static void ConfigureNotifications(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<NotificationEvent>(entity =>
+        {
+            entity.ToTable("notification_events", table => table.HasCheckConstraint("ck_notification_audience",
+                "(audience = 'Administrator' AND recipient_subject IS NULL) OR (audience = 'Subject' AND recipient_subject IS NOT NULL AND length(recipient_subject) > 0)"));
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.Sequence).UseIdentityAlwaysColumn();
+            entity.HasIndex(item => item.Sequence).IsUnique();
+            entity.Property(item => item.SourceKey).HasMaxLength(128); entity.HasIndex(item => item.SourceKey).IsUnique();
+            entity.Property(item => item.SourceKind).HasMaxLength(16); entity.Property(item => item.Audience).HasMaxLength(24);
+            entity.Property(item => item.RecipientSubject).HasMaxLength(256);
+            entity.Property(item => item.MessageCode).HasMaxLength(64); entity.Property(item => item.Severity).HasMaxLength(16);
+            entity.HasIndex(item => new { item.Audience, item.RecipientSubject, item.Sequence });
+            entity.HasIndex(item => item.ExpiresAtUtc);
+        });
+        modelBuilder.Entity<NotificationReadState>(entity =>
+        {
+            entity.ToTable("notification_read_states"); entity.HasKey(item => new { item.Subject, item.NotificationId });
+            entity.Property(item => item.Subject).HasMaxLength(256);
+            entity.HasOne<NotificationEvent>().WithMany().HasForeignKey(item => item.NotificationId).OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
     private static void ConfigureAuditAndSettings(ModelBuilder modelBuilder)

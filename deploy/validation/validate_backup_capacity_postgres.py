@@ -22,7 +22,7 @@ def command(arguments, timeout=60, input=None):
 
 
 def main(suite='capacity'):
-    if suite not in ('capacity', 'metrics', 'alerts'):
+    if suite not in ('capacity', 'metrics', 'alerts', 'notifications'):
         raise ValueError('Unknown isolated native suite')
     repository = Path(__file__).resolve().parents[2]
     database = 'wdv_' + suite + '_' + uuid.uuid4().hex[:16]
@@ -77,7 +77,7 @@ def main(suite='capacity'):
                 'dotnet', 'test', 'tests/WhaleDeck.IntegrationTests/WhaleDeck.IntegrationTests.csproj',
                 '--configuration', 'Release', '--artifacts-path', '/scratch/build', '--logger', 'console;verbosity=normal',
                 '--logger', 'trx;LogFileName=native.trx', '--results-directory', '/scratch/results', '--filter',
-                'FullyQualifiedName~' + {'capacity': 'NativeBackupCapacityTests', 'metrics': 'NativeMetricAggregationTests', 'alerts': 'NativeMonitoringAlertsTests'}[suite]]).strip()
+                'FullyQualifiedName~' + {'capacity': 'NativeBackupCapacityTests', 'metrics': 'NativeMetricAggregationTests', 'alerts': 'NativeMonitoringAlertsTests', 'notifications': 'NativeNotificationInboxTests'}[suite]]).strip()
             assert re.fullmatch(r'[a-f0-9]{64}', identity)
             command(['docker', 'network', 'connect', common[0], identity])
             completed = subprocess.run(['docker', 'start', '-a', identity], check=False, text=True,
@@ -104,6 +104,9 @@ def main(suite='capacity'):
             elif suite == 'alerts':
                 print(json.dumps({'nativeMonitoringAlertsPostgres': 'passed', 'database': 'isolated-and-migrated',
                     'selectorQualityCoverageHysteresisEscalationSilenceRecoveryConcurrencyUniqueDisable': 'passed'}))
+            elif suite == 'notifications':
+                print(json.dumps({'nativeNotificationInboxPostgres': 'passed', 'database': 'isolated-and-migrated',
+                    'atomicSourcePrivacyAudienceDowngradeReadIdempotenceConcurrencyPaginationBatchSnapshotRetention': 'passed'}))
             else:
                 benchmark = re.findall(r'METRIC_QUERY_BENCH_MS=([0-9]{1,6})', '\n'.join(results.itertext()))
                 assert len(benchmark) == 1, 'Native metric load query was not observed'

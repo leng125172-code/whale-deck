@@ -21,6 +21,8 @@ import {
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import AppTopbar from '@/components/AppTopbar.vue'
+import NotificationDrawer from '@/components/NotificationDrawer.vue'
+import { createNotificationInbox } from '@/services/notificationInbox'
 import { authSession } from '@/services/authSession'
 import { apiRequest } from '@/services/apiClient'
 import type { AlertEvent, GlobalSearchResult, Job } from '@/services/contracts'
@@ -37,6 +39,7 @@ const jobs = ref<Job[]>([])
 const managementLoading = ref(false)
 const remoteSearchResults = ref<GlobalSearchResult[]>([])
 const searchLoading = ref(false)
+const inbox = createNotificationInbox()
 
 const activeNavigation = computed(() => route.path)
 const currentUserName = computed(() => authSession.user.value?.name || '已登录')
@@ -148,9 +151,6 @@ const searchResults = computed(() => [
     icon: searchIcon(item.kind),
   })),
 ])
-const activeAlertCount = computed(
-  () => alerts.value.filter((item) => item.state !== 'Recovered').length,
-)
 const activeJobCount = computed(
   () => jobs.value.filter((item) => item.state === 'Queued' || item.state === 'Running').length,
 )
@@ -158,20 +158,51 @@ const activeJobCount = computed(
 let managementRefreshTimer: number | undefined
 let searchTimer: number | undefined
 let searchGeneration = 0
+let managementGeneration = 0
+let managementController: AbortController | null = null
+
+watch(
+  () => [authSession.user.value?.subject, isAdministrator.value, authSession.authenticated.value],
+  () => {
+    managementGeneration++
+    managementController?.abort()
+    managementController = null
+    managementLoading.value = false
+    alerts.value = []
+    jobs.value = []
+    notificationsVisible.value = false
+    jobsVisible.value = false
+    searchGeneration++
+    remoteSearchResults.value = []
+    searchVisible.value = false
+    inbox.reset(authSession.authenticated.value && !!authSession.user.value?.subject)
+    void inbox.refreshSummary()
+  },
+  { immediate: true },
+)
 
 async function refreshManagementData() {
-  if (!isAdministrator.value || managementLoading.value) return
+  if (!isAdministrator.value || managementLoading.value || document.visibilityState === 'hidden')
+    return
+  const generation = managementGeneration
+  const controller = new AbortController()
+  managementController = controller
   managementLoading.value = true
   try {
-    ;[alerts.value, jobs.value] = await Promise.all([
-      apiRequest<AlertEvent[]>('alerts?includeRecovered=false'),
-      apiRequest<Job[]>('jobs?take=50'),
+    const results = await Promise.all([
+      apiRequest<AlertEvent[]>('alerts?includeRecovered=false', { signal: controller.signal }),
+      apiRequest<Job[]>('jobs?take=50', { signal: controller.signal }),
     ])
+    if (generation === managementGeneration && isAdministrator.value)
+      [alerts.value, jobs.value] = results
   } catch {
     // The dedicated pages surface request diagnostics. Topbar counters remain
     // unobtrusive when a dependency is temporarily unavailable.
   } finally {
-    managementLoading.value = false
+    if (generation === managementGeneration) {
+      managementLoading.value = false
+      managementController = null
+    }
   }
 }
 
@@ -181,19 +212,13 @@ function openSearch() {
   searchVisible.value = true
 }
 
-async function openNotifications() {
-  await refreshManagementData()
+function openNotifications() {
   notificationsVisible.value = true
 }
 
 async function openJobs() {
   await refreshManagementData()
   jobsVisible.value = true
-}
-
-async function openAlertsPage() {
-  notificationsVisible.value = false
-  await router.push('/alerts')
 }
 
 async function openJobsPage() {
@@ -259,13 +284,21 @@ function formatDate(value: string | null) {
 onMounted(() => {
   window.addEventListener('keydown', handleSearchShortcut)
   void refreshManagementData()
-  managementRefreshTimer = window.setInterval(() => void refreshManagementData(), 30_000)
+  managementRefreshTimer = window.setInterval(() => {
+    if (document.visibilityState === 'hidden') return
+    void refreshManagementData()
+    void inbox.refreshSummary()
+  }, 30_000)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleSearchShortcut)
   if (managementRefreshTimer !== undefined) window.clearInterval(managementRefreshTimer)
   if (searchTimer !== undefined) window.clearTimeout(searchTimer)
+  managementGeneration++
+  searchGeneration++
+  managementController?.abort()
+  inbox.reset(false)
 })
 
 function toggleMobileNavigation() {
@@ -294,7 +327,8 @@ async function userCommand(command: string) {
     <AppTopbar
       show-navigation-trigger
       :show-management-actions="isAdministrator"
-      :notification-count="activeAlertCount"
+      :notification-count="inbox.state.unreadCount"
+      :notification-unavailable="inbox.state.summaryUnavailable"
       :job-count="activeJobCount"
       @toggle-navigation="toggleMobileNavigation"
       @open-search="openSearch"
@@ -404,27 +438,14 @@ async function userCommand(command: string) {
       </div>
     </el-dialog>
 
-    <el-drawer v-model="notificationsVisible" title="通知与活动告警" size="min(440px, 92vw)">
-      <div class="topbar-drawer-list" v-loading="managementLoading">
-        <el-empty v-if="alerts.length === 0" description="当前没有活动告警" />
-        <button v-for="item in alerts" :key="item.id" type="button" @click="openAlertsPage">
-          <span
-            ><strong>{{ item.summaryCode }}</strong
-            ><small>{{ item.state }} · {{ formatDate(item.lastOccurredAtUtc) }}</small></span
-          >
-          <el-tag
-            :type="
-              item.severity === 'Critical'
-                ? 'danger'
-                : item.severity === 'Warning'
-                  ? 'warning'
-                  : 'info'
-            "
-            >{{ item.severity }}</el-tag
-          >
-        </button>
-      </div>
-    </el-drawer>
+    <NotificationDrawer
+      v-model="notificationsVisible"
+      :inbox="inbox"
+      :administrator="isAdministrator"
+      :alerts="alerts"
+      :activities-loading="managementLoading"
+      @refresh-activities="refreshManagementData"
+    />
 
     <el-drawer v-model="jobsVisible" title="任务中心" size="min(480px, 92vw)">
       <div class="topbar-drawer-list" v-loading="managementLoading">

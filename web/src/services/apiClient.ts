@@ -26,11 +26,12 @@ export function apiUrl(path: string) {
   return `${base}/${path.replace(/^\//, '')}`
 }
 
-async function csrfHeaders() {
+async function csrfHeaders(signal: AbortSignal) {
   if (!csrf) {
     const response = await fetch(apiUrl('auth/csrf'), {
       credentials: 'include',
       headers: { Accept: 'application/json' },
+      signal,
     })
     if (!response.ok) throw await toApiError(response)
     csrf = (await response.json()) as { headerName: string; token: string }
@@ -52,20 +53,23 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   const method = (init.method || 'GET').toUpperCase()
   const writes = !['GET', 'HEAD', 'OPTIONS'].includes(method)
   const controller = new AbortController()
+  const externalAbort = () => controller.abort()
+  if (init.signal?.aborted) controller.abort()
+  else init.signal?.addEventListener('abort', externalAbort, { once: true })
   const timeout = window.setTimeout(() => controller.abort(), 15_000)
   const headers = new Headers(init.headers)
   headers.set('Accept', 'application/json')
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-  if (writes) {
-    for (const [name, value] of Object.entries(await csrfHeaders())) headers.set(name, value)
-  }
-
   try {
+    if (writes) {
+      for (const [name, value] of Object.entries(await csrfHeaders(controller.signal)))
+        headers.set(name, value)
+    }
     const response = await fetch(apiUrl(path), {
       ...init,
       credentials: 'include',
       headers,
-      signal: init.signal ?? controller.signal,
+      signal: controller.signal,
     })
     if (!response.ok) {
       if (response.status === 400 && writes) csrf = null
@@ -75,6 +79,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     return (await response.json()) as T
   } finally {
     window.clearTimeout(timeout)
+    init.signal?.removeEventListener('abort', externalAbort)
   }
 }
 

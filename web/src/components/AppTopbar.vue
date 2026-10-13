@@ -11,6 +11,7 @@ withDefaults(
     showNavigationTrigger?: boolean
     showManagementActions?: boolean
     notificationCount?: number
+    notificationUnavailable?: boolean
     jobCount?: number
   }>(),
   {
@@ -18,6 +19,7 @@ withDefaults(
     showNavigationTrigger: false,
     showManagementActions: false,
     notificationCount: 0,
+    notificationUnavailable: false,
     jobCount: 0,
   },
 )
@@ -112,7 +114,10 @@ onBeforeUnmount(() => window.removeEventListener('scroll', updateScrollState))
               </el-badge>
             </el-button>
           </el-tooltip>
-          <el-tooltip v-if="showManagementActions" content="通知" placement="bottom">
+          <el-tooltip
+            :content="notificationUnavailable ? '消息中心（未读数量暂时不可用）' : '消息中心'"
+            placement="bottom"
+          >
             <el-button
               class="icon-action"
               text
@@ -120,7 +125,12 @@ onBeforeUnmount(() => window.removeEventListener('scroll', updateScrollState))
               aria-label="通知"
               @click="emit('openNotifications')"
             >
-              <el-badge :value="notificationCount" :hidden="notificationCount === 0" :max="99">
+              <el-badge
+                :value="notificationUnavailable ? '!' : notificationCount"
+                :type="notificationUnavailable ? 'warning' : 'danger'"
+                :hidden="!notificationUnavailable && notificationCount === 0"
+                :max="99"
+              >
                 <el-icon><Bell /></el-icon>
               </el-badge>
             </el-button>

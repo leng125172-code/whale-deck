@@ -185,3 +185,11 @@ Worker 批量保存 `container.cpu.utilization`、`container.memory.used/limit/u
 每条审计包含：`actorSubject`、来源 IP、动作码、目标类型/ID、结果、`jobId`、`traceId`、发生时间和脱敏详情。审计写入失败时，高风险写操作必须失败关闭；高频只读查询不产生逐次审计。
 
 新增开发空间审计覆盖创建/授权、环境变更、源码导入/替换、执行/取消、会话建立/终止、报告下载、快照/删除。记录 workspace/run/session ID、非敏感版本摘要和结果；不把终端全文、调试变量、完整环境、私有源码或凭据写入审计。
+## 消息中心（开发中，尚未发布）
+
+| ID | 用例 | 权限 | 接口与结果 |
+| --- | --- | --- | --- |
+| UC-NOT-001 | 个人消息及未读摘要 | 登录主体 | GET `/api/v1/notifications`、`/summary`；普通仅本人，管理员额外可见广播；不自动已读 |
+| UC-NOT-002 | 读状态及快照全部已读 | 登录主体 | POST `/{id}/read-state`、`/read-all`；仅修改本人读状态，批次上限 1000、幂等、审计、Cookie CSRF/Origin |
+
+事件来源和保留、前端状态及外部投递后续范围见 [消息中心](NOTIFICATIONS.md)。不支持客户端发送任意消息正文或修改消息事实。

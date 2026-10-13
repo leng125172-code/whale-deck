@@ -66,6 +66,8 @@ public static class DependencyInjection
         services.AddScoped<IPortalRepository, PortalRepository>();
         services.AddScoped<IJobRepository, JobRepository>();
         services.AddScoped<IGovernanceRepository, GovernanceRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<NotificationService>();
         services.AddScoped<IApplicationRepository, ApplicationRepository>();
         services.AddScoped<IContainerUpdateRepository, ContainerUpdateRepository>();
         services.AddScoped<IDockerEventRepository, DockerEventRepository>();
