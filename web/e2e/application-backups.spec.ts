@@ -53,6 +53,7 @@ async function open(page: import('@playwright/test').Page) {
     .click()
   const dialog = page.getByRole('dialog', { name: '应用备份', exact: true })
   await expect(dialog.getByText('最近 100 条备份记录')).toBeVisible()
+  await expect(dialog.getByText(/1\.0 MiB/)).toBeVisible()
   return dialog
 }
 for (const width of [320, 390, 1045, 1440, 1920])

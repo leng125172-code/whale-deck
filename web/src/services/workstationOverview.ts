@@ -1,4 +1,10 @@
 import { ApiError, apiRequest } from '@/services/apiClient'
+import {
+  formatBytes,
+  formatByteRate,
+  formatDuration as formatSeconds,
+  formatQuantity,
+} from '@/services/displayUnits'
 import type { MetricSeriesSnapshot, OverviewResponse, PortalItem } from '@/services/contracts'
 import {
   RollingTelemetryHistory,
@@ -28,7 +34,7 @@ export interface ResourceSummary {
 export interface UsageMetric {
   key: 'cpu' | 'memory' | 'disk'
   label: string
-  percentage: number
+  percentage: number | null
   value: string
   detail: string
 }
@@ -95,7 +101,7 @@ export interface WorkstationOverviewSnapshot {
   applications: RecommendedApplication[]
 }
 
-const emptyTelemetry = (unit = 'MB/s'): TelemetryDataset => ({
+const emptyTelemetry = (unit = 'MiB/s'): TelemetryDataset => ({
   unit,
   labels: [],
   filters: [{ value: 'none', label: '暂无设备采样', stats: [], series: [] }],
@@ -169,8 +175,16 @@ export async function fetchWorkstationOverview(
   const running = containers.filter((item) => item.state.toLowerCase() === 'running').length
   const metricValues = response.metrics ?? []
   const metric = (kind: string, aggregate: 'first' | 'max' = 'first') => {
-    const values = metricValues.filter((item) => item.kind === kind).map((item) => item.value)
-    if (values.length === 0) return 0
+    const values = metricValues
+      .filter(
+        (item) =>
+          item.kind === kind &&
+          Number.isFinite(item.value) &&
+          item.value >= 0 &&
+          ['Good', 'Idle'].includes(item.quality),
+      )
+      .map((item) => item.value)
+    if (values.length === 0) return null
     return aggregate === 'max' ? Math.max(...values) : values[0]!
   }
   const cpu = metric('cpu.utilization')
@@ -231,14 +245,14 @@ export async function fetchWorkstationOverview(
         key: 'cpu',
         label: 'CPU 使用率',
         percentage: cpu,
-        value: `${cpu.toFixed(1)}%`,
+        value: formatQuantity(cpu, '%', 1, '暂无采样'),
         detail: '6 秒采样',
       },
       {
         key: 'memory',
         label: '内存使用率',
         percentage: memory,
-        value: `${memory.toFixed(1)}%`,
+        value: formatQuantity(memory, '%', 1, '暂无采样'),
         detail: response.host
           ? `${formatBytes(response.host.totalMemoryBytes)} 总内存`
           : '无主机数据',
@@ -247,7 +261,7 @@ export async function fetchWorkstationOverview(
         key: 'disk',
         label: '硬盘使用率',
         percentage: disk,
-        value: `${disk.toFixed(1)}%`,
+        value: formatQuantity(disk, '%', 1, '暂无采样'),
         detail: '当前最高文件系统占用',
       },
     ],
@@ -311,7 +325,7 @@ export function makeTelemetry(
     .filter((device) => mode === 'disk' || isHostNetworkDevice(device))
     .sort()
   if (devices.length === 0)
-    return emptyTelemetry(measure === 'throughput' ? 'MB/s' : measure === 'iops' ? 'IOPS' : 'ms')
+    return emptyTelemetry(measure === 'throughput' ? 'MiB/s' : measure === 'iops' ? 'IOPS' : 'ms')
 
   const source = history.find((series) => series.kind === firstKind) ?? history[0]
   const labels =
@@ -326,7 +340,7 @@ export function makeTelemetry(
     telemetryFilter(mode, device, history, current ?? [], firstKind, secondKind, measure, window),
   )
   return {
-    unit: measure === 'throughput' ? 'MB/s' : measure === 'iops' ? 'IOPS' : 'ms',
+    unit: measure === 'throughput' ? 'MiB/s' : measure === 'iops' ? 'IOPS' : 'ms',
     labels,
     filters: [aggregateTelemetry(mode, deviceFilters, measure, window), ...deviceFilters],
   }
@@ -349,7 +363,7 @@ function telemetryFilter(
   const firstValue = first[first.length - 1]?.value ?? null
   const secondValue = second[second.length - 1]?.value ?? null
   const total = (kind: string) =>
-    current.find((item) => item.kind === kind && item.deviceId === device)?.value ?? 0
+    current.find((item) => item.kind === kind && item.deviceId === device)?.value ?? null
   const stats: TelemetryStat[] =
     mode === 'network'
       ? [
@@ -506,33 +520,31 @@ function formatSampleTime(value: string) {
 }
 
 function formatRate(bytesPerSecond: number | null) {
-  return bytesPerSecond === null ? '暂无采样' : `${(bytesPerSecond / 1024 / 1024).toFixed(2)} MB/s`
+  return formatByteRate(bytesPerSecond, '暂无采样')
 }
 
 function formatMetric(value: number | null, measure: DiskMeasure, idle = false) {
   if (measure === 'throughput') return formatRate(value)
   if (value === null) return idle ? '无 I/O' : '暂无有效采样'
-  return measure === 'iops' ? `${value.toFixed(1)} 次/s` : `${value.toFixed(2)} ms`
+  return formatQuantity(
+    value,
+    measure === 'iops' ? '次/s' : 'ms',
+    measure === 'iops' ? 1 : 2,
+    '暂无有效采样',
+  )
 }
 
 function lastValue(values: Array<number | null> | undefined) {
   return values?.[values.length - 1]
 }
 
-function formatBytes(value: number) {
-  if (!Number.isFinite(value) || value <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
-  return `${(value / 1024 ** index).toFixed(index >= 3 ? 1 : 0)} ${units[index]}`
-}
-
 function formatDuration(value: string) {
-  const match = /(?:(\d+)\.)?(\d{2}):(\d{2}):(\d{2})/.exec(value)
-  if (!match) return value || '未知'
+  const match = /^(?:(\d+)\.)?(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?$/.exec(value)
+  if (!match) return '未知'
   const days = Number(match[1] ?? 0)
   const hours = Number(match[2])
   const minutes = Number(match[3])
-  return `${days ? `${days} 天 ` : ''}${hours} 小时 ${minutes} 分`
+  return formatSeconds(days * 86400 + hours * 3600 + minutes * 60 + Number(match[4]))
 }
 
 function isHostNetworkDevice(name: string) {

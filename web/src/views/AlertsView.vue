@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import type { AlertEvent, AlertEventHistory, AlertRule } from '@/services/contracts'
 import { authSession } from '@/services/authSession'
+import { formatBytes, formatQuantity, formatDuration } from '@/services/displayUnits'
 
 const events = ref<AlertEvent[]>([])
 const history = ref<AlertEventHistory[]>([])
@@ -50,9 +51,15 @@ function readableState(state: string) {
 function capacityText(item: AlertEvent) {
   const value = item.capacity
   if (!value) return ''
-  if (!value.available || value.usedPercent == null) return '容量未知 · 不会因此解除风险'
-  const free = value.freeBytes == null ? '—' : `${(value.freeBytes / 1024 ** 3).toFixed(1)} GiB`
-  return `HDD 已用 ${value.usedPercent.toFixed(1)}% · 可用 ${free}`
+  if (
+    !value.available ||
+    value.usedPercent == null ||
+    !Number.isFinite(value.usedPercent) ||
+    value.usedPercent < 0
+  )
+    return '容量未知 · 不会因此解除风险'
+  const free = formatBytes(value.freeBytes)
+  return `HDD 已用 ${formatQuantity(value.usedPercent, '%', 1)} · 可用 ${free}`
 }
 function monitoringText(item: AlertEvent) {
   const value = item.monitoring
@@ -63,7 +70,7 @@ function monitoringText(item: AlertEvent) {
   if (value.triggered == null) return '采样不足或已失联 · 不会自动恢复'
   return value.value == null
     ? '状态已确认'
-    : `窗口均值 ${value.value.toFixed(1)}% · 有效采样 ${value.coveragePercent?.toFixed(0) ?? '—'}%`
+    : `窗口均值 ${formatQuantity(value.value, '%', 1)} · 有效采样 ${formatQuantity(value.coveragePercent, '%', 0)}`
 }
 const metricRule = computed(() => form.ruleType.endsWith('Utilization'))
 const thresholds = reactive({
@@ -466,7 +473,11 @@ onUnmounted(() => {
                 }}</el-tag></template
               ></el-table-column
             >
-            <el-table-column prop="evaluationWindowSeconds" label="判断窗口（秒）" width="150" />
+            <el-table-column label="判断窗口" width="150">
+              <template #default="scope">{{
+                formatDuration(scope.row.evaluationWindowSeconds)
+              }}</template>
+            </el-table-column>
             <el-table-column label="状态" width="100"
               ><template #default="scope"
                 ><el-tag :type="scope.row.isEnabled ? 'success' : 'info'">{{

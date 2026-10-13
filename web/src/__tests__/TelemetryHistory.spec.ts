@@ -17,6 +17,19 @@ const sample = (
   points: [{ sampledAtUtc: '2026-10-12T10:00:00Z', value, quality }],
 })
 describe('History and disk metrics', () => {
+  it('labels binary throughput accurately and preserves unknown cumulative totals', () => {
+    const chart = makeTelemetry(
+      'network',
+      [sample('network.receive', 'en0', 1024 ** 2), sample('network.send', 'en0', 512)],
+      [],
+    )
+    expect(chart.unit).toBe('MiB/s')
+    const network = chart.filters.find((item) => item.value === 'en0')!
+    expect(network.series[0]!.values).toEqual([1])
+    expect(network.stats[0]!.value).toBe('1.0 MiB/s')
+    expect(network.stats[1]!.value).toBe('512 B/s')
+    expect(network.stats[2]!.value).toBe('—')
+  })
   it.each([121, 289, 169])(
     'fits %i historical slots inside the plot and keeps gaps disconnected',
     (count) => {

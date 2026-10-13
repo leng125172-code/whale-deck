@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RefreshRight } from '@element-plus/icons-vue'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import type { ManagedResource } from '@/services/contracts'
+import { formatBytes as bytes, formatBitRate } from '@/services/displayUnits'
 
 const loading = ref(false)
 const error = ref('')
@@ -16,17 +17,8 @@ const visibleInterfaces = computed(() =>
     : interfaces.value.filter((item) => item.attributes.isVirtual !== 'true'),
 )
 
-function bytes(value?: string) {
-  const amount = Number(value || 0)
-  if (!Number.isFinite(amount) || amount <= 0) return '—'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const index = Math.min(Math.floor(Math.log(amount) / Math.log(1024)), units.length - 1)
-  return `${(amount / 1024 ** index).toFixed(index > 1 ? 1 : 0)} ${units[index]}`
-}
-
 function speed(value: string) {
-  const amount = Number(value)
-  return Number.isFinite(amount) && amount > 0 ? `${(amount / 1_000_000).toFixed(0)} Mbps` : '—'
+  return Number(value) > 0 ? formatBitRate(value) : '—'
 }
 
 async function load() {

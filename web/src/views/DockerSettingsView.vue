@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { enqueueOperation, planOperation } from '@/services/operations'
 import { apiRequest } from '@/services/apiClient'
 import type { Job } from '@/services/contracts'
+import { formatDuration } from '@/services/displayUnits'
 
 const settingsJson = ref('{}')
 const editableKeys = ref<string[]>([])
@@ -138,7 +139,7 @@ onMounted(load)
           <span class="maintenance-overlay__spinner" aria-hidden="true" />
           <h2>等待容器启动中</h2>
           <p>{{ maintenancePhase }}</p>
-          <small>已等待 {{ maintenanceElapsed }} 秒，请勿关闭页面。</small>
+          <small>已等待 {{ formatDuration(maintenanceElapsed) }}，请勿关闭页面。</small>
         </div>
       </div>
     </Teleport>

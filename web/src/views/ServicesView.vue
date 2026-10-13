@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { Link } from '@element-plus/icons-vue'
 import { apiRequest } from '@/services/apiClient'
 import type { ServiceEntry } from '@/services/contracts'
+import { formatDuration } from '@/services/displayUnits'
 
 const services = ref<ServiceEntry[]>([])
 const loading = ref(false)
@@ -56,7 +57,9 @@ onMounted(load)
           <code>{{ service.url }}</code>
           <span
             >延迟：{{
-              service.latencyMilliseconds === null ? '—' : `${service.latencyMilliseconds} ms`
+              service.latencyMilliseconds == null
+                ? '—'
+                : formatDuration(service.latencyMilliseconds / 1000)
             }}</span
           >
         </div>

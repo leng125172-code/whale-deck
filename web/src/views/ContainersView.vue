@@ -8,6 +8,7 @@ import { enqueueOperation, planOperation, stageSecret } from '@/services/operati
 import ContainerUsageCell from '@/components/containers/ContainerUsageCell.vue'
 import ContainerRelationships from '@/components/containers/ContainerRelationships.vue'
 import { authSession } from '@/services/authSession'
+import { formatBytes } from '@/services/displayUnits'
 import type {
   ContainerInspect,
   ContainerLogs,
@@ -967,7 +968,9 @@ onMounted(() => {
             }}</el-descriptions-item>
             <el-descriptions-item label="资源限制"
               >{{ inspect.cpus || '默认' }} CPU ·
-              {{ inspect.memoryMb || '默认' }} MiB</el-descriptions-item
+              {{
+                inspect.memoryMb > 0 ? formatBytes(inspect.memoryMb * 1024 ** 2) : '默认'
+              }}</el-descriptions-item
             >
             <el-descriptions-item
               v-if="!inspect.relationships"

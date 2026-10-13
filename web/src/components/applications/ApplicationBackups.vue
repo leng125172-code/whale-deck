@@ -5,6 +5,7 @@ import { ApiError, apiRequest } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
 import { enqueueOperation, planOperation } from '@/services/operations'
 import type { BackupRecord, Job } from '@/services/contracts'
+import { formatBytes as size } from '@/services/displayUnits'
 
 const props = defineProps<{ modelValue: boolean; resourceId: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
@@ -60,12 +61,6 @@ function label(state: string) {
       } as Record<string, string>
     )[state] || state
   )
-}
-function size(bytes: number | null) {
-  if (bytes === null) return '—'
-  return bytes >= 1024 ** 3
-    ? `${(bytes / 1024 ** 3).toFixed(2)} GB`
-    : `${(bytes / 1024 ** 2).toFixed(2)} MB`
 }
 const date = (value: string | null) =>
   value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'

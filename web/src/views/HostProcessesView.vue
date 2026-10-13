@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElPagination } from 'element-plus'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import type { HostProcess, HostProcessPage } from '@/services/contracts'
+import { formatBytes as memory, formatDuration, formatQuantity } from '@/services/displayUnits'
 
 const result = ref<HostProcessPage | null>(null)
 const loading = ref(false)
@@ -96,11 +97,8 @@ function closeDetail() {
   detailGeneration++
   detailLoading.value = false
 }
-function memory(value: number) {
-  return `${(value / 1024 / 1024).toFixed(1)} MiB`
-}
 function cpu(value: number | null) {
-  return value === null ? '—' : `${value.toFixed(1)}%`
+  return formatQuantity(value, '%', 1)
 }
 
 onMounted(() => {
@@ -177,7 +175,7 @@ onBeforeUnmount(() => {
         <span>{{ result?.total ?? '—' }} 个匹配进程</span
         ><span v-if="result"
           >采样 {{ new Date(result.sampledAtUtc).toLocaleTimeString() }} ·
-          {{ result.cpuWindowSeconds.toFixed(1) }} 秒窗口<span v-if="result.skippedCount">
+          {{ formatDuration(result.cpuWindowSeconds) }}窗口<span v-if="result.skippedCount">
             · {{ result.skippedCount }} 个进程退出或无法读取</span
           ></span
         >
@@ -262,8 +260,9 @@ onBeforeUnmount(() => {
           ><el-descriptions-item label="CPU 使用率">{{
             cpu(detail.cpuPercent)
           }}</el-descriptions-item
-          ><el-descriptions-item label="累计 CPU 时间"
-            >{{ detail.cpuTimeSeconds.toFixed(2) }} 秒</el-descriptions-item
+          ><el-descriptions-item label="累计 CPU 时间">{{
+            formatDuration(detail.cpuTimeSeconds)
+          }}</el-descriptions-item
           ><el-descriptions-item label="常驻 / 虚拟内存"
             >{{ memory(detail.memoryBytes) }} /
             {{ memory(detail.virtualMemoryBytes) }}</el-descriptions-item

@@ -9,6 +9,12 @@ namespace WhaleDeck.Agent.Services;
 
 public sealed class DockerEngine : IDisposable, IContainerUsageSource
 {
+    internal static string ImageCleanupDescription(long bytes) =>
+        $"清理未使用的悬空镜像，预计最多回收 {DisplayUnits.Bytes(bytes)}";
+
+    internal static Dictionary<string, IDictionary<string, bool>> DanglingImageFilters() =>
+        new() { ["dangling"] = new Dictionary<string, bool> { ["true"] = true } };
+
     private static readonly Regex ContainerNamePattern = new("^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$", RegexOptions.CultureInvariant);
     private static readonly Regex ImagePattern = new("^[a-zA-Z0-9][a-zA-Z0-9./_:@-]{0,254}$", RegexOptions.CultureInvariant);
     private static readonly Regex EnvironmentNamePattern = new("^[A-Z_][A-Z0-9_]{0,127}$", RegexOptions.CultureInvariant);
@@ -144,7 +150,10 @@ public sealed class DockerEngine : IDisposable, IContainerUsageSource
         }
         else if (action == "prune")
         {
-            unusedImageBytes = (await ListImagesAsync(cancellationToken)).Where(item => item.Containers == 0).Sum(item => item.Size);
+            // Match the execution filter. Shared layers make this an upper bound, not a guarantee.
+            unusedImageBytes = (await _client.Images.ListImagesAsync(
+                new ImagesListParameters { All = true, Filters = DanglingImageFilters() }, cancellationToken))
+                .Sum(item => Math.Max(0, item.Size));
         }
         else if (action is "batch-start" or "batch-stop" or "batch-restart" or "batch-delete")
         {
@@ -219,7 +228,7 @@ public sealed class DockerEngine : IDisposable, IContainerUsageSource
         else if (unusedImageBytes.HasValue)
         {
             response.Changes.Clear();
-            response.Changes.Add($"清理未使用镜像，预计最多回收 {unusedImageBytes.Value} 字节");
+            response.Changes.Add(ImageCleanupDescription(unusedImageBytes.Value));
         }
         else if (batchPlan is not null)
         {
@@ -679,7 +688,7 @@ public sealed class DockerEngine : IDisposable, IContainerUsageSource
         {
             await _client.Images.PruneImagesAsync(new ImagesPruneParameters
             {
-                Filters = new Dictionary<string, IDictionary<string, bool>> { ["dangling"] = new Dictionary<string, bool> { ["true"] = true } }
+                Filters = DanglingImageFilters()
             }, cancellationToken);
         }
         if (pruneVolumes)

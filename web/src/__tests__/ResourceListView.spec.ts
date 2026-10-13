@@ -26,6 +26,7 @@ async function create(path = '/networks') {
     routes: [
       { path: '/images', component: ResourceListView, meta: { endpoint: 'images' } },
       { path: '/networks', component: ResourceListView, meta: { endpoint: 'networks' } },
+      { path: '/volumes', component: ResourceListView, meta: { endpoint: 'volumes' } },
     ],
   })
   await router.push(path)
@@ -39,6 +40,20 @@ beforeEach(() => {
 })
 afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()))
 describe('Resource navigation isolation', () => {
+  it('uses readable binary volume capacity and keeps unknown or missing sizes distinct from zero', async () => {
+    request.mockResolvedValue([
+      { ...resource('volume:large'), attributes: { sizeBytes: '16131004906' } },
+      { ...resource('volume:empty'), attributes: { sizeBytes: '0' } },
+      { ...resource('volume:unknown'), attributes: { sizeBytes: '-1' } },
+      resource('volume:missing'),
+    ])
+    const { wrapper } = await create('/volumes')
+    await flushPromises()
+    expect(wrapper.text()).toContain('15.02 GiB')
+    expect(wrapper.text()).toContain('0 B')
+    expect(wrapper.text().match(/容量未知/g)).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('16131004906 B')
+  })
   it('focus matches exact ID rather than a similar name, and reset shows all', async () => {
     const { wrapper, router } = await create('/networks?resourceId=network:exact')
     await flushPromises()

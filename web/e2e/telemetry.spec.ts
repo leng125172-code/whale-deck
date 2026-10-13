@@ -20,6 +20,7 @@ for (const width of [320, 1045, 1440]) {
       await page.goto('/')
       const panel = page.locator('#monitoring')
       await expect(panel.getByRole('heading', { name: '实时监控' })).toBeVisible()
+      await expect(panel.locator('.telemetry-chart')).toHaveAttribute('aria-label', /单位 MiB\/s/)
       await panel.getByText('磁盘 IO', { exact: true }).click()
       for (const [label, axis] of [
         ['1 小时', '1 小时前'],

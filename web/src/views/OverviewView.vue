@@ -31,6 +31,7 @@ import {
 } from '@/services/workstationOverview'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
+import { formatDuration } from '@/services/displayUnits'
 import { RollingTelemetryHistory } from '@/services/rollingTelemetry'
 import { enqueueOperation } from '@/services/operations'
 import type { Job } from '@/services/contracts'
@@ -104,7 +105,8 @@ const activeFilter = computed(
     activeTelemetry.value.filters[0]!,
 )
 
-function gaugeColor(percentage: number) {
+function gaugeColor(percentage: number | null) {
+  if (percentage === null) return 'var(--el-text-color-placeholder)'
   if (percentage >= 85) return 'var(--el-color-danger)'
   if (percentage >= 70) return 'var(--el-color-warning)'
   return 'var(--el-color-primary)'
@@ -355,13 +357,13 @@ onBeforeUnmount(() => {
             <article v-for="metric in snapshot.usage" :key="metric.key" class="usage-card">
               <el-progress
                 type="dashboard"
-                :percentage="metric.percentage"
+                :percentage="Math.min(100, metric.percentage ?? 0)"
                 :width="116"
                 :stroke-width="8"
                 :color="gaugeColor(metric.percentage)"
               >
                 <template #default>
-                  <strong>{{ metric.percentage.toFixed(1) }}%</strong>
+                  <strong>{{ metric.value }}</strong>
                 </template>
               </el-progress>
               <div class="usage-card__copy">
@@ -423,7 +425,7 @@ onBeforeUnmount(() => {
             {{
               monitorWindow === 'live'
                 ? '每 6 秒采集，缺失区间留空'
-                : `数据库按 ${snapshot.telemetryResolutionSeconds} 秒聚合，当前时间桶可能尚未结束，缺失区间留空`
+                : `数据库按 ${formatDuration(snapshot.telemetryResolutionSeconds)}聚合，当前时间桶可能尚未结束，缺失区间留空`
             }}<span v-if="monitorMode === 'disk' && diskMeasure === 'latency'">
               · 延迟按完成 I/O 数加权；无 I/O 不记为零延迟</span
             >

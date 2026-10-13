@@ -55,6 +55,21 @@ function overview(
 beforeEach(() => request.mockReset())
 
 describe('Fixed rolling telemetry window', () => {
+  it('does not invent zero percent usage when the metrics are absent or invalid', async () => {
+    request.mockResolvedValueOnce(overview()).mockResolvedValueOnce([])
+    const empty = await fetchWorkstationOverview(new RollingTelemetryHistory())
+    expect(empty.usage.every((item) => item.percentage === null && item.value === '暂无采样')).toBe(
+      true,
+    )
+    request
+      .mockResolvedValueOnce({
+        ...overview(),
+        metrics: [{ kind: 'cpu.utilization', value: NaN, quality: 'Good' }],
+      })
+      .mockResolvedValueOnce([])
+    const invalid = await fetchWorkstationOverview(new RollingTelemetryHistory())
+    expect(invalid.usage[0]!.percentage).toBeNull()
+  })
   it('places short initial history on the right without stretching or invented zeros', () => {
     const history = new RollingTelemetryHistory()
     const points = history.update(
@@ -198,7 +213,7 @@ describe('Fixed rolling telemetry window', () => {
     const wrapper = mount(TelemetryChart, {
       props: {
         labels: Array.from({ length: 61 }, () => '12:00:00'),
-        unit: 'MB/s',
+        unit: 'MiB/s',
         series: [{ name: '读取', color: '#409eff', values: [null, 1, 2, null, 3, null] }],
       },
     })

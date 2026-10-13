@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ContainerUsage } from '@/services/contracts'
+import { formatBytes as bytes, formatDuration, formatQuantity } from '@/services/displayUnits'
 
 const props = defineProps<{ sample?: ContainerUsage; state: string; stale: boolean }>()
 const unavailable = computed(() =>
@@ -14,16 +15,10 @@ const unavailable = computed(() =>
           ? '采样不可用'
           : '',
 )
-function bytes(value: number | null | undefined) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
-  if (value === 0) return '0 B'
-  const unit = Math.min(4, Math.floor(Math.log(value) / Math.log(1024)))
-  return `${(value / 1024 ** unit).toFixed(unit === 0 ? 0 : 1)} ${['B', 'KiB', 'MiB', 'GiB', 'TiB'][unit]}`
-}
 const cpu = computed(() =>
   props.sample?.cpuPercent === null || props.sample?.cpuPercent === undefined
     ? '预热'
-    : `${props.sample.cpuPercent.toFixed(2)}%`,
+    : formatQuantity(props.sample.cpuPercent, '%'),
 )
 const memory = computed(
   () => `${bytes(props.sample?.memoryUsedBytes)} / ${bytes(props.sample?.memoryLimitBytes)}`,
@@ -44,8 +39,8 @@ const memory = computed(
     >
       <template #content>
         <div class="container-usage__tooltip">
-          <span>CPU 100% 为一个逻辑核心 · {{ sample?.cpuWindowSeconds.toFixed(1) }} 秒窗口</span>
-          <span>内存已扣除可回收文件缓存 · {{ sample?.memoryPercent?.toFixed(2) ?? '—' }}%</span>
+          <span>CPU 100% 为一个逻辑核心 · {{ formatDuration(sample?.cpuWindowSeconds) }}窗口</span>
+          <span>内存已扣除可回收文件缓存 · {{ formatQuantity(sample?.memoryPercent, '%') }}</span>
           <span
             >累计接收 / 发送：{{ bytes(sample?.networkReceiveBytes) }} /
             {{ bytes(sample?.networkSendBytes) }}</span

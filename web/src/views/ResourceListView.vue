@@ -14,6 +14,7 @@ import { ApiError, apiRequest } from '@/services/apiClient'
 import type { ManagedResource } from '@/services/contracts'
 import { enqueueOperation, planOperation } from '@/services/operations'
 import { authSession } from '@/services/authSession'
+import { formatBytes } from '@/services/displayUnits'
 
 const route = useRoute()
 const loading = ref(false)
@@ -66,19 +67,6 @@ watch(
     if (authSession.user.value?.isAdministrator) void load()
   },
 )
-
-function formatBytes(value?: string) {
-  const bytes = Number(value)
-  if (!Number.isFinite(bytes) || bytes < 0) return '容量未知'
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
-  let size = bytes
-  let unit = 0
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024
-    unit += 1
-  }
-  return `${size >= 10 || unit === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unit]}`
-}
 
 function actionsFor(resource: ManagedResource) {
   return (resource.attributes.allowedActions || '')
@@ -322,7 +310,7 @@ watch(
           <template #default="scope">
             <template v-if="isImages">
               {{ scope.row.attributes.containerCount || '0' }} 个引用 ·
-              {{ formatBytes(scope.row.attributes.sizeBytes) }}
+              {{ formatBytes(scope.row.attributes.sizeBytes, '容量未知') }}
               <small v-if="scope.row.attributes.createdAtUtc" class="resource-detail-time">
                 · {{ new Date(scope.row.attributes.createdAtUtc).toLocaleDateString() }}
               </small>
@@ -333,11 +321,7 @@ watch(
             </template>
             <template v-else>
               {{ scope.row.attributes.referenceCount || '0' }} 个引用 ·
-              {{
-                scope.row.attributes.sizeBytes === '-1'
-                  ? '容量未知'
-                  : `${scope.row.attributes.sizeBytes} B`
-              }}
+              {{ formatBytes(scope.row.attributes.sizeBytes, '容量未知') }}
             </template>
           </template>
         </el-table-column>
