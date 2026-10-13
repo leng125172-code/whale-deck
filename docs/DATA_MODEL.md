@@ -198,6 +198,8 @@
 
 字段：`id`、`rule_type`、`resource_selector_json`、`threshold_json`、`evaluation_window_seconds`、`severity`、`is_enabled`、`version` 和更新时间。
 
+规则类型包含 LoadAverage（`load.normalized`，按逻辑核心归一化，阈值 0–1000%）、SystemdHealth（仅登记服务/计时器）与 ContainerHealth（进程 State + Docker 原生 Status，区分健康、失败、初始化及无健康检查）。复用现有指标/资源/告警表；独立告警循环不依赖 Agent 在线。新增四个 load 指标沿用日分区和 14 天保留，不新增 schema。见 [负载与状态验收](qa/HEALTH_ALERTS.md)。
+
 ### `DM-ALERT` `alert_events`
 
 字段：`id`、`rule_id`、`resource_id`、`fingerprint`、`state`、`severity`、`occurrence_count`、`first/last_occurred_at_utc`、`recovered_at_utc`、`acknowledged_by_subject`、`acknowledged_at_utc`、`silenced_until_utc`、`related_job_id`、`summary_code` 和 `detail_json`。

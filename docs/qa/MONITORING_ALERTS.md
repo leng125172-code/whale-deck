@@ -30,6 +30,8 @@ Login HTML available, recent five-minute bounded Worker logs (eight lines inspec
 
 ## Remaining broader scope
 
+Later runtime `3c26e13` implements load-average/systemd and distinct native Docker health-state alerts plus an independent hosted offline evaluator. Its local, isolated PostgreSQL and real workstation evidence is recorded separately in [health alerts](HEALTH_ALERTS.md); the following paragraph describes the earlier `57a94d3` boundary, not the latest implementation.
+
 This does not complete P0-07: load-average/systemd-health rules, full notification delivery/routing/read state, long-running log-pressure tests and broader outage combinations remain. ContainerHealth currently consumes discovered running-state snapshots, not Docker's distinct healthcheck status. No external notification or production service disruption is enabled by this change.
 
 ## Assistance

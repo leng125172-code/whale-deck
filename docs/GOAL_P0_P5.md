@@ -31,8 +31,9 @@
 
 ## 3. 当前证据与暂停恢复点
 
+- 最新运行时 `3c26e13` 已签收负载/systemd/Docker 健康及独立离线评估；Agent 1.16、438 Unit/62 Integration、74 前端、11 浏览器、隔离原生 PostgreSQL与真实 Authentik/API/Worker 通过。32 核/4 负载/3 单元/11 容器实际对照、临时 Info 规则禁用/恢复，零生产故障制造；11 核心健康、sudo 保留。详见 [健康告警证据](qa/HEALTH_ALERTS.md)。P0-07 仍缺通知和长期压力等，76 项不因此完成。
 - 单位修正运行时 `c671b7e` 已发布及真实只读预检验收；412 Unit/62 Integration、74 前端及 50 浏览器通过。真实悬空镜像 0 B，镜像/数据卷/容器清单未变；11 核心健康，Agent 1.15，未执行清理。详见 [单位证据](qa/DISPLAY_UNITS.md)。P0-08/P1-04 的一部分，不视作整项完成。
-- 最新运行时 `57a94d3` 已签收利用率/状态告警修复和统一原子审计；402 Unit/62 Integration（3 原生本机跳过）、44 前端、47 项独立浏览器回归，独立 PostgreSQL 告警/备份容量与真实 Authentik/API/Worker 验收通过。11 核心健康、user sudo 保留；详见 [告警证据](qa/MONITORING_ALERTS.md)。P0-07 仍部分实现，其他 76 项不因此签收。
+- 前阶段运行时 `57a94d3` 已签收利用率/状态告警修复和统一原子审计；402 Unit/62 Integration（3 原生本机跳过）、44 前端、47 项独立浏览器回归，独立 PostgreSQL 告警/备份容量与真实 Authentik/API/Worker 验收通过。11 核心健康、user sudo 保留；详见 [告警证据](qa/MONITORING_ALERTS.md)。P0-07 仍部分实现，其他 76 项不因此签收。
 - 新版恢复后的运行时 `ad4f0d8`：root journal/清理 schema 修复；Linux helper 38 项与 PID 绑定 8 项通过，原生 SIGKILL/共享卷/失效计划/坏归档验收通过并清理，见 [P0 证据](qa/P0_RECOVERY.md)。以下断线时未签收的记录是历史，不能再当作本轮结果；但主机断电和全部组合仍未验证。
 - 较早完整发布历史：`723ba55`，Agent 协议 1.15；源码后续验收脚本提交本身不等同再次部署。
 - 上一完整验收：377 后端单元/62 现有集成测试、另行真实隔离 PostgreSQL 容量状态测试、43 前端单元、96 全页浏览器回归和最终 34 项容量/布局回归。不是新版 P0–P5 完成证据。

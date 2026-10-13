@@ -1,10 +1,10 @@
 # WhaleDeck Agent RPC 契约
 
-范围修订：2026-10-13 [P0–P5 基线](GOAL_P0_P5.md) 增加受控终端会话/文件/恢复/网络/网站/邮件/DNS/多节点适配。现有 1.15 RPC 与本地 UDS 限制仍是当前运行契约，不得直接放宽成任意路径/命令；新增能力须独立设计、能力协商和安全测试。P5 远程 Agent 采用专用 mTLS 通道，本地 UDS 不暴露 TCP；远程写入须同时验证节点/资源/主体/短时 capability。
+范围修订：2026-10-13 [P0–P5 基线](GOAL_P0_P5.md) 增加受控终端会话/文件/恢复/网络/网站/邮件/DNS/多节点适配。现有 1.16 RPC 与本地 UDS 限制仍是当前运行契约，不得直接放宽成任意路径/命令；新增能力须独立设计、能力协商和安全测试。P5 远程 Agent 采用专用 mTLS 通道，本地 UDS 不暴露 TCP；远程写入须同时验证节点/资源/主体/短时 capability。
 
 本文定义 `WhaleDeck.Api/Worker` 与宿主机 `WhaleDeck.Agent` 的内部契约。Agent 是唯一可以访问 Docker Engine、systemd、journald 和批准宿主机资源的组件。
 
-开发空间拟新增专用 `RPC-DEV-001..007`，只处理登记空间/环境/run/session ID，按能力协商启用。代码执行和调试发生在隔离空间内，不新增任意宿主命令/路径接口；调试适配器与 IDE 不持有 Docker/Agent Socket。契约与数据流见 [开发空间 Agent 契约](DEVELOPMENT_WORKSPACES.md#6-agentworker-契约)。此处是待实现设计，**当前协议仍为 1.15，未宣称新能力已部署**。
+开发空间拟新增专用 `RPC-DEV-001..007`，只处理登记空间/环境/run/session ID，按能力协商启用。代码执行和调试发生在隔离空间内，不新增任意宿主命令/路径接口；调试适配器与 IDE 不持有 Docker/Agent Socket。契约与数据流见 [开发空间 Agent 契约](DEVELOPMENT_WORKSPACES.md#6-agentworker-契约)。此处是待实现设计，**当前协议为 1.16，但未包含开发空间能力**。
 
 ## 1. 传输与版本
 
@@ -14,7 +14,13 @@
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
-- 当前源码协议版本为 `1.15`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`，`1.15` 增加 `backups.capacity`；旧次版本按能力协商并安全降级。
+- 当前源码协议版本为 `1.16`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`，`1.15` 增加 `backups.capacity`，`1.16` 增加 `host.load-average`；旧次版本按能力协商并安全降级。
+
+### 主机负载与状态（1.16）
+
+现有 `HostService.StreamMetrics` 有界批次增加 `load.average.1/5/15`（tasks）和 `load.normalized`（percent）；后者是一分钟负载除以逻辑核心数，不是 CPU 使用率，允许超过 100%。缺失/非法 `/proc/loadavg` 返回 Unavailable 质量。沿用 6 秒采样、UDS/短时 capability、14 天指标保留；不新增宿主路径、命令或 TCP 方法。
+
+`ListSystemdUnits` 仍仅注册单元；状态按 `ActiveState/SubState/LoadState/UnitFileState` 命名属性读取，不依赖输出次序。现有 Docker 原生 summary `Status` 与进程 State 共同用于健康判定；starting/未知/失联不能解除风险，未配置健康检查不等于健康检查通过。详见 [状态与负载验收](qa/HEALTH_ALERTS.md)。
 
 ### 备份目标容量（1.15）
 
