@@ -25,6 +25,7 @@ public sealed class MonitoringAlertPolicyTests
     [InlineData("{\"unknown\":1}")]
     [InlineData("{\"resourceIds\":[]}")]
     [InlineData("{\"resourceIds\":[null]}")]
+    [InlineData("{\"resourceIds\":[\"   \"]}")]
     [InlineData("{\"resourceIds\":[\"a\"],\"resourceIds\":[\"b\"]}")]
     public void RejectInvalidSelector(string selector) => Assert.ThrowsAny<Exception>(() => MonitoringAlertPolicy.Parse(Command(selector: selector)));
 
@@ -34,6 +35,7 @@ public sealed class MonitoringAlertPolicyTests
         var resource = new ManagedResource { ResourceType = "Host", ExternalId = "local", DisplayName = "host", Source = "Test", ProtectionLevel = "Managed" };
         var policy = MonitoringAlertPolicy.Parse(Command(selector: "{\"resourceIds\":[\"local\"],\"deviceIds\":[\"nvme0n1\"]}"));
         Assert.True(policy.Includes(resource));
+        Assert.True(MonitoringAlertPolicy.Parse(Command(selector: $"{{\"resourceIds\":[\"{resource.Id.ToString("D").ToUpperInvariant()}\"]}}" )).Includes(resource));
         Assert.True(policy.IncludesDevice("{\"DeviceId\":\"nvme0n1\"}"));
         Assert.False(policy.IncludesDevice("{\"DeviceId\":\"sda\"}"));
         Assert.False(policy.Includes(OtherResource()));

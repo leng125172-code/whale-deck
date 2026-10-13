@@ -40,7 +40,7 @@ public sealed record MonitoringAlertPolicy(double? Threshold, double? CriticalTh
     }
 
     public bool Includes(ManagedResource resource) => ResourceIds.Length == 0 || ResourceIds.Contains(resource.ExternalId, StringComparer.Ordinal) ||
-        ResourceIds.Contains(resource.Id.ToString("D"), StringComparer.Ordinal);
+        ResourceIds.Any(id => Guid.TryParse(id, out var stableId) && stableId == resource.Id);
 
     public bool IncludesDevice(string dimensions)
     {
@@ -133,7 +133,7 @@ public sealed record MonitoringAlertPolicy(double? Threshold, double? CriticalTh
         if (ids.ValueKind != JsonValueKind.Array || ids.GetArrayLength() is < 1 or > 100)
             throw new ArgumentException("Alert selectors require 1–100 explicit identifiers.");
         return ids.EnumerateArray().Select(value => value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 and <= 256 } id &&
-            !id.Any(char.IsControl) ? id : throw new ArgumentException("Invalid alert selector identifier.")).Distinct(StringComparer.Ordinal).ToArray();
+            !string.IsNullOrWhiteSpace(id) && !id.Any(char.IsControl) ? id : throw new ArgumentException("Invalid alert selector identifier.")).Distinct(StringComparer.Ordinal).ToArray();
     }
     private static double? ReadNumber(JsonElement root, string name)
     {
