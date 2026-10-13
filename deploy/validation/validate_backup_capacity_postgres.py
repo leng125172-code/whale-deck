@@ -64,6 +64,8 @@ def main(suite='capacity'):
             descriptor = os.open(environment, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(descriptor, 'w') as stream:
                 stream.write('WHALEDECK_NATIVE_TEST_CONNECTION=' + connection + '\n')
+                if suite == 'metrics':
+                    stream.write('WHALEDECK_METRIC_LOAD_VALIDATION=1\n')
             identity = command(['docker', 'create', '--name', container, '--read-only', '--cap-drop', 'ALL',
                 '--security-opt', 'no-new-privileges', '--memory', '1536m', '--cpus', '2', '--pids-limit', '256',
                 '--user', str(os.getuid()) + ':' + str(os.getgid()), '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m',
@@ -72,7 +74,7 @@ def main(suite='capacity'):
                 '--mount', 'type=bind,source=' + str(public_source) + ',target=/repo,readonly',
                 '--mount', 'type=bind,source=' + scratch + ',target=/scratch', '--workdir', '/repo', sdk_identity,
                 'dotnet', 'test', 'tests/WhaleDeck.IntegrationTests/WhaleDeck.IntegrationTests.csproj',
-                '--configuration', 'Release', '--artifacts-path', '/scratch/build', '--filter',
+                '--configuration', 'Release', '--artifacts-path', '/scratch/build', '--logger', 'console;verbosity=normal', '--filter',
                 'FullyQualifiedName~' + ('NativeBackupCapacityTests' if suite == 'capacity' else 'NativeMetricAggregationTests')]).strip()
             assert re.fullmatch(r'[a-f0-9]{64}', identity)
             command(['docker', 'network', 'connect', common[0], identity])
@@ -92,8 +94,11 @@ def main(suite='capacity'):
                 print(json.dumps({'nativeBackupCapacityPostgres': 'passed', 'database': 'isolated-and-migrated',
                     'capacitySamples': 'synthetic-not-production-disk-saturation', 'dedupEscalationSilenceExpiryUnknownRecoveryDisable': 'passed'}))
             else:
+                benchmark = re.findall(r'METRIC_QUERY_BENCH_MS=([0-9]{1,6})', output)
+                assert len(benchmark) == 1, 'Native metric load query was not observed'
                 print(json.dumps({'nativeMetricAggregationPostgres': 'passed', 'database': 'isolated-and-migrated',
-                    'upgradeBackfillRestartFirstLastWeightedQualityLateDirtyHistoryDownUp': 'passed'}))
+                    'upgradeBackfillRestartFirstLastWeightedQualityLateDirtyHistoryDownUp': 'passed',
+                    'syntheticColdHistoryRows': 2764800, 'coldSevenDayQueryMilliseconds': int(benchmark[0])}))
             command(['docker', 'rm', identity])
             identity = None
     finally:

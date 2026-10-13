@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Data.Common;
+using System.Diagnostics;
 using Npgsql;
 using WhaleDeck.Application.Services;
 using WhaleDeck.Domain.Entities;
@@ -146,6 +147,35 @@ public sealed class NativeMetricAggregationTests
         Assert.Equal(rawAfter, await db.MetricSamples.CountAsync());
         Sample(counter, hour.AddSeconds(301), 400); await db.SaveChangesAsync();
         Assert.NotEmpty(await db.MetricAggregationPending.AsNoTracking().ToArrayAsync());
+        if (Environment.GetEnvironmentVariable("WHALEDECK_METRIC_LOAD_VALIDATION") == "1")
+        {
+            // A cold/backfilling seven-day query must work before any rollup receipt exists.
+            // Synthetic rows live only in this disposable database, never production metric tables.
+            var loadKinds = new[] { "network.receive", "network.send", "disk.read", "disk.write", "disk.read.iops", "disk.write.iops", "disk.read.latency", "disk.write.latency" };
+            var loadResource = Guid.NewGuid();
+            foreach (var kind in loadKinds)
+                for (var device = 0; device < 4; device++)
+                    db.MetricSeries.Add(new MetricSeries { ResourceId = loadResource, MetricKind = kind, Unit = "load-fixture",
+                        DimensionsJson = "{\"DeviceId\":\"" + (kind.StartsWith("network.", StringComparison.Ordinal) ? "enobench" : "sd") + (char)('a' + device) + "\"}", LastSeenAtUtc = now });
+            await db.SaveChangesAsync();
+            var loadStart = MetricHistoryPolicy.AlignUtc(now, 3600).AddDays(-6);
+            db.Database.SetCommandTimeout(TimeSpan.FromMinutes(3)); // Fixture creation only, not the API/query budget.
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO metric_samples(series_id,sampled_at_utc,value_double,quality)
+                SELECT series.id, stamp, 1.0 + (EXTRACT(EPOCH FROM stamp)::bigint % 100), 'Good'
+                FROM metric_series series CROSS JOIN generate_series({loadStart}, {loadStart.AddDays(6).AddSeconds(-6)}, INTERVAL '6 seconds') stamp
+                WHERE series.resource_id = {loadResource}
+                """);
+            await db.Database.ExecuteSqlRawAsync("ANALYZE metric_samples; ANALYZE metric_series;");
+            db.Database.SetCommandTimeout(TimeSpan.FromSeconds(30));
+            Assert.Equal(2_764_800, await db.MetricSamples.Join(db.MetricSeries.Where(item => item.ResourceId == loadResource), item => item.SeriesId, item => item.Id, (sample, _) => sample).CountAsync());
+            var timer = Stopwatch.StartNew();
+            var loaded = await history.GetHistoryAsync(loadKinds, 60, default, "7d");
+            timer.Stop();
+            Assert.True(timer.Elapsed < TimeSpan.FromSeconds(25), "Cold seven-day history exceeded its bounded query budget.");
+            Assert.True(loaded.Count >= 32); Assert.All(loaded, item => Assert.Equal(169, item.Points.Count));
+            Console.WriteLine($"METRIC_QUERY_BENCH_MS={timer.ElapsedMilliseconds}");
+        }
     }
 
     private sealed class RacingArrival(string connection, Guid series, DateTimeOffset timestamp) : DbCommandInterceptor
