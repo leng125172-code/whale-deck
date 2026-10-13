@@ -13,6 +13,7 @@ public sealed class MonitoringAlertPolicyTests
     [Theory]
     [InlineData("{}")]
     [InlineData("[]")]
+    [InlineData("{not-json")]
     [InlineData("{\"value\":101}")]
     [InlineData("{\"value\":85,\"criticalValue\":70}")]
     [InlineData("{\"value\":85,\"recoveryValue\":90}")]

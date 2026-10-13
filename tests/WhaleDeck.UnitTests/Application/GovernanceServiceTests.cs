@@ -56,7 +56,7 @@ public sealed class GovernanceServiceTests
     public async Task AlertRejectsInvalidJson()
     {
         var command = new SaveAlertRuleCommand(null, "CpuUtilization", "{}", "not-json", 60, "Warning", true, null);
-        await Assert.ThrowsAnyAsync<Exception>(() => _service.SaveAlertRuleAsync(new("admin", "unit-trace"), command, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.SaveAlertRuleAsync(new("admin", "unit-trace"), command, default));
     }
 
     [Fact]

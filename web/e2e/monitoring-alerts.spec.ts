@@ -93,4 +93,14 @@ for (const width of [320, 1440])
         recoveryValue: 90,
         minimumCoveragePercent: 75,
       })
+      await page.getByRole('button', { name: '新增规则' }).click()
+      await dialog.getByLabel('严重阈值（%，可留空）').fill('')
+      await dialog.getByLabel('恢复阈值（%，可留空）').fill('')
+      await dialog.getByRole('button', { name: '保存', exact: true }).click()
+      await expect(dialog).not.toBeVisible()
+      expect(JSON.parse(saved!.thresholdJson as string)).toEqual({
+        operator: '>=',
+        value: 90,
+        minimumCoveragePercent: 80,
+      })
     })

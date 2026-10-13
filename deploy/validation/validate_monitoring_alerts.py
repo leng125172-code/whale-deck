@@ -35,7 +35,7 @@ def main():
     payload = {'ruleType': 'DiskUtilization', 'resourceSelectorJson': json.dumps({'resourceIds': ['local'], 'deviceIds': [device]}),
         'thresholdJson': json.dumps({'value': 0, 'criticalValue': 100, 'recoveryValue': 0}), 'evaluationWindowSeconds': 30,
         'severity': 'Info', 'isEnabled': True, 'expectedVersion': None}
-    for invalid in (dict(payload, thresholdJson='{"value":90,"operator":"<"}'),
+    for invalid in (dict(payload, thresholdJson='{not-json'), dict(payload, thresholdJson='{"value":90,"operator":"<"}'),
                     dict(payload, resourceSelectorJson='{"arbitrary":true}')):
         rejected = session.post(base + '/api/v1/alerts/rules', json=invalid, headers=api.headers, timeout=20)
         assert rejected.status_code == 400 and rejected.json().get('traceId')

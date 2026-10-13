@@ -10,13 +10,15 @@
 - Severity escalation reopens acknowledged risk; silence expiry reactivates even if telemetry becomes Unknown, without inventing another occurrence. Counts increment at most once per evaluation window. Disable or explicit rule scope/type changes close old risk; malformed legacy rules hold risk without aborting other rules.
 - PostgreSQL partial unique fingerprint index and optimistic event Version protect duplicate creation and administrator/evaluator races. Generic evaluators use a transaction advisory lock; failures retain state for retry on the next normal Worker cycle.
 - Rule form has direct threshold/coverage controls and bounded internal scrolling. Events expose measured average/coverage or explicit Unknown reason. Backup capacity policy controls remain separate and unchanged.
+- Rule save, acknowledge and silence capture the authenticated subject, HTTP trace and source IP and insert unified audit in the same SaveChanges transaction as the state. Audit contains action/target only, no rule body. Required actor/trace are validated in Application; controller only supplies request context.
 
 ## Verification before remote acceptance
 
-- Release tests: 399 Unit + 62 existing Integration passed; 3 native PostgreSQL Facts explicitly skipped locally. They are not real-dependency proof.
+- Release tests at audit revision: 401 Unit + 62 existing Integration passed; 3 native PostgreSQL Facts explicitly skipped locally. They are not real-dependency proof.
 - Frontend build/type/lint and 44 unit tests passed. 16 browser tests passed (4 new threshold/quality regressions and 12 existing backup capacity tests); mobile dark and desktop light screenshots inspected. Fixtures do not prove production authentication/alert execution.
 - Production read-only migration preflight found zero duplicate active fingerprints. No production saturation, high CPU load or metric rewriting was used.
 - `NativeMonitoringAlertsTests` and `validate_monitoring_alerts_postgres.py` provision a disposable namespaced database using real PostgreSQL/EF migrations. Native acceptance and deployment will be recorded after execution; source generation alone is not acceptance.
+- Native lifecycle passed twice before audit, then again at `af4e92b` with three atomic acknowledgement/silence audit records. Each TRX reported exactly one executed/passed Fact, no skipped/incomplete test, followed by exact container/database cleanup. Prior backup capacity native regression passed at `8535884`; the audit-signature variant is being rerun. Latest UI clear-optional-threshold regression passed in all four viewport/theme combinations. A further 31 layout/search/telemetry regressions passed.
 
 ## Remaining broader scope
 

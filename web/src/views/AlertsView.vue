@@ -173,7 +173,14 @@ function openRule(item?: AlertRule) {
 async function saveRule() {
   if (!canManage.value) return
   const version = generation
-  form.thresholdJson = metricRule.value ? JSON.stringify({ operator: '>=', ...thresholds }) : '{}'
+  form.thresholdJson = metricRule.value
+    ? JSON.stringify({
+        operator: '>=',
+        ...thresholds,
+        criticalValue: thresholds.criticalValue ?? undefined,
+        recoveryValue: thresholds.recoveryValue ?? undefined,
+      })
+    : '{}'
   if (
     metricRule.value &&
     ((thresholds.criticalValue != null && thresholds.criticalValue < thresholds.value) ||

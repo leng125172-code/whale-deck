@@ -116,7 +116,9 @@ public sealed record MonitoringAlertPolicy(double? Threshold, double? CriticalTh
     private static JsonDocument ReadObject(string value)
     {
         if (value.Length > 4096) throw new ArgumentException("Alert JSON exceeds its budget.");
-        var json = JsonDocument.Parse(value, new JsonDocumentOptions { MaxDepth = 8 });
+        JsonDocument json;
+        try { json = JsonDocument.Parse(value, new JsonDocumentOptions { MaxDepth = 8 }); }
+        catch (JsonException) { throw new ArgumentException("Alert configuration JSON is invalid."); }
         if (json.RootElement.ValueKind == JsonValueKind.Object) return json;
         json.Dispose(); throw new ArgumentException("Alert configuration must be a JSON object.");
     }
