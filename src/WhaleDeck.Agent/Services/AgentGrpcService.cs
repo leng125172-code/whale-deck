@@ -12,11 +12,12 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = 15,
+            ProtocolMinor = 16,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
             "docker.usage",
+            "host.load-average",
             "docker.relationships",
             "applications.configuration",
             "applications.backups",

@@ -19,6 +19,7 @@ builder.Services.AddSerilog((services, configuration) => configuration
     .WriteTo.Console(new JsonFormatter()));
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService<MonitoringAlertWorker>();
 
 var host = builder.Build();
 await host.RunAsync();

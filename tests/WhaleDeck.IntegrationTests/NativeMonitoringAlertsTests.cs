@@ -1,10 +1,14 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using WhaleDeck.Application.Models;
+using WhaleDeck.Application.Abstractions;
 using WhaleDeck.Application.Services;
 using WhaleDeck.Domain.Entities;
 using WhaleDeck.Infrastructure.Persistence;
+using WhaleDeck.Worker;
 
 namespace WhaleDeck.IntegrationTests;
 
@@ -80,5 +84,50 @@ public sealed class NativeMonitoringAlertsTests
         Assert.All(audit, item => { Assert.Null(item.DetailJson); Assert.Equal("alert", item.TargetType); Assert.StartsWith("native-", item.TraceId); });
         Assert.Contains(audit, item => item.Action == "alerts.acknowledge");
         Assert.Contains(audit, item => item.Action == "alerts.silence");
+
+        // New state/load rules use the same real PostgreSQL lifecycle, without touching production services.
+        var container = new ManagedResource { ResourceType = "Container", ExternalId = "isolated-container", DisplayName = "isolated", ProtectionLevel = "Managed", Source = "Test", LastSeenAtUtc = now,
+            LabelsJson = "{\"state\":\"running\",\"attributes\":{\"dockerStatus\":\"Up 1 minute (unhealthy)\"}}" };
+        var service = new ManagedResource { ResourceType = "SystemdUnit", ExternalId = "isolated-service", DisplayName = "isolated", ProtectionLevel = "Managed", Source = "Test", LastSeenAtUtc = now,
+            LabelsJson = "{\"state\":\"failed\",\"attributes\":{\"loadState\":\"loaded\",\"subState\":\"failed\"}}" };
+        var loadRule = new AlertRule { RuleType = "LoadAverage", ResourceSelectorJson = "{\"resourceIds\":[\"local\"]}", ThresholdJson = "{\"value\":150,\"criticalValue\":200,\"recoveryValue\":100}", EvaluationWindowSeconds = 12 };
+        var containerRule = new AlertRule { RuleType = "ContainerHealth", ResourceSelectorJson = "{\"resourceIds\":[\"isolated-container\"]}" };
+        var serviceRule = new AlertRule { RuleType = "SystemdHealth", ResourceSelectorJson = "{\"resourceIds\":[\"isolated-service\"]}" };
+        var loadSeries = new MetricSeries { ResourceId = selected.Id, MetricKind = "load.normalized", Unit = "percent" };
+        db.ManagedResources.AddRange(container, service); db.AlertRules.AddRange(loadRule, containerRule, serviceRule); db.MetricSeries.Add(loadSeries);
+        foreach (var age in new[] { 9, 3 }) db.MetricSamples.Add(new MetricSample { SeriesId = loadSeries.Id, SampledAtUtc = now.AddSeconds(-age), ValueDouble = 250 });
+        await db.SaveChangesAsync(); await Evaluate();
+        var current = await db.AlertEvents.AsNoTracking().Where(item => item.State != "Recovered").ToArrayAsync();
+        Assert.Equal(3, current.Length);
+        Assert.Equal("Critical", current.Single(item => item.RuleId == loadRule.Id).Severity);
+        Assert.Equal("ContainerUnhealthy", MonitoringAlertPolicy.ReadDetail(current.Single(item => item.RuleId == containerRule.Id))!.Reason);
+        Assert.Equal("ServiceStopped", MonitoringAlertPolicy.ReadDetail(current.Single(item => item.RuleId == serviceRule.Id))!.Reason);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE managed_resources SET labels_json='{{\"state\":\"running\",\"attributes\":{{\"dockerStatus\":\"Up 1 minute (health: starting)\"}}}}'::jsonb WHERE id={container.Id}");
+        await Evaluate();
+        Assert.Null(MonitoringAlertPolicy.ReadDetail(await db.AlertEvents.AsNoTracking().SingleAsync(item => item.RuleId == containerRule.Id && item.State != "Recovered"))!.Triggered);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE managed_resources SET labels_json='{{\"state\":\"running\",\"attributes\":{{\"dockerStatus\":\"Up 1 minute (healthy)\"}}}}'::jsonb WHERE id={container.Id}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE managed_resources SET labels_json='{{\"state\":\"active\",\"attributes\":{{\"loadState\":\"loaded\",\"subState\":\"running\"}}}}'::jsonb WHERE id={service.Id}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE metric_samples SET value_double=50 WHERE series_id={loadSeries.Id}");
+        await Evaluate(); Assert.Empty(await db.AlertEvents.Where(item => item.State != "Recovered").ToArrayAsync());
+
+        // Run the actual hosted evaluator with no usable Agent at all. Only isolated DB state is changed.
+        var offlineRule = new AlertRule { RuleType = "AgentOffline", ResourceSelectorJson = "{\"resourceIds\":[\"local\"]}", EvaluationWindowSeconds = 12 };
+        db.AlertRules.Add(offlineRule);
+        await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE managed_resources SET last_seen_at_utc={DateTimeOffset.UtcNow.AddMinutes(-2)} WHERE id={selected.Id}");
+        var services = new ServiceCollection();
+        services.AddDbContext<PlatformDbContext>(builder => builder.UseNpgsql(connection.ConnectionString));
+        services.AddScoped<IAgentGateway>(_ => throw new InvalidOperationException("Agent must not be queried by the independent evaluator."));
+        await using var provider = services.BuildServiceProvider();
+        using var evaluator = new MonitoringAlertWorker(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<MonitoringAlertWorker>.Instance);
+        await evaluator.StartAsync(default);
+        try
+        {
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(15);
+            while (DateTimeOffset.UtcNow < deadline && !await db.AlertEvents.AsNoTracking().AnyAsync(item => item.RuleId == offlineRule.Id)) await Task.Delay(250);
+            var offline = await db.AlertEvents.AsNoTracking().SingleAsync(item => item.RuleId == offlineRule.Id);
+            Assert.Equal("Active", offline.State); Assert.True(MonitoringAlertPolicy.ReadDetail(offline)!.Triggered);
+        }
+        finally { using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(5)); await evaluator.StopAsync(stop.Token); }
     }
 }

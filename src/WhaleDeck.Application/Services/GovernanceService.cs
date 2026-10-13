@@ -11,7 +11,7 @@ public sealed class GovernanceService(IGovernanceRepository repository)
     private static readonly HashSet<string> SettingKeys = new(StringComparer.OrdinalIgnoreCase)
         { "maintenance.window", "applications.autoupdate", "metrics.retention", "catalog.refresh", "ui.branding" };
     private static readonly HashSet<string> AlertTypes = new(StringComparer.OrdinalIgnoreCase)
-        { "CpuUtilization", "MemoryUtilization", "DiskUtilization", "ContainerHealth", "BackupFailure", "AgentOffline" };
+        { "CpuUtilization", "MemoryUtilization", "DiskUtilization", "LoadAverage", "SystemdHealth", "ContainerHealth", "BackupFailure", "AgentOffline" };
 
     public async Task<IReadOnlyCollection<ScheduledTaskDto>> ListSchedulesAsync(CancellationToken cancellationToken) =>
         (await repository.ListSchedulesAsync(cancellationToken)).Select(Map).ToArray();

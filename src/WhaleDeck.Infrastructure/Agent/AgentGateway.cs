@@ -233,7 +233,8 @@ public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcess
             "host-storage-devices" => Map(await _host.ListStorageDevicesAsync(new Empty(), Headers("/whaledeck.agent.v1.HostService/ListStorageDevices"), cancellationToken: cancellationToken)),
             "overview" => (await ListContainersAsync(true, cancellationToken))
                 .Where(IsOverviewContainer)
-                .Select(item => new ManagedResourceDto(item.Id, item.Name, "Container", item.State, item.Image, item.IsProtected, item.Labels))
+                .Select(item => new ManagedResourceDto(item.Id, item.Name, "Container", item.State, item.Image, item.IsProtected,
+                    new Dictionary<string, string>(item.Labels) { ["dockerStatus"] = item.Status }))
                 .ToArray(),
             _ => []
         };

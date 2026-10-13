@@ -78,9 +78,9 @@ public static class MonitoringAlerts
         ManagedResource[] selected, AlertEvent[] active, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var cutoff = now.AddSeconds(-rule.EvaluationWindowSeconds);
-        if (rule.RuleType.EndsWith("Utilization", StringComparison.Ordinal))
+        if (MonitoringAlertPolicy.IsMetricRule(rule.RuleType))
         {
-            var kind = rule.RuleType switch { "CpuUtilization" => "cpu.utilization", "MemoryUtilization" => "memory.utilization", _ => "disk.utilization" };
+            var kind = rule.RuleType switch { "CpuUtilization" => "cpu.utilization", "MemoryUtilization" => "memory.utilization", "LoadAverage" => "load.normalized", _ => "disk.utilization" };
             var resourceIds = selected.Select(item => item.Id).ToArray();
             var series = (await db.MetricSeries.AsNoTracking().Where(item => resourceIds.Contains(item.ResourceId) && item.MetricKind == kind)
                 .ToArrayAsync(cancellationToken)).Where(item => config.IncludesDevice(item.DimensionsJson)).ToArray();
@@ -90,10 +90,10 @@ public static class MonitoringAlerts
                 .GroupBy(item => item.SeriesId).Select(group => new
                 {
                     Id = group.Key,
-                    Average = group.Where(item => (item.Quality == "Good" || item.Quality == "Idle") && item.ValueDouble >= -double.MaxValue && item.ValueDouble <= double.MaxValue).Average(item => item.ValueDouble),
-                    Count = group.LongCount(item => (item.Quality == "Good" || item.Quality == "Idle") && item.ValueDouble >= -double.MaxValue && item.ValueDouble <= double.MaxValue),
+                    Average = group.Where(item => (item.Quality == "Good" || item.Quality == "Idle") && item.ValueDouble >= 0 && item.ValueDouble <= double.MaxValue).Average(item => item.ValueDouble),
+                    Count = group.LongCount(item => (item.Quality == "Good" || item.Quality == "Idle") && item.ValueDouble >= 0 && item.ValueDouble <= double.MaxValue),
                     LatestObserved = group.Max(item => (DateTimeOffset?)item.SampledAtUtc),
-                    LatestValid = group.Where(item => (item.Quality == "Good" || item.Quality == "Idle") && item.ValueDouble >= -double.MaxValue && item.ValueDouble <= double.MaxValue).Max(item => (DateTimeOffset?)item.SampledAtUtc)
+                    LatestValid = group.Where(item => (item.Quality == "Good" || item.Quality == "Idle") && item.ValueDouble >= 0 && item.ValueDouble <= double.MaxValue).Max(item => (DateTimeOffset?)item.SampledAtUtc)
                 }).ToDictionaryAsync(item => item.Id, cancellationToken);
             return series.GroupBy(item => item.ResourceId).Select(group =>
             {
@@ -109,16 +109,12 @@ public static class MonitoringAlerts
         if (rule.RuleType == "AgentOffline")
         {
             var host = selected.SingleOrDefault(item => item.ResourceType == "Host" && item.ExternalId == "local");
-            return host is null ? [] : [new(host.Id, host.LastSeenAtUtc < cutoff, rule.Severity, ObservedAtUtc: host.LastSeenAtUtc)];
+            return host is null ? [] : [new(host.Id, host.LastSeenAtUtc > now ? null : host.LastSeenAtUtc < cutoff, rule.Severity, ObservedAtUtc: host.LastSeenAtUtc,
+                Reason: host.LastSeenAtUtc > now ? "TelemetryUnknown" : "Observed")];
         }
-        if (rule.RuleType == "ContainerHealth")
-            return selected.Where(item => item.ResourceType == "Container").Select(item =>
-            {
-                using var json = JsonDocument.Parse(item.LabelsJson);
-                var state = json.RootElement.TryGetProperty("state", out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-                return new AlertObservation(item.Id, item.LastSeenAtUtc < now.AddSeconds(-18) || state is null ? null : state != "running",
-                    rule.Severity, ObservedAtUtc: item.LastSeenAtUtc, Reason: state ?? "TelemetryUnknown");
-            }).ToArray();
+        if (rule.RuleType is "ContainerHealth" or "SystemdHealth")
+            return selected.Where(item => item.ResourceType == (rule.RuleType == "ContainerHealth" ? "Container" : "SystemdUnit"))
+                .Select(item => MonitoringAlertPolicy.ObserveState(rule.RuleType, item, now, rule.Severity)).ToArray();
         var failures = await db.BackupRecords.AsNoTracking().Where(item => item.Status == "Failed" && item.CompletedAtUtc > cutoff && item.CompletedAtUtc <= now)
             .Select(item => item.InstanceResourceId).Distinct().ToArrayAsync(cancellationToken);
         var cleanup = await db.OperationJobs.AsNoTracking().Where(item => item.JobType == "applications.cleanup-backups" && item.State == "Failed" &&

@@ -42,6 +42,13 @@ public sealed class HostReader(TimeProvider? timeProvider = null)
         {
             var usage = ReadUsage();
             var values = new List<HostMetric> { new("cpu.utilization", "host", usage.CpuPercent, "percent"), new("memory.utilization", "host", usage.MemoryPercent, "percent") };
+            string? load = null;
+            if (OperatingSystem.IsLinux())
+            {
+                try { load = File.ReadAllText("/proc/loadavg"); }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+            }
+            values.AddRange(HostLoadMetrics.Parse(load, Environment.ProcessorCount));
             values.AddRange(ReadDeviceMetrics());
             _cachedMetrics = new(_clock.GetUtcNow(), values);
             return _cachedMetrics;

@@ -67,12 +67,27 @@ function monitoringText(item: AlertEvent) {
   if (value.reason === 'RuleDisabled') return '规则已禁用'
   if (value.reason === 'ResourceExcluded' || value.reason === 'RuleChanged') return '规则范围已调整'
   if (value.reason === 'RuleInvalid') return '规则配置无效 · 保留原风险'
+  const stateReasons: Record<string, string> = {
+    ContainerUnhealthy: '运行中 · Docker 健康检查失败',
+    ContainerHealthy: 'Docker 健康检查通过',
+    ContainerNotRunning: '容器未运行',
+    ProcessRunningNoHealthcheck: '进程运行 · 未配置健康检查',
+    HealthStarting: '健康检查初始化 · 不据此解除风险',
+    ServiceActive: 'systemd 服务活动',
+    ServiceStopped: 'systemd 服务停止或失败',
+    ServiceUnavailable: '服务状态不可用 · 不据此解除风险',
+    ServiceTransition: '服务状态变化中 · 不据此解除风险',
+  }
+  if (stateReasons[value.reason]) return stateReasons[value.reason]
   if (value.triggered == null) return '采样不足或已失联 · 不会自动恢复'
   return value.value == null
     ? '状态已确认'
     : `窗口均值 ${formatQuantity(value.value, '%', 1)} · 有效采样 ${formatQuantity(value.coveragePercent, '%', 0)}`
 }
-const metricRule = computed(() => form.ruleType.endsWith('Utilization'))
+const metricRule = computed(
+  () => form.ruleType.endsWith('Utilization') || form.ruleType === 'LoadAverage',
+)
+const thresholdMaximum = computed(() => (form.ruleType === 'LoadAverage' ? 1000 : 100))
 const thresholds = reactive({
   value: 90,
   criticalValue: 95 as number | undefined,
@@ -93,6 +108,8 @@ const ruleNames: Record<string, string> = {
   CpuUtilization: 'CPU 使用率',
   MemoryUtilization: '内存使用率',
   DiskUtilization: '磁盘使用率',
+  LoadAverage: '主机负载 · 按逻辑核心归一化',
+  SystemdHealth: 'systemd 服务状态',
   ContainerHealth: '容器健康',
   BackupFailure: '备份失败',
   AgentOffline: 'Agent 离线',
@@ -524,7 +541,7 @@ onUnmounted(() => {
                 label="警告"
                 value="Warning" /><el-option label="严重" value="Critical" /></el-select
           ></el-form-item>
-          <el-form-item label="平均判断窗口（秒）"
+          <el-form-item :label="metricRule ? '平均判断窗口（秒）' : '检查窗口（秒）'"
             ><el-input-number v-model="form.evaluationWindowSeconds" :min="12" :max="86400"
           /></el-form-item>
           <el-form-item label="启用"><el-switch v-model="form.isEnabled" /></el-form-item>
@@ -538,13 +555,13 @@ onUnmounted(() => {
         </p>
         <div v-if="metricRule" class="form-grid">
           <el-form-item label="告警阈值（%）"
-            ><el-input-number v-model="thresholds.value" :min="0" :max="100"
+            ><el-input-number v-model="thresholds.value" :min="0" :max="thresholdMaximum"
           /></el-form-item>
           <el-form-item label="严重阈值（%，可留空）"
-            ><el-input-number v-model="thresholds.criticalValue" :min="0" :max="100"
+            ><el-input-number v-model="thresholds.criticalValue" :min="0" :max="thresholdMaximum"
           /></el-form-item>
           <el-form-item label="恢复阈值（%，可留空）"
-            ><el-input-number v-model="thresholds.recoveryValue" :min="0" :max="100"
+            ><el-input-number v-model="thresholds.recoveryValue" :min="0" :max="thresholdMaximum"
           /></el-form-item>
           <el-form-item label="最低有效采样（%）"
             ><el-input-number v-model="thresholds.minimumCoveragePercent" :min="50" :max="100"
@@ -552,6 +569,14 @@ onUnmounted(() => {
         </div>
         <p class="rule-hint">
           采样不足、失联或无效时保留现有风险；严重升级会重新打开已确认告警，静默到期会重新激活。
+        </p>
+        <p v-if="form.ruleType === 'LoadAverage'" class="rule-hint">
+          1 分钟 Linux 负载 ÷ 逻辑核心数 × 100%；100% 表示平均每核心一个就绪或不可中断任务，不是 CPU
+          使用率。负载可以超过 100%。
+        </p>
+        <p v-if="form.ruleType === 'ContainerHealth'" class="rule-hint">
+          检查进程状态及 Docker
+          健康检查；初始化、失联或旧状态不会解除风险。未配置健康检查只表示进程运行。
         </p>
       </el-form>
       <template #footer

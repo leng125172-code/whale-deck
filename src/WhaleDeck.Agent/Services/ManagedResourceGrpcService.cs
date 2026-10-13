@@ -83,6 +83,7 @@ public sealed class ManagedResourceGrpcService(
             snapshot.State = container?.State ?? "Missing";
             snapshot.Version = container?.Image ?? string.Empty;
             snapshot.Attributes["status"] = container?.Status ?? "Not found";
+            snapshot.Attributes["dockerStatus"] = container?.Status ?? "Not found";
             response.Resources.Add(snapshot);
         }
         return response;
@@ -97,12 +98,13 @@ public sealed class ManagedResourceGrpcService(
             try
             {
                 var status = await processes.RunAsync("/usr/bin/systemctl",
-                    ["show", resource.ExternalId, "--property=ActiveState", "--property=SubState", "--property=UnitFileState", "--value"],
+                    ["show", resource.ExternalId, "--property=ActiveState", "--property=SubState", "--property=UnitFileState", "--property=LoadState"],
                     null, TimeSpan.FromSeconds(10), "SYSTEMD_QUERY_FAILED", context.CancellationToken);
-                var values = status.StandardOutput.Split('\n', StringSplitOptions.TrimEntries);
-                snapshot.State = values.ElementAtOrDefault(0) ?? "Unknown";
-                snapshot.Version = values.ElementAtOrDefault(2) ?? string.Empty;
-                snapshot.Attributes["subState"] = values.ElementAtOrDefault(1) ?? string.Empty;
+                var values = SystemdStatus.Parse(status.StandardOutput);
+                snapshot.State = values.GetValueOrDefault("ActiveState", "Unknown");
+                snapshot.Version = values.GetValueOrDefault("UnitFileState", string.Empty);
+                snapshot.Attributes["subState"] = values.GetValueOrDefault("SubState", string.Empty);
+                snapshot.Attributes["loadState"] = values.GetValueOrDefault("LoadState", "Unknown");
             }
             catch (InvalidOperationException)
             {

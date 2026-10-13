@@ -11,9 +11,10 @@ public sealed record MonitoringAlertPolicy(double? Threshold, double? CriticalTh
     int MinimumCoveragePercent, string[] ResourceIds, string[] DeviceIds)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    public static bool IsMetricRule(string type) => type.EndsWith("Utilization", StringComparison.Ordinal) || type == "LoadAverage";
     public static MonitoringAlertPolicy Parse(SaveAlertRuleCommand command)
     {
-        if (command.RuleType is not ("CpuUtilization" or "MemoryUtilization" or "DiskUtilization" or "AgentOffline" or "ContainerHealth" or "BackupFailure"))
+        if (command.RuleType is not ("CpuUtilization" or "MemoryUtilization" or "DiskUtilization" or "LoadAverage" or "SystemdHealth" or "AgentOffline" or "ContainerHealth" or "BackupFailure"))
             throw new ArgumentException("Unsupported alert rule type.");
         if (command.EvaluationWindowSeconds is < 12 or > 86400 || command.Severity is not ("Info" or "Warning" or "Critical"))
             throw new ArgumentException("Invalid alert evaluation window or severity.");
@@ -31,9 +32,10 @@ public sealed record MonitoringAlertPolicy(double? Threshold, double? CriticalTh
         var coverage = ReadNumber(threshold.RootElement, "minimumCoveragePercent") ?? 80;
         if (coverage is < 50 or > 100 || coverage != Math.Truncate(coverage))
             throw new ArgumentException("Minimum coverage must be an integer from 50 to 100.");
-        var metric = command.RuleType.EndsWith("Utilization", StringComparison.Ordinal);
-        if (metric && (value is null || value is < 0 or > 100 || critical is < 0 or > 100 || recovery is < 0 or > 100 || critical < value || recovery > value))
-            throw new ArgumentException("Percentage thresholds must be 0–100, recovery <= value <= criticalValue.");
+        var metric = IsMetricRule(command.RuleType);
+        var maximum = command.RuleType == "LoadAverage" ? 1000 : 100;
+        if (metric && (value is null || value < 0 || value > maximum || critical < 0 || critical > maximum || recovery < 0 || recovery > maximum || critical < value || recovery > value))
+            throw new ArgumentException("Percentage thresholds are out of range; recovery <= value <= criticalValue is required.");
         if (!metric && (devices.Length != 0 || critical is not null || recovery is not null))
             throw new ArgumentException("Device and multi-threshold fields apply only to utilization rules.");
         return new(value, critical, recovery, (int)coverage, resources, devices);
@@ -50,12 +52,54 @@ public sealed record MonitoringAlertPolicy(double? Threshold, double? CriticalTh
             DeviceIds.Contains(device.GetString()!, StringComparer.Ordinal);
     }
 
+    public static AlertObservation ObserveState(string type, ManagedResource resource, DateTimeOffset now, string severity)
+    {
+        AlertObservation Unknown(string reason = "TelemetryUnknown") => new(resource.Id, null, severity, ObservedAtUtc: resource.LastSeenAtUtc, Reason: reason);
+        if (resource.LastSeenAtUtc < now.AddSeconds(-18) || resource.LastSeenAtUtc > now) return Unknown();
+        if (resource.LabelsJson.Length > 65536) return Unknown();
+        try
+        {
+            using var json = JsonDocument.Parse(resource.LabelsJson, new JsonDocumentOptions { MaxDepth = 8 });
+            var root = json.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return Unknown();
+            static string? Text(JsonElement value, string key) => value.TryGetProperty(key, out var item) && item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+            var state = Text(root, "state");
+            var attributes = root.TryGetProperty("attributes", out var attrs) && attrs.ValueKind == JsonValueKind.Object ? attrs : default;
+            string? Attribute(string key) => attributes.ValueKind == JsonValueKind.Object ? Text(attributes, key) : null;
+            if (type == "SystemdHealth")
+            {
+                if (Attribute("loadState") is not "loaded") return Unknown("ServiceUnavailable");
+                return state switch
+                {
+                    "active" when Attribute("subState") == "failed" => new(resource.Id, true, severity, ObservedAtUtc: resource.LastSeenAtUtc, Reason: "ServiceStopped"),
+                    "active" when Attribute("subState") is "running" or "waiting" or "exited" or "elapsed" =>
+                        new(resource.Id, false, severity, ObservedAtUtc: resource.LastSeenAtUtc, Reason: "ServiceActive"),
+                    "inactive" or "failed" => new(resource.Id, true, severity, ObservedAtUtc: resource.LastSeenAtUtc, Reason: "ServiceStopped"),
+                    _ => Unknown("ServiceTransition")
+                };
+            }
+            if (type != "ContainerHealth") return Unknown();
+            if (state is "exited" or "dead" or "paused" or "restarting" or "created" or "removing")
+                return new(resource.Id, true, severity, ObservedAtUtc: resource.LastSeenAtUtc, Reason: "ContainerNotRunning");
+            if (state != "running") return Unknown();
+            var status = Attribute("dockerStatus");
+            if (status is null || !status.StartsWith("Up ", StringComparison.Ordinal)) return Unknown();
+            if (status.EndsWith("(unhealthy)", StringComparison.Ordinal))
+                return new(resource.Id, true, severity, ObservedAtUtc: resource.LastSeenAtUtc, Reason: "ContainerUnhealthy");
+            if (status.EndsWith("(health: starting)", StringComparison.Ordinal)) return Unknown("HealthStarting");
+            if (status.Contains('(') && !status.EndsWith("(healthy)", StringComparison.Ordinal)) return Unknown();
+            return new(resource.Id, false, severity, ObservedAtUtc: resource.LastSeenAtUtc,
+                Reason: status.EndsWith("(healthy)", StringComparison.Ordinal) ? "ContainerHealthy" : "ProcessRunningNoHealthcheck");
+        }
+        catch (JsonException) { return Unknown(); }
+    }
+
     public AlertObservation Metric(Guid resourceId, double? average, long validSamples, DateTimeOffset? latestValid,
         DateTimeOffset? latestObserved, int windowSeconds, DateTimeOffset now, string severity, bool alreadyActive)
     {
         var expected = Math.Max(1, windowSeconds / 6);
         var coverage = Math.Min(100, 100d * validSamples / expected);
-        var known = average is { } number && double.IsFinite(number) && latestValid == latestObserved && latestValid >= now.AddSeconds(-18) &&
+        var known = average is { } number && double.IsFinite(number) && number >= 0 && latestValid == latestObserved && latestValid >= now.AddSeconds(-18) &&
             latestValid <= now && coverage >= MinimumCoveragePercent;
         var threshold = alreadyActive ? RecoveryThreshold ?? Threshold : Threshold;
         bool? triggered = known ? average >= threshold : null;

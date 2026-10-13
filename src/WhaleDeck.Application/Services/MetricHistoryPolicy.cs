@@ -8,6 +8,7 @@ public static class MetricHistoryPolicy
     private static readonly HashSet<string> AllowedKinds = new(StringComparer.Ordinal)
     {
         "cpu.utilization", "memory.utilization", "disk.utilization", "disk.read", "disk.write",
+        "load.average.1", "load.average.5", "load.average.15", "load.normalized",
         "disk.read.iops", "disk.write.iops", "disk.read.latency", "disk.write.latency",
         "network.receive", "network.send", "network.receive.total", "network.send.total",
         "container.cpu.utilization", "container.memory.used", "container.memory.limit", "container.memory.utilization",

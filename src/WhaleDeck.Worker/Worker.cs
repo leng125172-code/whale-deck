@@ -33,6 +33,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(6));
+        var nextFailureLog = DateTimeOffset.MinValue;
         do
         {
             try
@@ -42,7 +43,11 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             }
             catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
             {
-                LogCycleFailure(logger, exception);
+                if (DateTimeOffset.UtcNow >= nextFailureLog)
+                {
+                    LogCycleFailure(logger, exception);
+                    nextFailureLog = DateTimeOffset.UtcNow.AddMinutes(1);
+                }
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
@@ -74,7 +79,6 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         await ReconcileAgentOperations(db, agent, leases, _workerInstanceId, cancellationToken);
         await ApplyRollups(db, cancellationToken);
         await BackupCapacityAlerts.EvaluateAsync(db, agent, cancellationToken);
-        await MonitoringAlerts.EvaluateAsync(db, DateTimeOffset.UtcNow, cancellationToken);
 
         if (_nextCatalogRefresh <= DateTimeOffset.UtcNow)
         {
@@ -125,6 +129,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         var discovered = (await agent.ListResourcesAsync("overview", cancellationToken))
             .Concat(await agent.ListResourcesAsync("databases", cancellationToken))
             .Concat(await agent.ListResourcesAsync("applications", cancellationToken))
+            .Concat(await agent.ListResourcesAsync("systemd", cancellationToken))
             .DistinctBy(item => (item.Type, item.Id))
             .ToArray();
         var resources = new Dictionary<(string Type, string Id), ManagedResource>();
