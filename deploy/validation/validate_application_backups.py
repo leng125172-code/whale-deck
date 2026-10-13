@@ -205,7 +205,7 @@ def main():
             if capsule.returncode:
                 try:
                     diagnostic = json.loads(capsule.stdout)
-                    detail = str(diagnostic.get('errorType')) + '/' + str(diagnostic.get('errno'))
+                    detail = str(diagnostic.get('stage')) + ':' + str(diagnostic.get('errorType')) + '/' + str(diagnostic.get('errno'))
                 except ValueError:
                     detail = 'capsule-exit-' + str(capsule.returncode)
                 raise RuntimeError('No successful bound signal receipt: ' + detail)

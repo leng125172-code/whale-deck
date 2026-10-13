@@ -29,13 +29,23 @@ def kill_bound_process(pid: int, start: str, slug: str, job: str) -> None:
         raise RuntimeError('Fault capsule requires an exact non-init PID and root UID')
     # Open first; a reused numeric PID cannot redirect the signal after validation.
     descriptor = os.pidfd_open(pid, 0)
+    stage = 'read-start-ticks'
     try:
         process = Path('/proc') / str(pid)
         actual_start = process.joinpath('stat').read_text().rsplit(')', 1)[1].split()[19]
-        if not matches_process(process.joinpath('cgroup').read_text(), process.joinpath('cmdline').read_bytes(),
+        stage = 'read-cgroup'
+        cgroup = process.joinpath('cgroup').read_text()
+        stage = 'read-command'
+        command = process.joinpath('cmdline').read_bytes()
+        stage = 'identity-check'
+        if not matches_process(cgroup, command,
                                actual_start, start, slug, job):
             raise RuntimeError('Exact backup service/process identity was not proved; no signal sent')
+        stage = 'send-bound-signal'
         signal.pidfd_send_signal(descriptor, signal.SIGKILL, None, 0)
+    except Exception as error:
+        error.fault_stage = stage
+        raise
     finally:
         os.close(descriptor)
 
@@ -48,6 +58,6 @@ if __name__ == '__main__':
     except Exception as error:
         # No command line, configuration, fingerprint or private environment in diagnostics.
         print(json.dumps({'boundBackupSignal': 'rejected', 'errorType': type(error).__name__,
-                          'errno': getattr(error, 'errno', None)}))
+                          'errno': getattr(error, 'errno', None), 'stage': getattr(error, 'fault_stage', 'open-handle')}))
         raise SystemExit(1)
     print(json.dumps({'boundBackupSignal': 'SIGKILL'}))
