@@ -178,7 +178,7 @@ def validate_alert(api: Api) -> None:
             "alerts/rules",
             payload={
                 **current,
-                "thresholdJson": json.dumps({"value": 101}),
+                "thresholdJson": json.dumps({"value": 100}),
                 "expectedVersion": current["version"],
             },
         ).json()

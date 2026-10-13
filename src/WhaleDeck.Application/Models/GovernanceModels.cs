@@ -58,7 +58,10 @@ public sealed record SaveAlertRuleCommand(Guid? Id, string RuleType, string Reso
 public sealed record AlertEventDto(Guid Id, Guid RuleId, Guid? ResourceId, string State, string Severity, int OccurrenceCount,
     DateTimeOffset FirstOccurredAtUtc, DateTimeOffset LastOccurredAtUtc, DateTimeOffset? RecoveredAtUtc,
     string? AcknowledgedBySubject, DateTimeOffset? AcknowledgedAtUtc, DateTimeOffset? SilencedUntilUtc, string SummaryCode,
-    BackupCapacityAlertDetail? Capacity = null);
+    BackupCapacityAlertDetail? Capacity = null, MonitoringAlertDetail? Monitoring = null);
+
+public sealed record MonitoringAlertDetail(bool? Triggered, string Severity, double? Value, double? CoveragePercent,
+    DateTimeOffset? ObservedAtUtc, string Reason);
 
 public sealed record AlertEventHistoryDto(Guid Id, Guid AlertEventId, string State, string ActorSubject,
     DateTimeOffset OccurredAtUtc);

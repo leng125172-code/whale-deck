@@ -368,6 +368,14 @@ export interface AlertRule {
 }
 
 export interface AlertEvent {
+  monitoring?: {
+    triggered: boolean | null
+    severity: string
+    value: number | null
+    coveragePercent: number | null
+    observedAtUtc: string | null
+    reason: string
+  } | null
   capacity?: {
     policyId: string
     targetDirectoryId: string

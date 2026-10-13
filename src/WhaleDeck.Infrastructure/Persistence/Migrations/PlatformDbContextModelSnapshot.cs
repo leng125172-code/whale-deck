@@ -94,7 +94,16 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("summary_code");
 
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Fingerprint")
+                        .IsUnique()
+                        .HasFilter("state <> 'Recovered'");
 
                     b.HasIndex("Fingerprint", "State");
 

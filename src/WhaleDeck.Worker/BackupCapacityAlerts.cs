@@ -56,6 +56,7 @@ public static class BackupCapacityAlerts
                 if (change is not null) Record(db, item, change);
             }
         }
+        MonitoringAlerts.TouchChangedEvents(db);
         await db.SaveChangesAsync(cancellationToken);
     }
 

@@ -54,6 +54,24 @@ function capacityText(item: AlertEvent) {
   const free = value.freeBytes == null ? '—' : `${(value.freeBytes / 1024 ** 3).toFixed(1)} GiB`
   return `HDD 已用 ${value.usedPercent.toFixed(1)}% · 可用 ${free}`
 }
+function monitoringText(item: AlertEvent) {
+  const value = item.monitoring
+  if (!value) return ''
+  if (value.reason === 'RuleDisabled') return '规则已禁用'
+  if (value.reason === 'ResourceExcluded' || value.reason === 'RuleChanged') return '规则范围已调整'
+  if (value.reason === 'RuleInvalid') return '规则配置无效 · 保留原风险'
+  if (value.triggered == null) return '采样不足或已失联 · 不会自动恢复'
+  return value.value == null
+    ? '状态已确认'
+    : `窗口均值 ${value.value.toFixed(1)}% · 有效采样 ${value.coveragePercent?.toFixed(0) ?? '—'}%`
+}
+const metricRule = computed(() => form.ruleType.endsWith('Utilization'))
+const thresholds = reactive({
+  value: 90,
+  criticalValue: 95 as number | undefined,
+  recoveryValue: 85 as number | undefined,
+  minimumCoveragePercent: 80,
+})
 const form = reactive({
   ruleType: 'CpuUtilization',
   resourceSelectorJson: '{}',
@@ -141,12 +159,29 @@ function openRule(item?: AlertRule) {
           isEnabled: true,
         },
   )
+  const threshold = JSON.parse(form.thresholdJson)
+  Object.assign(thresholds, {
+    value: threshold.value ?? 90,
+    criticalValue: threshold.criticalValue,
+    recoveryValue: threshold.recoveryValue,
+    minimumCoveragePercent: threshold.minimumCoveragePercent ?? 80,
+  })
+  if (!item) Object.assign(thresholds, { criticalValue: 95, recoveryValue: 85 })
   dialogVisible.value = true
 }
 
 async function saveRule() {
   if (!canManage.value) return
   const version = generation
+  form.thresholdJson = metricRule.value ? JSON.stringify({ operator: '>=', ...thresholds }) : '{}'
+  if (
+    metricRule.value &&
+    ((thresholds.criticalValue != null && thresholds.criticalValue < thresholds.value) ||
+      (thresholds.recoveryValue != null && thresholds.recoveryValue > thresholds.value))
+  ) {
+    ElMessage.error('阈值需要满足：恢复阈值 ≤ 告警阈值 ≤ 严重阈值')
+    return
+  }
   try {
     JSON.parse(form.resourceSelectorJson)
     JSON.parse(form.thresholdJson)
@@ -273,6 +308,7 @@ onUnmounted(() => {
                 }}</el-tag>
               </header>
               <p v-if="item.capacity" class="capacity-detail">{{ capacityText(item) }}</p>
+              <p v-if="item.monitoring" class="capacity-detail">{{ monitoringText(item) }}</p>
               <p v-if="item.capacity">
                 预警 {{ item.capacity.warningPercent }}% / 临界 {{ item.capacity.criticalPercent }}%
               </p>
@@ -314,6 +350,9 @@ onUnmounted(() => {
                 <div class="event-title">
                   <strong>{{ scope.row.summaryCode }}</strong
                   ><small>{{ ruleLabel(scope.row.ruleId) }}</small>
+                  <small v-if="scope.row.monitoring" class="capacity-detail">{{
+                    monitoringText(scope.row)
+                  }}</small>
                   <small v-if="scope.row.capacity" class="capacity-detail">{{
                     capacityText(scope.row)
                   }}</small>
@@ -448,6 +487,7 @@ onUnmounted(() => {
     <el-dialog
       v-model="dialogVisible"
       :title="editing ? '编辑告警规则' : '新增告警规则'"
+      class="alert-rule-dialog"
       width="min(680px, calc(100vw - 32px))"
     >
       <el-form label-position="top">
@@ -466,7 +506,7 @@ onUnmounted(() => {
                 label="警告"
                 value="Warning" /><el-option label="严重" value="Critical" /></el-select
           ></el-form-item>
-          <el-form-item label="连续判断窗口（秒）"
+          <el-form-item label="平均判断窗口（秒）"
             ><el-input-number v-model="form.evaluationWindowSeconds" :min="12" :max="86400"
           /></el-form-item>
           <el-form-item label="启用"><el-switch v-model="form.isEnabled" /></el-form-item>
@@ -474,9 +514,26 @@ onUnmounted(() => {
         <el-form-item label="资源筛选 JSON"
           ><el-input v-model="form.resourceSelectorJson" type="textarea" :rows="4"
         /></el-form-item>
-        <el-form-item label="阈值 JSON"
-          ><el-input v-model="form.thresholdJson" type="textarea" :rows="5"
-        /></el-form-item>
+        <p class="rule-hint">
+          资源筛选支持 resourceIds（资源 ID 或外部 ID）、deviceIds（磁盘 ID）；{} 表示全部。
+        </p>
+        <div v-if="metricRule" class="form-grid">
+          <el-form-item label="告警阈值（%）"
+            ><el-input-number v-model="thresholds.value" :min="0" :max="100"
+          /></el-form-item>
+          <el-form-item label="严重阈值（%，可留空）"
+            ><el-input-number v-model="thresholds.criticalValue" :min="0" :max="100"
+          /></el-form-item>
+          <el-form-item label="恢复阈值（%，可留空）"
+            ><el-input-number v-model="thresholds.recoveryValue" :min="0" :max="100"
+          /></el-form-item>
+          <el-form-item label="最低有效采样（%）"
+            ><el-input-number v-model="thresholds.minimumCoveragePercent" :min="50" :max="100"
+          /></el-form-item>
+        </div>
+        <p class="rule-hint">
+          采样不足、失联或无效时保留现有风险；严重升级会重新打开已确认告警，静默到期会重新激活。
+        </p>
       </el-form>
       <template #footer
         ><el-button @click="dialogVisible = false">取消</el-button
@@ -487,6 +544,15 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+:global(.alert-rule-dialog .el-dialog__body) {
+  max-height: min(580px, calc(100dvh - 240px));
+  overflow: auto;
+}
+.rule-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
 .alerts-page {
   display: grid;
   gap: 18px;

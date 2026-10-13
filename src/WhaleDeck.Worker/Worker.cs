@@ -74,7 +74,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         await ReconcileAgentOperations(db, agent, leases, _workerInstanceId, cancellationToken);
         await ApplyRollups(db, cancellationToken);
         await BackupCapacityAlerts.EvaluateAsync(db, agent, cancellationToken);
-        await EvaluateAlerts(db, cancellationToken);
+        await MonitoringAlerts.EvaluateAsync(db, DateTimeOffset.UtcNow, cancellationToken);
 
         if (_nextCatalogRefresh <= DateTimeOffset.UtcNow)
         {
@@ -663,106 +663,6 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         }
     }
 
-    private static async Task EvaluateAlerts(PlatformDbContext db, CancellationToken cancellationToken)
-    {
-        var now = DateTimeOffset.UtcNow;
-        var rules = await db.AlertRules.Where(item => item.IsEnabled && item.RuleType != BackupCapacityPolicy.RuleType).ToArrayAsync(cancellationToken);
-        foreach (var rule in rules)
-        {
-            var triggeredResources = new List<Guid?>();
-            switch (rule.RuleType)
-            {
-                case "CpuUtilization":
-                case "MemoryUtilization":
-                case "DiskUtilization":
-                    {
-                        var kind = rule.RuleType switch
-                        {
-                            "CpuUtilization" => "cpu.utilization",
-                            "MemoryUtilization" => "memory.utilization",
-                            _ => "disk.utilization"
-                        };
-                        var threshold = ReadThreshold(rule.ThresholdJson);
-                        var cutoff = now.AddSeconds(-rule.EvaluationWindowSeconds);
-                        var series = await db.MetricSeries.Where(item => item.MetricKind == kind).ToArrayAsync(cancellationToken);
-                        foreach (var item in series)
-                        {
-                            var average = await db.MetricSamples.Where(sample => sample.SeriesId == item.Id && sample.SampledAtUtc >= cutoff && sample.ValueDouble != null)
-                                .AverageAsync(sample => sample.ValueDouble, cancellationToken);
-                            if (average >= threshold) triggeredResources.Add(item.ResourceId);
-                        }
-                        break;
-                    }
-                case "AgentOffline":
-                    {
-                        var host = await db.ManagedResources.SingleOrDefaultAsync(item => item.ResourceType == "Host" && item.ExternalId == "local", cancellationToken);
-                        if (host is null || host.LastSeenAtUtc < now.AddSeconds(-rule.EvaluationWindowSeconds)) triggeredResources.Add(host?.Id);
-                        break;
-                    }
-                case "ContainerHealth":
-                    {
-                        var containers = await db.ManagedResources.Where(item => item.ResourceType == "Container").ToArrayAsync(cancellationToken);
-                        foreach (var container in containers)
-                        {
-                            using var labels = JsonDocument.Parse(container.LabelsJson);
-                            var state = labels.RootElement.TryGetProperty("state", out var stateValue) ? stateValue.GetString() : null;
-                            if (state is not "running") triggeredResources.Add(container.Id);
-                        }
-                        break;
-                    }
-                case "BackupFailure":
-                    triggeredResources.AddRange(await db.BackupRecords.Where(item => item.Status == "Failed" && item.CompletedAtUtc >= now.AddSeconds(-rule.EvaluationWindowSeconds))
-                        .Select(item => (Guid?)item.InstanceResourceId).Distinct().ToArrayAsync(cancellationToken));
-                    triggeredResources.AddRange(await db.OperationJobs.Where(item => item.JobType == "applications.cleanup-backups" &&
-                        item.State == "Failed" && item.CompletedAtUtc >= now.AddSeconds(-rule.EvaluationWindowSeconds) && item.ResourceId != null)
-                        .Select(item => item.ResourceId).Distinct().ToArrayAsync(cancellationToken));
-                    break;
-            }
-
-            var active = await db.AlertEvents.Where(item => item.RuleId == rule.Id && item.State != "Recovered").ToArrayAsync(cancellationToken);
-            foreach (var resourceId in triggeredResources.Distinct())
-            {
-                var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{rule.Id:D}:{resourceId?.ToString("D") ?? "global"}")));
-                var existing = active.SingleOrDefault(item => item.Fingerprint == fingerprint);
-                if (existing is null)
-                {
-                    existing = new AlertEvent
-                    {
-                        RuleId = rule.Id,
-                        ResourceId = resourceId,
-                        Fingerprint = fingerprint,
-                        Severity = rule.Severity,
-                        SummaryCode = $"ALERT_{rule.RuleType.ToUpperInvariant()}",
-                        DetailJson = rule.ThresholdJson
-                    };
-                    db.AlertEvents.Add(existing);
-                    db.AlertEventHistory.Add(new AlertEventHistory { AlertEventId = existing.Id, State = "Active", ActorSubject = "system:alert-evaluator" });
-                }
-                else if (existing.LastOccurredAtUtc <= now.AddSeconds(-rule.EvaluationWindowSeconds))
-                {
-                    existing.LastOccurredAtUtc = now;
-                    existing.OccurrenceCount++;
-                }
-            }
-
-            var triggeredIds = triggeredResources.Distinct().ToHashSet();
-            foreach (var existing in active.Where(item => !triggeredIds.Contains(item.ResourceId)))
-            {
-                existing.State = "Recovered";
-                existing.RecoveredAtUtc = now;
-                existing.LastOccurredAtUtc = now;
-                db.AlertEventHistory.Add(new AlertEventHistory { AlertEventId = existing.Id, State = "Recovered", ActorSubject = "system:alert-evaluator" });
-            }
-        }
-        await db.SaveChangesAsync(cancellationToken);
-    }
-
-    private static double ReadThreshold(string thresholdJson)
-    {
-        using var document = JsonDocument.Parse(thresholdJson);
-        return document.RootElement.TryGetProperty("value", out var value) && value.TryGetDouble(out var threshold)
-            ? threshold : throw new InvalidOperationException("Alert threshold JSON requires a numeric value.");
-    }
 
     private static string GetResourceLockKey(OperationJob job)
     {

@@ -335,6 +335,7 @@ public sealed class AlertEvent
     public Guid? RelatedJobId { get; set; }
     public required string SummaryCode { get; init; }
     public string DetailJson { get; set; } = "{}";
+    public long Version { get; set; }
 }
 
 public sealed class AlertEventHistory

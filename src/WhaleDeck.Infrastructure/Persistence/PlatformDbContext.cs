@@ -262,6 +262,8 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             entity.ToTable("alert_events"); entity.HasKey(item => item.Id);
             entity.Property(item => item.DetailJson).HasColumnType("jsonb");
             entity.HasIndex(item => new { item.Fingerprint, item.State });
+            entity.HasIndex(item => item.Fingerprint).IsUnique().HasFilter("state <> 'Recovered'");
+            entity.Property(item => item.Version).IsConcurrencyToken();
         });
         modelBuilder.Entity<AlertEventHistory>(entity => { entity.ToTable("alert_event_history"); entity.HasKey(item => item.Id); entity.HasIndex(item => new { item.AlertEventId, item.OccurredAtUtc }); });
         modelBuilder.Entity<ConfigSnapshot>(entity =>

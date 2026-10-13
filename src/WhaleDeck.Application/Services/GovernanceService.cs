@@ -114,8 +114,7 @@ public sealed class GovernanceService(IGovernanceRepository repository)
     public async Task<AlertRuleDto> SaveAlertRuleAsync(SaveAlertRuleCommand command, CancellationToken cancellationToken)
     {
         if (!AlertTypes.Contains(command.RuleType)) throw new ArgumentException("Unsupported alert rule type.");
-        ValidateJson(command.ResourceSelectorJson);
-        ValidateJson(command.ThresholdJson);
+        _ = MonitoringAlertPolicy.Parse(command);
         if (command.EvaluationWindowSeconds is < 12 or > 86400) throw new ArgumentException("Alert evaluation window is out of range.");
         if (command.Severity is not ("Info" or "Warning" or "Critical")) throw new ArgumentException("Invalid alert severity.");
         return Map(await repository.SaveAlertRuleAsync(command, cancellationToken));
@@ -177,7 +176,7 @@ public sealed class GovernanceService(IGovernanceRepository repository)
         item.ThresholdJson, item.EvaluationWindowSeconds, item.Severity, item.IsEnabled, item.Version);
     private static AlertEventDto Map(Domain.Entities.AlertEvent item) => new(item.Id, item.RuleId, item.ResourceId, item.State,
         item.Severity, item.OccurrenceCount, item.FirstOccurredAtUtc, item.LastOccurredAtUtc, item.RecoveredAtUtc,
-        item.AcknowledgedBySubject, item.AcknowledgedAtUtc, item.SilencedUntilUtc, item.SummaryCode, BackupCapacityPolicy.ReadDetail(item));
+        item.AcknowledgedBySubject, item.AcknowledgedAtUtc, item.SilencedUntilUtc, item.SummaryCode, BackupCapacityPolicy.ReadDetail(item), MonitoringAlertPolicy.ReadDetail(item));
 
     private static void ValidateName(string value)
     {

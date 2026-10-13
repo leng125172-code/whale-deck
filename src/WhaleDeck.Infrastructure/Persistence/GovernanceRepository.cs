@@ -239,6 +239,7 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
         item.AcknowledgedAtUtc = DateTimeOffset.UtcNow;
         item.SilencedUntilUtc = silencedUntilUtc;
         item.State = silencedUntilUtc is null ? "Acknowledged" : "Silenced";
+        item.Version++;
         db.AlertEventHistory.Add(new AlertEventHistory { AlertEventId = item.Id, State = item.State, ActorSubject = actorSubject });
         await db.SaveChangesAsync(cancellationToken);
         return item;
