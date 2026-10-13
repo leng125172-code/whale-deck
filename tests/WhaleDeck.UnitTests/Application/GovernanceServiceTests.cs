@@ -56,7 +56,15 @@ public sealed class GovernanceServiceTests
     public async Task AlertRejectsInvalidJson()
     {
         var command = new SaveAlertRuleCommand(null, "CpuUtilization", "{}", "not-json", 60, "Warning", true, null);
-        await Assert.ThrowsAnyAsync<Exception>(() => _service.SaveAlertRuleAsync(command, default));
+        await Assert.ThrowsAnyAsync<Exception>(() => _service.SaveAlertRuleAsync(new("admin", "unit-trace"), command, default));
+    }
+
+    [Fact]
+    public async Task AlertRequiresActorAndRequestTrace()
+    {
+        var command = new SaveAlertRuleCommand(null, "CpuUtilization", "{}", "{\"value\":90}", 60, "Warning", true, null);
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.SaveAlertRuleAsync(new("", "trace"), command, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.UpdateAlertAsync(Guid.NewGuid(), new("admin", ""), null, default));
     }
 
     [Fact]
@@ -97,10 +105,10 @@ public sealed class GovernanceServiceTests
         public Task<string> ResolveResourceExternalIdAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult("database-platform.postgres");
         public Task<BackupPolicy> SaveBackupPolicyAsync(SaveBackupPolicyCommand command, CancellationToken cancellationToken) => throw new InvalidOperationException();
         public Task<IReadOnlyCollection<AlertRule>> ListAlertRulesAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<AlertRule>>([]);
-        public Task<AlertRule> SaveAlertRuleAsync(SaveAlertRuleCommand command, CancellationToken cancellationToken) => throw new InvalidOperationException();
+        public Task<AlertRule> SaveAlertRuleAsync(AlertWriteContext context, SaveAlertRuleCommand command, CancellationToken cancellationToken) => throw new InvalidOperationException();
         public Task<IReadOnlyCollection<AlertEvent>> ListAlertsAsync(bool includeRecovered, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<AlertEvent>>([]);
         public Task<IReadOnlyCollection<AlertEventHistory>> ListAlertHistoryAsync(Guid? alertEventId, int take, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<AlertEventHistory>>([]);
-        public Task<AlertEvent> UpdateAlertAsync(Guid id, string actorSubject, DateTimeOffset? silencedUntilUtc, CancellationToken cancellationToken) => throw new InvalidOperationException();
+        public Task<AlertEvent> UpdateAlertAsync(Guid id, AlertWriteContext context, DateTimeOffset? silencedUntilUtc, CancellationToken cancellationToken) => throw new InvalidOperationException();
         public Task<IReadOnlyCollection<PlatformSetting>> ListSettingsAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<PlatformSetting>>([]);
         public Task<PlatformSetting> SaveSettingAsync(string key, string actorSubject, SavePlatformSettingCommand command, CancellationToken cancellationToken) => throw new InvalidOperationException();
         public Task<IReadOnlyCollection<AuditEvent>> ListAuditAsync(int take, string? actorSubject, string? action, string? result, DateTimeOffset? fromUtc, DateTimeOffset? toUtc, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<AuditEvent>>([]);

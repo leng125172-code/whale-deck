@@ -181,7 +181,7 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
     public async Task<IReadOnlyCollection<AlertRule>> ListAlertRulesAsync(CancellationToken cancellationToken) =>
         await db.AlertRules.AsNoTracking().OrderBy(item => item.RuleType).ToArrayAsync(cancellationToken);
 
-    public async Task<AlertRule> SaveAlertRuleAsync(SaveAlertRuleCommand command, CancellationToken cancellationToken)
+    public async Task<AlertRule> SaveAlertRuleAsync(AlertWriteContext context, SaveAlertRuleCommand command, CancellationToken cancellationToken)
     {
         AlertRule item;
         if (command.Id is { } id)
@@ -212,9 +212,16 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
             };
             db.AlertRules.Add(item);
         }
+        RecordAlertAudit(context, "alerts.rule-save", "alert-rule", item.Id);
         await db.SaveChangesAsync(cancellationToken);
         return item;
     }
+
+    private void RecordAlertAudit(AlertWriteContext context, string action, string type, Guid id) => db.AuditEvents.Add(new AuditEvent
+    {
+        ActorSubject = context.Subject, Action = action, TargetType = type, TargetId = id.ToString("D"),
+        TraceId = context.TraceId, SourceIp = context.SourceIp
+    });
 
     public async Task<IReadOnlyCollection<AlertEvent>> ListAlertsAsync(bool includeRecovered, CancellationToken cancellationToken) =>
         await db.AlertEvents.AsNoTracking().Where(item => includeRecovered || item.State != "Recovered")
@@ -230,17 +237,18 @@ public sealed class GovernanceRepository(PlatformDbContext db) : IGovernanceRepo
         return await query.OrderByDescending(item => item.OccurredAtUtc).Take(take).ToArrayAsync(cancellationToken);
     }
 
-    public async Task<AlertEvent> UpdateAlertAsync(Guid id, string actorSubject, DateTimeOffset? silencedUntilUtc, CancellationToken cancellationToken)
+    public async Task<AlertEvent> UpdateAlertAsync(Guid id, AlertWriteContext context, DateTimeOffset? silencedUntilUtc, CancellationToken cancellationToken)
     {
         var item = await db.AlertEvents.SingleOrDefaultAsync(value => value.Id == id, cancellationToken)
             ?? throw new KeyNotFoundException("Alert event was not found.");
         if (item.State == "Recovered") throw new InvalidOperationException("Recovered alerts cannot be acknowledged or silenced again.");
-        item.AcknowledgedBySubject = actorSubject;
+        item.AcknowledgedBySubject = context.Subject;
         item.AcknowledgedAtUtc = DateTimeOffset.UtcNow;
         item.SilencedUntilUtc = silencedUntilUtc;
         item.State = silencedUntilUtc is null ? "Acknowledged" : "Silenced";
         item.Version++;
-        db.AlertEventHistory.Add(new AlertEventHistory { AlertEventId = item.Id, State = item.State, ActorSubject = actorSubject });
+        db.AlertEventHistory.Add(new AlertEventHistory { AlertEventId = item.Id, State = item.State, ActorSubject = context.Subject });
+        RecordAlertAudit(context, silencedUntilUtc is null ? "alerts.acknowledge" : "alerts.silence", "alert", item.Id);
         await db.SaveChangesAsync(cancellationToken);
         return item;
     }

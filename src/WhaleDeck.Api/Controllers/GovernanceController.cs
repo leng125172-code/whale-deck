@@ -64,7 +64,7 @@ public sealed class GovernanceController(GovernanceService governance, WhaleDeck
 
     [HttpPost("alerts/rules")]
     public async Task<IActionResult> SaveAlertRule([FromBody] SaveAlertRuleCommand command, CancellationToken cancellationToken) =>
-        Ok(await governance.SaveAlertRuleAsync(command, cancellationToken));
+        Ok(await governance.SaveAlertRuleAsync(AlertContext(), command, cancellationToken));
 
     [HttpGet("alerts")]
     public async Task<IActionResult> Alerts([FromQuery] bool includeRecovered = false, CancellationToken cancellationToken = default) =>
@@ -79,11 +79,13 @@ public sealed class GovernanceController(GovernanceService governance, WhaleDeck
 
     [HttpPost("alerts/{id:guid}/acknowledge")]
     public async Task<IActionResult> Acknowledge(Guid id, CancellationToken cancellationToken) =>
-        Ok(await governance.UpdateAlertAsync(id, User.RequireSubject(), null, cancellationToken));
+        Ok(await governance.UpdateAlertAsync(id, AlertContext(), null, cancellationToken));
 
     [HttpPost("alerts/{id:guid}/silence")]
     public async Task<IActionResult> Silence(Guid id, [FromBody] SilenceAlertRequest request, CancellationToken cancellationToken) =>
-        Ok(await governance.UpdateAlertAsync(id, User.RequireSubject(), request.UntilUtc, cancellationToken));
+        Ok(await governance.UpdateAlertAsync(id, AlertContext(), request.UntilUtc, cancellationToken));
+
+    private AlertWriteContext AlertContext() => new(User.RequireSubject(), HttpContext.TraceIdentifier, HttpContext.Connection.RemoteIpAddress?.ToString());
 
     [HttpGet("settings")]
     public async Task<IActionResult> Settings(CancellationToken cancellationToken) => Ok(await governance.ListSettingsAsync(cancellationToken));

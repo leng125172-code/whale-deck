@@ -55,6 +55,8 @@ public sealed record AlertRuleDto(Guid Id, string RuleType, string ResourceSelec
 public sealed record SaveAlertRuleCommand(Guid? Id, string RuleType, string ResourceSelectorJson, string ThresholdJson,
     int EvaluationWindowSeconds, string Severity, bool IsEnabled, long? ExpectedVersion);
 
+public sealed record AlertWriteContext(string Subject, string TraceId, string? SourceIp = null);
+
 public sealed record AlertEventDto(Guid Id, Guid RuleId, Guid? ResourceId, string State, string Severity, int OccurrenceCount,
     DateTimeOffset FirstOccurredAtUtc, DateTimeOffset LastOccurredAtUtc, DateTimeOffset? RecoveredAtUtc,
     string? AcknowledgedBySubject, DateTimeOffset? AcknowledgedAtUtc, DateTimeOffset? SilencedUntilUtc, string SummaryCode,

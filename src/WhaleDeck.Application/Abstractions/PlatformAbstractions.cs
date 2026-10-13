@@ -137,10 +137,10 @@ public interface IGovernanceRepository
     Task<string> ResolveResourceExternalIdAsync(Guid id, CancellationToken cancellationToken);
     Task<BackupPolicy> SaveBackupPolicyAsync(SaveBackupPolicyCommand command, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<AlertRule>> ListAlertRulesAsync(CancellationToken cancellationToken);
-    Task<AlertRule> SaveAlertRuleAsync(SaveAlertRuleCommand command, CancellationToken cancellationToken);
+    Task<AlertRule> SaveAlertRuleAsync(AlertWriteContext context, SaveAlertRuleCommand command, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<AlertEvent>> ListAlertsAsync(bool includeRecovered, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<AlertEventHistory>> ListAlertHistoryAsync(Guid? alertEventId, int take, CancellationToken cancellationToken);
-    Task<AlertEvent> UpdateAlertAsync(Guid id, string actorSubject, DateTimeOffset? silencedUntilUtc, CancellationToken cancellationToken);
+    Task<AlertEvent> UpdateAlertAsync(Guid id, AlertWriteContext context, DateTimeOffset? silencedUntilUtc, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<PlatformSetting>> ListSettingsAsync(CancellationToken cancellationToken);
     Task<PlatformSetting> SaveSettingAsync(string key, string actorSubject, SavePlatformSettingCommand command, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<AuditEvent>> ListAuditAsync(int take, string? actorSubject, string? action, string? result,

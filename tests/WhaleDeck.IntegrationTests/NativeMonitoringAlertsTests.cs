@@ -40,11 +40,11 @@ public sealed class NativeMonitoringAlertsTests
         await Evaluate(); var alarm = await Active();
         Assert.Equal(selected.Id, alarm.ResourceId); Assert.Equal("Warning", alarm.Severity);
         await Evaluate(); Assert.Equal(1, (await Active()).OccurrenceCount);
-        await new GovernanceRepository(db).UpdateAlertAsync(alarm.Id, "native-admin", null, default);
+        await new GovernanceRepository(db).UpdateAlertAsync(alarm.Id, new("native-admin", "native-acknowledge"), null, default);
         await Values(96); await Evaluate(); alarm = await Active();
         Assert.Equal("Active", alarm.State); Assert.Equal("Critical", alarm.Severity); Assert.Null(alarm.AcknowledgedBySubject);
         Assert.Equal(100, MonitoringAlertPolicy.ReadDetail(alarm)!.CoveragePercent);
-        await new GovernanceRepository(db).UpdateAlertAsync(alarm.Id, "native-admin", now.AddHours(1), default);
+        await new GovernanceRepository(db).UpdateAlertAsync(alarm.Id, new("native-admin", "native-silence"), now.AddHours(1), default);
         await Evaluate(); Assert.Equal("Silenced", (await Active()).State);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE alert_events SET silenced_until_utc={now.AddSeconds(-1)}, version=version+1 WHERE id={alarm.Id}");
         await Values(null, "Unavailable"); await Evaluate(); alarm = await Active();
@@ -58,7 +58,7 @@ public sealed class NativeMonitoringAlertsTests
         await using (var concurrent = new PlatformDbContext(options))
         {
             var stale = await concurrent.AlertEvents.SingleAsync(item => item.Id == retriggered.Id);
-            await new GovernanceRepository(db).UpdateAlertAsync(retriggered.Id, "native-admin", now.AddHours(1), default);
+            await new GovernanceRepository(db).UpdateAlertAsync(retriggered.Id, new("native-admin", "native-race"), now.AddHours(1), default);
             stale.State = "Recovered"; stale.Version++;
             await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => concurrent.SaveChangesAsync());
         }
@@ -75,5 +75,10 @@ public sealed class NativeMonitoringAlertsTests
         await Evaluate(); Assert.Empty(await db.AlertEvents.AsNoTracking().Where(item => item.State != "Recovered").ToArrayAsync());
         Assert.Contains(await db.AlertEventHistory.AsNoTracking().Select(item => item.State).ToArrayAsync(), item => item == "SilenceExpired");
         Assert.Equal(2, await db.AlertEvents.CountAsync());
+        var audit = await db.AuditEvents.AsNoTracking().Where(item => item.ActorSubject == "native-admin").ToArrayAsync();
+        Assert.Equal(3, audit.Length);
+        Assert.All(audit, item => { Assert.Null(item.DetailJson); Assert.Equal("alert", item.TargetType); Assert.StartsWith("native-", item.TraceId); });
+        Assert.Contains(audit, item => item.Action == "alerts.acknowledge");
+        Assert.Contains(audit, item => item.Action == "alerts.silence");
     }
 }

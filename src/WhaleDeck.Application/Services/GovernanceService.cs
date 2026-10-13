@@ -111,13 +111,14 @@ public sealed class GovernanceService(IGovernanceRepository repository)
     public async Task<IReadOnlyCollection<AlertRuleDto>> ListAlertRulesAsync(CancellationToken cancellationToken) =>
         (await repository.ListAlertRulesAsync(cancellationToken)).Select(Map).ToArray();
 
-    public async Task<AlertRuleDto> SaveAlertRuleAsync(SaveAlertRuleCommand command, CancellationToken cancellationToken)
+    public async Task<AlertRuleDto> SaveAlertRuleAsync(AlertWriteContext context, SaveAlertRuleCommand command, CancellationToken cancellationToken)
     {
+        ValidateAlertContext(context);
         if (!AlertTypes.Contains(command.RuleType)) throw new ArgumentException("Unsupported alert rule type.");
         _ = MonitoringAlertPolicy.Parse(command);
         if (command.EvaluationWindowSeconds is < 12 or > 86400) throw new ArgumentException("Alert evaluation window is out of range.");
         if (command.Severity is not ("Info" or "Warning" or "Critical")) throw new ArgumentException("Invalid alert severity.");
-        return Map(await repository.SaveAlertRuleAsync(command, cancellationToken));
+        return Map(await repository.SaveAlertRuleAsync(context, command, cancellationToken));
     }
 
     public async Task<IReadOnlyCollection<AlertEventDto>> ListAlertsAsync(bool includeRecovered, CancellationToken cancellationToken) =>
@@ -131,11 +132,19 @@ public sealed class GovernanceService(IGovernanceRepository repository)
         .Select(item => new AlertEventHistoryDto(item.Id, item.AlertEventId, item.State, item.ActorSubject, item.OccurredAtUtc))
         .ToArray();
 
-    public async Task<AlertEventDto> UpdateAlertAsync(Guid id, string actorSubject, DateTimeOffset? silencedUntilUtc, CancellationToken cancellationToken)
+    public async Task<AlertEventDto> UpdateAlertAsync(Guid id, AlertWriteContext context, DateTimeOffset? silencedUntilUtc, CancellationToken cancellationToken)
     {
+        ValidateAlertContext(context);
         if (silencedUntilUtc is { } until && (until <= DateTimeOffset.UtcNow || until > DateTimeOffset.UtcNow.AddDays(30)))
             throw new ArgumentException("Silence expiration is out of range.");
-        return Map(await repository.UpdateAlertAsync(id, actorSubject, silencedUntilUtc, cancellationToken));
+        return Map(await repository.UpdateAlertAsync(id, context, silencedUntilUtc, cancellationToken));
+    }
+
+    private static void ValidateAlertContext(AlertWriteContext context)
+    {
+        if (string.IsNullOrWhiteSpace(context.Subject) || context.Subject.Length > 256 ||
+            string.IsNullOrWhiteSpace(context.TraceId) || context.TraceId.Length > 128)
+            throw new ArgumentException("Authenticated alert actor and bounded request trace are required.");
     }
 
     public async Task<IReadOnlyCollection<PlatformSettingDto>> ListSettingsAsync(CancellationToken cancellationToken) =>

@@ -49,12 +49,12 @@ public sealed class NativeBackupCapacityTests
         Assert.Equal("Warning", alarm.Severity); Assert.Equal(1, alarm.OccurrenceCount);
         Assert.Equal(BackupCapacityAlerts.RuleId(policy.Id), alarm.RuleId);
         var repository = new GovernanceRepository(db);
-        await repository.UpdateAlertAsync(alarm.Id, "native-validation", null, default);
+        await repository.UpdateAlertAsync(alarm.Id, new("native-validation", "native-backup-acknowledge"), null, default);
         sample.Current = Capacity(91);
         await BackupCapacityAlerts.EvaluateAsync(db, proxy, default);
         alarm = await db.AlertEvents.AsNoTracking().SingleAsync();
         Assert.Equal("Critical", alarm.Severity); Assert.Equal("Active", alarm.State); Assert.Null(alarm.AcknowledgedAtUtc);
-        await repository.UpdateAlertAsync(alarm.Id, "native-validation", DateTimeOffset.UtcNow.AddHours(1), default);
+        await repository.UpdateAlertAsync(alarm.Id, new("native-validation", "native-backup-silence"), DateTimeOffset.UtcNow.AddHours(1), default);
         await BackupCapacityAlerts.EvaluateAsync(db, proxy, default);
         Assert.Equal("Silenced", (await db.AlertEvents.AsNoTracking().SingleAsync()).State);
         db.ChangeTracker.Clear();
@@ -70,7 +70,7 @@ public sealed class NativeBackupCapacityTests
         await BackupCapacityAlerts.EvaluateAsync(db, proxy, default);
         alarm = await db.AlertEvents.AsNoTracking().SingleAsync();
         Assert.Equal("Recovered", alarm.State);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => repository.UpdateAlertAsync(alarm.Id, "native-validation", null, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => repository.UpdateAlertAsync(alarm.Id, new("native-validation", "native-backup-recovered"), null, default));
         sample.Current = Capacity(81);
         await BackupCapacityAlerts.EvaluateAsync(db, proxy, default);
         Assert.Equal(2, await db.AlertEvents.CountAsync());
@@ -82,7 +82,7 @@ public sealed class NativeBackupCapacityTests
         Assert.False((await db.AlertRules.AsNoTracking().SingleAsync()).IsEnabled);
         Assert.Contains(await db.AlertEventHistory.AsNoTracking().ToArrayAsync(), item => item.State == "SeverityChanged");
         Assert.Contains(await db.AlertEventHistory.AsNoTracking().ToArrayAsync(), item => item.State == "SilenceExpired");
-        await Assert.ThrowsAsync<InvalidOperationException>(() => repository.SaveAlertRuleAsync(new SaveAlertRuleCommand(
+        await Assert.ThrowsAsync<InvalidOperationException>(() => repository.SaveAlertRuleAsync(new("native-validation", "native-backup-rule"), new SaveAlertRuleCommand(
             alarm.RuleId, "CpuUtilization", "{}", "{\"value\":50}", 60, "Warning", true, 0), default));
     }
 

@@ -66,6 +66,9 @@ def main():
         assert recovered['monitoring']['reason'] == 'RuleDisabled'
         states = [item['state'] for item in request(api, 'GET', f"alerts/history?alertEventId={alarm['id']}&take=100").json()]
         assert {'Active', 'Acknowledged', 'Silenced', 'SeverityChanged', 'Recovered'}.issubset(states)
+        audit = request(api, 'GET', 'audit?take=100').json()
+        for action, target in (('alerts.rule-save', rule_id), ('alerts.acknowledge', alarm['id']), ('alerts.silence', alarm['id'])):
+            assert any(item['action'] == action and item['targetId'] == target and item.get('traceId') for item in audit)
         print('Live monitoring alerts passed: real scoped measurement, dedup, acknowledge, silence, escalation, explicit disable/recovery and history; anonymous 401/ordinary 403/admin cookie+CSRF')
     finally:
         if current['isEnabled']:
