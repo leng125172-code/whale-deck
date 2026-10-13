@@ -1,6 +1,6 @@
 # WhaleDeck
 
-Whale Deck is a containerized control plane for the Precision 7920 workstation, with a host-side Agent and maintenance entry point. The current MVP/P1 backend, Vue management UI and workstation integration are deployed on the target workstation; GitLab and the explicitly marked `HOLD` features remain deferred.
+Whale Deck is a containerized control plane for the Precision 7920 workstation, with a host-side Agent and maintenance entry point. The current MVP/P1 backend, Vue management UI and workstation integration are deployed on the target workstation. The expanded [P0–P5 delivery scope](docs/GOAL_P0_P5.md) is active; old `HOLD` restrictions have been removed, but newly included features are not yet implemented or accepted.
 
 See [implementation status](docs/IMPLEMENTATION_STATUS.md) for the distinction between implemented code, placeholders and pending workstation acceptance. A passing build does not mean the complete backend is ready for production.
 
@@ -19,6 +19,8 @@ WhaleDeck has no local password store and does not duplicate Authentik user prof
 ## Product scope
 
 The product baseline starts in [docs/FEATURES.md](docs/FEATURES.md). The complete page, use-case, Agent RPC, permission, data-model, and delivery breakdown is indexed in [docs/README.md](docs/README.md).
+
+The 76-task scope includes [multi-language development workspaces](docs/DEVELOPMENT_WORKSPACES.md): Git/upload source import, remote editing/debugging/testing, private previews and automatically collected diagnostic reports. These isolated environments are for development and testing only, not automatic production deployment. Their design is recorded; runtime implementation remains pending.
 
 ## Repository layout
 
@@ -76,7 +78,7 @@ The current workstation entry points are:
 - Authentik: `http://<reachable-workstation-address>:8081`
 
 Use the Authentik root address for normal login, not `/setup`. Initial setup is a one-time flow. The installer finalizes an already configured administrator and Whale Deck OIDC instance with a guarded, idempotent setup-completion check; it never resets the administrator password. `deploy/validation/inspect_authentik_setup.py` reports non-secret setup state through `ak shell` for troubleshooting.
-- GitLab: deferred; no port is currently published
+- GitLab: included in P4, not yet deployed; no port is currently published
 
 The host-side MaintenanceHost binds `0.0.0.0` on ports `8080/8081`, so wired, USB and future workstation interfaces can use the same service without hard-coded interface addresses. The gateway publishes only loopback upstream ports (`18080` and `18081`). API, Worker, databases, cache and Authentik do not publish host ports. API and Worker must never mount `/var/run/docker.sock`; container operations use the Agent Unix socket and an allow-listed resource registry.
 
@@ -86,7 +88,7 @@ The desired friendly LAN entry is `http://precision-7920-tower.local` for Whale 
 
 The [installation guide](deploy/install/README.md) describes the seven-stage Linux workflow: tool/source checks, optional Docker accelerator configuration, dependency repository deployment, then source build and deployment. `bash install.sh --dry-run` previews the workflow without network or system changes. `--dependencies-only` excludes the Whale Deck build/deployment stage.
 
-Agent、MaintenanceHost、UDS 权限/对端身份、受限 helper、动态全网卡入口、容器桥隔离以及 Docker 重启韧性已在目标工作站验收通过。API、Worker 与 Gateway 已构建并部署，数据库、备份、应用、身份、治理和主机管理流程已完成真实依赖验收；旧 `dcfs*` 运行时对象与临时全量 sudo 规则也已完成安全清理。准确的完成边界与后续发布项见 [实施状态](docs/IMPLEMENTATION_STATUS.md)。
+Agent、MaintenanceHost、UDS 权限/对端身份、受限 helper、动态全网卡入口、容器桥隔离以及 Docker 重启韧性已在目标工作站验收通过。API、Worker 与 Gateway 已构建并部署，数据库、备份、应用、身份、治理和主机管理流程已完成多项真实依赖验收，不能据此判为全量功能完成；旧 `dcfs*` 运行时对象已清理。2026-10-13 按用户新授权重新启用并保留宿主 user 的开发期全量 sudo，由用户之后自行撤销并改密码，产品 Agent 的受限规则未扩大。准确边界与后续发布项见 [实施状态](docs/IMPLEMENTATION_STATUS.md)。
 
 ## Container boundaries
 

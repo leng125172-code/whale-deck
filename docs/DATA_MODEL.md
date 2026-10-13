@@ -4,6 +4,8 @@
 
 本文定义 WhaleDeck 自有 PostgreSQL 数据和 Valkey 临时数据。Authentik 是用户、凭据、MFA、资料和用户组的事实来源，不创建本地密码表或完整用户资料副本。
 
+新增设计实体 `DM-DEV-WORKSPACE/ENVIRONMENT/RUNTIME/SOURCE/RUN/STEP/REPORT/SESSION/GRANT/ARTIFACT` 详见 [开发空间模型](DEVELOPMENT_WORKSPACES.md#8-数据库与存储模型)。一个空间对应多 runtime，报告绑定不可变源码/环境版本与执行记录；稳定字段关系化建模并用 EF migration 落地，Secret 只存引用。当前尚未新增这些生产表，不以文档或 JSONB 占位判为实现。
+
 ## 1. 设计约束
 
 - PostgreSQL 保存平台配置、个人门户、资源注册、任务、审计、指标、告警、备份与同步历史。
@@ -244,6 +246,7 @@ Valkey 清空后系统必须能从 PostgreSQL、Agent 和外部服务重建，�
 | 审计事件 | 默认 1 年，后续由管理员配置但不能被普通界面任意清空 |
 | 配置同步记录 | 1 年 |
 | 备份记录 | 至少覆盖备份文件生命周期，删除文件后仍保留审计摘要 |
+| 开发报告/诊断工件（待实现） | 默认 14 天，可配置且受配额；源码不按报告 TTL 删除，会话票据短时一次性 |
 
 清理任务按小批次或分区执行，产生一条汇总日志和审计，不逐行输出日志。
 
@@ -262,3 +265,4 @@ Valkey 清空后系统必须能从 PostgreSQL、Agent 和外部服务重建，�
 | `DM-BACKUP-POLICY`、`DM-BACKUP` | `UC-BKP-*` |
 | `DM-ALERT-*` | `UC-ALT-*` |
 | `DM-CONFIG-*` | `UC-CFG-*` |
+| `DM-DEV-*`（待实现） | `UC-DEV-001..010`，具体实体/约束以开发空间专用设计为准 |
