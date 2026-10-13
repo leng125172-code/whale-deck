@@ -202,7 +202,9 @@
 
 字段：`id`、`rule_id`、`resource_id`、`fingerprint`、`state`、`severity`、`occurrence_count`、`first/last_occurred_at_utc`、`recovered_at_utc`、`acknowledged_by_subject`、`acknowledged_at_utc`、`silenced_until_utc`、`related_job_id`、`summary_code` 和 `detail_json`。
 
-`fingerprint + state=Active` 保证同一活动告警去重。状态为 `Active/Recovered/Acknowledged/Silenced`，历史状态变化写入 `alert_event_history`。
+`fingerprint WHERE state <> 'Recovered'` 的 PostgreSQL 部分唯一索引保证未恢复告警去重（包含已确认/静默）；`version` 为乐观并发令牌，防止评估覆盖管理员操作。状态为 `Active/Recovered/Acknowledged/Silenced`，历史状态变化写入 `alert_event_history`。
+
+利用率规则的 `threshold_json` 支持 `value/criticalValue/recoveryValue/minimumCoveragePercent` 与 `operator: >=`；`resource_selector_json` 支持明确的资源 UUID/外部 ID、指标 DeviceId（磁盘使用率为挂载点）。`detail_json` 保存当前均值、覆盖比例、观测时间和已观测/未知/规则失效原因，不保存任意诊断文本或凭据；未知不能判为恢复。见 [告警状态实现与验收](qa/MONITORING_ALERTS.md)。
 
 ## 9. 配置仓库与外部同步
 

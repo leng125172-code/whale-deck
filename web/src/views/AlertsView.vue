@@ -515,7 +515,8 @@ onUnmounted(() => {
           ><el-input v-model="form.resourceSelectorJson" type="textarea" :rows="4"
         /></el-form-item>
         <p class="rule-hint">
-          资源筛选支持 resourceIds（资源 ID 或外部 ID）、deviceIds（磁盘 ID）；{} 表示全部。
+          资源筛选支持 resourceIds（资源 ID 或外部 ID）、deviceIds（指标设备标识，如磁盘挂载点
+          /）；{} 表示全部。
         </p>
         <div v-if="metricRule" class="form-grid">
           <el-form-item label="告警阈值（%）"
