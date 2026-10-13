@@ -14,11 +14,19 @@
 
 ## Verification before remote acceptance
 
-- Release tests at audit revision: 401 Unit + 62 existing Integration passed; 3 native PostgreSQL Facts explicitly skipped locally. They are not real-dependency proof.
+- Final Release tests: 402 Unit + 62 existing Integration passed; 3 native PostgreSQL Facts explicitly skipped locally. They are not real-dependency proof.
 - Frontend build/type/lint and 44 unit tests passed. 16 browser tests passed (4 new threshold/quality regressions and 12 existing backup capacity tests); mobile dark and desktop light screenshots inspected. Fixtures do not prove production authentication/alert execution.
 - Production read-only migration preflight found zero duplicate active fingerprints. No production saturation, high CPU load or metric rewriting was used.
-- `NativeMonitoringAlertsTests` and `validate_monitoring_alerts_postgres.py` provision a disposable namespaced database using real PostgreSQL/EF migrations. Native acceptance and deployment will be recorded after execution; source generation alone is not acceptance.
-- Native lifecycle passed twice before audit, then again at `af4e92b` with three atomic acknowledgement/silence audit records. Each TRX reported exactly one executed/passed Fact, no skipped/incomplete test, followed by exact container/database cleanup. Prior backup capacity native regression passed at `8535884`; the audit-signature variant is being rerun. Latest UI clear-optional-threshold regression passed in all four viewport/theme combinations. A further 31 layout/search/telemetry regressions passed.
+- `NativeMonitoringAlertsTests` and `validate_monitoring_alerts_postgres.py` provision a disposable namespaced database using real PostgreSQL/EF migrations. Native lifecycle passed at `8535884`, `e998a3f` and audit revision `af4e92b`; the last includes three atomic acknowledgement/silence audit records. Each TRX reported exactly one executed/passed Fact, no skipped/incomplete test, followed by exact container/database cleanup. Backup capacity native regression also passed at `8535884` and audit revision `af4e92b`.
+- Latest UI clear-optional-threshold regression passed in all four viewport/theme combinations. A further 31 layout/search/telemetry regressions passed (47 distinct browser tests across the two selected suites, plus four repeated after the optional-field change). The later `57a94d3` change only wraps malformed JSON parsing as ArgumentException and normalizes optional frontend fields; evaluator SQL, migration and atomic audit logic are unchanged from the native audit proof. Unit and real HTTP rejection tests cover the final malformed-input change.
+
+## Workstation acceptance
+
+Runtime `57a94d3` published in place. Scheduling job `d54b76d7-52f9-41ad-88c2-264d50a1b78e` completed, followed by actual update unit `inactive/dead`, `Result=success`, `ExecMainStatus=0`. Eleven core containers healthy; Agent/MaintenanceHost active; user sudo -n still succeeds without changing the Agent grant.
+
+`run_with_ephemeral_admin.py validate_monitoring_alerts.py` passed against real Authentik/API/Worker: anonymous 401, real ordinary-user 403 for events/rules/history, administrator Cookie/CSRF; malformed JSON/operator/unknown selector return 400 with trace; one real selected host/device event with valid coverage, acknowledge, silence, Critical upgrade without duplicate or losing silence, explicit disable/recovery and complete transition history. Unified rule/acknowledge/silence audit contains actual target and request trace. Validation rule is disabled and its event Recovered; history/audit are retained intentionally. Both ephemeral users were cleaned by the wrapper; native SDK absence rechecked. No metric rewriting, production saturation or container lifecycle operation was used for this live proof.
+
+Login HTML available, recent five-minute bounded Worker logs (eight lines inspected) contain zero Error/Critical records. This is a short post-deploy check, not long-running log-pressure proof. Source and runtime are recorded separately; final documentation-only commits do not imply a further rebuild.
 
 ## Remaining broader scope
 
