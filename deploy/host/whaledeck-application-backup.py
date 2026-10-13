@@ -50,12 +50,14 @@ def safe_path(path: Path, *, directory=False):
     return path
 
 
-def read_json(path: Path, *, limit=65536):
+def read_json(path: Path, *, limit=65536, kind=dict):
     safe_path(path)
     require(path.stat().st_size <= limit)
     try:
-        return json.loads(path.read_bytes())
-    except (ValueError, UnicodeError):
+        value = json.loads(path.read_bytes())
+        require(type(value) is kind)
+        return value
+    except (ValueError, UnicodeError, RecursionError):
         raise BackupError('Application backup metadata is invalid.') from None
 
 
@@ -106,8 +108,8 @@ def inspect_all():
 
 
 def registry():
-    entries = read_json(REGISTRY)
-    require(isinstance(entries, list))
+    entries = read_json(REGISTRY, kind=list)
+    require(all(isinstance(item, dict) for item in entries))
     apps = next((item for item in entries if item.get('id') == 'whaledeck.apps'), {})
     require(apps.get('path') == str(APPS) and 'backup' in apps.get('allowedActions', []))
     return entries
@@ -234,11 +236,16 @@ def journal_path(job):
 
 
 def resume(journal):
-    require(SLUG.fullmatch(journal.get('slug', '')) is not None)
+    require(isinstance(journal, dict) and isinstance(journal.get('slug'), str) and
+        SLUG.fullmatch(journal['slug']) is not None)
+    paused = journal.get('paused')
+    require(isinstance(paused, list) and len(paused) <= 64 and
+        all(isinstance(identity, str) and IDENTIFIER.fullmatch(identity) is not None for identity in paused) and
+        len(set(paused)) == len(paused))
     entries = registry()
     remaining = []
-    identities = {item['Id']: item for item in inspect_all()} if journal.get('paused') else {}
-    for identity in journal.get('paused', []):
+    identities = {item['Id']: item for item in inspect_all()} if paused else {}
+    for identity in paused:
         require(IDENTIFIER.fullmatch(identity) is not None)
         if identity not in identities:
             continue  # Successful Engine listing proves the original container no longer exists.
@@ -260,7 +267,10 @@ def recover_job(job):
     if not path.exists():
         return
     journal = read_json(path, limit=1024 * 1024)
-    require(SLUG.fullmatch(journal.get('slug', '')) is not None)
+    require(isinstance(journal.get('slug'), str) and SLUG.fullmatch(journal['slug']) is not None and
+        isinstance(journal.get('job'), str) and journal['job'] == job and
+        type(journal.get('cleanup', False)) is bool and
+        (journal.get('pendingCleanup') is None or isinstance(journal['pendingCleanup'], dict)))
     try:
         with lock(journal['slug'], blocking=False):
             require(resume(journal))
@@ -412,12 +422,21 @@ def cleanup_plan(slug, retention_days, retention_count):
 
 def cleanup_result(journal):
     removed = journal.get('removedBackupIds', [])
-    require(isinstance(removed, list) and len(removed) <= 1024 and all(JOB.fullmatch(item) for item in removed))
+    require(isinstance(removed, list) and len(removed) <= 1024 and
+        all(isinstance(item, str) and JOB.fullmatch(item) is not None for item in removed) and
+        type(journal.get('retentionDays')) is int and 1 <= journal['retentionDays'] <= 3650 and
+        type(journal.get('retentionCount')) is int and 1 <= journal['retentionCount'] <= 365)
     return {'removedBackupIds': removed, 'retentionDays': journal['retentionDays'], 'retentionCount': journal['retentionCount']}
 
 
 def finish_cleanup_entry(journal):
+    cleanup_result(journal)  # Validate receipt fields before either file can be unlinked.
     entry = journal['pendingCleanup']
+    require(isinstance(entry, dict) and isinstance(entry.get('backupId'), str) and
+        isinstance(entry.get('metadataDigest'), str) and IDENTIFIER.fullmatch(entry['metadataDigest']) is not None and
+        isinstance(entry.get('identity'), list) and len(entry['identity']) == 3 and
+        all(type(item) is int and item >= 0 for item in entry['identity']) and
+        type(entry.get('changedAtNs')) is int and entry['changedAtNs'] >= 0)
     identity = entry['backupId']
     require(JOB.fullmatch(identity) is not None and SLUG.fullmatch(journal['slug']) is not None)
     directory = safe_path(TARGET / journal['slug'], directory=True)
@@ -617,7 +636,7 @@ def main():
             if JOB.fullmatch(path.stem):
                 try:
                     recover_job(path.stem)
-                except (BackupError, OSError, ValueError, subprocess.TimeoutExpired):
+                except (BackupError, OSError, ValueError, TypeError, KeyError, AttributeError, subprocess.TimeoutExpired):
                     failed = True
         require(not failed)
         return

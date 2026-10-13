@@ -87,7 +87,7 @@ class BackupHelperTests(unittest.TestCase):
         candidate = backup.archive_catalog('demo')[-1]
         artifact = self.target / 'demo' / (candidate['backupId'] + '.tar.gz')
         artifact.write_bytes(artifact.read_bytes() + b'changed')
-        journal = {'slug': 'demo', 'pendingCleanup': candidate, 'removedBackupIds': []}
+        journal = {'slug': 'demo', 'pendingCleanup': candidate, 'removedBackupIds': [], 'retentionDays': 14, 'retentionCount': 1}
         with self.assertRaises(backup.BackupError): backup.finish_cleanup_entry(journal)
         self.assertTrue(artifact.exists())
 
@@ -121,6 +121,55 @@ class BackupHelperTests(unittest.TestCase):
         backup.recover_job(job)
         self.assertTrue(self.member['State']['Paused'])
         self.assertFalse(any(call[0] == 'unpause' for call in self.calls))
+
+    def test_metadata_object_shape_and_registry_entries_fail_closed(self):
+        path = self.state / 'invalid.json'
+        for value in (None, [], True, 7, 'text'):
+            path.write_text(json.dumps(value), encoding='utf-8')
+            with self.subTest(value=value), self.assertRaises(backup.BackupError):
+                backup.read_json(path)
+        backup.REGISTRY.write_text('[null]', encoding='utf-8')
+        with self.assertRaises(backup.BackupError):
+            backup.registry()
+        self.assertEqual(self.calls, [])
+
+    def test_invalid_journal_shapes_do_not_block_other_recovery(self):
+        bad, good = 'a' * 32, 'b' * 32
+        malformed = [None, [], {'slug': 7, 'job': bad, 'paused': []},
+            {'slug': 'demo', 'job': bad, 'paused': None},
+            {'slug': 'demo', 'job': bad, 'paused': [None]},
+            {'slug': 'demo', 'job': good, 'paused': []},
+            {'slug': 'demo', 'job': bad, 'paused': [], 'cleanup': 1},
+            {'slug': 'demo', 'job': bad, 'paused': [], 'pendingCleanup': []}]
+        for value in malformed:
+            with self.subTest(value=value):
+                backup.private_json(backup.journal_path(bad), value)
+                backup.private_json(backup.journal_path(good), {'slug': 'demo', 'job': good, 'paused': [self.identity]})
+                self.member['State']['Paused'] = True
+                with patch.object(backup.os, 'geteuid', return_value=0, create=True), \
+                     patch.object(backup.sys, 'argv', ['helper', 'recover-all']):
+                    with self.assertRaises(backup.BackupError):
+                        backup.main()
+                self.assertTrue(backup.journal_path(bad).exists())
+                self.assertFalse(backup.journal_path(good).exists())
+                self.assertFalse(self.member['State']['Paused'])
+
+    def test_resume_rejects_invalid_or_duplicate_pause_ids_before_engine_calls(self):
+        for value in (None, self.identity, [None], [self.identity, self.identity], [self.identity] * 65):
+            with self.subTest(value=value), self.assertRaises(backup.BackupError):
+                backup.resume({'slug': 'demo', 'paused': value})
+        self.assertEqual(self.calls, [])
+
+    def test_corrupt_cleanup_receipt_cannot_unlink_archive_pair(self):
+        identities = self.create_archives(2)
+        candidate = backup.archive_catalog('demo')[-1]
+        for removed in (None, {}, [None]):
+            journal = {'slug': 'demo', 'pendingCleanup': candidate, 'removedBackupIds': removed,
+                       'retentionDays': 14, 'retentionCount': 1}
+            with self.subTest(removed=removed), self.assertRaises(backup.BackupError):
+                backup.finish_cleanup_entry(journal)
+            self.assertTrue((self.target / 'demo' / (identities[0] + '.tar.gz')).exists())
+            self.assertTrue((self.target / 'demo' / (identities[0] + '.json')).exists())
 
     def test_invalid_archive_timestamp_blocks_retention_without_deletion(self):
         identities = self.create_archives(2)
@@ -337,7 +386,7 @@ class BackupHelperTests(unittest.TestCase):
 
     def test_recovery_unpauses_only_recorded_owned_container(self):
         self.member['State']['Paused'] = True
-        backup.private_json(self.state / ('1' * 32 + '.json'), {'slug': 'demo', 'paused': [self.identity]})
+        backup.private_json(self.state / ('1' * 32 + '.json'), {'slug': 'demo', 'job': '1' * 32, 'paused': [self.identity]})
         backup.recover_job('1' * 32)
         self.assertFalse(self.member['State']['Paused'])
         self.assertFalse((self.state / ('1' * 32 + '.json')).exists())
@@ -353,7 +402,7 @@ class BackupHelperTests(unittest.TestCase):
     def test_real_project_lock_serializes_and_rejects_path_traversal(self):
         self.member['State']['Paused'] = True
         journal = self.state / ('2' * 32 + '.json')
-        backup.private_json(journal, {'slug': 'demo', 'paused': [self.identity]})
+        backup.private_json(journal, {'slug': 'demo', 'job': '2' * 32, 'paused': [self.identity]})
         with REAL_LOCK('demo'):
             with self.assertRaises(BlockingIOError):
                 with REAL_LOCK('demo', blocking=False):
