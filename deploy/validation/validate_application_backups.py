@@ -193,14 +193,10 @@ def main():
                 if observe(killed_id)['state'] in {'Succeeded', 'Failed', 'Canceled'} or time.monotonic() >= deadline:
                     raise RuntimeError('Exact backup was not observed live and paused; no signal sent')
                 time.sleep(0.25)
-            image_id = json.loads(native(['inspect', 'database-platform-authentik-server']))[0]['Image']
-            assert re.fullmatch(r'sha256:[a-f0-9]{64}', image_id)
-            capsule = subprocess.run(['docker', 'run', '--rm', '-i', '--network', 'none', '--read-only',
-                '--user', '0:0', '--pid', 'host', '--cap-drop', 'ALL', '--cap-add', 'KILL',
-                '--security-opt', 'no-new-privileges', '--memory', '128m', '--cpus', '0.5', '--pids-limit', '32',
-                '--log-driver', 'local', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=2',
-                '--entrypoint', 'python3', image_id, '-', str(pid), start, slug, killed_hex],
-                input=Path(__file__).with_name('kill_bound_backup.py').read_text(), check=False,
+            # Explicitly authorized development account only. No new Agent helper/action,
+            # no host-PID Docker container and no weakening Docker's AppArmor profile.
+            capsule = subprocess.run(['sudo', '-n', '/usr/bin/python3',
+                str(Path(__file__).with_name('kill_bound_backup.py')), str(pid), start, slug, killed_hex], check=False,
                 text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
             if capsule.returncode:
                 try:
