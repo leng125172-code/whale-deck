@@ -129,6 +129,7 @@ def main():
                 'alpine:3.22', '/bin/sh', '-c', "printf '\\n# isolated-stale-plan-proof\\n' >> /compose"])
             stale = terminal(enqueue('backup', {'slug': slug, 'consistency': 'quiesced'}, old_plan))
             assert stale['state'] == 'Failed', stale['state']
+            assert stale['phase'] == 'AgentRejected' and stale['errorCode'] == 'AGENT_PRECONDITION_FAILED'
             assert not json.loads(native(['inspect', container]))[0]['State']['Paused']
             failures.update(sharedVolume='preflight-rejected', stalePlan='failed-before-pause')
 
