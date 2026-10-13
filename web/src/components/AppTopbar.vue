@@ -92,10 +92,11 @@ onBeforeUnmount(() => window.removeEventListener('scroll', updateScrollState))
           class="command-search"
           type="button"
           aria-label="搜索平台功能"
+          title="搜索平台功能（Ctrl K）"
           @click="emit('openSearch')"
         >
           <el-icon><Search /></el-icon>
-          <span>搜索功能</span>
+          <span>搜索</span>
           <kbd>Ctrl K</kbd>
         </button>
 

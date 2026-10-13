@@ -372,7 +372,7 @@ async function userCommand(command: string) {
 
     <el-dialog
       v-model="searchVisible"
-      title="搜索平台功能"
+      title="搜索"
       width="min(620px, calc(100vw - 28px))"
       class="global-search-dialog"
     >
@@ -380,7 +380,7 @@ async function userCommand(command: string) {
         v-model="searchQuery"
         autofocus
         clearable
-        placeholder="搜索页面、门户、资源、任务、应用或用户"
+        placeholder="搜索功能或资源"
         size="large"
       />
       <div v-loading="searchLoading" class="global-search-results">
@@ -392,8 +392,8 @@ async function userCommand(command: string) {
         >
           <el-icon><component :is="item.icon" /></el-icon>
           <span
-            ><strong>{{ item.title }}</strong
-            ><small>{{ item.subtitle }}</small></span
+            ><strong :title="item.title">{{ item.title }}</strong
+            ><small :title="item.subtitle">{{ item.subtitle }}</small></span
           >
         </button>
         <el-empty
@@ -452,6 +452,23 @@ async function userCommand(command: string) {
   display: grid;
   gap: 8px;
   margin-top: 14px;
+}
+.global-search-results {
+  grid-template-columns: minmax(0, 1fr);
+  max-height: min(420px, calc(100dvh - 240px));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.global-search-results button {
+  min-width: 0;
+}
+.global-search-results button > .el-icon {
+  flex: 0 0 auto;
+}
+.global-search-results strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .global-search-results button,
 .topbar-drawer-list button {
