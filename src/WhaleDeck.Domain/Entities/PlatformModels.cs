@@ -232,11 +232,39 @@ public sealed class MetricRollup
     public Guid SeriesId { get; init; }
     public DateTimeOffset WindowStartUtc { get; init; }
     public required string Resolution { get; init; }
-    public double Minimum { get; init; }
-    public double Maximum { get; init; }
-    public double Average { get; init; }
-    public double Sum { get; init; }
+    public double? Minimum { get; init; }
+    public double? Maximum { get; init; }
+    public double? Average { get; init; }
+    public double? Sum { get; init; }
     public long SampleCount { get; init; }
+    public long ObservedSampleCount { get; init; }
+    public long IdleCount { get; init; }
+    public long WarmupCount { get; init; }
+    public long UnavailableCount { get; init; }
+    public double? First { get; init; }
+    public double? Last { get; init; }
+    public DateTimeOffset? FirstSampledAtUtc { get; init; }
+    public DateTimeOffset? LastSampledAtUtc { get; init; }
+    public double? WeightedSum { get; init; }
+    public double? WeightSum { get; init; }
+}
+
+public sealed class MetricAggregationPending
+{
+    public DateTimeOffset WindowStartUtc { get; init; }
+    public long Revision { get; init; }
+}
+
+public sealed class MetricAggregationState
+{
+    public required string Key { get; init; }
+    public DateTimeOffset NextHourUtc { get; set; }
+}
+
+public sealed class MetricAggregationWindow
+{
+    public DateTimeOffset WindowStartUtc { get; init; }
+    public DateTimeOffset CompletedThroughUtc { get; init; }
 }
 
 public sealed class BackupPolicy

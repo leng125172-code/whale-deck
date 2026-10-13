@@ -72,6 +72,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         await DispatchBackupPolicies(db, cancellationToken);
         await DispatchOutbox(db, agent, secrets, identityDirectory, identity, leases, _workerInstanceId, logger, cancellationToken);
         await ReconcileAgentOperations(db, agent, leases, _workerInstanceId, cancellationToken);
+        await ApplyRollups(db, cancellationToken);
         await BackupCapacityAlerts.EvaluateAsync(db, agent, cancellationToken);
         await EvaluateAlerts(db, cancellationToken);
 
@@ -82,7 +83,6 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         }
         if (_nextRetentionSweep <= DateTimeOffset.UtcNow)
         {
-            await ApplyRollups(db, cancellationToken);
             await ApplyRetention(db, cancellationToken);
             _nextRetentionSweep = DateTimeOffset.UtcNow.AddHours(1);
         }
@@ -1108,31 +1108,6 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         await db.DockerEvents.Where(item => item.OccurredAtUtc < metricCutoff).ExecuteDeleteAsync(cancellationToken);
     }
 
-    private static async Task ApplyRollups(PlatformDbContext db, CancellationToken cancellationToken)
-    {
-        var end = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 60 * 60);
-        var start = end.AddHours(-2);
-        // Only complete minutes, no warmup/idle pseudo-values, and one bounded SQL operation.
-        // Upsert permits late persisted batches to correct the prior minute instead of freezing partial data.
-        await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO metric_rollups (series_id, window_start_utc, resolution, minimum, maximum, average, sum, sample_count)
-            SELECT sample.series_id, date_bin(INTERVAL '1 minute', sample.sampled_at_utc, TIMESTAMPTZ '1970-01-01'), '1m',
-                MIN(sample.value_double), MAX(sample.value_double),
-                CASE WHEN source.metric_kind IN ('disk.read.latency', 'disk.write.latency') THEN
-                    SUM(sample.value_double * weight.value_double) / NULLIF(SUM(weight.value_double), 0)
-                ELSE AVG(sample.value_double) END,
-                SUM(sample.value_double), COUNT(*)
-            FROM metric_samples sample
-            JOIN metric_series source ON source.id = sample.series_id
-            LEFT JOIN metric_series weights ON weights.resource_id = source.resource_id AND weights.dimensions_json = source.dimensions_json
-                AND weights.metric_kind = CASE source.metric_kind WHEN 'disk.read.latency' THEN 'disk.read.iops' WHEN 'disk.write.latency' THEN 'disk.write.iops' ELSE NULL END
-            LEFT JOIN metric_samples weight ON weight.series_id = weights.id AND weight.sampled_at_utc = sample.sampled_at_utc AND weight.quality = 'Good'
-            WHERE sample.sampled_at_utc >= {start} AND sample.sampled_at_utc < {end} AND sample.value_double IS NOT NULL AND sample.quality = 'Good'
-            GROUP BY sample.series_id, source.metric_kind, date_bin(INTERVAL '1 minute', sample.sampled_at_utc, TIMESTAMPTZ '1970-01-01')
-            HAVING source.metric_kind NOT IN ('disk.read.latency', 'disk.write.latency') OR SUM(weight.value_double) > 0
-            ON CONFLICT (series_id, window_start_utc, resolution) DO UPDATE SET
-                minimum = EXCLUDED.minimum, maximum = EXCLUDED.maximum, average = EXCLUDED.average,
-                sum = EXCLUDED.sum, sample_count = EXCLUDED.sample_count
-            """, cancellationToken);
-    }
+    private static Task<int> ApplyRollups(PlatformDbContext db, CancellationToken cancellationToken) =>
+        MetricAggregation.ApplyAsync(db, DateTimeOffset.UtcNow, cancellationToken);
 }

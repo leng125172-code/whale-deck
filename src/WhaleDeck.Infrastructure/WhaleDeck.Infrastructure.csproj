@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Persistence/Sql/MetricPartitions.*.sql" />
+    <EmbeddedResource Include="Persistence/Sql/MetricAggregation.*.sql" />
   </ItemGroup>
 
 </Project>

@@ -262,7 +262,7 @@ export async function fetchWorkstationOverview(
     telemetryWindow: window,
     telemetryResolutionSeconds:
       history[0]?.resolutionSeconds ??
-      ({ live: 6, '1h': 30, '24h': 300, '7d': 1800 } as const)[window],
+      ({ live: 6, '1h': 30, '24h': 300, '7d': 3600 } as const)[window],
     telemetryError,
     system: response.host
       ? [

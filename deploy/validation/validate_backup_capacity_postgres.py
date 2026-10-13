@@ -20,11 +20,13 @@ def command(arguments, timeout=60, input=None):
         stderr=subprocess.PIPE, timeout=timeout).stdout
 
 
-def main():
+def main(suite='capacity'):
+    if suite not in ('capacity', 'metrics'):
+        raise ValueError('Unknown isolated native suite')
     repository = Path(__file__).resolve().parents[2]
-    database = 'wdv_capacity_' + uuid.uuid4().hex[:16]
-    container = 'whaledeck-native-capacity-' + uuid.uuid4().hex[:12]
-    assert re.fullmatch(r'wdv_capacity_[a-f0-9]{16}', database)
+    database = 'wdv_' + suite + '_' + uuid.uuid4().hex[:16]
+    container = 'whaledeck-native-' + suite + '-' + uuid.uuid4().hex[:12]
+    assert re.fullmatch(r'wdv_' + suite + r'_[a-f0-9]{16}', database)
     values = container_environment()
     connection = values['ConnectionStrings__WhaleDeck']
     connection, changed = re.subn(r'(?i)\bDatabase=[^;]*', 'Database=' + database, connection)
@@ -49,7 +51,7 @@ def main():
         assert re.fullmatch(r'sha256:[a-f0-9]{64}', sdk_identity)
         artifact_root = repository / 'deploy/artifacts'
         artifact_root.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix='capacity-native-', dir=artifact_root) as scratch:
+        with tempfile.TemporaryDirectory(prefix=suite + '-native-', dir=artifact_root) as scratch:
             scratch_path = Path(scratch).resolve()
             assert scratch_path.parent == artifact_root.resolve()
             archive = scratch_path / 'source.tar'
@@ -70,7 +72,8 @@ def main():
                 '--mount', 'type=bind,source=' + str(public_source) + ',target=/repo,readonly',
                 '--mount', 'type=bind,source=' + scratch + ',target=/scratch', '--workdir', '/repo', sdk_identity,
                 'dotnet', 'test', 'tests/WhaleDeck.IntegrationTests/WhaleDeck.IntegrationTests.csproj',
-                '--configuration', 'Release', '--artifacts-path', '/scratch/build', '--filter', 'FullyQualifiedName~NativeBackupCapacityTests']).strip()
+                '--configuration', 'Release', '--artifacts-path', '/scratch/build', '--filter',
+                'FullyQualifiedName~' + ('NativeBackupCapacityTests' if suite == 'capacity' else 'NativeMetricAggregationTests')]).strip()
             assert re.fullmatch(r'[a-f0-9]{64}', identity)
             command(['docker', 'network', 'connect', common[0], identity])
             completed = subprocess.run(['docker', 'start', '-a', identity], check=False, text=True,
@@ -79,10 +82,18 @@ def main():
             status = command(['docker', 'inspect', '--format', '{{.State.ExitCode}}', identity]).strip()
             if status != '0':
                 diagnostics = [line for line in output.splitlines() if re.search(r': error (?:CS|CA|IDE|NU)\d+', line)][:8]
-                raise RuntimeError('Isolated native capacity test failed: ' + ('\n'.join(diagnostics) if diagnostics else 'native assertion or migration failure; private output withheld'))
+                # Only stable exception/code tokens; never connection strings or native SQL values.
+                error_types = sorted(set(re.findall(r'\b(?:[A-Za-z]+\.)*(?:PostgresException|InvalidOperationException|EqualException|TrueException|SingleException|NotNullException|NullException|InRangeException)\b', output)))
+                sql_states = sorted(set(re.findall(r'\b([0-9A-Z]{5}):\s', output)))
+                raise RuntimeError('Isolated native ' + suite + ' test failed: ' + ('\n'.join(diagnostics) if diagnostics else
+                    'native failure types=' + ','.join(error_types) + ' SQLSTATE=' + ','.join(sql_states) + '; private output withheld'))
             assert 'Failed:' in output and 'Passed:' in output and re.search(r'Skipped:\s+0', output), 'Native test was not observed running without skips'
-            print(json.dumps({'nativeBackupCapacityPostgres': 'passed', 'database': 'isolated-and-migrated',
-                'capacitySamples': 'synthetic-not-production-disk-saturation', 'dedupEscalationSilenceExpiryUnknownRecoveryDisable': 'passed'}))
+            if suite == 'capacity':
+                print(json.dumps({'nativeBackupCapacityPostgres': 'passed', 'database': 'isolated-and-migrated',
+                    'capacitySamples': 'synthetic-not-production-disk-saturation', 'dedupEscalationSilenceExpiryUnknownRecoveryDisable': 'passed'}))
+            else:
+                print(json.dumps({'nativeMetricAggregationPostgres': 'passed', 'database': 'isolated-and-migrated',
+                    'upgradeBackfillRestartFirstLastWeightedQualityLateDirtyHistoryDownUp': 'passed'}))
             command(['docker', 'rm', identity])
             identity = None
     finally:
@@ -90,7 +101,7 @@ def main():
             command(['docker', 'rm', '-f', identity])
         if created:
             command(sql_arguments, input=f'DROP DATABASE "{database}" WITH (FORCE);')
-        print(json.dumps({'nativeCapacityTemporaryCleanup': 'passed'}))
+        print(json.dumps({'nativeTemporaryCleanup': 'passed', 'suite': suite}))
 
 
 if __name__ == '__main__': main()

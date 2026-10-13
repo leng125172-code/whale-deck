@@ -27,10 +27,18 @@ public static class MetricHistoryPolicy
         }
         var (duration, resolution) = window switch
         {
-            "1h" => (3600, 30), "24h" => (86400, 300), "7d" => (604800, 1800),
+            "1h" => (3600, 30), "24h" => (86400, 300), "7d" => (604800, 3600),
             _ => throw new ArgumentException("Metric window must be live, 1h, 24h or 7d.")
         };
-        var lastBucket = DateTimeOffset.FromUnixTimeSeconds(now.ToUnixTimeSeconds() / resolution * resolution);
+        var lastBucket = AlignUtc(now, resolution);
         return new(normalized, window, lastBucket.AddSeconds(-duration), now, resolution, duration / resolution + 1, true);
+    }
+
+    public static DateTimeOffset AlignUtc(DateTimeOffset value, int seconds)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seconds);
+        var unix = value.ToUnixTimeSeconds();
+        var remainder = ((unix % seconds) + seconds) % seconds;
+        return DateTimeOffset.FromUnixTimeSeconds(unix - remainder);
     }
 }

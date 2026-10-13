@@ -41,7 +41,7 @@ def main() -> int:
     checked = 0
     partial_only = 0
     observed_disk_kinds: set[str] = set()
-    for window, resolution, count in [("live", 6, None), ("1h", 30, 121), ("24h", 300, 289), ("7d", 1800, 337)]:
+    for window, resolution, count in [("live", 6, None), ("1h", 30, 121), ("24h", 300, 289), ("7d", 3600, 169)]:
         response = session.get(f"{base}/api/v1/metrics", params=[*(('kinds', kind) for kind in KINDS), ('window', window), ('take', '60')], timeout=60)
         response.raise_for_status()
         series = response.json()

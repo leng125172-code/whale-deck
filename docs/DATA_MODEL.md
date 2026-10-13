@@ -174,7 +174,7 @@
 
 保存 1 分钟/1 小时窗口的 `min/max/avg/sum/first/last/sample_count`，用于长时间图表。首期同样保留 14 天；以后延长历史时只延长 rollup，不无限保留原始样本。
 
-当前落地范围：`metric_rollups` 已按 `window_start_utc` UTC 日分区并采用相同滚动保留策略，存储 `minimum/maximum/average/sum/sample_count` 的 1 分钟聚合。持久化 1 小时聚合与 `first/last` 扩展仍未实现；API 的 1 小时/24 小时/7 天图表当前从原始样本有界聚合，不代表这两个存储细项已经完成。时间 BRIN 由独立 `MetricTimeBrin` migration 和 EF snapshot 管理，父索引自动继承到未来分区。
+既有运行时为 UTC 日分区的 1 分钟 `minimum/maximum/average/sum/sample_count`。新版 `MetricAggregation` migration/源码增加完整小时、first/last 及采样时间、加权分子/分母、观察/质量计数；统计可空，不把无有效值写成 0。新增 `metric_aggregation_pending`（分钟键/递增 revision）、`metric_aggregation_state`（固定进度键/next hour）与 `metric_aggregation_windows`（小时键/完成截止）用于样本同事务标脏、14 天逐小时回填、并发 ACK 和重启接续。每轮最多两脏小时+一回填小时；分区保留不变。时间 BRIN 由独立 migration 和 EF snapshot 管理，父索引自动继承。实际原生验证/部署完成与否见 [聚合验收](qa/METRIC_AGGREGATION.md)，不能据模型文档判为上线。
 
 即时资源状态不必每 6 秒全部写数据库；Worker 可以批量落库，Valkey 保存最近快照。
 

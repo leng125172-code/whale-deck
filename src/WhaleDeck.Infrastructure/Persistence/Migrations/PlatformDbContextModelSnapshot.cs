@@ -898,6 +898,52 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.ToTable("managed_resources", (string)null);
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.MetricAggregationPending", b =>
+                {
+                    b.Property<DateTimeOffset>("WindowStartUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("window_start_utc");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint")
+                        .HasColumnName("revision");
+
+                    b.HasKey("WindowStartUtc");
+
+                    b.ToTable("metric_aggregation_pending", (string)null);
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.MetricAggregationState", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key");
+
+                    b.Property<DateTimeOffset>("NextHourUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_hour_utc");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("metric_aggregation_state", (string)null);
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.MetricAggregationWindow", b =>
+                {
+                    b.Property<DateTimeOffset>("WindowStartUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("window_start_utc");
+
+                    b.Property<DateTimeOffset>("CompletedThroughUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_through_utc");
+
+                    b.HasKey("WindowStartUtc");
+
+                    b.ToTable("metric_aggregation_windows", (string)null);
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.MetricRollup", b =>
                 {
                     b.Property<Guid>("SeriesId")
@@ -912,25 +958,65 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("resolution");
 
-                    b.Property<double>("Average")
+                    b.Property<double?>("Average")
                         .HasColumnType("double precision")
                         .HasColumnName("average");
 
-                    b.Property<double>("Maximum")
+                    b.Property<double?>("First")
+                        .HasColumnType("double precision")
+                        .HasColumnName("first");
+
+                    b.Property<DateTimeOffset?>("FirstSampledAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_sampled_at_utc");
+
+                    b.Property<long>("IdleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("idle_count");
+
+                    b.Property<double?>("Last")
+                        .HasColumnType("double precision")
+                        .HasColumnName("last");
+
+                    b.Property<DateTimeOffset?>("LastSampledAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_sampled_at_utc");
+
+                    b.Property<double?>("Maximum")
                         .HasColumnType("double precision")
                         .HasColumnName("maximum");
 
-                    b.Property<double>("Minimum")
+                    b.Property<double?>("Minimum")
                         .HasColumnType("double precision")
                         .HasColumnName("minimum");
+
+                    b.Property<long>("ObservedSampleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("observed_sample_count");
 
                     b.Property<long>("SampleCount")
                         .HasColumnType("bigint")
                         .HasColumnName("sample_count");
 
-                    b.Property<double>("Sum")
+                    b.Property<double?>("Sum")
                         .HasColumnType("double precision")
                         .HasColumnName("sum");
+
+                    b.Property<long>("UnavailableCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("unavailable_count");
+
+                    b.Property<long>("WarmupCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("warmup_count");
+
+                    b.Property<double?>("WeightSum")
+                        .HasColumnType("double precision")
+                        .HasColumnName("weight_sum");
+
+                    b.Property<double?>("WeightedSum")
+                        .HasColumnType("double precision")
+                        .HasColumnName("weighted_sum");
 
                     b.HasKey("SeriesId", "WindowStartUtc", "Resolution");
 

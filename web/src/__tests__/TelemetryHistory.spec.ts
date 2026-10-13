@@ -17,7 +17,7 @@ const sample = (
   points: [{ sampledAtUtc: '2026-10-12T10:00:00Z', value, quality }],
 })
 describe('History and disk metrics', () => {
-  it.each([121, 289, 337])(
+  it.each([121, 289, 169])(
     'fits %i historical slots inside the plot and keeps gaps disconnected',
     (count) => {
       const values = Array.from({ length: count }, (_, index) => (index === 8 ? null : 2))

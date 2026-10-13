@@ -26,6 +26,9 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
     public DbSet<MetricSeries> MetricSeries => Set<MetricSeries>();
     public DbSet<MetricSample> MetricSamples => Set<MetricSample>();
     public DbSet<MetricRollup> MetricRollups => Set<MetricRollup>();
+    public DbSet<MetricAggregationPending> MetricAggregationPending => Set<MetricAggregationPending>();
+    public DbSet<MetricAggregationState> MetricAggregationStates => Set<MetricAggregationState>();
+    public DbSet<MetricAggregationWindow> MetricAggregationWindows => Set<MetricAggregationWindow>();
     public DbSet<BackupPolicy> BackupPolicies => Set<BackupPolicy>();
     public DbSet<BackupRecord> BackupRecords => Set<BackupRecord>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
@@ -238,6 +241,9 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             entity.ToTable("metric_rollups");
             entity.HasKey(item => new { item.SeriesId, item.WindowStartUtc, item.Resolution });
         });
+        modelBuilder.Entity<MetricAggregationPending>(entity => { entity.ToTable("metric_aggregation_pending"); entity.HasKey(item => item.WindowStartUtc); });
+        modelBuilder.Entity<MetricAggregationState>(entity => { entity.ToTable("metric_aggregation_state"); entity.HasKey(item => item.Key); entity.Property(item => item.Key).HasMaxLength(64); });
+        modelBuilder.Entity<MetricAggregationWindow>(entity => { entity.ToTable("metric_aggregation_windows"); entity.HasKey(item => item.WindowStartUtc); });
     }
 
     private static void ConfigureBackupsAlertsAndConfiguration(ModelBuilder modelBuilder)

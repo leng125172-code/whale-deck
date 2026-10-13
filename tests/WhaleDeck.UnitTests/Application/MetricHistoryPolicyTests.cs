@@ -9,7 +9,7 @@ public sealed class MetricHistoryPolicyTests
     [Theory]
     [InlineData("1h", 30, 121)]
     [InlineData("24h", 300, 289)]
-    [InlineData("7d", 1800, 337)]
+    [InlineData("7d", 3600, 169)]
     public void WindowsAreBoundedAlignedAndIncludeTheCurrentPartialBucket(string window, int resolution, int count)
     {
         var plan = MetricHistoryPolicy.Create(["disk.read.latency", "disk.read.iops"], window, 600, Now);
@@ -29,5 +29,13 @@ public sealed class MetricHistoryPolicyTests
         Assert.Throws<ArgumentException>(() => MetricHistoryPolicy.Create([], "live", 60, Now));
         Assert.Throws<ArgumentException>(() => MetricHistoryPolicy.Create(["custom.sql"], "live", 60, Now));
         Assert.Throws<ArgumentException>(() => MetricHistoryPolicy.Create(["disk.read"], "14d", 60, Now));
+    }
+
+    [Fact]
+    public void UtcAlignmentHandlesOffsetsSubsecondsAndDatesBeforeEpoch()
+    {
+        Assert.Equal(Now.AddSeconds(-17), MetricHistoryPolicy.AlignUtc(Now.AddTicks(12345).ToOffset(TimeSpan.FromHours(8)), 60));
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(-60), MetricHistoryPolicy.AlignUtc(DateTimeOffset.FromUnixTimeSeconds(-1), 60));
+        Assert.Throws<ArgumentOutOfRangeException>(() => MetricHistoryPolicy.AlignUtc(Now, 0));
     }
 }
