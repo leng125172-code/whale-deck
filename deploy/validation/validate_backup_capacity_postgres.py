@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import tarfile
 import uuid
+import xml.etree.ElementTree as ET
 from run_with_ephemeral_admin import container_environment
 
 
@@ -74,7 +75,8 @@ def main(suite='capacity'):
                 '--mount', 'type=bind,source=' + str(public_source) + ',target=/repo,readonly',
                 '--mount', 'type=bind,source=' + scratch + ',target=/scratch', '--workdir', '/repo', sdk_identity,
                 'dotnet', 'test', 'tests/WhaleDeck.IntegrationTests/WhaleDeck.IntegrationTests.csproj',
-                '--configuration', 'Release', '--artifacts-path', '/scratch/build', '--logger', 'console;verbosity=normal', '--filter',
+                '--configuration', 'Release', '--artifacts-path', '/scratch/build', '--logger', 'console;verbosity=normal',
+                '--logger', 'trx;LogFileName=native.trx', '--results-directory', '/scratch/results', '--filter',
                 'FullyQualifiedName~' + ('NativeBackupCapacityTests' if suite == 'capacity' else 'NativeMetricAggregationTests')]).strip()
             assert re.fullmatch(r'[a-f0-9]{64}', identity)
             command(['docker', 'network', 'connect', common[0], identity])
@@ -89,12 +91,18 @@ def main(suite='capacity'):
                 sql_states = sorted(set(re.findall(r'\b([0-9A-Z]{5}):\s', output)))
                 raise RuntimeError('Isolated native ' + suite + ' test failed: ' + ('\n'.join(diagnostics) if diagnostics else
                     'native failure types=' + ','.join(error_types) + ' SQLSTATE=' + ','.join(sql_states) + '; private output withheld'))
-            assert 'Failed:' in output and 'Passed:' in output and re.search(r'Skipped:\s+0', output), 'Native test was not observed running without skips'
+            results = ET.parse(scratch_path / 'results/native.trx').getroot()
+            namespace = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+            counters = results.find('t:ResultSummary/t:Counters', namespace)
+            runs = results.findall('t:Results/t:UnitTestResult', namespace)
+            assert counters is not None and all(counters.get(key) == '1' for key in ('total', 'executed', 'passed')), 'Native test execution/pass count differs'
+            assert all(counters.get(key, '0') == '0' for key in ('failed', 'error', 'timeout', 'aborted', 'notExecuted', 'notRunnable', 'pending')), 'Native test was skipped/failed/incomplete'
+            assert len(runs) == 1 and runs[0].get('outcome') == 'Passed', 'Native result is not one complete passed execution'
             if suite == 'capacity':
                 print(json.dumps({'nativeBackupCapacityPostgres': 'passed', 'database': 'isolated-and-migrated',
                     'capacitySamples': 'synthetic-not-production-disk-saturation', 'dedupEscalationSilenceExpiryUnknownRecoveryDisable': 'passed'}))
             else:
-                benchmark = re.findall(r'METRIC_QUERY_BENCH_MS=([0-9]{1,6})', output)
+                benchmark = re.findall(r'METRIC_QUERY_BENCH_MS=([0-9]{1,6})', '\n'.join(results.itertext()))
                 assert len(benchmark) == 1, 'Native metric load query was not observed'
                 print(json.dumps({'nativeMetricAggregationPostgres': 'passed', 'database': 'isolated-and-migrated',
                     'upgradeBackfillRestartFirstLastWeightedQualityLateDirtyHistoryDownUp': 'passed',
