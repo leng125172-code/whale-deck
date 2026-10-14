@@ -9,6 +9,71 @@ async function choose(page: Page, name: string, label: string) {
   await page.getByRole('option', { name: label, exact: true }).click()
 }
 
+for (const state of ['fresh', 'idle', 'expired'] as const) {
+  test(`live disk cards distinguish ${state} samples from a trailing unsampled slot`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 1000 })
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await installTelemetryFixture(page)
+    const observedAt = Math.floor(Date.now() / 6000) * 6000
+    const sampledAtUtc = new Date(observedAt - (state === 'expired' ? 18000 : 6000)).toISOString()
+    const samples = [
+      { kind: 'disk.read.iops', value: 0, quality: 'Good', unit: 'operationsPerSecond' },
+      { kind: 'disk.write.iops', value: 14.33, quality: 'Good', unit: 'operationsPerSecond' },
+      { kind: 'disk.read.latency', value: 0, quality: 'Idle', unit: 'milliseconds' },
+      { kind: 'disk.write.latency', value: 6.24, quality: 'Good', unit: 'milliseconds' },
+    ].map((sample) => ({ ...sample, deviceId: 'nvme0n1', sampledAtUtc }))
+    await page.route('**/api/v1/overview', (route) =>
+      route.fulfill({
+        json: {
+          scope: 'Administrator',
+          sampledAtUtc: new Date(observedAt).toISOString(),
+          platformStatus: 'Healthy',
+          portals: [],
+          agent: { available: true, dockerAvailable: true, status: 'Ready' },
+          host: null,
+          resources: [],
+          metrics: samples,
+          applications: [],
+          catalogIsStale: false,
+        },
+      }),
+    )
+    await page.route('**/api/v1/metrics?**', (route) =>
+      route.fulfill({
+        json: samples.map((sample) => ({
+          kind: sample.kind,
+          deviceId: sample.deviceId,
+          unit: sample.unit,
+          points: [{ sampledAtUtc, value: sample.value, quality: sample.quality }],
+        })),
+      }),
+    )
+    await page.goto('/')
+    const panel = page.locator('#monitoring')
+    await panel.getByText('磁盘 IO', { exact: true }).click()
+    await choose(page, '磁盘指标', 'IOPS')
+    await expect(panel.locator('.telemetry-stat').nth(1)).toContainText(
+      state === 'expired' ? '暂无有效采样' : '14.3 次/s',
+    )
+    await choose(page, '磁盘指标', '读写延迟')
+    await expect(panel.locator('.telemetry-stat').first()).toContainText(
+      state === 'expired' ? '暂无有效采样' : '无 I/O',
+    )
+    await expect(panel.locator('.telemetry-stat').nth(1)).toContainText(
+      state === 'expired' ? '暂无有效采样' : '6.24 ms',
+    )
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        ),
+      )
+      .toBeLessThanOrEqual(1)
+  })
+}
+
 for (const width of [320, 1045, 1440]) {
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`${width}px ${colorScheme}: history/disk controls and chart fit`, async ({ page }) => {

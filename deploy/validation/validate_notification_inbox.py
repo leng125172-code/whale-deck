@@ -78,11 +78,14 @@ def main():
         request(ordinary, 'POST', 'notifications/read-all', payload={'throughSequence': summary.json()['snapshotSequence']}, expected=400)
         assert request(ordinary, 'GET', 'notifications/summary').json()['unreadCount'] == 0
     finally:
-        if rule:
-            request(admin, 'POST', 'alerts/rules', payload={**rule, 'isEnabled': False, 'expectedVersion': rule['version']})
-        if user_id:
-            deleted = identity.delete(AUTHENTIK_API + f'core/users/{user_id}/', timeout=20)
-            assert deleted.status_code in (204, 404)
+        try:
+            if rule:
+                request(admin, 'POST', 'alerts/rules', payload={**rule, 'isEnabled': False, 'expectedVersion': rule['version']})
+        finally:
+            # Identity cleanup must still execute if rule cleanup itself fails.
+            if user_id:
+                deleted = identity.delete(AUTHENTIK_API + f'core/users/{user_id}/', timeout=20)
+                assert deleted.status_code in (204, 404)
     if event_id:
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:

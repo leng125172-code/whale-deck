@@ -437,6 +437,11 @@ onBeforeUnmount(() => {
               :key="stat.label"
               class="telemetry-stat"
               :class="`telemetry-stat--${stat.tone}`"
+              :title="
+                stat.sampleBucketUtc
+                  ? `采样时间格：${new Date(stat.sampleBucketUtc).toLocaleString()}`
+                  : undefined
+              "
             >
               <span>{{ stat.label }}</span>
               <strong>{{ stat.value }}</strong>

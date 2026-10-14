@@ -55,6 +55,41 @@ function overview(
 beforeEach(() => request.mockReset())
 
 describe('Fixed rolling telemetry window', () => {
+  it('accepts a collector tick between health and metrics but rejects implausibly future data', () => {
+    const history = new RollingTelemetryHistory()
+    const result = history.update(
+      [],
+      [
+        {
+          kind: 'disk.read.iops',
+          deviceId: 'disk',
+          unit: 'operationsPerSecond',
+          value: 5,
+          quality: 'Good',
+          sampledAtUtc: time(6),
+        },
+      ],
+      time(5),
+    )
+    expect(result[0]!.points.slice(-1)[0]!.value).toBe(5)
+    expect(result[0]!.points.slice(-1)[0]!.sampledAtUtc).toBe(time(6))
+    const future = history.update(
+      [],
+      [
+        {
+          kind: 'disk.read.iops',
+          deviceId: 'disk',
+          unit: 'operationsPerSecond',
+          value: 999,
+          quality: 'Good',
+          sampledAtUtc: time(120),
+        },
+      ],
+      time(6),
+    )
+    expect(future[0]!.points.slice(-1)[0]!.value).toBe(5)
+    expect(future[0]!.points.slice(-1)[0]!.sampledAtUtc).toBe(time(6))
+  })
   it('does not invent zero percent usage when the metrics are absent or invalid', async () => {
     request.mockResolvedValueOnce(overview()).mockResolvedValueOnce([])
     const empty = await fetchWorkstationOverview(new RollingTelemetryHistory())

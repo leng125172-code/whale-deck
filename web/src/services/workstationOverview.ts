@@ -8,6 +8,7 @@ import {
 import type { MetricSeriesSnapshot, OverviewResponse, PortalItem } from '@/services/contracts'
 import {
   RollingTelemetryHistory,
+  TELEMETRY_INTERVAL_MS,
   sumAlignedTelemetry,
   weightedAlignedLatency,
 } from '@/services/rollingTelemetry'
@@ -43,6 +44,7 @@ export interface TelemetryStat {
   label: string
   value: string
   tone: 'primary' | 'success' | 'warning' | 'info'
+  sampleBucketUtc?: string
 }
 
 export interface TelemetrySeries {
@@ -57,6 +59,39 @@ export interface TelemetryFilter {
   stats: TelemetryStat[]
   series: TelemetrySeries[]
   weights?: Array<Array<number | null>>
+}
+
+type TelemetryPoint = MetricSeriesSnapshot['points'][number]
+interface CardSample {
+  index: number
+  point: TelemetryPoint | null
+}
+interface DeviceTelemetryFilter extends TelemetryFilter {
+  cardSamples: [CardSample, CardSample]
+}
+
+function metricValue(point: TelemetryPoint | null | undefined): number | null {
+  return point?.quality.toLowerCase() === 'good' &&
+    point.value !== null &&
+    Number.isFinite(point.value) &&
+    point.value >= 0
+    ? point.value
+    : null
+}
+
+/** Only synthetic trailing gaps may be skipped, never a newer explicit unavailable sample. */
+function selectCardSample(points: TelemetryPoint[], window: TelemetryWindow): CardSample {
+  let index = points.length - 1
+  if (window === 'live') {
+    while (index >= 0 && points[index]!.quality.toLowerCase() === 'missing') index--
+    if (index >= 0) {
+      const age =
+        Date.parse(points[points.length - 1]!.sampledAtUtc) -
+        Date.parse(points[index]!.sampledAtUtc)
+      if (!Number.isFinite(age) || age < 0 || age > 2 * TELEMETRY_INTERVAL_MS) index = -1
+    }
+  }
+  return { index, point: points[index] ?? null }
 }
 
 export interface TelemetryDataset {
@@ -355,13 +390,15 @@ function telemetryFilter(
   secondKind: string,
   measure: DiskMeasure,
   window: TelemetryWindow,
-): TelemetryFilter {
+): DeviceTelemetryFilter {
   const first =
     history.find((item) => item.kind === firstKind && item.deviceId === device)?.points ?? []
   const second =
     history.find((item) => item.kind === secondKind && item.deviceId === device)?.points ?? []
-  const firstValue = first[first.length - 1]?.value ?? null
-  const secondValue = second[second.length - 1]?.value ?? null
+  const firstSample = selectCardSample(first, window)
+  const secondSample = selectCardSample(second, window)
+  const firstValue = metricValue(firstSample.point)
+  const secondValue = metricValue(secondSample.point)
   const total = (kind: string) =>
     current.find((item) => item.kind === kind && item.deviceId === device)?.value ?? null
   const stats: TelemetryStat[] =
@@ -371,11 +408,13 @@ function telemetryFilter(
             label: window === 'live' ? '当前下行' : '末端下行均值',
             value: formatRate(firstValue),
             tone: 'success',
+            sampleBucketUtc: firstSample.point?.sampledAtUtc,
           },
           {
             label: window === 'live' ? '当前上行' : '末端上行均值',
             value: formatRate(secondValue),
             tone: 'primary',
+            sampleBucketUtc: secondSample.point?.sampledAtUtc,
           },
           { label: '累计接收', value: formatBytes(total('network.receive.total')), tone: 'info' },
           { label: '累计发送', value: formatBytes(total('network.send.total')), tone: 'warning' },
@@ -383,17 +422,15 @@ function telemetryFilter(
       : [
           {
             label: window === 'live' ? '读取' : '末端读取均值',
-            value: formatMetric(firstValue, measure, first[first.length - 1]?.quality === 'Idle'),
+            value: formatMetric(firstValue, measure, firstSample.point?.quality === 'Idle'),
             tone: 'success',
+            sampleBucketUtc: firstSample.point?.sampledAtUtc,
           },
           {
             label: window === 'live' ? '写入' : '末端写入均值',
-            value: formatMetric(
-              secondValue,
-              measure,
-              second[second.length - 1]?.quality === 'Idle',
-            ),
+            value: formatMetric(secondValue, measure, secondSample.point?.quality === 'Idle'),
             tone: 'warning',
+            sampleBucketUtc: secondSample.point?.sampledAtUtc,
           },
           { label: '时间窗口', value: telemetryWindowLabels[window], tone: 'info' },
         ]
@@ -401,6 +438,7 @@ function telemetryFilter(
     value: device,
     label: device,
     stats,
+    cardSamples: [firstSample, secondSample],
     weights:
       measure === 'latency'
         ? [first, second].map((points, direction) => {
@@ -409,10 +447,11 @@ function telemetryFilter(
                 item.kind === (direction === 0 ? 'disk.read.iops' : 'disk.write.iops') &&
                 item.deviceId === device,
             )?.points
-            return points.map((point, index) =>
+            const ratesByTime = new Map(rates?.map((point) => [point.sampledAtUtc, point]))
+            return points.map((point) =>
               window !== 'live' && Object.prototype.hasOwnProperty.call(point, 'aggregationWeight')
                 ? (point.aggregationWeight ?? null)
-                : (rates?.[index]?.value ?? null),
+                : metricValue(ratesByTime.get(point.sampledAtUtc)),
             )
           })
         : undefined,
@@ -421,22 +460,22 @@ function telemetryFilter(
         name: mode === 'network' ? '下行' : '读取',
         color: '#409eff',
         values: first.map((point) =>
-          point.value === null
+          metricValue(point) === null
             ? null
             : measure === 'throughput'
-              ? point.value / 1024 / 1024
-              : point.value,
+              ? metricValue(point)! / 1024 / 1024
+              : metricValue(point),
         ),
       },
       {
         name: mode === 'network' ? '上行' : '写入',
         color: mode === 'network' ? '#67c23a' : '#e6a23c',
         values: second.map((point) =>
-          point.value === null
+          metricValue(point) === null
             ? null
             : measure === 'throughput'
-              ? point.value / 1024 / 1024
-              : point.value,
+              ? metricValue(point)! / 1024 / 1024
+              : metricValue(point),
         ),
       },
     ],
@@ -445,7 +484,7 @@ function telemetryFilter(
 
 function aggregateTelemetry(
   mode: 'network' | 'disk',
-  filters: TelemetryFilter[],
+  filters: DeviceTelemetryFilter[],
   measure: DiskMeasure,
   window: TelemetryWindow,
 ): TelemetryFilter {
@@ -458,6 +497,23 @@ function aggregateTelemetry(
       : sumAlignedTelemetry(filters.map((item) => item.series[seriesIndex]?.values ?? []))
   const first = sumSeries(0)
   const second = sumSeries(1)
+  function aggregateCard(direction: 0 | 1, values: Array<number | null>) {
+    const samples = filters.map((item) => item.cardSamples[direction])
+    const index = samples[0]?.index ?? -1
+    const sameSlot =
+      index >= 0 &&
+      samples.every(
+        (item) =>
+          item.index === index && item.point?.sampledAtUtc === samples[0]?.point?.sampledAtUtc,
+      )
+    return {
+      value: sameSlot ? (values[index] ?? null) : null,
+      idle: sameSlot && samples.every((item) => item.point?.quality === 'Idle'),
+      time: sameSlot ? samples[0]?.point?.sampledAtUtc : undefined,
+    }
+  }
+  const firstCard = aggregateCard(0, first)
+  const secondCard = aggregateCard(1, second)
   return {
     value: 'all',
     label: mode === 'network' ? '全部网卡' : '全部磁盘',
@@ -472,13 +528,14 @@ function aggregateTelemetry(
               ? '当前下行'
               : '读取',
         value: formatMetric(
-          first[first.length - 1] === null || first.length === 0
+          firstCard.value === null
             ? null
-            : first[first.length - 1]! * (measure === 'throughput' ? 1024 * 1024 : 1),
+            : firstCard.value * (measure === 'throughput' ? 1024 * 1024 : 1),
           measure,
-          measure === 'latency' && filters.every((item) => lastValue(item.weights?.[0]) === 0),
+          measure === 'latency' && firstCard.idle,
         ),
         tone: 'success',
+        sampleBucketUtc: firstCard.time,
       },
       {
         label:
@@ -490,13 +547,14 @@ function aggregateTelemetry(
               ? '当前上行'
               : '写入',
         value: formatMetric(
-          second[second.length - 1] === null || second.length === 0
+          secondCard.value === null
             ? null
-            : second[second.length - 1]! * (measure === 'throughput' ? 1024 * 1024 : 1),
+            : secondCard.value * (measure === 'throughput' ? 1024 * 1024 : 1),
           measure,
-          measure === 'latency' && filters.every((item) => lastValue(item.weights?.[1]) === 0),
+          measure === 'latency' && secondCard.idle,
         ),
         tone: mode === 'network' ? 'primary' : 'warning',
+        sampleBucketUtc: secondCard.time,
       },
       {
         label: '设备 / 窗口',
@@ -532,10 +590,6 @@ function formatMetric(value: number | null, measure: DiskMeasure, idle = false) 
     measure === 'iops' ? 1 : 2,
     '暂无有效采样',
   )
-}
-
-function lastValue(values: Array<number | null> | undefined) {
-  return values?.[values.length - 1]
 }
 
 function formatDuration(value: string) {

@@ -30,9 +30,18 @@ export class RollingTelemetryHistory {
 
   update(history: MetricSeriesSnapshot[], current: MetricValue[], sampledAtUtc: string) {
     const sampledAt = Date.parse(sampledAtUtc)
-    const end =
-      Math.floor((Number.isFinite(sampledAt) ? sampledAt : Date.now()) / TELEMETRY_INTERVAL_MS) *
-      TELEMETRY_INTERVAL_MS
+    const observedAt = Number.isFinite(sampledAt) ? sampledAt : Date.now()
+    // Health is observed before the metrics RPC. A collector tick between them is legitimate,
+    // but an implausibly future point must not move the whole plot into the future.
+    const newestCurrent = current.reduce((newest, item) => {
+      const timestamp = Date.parse(item.sampledAtUtc)
+      return supportedKinds.has(item.kind) &&
+        Number.isFinite(timestamp) &&
+        timestamp <= observedAt + TELEMETRY_INTERVAL_MS
+        ? Math.max(newest, timestamp)
+        : newest
+    }, observedAt)
+    const end = Math.floor(newestCurrent / TELEMETRY_INTERVAL_MS) * TELEMETRY_INTERVAL_MS
     const start = end - TELEMETRY_WINDOW_MS
     const add = (kind: string, deviceId: string, unit: string, point: Point) => {
       if (!supportedKinds.has(kind)) return
