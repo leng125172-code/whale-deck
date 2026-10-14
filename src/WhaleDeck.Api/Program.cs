@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Claims;
-using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -73,10 +72,7 @@ try
         options.Cookie.SecurePolicy = CookieSecurePolicy.None;
         options.HeaderName = "X-XSRF-TOKEN";
     });
-    builder.Services.AddRateLimiter(options => options.AddPolicy("api", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
-            _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
+    builder.Services.AddApiRateLimiting();
 
     if (oidcSettings.Enabled)
     {
@@ -140,8 +136,7 @@ try
             ? Serilog.Events.LogEventLevel.Error
             : Serilog.Events.LogEventLevel.Debug);
     app.UseExceptionHandler(error => error.Run(TraceAndErrors.WriteProblemAsync));
-    app.UseRateLimiter();
-    app.UseAuthentication();
+    app.UseAuthenticatedApiRateLimiting();
     app.Use(SameOriginWriteProtection.InvokeAsync);
     // Run before authorization's OIDC challenge so debug clients receive a
     // deterministic denial rather than following redirects to identity pages.
@@ -176,7 +171,7 @@ try
     var openApi = app.MapOpenApi();
     if (app.Environment.IsDevelopment()) openApi.AllowAnonymous(); else openApi.RequireAuthorization("Administrator");
     app.MapHealthChecks("/health/live").AllowAnonymous();
-    app.MapControllers().RequireRateLimiting("api");
+    app.MapControllers().RequireRateLimiting(ApiRateLimiting.PolicyName);
     await app.RunAsync();
 }
 catch (Exception exception)

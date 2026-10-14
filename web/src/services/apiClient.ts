@@ -13,6 +13,7 @@ export class ApiError extends Error {
     message: string,
     readonly status: number,
     readonly problem: ApiProblem,
+    readonly retryAfterSeconds: number | null = null,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -46,7 +47,18 @@ async function toApiError(response: Response) {
   } catch {
     // Non-JSON upstream errors are deliberately reduced to the HTTP status.
   }
-  return new ApiError(problem.title || `请求失败 (${response.status})`, response.status, problem)
+  const retryHeader = response.headers.get('Retry-After') || ''
+  const retrySeconds = /^[0-9]{1,6}$/.test(retryHeader) ? Number(retryHeader) : null
+  const retryAfter =
+    retrySeconds !== null && retrySeconds > 0 && retrySeconds <= 3600 ? retrySeconds : null
+  const message =
+    response.status === 429
+      ? retryAfter === null
+        ? '请求过于频繁，请稍后再试。'
+        : `请求过于频繁，请 ${retryAfter} 秒后再试。`
+      : problem.title || `请求失败 (${response.status})`
+  // Do not automatically retry a write: the operation may already have been committed.
+  return new ApiError(message, response.status, problem, retryAfter)
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {

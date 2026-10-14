@@ -81,6 +81,8 @@ export function createNotificationInbox(request: Request = apiRequest) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       reset(false)
       state.error = '会话或权限已变化，请重新登录后查看消息。'
+    } else if (error instanceof ApiError && error.status === 429) {
+      state.error = `${error.message}已完成的已读批次会保留。`
     } else if (
       error instanceof ApiError &&
       error.problem.code === 'NOTIFICATION_READ_SNAPSHOT_UNAVAILABLE'

@@ -175,6 +175,20 @@ describe('Notification inbox lifecycle', () => {
     expect(inbox.state.error).toContain('不会回退')
     expect(inbox.state.writing).toBe(false)
   })
+  it('keeps private rows and reports rate rejection without resubmitting the write', async () => {
+    const { inbox, request } = create(async (path) => {
+      if (path === 'notifications/read-all-snapshot') return snapshot
+      throw new ApiError('请求过于频繁，请 60 秒后再试。', 429, { code: 'API_RATE_LIMITED' }, 60)
+    })
+    inbox.state.items = [message('owned', 1)]
+    await inbox.markAllRead()
+    expect(inbox.state.items).toHaveLength(1)
+    expect(inbox.state.error).toContain('60 秒')
+    expect(inbox.state.error).toContain('批次会保留')
+    expect(inbox.state.error).not.toContain('服务暂时不可用')
+    expect(request.mock.calls.filter(([path]) => path === 'notifications/read-all')).toHaveLength(1)
+    expect(inbox.state.writing).toBe(false)
+  })
   it.each([401, 403])('clears all private rows and counters on %s', async (status) => {
     const { inbox } = create(async () => {
       throw new ApiError('denied', status, {})
