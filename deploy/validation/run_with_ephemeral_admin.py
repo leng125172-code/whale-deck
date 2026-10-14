@@ -109,7 +109,9 @@ def main() -> int:
         if applications.ok:
             for item in applications.json().get("results", []):
                 application_slug = str(item.get("slug") or "")
-                if not application_slug.startswith("whaledeck-validation-"):
+                # Only this wrapper's generated slug belongs to this run. Other validation
+                # sessions may be live; a shared prefix is not proof of ownership.
+                if application_slug != sso_slug:
                     continue
                 provider_id = item.get("provider")
                 session.delete(f"{AUTHENTIK_API}core/applications/{application_slug}/", timeout=20)
