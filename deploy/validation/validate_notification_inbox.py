@@ -74,8 +74,14 @@ def main():
         request(admin, 'POST', f'notifications/{note_id}/read-state', payload={'isRead': False})
         summary = request(admin, 'GET', 'notifications/summary')
         assert 'no-store' in summary.headers.get('Cache-Control', '')
-        # Ordinary subjects cannot consume administrator snapshot ranges.
-        request(ordinary, 'POST', 'notifications/read-all', payload={'throughSequence': summary.json()['snapshotSequence']}, expected=400)
+        # Ordinary subjects cannot consume administrator materialized snapshots. Legacy sequence-only writes fail closed.
+        snapshot = request(admin, 'POST', 'notifications/read-all-snapshot').json()
+        request(ordinary, 'POST', 'notifications/read-all', payload={'snapshotId': snapshot['snapshotId']}, expected=404)
+        request(admin, 'POST', 'notifications/read-all', payload={'throughSequence': summary.json()['snapshotSequence']}, expected=400)
+        own = request(ordinary, 'POST', 'notifications/read-all-snapshot').json()
+        assert own['itemCount'] == 0
+        empty_batch = request(ordinary, 'POST', 'notifications/read-all', payload={'snapshotId': own['snapshotId']}).json()
+        assert empty_batch == {'changedCount': 0, 'hasMore': False, 'processedCount': 0}
         assert request(ordinary, 'GET', 'notifications/summary').json()['unreadCount'] == 0
     finally:
         try:

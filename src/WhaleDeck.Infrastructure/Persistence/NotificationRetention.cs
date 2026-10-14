@@ -14,6 +14,8 @@ public static class NotificationRetention
             if (!acquired) return 0;
             var batch = db.NotificationEvents.Where(item => item.ExpiresAtUtc <= now).OrderBy(item => item.ExpiresAtUtc).ThenBy(item => item.Sequence).Take(1000).Select(item => item.Id);
             var removed = await db.NotificationEvents.Where(item => batch.Contains(item.Id)).ExecuteDeleteAsync(cancellationToken);
+            var snapshots = db.NotificationReadSnapshots.Where(item => item.ExpiresAtUtc <= now).OrderBy(item => item.ExpiresAtUtc).Take(10).Select(item => item.Id);
+            await db.NotificationReadSnapshots.Where(item => snapshots.Contains(item.Id)).ExecuteDeleteAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return removed;
         });

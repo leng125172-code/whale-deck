@@ -24,10 +24,16 @@ public sealed class NotificationService(INotificationRepository repository)
         return repository.SetReadAsync(context, id, isRead, cancellationToken);
     }
 
-    public Task<MarkNotificationsReadDto> MarkAllReadAsync(NotificationContext context, long throughSequence, CancellationToken cancellationToken)
+    public Task<PrepareNotificationsReadDto> PrepareReadAllAsync(NotificationContext context, CancellationToken cancellationToken)
     {
-        Validate(context); ArgumentOutOfRangeException.ThrowIfNegative(throughSequence);
-        return repository.MarkAllReadAsync(context, throughSequence, cancellationToken);
+        Validate(context); return repository.PrepareReadAllAsync(context, cancellationToken);
+    }
+
+    public Task<MarkNotificationsReadDto> MarkAllReadAsync(NotificationContext context, Guid snapshotId, CancellationToken cancellationToken)
+    {
+        Validate(context);
+        if (snapshotId == Guid.Empty) throw new ArgumentException("Notification snapshot ID is invalid.");
+        return repository.MarkAllReadAsync(context, snapshotId, cancellationToken);
     }
 
     private static void Validate(NotificationContext context)

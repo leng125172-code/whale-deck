@@ -40,6 +40,8 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
     public DbSet<CatalogSnapshot> CatalogSnapshots => Set<CatalogSnapshot>();
     public DbSet<NotificationEvent> NotificationEvents => Set<NotificationEvent>();
     public DbSet<NotificationReadState> NotificationReadStates => Set<NotificationReadState>();
+    public DbSet<NotificationReadSnapshot> NotificationReadSnapshots => Set<NotificationReadSnapshot>();
+    public DbSet<NotificationReadSnapshotItem> NotificationReadSnapshotItems => Set<NotificationReadSnapshotItem>();
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
     public DbSet<NotificationRoute> NotificationRoutes => Set<NotificationRoute>();
     public DbSet<NotificationDispatchReceipt> NotificationDispatchReceipts => Set<NotificationDispatchReceipt>();
@@ -148,6 +150,19 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     private static void ConfigureNotifications(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<NotificationReadSnapshot>(entity =>
+        {
+            entity.ToTable("notification_read_snapshots", table => table.HasCheckConstraint("ck_notification_read_snapshot_budget", "item_count >= 0"));
+            entity.HasKey(item => item.Id); entity.Property(item => item.Subject).HasMaxLength(256);
+            entity.HasIndex(item => item.Subject).IsUnique(); entity.HasIndex(item => item.ExpiresAtUtc);
+        });
+        modelBuilder.Entity<NotificationReadSnapshotItem>(entity =>
+        {
+            entity.ToTable("notification_read_snapshot_items"); entity.HasKey(item => new { item.SnapshotId, item.NotificationId });
+            entity.HasOne<NotificationReadSnapshot>().WithMany().HasForeignKey(item => item.SnapshotId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<NotificationEvent>().WithMany().HasForeignKey(item => item.NotificationId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(item => new { item.SnapshotId, item.IsProcessed });
+        });
         modelBuilder.Entity<NotificationEvent>(entity =>
         {
             entity.ToTable("notification_events", table => table.HasCheckConstraint("ck_notification_audience",

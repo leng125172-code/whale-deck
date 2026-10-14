@@ -7,6 +7,7 @@ public sealed record NotificationDto(Guid Id, long Sequence, string SourceKind, 
 public sealed record NotificationSummaryDto(long UnreadCount, long TotalCount, long SnapshotSequence);
 public sealed record NotificationPageDto(IReadOnlyCollection<NotificationDto> Items, long? NextBefore, long SnapshotSequence);
 public sealed record SetNotificationReadCommand(bool IsRead = true);
-public sealed record MarkNotificationsReadCommand(long ThroughSequence);
+public sealed record PrepareNotificationsReadDto(Guid SnapshotId, long ItemCount, DateTimeOffset ExpiresAtUtc);
+public sealed record MarkNotificationsReadCommand(Guid SnapshotId);
 public sealed record NotificationReadDto(Guid Id, bool IsRead, DateTimeOffset? ReadAtUtc);
-public sealed record MarkNotificationsReadDto(int ChangedCount, bool HasMore = false);
+public sealed record MarkNotificationsReadDto(int ChangedCount, bool HasMore = false, int ProcessedCount = 0);

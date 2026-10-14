@@ -48,7 +48,7 @@ public sealed class NotificationServiceTests
         var repository = new SpyRepository();
         var service = new NotificationService(repository);
         await Assert.ThrowsAsync<ArgumentException>(() => service.SetReadAsync(Valid, Guid.Empty, true, default));
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.MarkAllReadAsync(Valid, -1, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.MarkAllReadAsync(Valid, Guid.Empty, default));
         Assert.Equal(0, repository.Calls);
     }
 
@@ -62,7 +62,9 @@ public sealed class NotificationServiceTests
         { Calls++; return Task.FromResult(new NotificationSummaryDto(0, 0, 0)); }
         public Task<NotificationReadDto> SetReadAsync(NotificationContext context, Guid id, bool isRead, CancellationToken cancellationToken)
         { Calls++; return Task.FromResult(new NotificationReadDto(id, isRead, null)); }
-        public Task<MarkNotificationsReadDto> MarkAllReadAsync(NotificationContext context, long throughSequence, CancellationToken cancellationToken)
+        public Task<PrepareNotificationsReadDto> PrepareReadAllAsync(NotificationContext context, CancellationToken cancellationToken)
+        { Calls++; return Task.FromResult(new PrepareNotificationsReadDto(Guid.NewGuid(), 0, DateTimeOffset.UtcNow.AddMinutes(5))); }
+        public Task<MarkNotificationsReadDto> MarkAllReadAsync(NotificationContext context, Guid snapshotId, CancellationToken cancellationToken)
         { Calls++; return Task.FromResult(new MarkNotificationsReadDto(0)); }
     }
 }

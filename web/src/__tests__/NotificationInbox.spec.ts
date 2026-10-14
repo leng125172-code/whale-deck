@@ -22,6 +22,11 @@ const page = (items = [message('one', 10)], nextBefore: number | null = null) =>
   snapshotSequence: 10,
 })
 const summary = { unreadCount: 2, totalCount: 3, snapshotSequence: 10 }
+const snapshot = {
+  snapshotId: '00000000-0000-0000-0000-000000000001',
+  itemCount: 2000,
+  expiresAtUtc: new Date(Date.now() + 300000).toISOString(),
+}
 function create(handler: (path: string, init?: RequestInit) => Promise<unknown>) {
   const request = vi.fn<typeof handler>(handler)
   const inbox = createNotificationInbox(request as typeof apiRequest)
@@ -61,11 +66,12 @@ describe('Notification inbox lifecycle', () => {
     expect(inbox.state.unreadCount).toBe(0)
   })
   it('uses one snapshot across read-all batches and leaves newer messages unread', async () => {
-    const cutoffs: number[] = []
+    const snapshots: string[] = []
     const { inbox } = create(async (path, init) => {
+      if (path === 'notifications/read-all-snapshot') return snapshot
       if (path === 'notifications/read-all') {
-        cutoffs.push(JSON.parse(init!.body as string).throughSequence)
-        return { changedCount: 1000, hasMore: cutoffs.length < 2 }
+        snapshots.push(JSON.parse(init!.body as string).snapshotId)
+        return { changedCount: 1000, processedCount: 1000, hasMore: snapshots.length < 2 }
       }
       if (path === 'notifications/summary')
         return { ...summary, unreadCount: 1, snapshotSequence: 11 }
@@ -73,15 +79,16 @@ describe('Notification inbox lifecycle', () => {
     })
     inbox.state.snapshotSequence = 10
     await inbox.markAllRead()
-    expect(cutoffs).toEqual([10, 10])
+    expect(snapshots).toEqual([snapshot.snapshotId, snapshot.snapshotId])
     expect(inbox.state.unreadCount).toBe(1)
     expect(inbox.state.items[0]!.id).toBe('new')
   })
   it('does not report a partial read-all as complete when a later batch fails', async () => {
     let batches = 0
-    const { inbox } = create(async () => {
+    const { inbox } = create(async (path) => {
+      if (path === 'notifications/read-all-snapshot') return snapshot
       if (++batches === 2) throw new ApiError('unavailable', 503, {})
-      return { changedCount: 1000, hasMore: true }
+      return { changedCount: 1000, processedCount: 1000, hasMore: true }
     })
     inbox.state.snapshotSequence = 10
     await inbox.markAllRead()
@@ -100,9 +107,72 @@ describe('Notification inbox lifecycle', () => {
     inbox.state.snapshotSequence = 10
     const writing = inbox.markAllRead()
     inbox.cancelView()
-    finish({ changedCount: 1000, hasMore: true })
+    finish(snapshot)
     await writing
     expect(request).toHaveBeenCalledTimes(1)
+    expect(inbox.state.writing).toBe(false)
+  })
+  it('stops after an already submitted batch when close ignores transport abort', async () => {
+    let finish: (value: unknown) => void = () => {}
+    const { inbox, request } = create(async (path) =>
+      path === 'notifications/read-all-snapshot'
+        ? snapshot
+        : new Promise((resolve) => {
+            finish = resolve
+          }),
+    )
+    const writing = inbox.markAllRead()
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2))
+    inbox.cancelView()
+    finish({ changedCount: 1000, processedCount: 1000, hasMore: true })
+    await writing
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(inbox.state.writing).toBe(false)
+  })
+  it('continues when members were separately read but the snapshot batch progressed', async () => {
+    let batches = 0
+    const { inbox } = create(async (path) => {
+      if (path === 'notifications/read-all-snapshot') return snapshot
+      if (path === 'notifications/read-all')
+        return ++batches === 1
+          ? { changedCount: 0, processedCount: 1000, hasMore: true }
+          : { changedCount: 5, processedCount: 5, hasMore: false }
+      return path === 'notifications/summary' ? summary : page()
+    })
+    await inbox.markAllRead()
+    expect(batches).toBe(2)
+    expect(inbox.state.error).toBe('')
+  })
+  it.each([undefined, 'invalid-id'])(
+    'does not write a batch with invalid snapshot id %s',
+    async (id) => {
+      const { inbox, request } = create(async () => ({ ...snapshot, snapshotId: id }))
+      await inbox.markAllRead()
+      expect(request).toHaveBeenCalledTimes(1)
+      expect(inbox.state.error).toContain('重试')
+    },
+  )
+  it('does not impose an arbitrary total 100k cap on a prepared snapshot', async () => {
+    let batches = 0
+    const { inbox } = create(async (path) => {
+      if (path === 'notifications/read-all-snapshot') return { ...snapshot, itemCount: 100005 }
+      if (path === 'notifications/read-all') {
+        batches++
+        return { changedCount: 1000, processedCount: 1000, hasMore: false }
+      }
+      return path === 'notifications/summary' ? summary : page()
+    })
+    await inbox.markAllRead()
+    expect(batches).toBe(1)
+    expect(inbox.state.error).toBe('')
+  })
+  it('explains expired snapshots without pretending partial changes were rolled back', async () => {
+    const { inbox } = create(async (path) => {
+      if (path === 'notifications/read-all-snapshot') return snapshot
+      throw new ApiError('expired', 404, { code: 'NOTIFICATION_READ_SNAPSHOT_UNAVAILABLE' })
+    })
+    await inbox.markAllRead()
+    expect(inbox.state.error).toContain('不会回退')
     expect(inbox.state.writing).toBe(false)
   })
   it.each([401, 403])('clears all private rows and counters on %s', async (status) => {

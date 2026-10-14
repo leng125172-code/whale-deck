@@ -15,6 +15,7 @@ for (const width of [320, 1440])
       let readAll = false
       let fail = false
       let batchCount = 0
+      const snapshotId = '00000000-0000-0000-0000-000000000001'
       const writes: { path: string; body: unknown; csrf: string | undefined }[] = []
       await page.route('**/api/v1/**', (route) => {
         const url = new URL(route.request().url())
@@ -28,13 +29,23 @@ for (const width of [320, 1440])
         if (route.request().method() === 'POST' && path.startsWith('notifications/')) {
           writes.push({
             path,
-            body: route.request().postDataJSON(),
+            body: route.request().postData() ? route.request().postDataJSON() : null,
             csrf: route.request().headers()['x-csrf-token'],
           })
+          if (path === 'notifications/read-all-snapshot')
+            return route.fulfill({
+              json: {
+                snapshotId,
+                itemCount: 2,
+                expiresAtUtc: new Date(Date.now() + 300000).toISOString(),
+              },
+            })
           if (path === 'notifications/read-all') {
             batchCount++
             readAll = batchCount === 2
-            return route.fulfill({ json: { changedCount: 1, hasMore: !readAll } })
+            return route.fulfill({
+              json: { changedCount: 1, processedCount: 1, hasMore: !readAll },
+            })
           }
           read = route.request().postDataJSON().isRead
           return route.fulfill({
@@ -86,7 +97,8 @@ for (const width of [320, 1440])
       expect(writes.every((write) => write.csrf === 'browser-test-only')).toBe(true)
       expect(
         writes.filter((write) => write.path.endsWith('read-all')).map((write) => write.body),
-      ).toEqual([{ throughSequence: 10 }, { throughSequence: 10 }])
+      ).toEqual([{ snapshotId }, { snapshotId }])
+      expect(writes.filter((write) => write.path.endsWith('read-all-snapshot'))).toHaveLength(1)
       await drawer.getByText('未读', { exact: true }).click()
       await expect(drawer.getByText('没有未读消息', { exact: true })).toBeVisible()
       await drawer.getByText('全部', { exact: true }).click()

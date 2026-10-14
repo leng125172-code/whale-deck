@@ -1371,6 +1371,75 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationReadSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<bool>("IsAdministrator")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_administrator");
+
+                    b.Property<long>("ItemCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("item_count");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("subject");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("Subject")
+                        .IsUnique();
+
+                    b.ToTable("notification_read_snapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_read_snapshot_budget", "item_count >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationReadSnapshotItem", b =>
+                {
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("snapshot_id");
+
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("notification_id");
+
+                    b.Property<bool>("IsProcessed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_processed");
+
+                    b.HasKey("SnapshotId", "NotificationId");
+
+                    b.HasIndex("NotificationId");
+
+                    b.HasIndex("SnapshotId", "IsProcessed");
+
+                    b.ToTable("notification_read_snapshot_items", (string)null);
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationReadState", b =>
                 {
                     b.Property<string>("Subject")
@@ -1988,6 +2057,21 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.HasOne("WhaleDeck.Domain.Entities.NotificationEvent", null)
                         .WithMany()
                         .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationReadSnapshotItem", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.NotificationEvent", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.NotificationReadSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

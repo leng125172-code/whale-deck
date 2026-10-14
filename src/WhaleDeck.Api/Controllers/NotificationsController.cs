@@ -29,10 +29,15 @@ public sealed class NotificationsController(NotificationService notifications, I
     public async Task<ActionResult<NotificationReadDto>> SetRead(Guid id, SetNotificationReadCommand command, CancellationToken cancellationToken) =>
         Ok(await notifications.SetReadAsync(await Context(cancellationToken), id, command.IsRead, cancellationToken));
 
-    /// <summary>Mark only visible messages through a previously returned snapshot sequence; newer messages stay unread.</summary>
+    /// <summary>Prepare the currently visible unread set. Protected by CSRF and bound to subject/permission scope. Five-minute inactivity expiry; active batches renew it up to one hour. Preparation remains subject to the bounded database statement deadline.</summary>
+    [HttpPost("read-all-snapshot")]
+    public async Task<ActionResult<PrepareNotificationsReadDto>> PrepareReadAll(CancellationToken cancellationToken) =>
+        Ok(await notifications.PrepareReadAllAsync(await Context(cancellationToken), cancellationToken));
+
+    /// <summary>Process at most 1000 snapshot members. Later committed messages remain unread even with lower sequence IDs. ProcessedCount includes members already read separately; completed snapshots are idempotent.</summary>
     [HttpPost("read-all")]
     public async Task<ActionResult<MarkNotificationsReadDto>> MarkAll(MarkNotificationsReadCommand command, CancellationToken cancellationToken) =>
-        Ok(await notifications.MarkAllReadAsync(await Context(cancellationToken), command.ThroughSequence, cancellationToken));
+        Ok(await notifications.MarkAllReadAsync(await Context(cancellationToken), command.SnapshotId, cancellationToken));
 
     private async Task<NotificationContext> Context(CancellationToken cancellationToken)
     {

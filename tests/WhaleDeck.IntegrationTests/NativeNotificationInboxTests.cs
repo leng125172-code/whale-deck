@@ -111,15 +111,16 @@ public sealed class NativeNotificationInboxTests
         Assert.Equal(3, firstPage.Items.Count); Assert.Equal(3, secondPage.Items.Count);
         Assert.True(firstPage.Items.Last().Sequence > secondPage.Items.First().Sequence);
         Assert.Empty((await service.ListAsync(batchContext, new(Kind: "Alert"), default)).Items);
-        var cutoff = (await service.SummaryAsync(batchContext, default)).SnapshotSequence;
-        var marked = await service.MarkAllReadAsync(batchContext, cutoff, default);
+        var snapshot = await service.PrepareReadAllAsync(batchContext, default);
+        Assert.Equal(1005, snapshot.ItemCount);
+        var marked = await service.MarkAllReadAsync(batchContext, snapshot.SnapshotId, default);
         Assert.Equal(1000, marked.ChangedCount); Assert.True(marked.HasMore);
         db.NotificationEvents.Add(Event(batchContext.Subject, now.AddDays(1))); await db.SaveChangesAsync();
-        marked = await service.MarkAllReadAsync(batchContext, cutoff, default);
+        marked = await service.MarkAllReadAsync(batchContext, snapshot.SnapshotId, default);
         Assert.Equal(5, marked.ChangedCount); Assert.False(marked.HasMore);
         Assert.Equal(1, (await service.SummaryAsync(batchContext, default)).UnreadCount);
-        Assert.Equal(0, (await service.MarkAllReadAsync(batchContext, cutoff, default)).ChangedCount);
-        await Assert.ThrowsAsync<ArgumentException>(() => service.MarkAllReadAsync(batchContext, long.MaxValue, default));
+        Assert.Equal(0, (await service.MarkAllReadAsync(batchContext, snapshot.SnapshotId, default)).ChangedCount);
+        await Assert.ThrowsAsync<NotificationSnapshotUnavailableException>(() => service.MarkAllReadAsync(batchContext, Guid.NewGuid(), default));
         Console.WriteLine("INBOX_PHASE=batch-snapshot");
 
         // DB uniqueness, event immutability, bounded retention and FK read-state cascade.

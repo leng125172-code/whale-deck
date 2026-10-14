@@ -81,6 +81,11 @@ export function createNotificationInbox(request: Request = apiRequest) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       reset(false)
       state.error = '会话或权限已变化，请重新登录后查看消息。'
+    } else if (
+      error instanceof ApiError &&
+      error.problem.code === 'NOTIFICATION_READ_SNAPSHOT_UNAVAILABLE'
+    ) {
+      state.error = '已读快照已失效，已处理的消息不会回退；请重新点击“全部已读”。'
     } else {
       state.error = '消息服务暂时不可用，请重试。'
     }
@@ -199,20 +204,44 @@ export function createNotificationInbox(request: Request = apiRequest) {
   }
 
   function markAllRead() {
-    const throughSequence = state.snapshotSequence
     return write(async (signal) => {
+      const snapshot = await request<{
+        snapshotId: string
+        itemCount: number
+        expiresAtUtc: string
+      }>('notifications/read-all-snapshot', { method: 'POST', signal })
+      if (signal.aborted) return
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          snapshot.snapshotId,
+        ) ||
+        !Number.isSafeInteger(snapshot.itemCount) ||
+        snapshot.itemCount < 0 ||
+        !Number.isFinite(Date.parse(snapshot.expiresAtUtc))
+      )
+        throw new Error('Invalid read-all snapshot')
       let remaining = true
       while (remaining && !signal.aborted) {
-        const result = await request<{ changedCount: number; hasMore: boolean }>(
-          'notifications/read-all',
-          {
-            method: 'POST',
-            body: JSON.stringify({ throughSequence }),
-            signal,
-          },
+        const result = await request<{
+          changedCount: number
+          hasMore: boolean
+          processedCount: number
+        }>('notifications/read-all', {
+          method: 'POST',
+          body: JSON.stringify({ snapshotId: snapshot.snapshotId }),
+          signal,
+        })
+        if (
+          !Number.isSafeInteger(result.changedCount) ||
+          !Number.isSafeInteger(result.processedCount) ||
+          result.changedCount < 0 ||
+          result.processedCount < result.changedCount ||
+          result.processedCount > 1000 ||
+          typeof result.hasMore !== 'boolean'
         )
+          throw new Error('Invalid read-all batch')
         remaining = result.hasMore
-        if (remaining && result.changedCount === 0) throw new Error('Read batch made no progress')
+        if (remaining && result.processedCount === 0) throw new Error('Read batch made no progress')
       }
     })
   }

@@ -68,28 +68,76 @@ public sealed class NotificationRepository(PlatformDbContext db) : INotification
             return new NotificationReadDto(id, readAt is not null, readAt);
         });
 
-    public Task<MarkNotificationsReadDto> MarkAllReadAsync(NotificationContext context, long throughSequence, CancellationToken cancellationToken) =>
+    public Task<PrepareNotificationsReadDto> PrepareReadAllAsync(NotificationContext context, CancellationToken cancellationToken) =>
         db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             await using var transaction = await BeginWriteAsync(context.Subject, cancellationToken);
             var now = DateTimeOffset.UtcNow;
-            var latest = await Visible(context, now).MaxAsync(item => (long?)item.Sequence, cancellationToken) ?? 0;
-            if (throughSequence > latest) throw new ArgumentException("Notification snapshot is no longer valid.");
+            var expires = now.AddMinutes(5);
+            var id = Guid.NewGuid();
+            // One active intent per subject: creating a new one invalidates an old retry, without changing read states.
+            await db.NotificationReadSnapshots.Where(item => item.Subject == context.Subject).ExecuteDeleteAsync(cancellationToken);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO notification_read_snapshots (id,subject,is_administrator,item_count,created_at_utc,expires_at_utc)
+                VALUES ({id},{context.Subject},{context.IsAdministrator},0,{now},{expires})
+                """, cancellationToken);
+            // This single statement materializes the actually visible committed set, not sequence allocation order.
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO notification_read_snapshot_items (snapshot_id,notification_id,is_processed)
+                SELECT {id},n.id,false FROM notification_events n
+                WHERE n.expires_at_utc>{now}
+                  AND ((n.audience='Administrator' AND {context.IsAdministrator}) OR (n.audience='Subject' AND n.recipient_subject={context.Subject}))
+                  AND NOT EXISTS (SELECT 1 FROM notification_read_states r WHERE r.notification_id=n.id AND r.subject={context.Subject})
+                ORDER BY n.sequence DESC FOR KEY SHARE OF n
+                """, cancellationToken);
+            var count = await db.NotificationReadSnapshotItems.LongCountAsync(item => item.SnapshotId == id, cancellationToken);
+            await db.NotificationReadSnapshots.Where(item => item.Id == id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ItemCount, count), cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return new PrepareNotificationsReadDto(id, count, expires);
+        });
+
+    public Task<MarkNotificationsReadDto> MarkAllReadAsync(NotificationContext context, Guid snapshotId, CancellationToken cancellationToken) =>
+        db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await BeginWriteAsync(context.Subject, cancellationToken);
+            var now = DateTimeOffset.UtcNow;
+            var headers = await db.NotificationReadSnapshots.FromSqlInterpolated($"""
+                SELECT * FROM notification_read_snapshots WHERE id={snapshotId} AND subject={context.Subject}
+                  AND is_administrator={context.IsAdministrator} AND expires_at_utc>{now} FOR KEY SHARE
+                """).AsNoTracking().ToArrayAsync(cancellationToken);
+            if (headers.Length == 0) throw new NotificationSnapshotUnavailableException();
+            if (headers[0].CompletedAtUtc is not null) return new MarkNotificationsReadDto(0);
+            var ids = await db.Database.SqlQuery<Guid>($"""
+                SELECT n.id AS "Value" FROM notification_read_snapshot_items m
+                JOIN notification_events n ON n.id=m.notification_id
+                WHERE m.snapshot_id={snapshotId} AND NOT m.is_processed AND n.expires_at_utc>{now}
+                  AND ((n.audience='Administrator' AND {context.IsAdministrator}) OR (n.audience='Subject' AND n.recipient_subject={context.Subject}))
+                ORDER BY n.sequence DESC LIMIT 1000 FOR KEY SHARE OF n
+                """).ToArrayAsync(cancellationToken);
             var changed = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO notification_read_states (notification_id, subject, read_at_utc)
                 SELECT id, {context.Subject}, {now} FROM notification_events
-                WHERE expires_at_utc > {now} AND sequence <= {throughSequence}
-                  AND ((audience = 'Administrator' AND {context.IsAdministrator}) OR (audience = 'Subject' AND recipient_subject = {context.Subject}))
-                  AND NOT EXISTS (SELECT 1 FROM notification_read_states r WHERE r.notification_id = notification_events.id AND r.subject = {context.Subject})
-                ORDER BY sequence DESC LIMIT 1000 FOR KEY SHARE
+                WHERE id=ANY({ids})
                 ON CONFLICT (subject, notification_id) DO NOTHING
                 """, cancellationToken);
+            var processed = await db.NotificationReadSnapshotItems.Where(item => item.SnapshotId == snapshotId && ids.Contains(item.NotificationId))
+                .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.IsProcessed, true), cancellationToken);
             if (changed > 0) Audit(context, "notifications.read-all", "self");
             await db.SaveChangesAsync(cancellationToken);
-            var remaining = await Visible(context, now).AnyAsync(item => item.Sequence <= throughSequence &&
-                !db.NotificationReadStates.Any(read => read.NotificationId == item.Id && read.Subject == context.Subject), cancellationToken);
+            var visible = Visible(context, now);
+            var remaining = await db.NotificationReadSnapshotItems.AnyAsync(member => member.SnapshotId == snapshotId && !member.IsProcessed &&
+                visible.Any(source => source.Id == member.NotificationId), cancellationToken);
+            if (!remaining) await db.NotificationReadSnapshots.Where(item => item.Id == snapshotId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.CompletedAtUtc, now), cancellationToken);
+            else
+            {
+                var absoluteExpiry = headers[0].CreatedAtUtc.AddHours(1);
+                var renewedExpiry = now.AddMinutes(5) < absoluteExpiry ? now.AddMinutes(5) : absoluteExpiry;
+                await db.NotificationReadSnapshots.Where(item => item.Id == snapshotId)
+                    .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ExpiresAtUtc, renewedExpiry), cancellationToken);
+            }
             await transaction.CommitAsync(cancellationToken);
-            return new MarkNotificationsReadDto(changed, remaining);
+            return new MarkNotificationsReadDto(changed, remaining, processed);
         });
 
     private async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginWriteAsync(string subject, CancellationToken cancellationToken)

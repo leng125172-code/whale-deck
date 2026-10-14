@@ -25,3 +25,22 @@ public sealed class NotificationReadState
     public required string Subject { get; init; }
     public DateTimeOffset ReadAtUtc { get; init; }
 }
+
+/// <summary>Short-lived subject/permission-bound materialized read-all intent, not an authentication token.</summary>
+public sealed class NotificationReadSnapshot
+{
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public required string Subject { get; init; }
+    public bool IsAdministrator { get; init; }
+    public long ItemCount { get; init; }
+    public DateTimeOffset CreatedAtUtc { get; init; }
+    public DateTimeOffset ExpiresAtUtc { get; init; }
+    public DateTimeOffset? CompletedAtUtc { get; set; }
+}
+
+public sealed class NotificationReadSnapshotItem
+{
+    public Guid SnapshotId { get; init; }
+    public Guid NotificationId { get; init; }
+    public bool IsProcessed { get; set; }
+}

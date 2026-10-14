@@ -37,7 +37,7 @@ def main(suite='capacity'):
 
 
 def run_native(suite, report):
-    if suite not in ('capacity', 'metrics', 'alerts', 'notifications', 'dispatch'):
+    if suite not in ('capacity', 'metrics', 'alerts', 'notifications', 'dispatch', 'snapshots'):
         raise ValueError('Unknown isolated native suite')
     repository = Path(__file__).resolve().parents[2]
     database = 'wdv_' + suite + '_' + uuid.uuid4().hex[:16]
@@ -92,7 +92,7 @@ def run_native(suite, report):
                 'dotnet', 'test', 'tests/WhaleDeck.IntegrationTests/WhaleDeck.IntegrationTests.csproj',
                 '--configuration', 'Release', '--artifacts-path', '/scratch/build', '--logger', 'console;verbosity=normal',
                 '--logger', 'trx;LogFileName=native.trx', '--results-directory', '/scratch/results', '--filter',
-                'FullyQualifiedName~' + {'capacity': 'NativeBackupCapacityTests', 'metrics': 'NativeMetricAggregationTests', 'alerts': 'NativeMonitoringAlertsTests', 'notifications': 'NativeNotificationInboxTests', 'dispatch': 'NativeNotificationDispatchTests'}[suite]]).strip()
+                'FullyQualifiedName~' + {'capacity': 'NativeBackupCapacityTests', 'metrics': 'NativeMetricAggregationTests', 'alerts': 'NativeMonitoringAlertsTests', 'notifications': 'NativeNotificationInboxTests', 'dispatch': 'NativeNotificationDispatchTests', 'snapshots': 'NativeNotificationSnapshotTests'}[suite]]).strip()
             assert re.fullmatch(r'[a-f0-9]{64}', identity)
             command(['docker', 'network', 'connect', common[0], identity])
             report.update(state='Running', stage='test', sdkImageId=sdk_identity, containerName=container)
@@ -115,7 +115,7 @@ def run_native(suite, report):
                 # Only stable exception/code tokens; never connection strings or native SQL values.
                 error_types = sorted(set(re.findall(r'\b(?:[A-Za-z]+\.)*(?:PostgresException|InvalidOperationException|EqualException|TrueException|SingleException|NotNullException|NullException|InRangeException)\b', output)))
                 sql_states = sorted(set(re.findall(r'\b([0-9A-Z]{5}):\s', output)))
-                source_lines = re.findall(r'NativeNotification(?:Inbox|Dispatch)Tests.cs:line ([0-9]+)', output)
+                source_lines = re.findall(r'NativeNotification(?:Inbox|Dispatch|Snapshot)Tests.cs:line ([0-9]+)', output)
                 raise RuntimeError('Isolated native ' + suite + ' test failed: ' + ('\n'.join(diagnostics) if diagnostics else
                     'native failure types=' + ','.join(error_types) + ' SQLSTATE=' + ','.join(sql_states) +
                     ' inboxSourceLines=' + ','.join(source_lines[:8]) + '; private output withheld'))
@@ -133,6 +133,9 @@ def run_native(suite, report):
             elif suite == 'alerts':
                 print(json.dumps({'nativeMonitoringAlertsPostgres': 'passed', 'database': 'isolated-and-migrated',
                     'selectorQualityCoverageHysteresisEscalationSilenceRecoveryConcurrencyUniqueDisable': 'passed'}))
+            elif suite == 'snapshots':
+                print(json.dumps({'nativeNotificationSnapshotsPostgres': 'passed', 'database': 'isolated-and-migrated',
+                    'lateCommitExactSetScopeDowngradeExpirationReplacementMemberProgressReplayRetention': 'passed'}))
             elif suite == 'dispatch':
                 print(json.dumps({'nativeNotificationDispatchPostgres': 'passed', 'database': 'isolated-and-migrated',
                     'lateCommitAudienceFanoutDedupeConcurrentLeaseRestartUnknownSafeRetryVersionRetention': 'passed',

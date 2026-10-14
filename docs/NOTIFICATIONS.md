@@ -19,9 +19,9 @@
 - `GET /api/v1/notifications?take=50&before=<sequence>&status=all|unread&kind=all|Alert|Job`，稳定顺序分页，上限 100。
 - `GET /api/v1/notifications/summary`，返回个人未读/总数和 snapshotSequence。
 - `POST /api/v1/notifications/{id}/read-state` `{isRead:true|false}`；同一 subject 串行锁、重复操作幂等。
-- `POST /api/v1/notifications/read-all` `{throughSequence:<snapshot>}`；只标记本人当时可见的旧消息，新消息保留未读。未来/不再可见的快照范围拒绝。
+- 新版源码新增 `POST /api/v1/notifications/read-all-snapshot` 准备当时已提交且本人可见的未读 ID 集合；再以 `POST /api/v1/notifications/read-all` `{snapshotId}` 跨批次消费。主体/权限范围及有效期绑定，新到消息即使序号更小也不包含；旧 throughSequence 请求拒绝。尚待本轮生产发布，当前 `4aa036b` 为旧协议，详见 [已读快照修复](qa/NOTIFICATION_READ_SNAPSHOTS.md)。
 - Cookie 写请求继续全局防伪 Token/Origin；修改同事务审计，不记录消息正文。
-- 全部已读每次最多处理 1000 条并返回 hasMore，界面用相同快照继续批次；取消/退出时保留已完成批次，不把部分结果冒称全部完成。
+- 全部已读每次最多处理 1000 个固定成员并返回 hasMore/processedCount，界面以相同快照继续；processedCount 防止独立已读产生假零进度，完成快照不覆盖后来手工未读。取消/退出保留已完成批次，不把部分结果冒称全部完成。
 - 已接前端并发布：普通用户也可打开顶部个人收件箱，真实未读徽标不再使用活动告警数量。管理员另有活动告警页签；已读/未读筛选、告警/任务类别、逐条读/未读、快照分批全部已读、更多分页、加载/错误/空态。退出/降权清空，迟到响应不重新填入私有消息，摘要轮询仅页面可见时执行且不重叠；摘要失败显示不可用标记，不假装未读为零。
 - 消息清理独立于 Agent，每分钟最多删除 1000 条过期事件，读状态级联删除；多 Worker 通过事务级锁避免重复扫描。批次失败一分钟后重试，不输出消息正文。
 - 公共 HTTP 客户端组合外部取消和 15 秒截止时间，CSRF 获取也可取消；失败释放计时器。抽屉关闭可终止后续已读批次，已提交的批次不自动回退。

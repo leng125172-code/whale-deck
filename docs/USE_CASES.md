@@ -193,3 +193,5 @@ Worker 批量保存 `container.cpu.utilization`、`container.memory.used/limit/u
 | UC-NOT-002 | 读状态及快照全部已读 | 登录主体 | POST `/{id}/read-state`、`/read-all`；仅修改本人读状态，批次上限 1000、幂等、审计、Cookie CSRF/Origin |
 
 事件来源和保留、前端状态及外部投递后续范围见 [消息中心](NOTIFICATIONS.md)。不支持客户端发送任意消息正文或修改消息事实。
+
+全部已读契约修订：先 POST `/api/v1/notifications/read-all-snapshot`，再以服务端 `snapshotId` 调用原 read-all 路径，固定成员/当前主体权限绑定、5 分钟闲置与绝对 1 小时有效期、逐批 1000 与 ProcessedCount、旧序号写入失败关闭。接口/API/UI 已写入，签收状态见 [专项记录](qa/NOTIFICATION_READ_SNAPSHOTS.md)。
