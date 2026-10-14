@@ -46,6 +46,8 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
     public DbSet<NotificationRoute> NotificationRoutes => Set<NotificationRoute>();
     public DbSet<NotificationDispatchReceipt> NotificationDispatchReceipts => Set<NotificationDispatchReceipt>();
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
+    public DbSet<NotificationDeliveryAttempt> NotificationDeliveryAttempts => Set<NotificationDeliveryAttempt>();
+    public DbSet<NotificationTargetRateGate> NotificationTargetRateGates => Set<NotificationTargetRateGate>();
 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
@@ -135,16 +137,35 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             entity.ToTable("notification_deliveries", table =>
             {
                 table.HasCheckConstraint("ck_notification_delivery_state", "state IN ('Pending','Leased','Sending','RetryWait','Succeeded','Failed','Unknown','Canceled')");
+                table.HasCheckConstraint("ck_notification_delivery_configuration", "configuration_revision IS NULL OR configuration_revision ~ '^[A-F0-9]{64}$'");
                 table.HasCheckConstraint("ck_notification_delivery_attempts", "attempt_count >= 0 AND attempt_count <= 5 AND channel_version >= 0");
                 table.HasCheckConstraint("ck_notification_delivery_lease", "(state IN ('Leased','Sending') AND lease_token IS NOT NULL AND lease_expires_at_utc IS NOT NULL) OR (state NOT IN ('Leased','Sending') AND lease_token IS NULL AND lease_expires_at_utc IS NULL)");
             });
             entity.HasKey(item => item.Id); entity.Property(item => item.Provider).HasMaxLength(16);
             entity.Property(item => item.DestinationReference).HasMaxLength(64); entity.Property(item => item.CredentialReference).HasMaxLength(64);
             entity.Property(item => item.State).HasMaxLength(16); entity.Property(item => item.LastResultCode).HasMaxLength(32);
+            entity.Property(item => item.ConfigurationRevision).HasMaxLength(64);
             entity.HasIndex(item => new { item.NotificationId, item.ChannelId }).IsUnique();
             entity.HasIndex(item => new { item.State, item.NextAttemptAtUtc }); entity.HasIndex(item => item.LeaseExpiresAtUtc);
+            entity.HasIndex(item => item.LeaseToken).IsUnique().HasFilter("lease_token IS NOT NULL");
             entity.HasOne<NotificationEvent>().WithMany().HasForeignKey(item => item.NotificationId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<NotificationChannel>().WithMany().HasForeignKey(item => item.ChannelId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<NotificationDeliveryAttempt>(entity =>
+        {
+            entity.ToTable("notification_delivery_attempts", table =>
+            {
+                table.HasCheckConstraint("ck_notification_attempt_number", "attempt_number BETWEEN 1 AND 5");
+                table.HasCheckConstraint("ck_notification_attempt_result", "(finished_at_utc IS NULL AND result_code IS NULL) OR (finished_at_utc IS NOT NULL AND result_code IS NOT NULL AND finished_at_utc >= started_at_utc AND result_code IN ('Accepted','RetryableNotSent','Rejected','Unknown','LeaseExpiredAfterSend'))");
+            });
+            entity.HasKey(item => new { item.DeliveryId, item.AttemptNumber });
+            entity.Property(item => item.ResultCode).HasMaxLength(32);
+            entity.HasOne<NotificationDelivery>().WithMany().HasForeignKey(item => item.DeliveryId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NotificationTargetRateGate>(entity =>
+        {
+            entity.ToTable("notification_target_rate_gates", table => table.HasCheckConstraint("ck_notification_target_identity", "id ~ '^[A-F0-9]{64}$'"));
+            entity.HasKey(item => item.Id); entity.Property(item => item.Id).HasMaxLength(64); entity.HasIndex(item => item.NextAtUtc);
         });
     }
 

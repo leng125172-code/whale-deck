@@ -43,6 +43,12 @@ public sealed class NotificationManagementService(INotificationManagementReposit
     public Task DeleteRouteAsync(NotificationContext context, Guid id, DeleteNotificationConfigurationCommand command, CancellationToken cancellationToken)
     { Authorize(context); ValidateWrite(context, id, command.ExpectedVersion, command.Confirmed); return repository.DeleteRouteAsync(context, id, command.ExpectedVersion, cancellationToken); }
 
+    public Task<IReadOnlyCollection<NotificationAttemptDto>> AttemptsAsync(NotificationContext context, Guid deliveryId, CancellationToken cancellationToken)
+    {
+        Authorize(context); FilterId(deliveryId);
+        return repository.AttemptsAsync(deliveryId, cancellationToken);
+    }
+
     private static void Authorize(NotificationContext context)
     {
         if (!context.IsAdministrator) throw new UnauthorizedAccessException("Notification administration is restricted.");

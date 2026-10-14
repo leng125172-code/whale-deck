@@ -21,6 +21,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddHostedService<MonitoringAlertWorker>();
 builder.Services.AddHostedService<NotificationRetentionWorker>();
+builder.Services.AddHostedService<NotificationSenderWorker>();
 
 var host = builder.Build();
 await host.RunAsync();

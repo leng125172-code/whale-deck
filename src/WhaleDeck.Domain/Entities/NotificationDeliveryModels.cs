@@ -11,6 +11,7 @@ public sealed class NotificationChannel
     public bool IsEnabled { get; set; }
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     public long Version { get; set; }
+    public DateTimeOffset? NextDeliveryAtUtc { get; set; }
 }
 
 public sealed class NotificationRoute
@@ -44,6 +45,7 @@ public sealed class NotificationDelivery
     public required string Provider { get; init; }
     public required string DestinationReference { get; init; }
     public string? CredentialReference { get; init; }
+    public string? ConfigurationRevision { get; init; }
     public string State { get; set; } = "Pending";
     public int AttemptCount { get; set; }
     public DateTimeOffset CreatedAtUtc { get; init; }
@@ -53,4 +55,19 @@ public sealed class NotificationDelivery
     public DateTimeOffset? LastAttemptAtUtc { get; set; }
     public DateTimeOffset? CompletedAtUtc { get; set; }
     public string? LastResultCode { get; set; }
+}
+
+public sealed class NotificationDeliveryAttempt
+{
+    public Guid DeliveryId { get; init; }
+    public int AttemptNumber { get; init; }
+    public DateTimeOffset StartedAtUtc { get; init; }
+    public DateTimeOffset? FinishedAtUtc { get; set; }
+    public string? ResultCode { get; set; }
+}
+
+public sealed class NotificationTargetRateGate
+{
+    public required string Id { get; init; }
+    public DateTimeOffset NextAtUtc { get; set; }
 }

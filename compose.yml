@@ -146,6 +146,8 @@ services:
     volumes:
       - /run/whaledeck:/run/whaledeck:ro
       - /etc/whaledeck/agent-capability.key:/run/secrets/agent-capability.key:ro
+      # Private, 0600 registry is visible only to Worker. Parent mount sees atomic replacements.
+      - /etc/whaledeck/notifications:/run/secrets/notifications:ro
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -159,6 +161,7 @@ services:
       - authentik_frontend
       - postgres_backend
       - valkey_backend
+      - notifications_egress
     deploy:
       resources:
         limits:
@@ -184,6 +187,11 @@ services:
       - postgres_backend
 
 networks:
+  notifications_egress:
+    name: whaledeck-notifications-egress
+    driver: bridge
+    labels:
+      io.whaledeck.protected: "true"
   whaledeck_frontend:
     name: whaledeck-app-ui
     internal: true

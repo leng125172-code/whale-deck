@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.8" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.8" />
     <PackageReference Include="Valkey.Glide" Version="1.1.0" />
+    <PackageReference Include="MailKit" Version="4.18.1" />
   </ItemGroup>
 
   <PropertyGroup>

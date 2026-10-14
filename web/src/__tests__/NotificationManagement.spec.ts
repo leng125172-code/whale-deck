@@ -89,7 +89,7 @@ describe('Notification management', () => {
     const wrapper = create()
     await flushPromises()
     expect(wrapper.text()).toContain(channel.name)
-    expect(wrapper.text()).toContain('外部发送尚未接入')
+    expect(wrapper.text()).toContain('外部发送需要私有配置')
     expect(wrapper.text()).toContain('已配置')
     expect(wrapper.text()).not.toContain('private-reference')
   })

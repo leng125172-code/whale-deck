@@ -1137,6 +1137,10 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(80)")
                         .HasColumnName("name");
 
+                    b.Property<DateTimeOffset?>("NextDeliveryAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_delivery_at_utc");
+
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -1182,6 +1186,11 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("CompletedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at_utc");
+
+                    b.Property<string>("ConfigurationRevision")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("configuration_revision");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone")
@@ -1241,6 +1250,10 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("LeaseExpiresAtUtc");
 
+                    b.HasIndex("LeaseToken")
+                        .IsUnique()
+                        .HasFilter("lease_token IS NOT NULL");
+
                     b.HasIndex("NotificationId", "ChannelId")
                         .IsUnique();
 
@@ -1250,9 +1263,44 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_notification_delivery_attempts", "attempt_count >= 0 AND attempt_count <= 5 AND channel_version >= 0");
 
+                            t.HasCheckConstraint("ck_notification_delivery_configuration", "configuration_revision IS NULL OR configuration_revision ~ '^[A-F0-9]{64}$'");
+
                             t.HasCheckConstraint("ck_notification_delivery_lease", "(state IN ('Leased','Sending') AND lease_token IS NOT NULL AND lease_expires_at_utc IS NOT NULL) OR (state NOT IN ('Leased','Sending') AND lease_token IS NULL AND lease_expires_at_utc IS NULL)");
 
                             t.HasCheckConstraint("ck_notification_delivery_state", "state IN ('Pending','Leased','Sending','RetryWait','Succeeded','Failed','Unknown','Canceled')");
+                        });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationDeliveryAttempt", b =>
+                {
+                    b.Property<Guid>("DeliveryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delivery_id");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_number");
+
+                    b.Property<DateTimeOffset?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at_utc");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("result_code");
+
+                    b.Property<DateTimeOffset>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.HasKey("DeliveryId", "AttemptNumber");
+
+                    b.ToTable("notification_delivery_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_attempt_number", "attempt_number BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("ck_notification_attempt_result", "(finished_at_utc IS NULL AND result_code IS NULL) OR (finished_at_utc IS NOT NULL AND result_code IS NOT NULL AND finished_at_utc >= started_at_utc AND result_code IN ('Accepted','RetryableNotSent','Rejected','Unknown','LeaseExpiredAfterSend'))");
                         });
                 });
 
@@ -1520,6 +1568,27 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_notification_route_severity", "minimum_severity IN ('Info','Warning','Error','Critical')");
 
                             t.HasCheckConstraint("ck_notification_route_version", "version >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationTargetRateGate", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("NextAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextAtUtc");
+
+                    b.ToTable("notification_target_rate_gates", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_target_identity", "id ~ '^[A-F0-9]{64}$'");
                         });
                 });
 
@@ -2055,6 +2124,15 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.HasOne("WhaleDeck.Domain.Entities.NotificationEvent", null)
                         .WithMany()
                         .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationDeliveryAttempt", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.NotificationDelivery", null)
+                        .WithMany()
+                        .HasForeignKey("DeliveryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

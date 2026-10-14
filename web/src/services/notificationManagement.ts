@@ -1,6 +1,12 @@
 import { apiRequest, createIdempotencyKey } from '@/services/apiClient'
 
 export type NotificationProvider = 'Email' | 'Webhook' | 'DingTalk' | 'WeCom' | 'Feishu'
+export interface NotificationAttempt {
+  attemptNumber: number
+  startedAtUtc: string
+  finishedAtUtc: string | null
+  resultCode: string | null
+}
 export interface NotificationPage<T> {
   items: T[]
   hasMore: boolean

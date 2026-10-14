@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ApiError } from '@/services/apiClient'
+import { ApiError, apiRequest } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
 import {
   executeNotificationIntent,
@@ -13,6 +13,7 @@ import {
   type NotificationDelivery,
   type NotificationProvider,
   type NotificationWriteIntent,
+  type NotificationAttempt,
 } from '@/services/notificationManagement'
 
 const active = ref<'channels' | 'routes' | 'deliveries'>('channels')
@@ -28,6 +29,10 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 const traceId = ref('')
+const attempts = ref<NotificationAttempt[]>([])
+const attemptVisible = ref(false)
+const attemptLoading = ref(false)
+let attemptRevision = 0
 const denied = ref(false)
 const authorized = computed(() => authSession.user.value?.isAdministrator === true && !denied.value)
 const editor = ref<'channel' | 'route' | null>(null)
@@ -86,6 +91,10 @@ function clearPrivate() {
   routes.value = []
   deliveries.value = []
   deleteIntents.clear()
+  attemptRevision++
+  attempts.value = []
+  attemptVisible.value = false
+  attemptLoading.value = false
   closeEditor()
   loading.value = false
   saving.value = false
@@ -242,6 +251,36 @@ async function remove(kind: 'channels' | 'routes', item: NotificationChannel | N
 function channelName(id: string) {
   return choices.value.find((item) => item.id === id)?.name || id
 }
+async function openAttempts(id: string) {
+  if (!authorized.value) return
+  const current = generation
+  const selected = ++attemptRevision
+  attempts.value = []
+  attemptVisible.value = true
+  attemptLoading.value = true
+  try {
+    const values = await apiRequest<NotificationAttempt[]>(
+      `notifications/manage/deliveries/${encodeURIComponent(id)}/attempts`,
+      { signal: controller.signal },
+    )
+    if (
+      current === generation &&
+      selected === attemptRevision &&
+      authorized.value &&
+      attemptVisible.value
+    )
+      attempts.value = values
+  } catch (reason) {
+    if (current === generation && selected === attemptRevision && authorized.value) failure(reason)
+  } finally {
+    if (current === generation && selected === attemptRevision) attemptLoading.value = false
+  }
+}
+function closeAttempts() {
+  attemptRevision++
+  attempts.value = []
+  attemptLoading.value = false
+}
 function date(value: string | null) {
   return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'
 }
@@ -276,8 +315,8 @@ onUnmounted(clearPrivate)
       >
     </header>
     <el-alert
-      title="外部发送尚未接入"
-      description="当前保存引用标识，不录入真实地址或密钥。渠道配置成功不等于消息已发送；投递状态以实际记录为准。"
+      title="外部发送需要私有配置"
+      description="发送 Worker 已接入。请先在服务器私有配置中登记批准目标及凭据，再启用渠道。当前表单只保存引用标识；已接受不代表收件人已收到，结果未知不会自动重发。"
       type="info"
       :closable="false"
       show-icon
@@ -384,12 +423,7 @@ onUnmounted(clearPrivate)
           ></el-table-column
         >
       </el-table>
-      <el-table
-        v-else
-        :data="deliveries"
-        row-key="id"
-        empty-text="暂无投递记录"
-      >
+      <el-table v-else :data="deliveries" row-key="id" empty-text="暂无投递记录">
         <el-table-column label="渠道" min-width="180" show-overflow-tooltip
           ><template #default="{ row }">{{ channelName(row.channelId) }}</template></el-table-column
         >
@@ -411,6 +445,13 @@ onUnmounted(clearPrivate)
           min-width="150"
           show-overflow-tooltip
         />
+        <el-table-column label="记录" width="105"
+          ><template #default="{ row }"
+            ><el-button link type="primary" @click="openAttempts(row.id)"
+              >尝试记录</el-button
+            ></template
+          ></el-table-column
+        >
       </el-table>
       <div class="notification-pagination">
         <el-button :disabled="page <= 1 || loading || saving" @click="changePage(-1)"
@@ -422,6 +463,32 @@ onUnmounted(clearPrivate)
       </div>
     </section>
     <el-empty v-else description="需要管理员权限" />
+    <el-drawer
+      v-model="attemptVisible"
+      title="投递尝试记录"
+      size="min(560px, 100vw)"
+      @closed="closeAttempts"
+    >
+      <el-alert
+        title="仅显示固定结果码和时间，不记录地址、凭据或响应正文。"
+        :closable="false"
+        type="info"
+      />
+      <el-table :data="attempts" v-loading="attemptLoading" empty-text="暂无尝试记录">
+        <el-table-column prop="attemptNumber" label="次数" width="70" />
+        <el-table-column label="开始时间" min-width="185"
+          ><template #default="{ row }">{{ date(row.startedAtUtc) }}</template></el-table-column
+        >
+        <el-table-column label="完成时间" min-width="185"
+          ><template #default="{ row }">{{ date(row.finishedAtUtc) }}</template></el-table-column
+        >
+        <el-table-column label="结果" min-width="160"
+          ><template #default="{ row }">{{
+            row.resultCode || '等待结果'
+          }}</template></el-table-column
+        >
+      </el-table>
+    </el-drawer>
     <el-dialog
       :model-value="editor !== null"
       :title="editor === 'channel' ? '渠道配置' : '路由配置'"

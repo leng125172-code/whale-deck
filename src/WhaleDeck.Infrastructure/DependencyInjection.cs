@@ -7,6 +7,7 @@ using WhaleDeck.Application.Services;
 using WhaleDeck.Infrastructure.Agent;
 using WhaleDeck.Infrastructure.Catalog;
 using WhaleDeck.Infrastructure.Identity;
+using WhaleDeck.Infrastructure.Notifications;
 using WhaleDeck.Infrastructure.Persistence;
 using WhaleDeck.Infrastructure.Secrets;
 
@@ -70,6 +71,12 @@ public static class DependencyInjection
         services.AddScoped<NotificationService>();
         services.AddScoped<INotificationManagementRepository, NotificationManagementRepository>();
         services.AddScoped<NotificationManagementService>();
+        services.AddScoped<INotificationDispatchRepository, NotificationDispatchStore>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(new PrivateNotificationConfiguration("/run/secrets/notifications/registry.json"));
+        services.AddSingleton(new NotificationNetworkPolicy());
+        services.AddSingleton<INotificationTransport, NotificationTransport>();
+        services.AddScoped<NotificationSender>();
         services.AddScoped<IApplicationRepository, ApplicationRepository>();
         services.AddScoped<IContainerUpdateRepository, ContainerUpdateRepository>();
         services.AddScoped<IDockerEventRepository, DockerEventRepository>();

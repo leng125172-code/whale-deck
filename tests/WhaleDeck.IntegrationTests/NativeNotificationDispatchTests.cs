@@ -1,15 +1,25 @@
 using System.Text.RegularExpressions;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+using System.Net.Security;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using WhaleDeck.Application.Services;
 using WhaleDeck.Application.Models;
 using WhaleDeck.Domain.Entities;
 using WhaleDeck.Infrastructure.Persistence;
+using WhaleDeck.Infrastructure.Notifications;
 
 namespace WhaleDeck.IntegrationTests;
 
 public sealed class NativeNotificationDispatchTests
 {
+    private static readonly string[] LoopbackAddresses = ["127.0.0.1"];
+    private static readonly string[] CollectorRecipients = ["collector@example.invalid"];
     [NativePostgresFact]
     public async Task RealPostgresLateCommitFanoutLeaseRecoveryVersionAndRetention()
     {
@@ -94,6 +104,159 @@ public sealed class NativeNotificationDispatchTests
         Assert.Single(await db.NotificationChannels.ToArrayAsync());
         Console.WriteLine("INBOX_PHASE=dispatch-retained");
         await Management(options, db, store, now);
+        await Sender(db);
+    }
+
+    private static async Task Sender(PlatformDbContext db)
+    {
+        // The entire database is the already-verified isolated wdv_dispatch_* namespace.
+        await db.NotificationChannels.ExecuteUpdateAsync(setters => setters.SetProperty(item => item.IsEnabled, false));
+        await db.NotificationRoutes.ExecuteUpdateAsync(setters => setters.SetProperty(item => item.IsEnabled, false));
+        await db.NotificationEvents.ExecuteDeleteAsync(); db.ChangeTracker.Clear();
+        var directory = Path.Combine(Path.GetTempPath(), "wdv-sender-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "registry.json");
+        var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        const string fakeSecret = "native-secret-not-a-real-key";
+        var registry = JsonSerializer.Serialize(new
+        {
+            version = 1,
+            targets = new Dictionary<string, object> { ["native-target"] = new { provider = "Webhook", url = $"http://127.0.0.1:{port}/hook", allowedAddresses = LoopbackAddresses, allowPrivateNetwork = true, allowHttp = true, minimumIntervalSeconds = 5 } },
+            credentials = new Dictionary<string, object> { ["native-credential"] = new { signingSecret = fakeSecret } }
+        });
+        try
+        {
+            await File.WriteAllTextAsync(path, registry);
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            var clock = new SenderClock(); var channels = Enumerable.Range(0, 2).Select(index => new NotificationChannel
+            { Name = "native-sender-" + index, Provider = "Webhook", DestinationReference = "native-target", CredentialReference = "native-credential", IsEnabled = true, CreatedAtUtc = clock.GetUtcNow().AddMinutes(-1) }).ToArray();
+            db.NotificationChannels.AddRange(channels);
+            foreach (var channel in channels) db.NotificationRoutes.Add(new() { ChannelId = channel.Id, SourceKind = "Alert", MinimumSeverity = "Info", IsEnabled = true, CreatedAtUtc = clock.GetUtcNow().AddMinutes(-1) });
+            var source = new NotificationEvent { SourceKey = "sender-native-event", SourceKind = "Alert", Audience = "Administrator", MessageCode = "ALERT_ACTIVE", Severity = "Error", OccurredAtUtc = clock.GetUtcNow(), PublishedAtUtc = clock.GetUtcNow(), ExpiresAtUtc = clock.GetUtcNow().AddDays(1) };
+            db.NotificationEvents.Add(source); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+            var receiver = Receive(listener, 2, fakeSecret, deadline.Token);
+            var store = new NotificationDispatchStore(db);
+            var transport = new NotificationTransport(new PrivateNotificationConfiguration(path), new NotificationNetworkPolicy(true), clock);
+            var sender = new NotificationSender(store, transport, clock);
+            Assert.Equal(1, await sender.TickAsync(deadline.Token));
+            var statuses = await db.NotificationDeliveries.AsNoTracking().Where(item => item.NotificationId == source.Id).ToArrayAsync();
+            Assert.Equal(2, statuses.Length); Assert.Single(statuses, item => item.State == "Succeeded");
+            Assert.Single(statuses, item => item.State == "RetryWait" && item.LastResultCode == "RateDeferred" && item.AttemptCount == 0);
+            Assert.Equal(0, await sender.TickAsync(deadline.Token));
+            clock.Advance(TimeSpan.FromSeconds(6)); Assert.Equal(1, await sender.TickAsync(deadline.Token));
+            await receiver;
+            Assert.Equal(2, await db.NotificationDeliveries.CountAsync(item => item.NotificationId == source.Id && item.State == "Succeeded"));
+            Assert.Equal(2, await db.NotificationDeliveryAttempts.CountAsync(item => item.ResultCode == "Accepted"));
+            foreach (var id in statuses.Select(item => item.Id))
+                Assert.Single(await new NotificationManagementRepository(db).AttemptsAsync(id, default));
+
+            // A queued old revision cannot adopt newly rotated private values.
+            var rotated = new NotificationEvent { SourceKey = "sender-rotation", SourceKind = "Alert", Audience = "Administrator", MessageCode = "ALERT_RECOVERED", Severity = "Info", OccurredAtUtc = clock.GetUtcNow(), PublishedAtUtc = clock.GetUtcNow(), ExpiresAtUtc = clock.GetUtcNow().AddDays(1) };
+            db.NotificationEvents.Add(rotated); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+            await using var prepared = await transport.PrepareAsync("Webhook", "native-target", "native-credential", default);
+            await store.RouteBatchAsync(clock.GetUtcNow(), default, channels.ToDictionary(item => item.Id, _ => prepared.ConfigurationRevision));
+            var replacement = path + ".new";
+            await File.WriteAllTextAsync(replacement, registry.Replace(fakeSecret, "rotated-native-not-a-real-key", StringComparison.Ordinal));
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(replacement, UnixFileMode.UserRead | UnixFileMode.UserWrite); File.Move(replacement, path, true);
+            Assert.Equal(0, await sender.TickAsync(deadline.Token));
+            Assert.Equal(2, await db.NotificationDeliveries.CountAsync(item => item.NotificationId == rotated.Id && item.State == "Canceled" && item.LastResultCode == "ConfigurationChanged"));
+            Assert.Equal(2, await db.NotificationDeliveryAttempts.CountAsync());
+            Assert.False(await db.NotificationDeliveries.AnyAsync(item => item.ConfigurationRevision == null));
+            await Smtp(path, source, clock, deadline.Token);
+            Console.WriteLine("INBOX_PHASE=dispatch-sender-http-rate-rotation");
+        }
+        finally { listener.Stop(); File.Delete(path); File.Delete(path + ".new"); Directory.Delete(directory); }
+    }
+
+    private static async Task Smtp(string path, NotificationEvent message, TimeProvider clock, CancellationToken cancellationToken)
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=localhost", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var names = new SubjectAlternativeNameBuilder(); names.AddIpAddress(IPAddress.Loopback); request.CertificateExtensions.Add(names.Build());
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
+        var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        try
+        {
+            await File.WriteAllTextAsync(path, JsonSerializer.Serialize(new { version = 1,
+                targets = new Dictionary<string, object> { ["native-email"] = new { provider = "Email", smtpHost = "127.0.0.1", smtpPort = port, tls = "SslOnConnect", from = "whaledeck@example.invalid", to = CollectorRecipients, allowedAddresses = LoopbackAddresses, allowPrivateNetwork = true } },
+                credentials = new Dictionary<string, object>() }), cancellationToken);
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            var accepted = ReceiveSmtp(listener, certificate, cancellationToken);
+            var transport = new NotificationTransport(new PrivateNotificationConfiguration(path), new NotificationNetworkPolicy(true, certificate.GetCertHashString(HashAlgorithmName.SHA256)), clock);
+            await using var prepared = await transport.PrepareAsync("Email", "native-email", null, cancellationToken);
+            var id = Guid.NewGuid();
+            Assert.Equal(NotificationTransportResult.Accepted, await prepared.SendAsync(id, message, cancellationToken));
+            var data = await accepted;
+            Assert.Contains(id.ToString("N") + "@whaledeck.invalid", data); Assert.Contains("ALERT_ACTIVE", data);
+            Assert.DoesNotContain("recipientSubject", data);
+            Console.WriteLine("INBOX_PHASE=dispatch-sender-real-tls-smtp");
+        }
+        finally { listener.Stop(); }
+    }
+
+    private static async Task<string> ReceiveSmtp(TcpListener listener, X509Certificate2 certificate, CancellationToken cancellationToken)
+    {
+        using var client = await listener.AcceptTcpClientAsync(cancellationToken);
+        await using var stream = new SslStream(client.GetStream());
+        await stream.AuthenticateAsServerAsync(new SslServerAuthenticationOptions { ServerCertificate = certificate, ClientCertificateRequired = false }, cancellationToken);
+        using var reader = new StreamReader(stream, Encoding.UTF8, false, 4096, true);
+        await stream.WriteAsync(Encoding.ASCII.GetBytes("220 native.local ESMTP\r\n"), cancellationToken);
+        for (var index = 0; index < 20; index++)
+        {
+            var line = await reader.ReadLineAsync(cancellationToken); Assert.NotNull(line); Assert.True(line.Length < 2048);
+            string response;
+            if (line.StartsWith("EHLO ", StringComparison.Ordinal)) response = "250-native.local\r\n250 PIPELINING\r\n";
+            else if (line.StartsWith("MAIL FROM:", StringComparison.Ordinal) || line.StartsWith("RCPT TO:", StringComparison.Ordinal)) response = "250 OK\r\n";
+            else if (line == "DATA")
+            {
+                await stream.WriteAsync(Encoding.ASCII.GetBytes("354 End data with dot\r\n"), cancellationToken);
+                var body = new StringBuilder();
+                for (var count = 0; count < 200; count++)
+                {
+                    var part = await reader.ReadLineAsync(cancellationToken); Assert.NotNull(part); Assert.True(part.Length <= 2048);
+                    if (part == ".")
+                    { await stream.WriteAsync(Encoding.ASCII.GetBytes("250 Accepted by isolated collector\r\n"), cancellationToken); return body.ToString(); }
+                    body.AppendLine(part); Assert.True(body.Length < 32768);
+                }
+                throw new InvalidOperationException("Isolated SMTP DATA budget exceeded.");
+            }
+            else throw new InvalidOperationException("Unexpected isolated SMTP command.");
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(response), cancellationToken);
+        }
+        throw new InvalidOperationException("Isolated SMTP command budget exceeded.");
+    }
+
+    private static async Task Receive(TcpListener listener, int count, string secret, CancellationToken cancellationToken)
+    {
+        for (var index = 0; index < count; index++)
+        {
+            using var client = await listener.AcceptTcpClientAsync(cancellationToken); await using var stream = client.GetStream();
+            var header = new List<byte>(); var one = new byte[1];
+            while (header.Count < 16384)
+            {
+                Assert.Equal(1, await stream.ReadAsync(one, cancellationToken)); header.Add(one[0]);
+                if (header.Count >= 4 && header[^4] == 13 && header[^3] == 10 && header[^2] == 13 && header[^1] == 10) break;
+            }
+            Assert.True(header.Count < 16384);
+            var lines = Encoding.ASCII.GetString(header.ToArray()).Split("\r\n"); Assert.Equal("POST /hook HTTP/1.1", lines[0]);
+            var fields = lines.Skip(1).Where(line => line.Contains(':', StringComparison.Ordinal)).Select(line => line.Split(':', 2))
+                .ToDictionary(item => item[0], item => item[1].Trim(), StringComparer.OrdinalIgnoreCase);
+            var length = int.Parse(fields["Content-Length"], System.Globalization.CultureInfo.InvariantCulture); Assert.InRange(length, 1, 16384);
+            var body = new byte[length]; await stream.ReadExactlyAsync(body, cancellationToken);
+            var id = Guid.Parse(fields["X-WhaleDeck-Delivery"]);
+            Assert.Equal(NotificationPayload.WebhookSignature(fields["X-WhaleDeck-Timestamp"], id, body, secret), fields["X-WhaleDeck-Signature"]);
+            using var json = JsonDocument.Parse(body); Assert.Equal(id, json.RootElement.GetProperty("deliveryId").GetGuid());
+            Assert.DoesNotContain(secret, Encoding.UTF8.GetString(body)); Assert.DoesNotContain("recipientSubject", Encoding.UTF8.GetString(body));
+            await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"), cancellationToken);
+        }
+    }
+    private sealed class SenderClock : TimeProvider
+    {
+        private DateTimeOffset current = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => current;
+        public void Advance(TimeSpan duration) => current += duration;
     }
 
     private static async Task Management(DbContextOptions<PlatformDbContext> options, PlatformDbContext db, NotificationDispatchStore store, DateTimeOffset now)

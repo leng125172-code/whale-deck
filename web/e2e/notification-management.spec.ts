@@ -21,6 +21,7 @@ for (const width of [320, 1440])
         sessionStorage.setItem('whaledeck-preview-authenticated', 'true'),
       )
       const writes: { key: string; body: string }[] = []
+      let hasDelivery = false
       await page.route('**/api/v1/**', (route) => {
         const request = route.request()
         const path = new URL(request.url()).pathname.replace('/api/v1/', '')
@@ -38,15 +39,48 @@ for (const width of [320, 1440])
           return route.fulfill({ json: { items: [channel], hasMore: false, page: 1, take: 25 } })
         if (path === 'notifications/manage/routes')
           return route.fulfill({ json: { items: [], hasMore: false, page: 1, take: 25 } })
+        if (path.endsWith('/attempts'))
+          return route.fulfill({
+            json: [
+              {
+                attemptNumber: 1,
+                startedAtUtc: '2026-10-14T01:00:00Z',
+                finishedAtUtc: '2026-10-14T01:00:01Z',
+                resultCode: 'Accepted',
+              },
+            ],
+          })
         if (path === 'notifications/manage/deliveries')
-          return route.fulfill({ json: { items: [], hasMore: false, page: 1, take: 25 } })
+          return route.fulfill({
+            json: {
+              items: hasDelivery
+                ? [
+                    {
+                      id: 'e8e95c77-eaad-4d2c-8a6d-29d00f5606ec',
+                      notificationId: channel.id,
+                      channelId: channel.id,
+                      channelVersion: 0,
+                      provider: 'Webhook',
+                      state: 'Succeeded',
+                      attemptCount: 1,
+                      createdAtUtc: '2026-10-14T01:00:00Z',
+                      lastAttemptAtUtc: '2026-10-14T01:00:00Z',
+                      lastResultCode: 'Accepted',
+                    },
+                  ]
+                : [],
+              hasMore: false,
+              page: 1,
+              take: 25,
+            },
+          })
         if (path === 'notifications/summary')
           return route.fulfill({ json: { unreadCount: 0, totalCount: 0, snapshotSequence: 0 } })
         return route.fulfill({ json: [] })
       })
       await page.goto('/settings/notifications')
       await expect(page.getByRole('heading', { name: '通知管理' })).toBeVisible()
-      await expect(page.getByText('外部发送尚未接入')).toBeVisible()
+      await expect(page.getByText('外部发送需要私有配置')).toBeVisible()
       await expect(page.getByText('Ops channel', { exact: true })).toBeVisible()
       await page.getByRole('button', { name: '编辑', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: '渠道配置' })
@@ -69,6 +103,12 @@ for (const width of [320, 1440])
       })
       await page.getByRole('tab', { name: '投递记录', exact: true }).click()
       await expect(page.getByText('暂无投递记录', { exact: true })).toBeVisible()
+      hasDelivery = true
+      await page.getByRole('button', { name: '重新载入', exact: true }).click()
+      await page.getByRole('button', { name: '尝试记录', exact: true }).click()
+      const attempts = page.getByRole('dialog', { name: '投递尝试记录', exact: true })
+      await expect(attempts.getByText('Accepted', { exact: true })).toBeVisible()
+      await attempts.getByRole('button', { name: 'Close this dialog' }).click()
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       )

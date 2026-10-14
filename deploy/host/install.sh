@@ -19,6 +19,8 @@ id whaledeck-agent >/dev/null 2>&1 || useradd --system --gid whaledeck --groups 
 id whaledeck-maintenance >/dev/null 2>&1 || useradd --system --gid whaledeck --home-dir /nonexistent --shell /usr/sbin/nologin whaledeck-maintenance
 
 install -d -o root -g whaledeck -m 0750 /etc/whaledeck
+[[ ! -L /etc/whaledeck/notifications ]] || { echo 'Notification private directory must not be a symlink.' >&2; exit 1; }
+install -d -o root -g whaledeck -m 0750 /etc/whaledeck/notifications
 install -d -o whaledeck-agent -g whaledeck -m 0750 /data/WhaleDeck/apps
 install -d -o root -g root -m 0755 /opt/whaledeck-agent /opt/whaledeck-maintenance /usr/local/libexec
 # GNU cp otherwise truncates an existing executable in place and fails with

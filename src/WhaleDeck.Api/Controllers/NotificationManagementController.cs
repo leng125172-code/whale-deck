@@ -51,4 +51,9 @@ public sealed class NotificationManagementController(NotificationManagementServi
         return new(user.Subject, user.IsAdministrator, HttpContext.TraceIdentifier, HttpContext.Connection.RemoteIpAddress?.ToString(),
             Request.Headers["Idempotency-Key"].Count == 1 ? Request.Headers["Idempotency-Key"].ToString() : null);
     }
+
+    /// <summary>At most five fixed result/timestamp records. No private transport payload or configuration revision.</summary>
+    [HttpGet("deliveries/{id:guid}/attempts")]
+    public async Task<ActionResult<IReadOnlyCollection<NotificationAttemptDto>>> Attempts(Guid id, CancellationToken cancellationToken) =>
+        Ok(await notifications.AttemptsAsync(await Context(cancellationToken), id, cancellationToken));
 }

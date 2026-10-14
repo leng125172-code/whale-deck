@@ -18,6 +18,7 @@ public sealed class NotificationManagementTests
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ListChannelsAsync(ordinary, new(), default));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ListRoutesAsync(ordinary, new(), id, default));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ListDeliveriesAsync(ordinary, new(), id, "invalid", default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.AttemptsAsync(ordinary, id, default));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.SaveChannelAsync(ordinary, null, Channel, default));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.SaveRouteAsync(ordinary, null, new(id, Confirmed: true), default));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.DeleteChannelAsync(ordinary, id, new(0, true), default));
@@ -121,6 +122,8 @@ public sealed class NotificationManagementTests
         public Task<NotificationManagementPage<NotificationChannelDto>> ListChannelsAsync(NotificationManagementQuery query, CancellationToken cancellationToken) => List<NotificationChannelDto>(query);
         public Task<NotificationManagementPage<NotificationRouteDto>> ListRoutesAsync(NotificationManagementQuery query, Guid? channelId, CancellationToken cancellationToken) => List<NotificationRouteDto>(query);
         public Task<NotificationManagementPage<NotificationDeliveryDto>> ListDeliveriesAsync(NotificationManagementQuery query, Guid? channelId, string? state, CancellationToken cancellationToken) => List<NotificationDeliveryDto>(query);
+        public Task<IReadOnlyCollection<NotificationAttemptDto>> AttemptsAsync(Guid deliveryId, CancellationToken cancellationToken)
+        { Calls++; return Task.FromResult<IReadOnlyCollection<NotificationAttemptDto>>([]); }
         public Task<NotificationChannelDto> SaveChannelAsync(NotificationContext context, Guid? id, SaveNotificationChannelCommand command, CancellationToken cancellationToken)
         { Calls++; Command = command; return Task.FromResult(new NotificationChannelDto(id ?? Guid.NewGuid(), command.Name, command.Provider, command.DestinationReference, command.CredentialReference is not null, command.IsEnabled, 0, DateTimeOffset.UtcNow)); }
         public Task<NotificationRouteDto> SaveRouteAsync(NotificationContext context, Guid? id, SaveNotificationRouteCommand command, CancellationToken cancellationToken)

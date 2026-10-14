@@ -120,6 +120,13 @@ public sealed class NotificationManagementRepository(PlatformDbContext db) : INo
 
     private Task<int> InvalidateChannel(Guid id, CancellationToken cancellationToken) => db.NotificationChannels.Where(item => item.Id == id)
         .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.Version, item => item.Version + 1), cancellationToken);
+
+    public async Task<IReadOnlyCollection<NotificationAttemptDto>> AttemptsAsync(Guid deliveryId, CancellationToken cancellationToken)
+    {
+        if (!await db.NotificationDeliveries.AnyAsync(item => item.Id == deliveryId, cancellationToken)) throw new KeyNotFoundException("Notification delivery was not found.");
+        return await db.NotificationDeliveryAttempts.AsNoTracking().Where(item => item.DeliveryId == deliveryId).OrderBy(item => item.AttemptNumber).Take(5)
+            .Select(item => new NotificationAttemptDto(item.AttemptNumber, item.StartedAtUtc, item.FinishedAtUtc, item.ResultCode)).ToArrayAsync(cancellationToken);
+    }
     private async Task<NotificationChannel> Channel(Guid id, CancellationToken cancellationToken) =>
         await db.NotificationChannels.FromSqlInterpolated($"SELECT * FROM notification_channels WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException("Notification channel was not found.");

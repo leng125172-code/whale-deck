@@ -2,6 +2,7 @@
   { "id": "whaledeck.api", "type": "Container", "externalId": "whaledeck-api", "protectionLevel": "ControlPlane" },
   { "id": "whaledeck.worker", "type": "Container", "externalId": "whaledeck-worker", "protectionLevel": "ControlPlane" },
   { "id": "whaledeck.gateway", "type": "Container", "externalId": "whaledeck-gateway", "protectionLevel": "ControlPlane" },
+  { "id": "whaledeck.notifications-egress", "type": "DockerNetwork", "externalId": "whaledeck-notifications-egress", "protectionLevel": "ControlPlane" },
   { "id": "database-platform.postgres", "type": "Container", "externalId": "database-platform-postgres", "protectionLevel": "CriticalData" },
   { "id": "database-platform.mariadb", "type": "Container", "externalId": "database-platform-mariadb", "protectionLevel": "CriticalData" },
   { "id": "database-platform.mongodb", "type": "Container", "externalId": "database-platform-mongodb", "protectionLevel": "CriticalData" },
