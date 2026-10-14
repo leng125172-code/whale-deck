@@ -1,5 +1,7 @@
 # 外部通知可靠投递实施记录
 
+最新2026-10-14运行时6ad5970已签收Sender Worker、私有文件revision、传输适配/目标共享限流与尝试记录API/UI子项；真实原生HTTP/TLS SMTP与数据库及部署通过。仍缺私有值界面/安全Agent写入、测试发送/未知手动重试及外部厂商批准端验收，不能当作整项通知完成。详见 [最新证据](qa/NOTIFICATION_SENDER.md)。以下阶段描述保留为历史。
+
 2026-10-14：当前运行时e5b2cfc已签收渠道/路由元数据CRUD、投递查询API和管理员配置UI；详见 [实际签收](qa/NOTIFICATION_MANAGEMENT.md)。包含真实原生事务/幂等/预算、OIDC权限与HTTP资源验证，不能代表真实发送；Sender Worker、私有目标/凭据值管理、传输/签名/限流仍缺，完整渠道功能未完成。下方原9d534b3/ad0e661阶段的“尚未有API/UI”等描述保留为历史，不取代最新证据。站内消息见 [现有验收](NOTIFICATIONS.md) 与 [最新快照签收](qa/NOTIFICATION_READ_SNAPSHOTS.md)。不取消 Email/Webhook/钉钉/企业微信/飞书、配置/签名/测试/限流/重试及批准目标真实验收的全量范围。
 
 ## 已写入的基础
