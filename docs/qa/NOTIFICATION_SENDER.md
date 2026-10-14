@@ -30,7 +30,7 @@ Worker单独无端口的受保护egress网络；数据库/cache/API网络仍内�
 
 真实OIDC管理员/普通/匿名元数据CRUD、幂等/版本/CSRF/Origin/权限/OpenAPI和清理回归再次通过。8个HTTP入口/共享/页面分块与当前Gateway逐字节一致，页面含新提示与attempts查询；index-BaFi9er_.js SHA256=5459f2fdd160e404ba5fa6f11318e4a7b479bda44ac4dc1dcbf54473b15c6f66，NotificationSettingsView-iYM45rmo.js SHA256=efd98bf69ce46ce5b31b052b5d9071272eb46e66c480baef07c815bdb8ead520。现场生产身份浏览器未另行走查，attempts的真实行读取在原生仓储中已验证，不冒称生产已生成发送记录。首轮只读migration检查用了错误SQL引号/列名，随后正确TABLE读取确认两项migration，未制造新发布或改动数据。
 
-仍缺：WebUI真实目标/凭据配置与安全Agent写入/原子变更流程、测试发送入口及管理员确认Unknown手动重试、模板/偏好管理、更多故障/延迟/超额组合，以及批准目标的真实Email/Bot厂商验收。不能因适配器或本地接收端通过而标整项渠道完成。当前“已写入”与“已原生/部署验收”必须分开。
+后续 `fe3e034` 已分项签收测试发送与管理员确认 Unknown 人工子记录，见 [显式意图验收](NOTIFICATION_EXPLICIT_INTENTS.md)。仍缺 WebUI 真实目标/凭据配置与安全 Agent 写入/原子变更流程、模板/偏好管理、更多故障/延迟/超额组合，以及批准目标的真实 Email/Bot 厂商验收。不能因适配器或本地接收端通过而标整项渠道完成。当前“已写入”与“已原生/部署验收”必须分开。
 
 ## 依据与外援
 

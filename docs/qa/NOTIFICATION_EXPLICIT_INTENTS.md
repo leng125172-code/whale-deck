@@ -13,9 +13,13 @@
 
 ## 验证状态
 
-本地 Release 测试：543 Unit / 73 Integration 通过，6 个原生测试明确跳过；119 前端单元测试、类型/lint/生产构建通过。通知管理独立 8 项浏览器测试通过（320/1440px，明暗）；更广回归与真实原生/运行时验收进行中，不以本地跳过视为原生通过。
+本地 Release 全方案构建 0 警告/错误，543 Unit / 73 Integration 通过，6 个原生测试明确跳过；119 前端单元测试、类型/lint/生产构建通过。通知管理独立 8 项浏览器测试通过（320/1440px，明暗），通知/配置/限流/搜索联合回归共 18 项通过（包含上述 8 项，不能相加重复计数）。
 
-原生测试使用单独临时数据库、无生产数据挂载的 SDK 容器、仅测试内本地 HTTP 与 TLS SMTP 接收端。新增收到正文后丢弃响应、Unknown 不重发、确认子记录只创建一次、原记录不变、停用渠道显式测试和撤权不发出等断言；实际结果以完成后的状态报告为准。
+冻结源码 `fe3e034135ce30d563073032ac4ceceb8a99f0c9` 原生实际执行 1 / 通过 1，清理确认 true；状态报告 `deploy/artifacts/native-status/dispatch-d5505e8e423943d18f5c4ed7667f233f.json`。时间 08:24:38.201514–08:26:39.117400 UTC，SDK immutable ID `sha256:c0790639332692a0d56cdd81ed581cfd24d040d9839764c138994866df89a3b6`。使用单独临时数据库、无生产数据挂载的 SDK 容器、仅测试内本地 HTTP 与 TLS SMTP 接收端。收到正文后丢弃响应、Unknown 不重发、确认子记录只创建一次、原记录不变、停用渠道显式测试和撤权不发出等新增断言均真正通过，不以本地跳过视为原生通过。
+
+工作站发布由 Job `630cc30b-0e4b-466c-8072-f63ff873e61e` 调度，Job 成功只表示宿主更新启动。最终宿主 journal 确认 16:27:47 CST 启动、16:29:15 CST Deactivated successfully；目标记录为完整 `fe3e034` SHA，维护状态 healthy/更新完成、11 核心容器 healthy、Agent/维护/更新 timer active，完整宿主权限/UDS/受限 helper/动态入口验证通过，sudo 保留。新的 4 个投递字段实际存在，Worker 私有目录仍只读，不挂 Docker Socket。
+
+实际 Authentik 管理员/普通用户/匿名验证、配置 CRUD/版本/幂等/CSRF/Origin，以及两个新增入口的确认/重复风险/非法版本/缺键拒绝、普通与匿名拒绝、OpenAPI 通过；测试账户与临时配置清理、生产发送 0。8 个 HTTP 入口/共享/页面资源与 active Gateway 逐字节相同；`index-DLEBSc8V.js` SHA256 `184cde306743531e416ba69c767cdef8ad38f0711924eff99992c3bd6a31f873`，`NotificationSettingsView-QHJHWuG5.js` SHA256 `2481c32fddabd1c4da63cd7ef5e960684deb53c8d27e807b723a015db31dc7d7`。真实生产身份浏览器未另行走查，不将 fixture 浏览器或资源核对冒充生产 UI 点击；实际发送与人工子记录正向路径在隔离原生套件中验证。
 
 工作站真实 OIDC 验收脚本增加两新入口的确认/版本/幂等键与普通/匿名拒绝、OpenAPI 检查，不对生产目标提交发送意图。真实批准厂商/邮箱启用不在本轮自动测试中。
 

@@ -31,6 +31,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+- 2026-10-14 重连最新 runtime `fe3e034` 签收显式通知测试/Unknown 确认人工子记录：543 Unit/73 Integration、119 前端、18 联合浏览器及冻结原生 PG/实际签名接收后响应丢失/原历史不变/单子记录/TLS SMTP/清理通过。真实 OIDC 接口与新增权限/确认拒绝、8 HTTP资源相同、update journal 成功结束、维护 healthy、11 核心/宿主服务/动态入口/权限通过，sudo 保留。见 [证据](qa/NOTIFICATION_EXPLICIT_INTENTS.md)；下一步私有值 UI/Agent 写入，P4-06 和 76 项全量目标仍继续，以下 runtime 为历史。
+
 - 2026-10-14 当前runtime6ad5970签收通知Sender子项，538 Unit/73 Integration、119前端、36浏览器及真实独立PG/签名HTTP/TLS SMTP接收、限流/轮换/尝试通过并清理；实际OIDC回归/8资产相同、unit成功终止/两migration落库/11健康。仍缺私有值WebUI/Agent安全写入、测试发送与未知确认重试、厂商批准端验收等；完整76项继续，P4-06未整项签收。见 [证据](qa/NOTIFICATION_SENDER.md)，下方运行时为历史。
 
 - 2026-10-14 最新运行时e5b2cfc签收渠道/路由元数据配置和投递查询API/UI增量：498 Unit/73 Integration、119前端、36浏览器回归+空态4复测、Release/类型/lint/构建；独立原生管理事务/预算/幂等实际通过并清理，真实OIDC/API权限/CSRF/Origin/版本/OpenAPI及8个HTTP资源匹配通过。实际更新unit终态成功、11核心healthy、sudo保留。P0-07/P2-12/P4-06均未整体签完，外部传输/Sender Worker/私有值配置/签名仍缺，76项完整目标继续。见 [最新签收](qa/NOTIFICATION_MANAGEMENT.md#工作站最终签收)，下方运行时为历史。

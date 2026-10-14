@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-14 工作站重连后最新 runtime `fe3e034` 已签收通知显式测试与 Unknown 确认重试子项：原记录不可变、关联子记录/单父去重、执行前权限复核、版本/确认/CSRF/幂等/审计与 UI；543 Unit/73 Integration、119 前端、18 联合浏览器回归及 Release 全方案通过。冻结原生 PG/实际本地签名 HTTP 响应丢失/Unknown 不重发/人工子记录、TLS SMTP 与清理实际通过；宿主 update 成功终态、维护 healthy、11 核心健康、实际 OIDC 拒绝契约/OpenAPI及8 HTTP资产一致、动态入口/UDS/权限通过，sudo 保留。详见 [显式意图验收](qa/NOTIFICATION_EXPLICIT_INTENTS.md)。下一步私有目标/凭据 WebUI 与 Agent 安全写入；没有生产群/邮箱发送，P4-06 和 76 项整体仍未完成。
+
 - 2026-10-14 最新runtime6ad5970签收通知Sender增量：私有绑定revision、Email/Webhook/三种Bot适配、独立Worker、尝试历史API/UI、每目标与渠道共享SQL限流；538 Unit/73 Integration（6原生本机跳过）、119前端及36浏览器、Release/类型/lint/构建通过。冻结原生Fact实际执行HTTP签名接收/共享限流/轮换取消/TLS SMTP并清理，实际OIDC元数据回归/8个HTTP资源核对通过。第一次Git TLS失败未创建任务，核实后重试；实际unit成功终态、两个migration落库、11核心healthy、sudo保留。没有启用生产渠道或真实群/邮箱；仍缺WebUI私有值管理/专用Agent写入、测试发送/确认未知重试及厂商真实验收，76项整体未完成。见 [Sender签收](qa/NOTIFICATION_SENDER.md)。
 
 - 2026-10-14 最新运行时e5b2cfc签收通知渠道/路由配置与投递查询API/UI：498 Unit/73 Integration（6原生本机跳过）、119前端、36浏览器及手机空态4复测、Release/类型/lint/构建通过；f7c3f36冻结原生管理/派送基础Fact真正执行1/通过1/清理，实际OIDC权限/CRUD/幂等/版本/CSRF/Origin/OpenAPI通过，8个HTTP资源与Gateway逐字节一致。实际更新unit成功终止、11核心healthy、Agent/维护/timer active、sudo保留、临时测试配置/账户清理。外部发送/签名/Worker等仍待实现，76项目标不缩减；下方runtime是历史。见 [本轮最终签收](qa/NOTIFICATION_MANAGEMENT.md#工作站最终签收)。
