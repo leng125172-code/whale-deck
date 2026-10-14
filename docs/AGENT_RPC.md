@@ -1,10 +1,10 @@
 # WhaleDeck Agent RPC 契约
 
-范围修订：2026-10-13 [P0–P5 基线](GOAL_P0_P5.md) 增加受控终端会话/文件/恢复/网络/网站/邮件/DNS/多节点适配。现有 1.16 RPC 与本地 UDS 限制仍是当前运行契约，不得直接放宽成任意路径/命令；新增能力须独立设计、能力协商和安全测试。P5 远程 Agent 采用专用 mTLS 通道，本地 UDS 不暴露 TCP；远程写入须同时验证节点/资源/主体/短时 capability。
+范围修订：2026-10-13 [P0–P5 基线](GOAL_P0_P5.md) 增加受控终端会话/文件/恢复/网络/网站/邮件/DNS/多节点适配。源码新增 1.17 通知私有配置，保留本地 UDS 限制，不得直接放宽成任意路径/命令；新增能力须独立设计、能力协商和安全测试。P5 远程 Agent 采用专用 mTLS 通道，本地 UDS 不暴露 TCP；远程写入须同时验证节点/资源/主体/短时 capability。
 
 本文定义 `WhaleDeck.Api/Worker` 与宿主机 `WhaleDeck.Agent` 的内部契约。Agent 是唯一可以访问 Docker Engine、systemd、journald 和批准宿主机资源的组件。
 
-开发空间拟新增专用 `RPC-DEV-001..007`，只处理登记空间/环境/run/session ID，按能力协商启用。代码执行和调试发生在隔离空间内，不新增任意宿主命令/路径接口；调试适配器与 IDE 不持有 Docker/Agent Socket。契约与数据流见 [开发空间 Agent 契约](DEVELOPMENT_WORKSPACES.md#6-agentworker-契约)。此处是待实现设计，**当前协议为 1.16，但未包含开发空间能力**。
+开发空间拟新增专用 `RPC-DEV-001..007`，只处理登记空间/环境/run/session ID，按能力协商启用。代码执行和调试发生在隔离空间内，不新增任意宿主命令/路径接口；调试适配器与 IDE 不持有 Docker/Agent Socket。契约与数据流见 [开发空间 Agent 契约](DEVELOPMENT_WORKSPACES.md#6-agentworker-契约)。此处是待实现设计，**源码协议 1.17 未包含开发空间能力**。
 
 ## 1. 传输与版本
 
@@ -14,7 +14,13 @@
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
-- 当前源码协议版本为 `1.16`。`1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`，`1.15` 增加 `backups.capacity`，`1.16` 增加 `host.load-average`；旧次版本按能力协商并安全降级。
+- 当前源码协议版本为 `1.17`，新增 `notifications.private-configuration`。历史 `1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`，`1.15` 增加 `backups.capacity`，`1.16` 增加 `host.load-average`；旧次版本按能力协商并安全降级。
+
+### 通知私有配置（1.17）
+
+`notifications.private-configuration` 增加独立 `NotificationConfigurationService/Inspect/Apply`。Inspect 接受渠道 UUID 和可选操作 UUID，只返回别名/布尔/不透明版本及原操作回执；`binding_current=false` 表示已被后续变化取代。Apply 的私有字节只经 UDS 和 helper stdin，在有界校验后送固定 root writer，不能进入 OperationStore/任务/审计或命令参数。根回执和绑定同一个原子文件提交，可在输入暂存过期后查询确认；最终 Application 永久幂等和 PG 一致性仍须实现。
+
+固定 helper 用短时 systemd unit 逃离 Agent 只读挂载命名空间，writer 自身保持 ProtectSystem=strict，只有通知私有目录可写、无网络 socket；不扩大 Agent 的 ReadWritePaths。详见 [实现与验收状态](qa/NOTIFICATION_PRIVATE_CONFIGURATION.md)。源码与已部署运行时须按该证据区分；其他原有 1.16 能力保持兼容。
 
 ### 主机负载与状态（1.16）
 
