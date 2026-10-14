@@ -82,6 +82,13 @@ def main():
         assert own['itemCount'] == 0
         empty_batch = request(ordinary, 'POST', 'notifications/read-all', payload={'snapshotId': own['snapshotId']}).json()
         assert empty_batch == {'changedCount': 0, 'hasMore': False, 'processedCount': 0}
+        all_read = request(admin, 'POST', 'notifications/read-all', payload={'snapshotId': snapshot['snapshotId']}).json()
+        assert all_read['changedCount'] >= 1 and all_read['processedCount'] >= all_read['changedCount']
+        while all_read['hasMore']:
+            assert all_read['processedCount'] > 0
+            all_read = request(admin, 'POST', 'notifications/read-all', payload={'snapshotId': snapshot['snapshotId']}).json()
+        repeated = request(admin, 'POST', 'notifications/read-all', payload={'snapshotId': snapshot['snapshotId']}).json()
+        assert repeated == {'changedCount': 0, 'hasMore': False, 'processedCount': 0}
         assert request(ordinary, 'GET', 'notifications/summary').json()['unreadCount'] == 0
     finally:
         try:
@@ -96,7 +103,10 @@ def main():
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             inbox = request(admin, 'GET', 'notifications?kind=Alert&take=100').json()['items']
-            if any(item['sourceId'] == event_id and item['messageCode'] == 'ALERT_RECOVERED' for item in inbox): break
+            recovery = next((item for item in inbox if item['sourceId'] == event_id and item['messageCode'] == 'ALERT_RECOVERED'), None)
+            if recovery:
+                assert recovery['readAtUtc'] is None, 'Post-snapshot recovery was incorrectly marked read'
+                break
             time.sleep(2)
         else: raise RuntimeError('Disabled temporary rule did not produce recovery notification')
     print(json.dumps({'notificationInboxAcceptance': 'passed', 'realAuthentikAdminOrdinaryAnonymous': 'passed',
