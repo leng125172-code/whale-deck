@@ -3,7 +3,7 @@ using WhaleDeck.Application.Abstractions;
 namespace WhaleDeck.Application.Services;
 
 /// <summary>Only database work is retried by persistence; transport is invoked once, outside all transactions.</summary>
-public sealed class NotificationSender(INotificationDispatchRepository repository, INotificationTransport transport, TimeProvider clock)
+public sealed class NotificationSender(INotificationDispatchRepository repository, INotificationTransport transport, TimeProvider clock, INotificationRequestAuthorizer? authorizer = null)
 {
     public async Task<int> TickAsync(CancellationToken cancellationToken)
     {
@@ -26,13 +26,20 @@ public sealed class NotificationSender(INotificationDispatchRepository repositor
             var item = await repository.ClaimAsync(clock.GetUtcNow(), cancellationToken);
             if (item is null) break;
             var token = item.LeaseToken!.Value;
+            if (item.IntentKind != "Automatic" && (item.RequestedBySubject is null || authorizer is null ||
+                !await authorizer.IsAdministratorAsync(item.RequestedBySubject, cancellationToken)))
+            { await repository.RejectBeforeSendAsync(item.Id, token, clock.GetUtcNow(), "PermissionRevoked", cancellationToken); continue; }
             INotificationPreparedSend prepared;
             try { prepared = await transport.PrepareAsync(item.Provider, item.DestinationReference, item.CredentialReference, cancellationToken); }
             catch (NotificationConfigurationException error)
             { await repository.RejectBeforeSendAsync(item.Id, token, clock.GetUtcNow(), error.Code, cancellationToken); continue; }
             await using (prepared)
             {
-                if (item.ConfigurationRevision is null || item.ConfigurationRevision != prepared.ConfigurationRevision)
+                if (item.IntentKind == "Test" && item.ConfigurationRevision is null)
+                {
+                    if (!await repository.BindTestAsync(item.Id, token, prepared.ConfigurationRevision, clock.GetUtcNow(), cancellationToken)) continue;
+                }
+                else if (item.ConfigurationRevision is null || item.ConfigurationRevision != prepared.ConfigurationRevision)
                 { await repository.RejectBeforeSendAsync(item.Id, token, clock.GetUtcNow(), "ConfigurationChanged", cancellationToken); continue; }
                 var message = await repository.MessageAsync(item.NotificationId, cancellationToken);
                 if (message is null || message.Audience != "Administrator" || message.RecipientSubject is not null || message.ExpiresAtUtc <= clock.GetUtcNow())

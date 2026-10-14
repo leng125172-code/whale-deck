@@ -6,6 +6,14 @@ namespace WhaleDeck.UnitTests.Application;
 
 public sealed class NotificationSourcesTests
 {
+    [Fact]
+    public void TestSubmissionNeverClaimsSuccessfulDelivery()
+    {
+        var text = NotificationSources.Text(new() { SourceKey = "test", SourceKind = "NotificationTest", Audience = "Administrator", MessageCode = "NOTIFICATION_TEST", Severity = "Info" });
+        Assert.Equal("通知测试已提交", text.Title);
+        Assert.Contains("不代表消息已送达", text.Summary);
+    }
+
     [Theory]
     [InlineData("Active")]
     [InlineData("SeverityChanged")]

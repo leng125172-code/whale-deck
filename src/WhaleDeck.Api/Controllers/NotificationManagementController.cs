@@ -56,4 +56,12 @@ public sealed class NotificationManagementController(NotificationManagementServi
     [HttpGet("deliveries/{id:guid}/attempts")]
     public async Task<ActionResult<IReadOnlyCollection<NotificationAttemptDto>>> Attempts(Guid id, CancellationToken cancellationToken) =>
         Ok(await notifications.AttemptsAsync(await Context(cancellationToken), id, cancellationToken));
+
+    [HttpPost("channels/{id:guid}/test")]
+    public async Task<ActionResult<NotificationSubmissionDto>> Test(Guid id, TestNotificationCommand command, CancellationToken cancellationToken) =>
+        Accepted(await notifications.TestAsync(await Context(cancellationToken), id, command, cancellationToken));
+    /// <summary>Explicitly accept possible duplicate delivery. Creates one linked new intent; never resets original history or Sending.</summary>
+    [HttpPost("deliveries/{id:guid}/retry-unknown")]
+    public async Task<ActionResult<NotificationSubmissionDto>> RetryUnknown(Guid id, RetryUnknownNotificationCommand command, CancellationToken cancellationToken) =>
+        Accepted(await notifications.RetryUnknownAsync(await Context(cancellationToken), id, command, cancellationToken));
 }

@@ -80,13 +80,35 @@ public sealed class NotificationSenderTests
         Assert.Equal(0, transport.Calls); Assert.Equal(0, repository.Item.AttemptCount);
     }
 
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public async Task ExplicitIntentsRequireExecutionTimeAdministratorAndBindOnlyTest(bool administrator)
+    {
+        var clock = new Clock(); var repository = new Repository(clock, intentKind: "Test", requester: "requester", unbound: true);
+        var transport = new Transport(repository); var authorizer = new Authorizer(administrator);
+        await new NotificationSender(repository, transport, clock, authorizer).TickAsync(default);
+        Assert.Equal(1, authorizer.Calls); Assert.Equal(administrator ? 1 : 0, transport.Calls); Assert.Equal(administrator ? 1 : 0, repository.Bindings);
+        if (!administrator) Assert.Equal("PermissionRevoked", repository.Item.LastResultCode);
+    }
+    [Fact]
+    public async Task MissingRequestAuthorizerFailsClosed()
+    {
+        var clock = new Clock(); var repository = new Repository(clock, intentKind: "ManualRetry", requester: "requester"); var transport = new Transport(repository);
+        await new NotificationSender(repository, transport, clock).TickAsync(default);
+        Assert.Equal(0, transport.Calls); Assert.Equal("PermissionRevoked", repository.Item.LastResultCode);
+    }
+    private sealed class Authorizer(bool administrator) : INotificationRequestAuthorizer
+    {
+        public int Calls { get; private set; }
+        public Task<bool> IsAdministratorAsync(string subject, CancellationToken cancellationToken) { Calls++; return Task.FromResult(administrator); }
+    }
     private sealed class Clock : TimeProvider
     {
         private DateTimeOffset current = DateTimeOffset.UtcNow;
         public override DateTimeOffset GetUtcNow() => current;
         public void Advance(TimeSpan duration) => current += duration;
     }
-    private sealed class Repository(Clock clock, string? revision = null) : INotificationDispatchRepository
+    private sealed class Repository(Clock clock, string? revision = null, string intentKind = "Automatic", string? requester = null, bool unbound = false) : INotificationDispatchRepository
     {
         public List<string> Order { get; } = [];
         public bool LoseCompletion { get; set; }
@@ -94,7 +116,10 @@ public sealed class NotificationSenderTests
         public bool Personal { get; set; }
         public bool CompletionTokenCanceled { get; private set; }
         private readonly NotificationChannel channel = new() { Name = "test", Provider = "Webhook", DestinationReference = "test", IsEnabled = true };
-        public NotificationDelivery Item { get; } = new() { NotificationId = Guid.NewGuid(), ChannelId = Guid.NewGuid(), Provider = "Webhook", DestinationReference = "test", ConfigurationRevision = revision ?? new string('A', 64), CreatedAtUtc = clock.GetUtcNow(), NextAttemptAtUtc = clock.GetUtcNow() };
+        public NotificationDelivery Item { get; } = new() { NotificationId = Guid.NewGuid(), ChannelId = Guid.NewGuid(), Provider = "Webhook", DestinationReference = "test", ConfigurationRevision = unbound ? null : revision ?? new string('A', 64), IntentKind = intentKind, RequestedBySubject = requester, CreatedAtUtc = clock.GetUtcNow(), NextAttemptAtUtc = clock.GetUtcNow() };
+        public int Bindings { get; private set; }
+        public Task<bool> BindTestAsync(Guid id, Guid token, string configurationRevision, DateTimeOffset now, CancellationToken cancellationToken)
+        { Bindings++; return Task.FromResult(Item.IntentKind == "Test" && Item.State == "Leased" && Item.LeaseToken == token); }
         public Task<IReadOnlyCollection<NotificationChannel>> EnabledChannelsAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<NotificationChannel>>([channel]);
         public Task<int> RouteBatchAsync(DateTimeOffset now, CancellationToken cancellationToken, IReadOnlyDictionary<Guid, string>? revisions = null) => Task.FromResult(0);
         public Task<NotificationDelivery?> ClaimAsync(DateTimeOffset now, CancellationToken cancellationToken)

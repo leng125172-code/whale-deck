@@ -57,6 +57,15 @@ def main():
         delivered = admin.get(endpoint + 'deliveries', params={'channelId': channel_id}, timeout=15)
         assert delivered.status_code == 200 and delivered.json()['items'] == []
         assert all(token not in delivered.text for token in ('leaseToken', 'credentialReference', 'destinationReference'))
+        # Check new write contracts without queuing an external send in production.
+        test_path = 'channels/' + channel_id + '/test'
+        assert write('POST', test_path, {'expectedChannelVersion': 0, 'confirmed': False}).status_code == 400
+        assert write('POST', test_path, {'expectedChannelVersion': -1, 'confirmed': True}).status_code == 400
+        assert write('POST', test_path, {'expectedChannelVersion': 0, 'confirmed': True}, extra={'Idempotency-Key': ''}).status_code == 400
+        retry_path = 'deliveries/' + str(uuid.uuid4()) + '/retry-unknown'
+        retry_body = {'expectedVersion': 0, 'expectedChannelVersion': 0, 'confirmed': True, 'acceptDuplicateRisk': False}
+        assert write('POST', retry_path, retry_body).status_code == 400
+        assert write('POST', retry_path, {**retry_body, 'acceptDuplicateRisk': True}).status_code == 404
         name = 'whaledeck-notification-validation-' + uuid.uuid4().hex[:10]
         password = 'Wd!' + secrets.token_urlsafe(24) + '9aA'
         created = identity.post(AUTHENTIK_API + 'core/users/', json={'username': name, 'name': 'Ephemeral notification acceptance', 'email': '', 'is_active': True, 'groups': []}, timeout=20)
@@ -67,9 +76,16 @@ def main():
         for path in ('channels', 'routes', 'deliveries'):
             assert ordinary.get(endpoint + path, timeout=15, allow_redirects=False).status_code == 403
             assert anonymous.get(endpoint + path, timeout=15, allow_redirects=False).status_code == 401
+        ordinary_csrf = ordinary.get(base + '/api/v1/auth/csrf', timeout=15).json()
+        for path, body in ((test_path, {'expectedChannelVersion': 0, 'confirmed': True}), (retry_path, {**retry_body, 'acceptDuplicateRisk': True})):
+            ordinary_headers = {ordinary_csrf['headerName']: ordinary_csrf['token'], 'Origin': base, 'Idempotency-Key': str(uuid.uuid4())}
+            assert ordinary.post(endpoint + path, json=body, headers=ordinary_headers, timeout=15, allow_redirects=False).status_code == 403
+            assert anonymous.post(endpoint + path, json=body, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 401
         doc = admin.get(base + '/openapi/v1.json', timeout=20)
         assert doc.status_code == 200
         assert all('/api/v1/notifications/manage/' + path in doc.json()['paths'] for path in ('channels', 'routes', 'deliveries'))
+        assert '/api/v1/notifications/manage/channels/{id}/test' in doc.json()['paths']
+        assert '/api/v1/notifications/manage/deliveries/{id}/retry-unknown' in doc.json()['paths']
         delete_key = str(uuid.uuid4()); delete_body = {'expectedVersion': route_version, 'confirmed': True}
         assert write('DELETE', 'routes/' + route_id, delete_body, delete_key).status_code == 204
         assert write('DELETE', 'routes/' + route_id, delete_body, delete_key).status_code == 204

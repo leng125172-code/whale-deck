@@ -77,6 +77,7 @@ public static class DependencyInjection
         services.AddSingleton(new NotificationNetworkPolicy());
         services.AddSingleton<INotificationTransport, NotificationTransport>();
         services.AddScoped<NotificationSender>();
+        services.AddScoped<INotificationRequestAuthorizer, NotificationRequestAuthorizer>();
         services.AddScoped<IApplicationRepository, ApplicationRepository>();
         services.AddScoped<IContainerUpdateRepository, ContainerUpdateRepository>();
         services.AddScoped<IDockerEventRepository, DockerEventRepository>();

@@ -46,6 +46,17 @@ export interface NotificationDelivery {
   lastAttemptAtUtc: string | null
   completedAtUtc: string | null
   lastResultCode: string | null
+  version: number
+  intentKind: 'Automatic' | 'Test' | 'ManualRetry'
+  originDeliveryId: string | null
+  hasManualRetry: boolean
+}
+export interface NotificationSubmission {
+  deliveryId: string
+  notificationId: string
+  state: string
+  intentKind: string
+  originDeliveryId: string | null
 }
 export interface NotificationWriteIntent {
   path: string

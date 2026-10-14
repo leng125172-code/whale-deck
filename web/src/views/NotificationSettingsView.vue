@@ -14,6 +14,7 @@ import {
   type NotificationProvider,
   type NotificationWriteIntent,
   type NotificationAttempt,
+  type NotificationSubmission,
 } from '@/services/notificationManagement'
 
 const active = ref<'channels' | 'routes' | 'deliveries'>('channels')
@@ -58,6 +59,7 @@ const providers: NotificationProvider[] = ['Email', 'Webhook', 'DingTalk', 'WeCo
 let controller = new AbortController()
 let generation = 0
 const deleteIntents = new Map<string, NotificationWriteIntent>()
+const submissionIntents = new Map<string, NotificationWriteIntent>()
 const impact = '配置变化会取消该渠道尚未发送的旧版本投递；已经发送中的消息不会自动撤回或重发。'
 
 function closeEditor() {
@@ -91,6 +93,7 @@ function clearPrivate() {
   routes.value = []
   deliveries.value = []
   deleteIntents.clear()
+  submissionIntents.clear()
   attemptRevision++
   attempts.value = []
   attemptVisible.value = false
@@ -281,6 +284,59 @@ function closeAttempts() {
   attempts.value = []
   attemptLoading.value = false
 }
+async function submitNotification(
+  kind: 'test' | 'retry',
+  item: NotificationChannel | NotificationDelivery,
+) {
+  if (!authorized.value || saving.value) return
+  const current = generation
+  const key = `${kind}:${item.id}:${item.version}`
+  try {
+    await ElMessageBox.confirm(
+      kind === 'test'
+        ? '将向已登记的批准目标发送一条固定测试消息；即使渠道停用也会发送，不修改启停状态。是否继续？'
+        : '原消息可能已经送达！再次发送可能导致重复通知。此操作创建新记录，保留原记录；必须确认目标和渠道版本未变。',
+      kind === 'test' ? '确认测试发送' : '确认可能重复送达',
+      {
+        type: 'warning',
+        confirmButtonText: kind === 'test' ? '发送测试' : '接受风险并重试',
+        cancelButtonText: '取消',
+      },
+    )
+    if (current !== generation || !authorized.value) return
+    saving.value = true
+    let command = submissionIntents.get(key)
+    if (!command) {
+      command =
+        kind === 'test'
+          ? notificationIntent(`channels/${item.id}/test`, 'POST', {
+              expectedChannelVersion: item.version,
+              confirmed: true,
+            })
+          : notificationIntent(`deliveries/${item.id}/retry-unknown`, 'POST', {
+              expectedVersion: item.version,
+              expectedChannelVersion: (item as NotificationDelivery).channelVersion,
+              confirmed: true,
+              acceptDuplicateRisk: true,
+            })
+      submissionIntents.set(key, command)
+    }
+    const result = await executeNotificationIntent<NotificationSubmission>(
+      command,
+      controller.signal,
+    )
+    if (current !== generation || !authorized.value) return
+    submissionIntents.delete(key)
+    ElMessage.success(`已提交，尚未确认发送成功：${result.deliveryId.slice(0, 8)}`)
+    active.value = 'deliveries'
+    page.value = 1
+    await load()
+  } catch (reason) {
+    if (reason !== 'cancel' && reason !== 'close' && current === generation) failure(reason)
+  } finally {
+    saving.value = false
+  }
+}
 function date(value: string | null) {
   return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'
 }
@@ -387,8 +443,14 @@ onUnmounted(clearPrivate)
             }}</el-tag></template
           ></el-table-column
         >
-        <el-table-column label="操作" width="132"
+        <el-table-column label="操作" width="194"
           ><template #default="{ row }"
+            ><el-button
+              link
+              type="primary"
+              :disabled="saving"
+              @click="submitNotification('test', row)"
+              >测试</el-button
             ><el-button link type="primary" :disabled="saving" @click="openChannel(row)"
               >编辑</el-button
             ><el-button link type="danger" :disabled="saving" @click="remove('channels', row)"
@@ -450,6 +512,24 @@ onUnmounted(clearPrivate)
             ><el-button link type="primary" @click="openAttempts(row.id)"
               >尝试记录</el-button
             ></template
+          ></el-table-column
+        >
+        <el-table-column label="人工重试" width="150"
+          ><template #default="{ row }"
+            ><el-button
+              v-if="row.state === 'Unknown'"
+              link
+              type="warning"
+              :disabled="saving || row.hasManualRetry"
+              @click="submitNotification('retry', row)"
+              >{{ row.hasManualRetry ? '已有重试记录' : '确认重试' }}</el-button
+            ><span v-else>{{
+              row.intentKind === 'ManualRetry'
+                ? '人工重试记录'
+                : row.intentKind === 'Test'
+                  ? '测试发送'
+                  : '—'
+            }}</span></template
           ></el-table-column
         >
       </el-table>

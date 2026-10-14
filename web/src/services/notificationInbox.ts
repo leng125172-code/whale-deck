@@ -4,7 +4,7 @@ import { ApiError, apiRequest } from '@/services/apiClient'
 export interface InboxMessage {
   id: string
   sequence: number
-  sourceKind: 'Alert' | 'Job'
+  sourceKind: 'Alert' | 'Job' | 'NotificationTest'
   sourceId: string
   messageCode: string
   severity: string

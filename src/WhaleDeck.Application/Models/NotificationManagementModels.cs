@@ -9,7 +9,11 @@ public sealed record NotificationRouteDto(Guid Id, Guid ChannelId, string Source
     bool IncludeRecovery, bool IsEnabled, long Version, DateTimeOffset CreatedAtUtc);
 public sealed record NotificationDeliveryDto(Guid Id, Guid NotificationId, Guid ChannelId, long ChannelVersion,
     string Provider, string State, int AttemptCount, DateTimeOffset CreatedAtUtc, DateTimeOffset NextAttemptAtUtc,
-    DateTimeOffset? LastAttemptAtUtc, DateTimeOffset? CompletedAtUtc, string? LastResultCode);
+    DateTimeOffset? LastAttemptAtUtc, DateTimeOffset? CompletedAtUtc, string? LastResultCode,
+    long Version = 0, string IntentKind = "Automatic", Guid? OriginDeliveryId = null, bool HasManualRetry = false);
+public sealed record TestNotificationCommand(long ExpectedChannelVersion, bool Confirmed = false);
+public sealed record RetryUnknownNotificationCommand(long ExpectedVersion, long ExpectedChannelVersion, bool Confirmed = false, bool AcceptDuplicateRisk = false);
+public sealed record NotificationSubmissionDto(Guid DeliveryId, Guid NotificationId, string State, string IntentKind, Guid? OriginDeliveryId);
 public sealed record SaveNotificationChannelCommand(string Name, string Provider, string DestinationReference,
     string? CredentialReference = null, bool KeepCredential = false, bool IsEnabled = false,
     long? ExpectedVersion = null, bool Confirmed = false);

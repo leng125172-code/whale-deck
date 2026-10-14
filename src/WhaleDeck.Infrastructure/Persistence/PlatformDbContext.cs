@@ -138,6 +138,7 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             {
                 table.HasCheckConstraint("ck_notification_delivery_state", "state IN ('Pending','Leased','Sending','RetryWait','Succeeded','Failed','Unknown','Canceled')");
                 table.HasCheckConstraint("ck_notification_delivery_configuration", "configuration_revision IS NULL OR configuration_revision ~ '^[A-F0-9]{64}$'");
+                table.HasCheckConstraint("ck_notification_delivery_intent", "version >= 0 AND ((intent_kind='Automatic' AND requested_by_subject IS NULL AND origin_delivery_id IS NULL) OR (intent_kind='Test' AND requested_by_subject IS NOT NULL AND length(requested_by_subject)>0 AND origin_delivery_id IS NULL) OR (intent_kind='ManualRetry' AND requested_by_subject IS NOT NULL AND length(requested_by_subject)>0 AND origin_delivery_id IS NOT NULL AND origin_delivery_id<>id))");
                 table.HasCheckConstraint("ck_notification_delivery_attempts", "attempt_count >= 0 AND attempt_count <= 5 AND channel_version >= 0");
                 table.HasCheckConstraint("ck_notification_delivery_lease", "(state IN ('Leased','Sending') AND lease_token IS NOT NULL AND lease_expires_at_utc IS NOT NULL) OR (state NOT IN ('Leased','Sending') AND lease_token IS NULL AND lease_expires_at_utc IS NULL)");
             });
@@ -145,7 +146,11 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             entity.Property(item => item.DestinationReference).HasMaxLength(64); entity.Property(item => item.CredentialReference).HasMaxLength(64);
             entity.Property(item => item.State).HasMaxLength(16); entity.Property(item => item.LastResultCode).HasMaxLength(32);
             entity.Property(item => item.ConfigurationRevision).HasMaxLength(64);
-            entity.HasIndex(item => new { item.NotificationId, item.ChannelId }).IsUnique();
+            entity.Property(item => item.IntentKind).HasMaxLength(16).HasDefaultValue("Automatic");
+            entity.Property(item => item.RequestedBySubject).HasMaxLength(256); entity.Property(item => item.Version).IsConcurrencyToken();
+            entity.HasIndex(item => new { item.NotificationId, item.ChannelId }).IsUnique().HasFilter("intent_kind <> 'ManualRetry'");
+            entity.HasIndex(item => item.OriginDeliveryId).IsUnique().HasFilter("origin_delivery_id IS NOT NULL");
+            entity.HasOne<NotificationDelivery>().WithMany().HasForeignKey(item => item.OriginDeliveryId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(item => new { item.State, item.NextAttemptAtUtc }); entity.HasIndex(item => item.LeaseExpiresAtUtc);
             entity.HasIndex(item => item.LeaseToken).IsUnique().HasFilter("lease_token IS NOT NULL");
             entity.HasOne<NotificationEvent>().WithMany().HasForeignKey(item => item.NotificationId).OnDelete(DeleteBehavior.Cascade);

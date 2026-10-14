@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using WhaleDeck.Application.Services;
 using WhaleDeck.Application.Models;
+using WhaleDeck.Application.Abstractions;
 using WhaleDeck.Domain.Entities;
 using WhaleDeck.Infrastructure.Persistence;
 using WhaleDeck.Infrastructure.Notifications;
@@ -163,6 +164,9 @@ public sealed class NativeNotificationDispatchTests
             Assert.Equal(2, await db.NotificationDeliveries.CountAsync(item => item.NotificationId == rotated.Id && item.State == "Canceled" && item.LastResultCode == "ConfigurationChanged"));
             Assert.Equal(2, await db.NotificationDeliveryAttempts.CountAsync());
             Assert.False(await db.NotificationDeliveries.AnyAsync(item => item.ConfigurationRevision == null));
+            await File.WriteAllTextAsync(path, registry); // Restore the old binding only for new isolated explicit intents.
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            await Explicit(db, sender, transport, path, listener, channels[0], clock, fakeSecret, deadline.Token);
             await Smtp(path, source, clock, deadline.Token);
             Console.WriteLine("INBOX_PHASE=dispatch-sender-http-rate-rotation");
         }
@@ -228,7 +232,7 @@ public sealed class NativeNotificationDispatchTests
         throw new InvalidOperationException("Isolated SMTP command budget exceeded.");
     }
 
-    private static async Task Receive(TcpListener listener, int count, string secret, CancellationToken cancellationToken)
+    private static async Task Receive(TcpListener listener, int count, string secret, CancellationToken cancellationToken, bool dropReply = false)
     {
         for (var index = 0; index < count; index++)
         {
@@ -249,7 +253,7 @@ public sealed class NativeNotificationDispatchTests
             Assert.Equal(NotificationPayload.WebhookSignature(fields["X-WhaleDeck-Timestamp"], id, body, secret), fields["X-WhaleDeck-Signature"]);
             using var json = JsonDocument.Parse(body); Assert.Equal(id, json.RootElement.GetProperty("deliveryId").GetGuid());
             Assert.DoesNotContain(secret, Encoding.UTF8.GetString(body)); Assert.DoesNotContain("recipientSubject", Encoding.UTF8.GetString(body));
-            await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"), cancellationToken);
+            if (!dropReply) await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"), cancellationToken);
         }
     }
     private sealed class SenderClock : TimeProvider
@@ -257,6 +261,61 @@ public sealed class NativeNotificationDispatchTests
         private DateTimeOffset current = DateTimeOffset.UtcNow;
         public override DateTimeOffset GetUtcNow() => current;
         public void Advance(TimeSpan duration) => current += duration;
+    }
+
+    private static async Task Explicit(PlatformDbContext db, NotificationSender automaticSender, NotificationTransport transport, string path, TcpListener listener,
+        NotificationChannel channel, SenderClock clock, string secret, CancellationToken cancellationToken)
+    {
+        var management = new NotificationManagementService(new NotificationManagementRepository(db));
+        NotificationContext Context() => new("isolated-admin", true, "native-explicit", "127.0.0.1", Guid.NewGuid().ToString());
+        var disabled = new NotificationChannel { Name = "native-test-disabled", Provider = channel.Provider, DestinationReference = channel.DestinationReference,
+            CredentialReference = channel.CredentialReference, IsEnabled = false };
+        db.NotificationChannels.Add(disabled); await db.SaveChangesAsync(cancellationToken); db.ChangeTracker.Clear();
+        var testContext = Context(); var testCommand = new TestNotificationCommand(0, true);
+        var test = await management.TestAsync(testContext, disabled.Id, testCommand, cancellationToken);
+        Assert.Equal(test.DeliveryId, (await management.TestAsync(testContext, disabled.Id, testCommand, cancellationToken)).DeliveryId);
+        clock.Advance(TimeSpan.FromSeconds(6));
+        var accepted = Receive(listener, 1, secret, cancellationToken);
+        var authorizedSender = new NotificationSender(new NotificationDispatchStore(db), transport, clock, new NativeAuthorizer(true));
+        Assert.Equal(1, await authorizedSender.TickAsync(cancellationToken)); await accepted;
+        Assert.Equal("Succeeded", (await db.NotificationDeliveries.AsNoTracking().SingleAsync(item => item.Id == test.DeliveryId, cancellationToken)).State);
+        Assert.False((await db.NotificationChannels.AsNoTracking().SingleAsync(item => item.Id == disabled.Id, cancellationToken)).IsEnabled);
+        Assert.Equal(1, await db.NotificationDeliveries.CountAsync(item => item.NotificationId == test.NotificationId, cancellationToken));
+        var revoked = await management.TestAsync(Context(), disabled.Id, testCommand, cancellationToken);
+        Assert.Equal(0, await new NotificationSender(new NotificationDispatchStore(db), transport, clock, new NativeAuthorizer(false)).TickAsync(cancellationToken));
+        Assert.Equal("PermissionRevoked", (await db.NotificationDeliveries.AsNoTracking().SingleAsync(item => item.Id == revoked.DeliveryId, cancellationToken)).LastResultCode);
+
+        await db.NotificationChannels.Where(item => item.Id != channel.Id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.IsEnabled, false), cancellationToken);
+        var source = new NotificationEvent { SourceKey = "native-response-lost", SourceKind = "Alert", Audience = "Administrator", MessageCode = "ALERT_ACTIVE", Severity = "Error",
+            OccurredAtUtc = clock.GetUtcNow(), PublishedAtUtc = clock.GetUtcNow(), ExpiresAtUtc = clock.GetUtcNow().AddDays(1) };
+        db.NotificationEvents.Add(source); await db.SaveChangesAsync(cancellationToken); db.ChangeTracker.Clear();
+        clock.Advance(TimeSpan.FromSeconds(6));
+        var lost = Receive(listener, 1, secret, cancellationToken, true);
+        Assert.Equal(1, await automaticSender.TickAsync(cancellationToken)); await lost;
+        var unknown = await db.NotificationDeliveries.AsNoTracking().SingleAsync(item => item.NotificationId == source.Id, cancellationToken);
+        Assert.Equal("Unknown", unknown.State); Assert.Equal(1, unknown.AttemptCount);
+        Assert.Equal(0, await automaticSender.TickAsync(cancellationToken));
+        var retryContext = Context(); var retryCommand = new RetryUnknownNotificationCommand(unknown.Version, channel.Version, true, true);
+        var retry = await management.RetryUnknownAsync(retryContext, unknown.Id, retryCommand, cancellationToken);
+        Assert.Equal(retry.DeliveryId, (await management.RetryUnknownAsync(retryContext, unknown.Id, retryCommand, cancellationToken)).DeliveryId);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => management.RetryUnknownAsync(Context(), unknown.Id, retryCommand, cancellationToken));
+        var received = Receive(listener, 1, secret, cancellationToken); clock.Advance(TimeSpan.FromSeconds(6));
+        Assert.Equal(1, await authorizedSender.TickAsync(cancellationToken)); await received;
+        var original = await db.NotificationDeliveries.AsNoTracking().SingleAsync(item => item.Id == unknown.Id, cancellationToken);
+        Assert.Equal("Unknown", original.State); Assert.Equal(unknown.Version, original.Version); Assert.Equal(unknown.AttemptCount, original.AttemptCount);
+        var child = await db.NotificationDeliveries.AsNoTracking().SingleAsync(item => item.Id == retry.DeliveryId, cancellationToken);
+        Assert.Equal("Succeeded", child.State); Assert.Equal(unknown.Id, child.OriginDeliveryId); Assert.Equal(1, child.AttemptCount);
+        var listed = await management.ListDeliveriesAsync(Context(), new(Take: 100), channel.Id, null, cancellationToken);
+        Assert.True(listed.Items.Single(item => item.Id == original.Id).HasManualRetry);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => management.RetryUnknownAsync(Context(), child.Id, new(child.Version, channel.Version, true, true), cancellationToken));
+        // Event retention also removes a bounded manual child chain and its attempt rows.
+        await db.NotificationEvents.Where(item => item.Id == source.Id).ExecuteDeleteAsync(cancellationToken);
+        Assert.False(await db.NotificationDeliveries.AnyAsync(item => item.Id == original.Id || item.Id == child.Id, cancellationToken));
+        Console.WriteLine("INBOX_PHASE=dispatch-explicit-unknown-response-loss-retry");
+    }
+    private sealed class NativeAuthorizer(bool administrator) : INotificationRequestAuthorizer
+    {
+        public Task<bool> IsAdministratorAsync(string subject, CancellationToken cancellationToken) => Task.FromResult(administrator);
     }
 
     private static async Task Management(DbContextOptions<PlatformDbContext> options, PlatformDbContext db, NotificationDispatchStore store, DateTimeOffset now)

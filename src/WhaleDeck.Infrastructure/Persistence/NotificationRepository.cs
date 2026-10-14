@@ -29,7 +29,13 @@ public sealed class NotificationRepository(PlatformDbContext db) : INotification
         var page = rows.Take(query.Take).Select(item =>
         {
             var text = NotificationSources.Text(item.Event);
-            var target = !context.IsAdministrator ? null : item.Event.SourceKind == "Alert" ? "/alerts" : $"/jobs?jobId={item.Event.SourceId:D}";
+            var target = !context.IsAdministrator ? null : item.Event.SourceKind switch
+            {
+                "Alert" => "/alerts",
+                "Job" => $"/jobs?jobId={item.Event.SourceId:D}",
+                "NotificationTest" => "/settings/notifications",
+                _ => null
+            };
             return new NotificationDto(item.Event.Id, item.Event.Sequence, item.Event.SourceKind, item.Event.SourceId, item.Event.MessageCode, item.Event.Severity,
                 text.Title, text.Summary, item.Event.OccurredAtUtc, item.Event.PublishedAtUtc, item.ReadAt, target);
         }).ToArray();

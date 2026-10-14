@@ -25,7 +25,7 @@ public sealed class NotificationTransport(PrivateNotificationConfiguration confi
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         public Task<NotificationTransportResult> SendAsync(Guid deliveryId, NotificationEvent message, CancellationToken cancellationToken)
         {
-            if (message.Audience != "Administrator" || message.RecipientSubject is not null || message.SourceKind is not ("Alert" or "Job") ||
+            if (message.Audience != "Administrator" || message.RecipientSubject is not null || message.SourceKind is not ("Alert" or "Job" or "NotificationTest") ||
                 message.Severity is not ("Info" or "Warning" or "Error" or "Critical") || string.IsNullOrEmpty(message.MessageCode) || message.MessageCode.Length > 64 ||
                 message.MessageCode.Any(value => value is not (>= 'A' and <= 'Z' or >= '0' and <= '9' or '_')))
                 return Task.FromResult(NotificationTransportResult.Rejected);

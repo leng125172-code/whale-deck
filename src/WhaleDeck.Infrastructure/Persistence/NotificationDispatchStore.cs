@@ -21,7 +21,7 @@ public sealed class NotificationDispatchStore(PlatformDbContext db) : INotificat
     {
         var events = await db.NotificationEvents.FromSqlInterpolated($"""
             SELECT n.* FROM notification_events n
-            WHERE n.expires_at_utc>{now} AND NOT EXISTS
+            WHERE n.expires_at_utc>{now} AND n.source_kind IN ('Alert','Job') AND NOT EXISTS
               (SELECT 1 FROM notification_dispatch_receipts r WHERE r.notification_id=n.id)
             ORDER BY n.sequence LIMIT 100 FOR UPDATE OF n SKIP LOCKED
             """).AsNoTracking().ToArrayAsync(cancellationToken);
@@ -74,9 +74,9 @@ public sealed class NotificationDispatchStore(PlatformDbContext db) : INotificat
               JOIN notification_channels c ON c.id=d.channel_id
               JOIN notification_events n ON n.id=d.notification_id
               WHERE d.state IN ('Pending','RetryWait') AND d.next_attempt_at_utc<={now}
-                AND d.attempt_count<5 AND c.is_enabled AND c.version=d.channel_version AND n.expires_at_utc>{now}
+                AND d.attempt_count<5 AND (c.is_enabled OR d.intent_kind='Test') AND c.version=d.channel_version AND n.expires_at_utc>{now}
               ORDER BY d.next_attempt_at_utc,d.id LIMIT 1 FOR UPDATE OF d SKIP LOCKED
-            ) UPDATE notification_deliveries d SET state='Leased',lease_token={token},lease_expires_at_utc={expires}
+            ) UPDATE notification_deliveries d SET state='Leased',lease_token={token},lease_expires_at_utc={expires},version=d.version+1
               FROM candidate WHERE d.id=candidate.id RETURNING d.id AS "Value"
             """).ToArrayAsync(cancellationToken);
             return ids.Length == 0 ? null : await db.NotificationDeliveries.AsNoTracking().SingleAsync(item => item.Id == ids[0], cancellationToken);
@@ -152,13 +152,13 @@ public sealed class NotificationDispatchStore(PlatformDbContext db) : INotificat
             SELECT d.* FROM notification_deliveries d
             WHERE (d.state IN ('Leased','Sending') AND d.lease_expires_at_utc<={now})
               OR (d.state IN ('Pending','RetryWait','Leased') AND
-                (NOT EXISTS (SELECT 1 FROM notification_channels c WHERE c.id=d.channel_id AND c.is_enabled AND c.version=d.channel_version)
+                (NOT EXISTS (SELECT 1 FROM notification_channels c WHERE c.id=d.channel_id AND (c.is_enabled OR d.intent_kind='Test') AND c.version=d.channel_version)
                  OR NOT EXISTS (SELECT 1 FROM notification_events n WHERE n.id=d.notification_id AND n.expires_at_utc>{now})))
             ORDER BY d.created_at_utc,d.id LIMIT 100 FOR UPDATE OF d SKIP LOCKED
             """).AsNoTracking().ToArrayAsync(cancellationToken);
         foreach (var item in batch)
         {
-            var channelCurrent = await db.NotificationChannels.AnyAsync(channel => channel.Id == item.ChannelId && channel.IsEnabled && channel.Version == item.ChannelVersion, cancellationToken);
+            var channelCurrent = await db.NotificationChannels.AnyAsync(channel => channel.Id == item.ChannelId && (channel.IsEnabled || item.IntentKind == "Test") && channel.Version == item.ChannelVersion, cancellationToken);
             var eventCurrent = await db.NotificationEvents.AnyAsync(source => source.Id == item.NotificationId && source.ExpiresAtUtc > now, cancellationToken);
             NotificationDispatchPolicy.Recover(item, now, channelCurrent, eventCurrent);
             await PersistAsync(item, cancellationToken);
@@ -169,7 +169,7 @@ public sealed class NotificationDispatchStore(PlatformDbContext db) : INotificat
 
     public Task<bool> RejectBeforeSendAsync(Guid id, Guid token, DateTimeOffset now, string code, CancellationToken cancellationToken) => InTransaction(async () =>
     {
-        if (code is not ("ConfigurationMissing" or "ConfigurationInvalid" or "BindingMissing" or "NetworkDenied" or "ConfigurationChanged" or "EventUnavailable"))
+        if (code is not ("ConfigurationMissing" or "ConfigurationInvalid" or "BindingMissing" or "NetworkDenied" or "ConfigurationChanged" or "EventUnavailable" or "PermissionRevoked"))
             throw new ArgumentException("Invalid notification pre-send code.");
         var item = await LockAsync(id, cancellationToken);
         if (item is null || item.State != "Leased" || item.LeaseToken != token || item.LeaseExpiresAtUtc <= now) return false;
@@ -178,7 +178,7 @@ public sealed class NotificationDispatchStore(PlatformDbContext db) : INotificat
 
     private Task<int> Reject(NotificationDelivery item, DateTimeOffset now, string code, CancellationToken cancellationToken)
     {
-        item.State = code is "ConfigurationChanged" or "EventUnavailable" ? "Canceled" : "Failed";
+        item.State = code is "ConfigurationChanged" or "EventUnavailable" or "PermissionRevoked" ? "Canceled" : "Failed";
         item.LastResultCode = code; item.CompletedAtUtc = now; item.LeaseToken = null; item.LeaseExpiresAtUtc = null;
         return PersistAsync(item, cancellationToken);
     }
@@ -193,7 +193,7 @@ public sealed class NotificationDispatchStore(PlatformDbContext db) : INotificat
     private async Task<bool> CurrentAsync(NotificationDelivery item, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var channels = await db.NotificationChannels.FromSqlInterpolated($"""
-            SELECT * FROM notification_channels WHERE id={item.ChannelId} AND is_enabled AND version={item.ChannelVersion} FOR UPDATE
+            SELECT * FROM notification_channels WHERE id={item.ChannelId} AND (is_enabled OR {item.IntentKind == "Test"}) AND version={item.ChannelVersion} FOR UPDATE
             """).AsNoTracking().ToArrayAsync(cancellationToken);
         if (channels.Length == 0) return false;
         var events = await db.NotificationEvents.FromSqlInterpolated($"""
@@ -207,7 +207,20 @@ public sealed class NotificationDispatchStore(PlatformDbContext db) : INotificat
             .SetProperty(row => row.AttemptCount, item.AttemptCount).SetProperty(row => row.NextAttemptAtUtc, item.NextAttemptAtUtc)
             .SetProperty(row => row.LeaseToken, item.LeaseToken).SetProperty(row => row.LeaseExpiresAtUtc, item.LeaseExpiresAtUtc)
             .SetProperty(row => row.LastAttemptAtUtc, item.LastAttemptAtUtc).SetProperty(row => row.CompletedAtUtc, item.CompletedAtUtc)
-            .SetProperty(row => row.LastResultCode, item.LastResultCode), cancellationToken);
+            .SetProperty(row => row.LastResultCode, item.LastResultCode).SetProperty(row => row.Version, row => row.Version + 1), cancellationToken);
+
+    public Task<bool> BindTestAsync(Guid id, Guid token, string configurationRevision, DateTimeOffset now, CancellationToken cancellationToken) => InTransaction(async () =>
+    {
+        if (configurationRevision.Length != 64 || configurationRevision.Any(value => value is not (>= 'A' and <= 'F' or >= '0' and <= '9')))
+            throw new ArgumentException("Invalid notification configuration revision.");
+        var item = await LockAsync(id, cancellationToken);
+        if (item is null || item.IntentKind != "Test" || item.State != "Leased" || item.LeaseToken != token || item.LeaseExpiresAtUtc <= now ||
+            !await CurrentAsync(item, now, cancellationToken)) return false;
+        if (item.ConfigurationRevision is not null) return item.ConfigurationRevision == configurationRevision;
+        await db.NotificationDeliveries.Where(value => value.Id == id).ExecuteUpdateAsync(setters => setters
+            .SetProperty(value => value.ConfigurationRevision, configurationRevision).SetProperty(value => value.Version, value => value.Version + 1), cancellationToken);
+        return true;
+    }, cancellationToken);
 
     private Task<T> InTransaction<T>(Func<Task<T>> operation, CancellationToken cancellationToken) => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
     {

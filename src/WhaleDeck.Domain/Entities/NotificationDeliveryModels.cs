@@ -46,6 +46,10 @@ public sealed class NotificationDelivery
     public required string DestinationReference { get; init; }
     public string? CredentialReference { get; init; }
     public string? ConfigurationRevision { get; init; }
+    public string IntentKind { get; init; } = "Automatic";
+    public string? RequestedBySubject { get; init; }
+    public Guid? OriginDeliveryId { get; init; }
+    public long Version { get; set; }
     public string State { get; set; } = "Pending";
     public int AttemptCount { get; set; }
     public DateTimeOffset CreatedAtUtc { get; init; }

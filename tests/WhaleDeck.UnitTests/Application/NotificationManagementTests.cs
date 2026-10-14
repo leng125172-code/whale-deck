@@ -23,6 +23,8 @@ public sealed class NotificationManagementTests
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.SaveRouteAsync(ordinary, null, new(id, Confirmed: true), default));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.DeleteChannelAsync(ordinary, id, new(0, true), default));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.DeleteRouteAsync(ordinary, id, new(0, true), default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.TestAsync(ordinary, id, new(0, true), default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.RetryUnknownAsync(ordinary, id, new(0, 0, true, true), default));
         Assert.Equal(0, repository.Calls);
     }
 
@@ -113,6 +115,22 @@ public sealed class NotificationManagementTests
         Assert.DoesNotContain("Reference", serialized); Assert.DoesNotContain("Token", serialized); Assert.DoesNotContain("Message", serialized);
     }
 
+    [Fact]
+    public async Task ExplicitSendingRequiresConfirmationKeyAndDuplicateAcceptance()
+    {
+        var repository = new Spy(); var service = new NotificationManagementService(repository); var id = Guid.NewGuid();
+        await Assert.ThrowsAsync<ArgumentException>(() => service.TestAsync(Admin, id, new(0), default));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.TestAsync(Admin with { IdempotencyKey = null }, id, new(0, true), default));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.TestAsync(Admin, id, new(-1, true), default));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.RetryUnknownAsync(Admin, id, new(0, 0, true), default));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.RetryUnknownAsync(Admin, id, new(0, -1, true, true), default));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.RetryUnknownAsync(Admin, Guid.Empty, new(0, 0, true, true), default));
+        Assert.Equal(0, repository.Calls);
+        await service.TestAsync(Admin, id, new(0, true), default);
+        await service.RetryUnknownAsync(Admin, id, new(0, 0, true, true), default);
+        Assert.Equal(2, repository.Calls);
+    }
+
     private sealed class Spy : INotificationManagementRepository
     {
         public int Calls { get; private set; }
@@ -124,6 +142,10 @@ public sealed class NotificationManagementTests
         public Task<NotificationManagementPage<NotificationDeliveryDto>> ListDeliveriesAsync(NotificationManagementQuery query, Guid? channelId, string? state, CancellationToken cancellationToken) => List<NotificationDeliveryDto>(query);
         public Task<IReadOnlyCollection<NotificationAttemptDto>> AttemptsAsync(Guid deliveryId, CancellationToken cancellationToken)
         { Calls++; return Task.FromResult<IReadOnlyCollection<NotificationAttemptDto>>([]); }
+        public Task<NotificationSubmissionDto> TestAsync(NotificationContext context, Guid channelId, TestNotificationCommand command, CancellationToken cancellationToken)
+        { Calls++; return Task.FromResult(new NotificationSubmissionDto(Guid.NewGuid(), Guid.NewGuid(), "Pending", "Test", null)); }
+        public Task<NotificationSubmissionDto> RetryUnknownAsync(NotificationContext context, Guid deliveryId, RetryUnknownNotificationCommand command, CancellationToken cancellationToken)
+        { Calls++; return Task.FromResult(new NotificationSubmissionDto(Guid.NewGuid(), Guid.NewGuid(), "Pending", "ManualRetry", deliveryId)); }
         public Task<NotificationChannelDto> SaveChannelAsync(NotificationContext context, Guid? id, SaveNotificationChannelCommand command, CancellationToken cancellationToken)
         { Calls++; Command = command; return Task.FromResult(new NotificationChannelDto(id ?? Guid.NewGuid(), command.Name, command.Provider, command.DestinationReference, command.CredentialReference is not null, command.IsEnabled, 0, DateTimeOffset.UtcNow)); }
         public Task<NotificationRouteDto> SaveRouteAsync(NotificationContext context, Guid? id, SaveNotificationRouteCommand command, CancellationToken cancellationToken)

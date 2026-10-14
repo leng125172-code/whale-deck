@@ -117,3 +117,104 @@ for (const width of [320, 1440])
         scale: 'css',
       })
     })
+
+for (const width of [320, 1440])
+  for (const colorScheme of ['light', 'dark'] as const)
+    test(`${width}px ${colorScheme}: explicit sends require confirmation and retry one frozen intent`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.emulateMedia({ colorScheme })
+      await page.addInitScript(() =>
+        sessionStorage.setItem('whaledeck-preview-authenticated', 'true'),
+      )
+      const unknown = {
+        id: 'e8e95c77-eaad-4d2c-8a6d-29d00f5606ec',
+        notificationId: channel.id,
+        channelId: channel.id,
+        channelVersion: 0,
+        provider: 'Webhook',
+        state: 'Unknown',
+        attemptCount: 1,
+        version: 7,
+        intentKind: 'Automatic',
+        originDeliveryId: null,
+        hasManualRetry: false,
+        createdAtUtc: '2026-10-14T01:00:00Z',
+        lastAttemptAtUtc: '2026-10-14T01:00:00Z',
+        lastResultCode: 'Unknown',
+      }
+      const writes: { key: string; body: string; path: string }[] = []
+      let retryRequests = 0
+      await page.route('**/api/v1/**', (route) => {
+        const request = route.request()
+        const path = new URL(request.url()).pathname.replace('/api/v1/', '')
+        if (path === 'auth/csrf')
+          return route.fulfill({ json: { headerName: 'X-CSRF', token: 'fixture-only' } })
+        if (path.startsWith('notifications/manage/') && request.method() === 'POST') {
+          writes.push({
+            key: request.headers()['idempotency-key'] || '',
+            body: request.postData() || '',
+            path,
+          })
+          if (path.endsWith('/retry-unknown')) {
+            if (++retryRequests === 1) return route.abort('failed')
+            unknown.hasManualRetry = true
+          }
+          return route.fulfill({
+            status: 202,
+            json: {
+              deliveryId: 'fc91a6b3-d1a1-4ce4-92ec-bb971cb14a92',
+              notificationId: channel.id,
+              state: 'Pending',
+              intentKind: path.endsWith('/test') ? 'Test' : 'ManualRetry',
+              originDeliveryId: path.endsWith('/test') ? null : unknown.id,
+            },
+          })
+        }
+        if (path === 'notifications/manage/channels')
+          return route.fulfill({ json: { items: [channel], hasMore: false, page: 1, take: 25 } })
+        if (path === 'notifications/manage/deliveries')
+          return route.fulfill({ json: { items: [unknown], hasMore: false, page: 1, take: 25 } })
+        if (path === 'notifications/summary')
+          return route.fulfill({ json: { unreadCount: 0, totalCount: 0, snapshotSequence: 0 } })
+        return route.fulfill({ json: [] })
+      })
+      await page.goto('/settings/notifications')
+      // A disabled channel can be explicitly tested, but never silently enabled.
+      await page.getByRole('button', { name: '测试', exact: true }).click()
+      await expect(
+        page.getByText('将向已登记的批准目标发送一条固定测试消息', { exact: false }),
+      ).toBeVisible()
+      await page.getByRole('button', { name: '取消', exact: true }).click()
+      expect(writes).toHaveLength(0)
+      await page.getByRole('button', { name: '测试', exact: true }).click()
+      await page.getByRole('button', { name: '发送测试', exact: true }).click()
+      await expect(page.getByRole('button', { name: '确认重试', exact: true })).toBeVisible()
+      expect(writes).toHaveLength(1)
+      expect(JSON.parse(writes[0]!.body)).toEqual({ expectedChannelVersion: 0, confirmed: true })
+      await page.getByRole('button', { name: '确认重试', exact: true }).click()
+      await expect(page.getByText('原消息可能已经送达！', { exact: false })).toBeVisible()
+      await page.getByRole('button', { name: '取消', exact: true }).click()
+      expect(writes).toHaveLength(1)
+      await page.getByRole('button', { name: '确认重试', exact: true }).click()
+      await page.getByRole('button', { name: '接受风险并重试', exact: true }).click()
+      await expect(
+        page.getByRole('alert').filter({ hasText: /Failed to fetch|请求失败|Load failed/ }),
+      ).toBeVisible()
+      await page.getByRole('button', { name: '确认重试', exact: true }).click()
+      await page.getByRole('button', { name: '接受风险并重试', exact: true }).click()
+      await expect(page.getByRole('button', { name: '已有重试记录', exact: true })).toBeDisabled()
+      expect(writes).toHaveLength(3)
+      expect(writes[1]).toEqual(writes[2])
+      expect(writes[1]!.key).toMatch(/^[a-f0-9-]{36}$/)
+      expect(JSON.parse(writes[1]!.body)).toEqual({
+        expectedVersion: 7,
+        expectedChannelVersion: 0,
+        confirmed: true,
+        acceptDuplicateRisk: true,
+      })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      )
+    })

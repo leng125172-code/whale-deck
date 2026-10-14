@@ -49,6 +49,19 @@ public sealed class NotificationManagementService(INotificationManagementReposit
         return repository.AttemptsAsync(deliveryId, cancellationToken);
     }
 
+    public Task<NotificationSubmissionDto> TestAsync(NotificationContext context, Guid channelId, TestNotificationCommand command, CancellationToken cancellationToken)
+    {
+        Authorize(context); ValidateWrite(context, channelId, command.ExpectedChannelVersion, command.Confirmed);
+        return repository.TestAsync(context, channelId, command, cancellationToken);
+    }
+    public Task<NotificationSubmissionDto> RetryUnknownAsync(NotificationContext context, Guid deliveryId, RetryUnknownNotificationCommand command, CancellationToken cancellationToken)
+    {
+        Authorize(context); ValidateWrite(context, deliveryId, command.ExpectedVersion, command.Confirmed);
+        if (!command.AcceptDuplicateRisk || command.ExpectedChannelVersion is < 0 or long.MaxValue)
+            throw new ArgumentException("Manual retry requires explicit duplicate-delivery risk acceptance and channel version.");
+        return repository.RetryUnknownAsync(context, deliveryId, command, cancellationToken);
+    }
+
     private static void Authorize(NotificationContext context)
     {
         if (!context.IsAdministrator) throw new UnauthorizedAccessException("Notification administration is restricted.");

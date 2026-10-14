@@ -1207,6 +1207,14 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("destination_reference");
 
+                    b.Property<string>("IntentKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Automatic")
+                        .HasColumnName("intent_kind");
+
                     b.Property<DateTimeOffset?>("LastAttemptAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_attempt_at_utc");
@@ -1232,17 +1240,31 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("notification_id");
 
+                    b.Property<Guid?>("OriginDeliveryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("origin_delivery_id");
+
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)")
                         .HasColumnName("provider");
 
+                    b.Property<string>("RequestedBySubject")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("requested_by_subject");
+
                     b.Property<string>("State")
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)")
                         .HasColumnName("state");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
 
                     b.HasKey("Id");
 
@@ -1254,8 +1276,13 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("lease_token IS NOT NULL");
 
+                    b.HasIndex("OriginDeliveryId")
+                        .IsUnique()
+                        .HasFilter("origin_delivery_id IS NOT NULL");
+
                     b.HasIndex("NotificationId", "ChannelId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("intent_kind <> 'ManualRetry'");
 
                     b.HasIndex("State", "NextAttemptAtUtc");
 
@@ -1264,6 +1291,8 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_notification_delivery_attempts", "attempt_count >= 0 AND attempt_count <= 5 AND channel_version >= 0");
 
                             t.HasCheckConstraint("ck_notification_delivery_configuration", "configuration_revision IS NULL OR configuration_revision ~ '^[A-F0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_notification_delivery_intent", "version >= 0 AND ((intent_kind='Automatic' AND requested_by_subject IS NULL AND origin_delivery_id IS NULL) OR (intent_kind='Test' AND requested_by_subject IS NOT NULL AND length(requested_by_subject)>0 AND origin_delivery_id IS NULL) OR (intent_kind='ManualRetry' AND requested_by_subject IS NOT NULL AND length(requested_by_subject)>0 AND origin_delivery_id IS NOT NULL AND origin_delivery_id<>id))");
 
                             t.HasCheckConstraint("ck_notification_delivery_lease", "(state IN ('Leased','Sending') AND lease_token IS NOT NULL AND lease_expires_at_utc IS NOT NULL) OR (state NOT IN ('Leased','Sending') AND lease_token IS NULL AND lease_expires_at_utc IS NULL)");
 
@@ -2126,6 +2155,11 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasForeignKey("NotificationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.NotificationDelivery", null)
+                        .WithMany()
+                        .HasForeignKey("OriginDeliveryId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationDeliveryAttempt", b =>

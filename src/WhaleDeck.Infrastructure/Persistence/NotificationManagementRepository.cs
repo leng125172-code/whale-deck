@@ -33,7 +33,8 @@ public sealed class NotificationManagementRepository(PlatformDbContext db) : INo
         var rows = await db.NotificationDeliveries.AsNoTracking().Where(item => (channelId == null || item.ChannelId == channelId) && (state == null || item.State == state))
             .OrderByDescending(item => item.CreatedAtUtc).ThenByDescending(item => item.Id).Skip((query.Page - 1) * query.Take).Take(query.Take + 1)
             .Select(item => new NotificationDeliveryDto(item.Id, item.NotificationId, item.ChannelId, item.ChannelVersion, item.Provider, item.State,
-                item.AttemptCount, item.CreatedAtUtc, item.NextAttemptAtUtc, item.LastAttemptAtUtc, item.CompletedAtUtc, item.LastResultCode)).ToArrayAsync(cancellationToken);
+                item.AttemptCount, item.CreatedAtUtc, item.NextAttemptAtUtc, item.LastAttemptAtUtc, item.CompletedAtUtc, item.LastResultCode,
+                item.Version, item.IntentKind, item.OriginDeliveryId, db.NotificationDeliveries.Any(child => child.OriginDeliveryId == item.Id))).ToArrayAsync(cancellationToken);
         return Page(rows, query);
     }
 
@@ -120,6 +121,65 @@ public sealed class NotificationManagementRepository(PlatformDbContext db) : INo
 
     private Task<int> InvalidateChannel(Guid id, CancellationToken cancellationToken) => db.NotificationChannels.Where(item => item.Id == id)
         .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.Version, item => item.Version + 1), cancellationToken);
+
+    public Task<NotificationSubmissionDto> TestAsync(NotificationContext context, Guid channelId, TestNotificationCommand command, CancellationToken cancellationToken)
+    {
+        var id = StableId(context, "test");
+        return Write(context, "notification.test.request", "notification-channel", channelId, command, async () =>
+        {
+            var channel = await Channel(channelId, cancellationToken); Version(command.ExpectedChannelVersion, channel.Version);
+            var now = DateTimeOffset.UtcNow; var expires = now.AddMinutes(5); var sourceKey = "notification-test:" + id.ToString("N");
+            if (await db.NotificationDeliveries.CountAsync(item => item.ChannelId == channelId && item.IntentKind == "Test" && item.CreatedAtUtc > now.AddMinutes(-5), cancellationToken) >= 10)
+                throw new InvalidOperationException("Notification testing budget exceeded; at most ten per channel in five minutes.");
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO notification_events (id,source_key,source_kind,source_id,audience,message_code,severity,occurred_at_utc,published_at_utc,expires_at_utc)
+                VALUES ({id},{sourceKey},'NotificationTest',{channelId},'Administrator','NOTIFICATION_TEST','Info',{now},{now},{expires})
+                """, cancellationToken);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO notification_deliveries (id,notification_id,channel_id,channel_version,provider,destination_reference,credential_reference,
+                  state,attempt_count,created_at_utc,next_attempt_at_utc,intent_kind,requested_by_subject,version)
+                VALUES ({id},{id},{channel.Id},{channel.Version},{channel.Provider},{channel.DestinationReference},{channel.CredentialReference},
+                  'Pending',0,{now},{now},'Test',{context.Subject},0)
+                """, cancellationToken);
+            return new NotificationSubmissionDto(id, id, "Pending", "Test", null);
+        }, () => Submission(id, cancellationToken), cancellationToken);
+    }
+
+    public Task<NotificationSubmissionDto> RetryUnknownAsync(NotificationContext context, Guid deliveryId, RetryUnknownNotificationCommand command, CancellationToken cancellationToken)
+    {
+        var id = StableId(context, "manual-retry");
+        return Write(context, "notification.unknown.retry", "notification-delivery", deliveryId, command, async () =>
+        {
+            var original = await db.NotificationDeliveries.FromSqlInterpolated($"SELECT * FROM notification_deliveries WHERE id={deliveryId} FOR UPDATE")
+                .AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw new KeyNotFoundException("Notification delivery was not found.");
+            Version(command.ExpectedVersion, original.Version);
+            if (original.State != "Unknown" || original.ConfigurationRevision is null || await db.NotificationDeliveries.AnyAsync(child => child.OriginDeliveryId == deliveryId, cancellationToken))
+                throw new InvalidOperationException("Only an Unknown delivery without an existing manual retry can be retried.");
+            var channel = await Channel(original.ChannelId, cancellationToken); Version(command.ExpectedChannelVersion, channel.Version);
+            if (!channel.IsEnabled || channel.Version != original.ChannelVersion || channel.Provider != original.Provider ||
+                channel.DestinationReference != original.DestinationReference || channel.CredentialReference != original.CredentialReference)
+                throw new InvalidOperationException("The original approved channel configuration is no longer current.");
+            var now = DateTimeOffset.UtcNow;
+            if (!await db.NotificationEvents.AnyAsync(source => source.Id == original.NotificationId && source.ExpiresAtUtc > now && source.Audience == "Administrator" && source.RecipientSubject == null, cancellationToken))
+                throw new InvalidOperationException("The source notification is unavailable or expired.");
+            var ancestor = original; var depth = 0;
+            while (ancestor.OriginDeliveryId is { } parent)
+            {
+                if (++depth >= 10) throw new InvalidOperationException("Manual retry chain budget exceeded.");
+                ancestor = await db.NotificationDeliveries.AsNoTracking().SingleAsync(item => item.Id == parent, cancellationToken);
+            }
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO notification_deliveries (id,notification_id,channel_id,channel_version,provider,destination_reference,credential_reference,
+                  configuration_revision,state,attempt_count,created_at_utc,next_attempt_at_utc,intent_kind,requested_by_subject,origin_delivery_id,version)
+                VALUES ({id},{original.NotificationId},{channel.Id},{original.ChannelVersion},{original.Provider},{original.DestinationReference},
+                  {original.CredentialReference},{original.ConfigurationRevision},'Pending',0,{now},{now},'ManualRetry',{context.Subject},{deliveryId},0)
+                """, cancellationToken);
+            return new NotificationSubmissionDto(id, original.NotificationId, "Pending", "ManualRetry", deliveryId);
+        }, () => Submission(id, cancellationToken), cancellationToken);
+    }
+    private async Task<NotificationSubmissionDto> Submission(Guid id, CancellationToken cancellationToken) =>
+        await db.NotificationDeliveries.AsNoTracking().Where(item => item.Id == id).Select(item => new NotificationSubmissionDto(item.Id, item.NotificationId, item.State, item.IntentKind, item.OriginDeliveryId))
+            .SingleOrDefaultAsync(cancellationToken) ?? throw new KeyNotFoundException("Notification submission was not found.");
 
     public async Task<IReadOnlyCollection<NotificationAttemptDto>> AttemptsAsync(Guid deliveryId, CancellationToken cancellationToken)
     {

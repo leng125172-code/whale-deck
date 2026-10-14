@@ -133,7 +133,11 @@ async function openAlerts() {
             <div class="inbox-message__heading">
               <strong>{{ item.title }}</strong>
               <el-tag size="small" :type="severity(item.severity)">{{
-                item.sourceKind === 'Alert' ? '告警' : '任务'
+                item.sourceKind === 'Alert'
+                  ? '告警'
+                  : item.sourceKind === 'NotificationTest'
+                    ? '通知测试'
+                    : '任务'
               }}</el-tag>
             </div>
             <p>{{ item.summary }}</p>
