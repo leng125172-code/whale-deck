@@ -14,6 +14,7 @@ import tarfile
 import uuid
 import xml.etree.ElementTree as ET
 from run_with_ephemeral_admin import container_environment
+from native_validation_status import NativeValidationStatus
 
 
 def command(arguments, timeout=60, input=None):
@@ -22,6 +23,20 @@ def command(arguments, timeout=60, input=None):
 
 
 def main(suite='capacity'):
+    repository = Path(__file__).resolve().parents[2]
+    source_sha = command(['git', '-C', str(repository), 'rev-parse', 'HEAD']).strip()
+    report = NativeValidationStatus(repository / 'deploy/artifacts/native-status', suite, source_sha)
+    print(json.dumps({'nativeStatusFile': str(report.path.relative_to(repository)),
+        'sourceSha': source_sha}), flush=True)
+    try:
+        run_native(suite, report)
+        report.update(state='Passed', finishedAtUtc=report.now())
+    except BaseException as error:
+        report.update(state='Failed', failureType=type(error).__name__, finishedAtUtc=report.now())
+        raise
+
+
+def run_native(suite, report):
     if suite not in ('capacity', 'metrics', 'alerts', 'notifications'):
         raise ValueError('Unknown isolated native suite')
     repository = Path(__file__).resolve().parents[2]
@@ -56,7 +71,7 @@ def main(suite='capacity'):
             scratch_path = Path(scratch).resolve()
             assert scratch_path.parent == artifact_root.resolve()
             archive = scratch_path / 'source.tar'
-            command(['git', '-C', str(repository), 'archive', '--format=tar', '--output=' + str(archive), 'HEAD'])
+            command(['git', '-C', str(repository), 'archive', '--format=tar', '--output=' + str(archive), report.data['sourceSha']])
             public_source = scratch_path / 'public-source'
             public_source.mkdir()
             with tarfile.open(archive) as source:
@@ -80,6 +95,7 @@ def main(suite='capacity'):
                 'FullyQualifiedName~' + {'capacity': 'NativeBackupCapacityTests', 'metrics': 'NativeMetricAggregationTests', 'alerts': 'NativeMonitoringAlertsTests', 'notifications': 'NativeNotificationInboxTests'}[suite]]).strip()
             assert re.fullmatch(r'[a-f0-9]{64}', identity)
             command(['docker', 'network', 'connect', common[0], identity])
+            report.update(state='Running', stage='test', sdkImageId=sdk_identity, containerName=container)
             try:
                 completed = subprocess.run(['docker', 'start', '-a', identity], check=False, text=True,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
@@ -110,6 +126,7 @@ def main(suite='capacity'):
             assert counters is not None and all(counters.get(key) == '1' for key in ('total', 'executed', 'passed')), 'Native test execution/pass count differs'
             assert all(counters.get(key, '0') == '0' for key in ('failed', 'error', 'timeout', 'aborted', 'notExecuted', 'notRunnable', 'pending')), 'Native test was skipped/failed/incomplete'
             assert len(runs) == 1 and runs[0].get('outcome') == 'Passed', 'Native result is not one complete passed execution'
+            report.update(executedTests=1, passedTests=1, stage='cleanup')
             if suite == 'capacity':
                 print(json.dumps({'nativeBackupCapacityPostgres': 'passed', 'database': 'isolated-and-migrated',
                     'capacitySamples': 'synthetic-not-production-disk-saturation', 'dedupEscalationSilenceExpiryUnknownRecoveryDisable': 'passed'}))
@@ -128,10 +145,13 @@ def main(suite='capacity'):
             command(['docker', 'rm', identity])
             identity = None
     finally:
-        if identity:
-            command(['docker', 'rm', '-f', identity])
-        if created:
-            command(sql_arguments, input=f'DROP DATABASE "{database}" WITH (FORCE);')
+        try:
+            if identity:
+                command(['docker', 'rm', '-f', identity])
+        finally:
+            if created:
+                command(sql_arguments, input=f'DROP DATABASE "{database}" WITH (FORCE);')
+        report.update(cleanupConfirmed=True)
         print(json.dumps({'nativeTemporaryCleanup': 'passed', 'suite': suite}))
 
 
