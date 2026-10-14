@@ -2,6 +2,7 @@
 import copy
 import importlib.util
 import json
+import multiprocessing
 import os
 from pathlib import Path
 import tempfile
@@ -115,6 +116,41 @@ class Filesystem(unittest.TestCase):
         self.assertTrue(self.store.execute('inspect', {'channelId': self.channel, 'operationId': self.command['operationId']})['bindingCurrent'])
         with self.assertRaises(private.Rejected):
             self.store.execute('inspect', {'channelId': other['channelId'], 'operationId': self.command['operationId']})
+
+    def test_process_restart_recovers_receipt_with_same_fixed_key(self):
+        first = self.store.execute('apply', self.command)
+        restarted = private.Store(self.scratch.name, os.getuid(), self.store.revision_key)
+        self.assertEqual({**first, 'replayed': True}, restarted.execute('inspect', {'channelId': self.channel, 'operationId': self.command['operationId']}))
+
+    def test_cross_process_lock_or_version_conflict_allows_exactly_one_write(self):
+        context = multiprocessing.get_context('fork')
+        barrier = context.Barrier(2)
+        results = context.Queue()
+        def run():
+            try:
+                barrier.wait(timeout=5)
+                self.store.execute('apply', {**self.command, 'operationId': str(uuid.uuid4())})
+                results.put('accepted')
+            except private.Rejected as error:
+                results.put(error.code)
+            except Exception:
+                results.put('unexpected-failure')
+        children = [context.Process(target=run), context.Process(target=run)]
+        try:
+            for child in children:
+                child.start()
+            for child in children:
+                child.join(timeout=10)
+                self.assertFalse(child.is_alive())
+            outcomes = [results.get(timeout=2), results.get(timeout=2)]
+            self.assertEqual(1, outcomes.count('accepted'))
+            self.assertTrue(all(value in ('accepted', 'CONFIG_BUSY', 'VERSION_CONFLICT') for value in outcomes))
+        finally:
+            for child in children:
+                if child.is_alive():
+                    child.terminate()
+                    child.join(timeout=5)
+            results.close()
 
     def test_stale_revision_or_key_reuse_cannot_overwrite(self):
         first = self.store.execute('apply', self.command)
