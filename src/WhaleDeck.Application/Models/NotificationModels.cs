@@ -1,6 +1,6 @@
 namespace WhaleDeck.Application.Models;
 
-public sealed record NotificationContext(string Subject, bool IsAdministrator, string TraceId, string? SourceIp = null);
+public sealed record NotificationContext(string Subject, bool IsAdministrator, string TraceId, string? SourceIp = null, string? IdempotencyKey = null);
 public sealed record NotificationQuery(int Take = 50, long? Before = null, string Status = "all", string Kind = "all");
 public sealed record NotificationDto(Guid Id, long Sequence, string SourceKind, Guid SourceId, string MessageCode, string Severity,
     string Title, string Summary, DateTimeOffset OccurredAtUtc, DateTimeOffset PublishedAtUtc, DateTimeOffset? ReadAtUtc, string? TargetPath);

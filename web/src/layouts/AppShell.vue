@@ -98,6 +98,12 @@ const navigationGroups = [
     label: '治理',
     items: [
       { index: '/alerts', label: '告警', icon: BellFilled, administratorOnly: true },
+      {
+        index: '/settings/notifications',
+        label: '通知管理',
+        icon: BellFilled,
+        administratorOnly: true,
+      },
       { index: '/audit', label: '审计日志', icon: Document, administratorOnly: true },
       { index: '/settings', label: '平台设置', icon: Setting, administratorOnly: true },
       {

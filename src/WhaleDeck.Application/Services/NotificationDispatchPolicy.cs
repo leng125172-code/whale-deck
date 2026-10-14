@@ -97,6 +97,6 @@ public static partial class NotificationDispatchPolicy
     private static void ClearLease(NotificationDelivery item) { item.LeaseToken = null; item.LeaseExpiresAtUtc = null; }
     private static int SeverityRank(string severity) => severity switch { "Info" => 0, "Warning" => 1, "Error" => 2, "Critical" => 3, _ => -1 };
 
-    [GeneratedRegex("^[a-z][a-z0-9-]{0,63}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("\\A[a-z][a-z0-9-]{0,63}\\z", RegexOptions.CultureInvariant)]
     private static partial Regex ReferencePattern();
 }

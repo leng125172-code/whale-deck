@@ -191,6 +191,8 @@ Worker 批量保存 `container.cpu.utilization`、`container.memory.used/limit/u
 | --- | --- | --- | --- |
 | UC-NOT-001 | 个人消息及未读摘要 | 登录主体 | GET `/api/v1/notifications`、`/summary`；普通仅本人，管理员额外可见广播；不自动已读 |
 | UC-NOT-002 | 读状态及快照全部已读 | 登录主体 | POST `/{id}/read-state`、`/read-all`；仅修改本人读状态，批次上限 1000、幂等、审计、Cookie CSRF/Origin |
+| UC-NOT-003 | 渠道/路由元数据管理 | 管理员 | `/notifications/manage/channels`、`/routes` GET/POST，`/{id}` PUT/DELETE；确认/版本/幂等/审计同事务 |
+| UC-NOT-004 | 投递记录分页与筛选 | 管理员 | GET `/notifications/manage/deliveries`；不返回私有引用、租约 token 或消息正文 |
 
 事件来源和保留、前端状态及外部投递后续范围见 [消息中心](NOTIFICATIONS.md)。不支持客户端发送任意消息正文或修改消息事实。
 

@@ -20,6 +20,7 @@ const PlatformMaintenanceView = () => import('@/views/PlatformMaintenanceView.vu
 const SchedulesView = () => import('@/views/SchedulesView.vue')
 const AlertsView = () => import('@/views/AlertsView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
+const NotificationSettingsView = () => import('@/views/NotificationSettingsView.vue')
 const HostResourcesView = () => import('@/views/HostResourcesView.vue')
 const HostLogsView = () => import('@/views/HostLogsView.vue')
 const HostProcessesView = () => import('@/views/HostProcessesView.vue')
@@ -46,6 +47,12 @@ const router = createRouter({
           component: OverviewView,
         },
         { path: 'portal', name: 'portal', component: PortalView, meta: { title: '我的门户' } },
+        {
+          path: 'settings/notifications',
+          name: 'notification-settings',
+          component: NotificationSettingsView,
+          meta: { administratorOnly: true, title: '通知管理' },
+        },
         {
           path: 'services',
           name: 'services',

@@ -68,6 +68,8 @@ public static class DependencyInjection
         services.AddScoped<IGovernanceRepository, GovernanceRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<NotificationService>();
+        services.AddScoped<INotificationManagementRepository, NotificationManagementRepository>();
+        services.AddScoped<NotificationManagementService>();
         services.AddScoped<IApplicationRepository, ApplicationRepository>();
         services.AddScoped<IContainerUpdateRepository, ContainerUpdateRepository>();
         services.AddScoped<IDockerEventRepository, DockerEventRepository>();
