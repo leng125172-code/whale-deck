@@ -34,6 +34,7 @@ case "$action" in
       --property=User=root --property=Group=whaledeck \
       --property=ProtectSystem=strict --property=ReadWritePaths=/etc/whaledeck/notifications \
       --property=ProtectHome=yes --property=PrivateTmp=yes --property=NoNewPrivileges=yes \
+      --property=RuntimeMaxSec=15 --property=TimeoutStopSec=5 --property=KillMode=control-group \
       --property=RestrictAddressFamilies=AF_UNIX \
       /usr/bin/python3 -I /usr/local/libexec/whaledeck-notification-config.py "$2"
     ;;

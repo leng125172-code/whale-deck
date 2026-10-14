@@ -48,6 +48,7 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
     public DbSet<NotificationDeliveryAttempt> NotificationDeliveryAttempts => Set<NotificationDeliveryAttempt>();
     public DbSet<NotificationTargetRateGate> NotificationTargetRateGates => Set<NotificationTargetRateGate>();
+    public DbSet<NotificationPrivateOperation> NotificationPrivateOperations => Set<NotificationPrivateOperation>();
 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
@@ -332,6 +333,23 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     private static void ConfigureJobsAndMetrics(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<NotificationPrivateOperation>(entity =>
+        {
+            entity.ToTable("notification_private_operations", table =>
+            {
+                table.HasCheckConstraint("ck_private_state", "state IN ('Pending','Running','Unknown','Succeeded','Superseded','Canceled','Failed')");
+                table.HasCheckConstraint("ck_private_action", "action IN ('apply','remove') AND channel_version >= 0 AND version >= 0");
+                table.HasCheckConstraint("ck_private_fingerprints", "request_hash ~ '^[A-F0-9]{64}$' AND input_fingerprint ~ '^[A-F0-9]{64}$'");
+            });
+            entity.HasKey(item => item.Id); entity.Property(item => item.ActorSubject).HasMaxLength(256); entity.Property(item => item.State).HasMaxLength(16);
+            entity.Property(item => item.Action).HasMaxLength(16); entity.Property(item => item.Provider).HasMaxLength(16);
+            entity.Property(item => item.RequestHash).HasMaxLength(64); entity.Property(item => item.InputFingerprint).HasMaxLength(64); entity.Property(item => item.RegistryRevision).HasMaxLength(64);
+            entity.Property(item => item.ResultCode).HasMaxLength(64); entity.Property(item => item.Version).IsConcurrencyToken();
+            entity.HasIndex(item => item.ChannelId).IsUnique().HasFilter("state IN ('Pending','Running','Unknown')");
+            entity.HasIndex(item => item.LeaseToken).IsUnique().HasFilter("lease_token IS NOT NULL");
+            entity.HasOne<OperationJob>().WithOne().HasForeignKey<NotificationPrivateOperation>(item => item.Id).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<NotificationChannel>().WithMany().HasForeignKey(item => item.ChannelId).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<OperationJob>(entity =>
         {
             entity.ToTable("operation_jobs");

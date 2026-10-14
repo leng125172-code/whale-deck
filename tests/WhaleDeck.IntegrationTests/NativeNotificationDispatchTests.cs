@@ -7,6 +7,7 @@ using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 using WhaleDeck.Application.Services;
 using WhaleDeck.Application.Models;
@@ -106,6 +107,61 @@ public sealed class NativeNotificationDispatchTests
         Console.WriteLine("INBOX_PHASE=dispatch-retained");
         await Management(options, db, store, now);
         await Sender(db);
+        await PrivateWorkflow(db);
+    }
+
+    private static async Task PrivateWorkflow(PlatformDbContext db)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "wd-private-native-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(folder);
+        var key = Path.Combine(folder, "key"); await File.WriteAllBytesAsync(key, RandomNumberGenerator.GetBytes(32));
+        try
+        {
+            var channel = new NotificationChannel { Name = "private-native", Provider = "Webhook", DestinationReference = "legacy", IsEnabled = true };
+            db.NotificationChannels.Add(channel); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+            var protector = new NotificationPrivateProtector(new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = key }).Build());
+            var broker = new NotificationPrivateInputStore(); var staged = new WhaleDeck.Infrastructure.Secrets.MemoryOneTimeSecretStore();
+            var gateway = new NativePrivateGateway(); var repository = new NotificationPrivateRepository(db);
+            var service = new WhaleDeck.Application.Services.NotificationPrivateWorkflow(repository, gateway, staged, broker, protector, new NotificationPrivateValidator(), TimeProvider.System);
+            var context = new NotificationContext("native-private-admin", true, "private-trace", null, Guid.NewGuid().ToString("D"));
+            const string raw = "{\"target\":{\"provider\":\"Webhook\",\"url\":\"https://example.invalid/private-native\",\"allowedAddresses\":[]},\"credentialMode\":\"remove\"}";
+            var ticket = await staged.StoreAsync(context.Subject, raw, default);
+            var plan = await service.PlanAsync(context, channel.Id, new(0, "apply", ticket.Token), default);
+            var command = new NotificationPrivateSubmitCommand(plan.PlanHash, ticket.Token, true);
+            var submitted = await service.SubmitAsync(context, channel.Id, command, default);
+            Assert.Equal(submitted.Id, (await service.SubmitAsync(context, channel.Id, command, default)).Id);
+            var frozen = await db.NotificationChannels.AsNoTracking().SingleAsync(item => item.Id == channel.Id);
+            Assert.False(frozen.IsEnabled); Assert.True(frozen.PrivateConfigurationBlocked); Assert.Equal(1, frozen.Version);
+            Assert.DoesNotContain("example.invalid", (await db.OperationJobs.AsNoTracking().SingleAsync(item => item.Id == submitted.Id)).RequestJson);
+            Assert.DoesNotContain(ticket.Token, (await db.OperationJobs.AsNoTracking().SingleAsync(item => item.Id == submitted.Id)).RequestJson);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => new NotificationManagementService(new NotificationManagementRepository(db)).TestAsync(context, channel.Id, new(1, true), default));
+            var dispatcher = new NotificationPrivateDispatcher(repository, gateway, broker, new NativeAuthorizer(true), protector, TimeProvider.System);
+            await dispatcher.TickAsync(default); Assert.Equal(1, gateway.Applies);
+            var interrupted = await db.NotificationPrivateOperations.AsNoTracking().SingleAsync(item => item.Id == submitted.Id);
+            Assert.NotNull(interrupted.RootStartedAtUtc); Assert.Equal("Running", interrupted.State);
+            await broker.DeleteAsync(context.Subject, submitted.Id, default); // Input can disappear after root success.
+            await db.NotificationPrivateOperations.Where(item => item.Id == submitted.Id).ExecuteUpdateAsync(setters => setters
+                .SetProperty(item => item.LeaseExpiresAtUtc, DateTimeOffset.UtcNow.AddSeconds(-1)).SetProperty(item => item.NextAttemptAtUtc, DateTimeOffset.UtcNow.AddSeconds(-1)));
+            await new NotificationPrivateDispatcher(repository, gateway, broker, new NativeAuthorizer(false), protector, TimeProvider.System).TickAsync(default);
+            Assert.Equal(1, gateway.Applies);
+            Assert.Equal("Succeeded", (await db.OperationJobs.AsNoTracking().SingleAsync(item => item.Id == submitted.Id)).State);
+            var applied = await db.NotificationChannels.AsNoTracking().SingleAsync(item => item.Id == channel.Id);
+            Assert.False(applied.IsEnabled); Assert.False(applied.PrivateConfigurationBlocked); Assert.Equal("wd-" + channel.Id.ToString("N"), applied.DestinationReference); Assert.Equal(2, applied.Version);
+            Assert.Equal(2, await db.AuditEvents.CountAsync(item => item.JobId == submitted.Id));
+            Assert.True(await db.OutboxMessages.AnyAsync(item => item.MessageType == "NotificationPrivateRequested" && item.ProcessedAtUtc != null));
+            Assert.Equal("Succeeded", (await service.SubmitAsync(context, channel.Id, command, default)).State);
+            Console.WriteLine("INBOX_PHASE=private-atomic-job-pause-lost-reply-receipt-permanent-replay");
+        }
+        finally { File.Delete(key); Directory.Delete(folder); }
+    }
+
+    private sealed class NativePrivateGateway : INotificationPrivateGateway
+    {
+        public int Applies; private NotificationPrivateMetadata? _receipt;
+        public Task<NotificationPrivateMetadata> InspectAsync(Guid channelId, CancellationToken cancellationToken) => Task.FromResult(new NotificationPrivateMetadata("EMPTY", "wd-" + channelId.ToString("N"), null, false, false, false, false, null, true));
+        public Task<NotificationPrivateMetadata> InspectReceiptAsync(Guid channelId, Guid operationId, CancellationToken cancellationToken) => _receipt is null ? InspectAsync(channelId, cancellationToken) : Task.FromResult(_receipt);
+        public Task<NotificationPrivateMetadata> ApplyAsync(NotificationPrivateUpdate update, CancellationToken cancellationToken)
+        { Applies++; _receipt = new("EMPTY", "wd-" + update.ChannelId.ToString("N"), null, true, false, true, false, update.OperationId, true); throw new IOException("synthetic lost reply after root commit"); }
     }
 
     private static async Task Sender(PlatformDbContext db)

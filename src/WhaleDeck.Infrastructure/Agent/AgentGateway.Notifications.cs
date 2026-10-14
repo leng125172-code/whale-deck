@@ -27,9 +27,14 @@ public sealed partial class AgentGateway
             ChannelId = update.ChannelId.ToString("D"), OperationId = update.OperationId.ToString("D"), ExpectedRevision = update.ExpectedRevision,
             Action = update.Action, PrivateJson = ByteString.CopyFromUtf8(update.PrivateJson), Context = new RequestContext { ActorSubject = update.ActorSubject }
         };
-        var response = await new NotificationConfigurationService.NotificationConfigurationServiceClient(_channel).ApplyAsync(request,
-            Headers("/whaledeck.agent.v1.NotificationConfigurationService/Apply"), deadline: DateTime.UtcNow.AddSeconds(15), cancellationToken: cancellationToken);
-        return MapPrivate(response);
+        try
+        {
+            var response = await new NotificationConfigurationService.NotificationConfigurationServiceClient(_channel).ApplyAsync(request,
+                Headers("/whaledeck.agent.v1.NotificationConfigurationService/Apply"), deadline: DateTime.UtcNow.AddSeconds(15), cancellationToken: cancellationToken);
+            return MapPrivate(response);
+        }
+        catch (RpcException error) when (error.StatusCode is StatusCode.InvalidArgument or StatusCode.Aborted)
+        { throw new WhaleDeck.Application.Models.NotificationPrivateRejectedException(); }
     }
 
     public async Task<NotificationPrivateMetadata> InspectReceiptAsync(Guid channelId, Guid operationId, CancellationToken cancellationToken)

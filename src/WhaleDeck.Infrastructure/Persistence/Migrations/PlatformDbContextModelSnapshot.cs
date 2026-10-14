@@ -1141,6 +1141,10 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("next_delivery_at_utc");
 
+                    b.Property<bool>("PrivateConfigurationBlocked")
+                        .HasColumnType("boolean")
+                        .HasColumnName("private_configuration_blocked");
+
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -1445,6 +1449,120 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.ToTable("notification_events", null, t =>
                         {
                             t.HasCheckConstraint("ck_notification_audience", "(audience = 'Administrator' AND recipient_subject IS NULL) OR (audience = 'Subject' AND recipient_subject IS NOT NULL AND length(recipient_subject) > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationPrivateOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("action");
+
+                    b.Property<string>("ActorSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("actor_subject");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("channel_id");
+
+                    b.Property<long>("ChannelVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("channel_version");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTimeOffset>("InputExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("input_expires_at_utc");
+
+                    b.Property<string>("InputFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("input_fingerprint");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_expires_at_utc");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at_utc");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("RegistryRevision")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("registry_revision");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_hash");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("result_code");
+
+                    b.Property<DateTimeOffset?>("RootStartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("root_started_at_utc");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("state");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChannelId")
+                        .IsUnique()
+                        .HasFilter("state IN ('Pending','Running','Unknown')");
+
+                    b.HasIndex("LeaseToken")
+                        .IsUnique()
+                        .HasFilter("lease_token IS NOT NULL");
+
+                    b.ToTable("notification_private_operations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_private_action", "action IN ('apply','remove') AND channel_version >= 0 AND version >= 0");
+
+                            t.HasCheckConstraint("ck_private_fingerprints", "request_hash ~ '^[A-F0-9]{64}$' AND input_fingerprint ~ '^[A-F0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_private_state", "state IN ('Pending','Running','Unknown','Succeeded','Superseded','Canceled','Failed')");
                         });
                 });
 
@@ -2177,6 +2295,21 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("NotificationId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationPrivateOperation", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.NotificationChannel", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithOne()
+                        .HasForeignKey("WhaleDeck.Domain.Entities.NotificationPrivateOperation", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

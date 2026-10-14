@@ -88,7 +88,7 @@ public sealed partial class PrivateNotificationConfiguration(string path)
         finally { if (bytes is not null) CryptographicOperations.ZeroMemory(bytes); }
     }
 
-    private static void Validate(NotificationTarget target, NotificationCredential? credential)
+    internal static void Validate(NotificationTarget target, NotificationCredential? credential)
     {
         if (target.Provider is not ("Email" or "Webhook" or "DingTalk" or "WeCom" or "Feishu") || target.MinimumIntervalSeconds is < 5 or > 300 ||
             target.AllowedAddresses is null || target.AllowedAddresses.Length > 8 || target.AllowPrivateNetwork && target.AllowedAddresses.Length == 0 || target.AllowedAddresses.Any(value => !IPAddress.TryParse(value, out _)) ||

@@ -45,6 +45,7 @@ public sealed class NotificationManagementRepository(PlatformDbContext db) : INo
         {
             var existing = id is null ? null : await Channel(target, cancellationToken);
             if (existing is not null) Version(command.ExpectedVersion, existing.Version);
+            if (command.IsEnabled && existing?.PrivateConfigurationBlocked == true) throw new InvalidOperationException("Private configuration must be successfully reconciled before enabling this channel.");
             if (command.IsEnabled && await db.NotificationChannels.CountAsync(item => item.IsEnabled && item.Id != target, cancellationToken) >= 32)
                 throw new InvalidOperationException("Enabled notification channel budget exceeded.");
             if (command.KeepCredential && existing!.Provider != command.Provider) throw new ArgumentException("Provider changes require explicit credential replacement or removal.");
@@ -103,6 +104,7 @@ public sealed class NotificationManagementRepository(PlatformDbContext db) : INo
         Write(context, "notification.channel.delete", "notification-channel", id, expectedVersion, async () =>
         {
             var item = await Channel(id, cancellationToken); Version(expectedVersion, item.Version);
+            if (await db.NotificationPrivateOperations.AnyAsync(operation => operation.ChannelId == id, cancellationToken)) throw new InvalidOperationException("Private operation history prevents channel deletion; disable it instead.");
             if (await db.NotificationDeliveries.AnyAsync(delivery => delivery.ChannelId == id, cancellationToken))
                 throw new InvalidOperationException("Notification delivery history prevents channel deletion; disable it instead.");
             await db.NotificationChannels.Where(channel => channel.Id == id).ExecuteDeleteAsync(cancellationToken);
@@ -128,6 +130,7 @@ public sealed class NotificationManagementRepository(PlatformDbContext db) : INo
         return Write(context, "notification.test.request", "notification-channel", channelId, command, async () =>
         {
             var channel = await Channel(channelId, cancellationToken); Version(command.ExpectedChannelVersion, channel.Version);
+            if (channel.PrivateConfigurationBlocked) throw new InvalidOperationException("Reconcile private configuration before testing this channel.");
             var now = DateTimeOffset.UtcNow; var expires = now.AddMinutes(5); var sourceKey = "notification-test:" + id.ToString("N");
             if (await db.NotificationDeliveries.CountAsync(item => item.ChannelId == channelId && item.IntentKind == "Test" && item.CreatedAtUtc > now.AddMinutes(-5), cancellationToken) >= 10)
                 throw new InvalidOperationException("Notification testing budget exceeded; at most ten per channel in five minutes.");
@@ -187,9 +190,14 @@ public sealed class NotificationManagementRepository(PlatformDbContext db) : INo
         return await db.NotificationDeliveryAttempts.AsNoTracking().Where(item => item.DeliveryId == deliveryId).OrderBy(item => item.AttemptNumber).Take(5)
             .Select(item => new NotificationAttemptDto(item.AttemptNumber, item.StartedAtUtc, item.FinishedAtUtc, item.ResultCode)).ToArrayAsync(cancellationToken);
     }
-    private async Task<NotificationChannel> Channel(Guid id, CancellationToken cancellationToken) =>
-        await db.NotificationChannels.FromSqlInterpolated($"SELECT * FROM notification_channels WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken)
+    private async Task<NotificationChannel> Channel(Guid id, CancellationToken cancellationToken)
+    {
+        var channel = await db.NotificationChannels.FromSqlInterpolated($"SELECT * FROM notification_channels WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException("Notification channel was not found.");
+        if (await db.NotificationPrivateOperations.AnyAsync(item => item.ChannelId == id && (item.State == "Pending" || item.State == "Running" || item.State == "Unknown"), cancellationToken))
+            throw new InvalidOperationException("Private configuration is pending or unresolved; the channel cannot be changed or tested.");
+        return channel;
+    }
     private async Task<NotificationRoute> Route(Guid id, CancellationToken cancellationToken) =>
         await db.NotificationRoutes.FromSqlInterpolated($"SELECT * FROM notification_routes WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException("Notification route was not found.");

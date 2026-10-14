@@ -9,6 +9,7 @@ public sealed class NotificationChannel
     public required string DestinationReference { get; set; }
     public string? CredentialReference { get; set; }
     public bool IsEnabled { get; set; }
+    public bool PrivateConfigurationBlocked { get; set; }
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     public long Version { get; set; }
     public DateTimeOffset? NextDeliveryAtUtc { get; set; }

@@ -71,6 +71,12 @@ public static class DependencyInjection
         services.AddScoped<NotificationService>();
         services.AddScoped<INotificationManagementRepository, NotificationManagementRepository>();
         services.AddScoped<NotificationManagementService>();
+        services.AddScoped<INotificationPrivateRepository, NotificationPrivateRepository>();
+        services.AddSingleton<INotificationPrivateInputStore, NotificationPrivateInputStore>();
+        services.AddSingleton<INotificationPrivateProtector, NotificationPrivateProtector>();
+        services.AddSingleton<INotificationPrivateValidator, NotificationPrivateValidator>();
+        services.AddScoped<NotificationPrivateWorkflow>();
+        services.AddScoped<NotificationPrivateDispatcher>();
         services.AddScoped<INotificationDispatchRepository, NotificationDispatchStore>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new PrivateNotificationConfiguration("/run/secrets/notifications/registry.json"));
