@@ -4,6 +4,8 @@
 
 当前站内收件箱已在运行时 `4aa036b` 发布并完成独立原生及真实 Authentik/API/Worker 验收（2026-10-14）；下方“尚未发布”的记录仅为先前开发过程。外部渠道仍待实现。
 
+外部投递基础与新增快照边界验证继续点见 [投递实施记录](NOTIFICATION_DELIVERY.md)。已有并发已读/快照证据不覆盖低序号事务晚提交的组合，下一步须单独复现并修正，不能以原签收推断该组合也正确。
+
 ## 站内事件与权限
 
 - 不使用活动告警数量假装未读数量。新增 typed `notification_events` 与每个 Authentik subject 独立的 `notification_read_states`，不复制密码或用户资料。

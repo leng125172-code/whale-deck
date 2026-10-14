@@ -13,7 +13,7 @@ class NativeValidationStatus:
         'passedTests', 'cleanupConfirmed', 'failureType', 'finishedAtUtc'))
 
     def __init__(self, root: Path, suite: str, source_sha: str):
-        if suite not in ('capacity', 'metrics', 'alerts', 'notifications'):
+        if suite not in ('capacity', 'metrics', 'alerts', 'notifications', 'dispatch'):
             raise ValueError('Unknown native suite')
         if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
             raise ValueError('Invalid public source revision')

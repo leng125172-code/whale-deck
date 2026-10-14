@@ -40,6 +40,10 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
     public DbSet<CatalogSnapshot> CatalogSnapshots => Set<CatalogSnapshot>();
     public DbSet<NotificationEvent> NotificationEvents => Set<NotificationEvent>();
     public DbSet<NotificationReadState> NotificationReadStates => Set<NotificationReadState>();
+    public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
+    public DbSet<NotificationRoute> NotificationRoutes => Set<NotificationRoute>();
+    public DbSet<NotificationDispatchReceipt> NotificationDispatchReceipts => Set<NotificationDispatchReceipt>();
+    public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
@@ -78,6 +82,7 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
         ConfigureJobsAndMetrics(modelBuilder);
         ConfigureBackupsAlertsAndConfiguration(modelBuilder);
         ConfigureNotifications(modelBuilder);
+        ConfigureNotificationDispatch(modelBuilder);
 
         foreach (var entity in modelBuilder.Model.GetEntityTypes())
         {
@@ -86,6 +91,59 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
                 property.SetColumnName(ToSnakeCase(property.Name));
             }
         }
+    }
+
+    private static void ConfigureNotificationDispatch(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<NotificationChannel>(entity =>
+        {
+            entity.ToTable("notification_channels", table =>
+            {
+                table.HasCheckConstraint("ck_notification_channel_provider", "provider IN ('Email','Webhook','DingTalk','WeCom','Feishu')");
+                table.HasCheckConstraint("ck_notification_channel_refs", "destination_reference ~ '^[a-z][a-z0-9-]{0,63}$' AND (credential_reference IS NULL OR credential_reference ~ '^[a-z][a-z0-9-]{0,63}$')");
+                table.HasCheckConstraint("ck_notification_channel_version", "version >= 0");
+            });
+            entity.HasKey(item => item.Id); entity.Property(item => item.Name).HasMaxLength(80);
+            entity.Property(item => item.Provider).HasMaxLength(16);
+            entity.Property(item => item.DestinationReference).HasMaxLength(64);
+            entity.Property(item => item.CredentialReference).HasMaxLength(64);
+            entity.Property(item => item.Version).IsConcurrencyToken();
+        });
+        modelBuilder.Entity<NotificationRoute>(entity =>
+        {
+            entity.ToTable("notification_routes", table =>
+            {
+                table.HasCheckConstraint("ck_notification_route_kind", "source_kind IN ('all','Alert','Job')");
+                table.HasCheckConstraint("ck_notification_route_severity", "minimum_severity IN ('Info','Warning','Error','Critical')");
+                table.HasCheckConstraint("ck_notification_route_version", "version >= 0");
+            });
+            entity.HasKey(item => item.Id); entity.Property(item => item.SourceKind).HasMaxLength(16);
+            entity.Property(item => item.MinimumSeverity).HasMaxLength(16); entity.Property(item => item.Version).IsConcurrencyToken();
+            entity.HasOne<NotificationChannel>().WithMany().HasForeignKey(item => item.ChannelId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NotificationDispatchReceipt>(entity =>
+        {
+            entity.ToTable("notification_dispatch_receipts", table => table.HasCheckConstraint("ck_notification_receipt",
+                "outcome IN ('Matched','NoRoute','Personal') AND delivery_count >= 0 AND delivery_count <= 32"));
+            entity.HasKey(item => item.NotificationId); entity.Property(item => item.Outcome).HasMaxLength(16);
+            entity.HasOne<NotificationEvent>().WithMany().HasForeignKey(item => item.NotificationId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NotificationDelivery>(entity =>
+        {
+            entity.ToTable("notification_deliveries", table =>
+            {
+                table.HasCheckConstraint("ck_notification_delivery_state", "state IN ('Pending','Leased','Sending','RetryWait','Succeeded','Failed','Unknown','Canceled')");
+                table.HasCheckConstraint("ck_notification_delivery_attempts", "attempt_count >= 0 AND attempt_count <= 5 AND channel_version >= 0");
+                table.HasCheckConstraint("ck_notification_delivery_lease", "(state IN ('Leased','Sending') AND lease_token IS NOT NULL AND lease_expires_at_utc IS NOT NULL) OR (state NOT IN ('Leased','Sending') AND lease_token IS NULL AND lease_expires_at_utc IS NULL)");
+            });
+            entity.HasKey(item => item.Id); entity.Property(item => item.Provider).HasMaxLength(16);
+            entity.Property(item => item.DestinationReference).HasMaxLength(64); entity.Property(item => item.CredentialReference).HasMaxLength(64);
+            entity.Property(item => item.State).HasMaxLength(16); entity.Property(item => item.LastResultCode).HasMaxLength(32);
+            entity.HasIndex(item => new { item.NotificationId, item.ChannelId }).IsUnique();
+            entity.HasIndex(item => new { item.State, item.NextAttemptAtUtc }); entity.HasIndex(item => item.LeaseExpiresAtUtc);
+            entity.HasOne<NotificationEvent>().WithMany().HasForeignKey(item => item.NotificationId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<NotificationChannel>().WithMany().HasForeignKey(item => item.ChannelId).OnDelete(DeleteBehavior.Restrict);
+        });
     }
 
     private static void ConfigureNotifications(ModelBuilder modelBuilder)

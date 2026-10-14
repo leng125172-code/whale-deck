@@ -275,4 +275,5 @@ Valkey 清空后系统必须能从 PostgreSQL、Agent 和外部服务重建，�
 
 - `notification_events`：不可变 typed 事实，唯一 SourceKey 与 bigint 自增 Sequence；来源告警历史/任务终态，与源事务同存。管理员广播或精确 Authentik subject 受众；正文由固定代码模板生成，不复制 JSON/错误/Secret。
 - `notification_read_states`：复合主键 subject + notification_id，FK 级联删除。管理员也各自已读；无平台本地用户资料表。
+- 新的投递基础 migration：`notification_channels`/`notification_routes` 版本化策略、`notification_dispatch_receipts` 逐事件同事务回执、`notification_deliveries` 事件/渠道唯一意图及 token 租约/终态。保存私有目标/凭据引用而非实际 Secret；不包含传输正文。源码实现、尚未生产发布或接 Worker，完整范围与验证见 [投递记录](NOTIFICATION_DELIVERY.md)。
 - 默认 180 天有效，独立每分钟清理最多 1000 条过期事实；读状态随事件级联清理。详见 [消息模型与验收](NOTIFICATIONS.md)。
