@@ -93,6 +93,7 @@ public static class DependencyInjection
         services.AddSingleton<AgentGateway>();
         services.AddSingleton<IAgentGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IHostProcessGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddSingleton<INotificationPrivateGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IManagementQuery>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<PortalService>();
         services.AddScoped<OverviewService>();

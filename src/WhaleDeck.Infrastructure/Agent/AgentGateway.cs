@@ -11,7 +11,7 @@ using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Infrastructure.Agent;
 
-public sealed class AgentGateway : IAgentGateway, IManagementQuery, IHostProcessGateway, IDisposable
+public sealed partial class AgentGateway : IAgentGateway, IManagementQuery, IHostProcessGateway, INotificationPrivateGateway, IDisposable
 {
     private readonly GrpcChannel _channel;
     private readonly AgentService.AgentServiceClient _agent;

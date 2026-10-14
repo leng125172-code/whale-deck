@@ -18,7 +18,8 @@ public sealed class BoundedProcessRunner
         CancellationToken cancellationToken,
         string? workingDirectory = null,
         IReadOnlyDictionary<string, string>? environment = null,
-        bool clearEnvironment = false)
+        bool clearEnvironment = false,
+        IReadOnlySet<int>? acceptedExitCodes = null)
     {
         var start = new ProcessStartInfo(executable)
         {
@@ -59,7 +60,7 @@ public sealed class BoundedProcessRunner
         }
 
         var result = new ProcessResult(process.ExitCode, await outputTask, await errorTask);
-        if (result.ExitCode != 0) throw new InvalidOperationException($"{errorCode}: approved command failed with exit code {result.ExitCode}.");
+        if (result.ExitCode != 0 && acceptedExitCodes?.Contains(result.ExitCode) != true) throw new InvalidOperationException($"{errorCode}: approved command failed with exit code {result.ExitCode}.");
         return result;
     }
 

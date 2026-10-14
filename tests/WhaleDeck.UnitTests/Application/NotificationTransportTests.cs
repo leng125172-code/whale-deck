@@ -46,6 +46,9 @@ public sealed class NotificationTransportTests
             var binding = await reader.ResolveAsync("Webhook", "approved", "credential", default);
             Assert.Matches("^[A-F0-9]{64}$", binding.Revision); Assert.DoesNotContain("unit-secret", binding.ToString());
             Assert.DoesNotContain("unit-secret", binding.Credential!.ToString()); Assert.DoesNotContain("example.test", binding.Target.ToString());
+            var withReceipts = data.TrimEnd()[..^1] + ",\"revisionNonce\":\"" + new string('A', 64) + "\",\"receipts\":{\"fixture\":{\"inputHash\":\"opaque\",\"result\":{\"applied\":true}}}}";
+            await File.WriteAllTextAsync(path, withReceipts); Private(path);
+            Assert.Equal(binding.Revision, (await reader.ResolveAsync("Webhook", "approved", "credential", default)).Revision);
             await File.WriteAllTextAsync(path, data.Replace("unit-secret-not-a-real-key", "different-unit-secret-key", StringComparison.Ordinal)); Private(path);
             var rotated = await reader.ResolveAsync("Webhook", "approved", "credential", default);
             Assert.NotEqual(binding.Revision, rotated.Revision);

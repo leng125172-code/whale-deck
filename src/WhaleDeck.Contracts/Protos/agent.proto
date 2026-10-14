@@ -497,3 +497,30 @@ service ManagedResourceService {
   rpc RunPlatformMaintenance(RegisteredActionRequest) returns (OperationHandle);
   rpc DownloadDiagnosticBundle(DiagnosticBundleRequest) returns (stream DiagnosticBundleChunk);
 }
+
+// Private bytes are transient UDS input only, never a durable OperationHandle.
+message NotificationConfigurationRequest {
+  string channel_id = 1;
+  string operation_id = 2;
+  string expected_revision = 3;
+  string action = 4;
+  bytes private_json = 5;
+  RequestContext context = 6;
+}
+
+message NotificationConfigurationLookup { string channel_id = 1; }
+message NotificationConfigurationMetadata {
+  string revision = 1;
+  string destination_reference = 2;
+  string credential_reference = 3;
+  bool has_target = 4;
+  bool has_credential = 5;
+  bool applied = 6;
+  bool replayed = 7;
+  string operation_id = 8;
+}
+
+service NotificationConfigurationService {
+  rpc Inspect(NotificationConfigurationLookup) returns (NotificationConfigurationMetadata);
+  rpc Apply(NotificationConfigurationRequest) returns (NotificationConfigurationMetadata);
+}

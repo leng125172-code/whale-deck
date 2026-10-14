@@ -36,3 +36,4 @@ logs/
 *.log
 deploy/artifacts/
 deploy/install/install.env
+.project-atlas/

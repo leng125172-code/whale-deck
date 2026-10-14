@@ -59,6 +59,19 @@ public sealed class CapabilityValidatorTests : IDisposable
         return $"{expires}.{nonce}.{signature}";
     }
 
+    [Theory]
+    [InlineData("Inspect")]
+    [InlineData("Apply")]
+    public void PrivateConfigurationMethodsRequireTheirOwnSingleUseCapability(string action)
+    {
+        var method = "/whaledeck.agent.v1.NotificationConfigurationService/" + action;
+        Assert.False(_validator.Validate(null, method));
+        Assert.False(_validator.Validate(Sign(DateTimeOffset.UtcNow.AddSeconds(45), "private-wrong-method", Method), method));
+        var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "private-configuration-nonce", method);
+        Assert.True(_validator.Validate(token, method));
+        Assert.False(_validator.Validate(token, method));
+    }
+
     public void Dispose()
     {
         Directory.Delete(_directory, recursive: true);

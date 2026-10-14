@@ -68,6 +68,7 @@ public sealed partial class PrivateNotificationConfiguration(string path)
             using (var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 8 })) NoDuplicates(document.RootElement);
             var registry = JsonSerializer.Deserialize<Registry>(bytes, JsonOptions) ?? throw new NotificationConfigurationException("ConfigurationInvalid");
             if (registry.Version != 1 || registry.Targets is null || registry.Credentials is null || registry.Targets.Count > 32 || registry.Credentials.Count > 32 ||
+                registry.Receipts?.Count > 64 || registry.RevisionNonce is { } nonce && (nonce.Length != 64 || nonce.Any(value => value is not (>= 'A' and <= 'F' or >= '0' and <= '9'))) ||
                 registry.Targets.Keys.Concat(registry.Credentials.Keys).Any(key => !Reference().IsMatch(key))) throw new NotificationConfigurationException("ConfigurationInvalid");
             if (!Reference().IsMatch(destinationReference) || !registry.Targets.TryGetValue(destinationReference, out var target) || target is null || target.Provider != provider)
                 throw new NotificationConfigurationException("BindingMissing");
@@ -137,5 +138,8 @@ public sealed partial class PrivateNotificationConfiguration(string path)
         public int Version { get; init; }
         public Dictionary<string, NotificationTarget> Targets { get; init; } = [];
         public Dictionary<string, NotificationCredential> Credentials { get; init; } = [];
+        // Fixed root writer metadata, excluded from the selected binding hash.
+        public Dictionary<string, JsonElement>? Receipts { get; init; }
+        public string? RevisionNonce { get; init; }
     }
 }
