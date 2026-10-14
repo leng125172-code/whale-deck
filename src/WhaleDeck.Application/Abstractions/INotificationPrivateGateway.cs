@@ -4,11 +4,12 @@ namespace WhaleDeck.Application.Abstractions;
 public interface INotificationPrivateGateway
 {
     Task<NotificationPrivateMetadata> InspectAsync(Guid channelId, CancellationToken cancellationToken);
+    Task<NotificationPrivateMetadata> InspectReceiptAsync(Guid channelId, Guid operationId, CancellationToken cancellationToken);
     Task<NotificationPrivateMetadata> ApplyAsync(NotificationPrivateUpdate update, CancellationToken cancellationToken);
 }
 
 public sealed record NotificationPrivateMetadata(string Revision, string DestinationReference, string? CredentialReference,
-    bool HasTarget, bool HasCredential, bool Applied, bool Replayed, Guid? OperationId);
+    bool HasTarget, bool HasCredential, bool Applied, bool Replayed, Guid? OperationId, bool BindingCurrent);
 
 public sealed class NotificationPrivateUpdate
 {

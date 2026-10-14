@@ -13,7 +13,8 @@ public sealed class NotificationConfigurationGrpcService(BoundedProcessRunner pr
     public override Task<NotificationConfigurationMetadata> Inspect(NotificationConfigurationLookup request, ServerCallContext context)
     {
         Identity(request.ChannelId);
-        return Run("inspect", JsonSerializer.Serialize(new { channelId = request.ChannelId }), context.CancellationToken);
+        if (!string.IsNullOrEmpty(request.OperationId)) Identity(request.OperationId);
+        return Run("inspect", JsonSerializer.Serialize(new { channelId = request.ChannelId, operationId = string.IsNullOrEmpty(request.OperationId) ? null : request.OperationId }), context.CancellationToken);
     }
 
     public override Task<NotificationConfigurationMetadata> Apply(NotificationConfigurationRequest request, ServerCallContext context) =>
@@ -73,7 +74,7 @@ public sealed class NotificationConfigurationGrpcService(BoundedProcessRunner pr
             var revision = Value("revision");
             if (!Revision(revision)) throw new JsonException();
             return new() { Revision = revision, DestinationReference = Value("destinationReference"), CredentialReference = Value("credentialReference"),
-                HasTarget = Flag("hasTarget"), HasCredential = Flag("hasCredential"), Applied = Flag("applied"), Replayed = Flag("replayed"), OperationId = Value("operationId") };
+                HasTarget = Flag("hasTarget"), HasCredential = Flag("hasCredential"), Applied = Flag("applied"), Replayed = Flag("replayed"), OperationId = Value("operationId"), BindingCurrent = Flag("bindingCurrent") };
         }
         catch (JsonException) { throw new RpcException(new Status(StatusCode.DataLoss, "NOTIFICATION_PRIVATE_RESULT_INVALID")); }
     }

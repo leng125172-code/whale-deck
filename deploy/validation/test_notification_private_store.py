@@ -104,6 +104,17 @@ class Filesystem(unittest.TestCase):
         later = self.store.execute('apply', next_command)
         self.assertNotEqual(first['revision'], later['revision'])
         self.assertEqual(first['revision'], self.store.execute('apply', self.command)['revision'])
+        self.assertFalse(self.store.execute('inspect', {'channelId': self.channel, 'operationId': self.command['operationId']})['bindingCurrent'])
+
+    def test_receipt_recovery_does_not_need_expired_private_input(self):
+        first = self.store.execute('apply', self.command)
+        recovered = self.store.execute('inspect', {'channelId': self.channel, 'operationId': self.command['operationId']})
+        self.assertEqual({**first, 'replayed': True}, recovered)
+        other = {**self.command, 'channelId': str(uuid.uuid4()), 'operationId': str(uuid.uuid4()), 'expectedRevision': first['revision']}
+        self.store.execute('apply', other)
+        self.assertTrue(self.store.execute('inspect', {'channelId': self.channel, 'operationId': self.command['operationId']})['bindingCurrent'])
+        with self.assertRaises(private.Rejected):
+            self.store.execute('inspect', {'channelId': other['channelId'], 'operationId': self.command['operationId']})
 
     def test_stale_revision_or_key_reuse_cannot_overwrite(self):
         first = self.store.execute('apply', self.command)

@@ -32,6 +32,16 @@ public sealed partial class AgentGateway
         return MapPrivate(response);
     }
 
+    public async Task<NotificationPrivateMetadata> InspectReceiptAsync(Guid channelId, Guid operationId, CancellationToken cancellationToken)
+    {
+        if (channelId == Guid.Empty || operationId == Guid.Empty) throw new ArgumentException("A notification channel and operation are required.");
+        await RequirePrivateConfiguration(cancellationToken);
+        var response = await new NotificationConfigurationService.NotificationConfigurationServiceClient(_channel).InspectAsync(
+            new NotificationConfigurationLookup { ChannelId = channelId.ToString("D"), OperationId = operationId.ToString("D") },
+            Headers("/whaledeck.agent.v1.NotificationConfigurationService/Inspect"), deadline: DateTime.UtcNow.AddSeconds(15), cancellationToken: cancellationToken);
+        return MapPrivate(response);
+    }
+
     private async Task RequirePrivateConfiguration(CancellationToken cancellationToken)
     {
         var capabilities = await GetCapabilitiesAsync(cancellationToken);
@@ -40,5 +50,5 @@ public sealed partial class AgentGateway
     }
     private static NotificationPrivateMetadata MapPrivate(NotificationConfigurationMetadata item) => new(item.Revision, item.DestinationReference,
         string.IsNullOrEmpty(item.CredentialReference) ? null : item.CredentialReference, item.HasTarget, item.HasCredential, item.Applied, item.Replayed,
-        Guid.TryParse(item.OperationId, out var operation) ? operation : null);
+        Guid.TryParse(item.OperationId, out var operation) ? operation : null, item.BindingCurrent);
 }

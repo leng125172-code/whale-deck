@@ -166,6 +166,10 @@ class Store:
         core = {key: value for key, value in registry.items() if key != 'receipts'}
         return hmac.new(self.revision_key, canonical(core), hashlib.sha256).hexdigest().upper()
 
+    def binding_revision(self, registry, alias):
+        binding = {'target': registry['targets'].get(alias), 'credential': registry['credentials'].get(alias)}
+        return hmac.new(self.revision_key, canonical(binding), hashlib.sha256).hexdigest()
+
     @contextlib.contextmanager
     def locked(self):
         import fcntl
@@ -210,25 +214,30 @@ class Store:
 
     def execute(self, action, request):
         require(action in ('inspect', 'apply', 'remove'))
-        allowed = {'channelId'} if action == 'inspect' else {'channelId', 'operationId', 'expectedRevision', 'target', 'credential', 'credentialMode'}
+        allowed = {'channelId', 'operationId'} if action == 'inspect' else {'channelId', 'operationId', 'expectedRevision', 'target', 'credential', 'credentialMode'}
         require(isinstance(request, dict) and not request.keys() - allowed)
         try:
             channel = uuid.UUID(request['channelId'])
             require(channel.int != 0 and str(channel) == request['channelId'])
-            operation = None if action == 'inspect' else uuid.UUID(request['operationId'])
+            operation = None if action == 'inspect' and request.get('operationId') is None else uuid.UUID(request['operationId'])
             require(operation is None or operation.int != 0 and str(operation) == request['operationId'])
         except (KeyError, ValueError, TypeError, AttributeError):
             raise Rejected('CONFIG_INVALID') from None
         alias = 'wd-' + channel.hex
         with self.locked() as fd:
             registry, revision = self.read(fd)
+            if action == 'inspect' and operation is not None:
+                receipt = registry['receipts'].get(str(operation))
+                if receipt is not None:
+                    require(receipt.get('channelId') == str(channel) and isinstance(receipt.get('result'), dict), 'IDEMPOTENCY_CONFLICT')
+                    return {**receipt['result'], 'replayed': True, 'bindingCurrent': receipt.get('bindingRevision') == self.binding_revision(registry, alias)}
             if action != 'inspect':
                 input_hash = hashlib.sha256(canonical({'action': action, 'request': request})).hexdigest()
                 receipt = registry['receipts'].get(str(operation))
                 if receipt is not None:
                     require(receipt.get('inputHash') == input_hash and receipt.get('channelId') == str(channel), 'IDEMPOTENCY_CONFLICT')
                     require(isinstance(receipt.get('result'), dict), 'CONFIG_INVALID')
-                    return {**receipt['result'], 'replayed': True}
+                    return {**receipt['result'], 'replayed': True, 'bindingCurrent': receipt.get('bindingRevision') == self.binding_revision(registry, alias)}
                 require(request.get('expectedRevision') == revision, 'VERSION_CONFLICT')
                 now = int(time.time())
                 registry['receipts'] = {key: value for key, value in registry['receipts'].items() if isinstance(value, dict) and type(value.get('createdAt')) is int and value['createdAt'] > now - 86400}
@@ -254,8 +263,8 @@ class Store:
                 revision = self.revision(registry)
                 result = {'operationId': str(operation), 'applied': True, 'replayed': False, 'revision': revision,
                           'destinationReference': alias, 'credentialReference': alias if alias in registry['credentials'] else None,
-                          'hasTarget': alias in registry['targets'], 'hasCredential': alias in registry['credentials']}
-                registry['receipts'][str(operation)] = {'inputHash': input_hash, 'channelId': str(channel), 'createdAt': now, 'result': result}
+                          'hasTarget': alias in registry['targets'], 'hasCredential': alias in registry['credentials'], 'bindingCurrent': True}
+                registry['receipts'][str(operation)] = {'inputHash': input_hash, 'channelId': str(channel), 'createdAt': now, 'result': result, 'bindingRevision': self.binding_revision(registry, alias)}
                 raw = canonical(registry)
                 require(len(raw) <= LIMIT, 'CONFIG_BUDGET')
                 temporary = '.registry-' + secrets.token_hex(16)
@@ -276,7 +285,7 @@ class Store:
                         pass
             return {'operationId': str(operation) if operation else None, 'applied': action != 'inspect', 'replayed': False, 'revision': revision,
                     'destinationReference': alias, 'credentialReference': alias if alias in registry['credentials'] else None,
-                    'hasTarget': alias in registry['targets'], 'hasCredential': alias in registry['credentials']}
+                    'hasTarget': alias in registry['targets'], 'hasCredential': alias in registry['credentials'], 'bindingCurrent': True}
 
 
 def main():
