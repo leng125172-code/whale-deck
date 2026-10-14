@@ -54,7 +54,11 @@ public sealed class NotificationConfigurationGrpcService(BoundedProcessRunner pr
         if (result.ExitCode != 0)
         {
             string? code = null;
-            try { using var error = JsonDocument.Parse(result.StandardError); code = error.RootElement.GetProperty("errorCode").GetString(); }
+            try
+            {
+                var fixedError = result.StandardError.Split('\n').FirstOrDefault(line => line.StartsWith("{\"errorCode\":", StringComparison.Ordinal));
+                if (fixedError is not null) { using var error = JsonDocument.Parse(fixedError); code = error.RootElement.GetProperty("errorCode").GetString(); }
+            }
             catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException) { /* Fixed fallback only. */ }
             var status = code switch
             {

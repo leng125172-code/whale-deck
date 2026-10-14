@@ -26,7 +26,16 @@ run_transient() {
 case "$action" in
   notification-config)
     [[ $# -eq 2 && ( "$2" == inspect || "$2" == apply || "$2" == remove ) ]] || exit 2
-    exec /usr/bin/python3 -I /usr/local/libexec/whaledeck-notification-config.py "$2"
+    # Escape only the caller's read-only mount namespace through PID 1; the
+    # trusted transient writer itself remains strict with one writable directory.
+    # --pipe carries private stdin without argv, environment or staging files.
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit="whaledeck-notification-config-$$-$RANDOM" \
+      --property=User=root --property=Group=whaledeck \
+      --property=ProtectSystem=strict --property=ReadWritePaths=/etc/whaledeck/notifications \
+      --property=ProtectHome=yes --property=PrivateTmp=yes --property=NoNewPrivileges=yes \
+      --property=RestrictAddressFamilies=AF_UNIX \
+      /usr/bin/python3 -I /usr/local/libexec/whaledeck-notification-config.py "$2"
     ;;
   self-check)
     [[ $# -eq 1 ]] || exit 2
