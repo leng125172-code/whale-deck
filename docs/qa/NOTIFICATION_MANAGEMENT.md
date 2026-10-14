@@ -27,9 +27,17 @@ REST 根路径 `/api/v1/notifications/manage`；管理员才可 GET/POST `channe
 
 ## 验证状态
 
-- 本机 Release 498 Unit、73 Integration 真正通过；6项真实 PostgreSQL Fact 明确跳过，不当作本机通过。119项前端单元、4项320/1440明暗实际Chrome浏览器配置/冻结重试/无页面横向溢出通过；类型与生产构建通过。新增 lint mock 类型问题修复后复验通过。
+- 本机最终 Release 0警告/错误、498 Unit、73 Integration 真正通过；6项真实 PostgreSQL Fact 明确跳过，不当作本机通过。119项前端单元、36项实际Chrome新配置/原布局/搜索/消息/限流浏览器回归通过。截图复核后缩短手机空态，4项320/1440明暗再次通过；类型/lint/生产构建及12项Python验证工具单元通过。不是36+4个不同用例，不伪造现场生产身份浏览器走查。
 - 冻结源码f7c3f3610af470bfe2d1abda5af3190f150f1c43，工作站独立dispatch报告63f554bf231d46fb9a55ae51cf9472ca实际1项执行/1项通过，cleanupConfirmed=true。扩展Fact真实覆盖 CRUD、重放、版本、重叠路由、路由变化取消、禁止删除有历史渠道、审计失败事务原子性及32渠道并发预算/512路由预算，兼容原晚提交/租约/保留测试。零外部发送，SDK不可变摘要与起止时间记录在公开报告；不是传输已验收。
 - 真实 OIDC/API 脚本只创建停用临时渠道/路由并精确清理，覆盖 CSRF/Origin、确认、幂等、版本、字段投影、匿名/普通/管理员和 OpenAPI；上线后执行，不触发群消息或邮件。
-- 当前远程仍为已签收4ec6e86；本增量尚未发布。开发更新不自动回滚。
+- 工作站当前运行时e5b2cfc已覆盖发布并验收，详见下节。开发更新不自动回滚。
+
+## 工作站最终签收
+
+- 精确运行时 `e5b2cfc6041ff72bf17fa4d2b40ea84ef7b7d689`，更新任务0ed754d6-a226-4855-a6dd-c67b17e6d2e5只代表移交；另外核实宿主更新unit最终inactive/dead、Result=success、ExecMainStatus=0，root部署记录精确上述SHA。Agent/维护/周日timer active，11核心healthy，user免密保留。
+- 原生报告上述f7c3f36实际覆盖全部管理C#逻辑；git diff确认到运行时e5b2cfc仅增加公开HTTP资产验证、证据文档及手机空态/对应fixture文字，无C#/模型/Agent变化。旧原生证据的冻结源码与现行运行时分开记录，不声称在每个docs提交后重跑所有原生套件。
+- 真实Authentik OIDC管理员/普通Cookie和匿名请求，通过停用临时渠道/路由创建、编辑、重放、请求键载荷冲突、旧版本冲突、路由父版本变化及删除重放；无CSRF、非法Origin、未确认和无幂等键拒绝。三个列表匿名401/普通403/管理员成功，生产OpenAPI列出新路径，NoStore和凭据投影正确。精确临时配置和两个测试用户清理；审计合法历史保留，零外部发送。
+- 7个HTTP入口/预加载和1个新页面lazy分块与当前Gateway逐字节一致。入口index-vfeLnpzm.js SHA256 `6c9ae7d97dfb2ecae3eaf6ded2d6b673df4c8912200baa3fc0ca40034b479522`，页面NotificationSettingsView-CFj_hVAP.js SHA256 `d3dac180427a0874f12b937839d2b9d35b58848f764002a2224ad5fb25508741`。实际包包含API路径、幂等头、未接外发提示和原请求重试，不以本机dist冒称部署产物。真实身份浏览器全流程未单独走查；本机fixture是独立证据。
+- 本轮没有新schema migration或Agent协议变化，不宣称再验收六类数据库适配器/Valkey全部功能。通知整个P4-06仍为部分实现；下一步私有目标/凭据配置解析、实际Sender Worker与受控传输测试等完整范围继续。
 
 GLM Flash 仅作机械测试草案，GPT 复核：引用上限为64、重叠路由允许、take>100截断，未照搬草案中相反建议。调用成功1次，无重试，65729ms，输入11086/cache0/输出1700 tokens，费用未知；权限、事务、实现和签收由GPT负责。

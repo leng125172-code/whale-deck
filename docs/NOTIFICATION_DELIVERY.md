@@ -1,6 +1,6 @@
 # 外部通知可靠投递实施记录
 
-2026-10-14：正在实现，不是完整渠道功能完成。工作站重连后核实原bc39f46成功并真实验收，再把原生通过的有界清理增量ad0e661覆盖发布及签收；投递基础migration已随部署落库，仍没有发送Worker/实际渠道。站内消息见 [现有验收](NOTIFICATIONS.md) 与 [最新快照签收](qa/NOTIFICATION_READ_SNAPSHOTS.md)。不取消 Email/Webhook/钉钉/企业微信/飞书、管理页面、配置/签名/测试/限流/重试及批准目标真实验收的全量范围。
+2026-10-14：当前运行时e5b2cfc已签收渠道/路由元数据CRUD、投递查询API和管理员配置UI；详见 [实际签收](qa/NOTIFICATION_MANAGEMENT.md)。包含真实原生事务/幂等/预算、OIDC权限与HTTP资源验证，不能代表真实发送；Sender Worker、私有目标/凭据值管理、传输/签名/限流仍缺，完整渠道功能未完成。下方原9d534b3/ad0e661阶段的“尚未有API/UI”等描述保留为历史，不取代最新证据。站内消息见 [现有验收](NOTIFICATIONS.md) 与 [最新快照签收](qa/NOTIFICATION_READ_SNAPSHOTS.md)。不取消 Email/Webhook/钉钉/企业微信/飞书、配置/签名/测试/限流/重试及批准目标真实验收的全量范围。
 
 ## 已写入的基础
 

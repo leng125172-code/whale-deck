@@ -6,7 +6,7 @@
 
 ## 新增范围与当前继续点
 
-- 2026-10-14 正在补通知渠道/路由配置和投递查询的 API/UI，已通过498 Unit/73 Integration（6原生本机跳过）、119前端单元和4项明暗/响应式真实Chrome fixture。幂等回执、版本、预算、审计原子性及真实OIDC脚本已写入，待独立原生执行及覆盖发布。线上仍4ec6e86；外部发送/签名/Worker等仍待实现，76项目标不缩减。见 [本轮契约与证据](qa/NOTIFICATION_MANAGEMENT.md)。
+- 2026-10-14 最新运行时e5b2cfc签收通知渠道/路由配置与投递查询API/UI：498 Unit/73 Integration（6原生本机跳过）、119前端、36浏览器及手机空态4复测、Release/类型/lint/构建通过；f7c3f36冻结原生管理/派送基础Fact真正执行1/通过1/清理，实际OIDC权限/CRUD/幂等/版本/CSRF/Origin/OpenAPI通过，8个HTTP资源与Gateway逐字节一致。实际更新unit成功终止、11核心healthy、Agent/维护/timer active、sudo保留、临时测试配置/账户清理。外部发送/签名/Worker等仍待实现，76项目标不缩减；下方runtime是历史。见 [本轮最终签收](qa/NOTIFICATION_MANAGEMENT.md#工作站最终签收)。
 
 - 2026-10-14最新runtime4ec6e86已签收：修复认证前按用户限流实际退化成代理IP共享及默认503，改认证后、主体/匿名IP与会话/操作独立有限预算、429/Retry-After和中文提示、不重复提交写操作。476 Unit/73 Integration（6原生本机跳过）、113前端、30浏览器、Release/类型/lint/构建通过；真实Cookie同入口120/121、第二用户独立、401/403、额满仍CSRF/面板退出、原消息Worker回归通过。更新unit最终成功、7个HTTP分块匹配Gateway、11核心健康，sudo保留。详见 [限流签收](qa/API_RATE_LIMITS.md)。完整通知配置/渠道和76项未完成。
 - 2026-10-14重连最新签收runtime `ad0e661`：先核实原bc39f46更新成功，未重发原任务；新源码3个独立原生套件实际各执行1/通过1并清理，真正覆盖100005全101批消费/两次替换/多主体有界清理/存量迁移和消息投递基础兼容。之后覆盖发布，更新unit成功终止、新migration落库、11核心健康、真实身份/API/Worker及HTTP前端资产核对通过，临时测试资源清理，sudo保留。详见 [新快照最终签收](qa/NOTIFICATION_READ_SNAPSHOTS.md#重连后最终签收ad0e661)。以下断线/待原生记录是历史；外部发送/配置页面/完整通知仍缺，不算76项全部完成。
