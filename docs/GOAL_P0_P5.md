@@ -31,6 +31,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+- 2026-10-14 runtime `39c990b` 验收通知私有配置后端工作流：561 Unit/73 Integration、原生PG事务/恢复、真实 OIDC→API→Valkey→Worker→Agent 应用/移除/永久重放及精确清理通过，渠道未启用/外部发送0，普通匿名新入口拒绝、迁移/健康/UDS/HTTP资源一致，sudo保留。详见 [后端流程](qa/NOTIFICATION_PRIVATE_WORKFLOW.md)。配置 WebUI 与更多故障组合仍缺，76项完整目标不缩减；下方 runtime 为历史。
+
 - 2026-10-14 runtime `71b0b43` 已验收通知私有配置宿主基础、Agent 1.17 与固定原子 helper；553 Unit/73 Integration、18 条真实 Linux 权限/并发/断线恢复及原生依赖回归、真实受限 UDS 拒绝/读取/registry不变、OIDC/资源/最终更新与健康通过。首版只读挂载失败保留并已修正，sudo 保留。见 [宿主基础](qa/NOTIFICATION_PRIVATE_CONFIGURATION.md)；完整 API/UI、跨存储与审计仍缺，76项范围不缩减。项目图谱以 active 记录该模块，不能因宿主基础验收标整个 P4 完成。
 
 - 2026-10-14 重连最新 runtime `fe3e034` 签收显式通知测试/Unknown 确认人工子记录：543 Unit/73 Integration、119 前端、18 联合浏览器及冻结原生 PG/实际签名接收后响应丢失/原历史不变/单子记录/TLS SMTP/清理通过。真实 OIDC 接口与新增权限/确认拒绝、8 HTTP资源相同、update journal 成功结束、维护 healthy、11 核心/宿主服务/动态入口/权限通过，sudo 保留。见 [证据](qa/NOTIFICATION_EXPLICIT_INTENTS.md)；下一步私有值 UI/Agent 写入，P4-06 和 76 项全量目标仍继续，以下 runtime 为历史。

@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-14 最新 runtime `39c990b` 已验收通知私有配置后端流程：管理员签名 Plan/确认202 Job/Status/Unknown确认、Valkey短时输入且PG不存目标密码或票据、独立Worker租约/回执优先、原子入队暂停渠道/Job/Outbox/审计、发送阻断。561 Unit/73 Integration、Release、冻结原生PG新增流程/恢复/清理通过，真实 OIDC→API→Valkey→Worker→Agent应用/移除与永久重放通过，渠道始终停用、外部发送0、临时对象精确清理/审计保留；普通匿名新入口拒绝、migration/UDS/8 HTTP资源/宿主和11核心健康及sudo通过。见 [流程验收](qa/NOTIFICATION_PRIVATE_WORKFLOW.md)。下一步配置 WebUI、更多并发/取消/Unknown人工确认故障组合；P4-06与76项仍未整体完成。
+
 - 2026-10-14 最新 runtime `71b0b43` 签收通知私有配置宿主基础：Agent 1.17 独立契约、固定 root 原子 writer、回执/过期输入恢复/被取代标记、HMAC 不透明版本与受限 transient unit。553 Unit/73 Integration、Release 及 18 条真实 Linux 文件系统/并发/恢复用例、冻结原生依赖回归通过；首次 5b166ab Inspect 只读命名空间失败已实测并修复覆盖。最终真实 UDS 读取/能力重放与危险输入拒绝、生产 registry 不变、OIDC/8 HTTP资源/宿主与11核心健康、sudo 保留。见 [私有配置宿主验收](qa/NOTIFICATION_PRIVATE_CONFIGURATION.md)。下一步仍须 API/永久幂等审计/跨存储一致性/凭据暂存与 WebUI；此模块和76项整体不算完成。
 
 - 2026-10-14 工作站重连后最新 runtime `fe3e034` 已签收通知显式测试与 Unknown 确认重试子项：原记录不可变、关联子记录/单父去重、执行前权限复核、版本/确认/CSRF/幂等/审计与 UI；543 Unit/73 Integration、119 前端、18 联合浏览器回归及 Release 全方案通过。冻结原生 PG/实际本地签名 HTTP 响应丢失/Unknown 不重发/人工子记录、TLS SMTP 与清理实际通过；宿主 update 成功终态、维护 healthy、11 核心健康、实际 OIDC 拒绝契约/OpenAPI及8 HTTP资产一致、动态入口/UDS/权限通过，sudo 保留。详见 [显式意图验收](qa/NOTIFICATION_EXPLICIT_INTENTS.md)。下一步私有目标/凭据 WebUI 与 Agent 安全写入；没有生产群/邮箱发送，P4-06 和 76 项整体仍未完成。

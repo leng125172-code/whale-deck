@@ -19,6 +19,6 @@
 
 71b0b43 最终修正运行时已验收：Job f4361e51-bc0e-4e24-9d79-ad67d839120f 调度，实际宿主 update journal 18:31:57 CST 成功终止，维护 healthy，11 核心 healthy。真实 UDS 正向 Inspect、缺 capability/错方法/单次 nonce 重放拒绝、缺请求 actor 与固定 root writer 危险目标拒绝均通过，生产 registry 指纹/不存在状态前后不变；无生产目标创建/外部发送。完整宿主 UDS/受限 helper/权限/动态入口验证通过，user sudo 保留。实际 OIDC 元数据管理与权限/OpenAPI 回归、8 个 HTTP 前端资源与 Gateway 相同；本次前端代码未变，不把资源检查冒充生产浏览器操作或新 WebUI 已完成。
 
-下一步必须完成：管理员 API 与 WebUI、一次性私有输入暂存、确认与计划、Application/Worker 持久操作和原子审计、宿主回执与 PG 渠道版本的断线/重启一致性、目标切换取消旧投递、清理与真实批准厂商启用。不能以本次基础接口将 P4-06 标成整体 completed。
+后续 39c990b 已验收管理员 API、短时暂存、计划/永久 Job、审计与正向跨存储工作流，见 [业务流程](NOTIFICATION_PRIVATE_WORKFLOW.md)。配置 WebUI、更多断线/取消/Unknown 人工确认组合及真实批准厂商启用仍缺；不能以宿主基础或后端正向验收将 P4-06 标成整体 completed。
 
 GLM `glm-5.3-flash` 仅只读定位：274356ms，输入 768781、缓存 678144、输出 7945 Tokens，成功 1 次/重试 0，费用未知。定位结果由 GPT 核对；成本偏高，后续缩小单次定位范围与工具预算。核心设计、敏感边界、实际代码和验收由 GPT 执行。
