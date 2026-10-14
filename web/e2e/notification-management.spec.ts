@@ -68,7 +68,7 @@ for (const width of [320, 1440])
         expectedVersion: 0,
       })
       await page.getByRole('tab', { name: '投递记录', exact: true }).click()
-      await expect(page.getByText('暂无投递记录（配置成功不会生成虚假记录）')).toBeVisible()
+      await expect(page.getByText('暂无投递记录', { exact: true })).toBeVisible()
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       )

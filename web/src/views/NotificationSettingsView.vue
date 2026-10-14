@@ -388,7 +388,7 @@ onUnmounted(clearPrivate)
         v-else
         :data="deliveries"
         row-key="id"
-        empty-text="暂无投递记录（配置成功不会生成虚假记录）"
+        empty-text="暂无投递记录"
       >
         <el-table-column label="渠道" min-width="180" show-overflow-tooltip
           ><template #default="{ row }">{{ channelName(row.channelId) }}</template></el-table-column
