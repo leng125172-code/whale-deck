@@ -32,6 +32,7 @@ public sealed class NotificationReadSnapshot
     public Guid Id { get; init; } = Guid.NewGuid();
     public required string Subject { get; init; }
     public bool IsAdministrator { get; init; }
+    public bool IsCurrent { get; init; } = true;
     public long ItemCount { get; init; }
     public DateTimeOffset CreatedAtUtc { get; init; }
     public DateTimeOffset ExpiresAtUtc { get; init; }

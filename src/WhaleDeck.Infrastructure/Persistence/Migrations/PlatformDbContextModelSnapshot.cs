@@ -1394,6 +1394,12 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_administrator");
 
+                    b.Property<bool>("IsCurrent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_current");
+
                     b.Property<long>("ItemCount")
                         .HasColumnType("bigint")
                         .HasColumnName("item_count");
@@ -1409,7 +1415,8 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.HasIndex("ExpiresAtUtc");
 
                     b.HasIndex("Subject")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("is_current");
 
                     b.ToTable("notification_read_snapshots", null, t =>
                         {

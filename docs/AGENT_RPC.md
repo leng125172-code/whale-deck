@@ -160,7 +160,7 @@ Agent 每次维护状态变化都原子写入 `/run/whaledeck/maintenance/status
 
 新增 `disk.read.iops`、`disk.write.iops`（operationsPerSecond）及 `disk.read.latency`、`disk.write.latency`（milliseconds）。磁盘速率按 sector 差值 × 512 / 单调时间差；延迟按读/写累计毫秒差 / 完成 I/O 数差，表示内核请求完成耗时而非磁盘设备自身纯服务耗时。历史延迟按匹配 IOPS 加权。字段依据 [Linux I/O statistics](https://docs.kernel.org/admin-guide/iostats.html)。
 
-`GET /api/v1/metrics` 的 `window=live|1h|24h|7d` 为管理员只读接口；历史分别按 30/300/1800 秒聚合，返回 121/289/337 个对齐时间桶和 `windowStartUtc/windowEndUtc/resolutionSeconds`，当前桶可能未结束。无采样桶为 `Missing/null`。实时保持最多 600 个原始点的旧 `take` 兼容范围；Vue 使用固定 6 分钟 61 槽。数据库端有界聚合，不把 7 天原始样本全部加载到 API 内存。每日分区及按分区清理仍未落地，不能用现有按行保留清理代替其验收。
+`GET /api/v1/metrics` 的 `window=live|1h|24h|7d` 为管理员只读接口；历史分别按 30/300/1800 秒聚合，返回 121/289/337 个对齐时间桶和 `windowStartUtc/windowEndUtc/resolutionSeconds`，当前桶可能未结束。无采样桶为 `Missing/null`。实时保持最多 600 个原始点的旧 `take` 兼容范围；Vue 使用固定 6 分钟 61 槽。数据库端有界聚合，不把 7 天原始样本全部加载到 API 内存。UTC 日分区及按分区 14 天保留已有专用 migration/SQL 与历史验收；分钟/小时与迟到回填见 [聚合证据](qa/METRIC_AGGREGATION.md)，不能把此子项已验证当作整个监控或 P0–P5 已完成。
 
 ## 5. systemd、日志与系统更新
 

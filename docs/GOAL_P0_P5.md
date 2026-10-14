@@ -31,6 +31,7 @@
 
 ## 3. 当前证据与暂停恢复点
 
+- 2026-10-14 最新恢复点：工作站已断开，`bc39f46` 更新曾确认运行中、最终结果未知；最后已签收 runtime 仍为 `4aa036b`，不推断未签收版本已上线或因断线重发。GLM审查后继续本地成员有界清理/十万条完整消费和文档校正；476 Unit/64 Integration及Release通过、6原生明确跳过，新增源码尚未原生/生产签收。76项全量范围不变，见 [快照增量](qa/NOTIFICATION_READ_SNAPSHOTS.md) 与 [审查结论](qa/PLAN_REVIEW_20261014.md)。
 - 2026-10-14 运行时 `4aa036b` 已签收站内消息中心与实时卡片修复：460 Unit/62 Integration、98 前端、42 本机浏览器和 Release 全方案通过；独立原生消息实际通过、真实 Authentik/API/Worker 普通/管理员隔离与读状态/触发恢复、四窗口 78 完整桶数据库比对及部署前端资源核验通过。更新 unit 成功结束、11 核心健康、临时资源清理，sudo 保留。外部渠道、通知投递与长期压力仍缺，P0-07/P2-12/P4-06 及 76 项整体不算完成；见 [消息证据](NOTIFICATIONS.md) 和 [卡片证据](qa/TELEMETRY_CURRENT_CARDS.md)。下方运行时为历史。
 - 最新运行时 `3c26e13` 已签收负载/systemd/Docker 健康及独立离线评估；Agent 1.16、438 Unit/62 Integration、74 前端、11 浏览器、隔离原生 PostgreSQL与真实 Authentik/API/Worker 通过。32 核/4 负载/3 单元/11 容器实际对照、临时 Info 规则禁用/恢复，零生产故障制造；11 核心健康、sudo 保留。详见 [健康告警证据](qa/HEALTH_ALERTS.md)。P0-07 仍缺通知和长期压力等，76 项不因此完成。
 - 单位修正运行时 `c671b7e` 已发布及真实只读预检验收；412 Unit/62 Integration、74 前端及 50 浏览器通过。真实悬空镜像 0 B，镜像/数据卷/容器清单未变；11 核心健康，Agent 1.15，未执行清理。详见 [单位证据](qa/DISPLAY_UNITS.md)。P0-08/P1-04 的一部分，不视作整项完成。

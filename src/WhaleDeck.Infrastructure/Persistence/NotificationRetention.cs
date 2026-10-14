@@ -14,8 +14,25 @@ public static class NotificationRetention
             if (!acquired) return 0;
             var batch = db.NotificationEvents.Where(item => item.ExpiresAtUtc <= now).OrderBy(item => item.ExpiresAtUtc).ThenBy(item => item.Sequence).Take(1000).Select(item => item.Id);
             var removed = await db.NotificationEvents.Where(item => batch.Contains(item.Id)).ExecuteDeleteAsync(cancellationToken);
-            var snapshots = db.NotificationReadSnapshots.Where(item => item.ExpiresAtUtc <= now).OrderBy(item => item.ExpiresAtUtc).Take(10).Select(item => item.Id);
-            await db.NotificationReadSnapshots.Where(item => snapshots.Contains(item.Id)).ExecuteDeleteAsync(cancellationToken);
+            // Lock expired headers against renewal/replacement and FK insertion. Limiting only
+            // headers would still cascade arbitrarily many members in one statement.
+            var snapshots = await db.NotificationReadSnapshots.FromSqlInterpolated($"""
+                SELECT * FROM notification_read_snapshots WHERE expires_at_utc<={now}
+                ORDER BY expires_at_utc,id LIMIT 10 FOR UPDATE SKIP LOCKED
+                """).AsNoTracking().ToArrayAsync(cancellationToken);
+            var snapshotIds = snapshots.Select(item => item.Id).ToArray();
+            if (snapshotIds.Length > 0)
+            {
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    DELETE FROM notification_read_snapshot_items
+                    WHERE (snapshot_id,notification_id) IN (
+                        SELECT snapshot_id,notification_id FROM notification_read_snapshot_items
+                        WHERE snapshot_id=ANY({snapshotIds}) ORDER BY snapshot_id,notification_id LIMIT 1000
+                    )
+                    """, cancellationToken);
+                await db.NotificationReadSnapshots.Where(item => snapshotIds.Contains(item.Id) &&
+                    !db.NotificationReadSnapshotItems.Any(member => member.SnapshotId == item.Id)).ExecuteDeleteAsync(cancellationToken);
+            }
             await transaction.CommitAsync(cancellationToken);
             return removed;
         });

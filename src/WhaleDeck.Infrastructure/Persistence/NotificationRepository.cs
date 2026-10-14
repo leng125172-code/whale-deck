@@ -75,8 +75,11 @@ public sealed class NotificationRepository(PlatformDbContext db) : INotification
             var now = DateTimeOffset.UtcNow;
             var expires = now.AddMinutes(5);
             var id = Guid.NewGuid();
-            // One active intent per subject: creating a new one invalidates an old retry, without changing read states.
-            await db.NotificationReadSnapshots.Where(item => item.Subject == context.Subject).ExecuteDeleteAsync(cancellationToken);
+            // Invalidate immediately, but never cascade a large old set inside a user's request.
+            // Retention removes superseded members in bounded batches without undoing read states.
+            await db.NotificationReadSnapshots.Where(item => item.Subject == context.Subject && item.IsCurrent)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.IsCurrent, false)
+                    .SetProperty(item => item.ExpiresAtUtc, now), cancellationToken);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO notification_read_snapshots (id,subject,is_administrator,item_count,created_at_utc,expires_at_utc)
                 VALUES ({id},{context.Subject},{context.IsAdministrator},0,{now},{expires})
@@ -102,7 +105,7 @@ public sealed class NotificationRepository(PlatformDbContext db) : INotification
             await using var transaction = await BeginWriteAsync(context.Subject, cancellationToken);
             var now = DateTimeOffset.UtcNow;
             var headers = await db.NotificationReadSnapshots.FromSqlInterpolated($"""
-                SELECT * FROM notification_read_snapshots WHERE id={snapshotId} AND subject={context.Subject}
+                SELECT * FROM notification_read_snapshots WHERE id={snapshotId} AND subject={context.Subject} AND is_current
                   AND is_administrator={context.IsAdministrator} AND expires_at_utc>{now} FOR KEY SHARE
                 """).AsNoTracking().ToArrayAsync(cancellationToken);
             if (headers.Length == 0) throw new NotificationSnapshotUnavailableException();

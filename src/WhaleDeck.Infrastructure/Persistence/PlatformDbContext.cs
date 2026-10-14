@@ -154,7 +154,8 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
         {
             entity.ToTable("notification_read_snapshots", table => table.HasCheckConstraint("ck_notification_read_snapshot_budget", "item_count >= 0"));
             entity.HasKey(item => item.Id); entity.Property(item => item.Subject).HasMaxLength(256);
-            entity.HasIndex(item => item.Subject).IsUnique(); entity.HasIndex(item => item.ExpiresAtUtc);
+            entity.Property(item => item.IsCurrent).HasDefaultValue(true);
+            entity.HasIndex(item => item.Subject).IsUnique().HasFilter("is_current"); entity.HasIndex(item => item.ExpiresAtUtc);
         });
         modelBuilder.Entity<NotificationReadSnapshotItem>(entity =>
         {

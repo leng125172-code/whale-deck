@@ -190,7 +190,7 @@
 
 字段：`id`、`instance_resource_id`、`policy_id`、`job_id`、`status`、`relative_path`、`size_bytes`、`checksum_algorithm`、`checksum`、`started/completed_at_utc`、`verified_at_utc`、`expires_at_utc` 和 `error_code`。
 
-恢复相关字段可以预留 migration 设计，但 `HOLD` 期间不创建可调用业务入口。
+恢复已纳入 P2-08；按专用模型/migration、目标覆盖计划、权限和隔离恢复验收推进。实现完成前不注册可调用入口，但旧 `HOLD` 不再是排除理由。
 
 ## 8. 告警
 
@@ -220,7 +220,7 @@
 
 ### `DM-EXTERNAL-SYNC` `external_sync_runs`
 
-用于 Authentik/GitLab 同步历史。GitLab 功能为 `HOLD`，可以延后创建此表，避免空模型提前固化。
+用于 Authentik/GitLab 同步历史。GitLab 已纳入 P4-07，具体表随对应功能与 migration 实施，避免用空模型冒称功能完成。
 
 ## 10. Valkey 键空间
 
@@ -271,10 +271,10 @@ Valkey 清空后系统必须能从 PostgreSQL、Agent 和外部服务重建，�
 | `DM-CONFIG-*` | `UC-CFG-*` |
 | `DM-DEV-*`（待实现） | `UC-DEV-001..010`，具体实体/约束以开发空间专用设计为准 |
 
-## 消息中心增量模型（开发中，尚未上线）
+## 消息中心增量模型（站内已签收，新快照与外部投递待签收）
 
 - `notification_events`：不可变 typed 事实，唯一 SourceKey 与 bigint 自增 Sequence；来源告警历史/任务终态，与源事务同存。管理员广播或精确 Authentik subject 受众；正文由固定代码模板生成，不复制 JSON/错误/Secret。
 - `notification_read_states`：复合主键 subject + notification_id，FK 级联删除。管理员也各自已读；无平台本地用户资料表。
-- 新版 `notification_read_snapshots` / `notification_read_snapshot_items`：每主体一份权限范围绑定的短期固定 ID 集合，bigint ItemCount、成员处理标记与完成时刻、过期和级联清理。只保存主体/状态/关联 ID；不复制用户资料或消息正文。序号不再代表已读快照，状态见 [专项证据](qa/NOTIFICATION_READ_SNAPSHOTS.md)。
-- 新的投递基础 migration：`notification_channels`/`notification_routes` 版本化策略、`notification_dispatch_receipts` 逐事件同事务回执、`notification_deliveries` 事件/渠道唯一意图及 token 租约/终态。保存私有目标/凭据引用而非实际 Secret；不包含传输正文。源码实现、尚未生产发布或接 Worker，完整范围与验证见 [投递记录](NOTIFICATION_DELIVERY.md)。
+- 新版 `notification_read_snapshots` / `notification_read_snapshot_items`：每主体最多一份 IsCurrent 的权限范围绑定短期固定 ID 集合，部分唯一索引、bigint ItemCount、成员处理标记与完成时刻。替换仅使旧头失效并过期，不同步级联删除旧成员；后台按成员总预算清理，再删空头。只保存主体/状态/关联 ID，不复制用户资料或正文；源事实到期仍级联读状态/成员。状态见 [专项证据](qa/NOTIFICATION_READ_SNAPSHOTS.md)。
+- 新的投递基础 migration：`notification_channels`/`notification_routes` 版本化策略、`notification_dispatch_receipts` 逐事件同事务回执、`notification_deliveries` 事件/渠道唯一意图及 token 租约/终态。保存私有目标/凭据引用而非实际 Secret，不包含传输正文。基础源码已原生验证，未接传输 Worker；断线前发布启动、最终结果未知，不冒称已上线。见 [投递记录](NOTIFICATION_DELIVERY.md)。
 - 默认 180 天有效，独立每分钟清理最多 1000 条过期事实；读状态随事件级联清理。详见 [消息模型与验收](NOTIFICATIONS.md)。
