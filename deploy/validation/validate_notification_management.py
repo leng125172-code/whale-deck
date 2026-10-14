@@ -81,6 +81,12 @@ def main():
             ordinary_headers = {ordinary_csrf['headerName']: ordinary_csrf['token'], 'Origin': base, 'Idempotency-Key': str(uuid.uuid4())}
             assert ordinary.post(endpoint + path, json=body, headers=ordinary_headers, timeout=15, allow_redirects=False).status_code == 403
             assert anonymous.post(endpoint + path, json=body, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 401
+        for suffix, body in (('private/plan', {'expectedChannelVersion': 0, 'action': 'remove'}), ('private', {'planHash': 'invalid', 'confirmed': True}), ('private/acknowledge-unknown', {'operationId': str(uuid.uuid4()), 'expectedVersion': 0, 'confirmed': True, 'acceptUnknownOutcome': True})):
+            private_path = endpoint + 'channels/' + channel_id + '/' + suffix
+            assert ordinary.post(private_path, json=body, headers=ordinary_headers, timeout=15, allow_redirects=False).status_code == 403
+            assert anonymous.post(private_path, json=body, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 401
+        assert ordinary.get(endpoint + 'channels/' + channel_id + '/private', timeout=15, allow_redirects=False).status_code == 403
+        assert anonymous.get(endpoint + 'channels/' + channel_id + '/private/status', timeout=15, allow_redirects=False).status_code == 401
         doc = admin.get(base + '/openapi/v1.json', timeout=20)
         assert doc.status_code == 200
         assert all('/api/v1/notifications/manage/' + path in doc.json()['paths'] for path in ('channels', 'routes', 'deliveries'))
