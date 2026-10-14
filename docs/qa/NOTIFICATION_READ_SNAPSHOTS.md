@@ -1,6 +1,6 @@
 # 全部已读：晚提交事务与实际集合快照
 
-2026-10-14：最后已验收运行时 `4aa036b` 的序号截止方案不覆盖该组合。`bc39f46` 发布在断线前启动、最终状态未知；服务器已断开，本轮仅本地开发，不重发原发布。完整 P0–P5 仍未完成。
+2026-10-14：工作站已重连，原 `bc39f46` 更新终态与真实 API 已核实，未重复发布原任务；有界清理增量 `ad0e661` 已原生验证、覆盖发布及真实签收。下方断线/未验收记录是历史，不能继续当作当前状态。完整 P0–P5 仍未完成。
 
 ## 缺陷复现
 
@@ -32,8 +32,30 @@ GLM glm-5.3-flash 仅只读定位：113959ms，输入 120584 Tokens、缓存 907
 
 ## GLM 审查后的本地增量（未原生签收）
 
+以下为当时本机证据；后续签收见末节。
+
 - 新增 `20261014022643_NotificationSnapshotBoundedRetention` migration：旧头默认 IsCurrent=true，Subject 唯一索引改成 current 条件；保留存量成员。Down 有重复主体时先报固定错误而非删除历史，需要先完成有界清理，不增加 dev 自动回滚。
 - `NativeNotificationSnapshotTests` 增加旧 schema 的实际头/成员升级、两次替换十万条集合而不级联删除、旧 ID 拒绝、多主体过期而源事实仍有效、每轮成员总预算/新当前集合保护、100005 条全部 101 批消费、完整读状态与重试，以及 105021 条源事实最终清理。此用例本机明确跳过，**新增路径尚未真实执行**；旧 dac41f0 三份 Passed 不证明新增实现。
 - 离线两项模型/migration 测试真正通过；Release 全方案 0 警告/错误，476 Unit/64 Integration 通过，6 原生 Fact 明确跳过。本机 Windows/WSL 未找到可用 PostgreSQL/Docker CLI，未连接工作站或修改服务。前端与 API wire contract 未修改，本轮未冒称重跑 UI/浏览器或真实外部投递。
 - 重连先检查同一更新 unit 的终态与实际 runtime/迁移/11 核心健康，再执行原发布版本的真实 API 签收。新清理增量必须冻结新提交，另行重跑 snapshots/inbox/dispatch 隔离原生回归通过后才覆盖发布，不能重复发未确认的原更新。
 - GLM Flash 测试边界草案：29816ms、输入11121/缓存0/输出585、1次成功0重试、费用未返回。GPT 修正“所有 current 永不清理”为“仅未过期 current 不能误删”，以及旧 schema 原本全 Subject 唯一的迁移前提，并独立实施与复核。
+
+## 重连后最终签收：ad0e661
+
+先核实断线前更新 unit 为 inactive/dead、Result=success、ExecMainStatus=0，root 部署记录为 bc39f46，真实身份/API/Worker 快照消费与后续恢复未读通过；没有因断线重发。
+
+新源码冻结 `ad0e66127867d558b12438151ea41f1a00876b62`，三个隔离原生用例实际各执行1/通过1，均 Passed、cleanupConfirmed=true，SDK image 为 `sha256:c0790639332692a0d56cdd81ed581cfd24d040d9839764c138994866df89a3b6`：
+
+| 套件 | 原子报告 | UTC执行区间 |
+| --- | --- | --- |
+| 新快照/有界清理 | snapshots-8f6318898bc14efda9134f2a1d605a19.json | 03:26:34–03:30:59 |
+| 原消息中心兼容 | notifications-22433d54ec074b9998ead5da511eefe1.json | 03:30:59–03:33:12 |
+| 投递基础兼容 | dispatch-b52b861118844f7d97e9c5872da1df2a.json | 03:33:12–03:35:45 |
+
+快照原生真正完成旧 schema 头/成员升级、晚提交与范围隔离、100005 条全部101批消费、两次替换延后删除、多主体成员总预算/新当前保护、完成重试，以及105021条源事实最终清理。它没有执行 migration Down 错误路径；Down 保全历史的离线模型检查不冒称原生故障注入。
+
+通过后才提交更新任务 `0d8b40f6-f50a-43c4-b5cd-33fa14fd5060`；任务 Succeeded 只是移交宿主构建，另行等待更新 unit 最终 inactive/dead、Result=success、ExecMainStatus=0。部署记录仍精确 ad0e661，新 `20261014022643_NotificationSnapshotBoundedRetention` 已落库，11核心全部健康，Agent/维护/timer active，sudo保留，无临时原生容器遗留。
+
+发布后重复真实 Authentik/API/Worker：匿名401、普通/管理员范围、隐藏ID404、CSRF/Origin拒绝、消费进度/完成重试/后续恢复消息未读、NoStore均通过。临时普通与wrapper管理员删除，规则禁用恢复，历史/审计/消息按设计保留；没有外部发送。HTTP入口脚本 `/assets/index-aZAgwrDN.js` 与当前Gateway文件完全相同，SHA256=`e15517621100aadc2a6d812d15bedd291824552fa494be11c0b900799fce75aa`，新快照客户端契约存在；这是HTTP资源核对，不冒称现场浏览器登录走查。
+
+此前476 Unit/64 Integration与Release证据的backend代码未变；本轮另3项身份清理ownership模拟单元及2项原子报告器测试通过。修复wrapper仅清理本次sso_slug/关联provider，不再按共有前缀删除其他测试会话；模拟断言与实际身份账户清理明确分开。完整外部通知/配置UI/传输/限流/签名等继续，P0-07/P2-12/P4-06整体仍部分实现，76项未完成。
