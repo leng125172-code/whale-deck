@@ -70,6 +70,7 @@ internal static partial class TerminalProbe
             await Denied("../invalid", Headers(), StatusCode.InvalidArgument);
 
             var id = Guid.NewGuid().ToString("N"); var capability = Token();
+            var transcriptMarker = "wd-terminal-transcript-" + Guid.NewGuid().ToString("N");
             using (var call = Connect(Headers(capability)))
             {
                 Phase = "normal-open";
@@ -80,6 +81,7 @@ internal static partial class TerminalProbe
                 await Denied(id, Headers(), StatusCode.AlreadyExists);
                 Phase = "resize-and-output";
                 await call.RequestStream.WriteAsync(new() { Kind = "resize", Columns = 120, Rows = 40 });
+                await Input(call, "printf '%s\\n' '" + transcriptMarker + "'\n");
                 await Input(call, "printf 'WD_UID=%s\\n' \"$(id -u)\"; printf 'WD_GROUPS=%s\\n' \"$(id -Gn)\"; printf 'WD_HOME=%s\\n' \"$PWD\"; stty size; printf 'WD_KEY_%s\\n' \"$(test -r /etc/whaledeck/agent-capability.key && printf YES || printf NO)\"; exit 7\n");
                 var text = new StringBuilder(); var exit = false;
                 while (await call.ResponseStream.MoveNext())
@@ -89,9 +91,26 @@ internal static partial class TerminalProbe
                     Check(row.Kind != "error");
                 }
                 var uid = File.ReadLines("/etc/passwd").Single(line => line.StartsWith("whaledeck-shell:", StringComparison.Ordinal)).Split(':')[2];
-                Check(exit && text.ToString().Contains("WD_UID=" + uid, StringComparison.Ordinal) && text.ToString().Contains("WD_GROUPS=whaledeck-shell", StringComparison.Ordinal) &&
+                Check(exit && text.ToString().Contains(transcriptMarker, StringComparison.Ordinal) && text.ToString().Contains("WD_UID=" + uid, StringComparison.Ordinal) && text.ToString().Contains("WD_GROUPS=whaledeck-shell", StringComparison.Ordinal) &&
                     text.ToString().Contains("WD_HOME=/var/lib/whaledeck-shell", StringComparison.Ordinal) && text.ToString().Contains("40 120", StringComparison.Ordinal) && text.ToString().Contains("WD_KEY_NO", StringComparison.Ordinal));
             }
+            Phase = "transcript-not-in-journal-or-record";
+            var journalStart = new ProcessStartInfo("/usr/bin/journalctl") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+            journalStart.ArgumentList.Add("-u"); journalStart.ArgumentList.Add("whaledeck-terminal-" + id + ".service");
+            journalStart.ArgumentList.Add("--no-pager"); journalStart.ArgumentList.Add("-o"); journalStart.ArgumentList.Add("json"); journalStart.ArgumentList.Add("-n"); journalStart.ArgumentList.Add("50");
+            using (var journal = Process.Start(journalStart) ?? throw new InvalidOperationException())
+            {
+                var text = await journal.StandardOutput.ReadToEndAsync();
+                await journal.StandardError.BaseStream.CopyToAsync(Stream.Null); await journal.WaitForExitAsync();
+                Check(journal.ExitCode == 0 && text.Length <= 1048576 && !text.Contains(transcriptMarker, StringComparison.Ordinal));
+                foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    using var entry = JsonDocument.Parse(line);
+                    if (entry.RootElement.TryGetProperty("MESSAGE", out var message) && message.ValueKind == JsonValueKind.String)
+                        Check(!message.GetString()!.StartsWith("{\"type\":", StringComparison.Ordinal));
+                }
+            }
+            Check(!File.ReadAllText("/var/lib/whaledeck-terminal/" + id + ".json").Contains(transcriptMarker, StringComparison.Ordinal));
             Phase = "capability-and-uuid-replay";
             await Denied(Guid.NewGuid().ToString("N"), Headers(capability), StatusCode.PermissionDenied);
             await Denied(id, Headers(), StatusCode.FailedPrecondition);
@@ -102,7 +121,7 @@ internal static partial class TerminalProbe
             Phase = "disconnect-cgroup-cleanup"; await ChildCleanup(killDriver: false);
             Phase = "driver-kill-cgroup-cleanup"; await ChildCleanup(killDriver: true);
             Console.WriteLine(JsonSerializer.Serialize(new { nativeHostTerminal = "passed", udsMethodCapabilityReplay = "passed", fixedUnprivilegedIdentityResizeExit = "passed",
-                activeDuplicateDoesNotStopOriginal = "passed", eofAndKilledDriverCgroupCleanup = "passed", productionContainersModified = false, shellTranscriptPersisted = false }));
+                activeDuplicateDoesNotStopOriginal = "passed", eofAndKilledDriverCgroupCleanup = "passed", journalAndRootRecordContainNoTranscript = true, productionContainersModified = false }));
 
             async Task ChildCleanup(bool killDriver)
             {

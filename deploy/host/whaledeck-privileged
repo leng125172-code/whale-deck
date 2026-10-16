@@ -33,7 +33,7 @@ case "$action" in
       --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=yes \
       --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
       --property=RuntimeMaxSec=660 --property=TimeoutStopSec=5 --property=KillMode=control-group \
-      --property=Restart=no --property=TasksMax=64 --property=MemoryMax=256M --property=CPUQuota=50% \
+      --property=Restart=no --property=TasksMax=64 --property=MemoryMax=256M --property=CPUQuota=50% --property=LimitCORE=0 \
       --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
       --property="CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_KILL" \
       --property="ReadWritePaths=/var/lib/whaledeck-terminal /var/lib/whaledeck-shell" \
