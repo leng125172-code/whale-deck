@@ -9,8 +9,9 @@ const authenticated = ref(false)
 const initialized = ref(false)
 const user = ref<CurrentUser | null>(null)
 const unavailable = ref(false)
+let initialization: Promise<void> | undefined
 
-async function initializeAuthSession() {
+async function loadAuthSession() {
   if (initialized.value) return
 
   if (import.meta.env.DEV && sessionStorage.getItem(previewStorageKey) === 'true') {
@@ -49,6 +50,12 @@ async function initializeAuthSession() {
     window.clearTimeout(timeout)
     initialized.value = true
   }
+}
+
+function initializeAuthSession() {
+  if (initialized.value) return Promise.resolve()
+  initialization ??= loadAuthSession()
+  return initialization
 }
 
 function authenticatePreview() {

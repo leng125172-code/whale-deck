@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppShell from '@/layouts/AppShell.vue'
 import { authSession } from '@/services/authSession'
+import { createAccessGuard } from '@/routing/accessGuard'
 import LoginView from '@/views/LoginView.vue'
 import OverviewView from '@/views/OverviewView.vue'
 import StateView from '@/views/StateView.vue'
@@ -247,22 +248,6 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
-  if (authSession.initialized.value && to.meta.requiresAuth && !authSession.authenticated.value) {
-    return { name: 'login', query: { returnUrl: to.fullPath } }
-  }
-
-  if (authSession.initialized.value && to.name === 'login' && authSession.authenticated.value) {
-    return { name: 'overview' }
-  }
-
-  if (
-    authSession.initialized.value &&
-    to.meta.administratorOnly &&
-    !authSession.user.value?.isAdministrator
-  ) {
-    return { name: 'forbidden' }
-  }
-})
+router.beforeEach(createAccessGuard(authSession))
 
 export default router

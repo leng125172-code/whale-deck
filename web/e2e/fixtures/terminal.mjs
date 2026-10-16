@@ -11,7 +11,8 @@ export async function installTerminalFixture(page, options = {}) {
     sockets: 0,
     closed: false,
     grantStatus: options.grantStatus || 200,
-    administrator: true,
+    administrator: options.administrator ?? true,
+    authReads: 0,
   }
   let active
   let currentId
@@ -25,7 +26,12 @@ export async function installTerminalFixture(page, options = {}) {
       state.writes.push({ path, method: request.method(), body: request.postDataJSON() })
     if (path === 'auth/csrf')
       return fulfill({ headerName: 'X-XSRF-TOKEN', token: 'ui-fixture-only' })
-    if (path === 'auth/me')
+    if (path === 'auth/me') {
+      state.authReads++
+      if (options.authenticationDelayMs)
+        await new Promise((resolve) => setTimeout(resolve, options.authenticationDelayMs))
+      if (options.authenticationStatus && options.authenticationStatus !== 200)
+        return fulfill({ status: options.authenticationStatus }, options.authenticationStatus)
       return fulfill({
         subject: 'preview-user',
         name: 'Preview User',
@@ -33,6 +39,7 @@ export async function installTerminalFixture(page, options = {}) {
         isAdministrator: state.administrator,
         permissionExpiresAtUtc: new Date(Date.now() + 7200000).toISOString(),
       })
+    }
     if (path === 'terminals/host/grants') {
       if (state.grantStatus !== 200)
         return fulfill(
