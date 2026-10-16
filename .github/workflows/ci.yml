@@ -36,6 +36,54 @@ jobs:
       - run: dotnet test --configuration Release --no-build --logger trx
       - run: dotnet list package --vulnerable --include-transitive
 
+  native-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        env:
+          # Isolated disposable CI service, loopback only; no production secret.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:15432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Create isolated application-owned native database
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i "$POSTGRES_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
+          CREATE ROLE whaledeck LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE DATABASE wdv_dispatch_0000000000000001 OWNER whaledeck;
+          SQL
+      - name: Run actual migrations, SQL lifecycle and transactional audit
+        env:
+          WHALEDECK_NATIVE_TEST_CONNECTION: Host=127.0.0.1;Port=15432;Database=wdv_dispatch_0000000000000001;Username=whaledeck
+        run: >-
+          dotnet test tests/WhaleDeck.IntegrationTests/WhaleDeck.IntegrationTests.csproj
+          --configuration Release --logger "trx;LogFileName=native-ci.trx"
+          --filter FullyQualifiedName~NativeNotificationDispatchTests.RealPostgresLateCommitFanoutLeaseRecoveryVersionAndRetention
+      - name: Require one executed native test, never a skipped green result
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          reports = list(Path('tests/WhaleDeck.IntegrationTests/TestResults').glob('native-ci.trx'))
+          assert len(reports) == 1, 'Native test evidence missing'
+          tree = ET.parse(reports[0])
+          counters = next(item for item in tree.iter() if item.tag.endswith('Counters'))
+          assert counters.attrib['executed'] == counters.attrib['passed'] == counters.attrib['total'] == '1', 'Native test did not actually execute and pass'
+          PY
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
