@@ -44,6 +44,8 @@ docker run --rm \
   --env DOTNET_CLI_HOME=/tmp/dotnet \
   --env WHALEDECK_BUILD_REVISION="$source_revision" \
   "$sdk_image" sh -ec '
+    test ! -e /src/.env
+    test ! -e /src/.images.env
     dotnet publish src/WhaleDeck.Agent/WhaleDeck.Agent.csproj \
       --configuration Release --runtime '"$runtime_id"' --self-contained true \
       --artifacts-path /tmp/artifacts/agent --output /out/agent \

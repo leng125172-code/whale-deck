@@ -114,3 +114,21 @@ The new validator was run read-only against the old installed bundle and
 correctly rejected it. New-SDK Release/tests, actual bundle publication and
 installation, PKCS product-version checks and service regression are still
 pending. No exploitation assessment is inferred from presence of this DLL.
+
+The first 10.0.402 frozen native run failed before test execution, with temporary
+database/container cleanup confirmed. A separate probe with only public tracked
+source and **no** connection/token/env-file reproduced `NuGet-Migrations` mutex
+startup failure. A non-root read-only probe confirmed writable /tmp alone is
+insufficient. [.NET maintainers document the 10.0.13 mutex security change](https://github.com/dotnet/runtime/issues/135726):
+an existing writable user-owned XDG_RUNTIME_DIR is required when the home is
+unavailable. Supplying a 0700 private directory fixed the probe, without removing
+read-only/capability/no-new-privileges restrictions or skipping NuGet migration.
+The shared native runner now supplies a per-run private /scratch/runtime and
+recognizes this startup failure explicitly rather than logging private output.
+
+SDK 10.0.402 CI 38864657702 completed successfully, including backend Release,
+tests/audit, installer/runtime-validator tests and the production-route browser
+gate. Publication from frozen source 640654e produced host-publish.7dG1kC:
+both included frameworks and actual PKCS informational metadata are 10.0.13.
+This package was validated but is **not yet installed**; a corrected frozen
+native run and final deployment/service checks remain required.

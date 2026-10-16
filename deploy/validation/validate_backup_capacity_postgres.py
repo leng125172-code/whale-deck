@@ -70,6 +70,8 @@ def run_native(suite, report):
         with tempfile.TemporaryDirectory(prefix=suite + '-native-', dir=artifact_root) as scratch:
             scratch_path = Path(scratch).resolve()
             assert scratch_path.parent == artifact_root.resolve()
+            runtime_directory = scratch_path / 'runtime'
+            runtime_directory.mkdir(mode=0o700)
             archive = scratch_path / 'source.tar'
             command(['git', '-C', str(repository), 'archive', '--format=tar', '--output=' + str(archive), report.data['sourceSha']])
             public_source = scratch_path / 'public-source'
@@ -87,6 +89,7 @@ def run_native(suite, report):
                 '--user', str(os.getuid()) + ':' + str(os.getgid()), '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m',
                 '--log-driver', 'local', '--log-opt', 'max-size=2m', '--log-opt', 'max-file=2',
                 '--env-file', str(environment), '--env', 'DOTNET_CLI_HOME=/scratch/home', '--env', 'NUGET_PACKAGES=/scratch/packages',
+                '--env', 'XDG_RUNTIME_DIR=/scratch/runtime',
                 '--mount', 'type=bind,source=' + str(public_source) + ',target=/repo,readonly',
                 '--mount', 'type=bind,source=' + scratch + ',target=/scratch', '--workdir', '/repo', sdk_identity,
                 'dotnet', 'test', 'tests/WhaleDeck.IntegrationTests/WhaleDeck.IntegrationTests.csproj',
@@ -111,13 +114,14 @@ def run_native(suite, report):
             output = completed.stdout + completed.stderr
             status = command(['docker', 'inspect', '--format', '{{.State.ExitCode}}', identity]).strip()
             if status != '0':
-                diagnostics = [line for line in output.splitlines() if re.search(r': error (?:CS|CA|IDE|NU)\d+', line)][:8]
+                diagnostics = [line for line in output.splitlines() if re.search(r': error (?:CS|CA|IDE|NU|NETSDK|MSB)\d+', line)][:8]
+                startup_failed = 'NuGet-Migrations' in output and 'System.Threading.Mutex' in output
                 # Only stable exception/code tokens; never connection strings or native SQL values.
                 error_types = sorted(set(re.findall(r'\b(?:[A-Za-z]+\.)*(?:PostgresException|InvalidOperationException|EqualException|TrueException|SingleException|NotNullException|NullException|InRangeException)\b', output)))
                 sql_states = sorted(set(re.findall(r'\b([0-9A-Z]{5}):\s', output)))
                 source_lines = re.findall(r'NativeNotification(?:Inbox|Dispatch|Snapshot)Tests(?:\.[A-Za-z0-9_-]{1,80})?\.cs:line ([0-9]+)', output)
                 raise RuntimeError('Isolated native ' + suite + ' test failed: ' + ('\n'.join(diagnostics) if diagnostics else
-                    'native failure types=' + ','.join(error_types) + ' SQLSTATE=' + ','.join(sql_states) +
+                    'native failure types=' + ','.join(error_types) + ' sdkMutexStartupFailed=' + str(startup_failed) + ' SQLSTATE=' + ','.join(sql_states) +
                     ' inboxSourceLines=' + ','.join(source_lines[:8]) + '; private output withheld'))
             results = ET.parse(scratch_path / 'results/native.trx').getroot()
             namespace = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
