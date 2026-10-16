@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-16 runtime `8c5ac86` PKCS 安全修复已签收：核实 MailKit→MimeKit→Pkcs 10.0.0，显式锁定10.0.13、保持全间接依赖审计和警告即错误；容器 .NET/ASP.NET 基础镜像同步锁定10.0.13官方摘要。CI 38855112870全部绿色，643 Unit/92 Integration、Release和依赖审计通过；冻结原生PG/TLS SMTP派发实际1通过/清理，未发送外部通知。真实更新unit13:25:20 CST成功结束；API/Worker依赖清单和DLL哈希、Migrator镜像、运行时均核实修复版本，11核心healthy；真实OIDC/权限/通知/宿主终端/8资产与宿主回归通过。见 [安全修复证据](qa/DEPENDENCY_SECURITY_2026_10.md)。仅关闭此依赖问题，不作未遭入侵的取证结论；本地终端WebUI仍在开发、未随此补丁提交部署，全部76项继续。
+
 - 2026-10-16 runtime `5bc2551` 受限宿主终端后端签收：642 Unit/92 Integration、Release无警告错误，冻结原生PG执行1/通过1/清理；真实OIDC/稳定代理/Gateway/BFF/UDS/PTy、一次性/幂等/Origin/尺寸/exit持久化/关闭握手和撤销通过。普通/匿名新终端全部入口403/401、原任务1006事件/通知全链路/8资产/UDS/宿主回归通过，更新unit12:31:12 CST成功结束、11核心healthy、sudo保留。首两次EOF失败与未放宽断言的修正见 [BFF证据](qa/HOST_TERMINAL_BFF.md)。前端尚未生成，本机pnpm新依赖TLS失败，未改全局代理或关闭TLS验证；继续前端、容器Exec/文件传输、隔离/清理与全76项，不能当作完整终端完成。
 
 - 2026-10-16 runtime `c9568e3` 宿主PTY基础实际签收：610 Unit/86 Integration、Release及冻结原生PG通过/清理；同源码原生UDS探针验证固定非特权身份、尺寸/exit、能力/UUID重放、活跃重复不误停、断线/仅强杀测试driver后setsid子进程清理与正文不进入journal/root记录。实际更新unit11:30:52 CST成功结束，任务SSE/通知私有链路/权限/8资产/UDS/宿主回归通过，11核心healthy、sudo保留。见 [证据与首版失败记录](qa/HOST_TERMINAL_PTY.md)。P1-11只部分实现，BFF票据/审计/撤权、前端、容器Exec/文件传输仍待继续，76项不缩减。
