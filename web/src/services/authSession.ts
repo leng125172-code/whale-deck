@@ -87,6 +87,21 @@ async function logout() {
   await navigateToLogout()
 }
 
+async function refresh() {
+  try {
+    user.value = await apiRequest<CurrentUser>('auth/me')
+    authenticated.value = true
+    unavailable.value = false
+  } catch (reason) {
+    if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
+      user.value = null
+      authenticated.value = false
+    }
+    unavailable.value = !(reason instanceof ApiError && reason.status === 401)
+    throw reason
+  }
+}
+
 export const authSession = {
   authenticated: readonly(authenticated),
   initialized: readonly(initialized),
@@ -96,4 +111,5 @@ export const authSession = {
   authenticatePreview,
   redirectToAuthentik,
   logout,
+  refresh,
 }

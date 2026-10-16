@@ -24,6 +24,7 @@ const NotificationSettingsView = () => import('@/views/NotificationSettingsView.
 const HostResourcesView = () => import('@/views/HostResourcesView.vue')
 const HostLogsView = () => import('@/views/HostLogsView.vue')
 const HostProcessesView = () => import('@/views/HostProcessesView.vue')
+const HostTerminalView = () => import('@/views/HostTerminalView.vue')
 const HostUpdatesView = () => import('@/views/HostUpdatesView.vue')
 const ServicesView = () => import('@/views/ServicesView.vue')
 const AgentStatusView = () => import('@/views/AgentStatusView.vue')
@@ -130,6 +131,12 @@ const router = createRouter({
           name: 'host-logs',
           component: HostLogsView,
           meta: { administratorOnly: true, title: '系统日志' },
+        },
+        {
+          path: 'host/terminal',
+          name: 'host-terminal',
+          component: HostTerminalView,
+          meta: { administratorOnly: true, title: '宿主终端' },
         },
         {
           path: 'host/processes',
