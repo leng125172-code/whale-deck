@@ -29,6 +29,7 @@ builder.Services.AddSingleton(services => new MaintenanceStatusReader(
 builder.Services.AddReverseProxy()
     .LoadFromMemory(
         [
+            TerminalProxyConfiguration.CreateRoute(),
             new Yarp.ReverseProxy.Configuration.RouteConfig
             {
                 RouteId = "authentik",
@@ -50,6 +51,7 @@ builder.Services.AddReverseProxy()
             }
         ],
         [
+        TerminalProxyConfiguration.CreateCluster(),
         new Yarp.ReverseProxy.Configuration.ClusterConfig
         {
             ClusterId = "gateway",

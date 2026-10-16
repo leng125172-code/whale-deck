@@ -163,6 +163,9 @@ def main():
         active = WireSocket(base, '/api/v1/terminals/' + live_id + '/connect', cookie)
         try:
             assert active.status == 101; active.send({'token': live['connectToken']}); assert active.read()['kind'] == 'ready'
+            # The stable proxy previously aborted silent terminal streams at
+            # five seconds, before the ten-second revocation monitor ran.
+            time.sleep(6)
             closed = session.post(endpoint + '/' + live_id + '/close', headers=headers, timeout=15); assert closed.status_code == 204
             deadline = time.monotonic() + 15
             while active.read() is not None: assert time.monotonic() < deadline
