@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-17）",
-  "nextStep": "已部署1e72ac4/Agent1.23，文件变更真实OIDC/BFF/SQL/Worker/UDS及管理员/普通用户网页子范围已验收，CI四作业与同源码真实PG通过并清理。继续目录树/名称搜索、编辑前HDD备份（覆盖上传同策略）、回收站/归档、容器文件及隔离/长期清理；全部76项保持active。"
+  "nextStep": "已部署eee26bf/Agent1.24，目录树/名称搜索真实OIDC/BFF/UDS、管理员与普通用户网页子范围已验收；运行时代码CI四作业和同源码真实PG通过并清理。QA-only afb1472的前端CI取消后单独重跑已成功（attempt2）。继续窄屏顶栏区域边界复查、UTF-8编辑与覆盖上传统一HDD前置备份、回收站/归档、容器文件及隔离/长期清理；全部76项active。"
 }

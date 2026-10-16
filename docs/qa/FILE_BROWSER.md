@@ -25,3 +25,21 @@
 GLM glm-5.3-flash只读定位指定6文件，1次成功/0重试，input145181/cache109248/output3116、97659ms，费用未返回；GPT负责方案、安全边界、实际修改和复核。
 
 候选96038f6已提交并推送；同源码工作站冻结PG报告`dispatch-570daacaf055426d94f68256c73bb6b5.json`实际执行通过并清理，外部发送0。13项目录树/搜索浏览器（含新增类型/空态/清除、切目录迟到响应、树版本变化/刷新）全部通过。随后复核将续页密钥改为完整私有暂存/fsync/NOREPLACE原子发布，不覆盖既有密钥；异常清理与原密钥保持测试后共77 Linux通过。浏览器错误提示区分只读搜索冲突/繁忙与写任务，不再要求搜索用户“查询原任务”；新最终源码CI/安装态仍待签收。
+
+## 最终运行时签收：eee26bf / Agent1.24
+
+- [CI38973477051](https://github.com/leng125172-code/whale-deck/actions/runs/38973477051)四作业全部成功：771 Unit/115 Integration、203前端单元、86生产授权/终端/文件/目录树/角标联合浏览器及Release/审计通过。Windows6原生跳过没有计作通过；工作站同源码77项真实Linux通过。同源码冻结PG报告`dispatch-d9ba0863a78b49ffba31b86c00cc72ea.json`的sourceSha为`eee26bff50fab7c382a6545414e27359875eb850`，state=Passed、executedTests=passedTests=1、cleanupConfirmed=true。
+- 更新Job`e8e23767-ccb0-486c-91aa-62a415b8c1df`仅表示调度；实际unit在2026-10-17 **06:13:59–06:15:23 CST**执行成功，wall1min23.605s，inactive/dead、MainPID0、Result=success、ExecMainStatus0。已安装Agent程序集含eee26bf完整SHA。没有自动回滚；只有QA脚本修正的后续afb1472不需要重建产品镜像。
+- `validate_file_browser.py`实际OIDC→稳定入口→API→UDS/root验证目录分页、递归命中与无重复续页、类型/大小写、保护子树/链接/FIFO、无CSRF/外Origin/匿名拒绝、游标查询绑定与真实目录变更409，自己的全部fixture清理。首轮脚本的get参数名与path查询参数重名，TypeError提前结束且清理成功；afb1472仅改辅助函数参数名后完整通过，不能把首轮失败当产品通过。
+- 原文件变更真实BFF/SQL/Worker/UDS四操作、65543字节/源保留/永久重放/身份/CSRF/Origin/审计回归通过并清理；宿主安装态/systemd/UDS/动态入口及宿主.NET/PKCS10.0.13、8份HTTP/Gateway资产核对通过。
+- 真正管理员浏览器没有安装route fixture，实际新建目录、上传90字节自有UTF-8文件、在根递归搜索命中、打开所在目录、展开真实目录树、切仅文件/大小写（敏感时空结果、忽略大小写恢复命中）、手机暗色与独立下载流完整SHA一致。自有文件摘要`19dcc5e99cf233184aeb4507f2ddcee62aff302c5e5ca13c5c4660ae7454981e`；1440与320均无稳态页面水平溢出，长名称title保留、结果与动作可达。该浏览器末次截图/收尾组合调用超时并重置运行时，未把未返回的动作当已执行；独立核实旧临时账号0、没有残余Playwright Chrome，再按实际字节/单链接/目录身份和无活跃任务精确清理此90字节文件与空目录，永久Job/审计/root回执保留。
+- 另启全新普通账号（Authentik组为空）的真实浏览器，初次和刷新均`/forbidden`，files-page=0、自动文件API请求0；取得真实CSRF后，GET directories与POST search均403。上下文/浏览器明确关闭，私有账号通道EOF后404删除、进程exit0；未修改任何正式用户的组或资料。
+- 最后11核心healthy，Agent/维护服务active；活跃上传/变更/路径锁/有效终端均0；游标密钥实际root:root/0600/32字节/单链接，不输出密钥内容。独立检查两类临时验证账号均0，验证源代码临时目录已清理。没有用户数据、数据卷或生产备份被删除，没有外部通知发送。
+
+后续只有QA脚本变化的[CI38974886967](https://github.com/leng125172-code/whale-deck/actions/runs/38974886967)后端/installer/native-postgres成功，前端准备/类型/lint/单元/构建/浏览器安装成功，联合浏览器step为cancelled，作业标failure，annotation仅为“The operation was canceled.”，没有据此伪称代码断言失败或确定基础设施根因。查询遇EOF/TLS超时，换只读接口确认终态；工具重跑请求传输失败后先核实attempt1未变化，再只重跑该前端作业，结果另行追踪。运行时eee26bf四作业成功与上述实机证据独立保留。
+
+该QA-only提交的**attempt2已确认completed/success**；没有再次覆盖运行时。另核对活动Gateway的FilesView产物与HTTP字节完全相等，包含实际search/directories入口，SHA256为`fa239b82ab74bad94139f023f323dbb63ef6c0bae4adb3243ec78bc8fdf1b5ed`。两种临时账号前缀独立计数0，普通账号通道明确removed=true/exit0、浏览器关闭，自己的90字节文件与空目录已清理。
+
+P0后续目测项：320px经典滚动条环境中顶栏主题开关靠近右侧边缘，需按内容区域再核对边界；本次页面scrollWidth及文件控件验收不替代全站顶栏/无障碍签收，不因已有几何门禁就忽略这一观察。
+
+目录内容搜索、目录复制移动、UTF-8编辑/统一覆盖前HDD备份、回收站/归档、容器文件及租户/长期清理未包含本子范围；P2-03与完整76项仍active。下一步优先编辑与覆盖上传统一HDD前置备份，不能让另一写入口绕过。

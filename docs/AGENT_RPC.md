@@ -8,7 +8,7 @@
 
 ## 1. 传输与版本
 
-2026-10-17实际运行时1e72ac4/Agent1.23已完成文件变更BFF/Worker及真实身份WebUI子范围验收，下面3f47300/1.22未覆盖说明为历史；详见[最终签收](qa/FILE_MUTATION_WORKFLOW.md#最终运行时签收1e72ac4)。新源码协议1.24新增`files.bounded-browser`与FileTransferService.Directories/Search，当前尚未部署；登记根files-list授权不扩大为任意路径/正文搜索。Directories为安全目录分页，Search为有界字面名称搜索，签名续页与所有祖先版本绑定、预算与不完整状态显式，详见[契约及验收清单](qa/FILE_BROWSER.md)。开发空间能力仍待实现，不因次版本升级而自动存在。
+2026-10-17实际运行时eee26bf/Agent1.24已经完成文件变更及有界目录树/名称搜索的真实OIDC/BFF/UDS/root和管理员/普通用户网页子范围签收，下面的未部署说明为历史；见[目录树/搜索运行时证据](qa/FILE_BROWSER.md#最终运行时签收eee26bf--agent124)及[文件变更签收](qa/FILE_MUTATION_WORKFLOW.md#最终运行时签收1e72ac4)。1.24能力为`files.bounded-browser`与FileTransferService.Directories/Search，依赖原files-list授权，不扩大到任意路径或正文搜索；签名续页/祖先版本及预算和不完整状态显式。开发空间、目录复制移动、HDD编辑备份及完整文件管理仍待继续。
 
 - 协议：gRPC，包名 `whaledeck.agent.v1`。
 - 传输：Unix Domain Socket `/run/whaledeck/agent.sock`，不监听 TCP。
@@ -16,7 +16,7 @@
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
-- 当前源码协议版本为 `1.24`，新增 `files.bounded-browser` 与目录树/名称搜索（新源码待部署）；`1.23` 增加 `files.mutation-tombstones` 与独立 Discard 方法；`1.22` 新增 `files.registered-mutations`；`1.21` 为 `files.staged-publication`，`1.20` 为 `files.registered-streams`，`1.19` 为 `docker.terminal.exec`，`1.18` 为 `host.terminal.pty`，`1.17` 为 `notifications.private-configuration`。历史 `1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`，`1.15` 增加 `backups.capacity`，`1.16` 增加 `host.load-average`；旧次版本按能力协商并安全降级。
+- 当前源码协议版本为 `1.24`，新增 `files.bounded-browser` 与目录树/名称搜索（运行时eee26bf已签收本子范围）；`1.23` 增加 `files.mutation-tombstones` 与独立 Discard 方法；`1.22` 新增 `files.registered-mutations`；`1.21` 为 `files.staged-publication`，`1.20` 为 `files.registered-streams`，`1.19` 为 `docker.terminal.exec`，`1.18` 为 `host.terminal.pty`，`1.17` 为 `notifications.private-configuration`。历史 `1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`，`1.15` 增加 `backups.capacity`，`1.16` 增加 `host.load-average`；旧次版本按能力协商并安全降级。
 
 ### 登记文件变更（1.22）
 
