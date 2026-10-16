@@ -27,8 +27,8 @@ def main():
     directories = ['目录', 'report-branch', 'secrets']
     files = {'Report-A.txt': b'ordinary-A', '目录/report-B.bin': b'binary\x00\xff', 'report-branch/other.txt': b'ordinary-B', 'secrets/report-private.txt': b'isolated-test-secret'}
     link = fixture / 'report-link'; fifo = fixture / 'report-fifo'
-    def get(path, expected=200, **params):
-        response = session.get(base + '/api/v1/files/' + path, params={'rootId': ROOT, **params}, timeout=30)
+    def get(route, expected=200, **params):
+        response = session.get(base + '/api/v1/files/' + route, params={'rootId': ROOT, **params}, timeout=30)
         assert response.status_code == expected, 'read-status'; return response.json()
     def search(expected=200, **values):
         response = session.post(base + '/api/v1/files/search', json={'rootId': ROOT, 'path': name, 'query': 'report', 'kind': 'All', 'matchCase': False, 'cursor': '', 'take': 1, **values}, headers=api.headers, timeout=30)
