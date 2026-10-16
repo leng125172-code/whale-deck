@@ -24,6 +24,7 @@ jobs:
           bash -n deploy/host/whaledeck-privileged
           python3 -m unittest discover -s deploy/validation -p test_container_terminal.py
           sudo python3 -m unittest discover -s deploy/validation -p test_file_transport.py
+          sudo python3 -m unittest discover -s deploy/validation -p test_file_operations.py
 
   backend:
     runs-on: ubuntu-latest
