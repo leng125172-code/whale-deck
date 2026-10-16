@@ -72,6 +72,25 @@ public sealed class FileTransferPolicyTests
         Assert.Equal(0, stream.WritesWhileOpen);
         FileTransferPipe.AbortInput(writer);
     }
+    [Theory]
+    [InlineData("upload", true)][InlineData("stage", true)]
+    [InlineData("roots", false)][InlineData("list", false)][InlineData("stat", false)]
+    [InlineData("download", false)][InlineData("status", false)][InlineData("publish", false)][InlineData("discard", false)]
+    public void ReceiveModesKeepBodyPipeOpenAfterReadyButUnaryActionsSendEof(string action, bool streaming)
+    {
+        using var pipe = new MemoryStream();
+        using var input = new StreamWriter(pipe);
+        input.WriteLine("opening-request"); input.Flush();
+        FileTransferPipe.CompleteOpeningInput(input, action);
+        Assert.Equal(streaming, pipe.CanWrite);
+        if (streaming)
+        {
+            input.WriteLine("body-then-commit"); input.Flush();
+            Assert.Contains("body-then-commit", Encoding.UTF8.GetString(pipe.ToArray()), StringComparison.Ordinal);
+            input.Close(); Assert.False(pipe.CanWrite);
+        }
+        else Assert.Throws<ObjectDisposedException>(() => input.WriteLine("unexpected-body"));
+    }
     private sealed class RejectingPipe : MemoryStream
     {
         public bool Disposed { get; private set; }

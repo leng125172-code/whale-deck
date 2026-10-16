@@ -9,7 +9,9 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import time
+import traceback
 import uuid
 import requests
 from validate_databases import Api
@@ -62,6 +64,11 @@ def main():
         value = SlowBytes(content) if idle else content
         response = session.put(base + '/api/v1/files/uploads/' + intent['id'] + '/content', data=value,
             headers={**api.headers, 'Content-Type': 'application/octet-stream', 'Idempotency-Key': intent['id']}, timeout=120)
+        if response.status_code != expected:
+            try: code = response.json().get('code', '')
+            except (ValueError, AttributeError): code = ''
+            print(json.dumps(dict(binaryFailureStatus=response.status_code, expectedStatus=expected,
+                problemCode=code if isinstance(code, str) and re.fullmatch(r'[A-Z0-9_]{1,80}', code) else 'withheld')), flush=True)
         assert response.status_code == expected, 'unexpected-binary-status'
         return response
     def inspect(filename): return get('files/entry', params=dict(rootId=ROOT, path=filename)).json()
@@ -159,5 +166,7 @@ def main():
 if __name__ == '__main__':
     try: main()
     except Exception as error:
-        print(json.dumps(dict(fileAcceptance='failed', phase=PHASE, failureType=type(error).__name__)))
+        frames = traceback.extract_tb(error.__traceback__)
+        print(json.dumps(dict(fileAcceptance='failed', phase=PHASE, failureType=type(error).__name__,
+            sourceLine=frames[-1].lineno if frames else None)))
         raise SystemExit(1) from None

@@ -222,7 +222,7 @@ public sealed class FileTransferRunner
             if (ready.RootElement.GetProperty("type").GetString() != "driver") throw new InvalidOperationException("FILES_DRIVER_INVALID");
             var id = ready.RootElement.GetProperty("invocationId").GetString() ?? string.Empty;
             FileTransferPolicy.Identity(id); driver.InvocationId = id;
-            if (action != "upload") driver.Process.StandardInput.Close();
+            FileTransferPipe.CompleteOpeningInput(driver.Process.StandardInput, action);
             return driver;
         }
         catch { driver.Dispose(); throw; }
@@ -327,6 +327,12 @@ public sealed class FileTransferRunner
 
 internal static class FileTransferPipe
 {
+    // Both receive modes keep stdin open until the exact body and commit EOF.
+    // Metadata/publication actions have no body after their opening request.
+    public static void CompleteOpeningInput(StreamWriter input, string action)
+    {
+        if (action is not ("upload" or "stage")) input.Close();
+    }
     // A helper may reject a stale version before consuming buffered input.
     // Close the underlying pipe first: disposal must not flush that buffer and
     // replace the authoritative rejection with a broken-pipe exception.
