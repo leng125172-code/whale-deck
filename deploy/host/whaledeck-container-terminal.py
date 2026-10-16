@@ -269,6 +269,7 @@ def run(base, session):
     started = last_input = heartbeat = time.monotonic()
     buffer = bytearray(); incoming = outgoing = 0
     reason, exit_code = 'TERMINAL_CLOSED', -1
+    stage = 'first-frame'
     with selectors.DefaultSelector() as selector:
         selector.register(0, selectors.EVENT_READ)
         try:
@@ -299,6 +300,7 @@ def run(base, session):
                     while b'\n' in buffer:
                         line, _, tail = buffer.partition(b'\n'); buffer = bytearray(tail)
                         if stream is None:
+                            stage = 'open-frame'
                             command = open_frame(base, line)
                             identifier = command['containerId']
                             inspected = api('GET', '/containers/' + identifier + '/json')
@@ -308,6 +310,7 @@ def run(base, session):
                             namespace = Path(f'/proc/{inspected["State"]["Pid"]}/ns/pid').stat().st_ino
                             if namespace == Path('/proc/1/ns/pid').stat().st_ino:
                                 raise PermissionError('CONTAINER_UNSAFE_ISOLATION')
+                            stage = 'exec-create'
                             created = api('POST', '/containers/' + identifier + '/exec', {
                                 'AttachStdin': True, 'AttachStdout': True, 'AttachStderr': True, 'Tty': True,
                                 'Privileged': False, 'Cmd': [SHELLS[command['shell']], '-i'],
@@ -317,11 +320,14 @@ def run(base, session):
                             if not isinstance(exec_id, str) or not ID.fullmatch(exec_id): raise ValueError('EXEC_ID_INVALID')
                             row.update(execId=exec_id, containerId=identifier, instanceId=info['instanceId'], pidNamespace=namespace)
                             save(session, row)
+                            stage = 'exec-upgrade'
                             stream = start_stream(exec_id)
+                            stage = 'exec-inspect'
                             status = api('GET', '/exec/' + exec_id + '/json')
                             pid = status.get('Pid')
                             if status.get('Running') is not True or type(pid) is not int or pid <= 1 or status.get('ContainerID') != identifier:
                                 raise ValueError('EXEC_START_FAILED')
+                            stage = 'pid-identity'
                             process_start, namespace = process_identity(pid)
                             current_container = api('GET', '/containers/' + identifier + '/json')
                             current_target = target(current_container, identifier, registry())
@@ -334,8 +340,10 @@ def run(base, session):
                             if current_target['instanceId'] != info['instanceId']:
                                 raise ValueError('CONTAINER_INSTANCE_CHANGED')
                             stream.setblocking(False); selector.register(stream, selectors.EVENT_READ)
+                            stage = 'initial-resize'
                             api('POST', '/exec/' + exec_id + '/resize?h=' + str(command['rows']) + '&w=' + str(command['columns']))
                             base.emit({'type': 'ready', 'invocationId': base.invocation()})
+                            stage = 'stream'
                             continue
                         command = base.frame(line)
                         if command['type'] == 'close': return
@@ -355,6 +363,15 @@ def run(base, session):
                                     time.sleep(.01)
                         else: raise ValueError('FRAME_INVALID')
                     if len(buffer) > 8192: raise ValueError('FRAME_INVALID')
+        except Exception as error:
+            # Stable diagnostic metadata only, never Docker's response body,
+            # exception text, terminal bytes, credentials or environment.
+            code = error.args[0] if error.args and isinstance(error.args[0], str) and re.fullmatch(r'[A-Z_]{1,64}', error.args[0]) else None
+            row['failure'] = {'stage': stage, 'type': type(error).__name__, 'code': code,
+                              'errno': error.errno if isinstance(error, OSError) else None,
+                              'httpStatus': error.status if isinstance(error, DockerFailure) else None}
+            save(session, row)
+            raise
         finally:
             if stream is not None: stream.close()
             stop_exec(row)
