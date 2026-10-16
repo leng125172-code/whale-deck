@@ -1,11 +1,14 @@
 """Actual Linux mutation/recovery tests in owned temporary roots only."""
 import importlib.util
+import contextlib
 import json
 import os
 from pathlib import Path
 import signal
+import select
 import stat
 import subprocess
+import time
 import unittest
 import uuid
 from unittest.mock import patch
@@ -121,9 +124,21 @@ class FileOperationTests(unittest.TestCase):
                 nonlocal calls
                 original(*args); calls += 1
                 if calls == ordinal: os.kill(os.getpid(), signal.SIGKILL)
-            with patch.object(driver, 'exchange', side_effect=crash): self.engine.apply(request)
-            os._exit(89)
-        _, status = os.waitpid(child, 0); self.assertEqual(os.waitstatus_to_exitcode(status), -signal.SIGKILL)
+            try:
+                with patch.object(driver, 'exchange', side_effect=crash): self.engine.apply(request)
+            finally: os._exit(89)
+        self.assertEqual(os.waitstatus_to_exitcode(self.wait_child(child)), -signal.SIGKILL)
+
+    @staticmethod
+    def wait_child(child):
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            result, status = os.waitpid(child, os.WNOHANG)
+            if result == child: return status
+            time.sleep(0.02)
+        os.kill(child, signal.SIGKILL)
+        _, status = os.waitpid(child, 0)
+        raise AssertionError('Owned test child exceeded bounded deadline')
 
     def test_real_process_crash_after_copy_publish_recovers_without_reapply(self):
         (self.root / 'source').write_bytes(b'copy-body'); request = self.request(self.command())
@@ -181,9 +196,10 @@ class FileOperationTests(unittest.TestCase):
                 def killed(descriptor, mode):
                     if applied: original(descriptor, mode)
                     os.kill(os.getpid(), signal.SIGKILL)
-                with patch.object(os, 'fchmod', side_effect=killed): self.engine.apply(request)
-                os._exit(89)
-            _, status = os.waitpid(child, 0); self.assertEqual(os.waitstatus_to_exitcode(status), -signal.SIGKILL)
+                try:
+                    with patch.object(os, 'fchmod', side_effect=killed): self.engine.apply(request)
+                finally: os._exit(89)
+            self.assertEqual(os.waitstatus_to_exitcode(self.wait_child(child)), -signal.SIGKILL)
             with patch.object(os, 'fchmod', side_effect=AssertionError('must-not-reapply')):
                 result = self.lookup(request)
             self.assertEqual(result['state'], 'Completed' if applied else 'Aborted')
@@ -198,17 +214,21 @@ class FileOperationTests(unittest.TestCase):
             def held(descriptor, info, output=None):
                 if output is not None: os.write(ready_write, b'R'); os.read(release_read, 1)
                 return original(descriptor, info, output)
-            with patch.object(self.engine, 'hash_descriptor', side_effect=held): self.engine.apply(request)
+            try:
+                with patch.object(self.engine, 'hash_descriptor', side_effect=held): self.engine.apply(request)
+            except BaseException: os._exit(90)
             os._exit(0)
         os.close(ready_write); os.close(release_read)
         try:
+            self.assertTrue(select.select([ready_read], [], [], 5)[0], 'Owned child did not reach ready phase')
             self.assertEqual(os.read(ready_read, 1), b'R')
             receipt = self.state / 'operations' / (request['operationId'] + '.json'); before = receipt.read_bytes()
             with self.assertRaisesRegex(driver.Rejected, 'FILES_OPERATION_BUSY'): self.lookup(request)
             self.assertEqual(receipt.read_bytes(), before)
         finally:
-            os.write(release_write, b'R'); os.close(release_write); os.close(ready_read)
-            _, status = os.waitpid(child, 0); self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+            with contextlib.suppress(BrokenPipeError): os.write(release_write, b'R')
+            os.close(release_write); os.close(ready_read)
+            self.assertEqual(os.waitstatus_to_exitcode(self.wait_child(child)), 0)
         self.assertEqual(self.lookup(request)['state'], 'Completed')
 
     def test_real_process_crash_between_move_steps_is_unknown_and_keeps_both(self):
