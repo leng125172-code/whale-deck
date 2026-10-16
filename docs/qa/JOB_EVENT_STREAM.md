@@ -26,3 +26,15 @@ GLM/glm-5.3-flash只读定位成功1次/失败重试0，71832ms，输入93605、
 `validate_job_events.py`以临时Auth​​entik管理员登录真实Gateway/API，创建无Outbox、无Agent动作的UUID范围惰性任务，流开始后原子追加终态；检查1006事件、续传/尾部、400/404/401并按所有权精确清理。该脚本须冻结源码并真正执行后才能签收，不把创建合成事件描述成完成一次真实业务操作；私有配置真实业务链路另行回归。
 
 现有浏览器只读走查证实匿名通知深链接进入WhaleDeck登录页，点击进入真实Authentik验证页；没有输入账户凭据，临时浏览器会话已关闭。生产身份登录后的UI、撤权/长时断网与完整Worker/Agent恢复组合仍待验收。本文件后续追加冻结原生、覆盖发布与线上结果。
+
+## 冻结原生、发布与实机结果
+
+冻结源码 `1dd3fa560c74e2218037b40e197f51c4ee5acb95`。最终27项联合浏览器回归通过（任务事件/私有配置/通知配置/消息中心），不是只累计早期失败后的单独通过数。
+
+原生报告 `dispatch-d1ce028dcd2b40ecaecdd27a6edcbbd0.json`：2026-10-16 02:11:41.087903–02:13:42.636721 UTC，state Passed、executedTests 1、passedTests 1、cleanupConfirmed true；SDK image ID `sha256:c0790639332692a0d56cdd81ed581cfd24d040d9839764c138994866df89a3b6`。两个真实PG连接的事件后提交及500/500/6/0场景实际运行。
+
+Job `9921c3a8-1c17-49fb-9218-2b8680ce93ee` 调度覆盖发布，实际宿主update服务inactive/dead、Result success/ExecMainStatus0，journal Deactivated successfully，root运行时完整SHA匹配。没有自动回滚、重启Docker或主机。
+
+真实OIDC/Gateway/API事件流开始后追加终态，1006条顺序完整、无重复，Last-Event-ID最后一条与尾部、非法游标400、缺失404、匿名401均通过；惰性任务无Outbox/Agent动作，按UUID与主体/类型/幂等键精确清理，现有任务未修改。真实私有配置应用/移除/永久重放、已结束任务续传、普通/管理员/匿名、CSRF/Origin/OpenAPI、8个HTTP资产与活动Gateway相同、UDS拒绝及宿主验证通过，临时配置/账户清理、审计保留、外部发送0。
+
+最终11核心容器healthy，Agent/维护入口/更新timer active，user免密sudo按授权保留。P0-03仍有完整取消/恢复/长期与真实身份UI缺口，全部76项目标不缩减。

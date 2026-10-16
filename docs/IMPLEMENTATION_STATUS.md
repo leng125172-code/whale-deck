@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-16 最新已部署runtime `1dd3fa5` 修复通用任务SSE终态竞争、500条以上历史尾部、camelCase协议与浏览器续传/去重/清理。591 Unit/86 Integration、146前端单元/27联合浏览器及Release/类型/lint/构建通过；冻结PG两个连接的1006事件实际通过并清理。宿主更新成功结束，真实OIDC/Gateway流中途追加终态、1006完整/续传/尾部/400/404/401与临时清理通过，私有配置/权限/8资产/UDS/宿主回归通过，11核心healthy、sudo保留。见 [本轮证据](qa/JOB_EVENT_STREAM.md)。P0-03与全部76项仍未完整签收，生产身份UI与其他大功能继续。
+
 - 2026-10-16 最新已部署runtime `df8f00a` 签收通知私有配置取消/租约/未知确认增量：591 Unit/73 Integration、Release、133前端单元/23浏览器、类型/lint/构建通过；冻结原生PG实际执行1/通过1并清理。覆盖发布unit成功结束，真实OIDC→API→Valkey→Worker→Agent应用/移除/永久重放、已结束任务SSE终态/Last-Event-ID、权限/CSRF/Origin、8 HTTP资源、UDS及宿主验证通过，11核心healthy，sudo保留；外部发送0。详见 [本轮证据](qa/NOTIFICATION_PRIVATE_BOUNDARIES.md)。生产身份UI、通用SSE实时终态竞争、更多通知/厂商验收及全部76项继续，下方runtime均为历史记录。
 
 - 2026-10-16 最新runtime `9d5775e` 已签收重启后维护状态修复；576 Unit/73 Integration与Release通过，冻结原生dispatch执行/通过并清理、真实安装后二进制独立HTTP验证通过，宿主更新08:44:30成功结束。此前eabac51私有配置真实应用/移除/永久重放、版本及发送阻断、权限/CSRF/Origin/UDS、8资产字节与宿主通过，外部发送0。MariaDB启动挂载故障已恢复，数据库平台a3f734a启动依赖实际安装且未重启Docker，缺失配置bind原生拒绝通过；没有重建数据库、重启主机或卸载HDD。见 [重连与P0修复](qa/BOOT_MAINTENANCE_STATUS.md)。生产身份UI、更多通知故障组合、完整重启演练及76项全量仍继续。
