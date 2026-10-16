@@ -80,10 +80,10 @@ def main():
         terminal_id = str(uuid.uuid4()); terminal_key = str(uuid.uuid4())
         terminal_headers = {ordinary_csrf['headerName']: ordinary_csrf['token'], 'Origin': base, 'Idempotency-Key': terminal_key}
         terminal_root = base + '/api/v1/terminals/'
-        for suffix in (terminal_id, terminal_id + '/connect'):
+        for suffix in (terminal_id, terminal_id + '/connect', 'containers/' + 'a' * 64):
             assert ordinary.get(terminal_root + suffix, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 403
             assert anonymous.get(terminal_root + suffix, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 401
-        for suffix, body in (('host/grants', {'confirmed': True, 'idempotencyKey': terminal_key}), (terminal_id + '/close', {})):
+        for suffix, body in (('host/grants', {'confirmed': True, 'idempotencyKey': terminal_key}), ('containers/grants', {'confirmed': True, 'idempotencyKey': terminal_key, 'containerId': 'a' * 64, 'instanceId': '10:instance', 'shell': 'sh'}), (terminal_id + '/close', {})):
             assert ordinary.post(terminal_root + suffix, json=body, headers=terminal_headers, timeout=15, allow_redirects=False).status_code == 403
             assert anonymous.post(terminal_root + suffix, json=body, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 401
         for path, body in ((test_path, {'expectedChannelVersion': 0, 'confirmed': True}), (retry_path, {**retry_body, 'acceptDuplicateRisk': True})):
@@ -101,7 +101,7 @@ def main():
         assert all('/api/v1/notifications/manage/' + path in doc.json()['paths'] for path in ('channels', 'routes', 'deliveries'))
         assert '/api/v1/notifications/manage/channels/{id}/test' in doc.json()['paths']
         assert '/api/v1/notifications/manage/deliveries/{id}/retry-unknown' in doc.json()['paths']
-        assert all('/api/v1/terminals/' + suffix in doc.json()['paths'] for suffix in ('host/grants', '{id}', '{id}/connect', '{id}/close'))
+        assert all('/api/v1/terminals/' + suffix in doc.json()['paths'] for suffix in ('host/grants', 'containers/{containerId}', 'containers/grants', '{id}', '{id}/connect', '{id}/close'))
         delete_key = str(uuid.uuid4()); delete_body = {'expectedVersion': route_version, 'confirmed': True}
         assert write('DELETE', 'routes/' + route_id, delete_body, delete_key).status_code == 204
         assert write('DELETE', 'routes/' + route_id, delete_body, delete_key).status_code == 204

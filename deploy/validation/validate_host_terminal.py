@@ -104,6 +104,16 @@ def main():
         target = inspected.json()
         assert target['containerId'] == container_id and target['configuredUser'] == '1000:1000', 'TERMINAL_CONTAINER_TARGET_INVALID'
         assert 'env' not in target and 'environment' not in target
+        protected = session.get(base + '/api/v1/containers', timeout=15)
+        assert protected.status_code == 200
+        core = next(item for item in protected.json() if item['isProtected'])
+        assert session.get(endpoint + '/containers/' + core['id'], timeout=15).status_code == 403, 'TERMINAL_CORE_INSPECTION_ALLOWED'
+        check_key = str(uuid.uuid4())
+        check_body = {'confirmed': True, 'idempotencyKey': check_key, 'containerId': container_id, 'instanceId': target['instanceId'], 'shell': 'sh'}
+        assert session.post(endpoint + '/containers/grants', json=check_body, headers={'Origin': base, 'Idempotency-Key': check_key}, timeout=15).status_code in (400, 403), 'TERMINAL_CSRF_NOT_REJECTED'
+        assert session.post(endpoint + '/containers/grants', json=check_body, headers={**headers, 'Origin': 'http://foreign.invalid', 'Idempotency-Key': check_key}, timeout=15).status_code == 403, 'TERMINAL_GRANT_ORIGIN_NOT_REJECTED'
+        core_body = {**check_body, 'containerId': core['id'], 'instanceId': '10:instance'}
+        assert session.post(endpoint + '/containers/grants', json=core_body, headers={**headers, 'Idempotency-Key': check_key}, timeout=15).status_code == 403, 'TERMINAL_CORE_GRANT_ALLOWED'
     grant_path = '/containers/grants' if target else '/host/grants'
     cookie = '; '.join(item.name + '=' + item.value for item in session.cookies)
     issued = []

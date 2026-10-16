@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-16）",
-  "nextStep": "a0b0001容器Exec Agent基础已覆盖发布及真实隔离验收；继续容器BFF目标绑定许可/持久审计与前端、文件传输、团队隔离和长期清理，P1-11及全部76项保持active。"
+  "nextStep": "085acef容器终端BFF/共享WebUI已覆盖部署并通过同源码原生PG、真实OIDC/Exec与浏览器权限验收。继续文件传输、租户级隔离、长期元数据清理和更广故障测试；P1-11及全部76项保持active。"
 }

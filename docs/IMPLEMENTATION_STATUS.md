@@ -6,6 +6,10 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-16 最新已部署runtime **`085acef`** 容器终端BFF/共享WebUI子范围签收：683 Unit/100 Integration、176前端/35浏览器与四作业CI全绿，新增非超级用户CI PostgreSQL实际升级/约束/持久审计1通过；同源码工作站冻结PG实际1通过/清理。更新unit18:07:25 CST成功终态，真实OIDC/BFF/UDS/Exec、核心保护/CSRF/Origin/作用域/幂等/resize/exit/撤销及原Host通过。真实网页临时管理员中文IME/读屏/手机/主题/清屏/exit7/重连断开、普通用户首次/直达/刷新403且surface0通过；独立核实账号/助手/临时容器0、所有会话Closed。通知/8资产/宿主UDS/动态入口及11核心healthy，PKCS10.0.13与sudo保留。初始离线、UI locator及600秒fixture到期失败没有抹去，见 [最终实机记录](qa/CONTAINER_TERMINAL_BFF_UI.md)。继续文件传输、租户隔离/长期清理和更广故障；P1-11及完整76项仍active，下方为历史。
+
+- 2026-10-16 源码 `f81324c`：容器终端BFF目标/启动实例/shell一次性许可、持久字段/SQL约束/人类主体审计、实际字段HMAC复查、共享宿主/容器WebUI及真实容器入口已实现。Release、683 Unit/100 Integration、176前端单元/35本地浏览器、类型/lint/生产构建与全间接依赖审计通过，6原生明确跳过；新真实BFF验收脚本仅准备，尚未执行。工作站两个已知网卡SSH超时，未部署、未推断健康，最后签收runtime仍a0b0001。CI与更细失败边界见 [本轮记录](qa/CONTAINER_TERMINAL_BFF_UI.md)。下一步同源码冻结PG/覆盖发布及真实OIDC/BFF/容器浏览器验收，再继续文件传输/隔离/清理；完整76项仍active，下方为历史。
+
 - 2026-10-16 runtime `a0b0001` 容器Exec Agent基础已覆盖部署并实机签收：独立1.19 RPC、完整ID/启动实例/固定shell，注册表+标签保护、容器隔离和pidfd交互进程清理；676 Unit/92 Integration、15驱动策略、Release/CI 38875103617全绿，冻结原生PG实际通过/清理。同源码原生UDS探针在无网络/无生产卷的非root临时容器验证UID1000/40×120/exit7、重放/重复、断线/仅强杀测试驱动后Exec消失而PID1不变，临时容器精确删除。首次HTTP升级早于实际PID导致的两次失败保留并修复，见 [Agent证据](qa/CONTAINER_TERMINAL_AGENT.md)。更新unit16:45:10 CST终态成功，原身份/宿主终端/通知/8资产与UDS/宿主及11核心健康通过，PKCS10.0.13保持、sudo未改。容器BFF持久授权/人类审计、UI、文件传输、团队隔离与长期清理仍缺；P1-11及76项继续，下方为历史。
 
 - 2026-10-16 runtime `1068b27` 已覆盖发布并签收宿主运行库安全补全与受限宿主终端WebUI子范围：实际Agent/维护包、API共享PKCS与Worker包均核实10.0.13；SDK10.0.402锁定摘要，发布/安装/在位校验，保持NuGetAudit与警告即错误。CI 38868581495全绿、646 Unit/92 Integration、171前端单元及3项生产授权浏览器门禁；冻结原生PG实际1通过/清理。更新unit15:43:57 CST终态成功；真实终端静默6秒正常Close/尺寸/退出持久化/重放、身份/通知/8资产和宿主UDS/权限/动态入口与隔离维护页通过，11核心healthy。实机UI管理员中文/IME/主题/resize/退出及普通用户冷启动403证据见 [终端UI记录](qa/HOST_TERMINAL_UI.md)，原5秒代理EOF及检查器误要求API本地DLL的失败保留并修正；[安全记录](qa/DEPENDENCY_SECURITY_2026_10.md)区分初版容器修复与本次宿主遗漏补全。不作入侵取证结论；P1-11仍缺容器Exec/文件传输/团队隔离/长期清理，全部76项继续，以下runtime为历史。

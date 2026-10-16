@@ -22,13 +22,13 @@
 
 独立 `HostTerminalService/Connect` 双向流同时验证UDS peer与方法绑定、单次nonce的短时capability；首帧只接受canonical UUID、主体、open与2–400列/行。后续仅4KiB内的二进制input、resize、close，不可更换目标、主体、UID、路径或启动程序。root与Agent注册表共同批准固定宿主资源，helper在独立systemd cgroup里以固定非特权身份启动，管道正文不进入操作存储/日志。退出/断线/超时清理，防重放元数据由root原子维护，停止必须匹配systemd InvocationID。原生证据见 [PTY基础](qa/HOST_TERMINAL_PTY.md)。
 
-浏览器只连接BFF的一次性、登录绑定WebSocket，不直接连接本RPC；BFF持久元数据与审计见 [会话层与实际状态](qa/HOST_TERMINAL_BFF.md)。当前仅管理员共享的受限宿主身份，不是root控制台、租户级文件系统隔离或开发空间终端；容器Exec的Agent基础已加入1.19，但其BFF/UI及传输仍缺，不能签完整P1-11。
+浏览器只连接BFF的一次性、登录绑定WebSocket，不直接连接本RPC；BFF持久元数据与审计见 [会话层与实际状态](qa/HOST_TERMINAL_BFF.md)。当前宿主会话仅管理员共享的受限身份，不是root控制台、租户级文件系统隔离或开发空间终端；085acef容器BFF/UI已覆盖部署并通过真实链路/浏览器验证，见 [当前证据](qa/CONTAINER_TERMINAL_BFF_UI.md)。文件传输等仍缺，不能签完整P1-11。
 
 ### 容器Exec（1.19）
 
 Inspect只接受`ResourceReference(type=Container, id=完整小写64位ID)`，返回名称、镜像、本次启动实例与配置用户，不含Env。Connect首帧`ContainerTerminalFrame`将既有有界终端payload和容器ID/启动实例/sh|bash|ash绑定；后续帧不得更换目标、实例或shell。独立方法capability、UDS peer与单次nonce继续生效。
 
-Agent与root驱动分别检查核心保护及隔离；root驱动通过固定Docker Unix API建立真实Exec，等待实际PID再Ready，保留容器配置的用户/隔离。pidfd只关闭本次交互Exec，不停止容器；主动脱离终端的后台服务归容器管理，不承诺宿主PTY的全cgroup清理语义。标准输入与输出都受预算限制，root回执不存正文或凭据，停止必须匹配InvocationID。实现、失败与实际验证见 [容器Agent证据](qa/CONTAINER_TERMINAL_AGENT.md)。本协议尚未向浏览器开放，容器BFF授权/持久模型/审计与前端另行实施。
+Agent与root驱动分别检查核心保护及隔离；root驱动通过固定Docker Unix API建立真实Exec，等待实际PID再Ready，保留容器配置的用户/隔离。pidfd只关闭本次交互Exec，不停止容器；主动脱离终端的后台服务归容器管理，不承诺宿主PTY的全cgroup清理语义。标准输入与输出都受预算限制，root回执不存正文或凭据，停止必须匹配InvocationID。实现、失败与实际验证见 [容器Agent证据](qa/CONTAINER_TERMINAL_AGENT.md)。浏览器仅通过085acef已签收的专用BFF许可/持久模型/审计和WebUI访问，不直接连接本协议；文件传输/隔离/清理仍待继续。
 
 ### 通知私有配置（1.17）
 
