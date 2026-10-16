@@ -46,7 +46,7 @@ internal static class ContainerTerminalProbe
                 "--entrypoint", "/bin/sh", image, "-c", "exec sleep 600"]);
             Check(Id(containerId));
             var target = await client.InspectAsync(new() { ResourceId = containerId, ResourceType = "Container" }, Headers(InspectMethod));
-            Check(target.ContainerId == containerId && target.ConfiguredUser == "1000");
+            Check(target.ContainerId == containerId && target.ConfiguredUser == "1000:1000");
             var instance = target.InstanceId;
             async Task Denied(ContainerTerminalFrame frame, Metadata headers, StatusCode expected)
             {
