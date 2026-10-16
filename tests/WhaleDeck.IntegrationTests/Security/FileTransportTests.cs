@@ -19,6 +19,8 @@ public sealed class FileTransportTests
     {
         Assert.Contains(typeof(FilesController).GetCustomAttributes<AuthorizeAttribute>(), item => item.Policy == "Administrator");
         Assert.Empty(typeof(FilesController).GetMethods().SelectMany(method => method.GetCustomAttributes<AllowAnonymousAttribute>()));
+        Assert.Contains(typeof(FileMutationsController).GetCustomAttributes<AuthorizeAttribute>(), item => item.Policy == "Administrator");
+        Assert.Empty(typeof(FileMutationsController).GetMethods().SelectMany(method => method.GetCustomAttributes<AllowAnonymousAttribute>()));
     }
     [Theory]
     [InlineData("/etc/passwd")][InlineData("a/../b")][InlineData("a//b")][InlineData("a\\b")][InlineData("a\nb")]
@@ -30,6 +32,11 @@ public sealed class FileTransportTests
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await controller.Create(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await controller.Content(Guid.NewGuid(), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await controller.Cancel(Guid.NewGuid(), default));
+        var mutations = new FileMutationsController(null!, null!) { ControllerContext = new() { HttpContext = new DefaultHttpContext() } };
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await mutations.Create(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await mutations.Resolve(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await mutations.Cancel(Guid.NewGuid(), default));
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await mutations.Acknowledge(Guid.NewGuid(), new(1, true), default));
     }
     [Fact]
     public void FilePlanMacBindsLoginPathVersionDigestAndAllDeclaredMetadata()

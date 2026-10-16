@@ -25,7 +25,7 @@ run_transient() {
 
 case "$action" in
   file-transport)
-    [[ $# -eq 3 && "$2" =~ ^(roots|list|stat|download|upload|stage|publish|discard|status|operation-plan|operation-apply|operation-status)$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    [[ $# -eq 3 && "$2" =~ ^(roots|list|stat|download|upload|stage|publish|discard|status|operation-plan|operation-apply|operation-status|operation-discard)$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
     # RestrictSUIDSGID seccomp blocks openat2 entirely, including read-only
     # resolution. Only this fixed, non-executing Python driver opts out: it
     # creates 0600 files and strips both special bits on every permission copy.

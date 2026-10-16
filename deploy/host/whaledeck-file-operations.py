@@ -174,6 +174,25 @@ class FileOperations:
                 raise
             return self.public(record)
 
+    def discard(self, request):
+        if not isinstance(request, dict) or set(request) != {'operationId', 'owner', 'plan'} or not isinstance(request['plan'], dict) or set(request['plan']) != self.PLAN_FIELDS:
+            self.reject('FILES_OPERATION_INVALID')
+        plan = request['plan']; self.validate(plan['command'])
+        unsigned = {key: value for key, value in plan.items() if key != 'fingerprint'}
+        fingerprint = hashlib.sha256(b'whaledeck-file-operation-v1:' + json.dumps(unsigned, sort_keys=True, separators=(',', ':')).encode()).hexdigest().upper()
+        if fingerprint != plan['fingerprint']: self.reject('FILES_PLAN_INVALID')
+        # No filesystem re-plan: cancellation must survive a stale source,
+        # missing target parent or revoked root. The typed, signed caller binds
+        # the original plan; the tombstone prevents delayed Apply publication.
+        with self.state(request['operationId'], request['owner'], writing=True) as (state, record):
+            if record is not None:
+                if record['plan'] != plan: self.reject('FILES_IDEMPOTENCY_CONFLICT')
+                self.recover(state, record)
+            else:
+                record = {'operationId': request['operationId'], 'owner': request['owner'], 'plan': plan, 'state': 'Aborted'}
+                self.save(state, record)
+            return self.public(record)
+
     def permissions(self, state, record):
         plan = record['plan']; command = plan['command']
         with self.f.directory(self.location(command), 'mutate') as (_, parent, leaf):

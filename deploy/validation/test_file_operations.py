@@ -89,6 +89,41 @@ class FileOperationTests(unittest.TestCase):
         changed['operationId'] = uuid.uuid4().hex
         with self.assertRaises(driver.Rejected): self.engine.apply(changed)
 
+    def test_cancellation_tombstone_fences_late_apply_and_is_idempotent(self):
+        (self.root / 'source').write_bytes(b'keep'); request = self.request(self.command())
+        self.assertEqual(self.engine.discard(request)['state'], 'Aborted')
+        self.assertEqual(self.engine.discard(request)['state'], 'Aborted')
+        self.assertEqual(self.engine.apply(request)['state'], 'Aborted')
+        self.assertEqual(self.lookup(request)['state'], 'Aborted')
+        self.assertFalse((self.root / 'target').exists())
+        self.assertEqual((self.root / 'source').read_bytes(), b'keep')
+
+    def test_tombstone_does_not_require_current_source_or_root_authorization(self):
+        (self.root / 'source').write_bytes(b'keep'); request = self.request(self.command())
+        (self.root / 'source').unlink()
+        entries = json.loads(self.registry.read_text()); entries[0]['allowedActions'].remove('files-mutate')
+        self.registry.write_text(json.dumps(entries))
+        self.assertEqual(self.engine.discard(request)['state'], 'Aborted')
+        self.assertEqual(self.engine.apply(request)['state'], 'Aborted')
+        self.assertFalse((self.root / 'target').exists())
+
+    def test_discard_never_undoes_completed_mutation(self):
+        (self.root / 'source').write_bytes(b'keep'); request = self.request(self.command('move'))
+        self.assertEqual(self.engine.apply(request)['state'], 'Completed')
+        self.assertEqual(self.engine.discard(request)['state'], 'Completed')
+        self.assertEqual((self.root / 'target').read_bytes(), b'keep')
+        self.assertFalse((self.root / 'source').exists())
+
+    def test_discard_owner_fingerprint_and_active_lock_are_enforced(self):
+        (self.root / 'source').write_bytes(b'keep'); request = self.request(self.command())
+        altered = {**request, 'plan': {**request['plan'], 'sha256': 'F' * 64}}
+        with self.assertRaisesRegex(driver.Rejected, 'FILES_PLAN_INVALID'): self.engine.discard(altered)
+        with self.engine.state(request['operationId'], request['owner'], writing=True):
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_OPERATION_BUSY'): self.engine.discard(request)
+        self.engine.discard(request)
+        with self.assertRaisesRegex(driver.Rejected, 'FILES_OPERATION_NOT_FOUND'): self.engine.discard({**request, 'owner': 'B' * 64})
+        self.assertFalse((self.root / 'target').exists())
+
     def test_target_conflict_and_source_change_never_overwrite(self):
         (self.root / 'source').write_bytes(b'original'); request = self.request(self.command())
         (self.root / 'target').write_bytes(b'external')

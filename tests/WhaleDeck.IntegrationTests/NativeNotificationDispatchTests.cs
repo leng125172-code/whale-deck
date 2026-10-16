@@ -37,7 +37,18 @@ public sealed partial class NativeNotificationDispatchTests
         var upgradeId = Guid.NewGuid(); var upgradeAt = DateTimeOffset.UtcNow; var upgradeHash = new string('A', 64); var upgradeKey = Guid.NewGuid().ToString("D");
         // Seed a real pre-extension row without referencing any new columns.
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO terminal_sessions (id,actor_subject,login_binding,idempotency_key,grant_hash,target_id,state,created_at_utc,grant_expires_at_utc,expires_at_utc,closed_at_utc,version) VALUES ({upgradeId},'native-upgrade',{upgradeHash},{upgradeKey},{upgradeHash},'whaledeck.host','Closed',{upgradeAt},{upgradeAt.AddSeconds(30)},{upgradeAt.AddMinutes(10)},{upgradeAt},0)");
+        await db.GetService<IMigrator>().MigrateAsync("20261016122353_FileUploadWorkflow");
+        var uploadUpgradeId = Guid.NewGuid();
+        db.OperationJobs.Add(new() { Id = uploadUpgradeId, JobType = "files.upload", ActorSubject = "native-upgrade", IdempotencyKey = Guid.NewGuid().ToString("D") });
+        db.FileUploadOperations.Add(new() { Id = uploadUpgradeId, ActorSubject = "native-upgrade", LoginBinding = upgradeHash, OwnerHash = upgradeHash,
+            RootId = "test.upgrade", RelativePath = "pending", TargetHash = upgradeHash, RequestHash = upgradeHash, ExpectedVersion = "ABSENT", Sha256 = upgradeHash,
+            CreatedAtUtc = upgradeAt, ExpiresAtUtc = upgradeAt.AddMinutes(15), State = "Unknown" });
+        await db.SaveChangesAsync(); db.ChangeTracker.Clear();
         await db.Database.MigrateAsync(); Assert.False(db.Database.HasPendingModelChanges());
+        Assert.Equal(uploadUpgradeId, (await db.FilePathLocks.SingleAsync(item => item.PathHash == upgradeHash)).OperationId);
+        await db.FilePathLocks.Where(item => item.OperationId == uploadUpgradeId).ExecuteDeleteAsync();
+        await db.FileUploadOperations.Where(item => item.Id == uploadUpgradeId).ExecuteDeleteAsync();
+        await db.OperationJobs.Where(item => item.Id == uploadUpgradeId).ExecuteDeleteAsync(); db.ChangeTracker.Clear();
         var upgradedHost = await db.TerminalSessions.SingleAsync(item => item.Id == upgradeId);
         Assert.Equal("Host", upgradedHost.TargetKind); Assert.Equal("whaledeck.host", upgradedHost.TargetId);
         Assert.Null(upgradedHost.InstanceId); Assert.Null(upgradedHost.Shell); Assert.Equal(upgradeKey, upgradedHost.IdempotencyKey);
@@ -124,6 +135,7 @@ public sealed partial class NativeNotificationDispatchTests
         await JobEventBoundaries(options);
         await TerminalSessionBoundaries(options);
         await FileUploadBoundaries(options);
+        await FileMutationBoundaries(options);
     }
 
     private static async Task PrivateWorkflow(PlatformDbContext db)

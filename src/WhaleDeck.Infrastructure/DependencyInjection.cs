@@ -72,6 +72,11 @@ public static class DependencyInjection
         services.AddSingleton<IFileGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<FileManagementService>();
         services.AddScoped<FileUploadDispatcher>();
+        services.AddScoped<IFileMutationRepository, FileMutationRepository>();
+        services.AddSingleton<IFileMutationProtector, FilePlanProtector>();
+        services.AddSingleton<IFileMutationGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddScoped<FileMutationService>();
+        services.AddScoped<FileMutationDispatcher>();
         services.AddSingleton<ITerminalGrantSigner, TerminalGrantSigner>();
         services.AddScoped<TerminalSessionService>();
         services.AddScoped<IGovernanceRepository, GovernanceRepository>();

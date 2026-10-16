@@ -28,6 +28,14 @@ public sealed class FileOperationGrpcService(FileTransferRunner runner) : FileOp
         using var result = await runner.OnceAsync("operation-status", JsonSerializer.Serialize(new { operationId = request.OperationId, owner = request.Owner }), context.CancellationToken);
         return FileOperationPolicy.Receipt(result.RootElement, request.OperationId);
     }
+    public override async Task<FileOperationReceipt> Discard(FileOperationApplyRequest request, ServerCallContext context)
+    {
+        FileOperationPolicy.Actor(request.Context);
+        FileTransferPolicy.Identity(request.OperationId); FileTransferPolicy.Hash(request.Owner);
+        var plan = FileOperationPolicy.PlanInput(request.Plan);
+        using var result = await runner.OnceAsync("operation-discard", JsonSerializer.Serialize(new { operationId = request.OperationId, owner = request.Owner, plan }), context.CancellationToken);
+        return FileOperationPolicy.Receipt(result.RootElement, request.OperationId, request.Plan);
+    }
 }
 
 internal static class FileOperationPolicy

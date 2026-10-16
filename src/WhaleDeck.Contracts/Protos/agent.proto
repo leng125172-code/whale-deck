@@ -646,4 +646,6 @@ service FileOperationService {
   rpc Plan(FileOperationPlanRequest) returns (FileOperationPlan);
   rpc Apply(FileOperationApplyRequest) returns (FileOperationReceipt);
   rpc Inspect(FileOperationLookup) returns (FileOperationReceipt);
+  // Durable cancellation tombstone, including before a delayed Apply arrives.
+  rpc Discard(FileOperationApplyRequest) returns (FileOperationReceipt);
 }

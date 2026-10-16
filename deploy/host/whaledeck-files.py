@@ -667,7 +667,7 @@ def operation_engine():
 
 
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status'):
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard'):
         raise Rejected('FILES_ACTION_INVALID')
     invocation = identity(os.environ.get('INVOCATION_ID'))
     emit({'type': 'driver', 'invocationId': invocation})
@@ -685,7 +685,7 @@ def main():
     elif action in ('publish', 'discard'): emit(staged_action(request, action))
     elif action.startswith('operation-'):
         source.finish(); engine = operation_engine()
-        emit(engine.plan(request) if action == 'operation-plan' else engine.apply(request) if action == 'operation-apply' else engine.lookup(request))
+        emit(engine.plan(request) if action == 'operation-plan' else engine.apply(request) if action == 'operation-apply' else engine.discard(request) if action == 'operation-discard' else engine.lookup(request))
     else: emit(status(request))
 
 

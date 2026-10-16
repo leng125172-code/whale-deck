@@ -18,10 +18,8 @@ public sealed class FileUploadRepository(PlatformDbContext db) : IFileUploadRepo
         var now = DateTimeOffset.UtcNow;
         if (claims.ExpiresAtUtc <= now) throw new InvalidOperationException("FILES_PLAN_EXPIRED");
         if (await db.OperationJobs.AnyAsync(item => item.ActorSubject == actor.Subject && item.IdempotencyKey == key, cancellationToken)) throw new InvalidOperationException("FILES_IDEMPOTENCY_CONFLICT");
-        if (await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) >= 64 ||
-            await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor.Subject, cancellationToken) >= 4) throw new InvalidOperationException("FILES_UPLOAD_BUDGET_EXHAUSTED");
         var file = claims.File; var targetHash = FileManagementService.Hash(file.RootId + ":" + file.Path);
-        if (await db.FileUploadOperations.AnyAsync(item => item.TargetHash == targetHash && item.CompletedAtUtc == null, cancellationToken)) throw new InvalidOperationException("FILES_TARGET_BUSY");
+        await FilePathLocks.Acquire(db, id, actor.Subject, [targetHash], cancellationToken);
         var operation = new FileUploadOperation { Id = id, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding,
             OwnerHash = FileManagementService.Hash("file-owner-v1:" + actor.Subject + ":" + actor.LoginBinding), RootId = file.RootId, RelativePath = file.Path,
             TargetHash = targetHash, RequestHash = requestHash, ExpectedVersion = file.ExpectedVersion, Sha256 = file.Sha256, SizeBytes = file.SizeBytes,
@@ -126,7 +124,11 @@ public sealed class FileUploadRepository(PlatformDbContext db) : IFileUploadRepo
             await Event(job, code, cancellationToken);
             Audit(current.ActorSubject, "files.upload.result", current.RootId, current.Id, current.Id.ToString("D"), null, state, current.TargetHash);
         }
-        if (terminal) await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('FileUploadRequested','FileUploadCancellationRequested') AND payload_json->>'jobId'={current.Id.ToString("D")}", cancellationToken);
+        if (terminal)
+        {
+            await FilePathLocks.Release(db, current.Id, cancellationToken);
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('FileUploadRequested','FileUploadCancellationRequested') AND payload_json->>'jobId'={current.Id.ToString("D")}", cancellationToken);
+        }
         await db.SaveChangesAsync(cancellationToken); return true;
     }, cancellationToken);
     public Task DeferAsync(FileUploadOperation operation, CancellationToken cancellationToken) => Transaction(async () =>

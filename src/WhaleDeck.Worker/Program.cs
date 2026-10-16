@@ -24,6 +24,7 @@ builder.Services.AddHostedService<NotificationRetentionWorker>();
 builder.Services.AddHostedService<NotificationSenderWorker>();
 builder.Services.AddHostedService<NotificationPrivateWorker>();
 builder.Services.AddHostedService<FileUploadWorker>();
+builder.Services.AddHostedService<FileMutationWorker>();
 
 var host = builder.Build();
 await host.RunAsync();

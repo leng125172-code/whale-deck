@@ -10,6 +10,8 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<TerminalSession> TerminalSessions => Set<TerminalSession>();
     public DbSet<FileUploadOperation> FileUploadOperations => Set<FileUploadOperation>();
+    public DbSet<FileMutationOperation> FileMutationOperations => Set<FileMutationOperation>();
+    public DbSet<FilePathLock> FilePathLocks => Set<FilePathLock>();
     public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
     public DbSet<PortalItem> PortalItems => Set<PortalItem>();
     public DbSet<PublicPortalPreference> PublicPortalPreferences => Set<PublicPortalPreference>();
@@ -360,6 +362,32 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     private static void ConfigureJobsAndMetrics(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<FilePathLock>(entity =>
+        {
+            entity.ToTable("file_path_locks", table => table.HasCheckConstraint("ck_file_path_hash", "path_hash ~ '^[A-F0-9]{64}$'"));
+            entity.HasKey(item => item.PathHash); entity.Property(item => item.PathHash).HasMaxLength(64);
+            entity.HasIndex(item => item.OperationId);
+            entity.HasOne<OperationJob>().WithMany().HasForeignKey(item => item.OperationId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<FileMutationOperation>(entity =>
+        {
+            entity.ToTable("file_mutation_operations", table =>
+            {
+                table.HasCheckConstraint("ck_file_mutation_state", "state IN ('Pending','Running','Unknown','Succeeded','Superseded','Canceled','Failed','Acknowledged')");
+                table.HasCheckConstraint("ck_file_mutation_limits", "version >= 0 AND expires_at_utc > created_at_utc AND octet_length(plan_json::text) <= 32768");
+                table.HasCheckConstraint("ck_file_mutation_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND owner_hash ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$'");
+                table.HasCheckConstraint("ck_file_mutation_terminal", "(completed_at_utc IS NULL) = (state IN ('Pending','Running','Unknown'))");
+            });
+            entity.HasKey(item => item.Id); entity.Property(item => item.ActorSubject).HasMaxLength(256);
+            entity.Property(item => item.PlanJson).HasColumnType("jsonb");
+            entity.Property(item => item.State).HasMaxLength(16); entity.Property(item => item.ResultCode).HasMaxLength(64);
+            foreach (var name in new[] { nameof(FileMutationOperation.LoginBinding), nameof(FileMutationOperation.OwnerHash), nameof(FileMutationOperation.RequestHash), nameof(FileMutationOperation.PublishedVersion) }) entity.Property(name).HasMaxLength(64);
+            entity.Property(item => item.Version).IsConcurrencyToken();
+            entity.HasIndex(item => item.LeaseToken).IsUnique().HasFilter("lease_token IS NOT NULL");
+            entity.HasIndex(item => new { item.NextAttemptAtUtc, item.Id }).HasFilter("completed_at_utc IS NULL");
+            entity.HasIndex(item => new { item.ActorSubject, item.CreatedAtUtc });
+            entity.HasOne<OperationJob>().WithOne().HasForeignKey<FileMutationOperation>(item => item.Id).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<FileUploadOperation>(entity =>
         {
             entity.ToTable("file_upload_operations", table =>
