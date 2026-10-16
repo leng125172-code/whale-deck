@@ -34,4 +34,13 @@ public sealed class AgentErrorInterceptorTests
             "request", null!, (_, _) => Task.FromException<string>(failure)));
         Assert.Same(failure, error);
     }
+
+    [Fact]
+    public async Task DuplexRejectedInputNeverExposesTerminalContentInStatus()
+    {
+        var error = await Assert.ThrowsAsync<RpcException>(() => new AgentErrorInterceptor().DuplexStreamingServerHandler<string, string>(
+            null!, null!, null!, (_, _, _) => Task.FromException(new ArgumentException("private terminal input"))));
+        Assert.Equal(StatusCode.InvalidArgument, error.StatusCode);
+        Assert.DoesNotContain("private terminal input", error.Status.Detail, StringComparison.Ordinal);
+    }
 }

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using WhaleDeck.Agent.Services;
+using Grpc.Core;
 
 namespace WhaleDeck.UnitTests.Agent;
 
@@ -76,5 +77,40 @@ public sealed class CapabilityValidatorTests : IDisposable
     {
         Directory.Delete(_directory, recursive: true);
         GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public async Task DuplexTerminalRequiresMethodBoundSingleUseCapabilityBeforeContinuation()
+    {
+        const string method = "/whaledeck.agent.v1.HostTerminalService/Connect";
+        var interceptor = new CapabilityInterceptor(_validator);
+        var invoked = false;
+        Task Continue(IAsyncStreamReader<string> _, IServerStreamWriter<string> __, ServerCallContext ___) { invoked = true; return Task.CompletedTask; }
+        var missing = await Assert.ThrowsAsync<RpcException>(() => interceptor.DuplexStreamingServerHandler<string, string>(null!, null!, new Context(method, null), Continue));
+        Assert.Equal(StatusCode.PermissionDenied, missing.StatusCode); Assert.False(invoked);
+        var wrong = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "terminal-wrong-nonce", Method);
+        await Assert.ThrowsAsync<RpcException>(() => interceptor.DuplexStreamingServerHandler<string, string>(null!, null!, new Context(method, wrong), Continue));
+        Assert.False(invoked);
+        var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "terminal-correct-nonce", method);
+        await interceptor.DuplexStreamingServerHandler<string, string>(null!, null!, new Context(method, token), Continue);
+        Assert.True(invoked); invoked = false;
+        await Assert.ThrowsAsync<RpcException>(() => interceptor.DuplexStreamingServerHandler<string, string>(null!, null!, new Context(method, token), Continue));
+        Assert.False(invoked);
+    }
+
+    private sealed class Context(string method, string? token) : ServerCallContext
+    {
+        protected override string MethodCore => method;
+        protected override string HostCore => "localhost";
+        protected override string PeerCore => "unix";
+        protected override DateTime DeadlineCore => DateTime.UtcNow.AddSeconds(45);
+        protected override Metadata RequestHeadersCore => token is null ? [] : new() { { "x-whaledeck-capability", token } };
+        protected override CancellationToken CancellationTokenCore => default;
+        protected override Metadata ResponseTrailersCore => [];
+        protected override Status StatusCore { get; set; }
+        protected override WriteOptions? WriteOptionsCore { get; set; }
+        protected override AuthContext AuthContextCore => null!;
+        protected override ContextPropagationToken CreatePropagationTokenCore(ContextPropagationOptions? options) => throw new NotSupportedException();
+        protected override Task WriteResponseHeadersAsyncCore(Metadata responseHeaders) => Task.CompletedTask;
     }
 }

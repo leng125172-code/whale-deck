@@ -1,6 +1,6 @@
 # WhaleDeck Agent RPC 契约
 
-范围修订：2026-10-13 [P0–P5 基线](GOAL_P0_P5.md) 增加受控终端会话/文件/恢复/网络/网站/邮件/DNS/多节点适配。源码新增 1.17 通知私有配置，保留本地 UDS 限制，不得直接放宽成任意路径/命令；新增能力须独立设计、能力协商和安全测试。P5 远程 Agent 采用专用 mTLS 通道，本地 UDS 不暴露 TCP；远程写入须同时验证节点/资源/主体/短时 capability。
+范围修订：2026-10-13 [P0–P5 基线](GOAL_P0_P5.md) 增加受控终端会话/文件/恢复/网络/网站/邮件/DNS/多节点适配。源码1.17通知私有配置、1.18宿主PTY基础，保留本地UDS限制，不得直接放宽成任意路径/可执行程序RPC；新增能力须独立设计、能力协商和安全测试。P5远程Agent采用专用mTLS通道，本地UDS不暴露TCP；远程写入须同时验证节点/资源/主体/短时capability。
 
 本文定义 `WhaleDeck.Api/Worker` 与宿主机 `WhaleDeck.Agent` 的内部契约。Agent 是唯一可以访问 Docker Engine、systemd、journald 和批准宿主机资源的组件。
 

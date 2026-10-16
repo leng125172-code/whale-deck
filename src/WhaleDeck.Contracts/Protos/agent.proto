@@ -525,3 +525,23 @@ service NotificationConfigurationService {
   rpc Inspect(NotificationConfigurationLookup) returns (NotificationConfigurationMetadata);
   rpc Apply(NotificationConfigurationRequest) returns (NotificationConfigurationMetadata);
 }
+
+// Host PTY only. Not an arbitrary executable/UID/path RPC. The first frame
+// opens one root-recorded UUID; subsequent frames carry input, resize or close.
+message HostTerminalFrame {
+  string session_id = 1;
+  RequestContext context = 2;
+  string kind = 3;
+  bytes data = 4;
+  uint32 columns = 5;
+  uint32 rows = 6;
+}
+message HostTerminalEvent {
+  string kind = 1;
+  bytes data = 2;
+  string code = 3;
+  int32 exit_code = 4;
+}
+service HostTerminalService {
+  rpc Connect(stream HostTerminalFrame) returns (stream HostTerminalEvent);
+}

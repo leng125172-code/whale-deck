@@ -24,6 +24,28 @@ run_transient() {
 }
 
 case "$action" in
+  host-terminal)
+    [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit="whaledeck-terminal-$2" \
+      --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
+      --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=yes \
+      --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
+      --property=RuntimeMaxSec=660 --property=TimeoutStopSec=5 --property=KillMode=control-group \
+      --property=Restart=no --property=TasksMax=64 --property=MemoryMax=256M --property=CPUQuota=50% \
+      --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
+      --property="CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_KILL" \
+      --property="ReadWritePaths=/var/lib/whaledeck-terminal /var/lib/whaledeck-shell" \
+      /usr/bin/python3 -I /usr/local/libexec/whaledeck-host-terminal.py "$2"
+    ;;
+  host-terminal-stop)
+    [[ $# -eq 3 && "$2" =~ ^[a-f0-9]{32}$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    terminal_instance=$(/usr/bin/systemctl show "whaledeck-terminal-$2.service" -p InvocationID --value 2>/dev/null || true)
+    [[ -n "$terminal_instance" ]] || exit 0
+    [[ "$terminal_instance" == "$3" ]] || exit 2
+    exec /usr/bin/systemctl stop "whaledeck-terminal-$2.service"
+    ;;
   notification-config)
     [[ $# -eq 2 && ( "$2" == inspect || "$2" == apply || "$2" == remove ) ]] || exit 2
     # Escape only the caller's read-only mount namespace through PID 1; the

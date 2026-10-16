@@ -77,7 +77,7 @@ public sealed class ResourceRegistry
         new("whaledeck.agent", "SystemdUnit", "whaledeck-agent.service", "ControlPlane", AllowedActions: ["systemd-restart"]),
         new("whaledeck.maintenance", "SystemdUnit", "whaledeck-maintenance.service", "ControlPlane", AllowedActions: ["systemd-restart"]),
         new("database-platform.update", "SystemdUnit", "database-platform-workstation-update.timer", "ControlPlane", AllowedActions: ["systemd-start", "systemd-stop", "systemd-restart"]),
-        new("whaledeck.host", "Host", "local", "ControlPlane", AllowedActions: ["update-check", "update-install", "reboot"]),
+        new("whaledeck.host", "Host", "local", "ControlPlane", AllowedActions: ["update-check", "update-install", "reboot", "terminal-open"]),
         new("whaledeck.docker", "DockerEngine", "docker", "ControlPlane", AllowedActions: ["validate-settings", "apply-settings", "rollback"]),
         new("whaledeck.platform", "Platform", "whaledeck", "ControlPlane", AllowedActions: ["diagnose", "diagnostic-bundle", "plan-update", "apply-update", "rollback"]),
         new("database-platform.repository", "GitRepository", "database-platform", "CriticalData", "/data/GitRepos/database-platform", ["status", "snapshot", "commit-push"]),

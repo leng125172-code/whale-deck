@@ -11,6 +11,7 @@
     <Project Path="src/WhaleDeck.Worker/WhaleDeck.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="deploy/validation/TerminalProbe/TerminalProbe.csproj" />
     <Project Path="tests/WhaleDeck.IntegrationTests/WhaleDeck.IntegrationTests.csproj" />
     <Project Path="tests/WhaleDeck.UnitTests/WhaleDeck.UnitTests.csproj" />
   </Folder>

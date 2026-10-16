@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" Version="2.84.0" />
+    <ProjectReference Include="../../../src/WhaleDeck.Contracts/WhaleDeck.Contracts.csproj" />
+  </ItemGroup>
+</Project>

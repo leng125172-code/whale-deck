@@ -17,6 +17,14 @@ fi
 getent group whaledeck >/dev/null || groupadd --system whaledeck
 id whaledeck-agent >/dev/null 2>&1 || useradd --system --gid whaledeck --groups docker,systemd-journal --home-dir /var/lib/whaledeck-agent --shell /usr/sbin/nologin whaledeck-agent
 id whaledeck-maintenance >/dev/null 2>&1 || useradd --system --gid whaledeck --home-dir /nonexistent --shell /usr/sbin/nologin whaledeck-maintenance
+id whaledeck-shell >/dev/null 2>&1 || useradd --system --user-group --home-dir /var/lib/whaledeck-shell --shell /usr/sbin/nologin whaledeck-shell
+# Never reuse the Docker-capable Agent identity or the temporary sudo user for
+# a general host shell. Existing misconfigured identities fail closed.
+[[ $(id -u whaledeck-shell) -gt 0 && $(id -nG whaledeck-shell) == whaledeck-shell ]] || { echo 'Unsafe terminal service identity.' >&2; exit 1; }
+[[ $(getent passwd whaledeck-shell | cut -d: -f6) == /var/lib/whaledeck-shell ]] || exit 1
+[[ ! -L /var/lib/whaledeck-shell && ! -L /var/lib/whaledeck-terminal ]] || exit 1
+install -d -o whaledeck-shell -g whaledeck-shell -m 0700 /var/lib/whaledeck-shell
+install -d -o root -g root -m 0700 /var/lib/whaledeck-terminal
 
 install -d -o root -g whaledeck -m 0750 /etc/whaledeck
 [[ ! -L /etc/whaledeck/notifications ]] || { echo 'Notification private directory must not be a symlink.' >&2; exit 1; }
@@ -45,6 +53,7 @@ chmod 0640 /etc/whaledeck/agent.env
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-privileged" /usr/local/libexec/whaledeck-privileged
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-application-backup.py" /usr/local/libexec/whaledeck-application-backup.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-notification-config.py" /usr/local/libexec/whaledeck-notification-config.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-host-terminal.py" /usr/local/libexec/whaledeck-host-terminal.py
 install -d -o root -g root -m 0700 /var/lib/whaledeck-application-backup /data/DockerData/whaledeck/application-backups
 for unit in whaledeck-application-backup-recovery.service whaledeck-application-backup-recovery.timer; do
   install -o root -g root -m 0644 "$(dirname "$0")/$unit" "/etc/systemd/system/$unit"

@@ -14,7 +14,7 @@
   { "id": "whaledeck.agent", "type": "SystemdUnit", "externalId": "whaledeck-agent.service", "protectionLevel": "ControlPlane", "allowedActions": ["systemd-restart"] },
   { "id": "whaledeck.maintenance", "type": "SystemdUnit", "externalId": "whaledeck-maintenance.service", "protectionLevel": "ControlPlane", "allowedActions": ["systemd-restart"] },
   { "id": "database-platform.update", "type": "SystemdUnit", "externalId": "database-platform-workstation-update.timer", "protectionLevel": "ControlPlane", "allowedActions": ["systemd-start", "systemd-stop", "systemd-restart"] },
-  { "id": "whaledeck.host", "type": "Host", "externalId": "local", "protectionLevel": "ControlPlane", "allowedActions": ["update-check", "update-install", "reboot"] },
+  { "id": "whaledeck.host", "type": "Host", "externalId": "local", "protectionLevel": "ControlPlane", "allowedActions": ["update-check", "update-install", "reboot", "terminal-open"] },
   { "id": "whaledeck.docker", "type": "DockerEngine", "externalId": "docker", "protectionLevel": "ControlPlane", "allowedActions": ["validate-settings", "apply-settings", "rollback"] },
   { "id": "whaledeck.platform", "type": "Platform", "externalId": "whaledeck", "protectionLevel": "ControlPlane", "allowedActions": ["diagnose", "diagnostic-bundle", "plan-update", "apply-update", "rollback"] },
   { "id": "database-platform.repository", "type": "GitRepository", "externalId": "database-platform", "protectionLevel": "CriticalData", "path": "/data/GitRepos/database-platform", "allowedActions": ["status", "snapshot", "commit-push"] },

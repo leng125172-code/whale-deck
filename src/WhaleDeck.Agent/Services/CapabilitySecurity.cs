@@ -80,6 +80,20 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
         return continuation(request, responseStream, context);
     }
 
+    public override Task<TResponse> ClientStreamingServerHandler<TRequest, TResponse>(IAsyncStreamReader<TRequest> requestStream,
+        ServerCallContext context, ClientStreamingServerMethod<TRequest, TResponse> continuation)
+    {
+        Authorize(context);
+        return continuation(requestStream, context);
+    }
+
+    public override Task DuplexStreamingServerHandler<TRequest, TResponse>(IAsyncStreamReader<TRequest> requestStream,
+        IServerStreamWriter<TResponse> responseStream, ServerCallContext context, DuplexStreamingServerMethod<TRequest, TResponse> continuation)
+    {
+        Authorize(context);
+        return continuation(requestStream, responseStream, context);
+    }
+
     private void Authorize(ServerCallContext context)
     {
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");

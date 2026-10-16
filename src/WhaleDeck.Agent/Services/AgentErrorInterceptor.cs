@@ -29,6 +29,13 @@ public sealed class AgentErrorInterceptor : Interceptor
         }
     }
 
+    public override async Task DuplexStreamingServerHandler<TRequest, TResponse>(IAsyncStreamReader<TRequest> requestStream,
+        IServerStreamWriter<TResponse> responseStream, ServerCallContext context, DuplexStreamingServerMethod<TRequest, TResponse> continuation)
+    {
+        try { await continuation(requestStream, responseStream, context); }
+        catch (Exception exception) when (Map(exception) is not null) { throw Map(exception)!; }
+    }
+
     private static RpcException? Map(Exception exception)
     {
         var code = exception switch
