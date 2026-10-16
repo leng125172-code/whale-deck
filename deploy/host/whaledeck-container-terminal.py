@@ -191,6 +191,19 @@ def process_identity(pid):
     return start, namespace
 
 
+def started_exec(exec_id, container_id):
+    # Docker sends the HTTP upgrade before runc has necessarily published a
+    # running process/PID. A hijacked stream alone is not terminal readiness.
+    deadline = time.monotonic() + 3
+    while True:
+        status = api('GET', '/exec/' + exec_id + '/json')
+        if status.get('ContainerID') != container_id: raise ValueError('EXEC_IDENTITY_CHANGED')
+        pid = status.get('Pid')
+        if status.get('Running') is True and type(pid) is int and pid > 1: return status
+        if time.monotonic() >= deadline: raise ValueError('EXEC_START_FAILED')
+        time.sleep(.05)
+
+
 def stop_exec(row):
     """Signal only the saved Exec instance via pidfd, never kill/restart its container."""
     exec_id, container_id = row.get('execId'), row.get('containerId')
@@ -323,10 +336,8 @@ def run(base, session):
                             stage = 'exec-upgrade'
                             stream = start_stream(exec_id)
                             stage = 'exec-inspect'
-                            status = api('GET', '/exec/' + exec_id + '/json')
+                            status = started_exec(exec_id, identifier)
                             pid = status.get('Pid')
-                            if status.get('Running') is not True or type(pid) is not int or pid <= 1 or status.get('ContainerID') != identifier:
-                                raise ValueError('EXEC_START_FAILED')
                             stage = 'pid-identity'
                             process_start, namespace = process_identity(pid)
                             current_container = api('GET', '/containers/' + identifier + '/json')

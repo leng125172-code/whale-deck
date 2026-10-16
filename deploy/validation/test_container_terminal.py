@@ -23,6 +23,21 @@ def container():
 
 
 class PolicyTests(unittest.TestCase):
+    def test_upgrade_is_not_readiness_until_running_pid_is_published(self):
+        statuses = [{'ContainerID': IDENTIFIER, 'Running': False, 'Pid': 0},
+                    {'ContainerID': IDENTIFIER, 'Running': True, 'Pid': 0},
+                    {'ContainerID': IDENTIFIER, 'Running': True, 'Pid': 777}]
+        with patch.object(driver, 'api', side_effect=statuses) as calls, patch.object(driver.time, 'sleep'):
+            self.assertEqual(driver.started_exec('b' * 64, IDENTIFIER)['Pid'], 777)
+            self.assertEqual(calls.call_count, 3)
+
+    def test_startup_timeout_and_target_change_do_not_produce_ready(self):
+        with patch.object(driver, 'api', return_value={'ContainerID': IDENTIFIER, 'Running': False, 'Pid': 0}), \
+             patch.object(driver.time, 'monotonic', side_effect=[0, 4]):
+            with self.assertRaisesRegex(ValueError, '^EXEC_START_FAILED$'): driver.started_exec('b' * 64, IDENTIFIER)
+        with patch.object(driver, 'api', return_value={'ContainerID': 'b' * 64, 'Running': True, 'Pid': 777}):
+            with self.assertRaisesRegex(ValueError, '^EXEC_IDENTITY_CHANGED$'): driver.started_exec('b' * 64, IDENTIFIER)
+
     def test_target_contains_only_public_metadata(self):
         value = driver.target(container(), IDENTIFIER, RESOURCES)
         self.assertEqual(value['instanceId'], '777:2026-10-16T01:02:03Z')
