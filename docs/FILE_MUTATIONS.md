@@ -45,7 +45,7 @@
 
 冻结源码`9f0e46fd1a1f9f88fe6f7d1c22d57a69b445793b`再次通过`git archive`仅导出四个必需文件，在独立忽略目录执行同样48项真实Linux测试通过。验收子进程和管道等待均有上限，异常子进程不会继续运行父测试套件；不把观察超时当作已停止/成功。[CI38927072725](https://github.com/leng125172-code/whale-deck/actions/runs/38927072725)四作业全部成功，新增Linux用例、原后端/前端/真实PG回归通过；其中旧UI回归不代表尚未生成的新文件操作页面。工作站11核心healthy、Agent/维护服务active，安装运行时未改变。
 
-## Agent接入开发记录（2026-10-17，待安装签收）
+## Agent接入开发记录（2026-10-17，初始待安装状态）
 
 1.22的FileOperationService.Plan/Apply/Inspect已实现，固定helper/模块安装、相邻模块的root权限验证及安装态validate均已接入。枚举/路径/Actor/模式/元数据/回执有强类型校验，设备和inode精确uint64、时间有符号纳秒，不经过浮点或字符串命令。初次编译发现nullable返回值，已改显式拒绝null；实现复核修正了计划JSON大小写与不确定回执不能携带已完成字段的问题，没有压警告或改宽断言。
 
@@ -54,3 +54,15 @@
 本地Release与733 Unit/115 Integration通过，Windows6原生明确跳过；独立工作站副本**24操作/并发+5注册表升级+28原通道=57项真实Linux测试通过**，含已持锁时的上传暂存保留与内联失败清理、模块权限和未知回执字段、原始SIGKILL/跨文件系统等。真实UDS探针已生成并编译，覆盖方法/重放/保护、目录/复制/移动/权限、源保留/旧计划拒绝和精确临时清理；此处尚未执行，不当作安装态证据。
 
 GLM/`glm-5.3-flash`本轮仅只读定位六个指定契约/注册/测试/安装文件，一次成功/0重试，input133951/cached97536/output1943 Tokens、103234ms，费用未返回。GPT复核并实际决定/实现安全、契约、修改和验证。
+
+## 最终安装态Agent子范围：3f47300（2026-10-17）
+
+- 源码/运行时`3f47300ea6a0e1e88ac9318769d3a0224cd5fd2a`，Agent协议1.22。本地733 Unit/115 Integration、Release/nullable/分析器通过；Windows六原生明确跳过，Linux57项由工作站隔离副本和[CI38935700816](https://github.com/leng125172-code/whale-deck/actions/runs/38935700816) installer实际执行。CI后端/原生PG/安装/前端四作业全部成功；旧前端/浏览器回归不是新变更页面证据。
+- 同源码冻结PG报告`dispatch-c3f85156ebd441c8b7c7b690067a480a.json`执行1/通过1，2026-10-16 16:56:36–16:58:07 UTC；独立非超级用户数据库实际迁移/事务/审计/恢复，临时SDK容器及数据库清理确认。原生验收客户端从同一git archive源码构建到忽略目录`terminal-probe.Sk1k5b`，运行前SHA256SUMS验证通过。
+- 发布前只读检查活跃文件意图0、文件transient unit0、终端36条均Closed。更新Job`90d19d52-689b-489a-b51c-ec148e6bd698`只代表调度；实际update unit于**01:04:26 CST**成功终止，inactive/dead、Result=success、ExecMainStatus=0，未重复调度或自动回滚。
+- 同源码`TerminalProbe file-operations`实际经UDS peer/方法capability→1.22服务→固定helper→已安装root模块与systemd沙箱通过：缺失/错误方法/nonce重放拒绝，保护根/.env/穿越拒绝，mkdir普通模式/历史重放、65543字节完整复制、chmod、move保留原对象、旧复制回执查询不复活已移动的文件、不同owner查询拒绝和计划后源变化拒绝。探针仅生成自己的随机前缀文件/空目录/UUID；完整摘要核实后精确清理，不删永久root回执。此证明Agent通道，不证明未实现的变更BFF/SQL任务/人类审计或UI。
+- 已安装注册表逐项等于新默认，私有前序备份逐项等于旧默认；当前root所有/0640，备份0600。既有自定义/收紧策略不覆盖的负例由真实Linux测试证明，没有在生产注册表上制造收紧故障。模块0750/root:root、UDS权限、固定helper与动态入口、宿主self-contained运行库10.0.13验证通过。
+- 真实OIDC/代理/Gateway/API/SQL/Worker/UDS的原文件BFF回归通过：34603015字节、7秒有意停顿、完整下载校验、覆盖保留、幂等、登录隔离、CSRF/Origin/普通匿名拒绝、取消tombstone/错误SHA/旧版本和审计；宿主/容器终端、通知管理、8份HTTP/Gateway资产字节一致和原2MiB+7文件UDS回归通过。没有新页面操作或外部通知发送。
+- 末次独立检查：11核心healthy；临时验证账号0、活跃上传意图0、文件transient unit0、新操作fixture名称0。API共享PKCS与Worker包哈希分别保持`e562a8977d9dd59e4329f1ad0941c99d10dc27c069c15f8b10be647103c144e4`和`eff9ed505c194f0f5c9faef1a175459cd0560eeb4ad08890c7c0c0e1ff4d34c3`，与10.0.13安全修复证据相同。user全量sudo按用户决定保留，产品Agent仍仅固定helper。
+
+下一步为新文件变更BFF/永久意图与共享路径锁、Job/Outbox/Worker、人类主体审计和UI；继而目录树、HDD编辑前备份（覆盖上传同策略）、回收站/归档、容器文件及隔离/长期清理。P1-11/P2-03/P2-04与76项完整目标仍active。
