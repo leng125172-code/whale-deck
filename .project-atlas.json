@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-16）",
-  "nextStep": "1068b27已验收PKCS容器与宿主运行库修复、受限宿主终端WebUI及初始路由授权；继续容器Exec/文件传输、团队隔离与长期清理，P1-11及全部76项仍在推进。"
+  "nextStep": "a0b0001容器Exec Agent基础已覆盖发布及真实隔离验收；继续容器BFF目标绑定许可/持久审计与前端、文件传输、团队隔离和长期清理，P1-11及全部76项保持active。"
 }
