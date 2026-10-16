@@ -32,4 +32,9 @@ Release/类型检查701 Unit/115 Integration通过，Windows6原生明确跳过�
 
 GLM Flash本轮仅机械只读定位6个已指定文件（缺失的OperationDispatcher.cs没有假称读过），一次成功/0重试；input223557/cached182464/output4270 Tokens、153282ms，费用未返回。GPT复核定位结果并完成方案、安全边界、修改和验证。
 
+## 原生门禁失败记录（尚未上线）
+
+- af2f711检查点漏入proto变更，冻结源码编译无法生成StageUpload/PublishUpload/DiscardUpload；原生测试未执行，清理确认。20bbd00补齐契约，没有把旧运行时当新功能上线。
+- 20bbd00本地701/115与CI编译通过，真实PG暴露新增fixture对JSONB的string.Contains生成不支持的查询（SQLSTATE42883）；改为原生`payload_json->>'jobId'`计数并保持事务断言，未删除/跳过测试。失败容器/数据库已清理；增加真实锁等待后租约到期拒绝及数据库往返HMAC/篡改期限验证。修正版仍须重新执行同源码原生与CI后才能部署签收。
+
 仍缺完整编辑/复制移动/搜索/权限/压缩解压、容器文件适配、回收站/HDD备份、Unknown人工处置、团队隔离与长期保留等；不因此关闭P1-11/P2-03/P2-04或整体目标。

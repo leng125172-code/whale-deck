@@ -92,6 +92,7 @@ public sealed class FileUploadRepository(PlatformDbContext db) : IFileUploadRepo
         var current = await Lock(operation, cancellationToken); if (current is null) return FileUploadStartResult.LeaseLost;
         var job = await db.OperationJobs.FromSqlInterpolated($"SELECT * FROM operation_jobs WHERE id={current.Id} FOR UPDATE").SingleAsync(cancellationToken);
         now = DateTimeOffset.UtcNow;
+        if (current.LeaseExpiresAtUtc is null || current.LeaseExpiresAtUtc <= now) return FileUploadStartResult.LeaseLost;
         if (job.CancelRequestedAtUtc is not null) return FileUploadStartResult.Canceled;
         if (current.ExpiresAtUtc <= now) return FileUploadStartResult.Expired;
         await db.FileUploadOperations.Where(item => item.Id == current.Id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.State, "Publishing")
