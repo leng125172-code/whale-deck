@@ -34,7 +34,10 @@ public sealed class FilePlanProtector(IConfiguration configuration) : IFilePlanP
     }
     public FileMutationPlanClaims VerifyMutation(string plan)
     {
-        if (string.IsNullOrWhiteSpace(plan) || plan.Length > 32768) throw new ArgumentException("FILES_PLAN_INVALID");
+        // Two 4096-byte Unicode paths can expand past 32 KiB after JSON
+        // escaping and Base64. Keep a finite bound without rejecting a plan
+        // produced by this server for otherwise valid registered locations.
+        if (string.IsNullOrWhiteSpace(plan) || plan.Length > 65536) throw new ArgumentException("FILES_PLAN_INVALID");
         var parts = plan.Split('.');
         if (parts.Length != 2 || parts[1].Length != 64 || !CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(parts[1]), Encoding.ASCII.GetBytes(Mac(parts[0], "whaledeck-file-mutation-plan-v1"))))
             throw new ArgumentException("FILES_PLAN_SIGNATURE_INVALID");

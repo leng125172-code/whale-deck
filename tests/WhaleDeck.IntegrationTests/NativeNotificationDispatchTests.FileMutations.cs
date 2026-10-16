@@ -57,6 +57,8 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Empty(await db.FilePathLocks.Where(item => item.OperationId == id).ToArrayAsync());
             Assert.Equal(3, await db.OperationJobEvents.CountAsync(item => item.JobId == id));
             Assert.Equal(2, await db.AuditEvents.CountAsync(item => item.JobId == id));
+            foreach (var detail in await db.AuditEvents.Where(item => item.JobId == id).Select(item => item.DetailJson).ToArrayAsync())
+            { Assert.DoesNotContain("roundtrip", detail); Assert.DoesNotContain(actor.LoginBinding, detail); }
             Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM outbox_messages WHERE message_type='FileMutationRequested' AND payload_json->>'jobId'={id.ToString("D")} AND processed_at_utc IS NULL) AS \"Value\"").SingleAsync());
             // Two real connections race different targets sharing a source.
             // A per-table unique target index cannot enforce this boundary.

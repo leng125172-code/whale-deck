@@ -67,6 +67,17 @@ public sealed class FileMutationTests : IDisposable
         Assert.Contains(FileManagementService.Hash("test.files:target"), FileMutationService.PathHashes(Plan()));
         Assert.Throws<ArgumentException>(() => FileMutationService.Validate(Plan().Command with { Target = Plan().Command.Source }));
     }
+    [Fact]
+    public void LongValidUnicodeLocationsDoNotProduceAnUnusableSignedPlan()
+    {
+        var path = string.Join('/', Enumerable.Repeat(string.Concat(Enumerable.Repeat("😀", 59)), 17));
+        var plan = Plan() with { Command = Plan().Command with { Source = new("test.files", path + "a"), Target = new("test.files", path + "b") } };
+        FileMutationService.Validate(plan);
+        var claims = new FileMutationPlanClaims(Actor.Subject, Actor.LoginBinding, plan, DateTimeOffset.UtcNow.AddMinutes(5));
+        var signed = _protector.Sign(claims); Assert.True(signed.Length > 32768); Assert.True(signed.Length <= 65536);
+        Assert.Equal(claims, _protector.VerifyMutation(signed));
+        Assert.Throws<ArgumentException>(() => _protector.VerifyMutation(new('A', 65537)));
+    }
     [Theory]
     [InlineData("kind")][InlineData("digest")][InlineData("size")][InlineData("fingerprint")][InlineData("version")][InlineData("unknown-fields")][InlineData("move-retention")]
     public void ReceiptsCannotInventSuccessOrDetachFromThePlan(string change)

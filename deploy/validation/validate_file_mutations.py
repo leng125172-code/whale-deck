@@ -120,7 +120,10 @@ def main():
         for identifier in operations:
             assert any(item.get('jobId') == identifier and item['action'] == 'files.mutation.accepted' for item in audits)
             assert any(item.get('jobId') == identifier and item['action'] == 'files.mutation.result' for item in audits)
-        assert all(marker not in (item.get('detailJson') or '') for item in audits)
+        # AuditEventDto deliberately omits stored details; the native SQL
+        # suite separately checks the real stored hashed metadata. Do not
+        # claim a default empty string proves a field we never received.
+        assert all('detailJson' not in item for item in audits)
         print(json.dumps(dict(realFileMutationBff='passed', binaryBytes=len(content), directoryCopyMovePermissions='passed',
             oidcSqlWorkerUdsHumanAudit='passed', idempotencyLoginCsrfOriginVersionProtection='passed',
             unknownFaultInjection='not-performed-on-production', directoryTreesHddAndTenantIsolation='not-covered')))
@@ -136,6 +139,10 @@ def main():
             if row['state'] not in ('Succeeded', 'Superseded', 'Failed', 'Canceled'):
                 post('files/uploads/' + upload_id + '/cancel', {}, 202, upload_id)
                 raise RuntimeError('owned-upload-cleanup-awaiting-receipt')
+        directory = DIRECTORY / folder
+        if directory.exists():
+            current = directory.lstat()
+            assert not directory.is_symlink() and (current.st_dev, current.st_ino) == created_directory_identity
         for relative in (original, copied, moved):
             target = DIRECTORY / relative
             if target.exists():
@@ -148,7 +155,6 @@ def main():
                 assert not target.is_symlink() and target.read_bytes() == content; target.unlink()
         if private.exists():
             assert not private.is_symlink() and not any(private.iterdir()); private.rmdir()
-        directory = DIRECTORY / folder
         if directory.exists():
             current = directory.lstat(); assert (current.st_dev, current.st_ino) == created_directory_identity
             assert directory.name == folder and not directory.is_symlink() and not any(directory.iterdir()); directory.rmdir()
