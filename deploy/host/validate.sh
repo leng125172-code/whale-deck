@@ -33,6 +33,10 @@ assert_metadata /etc/whaledeck/agent-capability.key '640:root:whaledeck'
 assert_metadata /etc/whaledeck/resources.json '640:root:whaledeck'
 assert_metadata /etc/whaledeck/agent.env '640:root:whaledeck'
 assert_metadata /usr/local/libexec/whaledeck-privileged '750:root:root'
+assert_metadata /usr/local/libexec/whaledeck-files.py '750:root:root'
+assert_metadata /var/lib/whaledeck-files '700:root:root'
+[[ ! -L /etc/whaledeck/file-roots.json && $(stat -c %u /etc/whaledeck/file-roots.json) == 0 ]]
+[[ $(stat -c %a /etc/whaledeck/file-roots.json) =~ ^(600|640|644)$ ]]
 assert_metadata /etc/sudoers.d/whaledeck-agent '440:root:root'
 visudo -cf /etc/sudoers.d/whaledeck-agent >/dev/null
 
@@ -40,6 +44,7 @@ visudo -cf /etc/sudoers.d/whaledeck-agent >/dev/null
 runuser -u whaledeck-agent -- docker version --format '{{.Server.Version}}' >/dev/null
 runuser -u whaledeck-agent -- test -r /etc/whaledeck/agent-capability.key
 runuser -u whaledeck-agent -- test ! -w /etc/whaledeck/agent-capability.key
+runuser -u whaledeck-agent -- test ! -w /etc/whaledeck/file-roots.json
 
 temporary=$(mktemp -d /tmp/whaledeck-validate.XXXXXX)
 cleanup() {

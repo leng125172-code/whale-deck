@@ -33,6 +33,11 @@ STAGING = '.whaledeck-files'
 PRIVATE = {'.git', '.ssh', '.gnupg', 'secrets', 'manifest.json', 'compose.yml', 'compose.yaml',
            'docker-compose.yml', 'docker-compose.yaml', 'resources.json', 'agent-capability.key'}
 LIBC = ctypes.CDLL(None, use_errno=True)
+# syscall(2) returns long; variadic arguments must have explicit native widths.
+# In particular sizeof(open_how) is size_t, not ctypes' implicit signed int.
+# Otherwise unused upper register bits can turn a valid size into EINVAL under
+# a different call frame (including the installed systemd sandbox).
+LIBC.syscall.restype = ctypes.c_long
 
 
 class Rejected(Exception):
@@ -69,11 +74,14 @@ class InputLines:
 
 
 def open_at(root, path, flags, mode=0, cross_mount=False):
+    if mode != 0 or flags & ~(os.O_RDONLY | os.O_DIRECTORY | os.O_NONBLOCK | os.O_NOFOLLOW):
+        raise Rejected('FILES_OPEN_OPTIONS_INVALID')
     if platform.machine() not in ('x86_64', 'aarch64'):
         raise Rejected('FILES_KERNEL_UNSUPPORTED')
     # BENEATH | NO_SYMLINKS | NO_MAGICLINKS, and NO_XDEV below the registered root.
     how = OpenHow(flags | os.O_CLOEXEC, mode, 0x08 | 0x04 | 0x02 | (0 if cross_mount else 0x01))
-    result = LIBC.syscall(437, root, os.fsencode(path), ctypes.byref(how), ctypes.sizeof(how))
+    result = LIBC.syscall(ctypes.c_long(437), ctypes.c_int(root), ctypes.c_char_p(os.fsencode(path)),
+                          ctypes.byref(how), ctypes.c_size_t(ctypes.sizeof(how)))
     if result < 0:
         number = ctypes.get_errno()
         if number in (errno.ENOSYS, errno.EINVAL):

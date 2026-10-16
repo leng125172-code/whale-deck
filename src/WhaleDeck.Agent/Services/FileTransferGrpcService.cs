@@ -171,8 +171,8 @@ public sealed class FileTransferRunner
         finally
         {
             lifetime.Cancel();
-            result.Process.StandardInput.Close();
             try { await writing; } catch (Exception) { /* No body, path or exception text in logs. */ }
+            FileTransferPipe.AbortInput(result.Process.StandardInput);
             try { if (reading.IsCompletedSuccessfully) reading.Result.Dispose(); else await reading; } catch (Exception) { }
         }
         async Task Write()
@@ -294,7 +294,7 @@ public sealed class FileTransferRunner
         {
             // Closing pipe endpoints also releases a driver whose Ready was not
             // received. Once Ready is bound, stop only that exact invocation.
-            try { Process.StandardInput.Close(); Process.StandardOutput.Close(); } catch (InvalidOperationException) { }
+            try { FileTransferPipe.AbortInput(Process.StandardInput); Process.StandardOutput.Close(); } catch (InvalidOperationException) { }
             if (InvocationId is not null)
             {
                 using var stop = Process.Start(Start(action, Id, InvocationId));
@@ -310,5 +310,19 @@ public sealed class FileTransferRunner
             }
             Process.Dispose(); ErrorBuffer.Dispose();
         }
+    }
+}
+
+internal static class FileTransferPipe
+{
+    // A helper may reject a stale version before consuming buffered input.
+    // Close the underlying pipe first: disposal must not flush that buffer and
+    // replace the authoritative rejection with a broken-pipe exception.
+    public static void AbortInput(StreamWriter writer)
+    {
+        writer.BaseStream.Dispose();
+        try { writer.Dispose(); }
+        catch (IOException) { }
+        catch (ObjectDisposedException) { }
     }
 }

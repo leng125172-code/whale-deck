@@ -26,11 +26,15 @@ run_transient() {
 case "$action" in
   file-transport)
     [[ $# -eq 3 && "$2" =~ ^(roots|list|stat|download|upload|status)$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    # RestrictSUIDSGID seccomp blocks openat2 entirely, including read-only
+    # resolution. Only this fixed, non-executing Python driver opts out: it
+    # creates 0600 files and strips both special bits on every permission copy.
+    # Other Agent/terminal/service sandboxes retain their original setting.
     exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
       --unit="whaledeck-files-$3" \
       --property=User=root --property=Group=root --property=UMask=0077 \
       --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
-      --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=yes \
+      --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=no \
       --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
       --property=RestrictNamespaces=yes --property=RestrictAddressFamilies=AF_UNIX \
       --property=RuntimeMaxSec=620 --property=TimeoutStopSec=5 --property=KillMode=control-group \

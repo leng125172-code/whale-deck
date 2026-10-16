@@ -152,6 +152,19 @@ class FileTransportTests(unittest.TestCase):
         self.assertEqual((self.root / driver.STAGING / (command['operationId'] + '.upload')).read_bytes(), b'previous')
         self.assertNotIn(driver.STAGING, [item['name'] for item in driver.list_directory({'rootId': 'test.shared', 'path': '', 'after': '', 'take': 100})['entries']])
 
+    def test_fixed_driver_cannot_create_via_openat2_or_copy_special_mode_bits(self):
+        root = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            for flags, mode in ((os.O_WRONLY | os.O_CREAT, 0o600), (os.O_RDONLY, 0o4755)):
+                with self.assertRaisesRegex(driver.Rejected, 'FILES_OPEN_OPTIONS_INVALID'):
+                    driver.open_at(root, 'forbidden', flags, mode)
+        finally: os.close(root)
+        target = self.root / 'special-mode'; target.write_bytes(b'previous'); os.chmod(target, 0o6755)
+        command = self.command(b'new', target.name, self.revision(target.name))
+        result = driver.upload(command, self.body(b'new'))
+        self.assertEqual(result['state'], 'Completed')
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o755)
+
     def test_wrong_version_hash_offset_eof_and_trailing_data_never_publish(self):
         for mode in ('version', 'hash', 'offset', 'eof', 'trailing'):
             target = self.root / ('file-' + mode); target.write_bytes(b'original')

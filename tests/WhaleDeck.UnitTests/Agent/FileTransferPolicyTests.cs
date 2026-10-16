@@ -61,4 +61,33 @@ public sealed class FileTransferPolicyTests
         Assert.Equal("{\"type\":\"commit\"}", FileTransferPolicy.Input(new() { Commit = true }, ref offset, 3));
         Assert.Throws<ArgumentException>(() => FileTransferPolicy.Input(new() { Data = ByteString.CopyFrom(new byte[32769]), Offset = offset }, ref offset, 100000));
     }
+    [Fact]
+    public void RejectedHelperCleanupDropsBufferedInputAndPreservesOriginalFailure()
+    {
+        var stream = new RejectingPipe();
+        var writer = new StreamWriter(stream);
+        writer.Write("buffered-private-body");
+        FileTransferPipe.AbortInput(writer);
+        Assert.True(stream.Disposed);
+        Assert.Equal(0, stream.WritesWhileOpen);
+        FileTransferPipe.AbortInput(writer);
+    }
+    private sealed class RejectingPipe : MemoryStream
+    {
+        public bool Disposed { get; private set; }
+        public int WritesWhileOpen { get; private set; }
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            if (Disposed) throw new IOException("private rejected input");
+            WritesWhileOpen++;
+            base.Write(buffer, offset, count);
+        }
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            if (Disposed) throw new IOException("private rejected input");
+            WritesWhileOpen++;
+            base.Write(buffer);
+        }
+        protected override void Dispose(bool disposing) { Disposed = true; base.Dispose(disposing); }
+    }
 }

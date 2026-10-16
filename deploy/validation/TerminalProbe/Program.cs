@@ -20,7 +20,11 @@ try
 catch (Exception error)
 {
     // No exception text, terminal transcript, credential or capability output.
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = args is ["files"] ? FileTransferProbe.Phase : TerminalProbe.Phase, code = TerminalProbe.FailureCode, failureType = error.GetType().Name }));
+    var rpc = error as RpcException;
+    var detail = rpc?.Status.Detail;
+    var ownFileCode = detail is { Length: <= 80 } && detail.StartsWith("FILES_", StringComparison.Ordinal) && detail.All(c => char.IsAsciiLetterUpper(c) || c == '_') ? detail : null;
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = args is ["files"] ? FileTransferProbe.Phase : TerminalProbe.Phase,
+        code = TerminalProbe.FailureCode, failureType = error.GetType().Name, rpcStatus = rpc?.StatusCode.ToString(), fileCode = ownFileCode }));
     return 1;
 }
 

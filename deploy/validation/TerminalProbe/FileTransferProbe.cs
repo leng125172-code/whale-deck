@@ -71,11 +71,13 @@ internal static class FileTransferProbe
             await Denied(async () => await client.InspectAsync(new() { RootId = Root, Path = ".env" }, Headers("Inspect")), StatusCode.PermissionDenied);
             await Denied(async () => await client.InspectAsync(new() { RootId = Root, Path = "../outside" }, Headers("Inspect")), StatusCode.InvalidArgument);
 
-            Phase = "binary-stream-upload-download";
+            Phase = "binary-stream-upload";
             var create = Header(payload); var result = await Upload(create, payload);
             Require(result.State == "Completed" && result.BindingCurrent && !result.Replayed && result.Sha256 == digest);
+            Phase = "binary-stream-inspect";
             var inspect = await client.InspectAsync(Location(), Headers("Inspect")); Require(inspect.SizeBytes == payload.Length && inspect.Version == result.Version);
             var listing = await client.ListAsync(new() { Location = new() { RootId = Root }, Take = 100 }, Headers("List")); Require(listing.Entries.Any(item => item.Name == name));
+            Phase = "binary-stream-download";
             using (var download = client.Download(new() { Location = Location(), ExpectedVersion = result.Version }, Headers("Download"), deadline: DateTime.UtcNow.AddSeconds(60)))
             {
                 using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256); long total = 0; var ended = false;
