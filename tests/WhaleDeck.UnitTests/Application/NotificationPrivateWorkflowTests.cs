@@ -9,7 +9,7 @@ using WhaleDeck.Infrastructure.Secrets;
 
 namespace WhaleDeck.UnitTests.Application;
 
-public sealed class NotificationPrivateWorkflowTests : IDisposable
+public sealed partial class NotificationPrivateWorkflowTests : IDisposable
 {
     private const string Input = "{\"target\":{\"provider\":\"Webhook\",\"url\":\"https://example.invalid/events\",\"allowedAddresses\":[]},\"credentialMode\":\"remove\"}";
     private readonly string _key = Path.Combine(Path.GetTempPath(), "wd-private-key-" + Guid.NewGuid().ToString("N"));
@@ -114,8 +114,8 @@ public sealed class NotificationPrivateWorkflowTests : IDisposable
         var validator = new NotificationPrivateValidator();
         Assert.Throws<ArgumentException>(() => validator.Validate("Webhook", "apply", "{\"target\":{},\"target\":{},\"path\":\"/etc/passwd\"}", false));
     }
-    private NotificationPrivateOperation Operation(bool started = false) => new() { Id = Guid.NewGuid(), ChannelId = _repo.Channel.Id, ActorSubject = "fixture-owner", RequestHash = new string('A', 64),
-        InputFingerprint = _protector.Fingerprint("fixture-owner", _repo.Channel.Id, "apply", Input), RegistryRevision = "EMPTY", Provider = "Webhook", Action = "apply",
+    private NotificationPrivateOperation Operation(bool started = false, bool changedInput = false) => new() { Id = Guid.NewGuid(), ChannelId = _repo.Channel.Id, ActorSubject = "fixture-owner", RequestHash = new string('A', 64),
+        InputFingerprint = changedInput ? new string('0', 64) : _protector.Fingerprint("fixture-owner", _repo.Channel.Id, "apply", Input), RegistryRevision = "EMPTY", Provider = "Webhook", Action = "apply",
         InputExpiresAtUtc = _clock.GetUtcNow().AddMinutes(5), RootStartedAtUtc = started ? _clock.GetUtcNow().AddMinutes(-1) : null };
     private NotificationPrivateMetadata Metadata(Guid? id = null, bool current = true) => new("EMPTY", "wd-" + _repo.Channel.Id.ToString("N"), null, id != null, false, id != null, false, id, current);
     public void Dispose() { File.Delete(_key); GC.SuppressFinalize(this); }
@@ -123,27 +123,32 @@ public sealed class NotificationPrivateWorkflowTests : IDisposable
     private sealed class Authorizer(bool allowed) : INotificationRequestAuthorizer { public Task<bool> IsAdministratorAsync(string subject, CancellationToken cancellationToken) => Task.FromResult(allowed); }
     private sealed class Gateway : INotificationPrivateGateway
     {
-        public int Applies; public bool LoseReply; public NotificationPrivateMetadata? Receipt;
+        public int Applies, ReceiptReads; public bool LoseReply; public NotificationPrivateMetadata? Receipt; public Exception? ReadFailure, ApplyFailure;
         public Task<NotificationPrivateMetadata> InspectAsync(Guid channelId, CancellationToken cancellationToken) => Task.FromResult(new NotificationPrivateMetadata("EMPTY", "wd-" + channelId.ToString("N"), null, false, false, false, false, null, true));
-        public Task<NotificationPrivateMetadata> InspectReceiptAsync(Guid channelId, Guid operationId, CancellationToken cancellationToken) => Receipt is null ? InspectAsync(channelId, cancellationToken) : Task.FromResult(Receipt);
+        public Task<NotificationPrivateMetadata> InspectReceiptAsync(Guid channelId, Guid operationId, CancellationToken cancellationToken)
+        { ReceiptReads++; return ReadFailure is not null ? Task.FromException<NotificationPrivateMetadata>(ReadFailure) : Receipt is null ? InspectAsync(channelId, cancellationToken) : Task.FromResult(Receipt); }
         public Task<NotificationPrivateMetadata> ApplyAsync(NotificationPrivateUpdate update, CancellationToken cancellationToken)
-        { Applies++; Receipt = new("EMPTY", "wd-" + update.ChannelId.ToString("N"), null, true, false, true, false, update.OperationId, true); return LoseReply ? Task.FromException<NotificationPrivateMetadata>(new IOException("fixture reply lost")) : Task.FromResult(Receipt); }
+        { Applies++; if (ApplyFailure is not null) return Task.FromException<NotificationPrivateMetadata>(ApplyFailure);
+            Receipt = new("EMPTY", "wd-" + update.ChannelId.ToString("N"), null, true, false, true, false, update.OperationId, true); return LoseReply ? Task.FromException<NotificationPrivateMetadata>(new IOException("fixture reply lost")) : Task.FromResult(Receipt); }
     }
     private sealed class Repo : INotificationPrivateRepository
     {
         public NotificationChannel Channel = new() { Name = "fixture", Provider = "Webhook", DestinationReference = "approved" };
-        public NotificationPrivateOperation? Operation; public int Enqueued, Deferred; public string? Finished;
+        public NotificationPrivateOperation? Operation; public int Enqueued, Deferred, Acknowledged; public string? Finished;
+        public bool Canceled, AckReplay, FinishAccepted = true;
+        public NotificationPrivateStartResult StartResult = NotificationPrivateStartResult.Started;
         private Guid _id; private string? _request;
         public Task<NotificationChannel> ChannelAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(Channel);
         public Task<JobDto?> ReplayAsync(Guid id, string actor, string requestHash, CancellationToken cancellationToken) => Task.FromResult<JobDto?>(_id == id && _request == requestHash ? Job(id) : null);
         public Task<JobDto> EnqueueAsync(NotificationContext context, Guid id, NotificationPrivatePlanClaims claims, string requestHash, CancellationToken cancellationToken) { Enqueued++; _id = id; _request = requestHash; return Task.FromResult(Job(id)); }
         private static JobDto Job(Guid id) => new(id, "notifications.private-configuration", "Queued", "Queued", null, null, DateTimeOffset.UtcNow, null, null);
         public Task<NotificationPrivateOperation?> ClaimAsync(DateTimeOffset now, CancellationToken cancellationToken) => Task.FromResult(Operation);
-        public Task<bool> StartedAsync(NotificationPrivateOperation operation, DateTimeOffset now, CancellationToken cancellationToken) => Task.FromResult(true);
-        public Task FinishAsync(NotificationPrivateOperation operation, string state, string code, NotificationPrivateMetadata? receipt, CancellationToken cancellationToken) { Finished = state; return Task.CompletedTask; }
+        public Task<NotificationPrivateStartResult> StartedAsync(NotificationPrivateOperation operation, DateTimeOffset now, CancellationToken cancellationToken) => Task.FromResult(StartResult);
+        public Task<bool> FinishAsync(NotificationPrivateOperation operation, string state, string code, NotificationPrivateMetadata? receipt, CancellationToken cancellationToken) { if (FinishAccepted) Finished = state; return Task.FromResult(FinishAccepted); }
         public Task DeferAsync(NotificationPrivateOperation operation, string code, CancellationToken cancellationToken) { Deferred++; return Task.CompletedTask; }
-        public Task<bool> CancellationRequestedAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<bool> CancellationRequestedAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(Canceled);
         public Task<NotificationPrivateOperation?> LatestAsync(Guid channelId, CancellationToken cancellationToken) => Task.FromResult(Operation);
-        public Task AcknowledgeAsync(NotificationContext context, Guid channelId, Guid operationId, long expectedVersion, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<bool> ReplayAcknowledgmentAsync(NotificationContext context, Guid channelId, Guid operationId, long expectedVersion, CancellationToken cancellationToken) => Task.FromResult(AckReplay);
+        public Task AcknowledgeAsync(NotificationContext context, Guid channelId, Guid operationId, long expectedVersion, CancellationToken cancellationToken) { Acknowledged++; return Task.CompletedTask; }
     }
 }

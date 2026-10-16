@@ -72,9 +72,21 @@ def main():
         snapshot = session.get(endpoint + 'channels/' + channel_id + '/private', timeout=15)
         assert snapshot.status_code == 200 and not snapshot.json()['hasTarget']
         assert channels()['privateConfigurationBlocked'], 'Removed private binding did not block sending'
+        for job_id in jobs:
+            events = session.get(base + '/api/v1/jobs/' + job_id + '/events', timeout=20)
+            assert events.status_code == 200 and events.headers.get('Content-Type', '').startswith('text/event-stream')
+            rows = [json.loads(line[6:]) for line in events.text.splitlines() if line.startswith('data: ')]
+            assert rows and rows[-1].get('state', rows[-1].get('State')) == 'Succeeded', 'Private job terminal event missing'
+            last = rows[-1].get('sequence', rows[-1].get('Sequence'))
+            assert isinstance(last, int) and last >= 2
+            resumed = session.get(base + '/api/v1/jobs/' + job_id + '/events', headers={'Last-Event-ID': str(last - 1)}, timeout=20)
+            resumed.raise_for_status()
+            resumed_rows = [json.loads(line[6:]) for line in resumed.text.splitlines() if line.startswith('data: ')]
+            assert len(resumed_rows) == 1 and resumed_rows[0].get('sequence', resumed_rows[0].get('Sequence')) == last, 'Private job event resume duplicated or lost progress'
+            assert 'example.invalid' not in events.text and 'example.invalid' not in resumed.text, 'Private input appeared in job events'
         doc = session.get(base + '/openapi/v1.json', timeout=15); doc.raise_for_status()
         assert '/api/v1/notifications/manage/channels/{id}/private/plan' in doc.json()['paths']
-        print(json.dumps({'privateConfigurationRealWorkflow': 'passed', 'oidcApiValkeyWorkerAgent': 'passed', 'asynchronousPermanentReplay': 'passed', 'channelNeverEnabled': True, 'externalSends': 0}))
+        print(json.dumps({'privateConfigurationRealWorkflow': 'passed', 'oidcApiValkeyWorkerAgent': 'passed', 'asynchronousPermanentReplay': 'passed', 'jobTerminalEventsAndLastEventIdResume': 'passed', 'channelNeverEnabled': True, 'externalSends': 0}))
     finally:
         if channel_id is not None:
             # Remove an accepted binding using its own confirmed workflow if an

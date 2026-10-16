@@ -18,7 +18,7 @@ using WhaleDeck.Infrastructure.Notifications;
 
 namespace WhaleDeck.IntegrationTests;
 
-public sealed class NativeNotificationDispatchTests
+public sealed partial class NativeNotificationDispatchTests
 {
     private static readonly string[] LoopbackAddresses = ["127.0.0.1"];
     private static readonly string[] CollectorRecipients = ["collector@example.invalid"];
@@ -108,6 +108,7 @@ public sealed class NativeNotificationDispatchTests
         await Management(options, db, store, now);
         await Sender(db);
         await PrivateWorkflow(db);
+        await PrivateBoundaries(options, db);
     }
 
     private static async Task PrivateWorkflow(PlatformDbContext db)
@@ -139,16 +140,19 @@ public sealed class NativeNotificationDispatchTests
             await dispatcher.TickAsync(default); Assert.Equal(1, gateway.Applies);
             var interrupted = await db.NotificationPrivateOperations.AsNoTracking().SingleAsync(item => item.Id == submitted.Id);
             Assert.NotNull(interrupted.RootStartedAtUtc); Assert.Equal("Running", interrupted.State);
+            await new JobRepository(db).RequestCancellationAsync(submitted.Id, context.Subject, default);
             await broker.DeleteAsync(context.Subject, submitted.Id, default); // Input can disappear after root success.
             await db.NotificationPrivateOperations.Where(item => item.Id == submitted.Id).ExecuteUpdateAsync(setters => setters
                 .SetProperty(item => item.LeaseExpiresAtUtc, DateTimeOffset.UtcNow.AddSeconds(-1)).SetProperty(item => item.NextAttemptAtUtc, DateTimeOffset.UtcNow.AddSeconds(-1)));
             await new NotificationPrivateDispatcher(repository, gateway, broker, new NativeAuthorizer(false), protector, TimeProvider.System).TickAsync(default);
             Assert.Equal(1, gateway.Applies);
             Assert.Equal("Succeeded", (await db.OperationJobs.AsNoTracking().SingleAsync(item => item.Id == submitted.Id)).State);
+            Assert.NotNull((await db.OperationJobs.AsNoTracking().SingleAsync(item => item.Id == submitted.Id)).CancelRequestedAtUtc);
             var applied = await db.NotificationChannels.AsNoTracking().SingleAsync(item => item.Id == channel.Id);
             Assert.False(applied.IsEnabled); Assert.False(applied.PrivateConfigurationBlocked); Assert.Equal("wd-" + channel.Id.ToString("N"), applied.DestinationReference); Assert.Equal(2, applied.Version);
             Assert.Equal(2, await db.AuditEvents.CountAsync(item => item.JobId == submitted.Id));
             Assert.True(await db.OutboxMessages.AnyAsync(item => item.MessageType == "NotificationPrivateRequested" && item.ProcessedAtUtc != null));
+            Assert.True(await db.OutboxMessages.AnyAsync(item => item.MessageType == "NotificationPrivateCancellationRequested" && item.ProcessedAtUtc != null));
             Assert.Equal("Succeeded", (await service.SubmitAsync(context, channel.Id, command, default)).State);
             Console.WriteLine("INBOX_PHASE=private-atomic-job-pause-lost-reply-receipt-permanent-replay");
         }

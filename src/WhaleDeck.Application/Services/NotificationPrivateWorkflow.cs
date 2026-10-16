@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using WhaleDeck.Application.Abstractions;
 using WhaleDeck.Application.Models;
+using WhaleDeck.Domain.Entities;
 
 namespace WhaleDeck.Application.Services;
 
@@ -65,6 +66,7 @@ public sealed class NotificationPrivateWorkflow(INotificationPrivateRepository r
     {
         Authorize(context); Identity(channelId); Identity(command.OperationId);
         if (!command.Confirmed || !command.AcceptUnknownOutcome || command.ExpectedVersion < 0 || !Guid.TryParseExact(context.IdempotencyKey, "D", out var key) || key == Guid.Empty) throw new ArgumentException("Unknown outcomes require explicit acceptance and a UUID request key.");
+        if (await repository.ReplayAcknowledgmentAsync(context, channelId, command.OperationId, command.ExpectedVersion, cancellationToken)) return;
         var receipt = await agent.InspectReceiptAsync(channelId, command.OperationId, cancellationToken);
         if (receipt.Applied && receipt.BindingCurrent) throw new InvalidOperationException("The root result is available; let reconciliation complete instead.");
         await repository.AcknowledgeAsync(context, channelId, command.OperationId, command.ExpectedVersion, cancellationToken);
@@ -92,32 +94,46 @@ public sealed class NotificationPrivateDispatcher(INotificationPrivateRepository
         var receipt = await agent.InspectReceiptAsync(operation.ChannelId, operation.Id, cancellationToken);
         if (receipt.Applied)
         {
-            await repository.FinishAsync(operation, receipt.BindingCurrent ? "Succeeded" : "Superseded", receipt.BindingCurrent ? "PRIVATE_APPLIED" : "PRIVATE_SUPERSEDED", receipt, cancellationToken);
-            await inputs.DeleteAsync(operation.ActorSubject, operation.Id, cancellationToken); return true;
+            if (await repository.FinishAsync(operation, receipt.BindingCurrent ? "Succeeded" : "Superseded", receipt.BindingCurrent ? "PRIVATE_APPLIED" : "PRIVATE_SUPERSEDED", receipt, cancellationToken))
+                await inputs.DeleteAsync(operation.ActorSubject, operation.Id, cancellationToken);
+            return true;
         }
         if (await repository.CancellationRequestedAsync(operation.Id, cancellationToken) || !await authorizer.IsAdministratorAsync(operation.ActorSubject, cancellationToken))
         {
-            await repository.FinishAsync(operation, operation.RootStartedAtUtc is null ? "Canceled" : "Unknown", "PRIVATE_PERMISSION_OR_CANCEL", null, cancellationToken); return true;
+            await StopAsync(operation, "Canceled", "PRIVATE_PERMISSION_OR_CANCEL", cancellationToken); return true;
         }
         var input = operation.Action == "remove" ? "{}" : await inputs.GetAsync(operation.ActorSubject, operation.Id, cancellationToken);
         if (input is null || operation.InputExpiresAtUtc <= clock.GetUtcNow())
         {
-            await repository.FinishAsync(operation, operation.RootStartedAtUtc is null ? "Failed" : "Unknown", "PRIVATE_INPUT_EXPIRED", null, cancellationToken); return true;
+            await StopAsync(operation, "Failed", "PRIVATE_INPUT_EXPIRED", cancellationToken); return true;
         }
         if (protector.Fingerprint(operation.ActorSubject, operation.ChannelId, operation.Action, input) != operation.InputFingerprint)
-        { await repository.FinishAsync(operation, "Unknown", "PRIVATE_INPUT_CHANGED", null, cancellationToken); return true; }
-        if (!await repository.StartedAsync(operation, clock.GetUtcNow(), cancellationToken)) return true;
+        { await StopAsync(operation, "Failed", "PRIVATE_INPUT_CHANGED", cancellationToken); return true; }
+        var start = await repository.StartedAsync(operation, clock.GetUtcNow(), cancellationToken);
+        if (start != NotificationPrivateStartResult.Started)
+        {
+            if (start != NotificationPrivateStartResult.LeaseLost)
+                await StopAsync(operation, start == NotificationPrivateStartResult.CancellationRequested ? "Canceled" : "Failed",
+                    start == NotificationPrivateStartResult.CancellationRequested ? "PRIVATE_PERMISSION_OR_CANCEL" : "PRIVATE_INPUT_EXPIRED", cancellationToken);
+            return true;
+        }
         try
         {
             var result = await agent.ApplyAsync(new() { ChannelId = operation.ChannelId, OperationId = operation.Id, ExpectedRevision = operation.RegistryRevision,
                 Action = operation.Action, ActorSubject = operation.ActorSubject, PrivateJson = input }, cancellationToken);
-            await repository.FinishAsync(operation, result.BindingCurrent ? "Succeeded" : "Superseded", result.BindingCurrent ? "PRIVATE_APPLIED" : "PRIVATE_SUPERSEDED", result, cancellationToken);
-            await inputs.DeleteAsync(operation.ActorSubject, operation.Id, cancellationToken);
+            if (await repository.FinishAsync(operation, result.BindingCurrent ? "Succeeded" : "Superseded", result.BindingCurrent ? "PRIVATE_APPLIED" : "PRIVATE_SUPERSEDED", result, cancellationToken))
+                await inputs.DeleteAsync(operation.ActorSubject, operation.Id, cancellationToken);
         }
         catch (NotificationPrivateRejectedException)
-        { await repository.FinishAsync(operation, "Failed", "PRIVATE_REJECTED", null, cancellationToken); await inputs.DeleteAsync(operation.ActorSubject, operation.Id, cancellationToken); }
+        { await StopAsync(operation, "Failed", "PRIVATE_REJECTED", cancellationToken); }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         { await repository.DeferAsync(operation, "PRIVATE_AWAITING_RECEIPT", cancellationToken); }
         return true;
+    }
+    private async Task StopAsync(NotificationPrivateOperation operation, string notStartedState, string code, CancellationToken cancellationToken)
+    {
+        var state = operation.RootStartedAtUtc is null ? notStartedState : "Unknown";
+        if (await repository.FinishAsync(operation, state, code, null, cancellationToken) && state != "Unknown")
+            await inputs.DeleteAsync(operation.ActorSubject, operation.Id, cancellationToken);
     }
 }

@@ -1,5 +1,7 @@
 namespace WhaleDeck.Application.Models;
 
+public enum NotificationPrivateStartResult { LeaseLost, CancellationRequested, InputExpired, Started }
+
 public sealed record NotificationPrivatePlanCommand(long ExpectedChannelVersion, string Action, string? InputTicket = null);
 public sealed record NotificationPrivateSubmitCommand(string PlanHash, string? InputTicket = null, bool Confirmed = false);
 public sealed record NotificationPrivatePlanClaims(string Actor, Guid ChannelId, long ChannelVersion, string Provider, string Action,

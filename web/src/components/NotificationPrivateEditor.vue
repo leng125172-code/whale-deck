@@ -318,6 +318,13 @@ onUnmounted(reset)
         :closable="false"
       />
       <el-alert
+        v-if="status?.resultCode === 'PRIVATE_UNKNOWN_ACKNOWLEDGED'"
+        title="已接受未知结果，发送仍被阻断"
+        description="仅释放原任务锁，不代表未写入或已回滚。请重新准备配置计划并成功对账，再测试和启用渠道。"
+        type="warning"
+        :closable="false"
+      />
+      <el-alert
         v-if="status?.state === 'Unknown'"
         title="宿主结果未知，不要盲目重复创建"
         type="warning"

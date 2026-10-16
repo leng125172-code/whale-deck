@@ -64,25 +64,28 @@ public sealed class NotificationPrivateRepository(PlatformDbContext db) : INotif
             return ids.Length == 0 ? null : await db.NotificationPrivateOperations.AsNoTracking().SingleAsync(item => item.Id == ids[0], cancellationToken);
         }, cancellationToken);
     }
-    public Task<bool> StartedAsync(NotificationPrivateOperation operation, DateTimeOffset now, CancellationToken cancellationToken) => Transaction(async () =>
+    public Task<NotificationPrivateStartResult> StartedAsync(NotificationPrivateOperation operation, DateTimeOffset now, CancellationToken cancellationToken) => Transaction(async () =>
     {
-        var current = await Lock(operation, cancellationToken); if (current is null || current.LeaseExpiresAtUtc <= now) return false;
+        var current = await Lock(operation, cancellationToken); if (current is null) return NotificationPrivateStartResult.LeaseLost;
+        var job = await db.OperationJobs.FromSqlInterpolated($"SELECT * FROM operation_jobs WHERE id={current.Id} FOR UPDATE").SingleAsync(cancellationToken);
         var channel = await LockChannel(current.ChannelId, cancellationToken);
+        now = DateTimeOffset.UtcNow;
+        if (current.LeaseExpiresAtUtc is null || current.LeaseExpiresAtUtc <= now) return NotificationPrivateStartResult.LeaseLost;
+        if (job.CancelRequestedAtUtc is not null) return NotificationPrivateStartResult.CancellationRequested;
+        if (current.InputExpiresAtUtc <= now) return NotificationPrivateStartResult.InputExpired;
         if (channel.Version != current.ChannelVersion || channel.IsEnabled) throw new InvalidOperationException("The private channel lock changed.");
         await db.NotificationPrivateOperations.Where(item => item.Id == current.Id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.State, "Running")
             .SetProperty(item => item.RootStartedAtUtc, item => item.RootStartedAtUtc ?? now).SetProperty(item => item.Version, item => item.Version + 1), cancellationToken);
-        var job = await db.OperationJobs.SingleAsync(item => item.Id == current.Id, cancellationToken);
         job.State = "Running"; job.Phase = "ApplyingPrivateConfiguration"; job.StartedAtUtc ??= now; job.Version++;
-        await db.SaveChangesAsync(cancellationToken); return true;
+        await db.SaveChangesAsync(cancellationToken); return NotificationPrivateStartResult.Started;
     }, cancellationToken);
 
     public Task<bool> CancellationRequestedAsync(Guid id, CancellationToken cancellationToken) => db.OperationJobs.AsNoTracking().AnyAsync(item => item.Id == id && item.CancelRequestedAtUtc != null, cancellationToken);
     public Task<NotificationPrivateOperation?> LatestAsync(Guid channelId, CancellationToken cancellationToken) => db.NotificationPrivateOperations.AsNoTracking()
         .Where(item => item.ChannelId == channelId).OrderByDescending(item => item.CreatedAtUtc).ThenByDescending(item => item.Id).FirstOrDefaultAsync(cancellationToken);
-    public Task AcknowledgeAsync(NotificationContext context, Guid channelId, Guid operationId, long expectedVersion, CancellationToken cancellationToken) => Transaction(async () =>
+    public async Task<bool> ReplayAcknowledgmentAsync(NotificationContext context, Guid channelId, Guid operationId, long expectedVersion, CancellationToken cancellationToken)
     {
-        var receiptId = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes("notification-private-ack:" + context.Subject + ":" + Guid.Parse(context.IdempotencyKey!).ToString("D"))).AsSpan(0, 16));
-        var requestHash = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { channelId, operationId, expectedVersion })));
+        var (receiptId, requestHash) = AcknowledgmentIdentity(context, channelId, operationId, expectedVersion);
         var existing = await db.AuditEvents.AsNoTracking().SingleOrDefaultAsync(item => item.Id == receiptId, cancellationToken);
         if (existing is not null)
         {
@@ -91,6 +94,12 @@ public sealed class NotificationPrivateRepository(PlatformDbContext db) : INotif
                 throw new InvalidOperationException("The acknowledgment key was reused for another request.");
             return true;
         }
+        return false;
+    }
+    public Task AcknowledgeAsync(NotificationContext context, Guid channelId, Guid operationId, long expectedVersion, CancellationToken cancellationToken) => Transaction(async () =>
+    {
+        if (await ReplayAcknowledgmentAsync(context, channelId, operationId, expectedVersion, cancellationToken)) return true;
+        var (receiptId, requestHash) = AcknowledgmentIdentity(context, channelId, operationId, expectedVersion);
         var current = await db.NotificationPrivateOperations.FromSqlInterpolated($"SELECT * FROM notification_private_operations WHERE id={operationId} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException("Private operation not found.");
         var now = DateTimeOffset.UtcNow;
@@ -101,12 +110,14 @@ public sealed class NotificationPrivateRepository(PlatformDbContext db) : INotif
             .SetProperty(item => item.ResultCode, "PRIVATE_UNKNOWN_ACKNOWLEDGED").SetProperty(item => item.CompletedAtUtc, now)
             .SetProperty(item => item.LeaseToken, (Guid?)null).SetProperty(item => item.LeaseExpiresAtUtc, (DateTimeOffset?)null).SetProperty(item => item.Version, item => item.Version + 1), cancellationToken);
         job.State = "Failed"; job.Phase = "UnknownOutcomeAcknowledged"; job.ErrorCode = "PRIVATE_RESULT_UNKNOWN"; job.CompletedAtUtc = now; job.Version++;
+        var sequence = (await db.OperationJobEvents.Where(item => item.JobId == job.Id).MaxAsync(item => (long?)item.Sequence, cancellationToken) ?? 0) + 1;
+        db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = "PRIVATE_UNKNOWN_ACKNOWLEDGED" });
         db.AuditEvents.Add(new() { Id = receiptId, ActorSubject = context.Subject, Action = "notification.private.unknown-acknowledged", TargetType = "notification-channel", TargetId = channelId.ToString("D"),
             JobId = job.Id, TraceId = context.TraceId, SourceIp = context.SourceIp, Result = "Acknowledged", DetailJson = JsonSerializer.Serialize(new { requestHash }) });
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('NotificationPrivateRequested','NotificationPrivateCancellationRequested') AND payload_json->>'jobId'={current.Id.ToString("D")}", cancellationToken);
         await db.SaveChangesAsync(cancellationToken); return true;
     }, cancellationToken);
-    public Task FinishAsync(NotificationPrivateOperation operation, string state, string code, NotificationPrivateMetadata? receipt, CancellationToken cancellationToken) => Transaction(async () =>
+    public Task<bool> FinishAsync(NotificationPrivateOperation operation, string state, string code, NotificationPrivateMetadata? receipt, CancellationToken cancellationToken) => Transaction(async () =>
     {
         if (state is not ("Succeeded" or "Superseded" or "Unknown" or "Failed" or "Canceled")) throw new ArgumentException("Invalid private result state.");
         var current = await Lock(operation, cancellationToken); if (current is null) return false;
@@ -150,9 +161,12 @@ public sealed class NotificationPrivateRepository(PlatformDbContext db) : INotif
     private async Task<NotificationPrivateOperation?> Lock(NotificationPrivateOperation item, CancellationToken cancellationToken)
     {
         var current = await db.NotificationPrivateOperations.FromSqlInterpolated($"SELECT * FROM notification_private_operations WHERE id={item.Id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken);
-        return current?.LeaseToken == item.LeaseToken && current?.CompletedAtUtc is null ? current : null;
+        return item.LeaseToken is not null && current?.LeaseToken == item.LeaseToken && current?.CompletedAtUtc is null ? current : null;
     }
     private Task<NotificationChannel> LockChannel(Guid id, CancellationToken cancellationToken) => db.NotificationChannels.FromSqlInterpolated($"SELECT * FROM notification_channels WHERE id={id} FOR UPDATE").AsNoTracking().SingleAsync(cancellationToken);
+    private static (Guid ReceiptId, string RequestHash) AcknowledgmentIdentity(NotificationContext context, Guid channelId, Guid operationId, long expectedVersion) =>
+        (new Guid(SHA256.HashData(Encoding.UTF8.GetBytes("notification-private-ack:" + context.Subject + ":" + Guid.Parse(context.IdempotencyKey!).ToString("D"))).AsSpan(0, 16)),
+            Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { channelId, operationId, expectedVersion }))));
     private void Audit(string actor, string action, Guid job, Guid channel, string? trace, string? source, string state) => db.AuditEvents.Add(new() { ActorSubject = actor,
         Action = action, TargetType = "notification-channel", TargetId = channel.ToString("D"), JobId = job, TraceId = trace ?? job.ToString("D"), SourceIp = source, Result = state, DetailJson = "{}" });
     private static JobDto Map(OperationJob job) => new(job.Id, job.JobType, job.State, job.Phase, job.ProgressPercent, job.ErrorCode, job.CreatedAtUtc, job.CompletedAtUtc, null);

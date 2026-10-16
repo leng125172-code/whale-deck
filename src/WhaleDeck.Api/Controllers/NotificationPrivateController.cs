@@ -24,7 +24,7 @@ public sealed class NotificationPrivateController(NotificationPrivateWorkflow wo
     public async Task<ActionResult<JobDto>> Submit(Guid id, NotificationPrivateSubmitCommand command, CancellationToken cancellationToken) => Accepted(await workflow.SubmitAsync(await Context(cancellationToken), id, command, cancellationToken));
     [HttpGet("status")]
     public async Task<ActionResult<NotificationPrivateStatusDto?>> Status(Guid id, CancellationToken cancellationToken) => Ok(await workflow.StatusAsync(await Context(cancellationToken), id, cancellationToken));
-    /// <summary>Accept an unknown outcome without enabling sending. Requires an expired operation lease and a fresh root receipt check; reconfiguration remains required.</summary>
+    /// <summary>Accept an unknown outcome without enabling sending. New acknowledgments require an expired lease and a fresh root receipt check; exact accepted requests replay from durable audit without Agent access. Reconfiguration remains required.</summary>
     [HttpPost("acknowledge-unknown")]
     public async Task<IActionResult> Acknowledge(Guid id, AcknowledgeNotificationPrivateCommand command, CancellationToken cancellationToken)
     { await workflow.AcknowledgeAsync(await Context(cancellationToken), id, command, cancellationToken); return NoContent(); }

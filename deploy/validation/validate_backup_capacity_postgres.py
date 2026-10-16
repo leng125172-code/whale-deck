@@ -115,7 +115,7 @@ def run_native(suite, report):
                 # Only stable exception/code tokens; never connection strings or native SQL values.
                 error_types = sorted(set(re.findall(r'\b(?:[A-Za-z]+\.)*(?:PostgresException|InvalidOperationException|EqualException|TrueException|SingleException|NotNullException|NullException|InRangeException)\b', output)))
                 sql_states = sorted(set(re.findall(r'\b([0-9A-Z]{5}):\s', output)))
-                source_lines = re.findall(r'NativeNotification(?:Inbox|Dispatch|Snapshot)Tests.cs:line ([0-9]+)', output)
+                source_lines = re.findall(r'NativeNotification(?:Inbox|Dispatch|Snapshot)Tests(?:\.[A-Za-z0-9_-]{1,80})?\.cs:line ([0-9]+)', output)
                 raise RuntimeError('Isolated native ' + suite + ' test failed: ' + ('\n'.join(diagnostics) if diagnostics else
                     'native failure types=' + ','.join(error_types) + ' SQLSTATE=' + ','.join(sql_states) +
                     ' inboxSourceLines=' + ','.join(source_lines[:8]) + '; private output withheld'))

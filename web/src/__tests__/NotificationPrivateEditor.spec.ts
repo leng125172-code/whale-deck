@@ -51,6 +51,27 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 describe('Private editor ownership and late replies', () => {
+  it('shows accepted uncertainty as blocked, never as a completed rollback', async () => {
+    request.mockImplementation(async (path) => {
+      if (path.endsWith('/status'))
+        return {
+          jobId: 'fixture-job',
+          state: 'Failed',
+          resultCode: 'PRIVATE_UNKNOWN_ACKNOWLEDGED',
+          version: 8,
+          canAcknowledgeUnknown: false,
+        }
+      if (path.startsWith('jobs/'))
+        return { id: 'fixture-job', state: 'Failed', phase: 'UnknownOutcomeAcknowledged' }
+      return { channelVersion: 9, hasTarget: true, hasCredential: true, revision: 'opaque' }
+    })
+    const wrapper = create()
+    await flushPromises()
+    expect(wrapper.text()).toContain('已接受未知结果，发送仍被阻断')
+    expect(wrapper.text()).toContain('不代表未写入或已回滚')
+    expect(wrapper.text()).not.toContain('配置任务已完成，渠道仍保持停用')
+    expect(wrapper.findAll('button').some((button) => button.text() === '确认未知结果')).toBe(false)
+  })
   async function prepareFixture(expiresAtUtc: string) {
     request.mockImplementation(async (path) => {
       if (path.endsWith('/status')) return null

@@ -31,6 +31,7 @@ async function fixture(
   let hasTarget = true
   let denied = false
   let ackAttempts = 0
+  let acknowledged = false
   await page.addInitScript(() => sessionStorage.setItem('whaledeck-preview-authenticated', 'true'))
   await page.route('**/api/v1/**', (route) => {
     const request = route.request()
@@ -47,23 +48,31 @@ async function fixture(
       if (options.forbidden && denied)
         return route.fulfill({ status: 403, json: { title: 'Permission denied' } })
       return route.fulfill({
-        json: options.unknown
+        json: acknowledged
           ? {
               jobId,
-              state: 'Unknown',
-              version: 4,
-              resultCode: 'Unknown',
-              canAcknowledgeUnknown: ackAttempts === 0,
+              state: 'Failed',
+              version: 5,
+              resultCode: 'PRIVATE_UNKNOWN_ACKNOWLEDGED',
+              canAcknowledgeUnknown: false,
             }
-          : submitted
+          : options.unknown
             ? {
                 jobId,
-                state: complete ? 'Succeeded' : 'Running',
-                version: 3,
-                resultCode: null,
-                canAcknowledgeUnknown: false,
+                state: 'Unknown',
+                version: 4,
+                resultCode: 'Unknown',
+                canAcknowledgeUnknown: ackAttempts === 0,
               }
-            : null,
+            : submitted
+              ? {
+                  jobId,
+                  state: complete ? 'Succeeded' : 'Running',
+                  version: 3,
+                  resultCode: null,
+                  canAcknowledgeUnknown: false,
+                }
+              : null,
       })
     }
     if (path === privatePath && request.method() === 'GET')
@@ -91,16 +100,27 @@ async function fixture(
     if (path === privatePath + '/acknowledge-unknown') {
       if (++ackAttempts === 1) return route.abort('failed')
       options.unknown = false
+      acknowledged = true
       return route.fulfill({ status: 204 })
     }
     if (path === `jobs/${jobId}`)
       return route.fulfill({
-        json: { id: jobId, state: complete ? 'Succeeded' : 'Running', phase: 'AwaitingReceipt' },
+        json: {
+          id: jobId,
+          state: acknowledged ? 'Failed' : complete ? 'Succeeded' : 'Running',
+          phase: acknowledged ? 'UnknownOutcomeAcknowledged' : 'AwaitingReceipt',
+        },
       })
     if (path === 'notifications/manage/channels')
       return route.fulfill({
         json: {
-          items: [{ ...channel, provider: options.provider || channel.provider }],
+          items: [
+            {
+              ...channel,
+              privateConfigurationBlocked: acknowledged || channel.privateConfigurationBlocked,
+              provider: options.provider || channel.provider,
+            },
+          ],
           hasMore: false,
           page: 1,
           take: 25,
@@ -246,25 +266,41 @@ test('email uses a structured SMTP form and clears replacement input after stagi
   await expect(dialog.getByLabel('SMTP 密码')).toHaveCount(0)
 })
 
-test('unknown acknowledgement retries the frozen original after eligibility changes', async ({
-  page,
-}) => {
-  const { dialog, writes } = await fixture(page, { unknown: true })
-  await expect(dialog.getByText('宿主结果未知，不要盲目重复创建', { exact: true })).toBeVisible()
-  await dialog.getByRole('button', { name: '确认未知结果', exact: true }).click()
-  await page.getByRole('button', { name: '接受未知结果', exact: true }).click()
-  await expect(dialog.getByRole('button', { name: '重试原确认请求' })).toBeVisible()
-  await dialog.getByRole('button', { name: '核对状态' }).click()
-  await dialog.getByRole('button', { name: '重试原确认请求' }).click()
-  await page.getByRole('button', { name: '接受未知结果', exact: true }).click()
-  await expect(dialog.getByRole('button', { name: '重试原确认请求' })).toHaveCount(0)
-  const acks = writes.filter((write) => write.path.endsWith('/acknowledge-unknown'))
-  expect(acks).toHaveLength(2)
-  expect(acks[0]).toEqual(acks[1])
-  expect(JSON.parse(acks[0]!.body)).toEqual({
-    operationId: jobId,
-    expectedVersion: 4,
-    confirmed: true,
-    acceptUnknownOutcome: true,
-  })
-})
+for (const width of [320, 1440])
+  for (const colorScheme of ['light', 'dark'] as const)
+    test(`${width}px ${colorScheme}: unknown acknowledgement retries the frozen original after eligibility changes`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.emulateMedia({ colorScheme })
+      const { dialog, writes } = await fixture(page, { unknown: true })
+      await expect(
+        dialog.getByText('宿主结果未知，不要盲目重复创建', { exact: true }),
+      ).toBeVisible()
+      await dialog.getByRole('button', { name: '确认未知结果', exact: true }).click()
+      await page.getByRole('button', { name: '接受未知结果', exact: true }).click()
+      await expect(dialog.getByRole('button', { name: '重试原确认请求' })).toBeVisible()
+      await dialog.getByRole('button', { name: '核对状态' }).click()
+      await dialog.getByRole('button', { name: '重试原确认请求' }).click()
+      await page.getByRole('button', { name: '接受未知结果', exact: true }).click()
+      await expect(dialog.getByRole('button', { name: '重试原确认请求' })).toHaveCount(0)
+      await expect(dialog.getByText('已接受未知结果，发送仍被阻断', { exact: true })).toBeVisible()
+      await expect(dialog.getByRole('button', { name: '准备配置计划' })).toBeEnabled()
+      await expect(page.getByRole('button', { name: '测试', exact: true })).toBeDisabled()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      )
+      await page.screenshot({
+        path: `test-results/private-ack-${width}-${colorScheme}.png`,
+        scale: 'css',
+      })
+      const acks = writes.filter((write) => write.path.endsWith('/acknowledge-unknown'))
+      expect(acks).toHaveLength(2)
+      expect(acks[0]).toEqual(acks[1])
+      expect(JSON.parse(acks[0]!.body)).toEqual({
+        operationId: jobId,
+        expectedVersion: 4,
+        confirmed: true,
+        acceptUnknownOutcome: true,
+      })
+    })
