@@ -28,16 +28,18 @@ case "$action" in
     [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ ]] || exit 2
     exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
       --unit="whaledeck-terminal-$2" \
-      --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=User=whaledeck-shell --property=Group=whaledeck-shell --property=UMask=0077 \
       --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
       --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=yes \
       --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
       --property=RuntimeMaxSec=660 --property=TimeoutStopSec=5 --property=KillMode=control-group \
       --property=Restart=no --property=TasksMax=64 --property=MemoryMax=256M --property=CPUQuota=50% --property=LimitCORE=0 \
       --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
-      --property="CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_KILL" \
+      --property=CapabilityBoundingSet= \
+      --property="ExecStartPre=!/usr/bin/python3 -I /usr/local/libexec/whaledeck-host-terminal.py reserve $2" \
+      --property="ExecStopPost=!/usr/bin/python3 -I /usr/local/libexec/whaledeck-host-terminal.py finish $2" \
       --property="ReadWritePaths=/var/lib/whaledeck-terminal /var/lib/whaledeck-shell" \
-      /usr/bin/python3 -I /usr/local/libexec/whaledeck-host-terminal.py "$2"
+      /usr/bin/python3 -I /usr/local/libexec/whaledeck-host-terminal.py run "$2"
     ;;
   host-terminal-stop)
     [[ $# -eq 3 && "$2" =~ ^[a-f0-9]{32}$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2

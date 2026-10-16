@@ -20,6 +20,7 @@ import stat
 import struct
 import sys
 import termios
+import tempfile
 import time
 
 STATE = Path('/var/lib/whaledeck-terminal')
@@ -92,6 +93,7 @@ def reserve(session):
     try:
         fcntl.flock(lock, fcntl.LOCK_EX)
         count = active = 0
+        boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
         for path in STATE.iterdir():
             if not re.fullmatch(r'[a-f0-9]{32}\.json', path.name):
                 continue
@@ -99,7 +101,10 @@ def reserve(session):
             if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_size > 4096:
                 raise PermissionError('STATE_UNSAFE')
             row = json.loads(path.read_bytes())
-            alive = row.get('bootId') == Path('/proc/sys/kernel/random/boot_id').read_text().strip() and row.get('start') is not None and process_start(row.get('pid', 0)) == row['start']
+            if row.get('version') == 2:
+                alive = row.get('bootId') == boot_id and row.get('active') is True and 0 <= time.monotonic() - row['monotonic'] < 670
+            else:
+                alive = row.get('bootId') == boot_id and row.get('start') is not None and process_start(row.get('pid', 0)) == row['start']
             if not alive and time.time() - metadata.st_mtime > 86400:
                 path.unlink()
                 continue
@@ -109,10 +114,47 @@ def reserve(session):
                 raise ValueError('SESSION_BUDGET')
         fd = os.open(STATE / (session + '.json'), os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'w') as record:
-            json.dump({'sessionId': session, 'pid': os.getpid(), 'start': process_start(os.getpid()), 'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(), 'createdAt': int(time.time())}, record)
+            json.dump({'version': 2, 'sessionId': session, 'invocationId': invocation(), 'active': True, 'monotonic': time.monotonic(), 'bootId': boot_id, 'createdAt': int(time.time())}, record)
             record.flush()
             os.fsync(record.fileno())
+        sync_directory()
     finally:
+        os.close(lock)
+
+
+def sync_directory():
+    directory = os.open(STATE, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try: os.fsync(directory)
+    finally: os.close(directory)
+
+
+def invocation():
+    value = os.environ.get('INVOCATION_ID', '')
+    if not re.fullmatch(r'[a-f0-9]{32}', value): raise PermissionError('UNIT_REQUIRED')
+    return value
+
+
+def finish(session):
+    lock = os.open(STATE / 'lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    temporary = None
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        path = STATE / (session + '.json')
+        if not path.exists(): return
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_size > 4096: raise PermissionError('STATE_UNSAFE')
+        row = json.loads(path.read_bytes())
+        # A rejected duplicate's stop hook cannot close the original record.
+        if row.get('invocationId') != invocation(): return
+        row['active'] = False
+        row['closedAt'] = int(time.time())
+        fd, temporary = tempfile.mkstemp(prefix=session + '.', suffix='.tmp', dir=STATE)
+        with os.fdopen(fd, 'w') as record:
+            json.dump(row, record); record.flush(); os.fsync(record.fileno())
+        os.replace(temporary, path); temporary = None
+        sync_directory()
+    finally:
+        if temporary is not None: os.unlink(temporary)
         os.close(lock)
 
 
@@ -140,15 +182,12 @@ def approved_host():
 
 
 def run(session):
-    if os.geteuid() != 0 or not re.fullmatch(r'[a-f0-9]{32}', session):
-        raise PermissionError('TERMINAL_DENIED')
     # Require systemd ownership; running the raw driver outside the unit would
     # lose the cgroup cleanup guarantee for children that create a new session.
-    if os.environ.get('INVOCATION_ID') is None:
-        raise PermissionError('UNIT_REQUIRED')
-    approved_host()
+    invocation()
     user = identity()
-    reserve(session)
+    if os.geteuid() != user.pw_uid or os.getuid() != user.pw_uid or os.getgid() != user.pw_gid or not set(os.getgroups()) <= {user.pw_gid}:
+        raise PermissionError('IDENTITY_UNSAFE')
     os.set_blocking(0, False)
     os.set_blocking(1, False)
     started = last_input = time.monotonic()
@@ -212,7 +251,8 @@ def run(session):
                             child, master = os.forkpty()
                             if child == 0:
                                 try:
-                                    os.setgroups([]); os.setgid(user.pw_gid); os.setuid(user.pw_uid)
+                                    # PID 1 already created this whole process
+                                    # tree as the fixed unprivileged identity.
                                     os.umask(0o077); os.chdir(HOME)
                                     os.closerange(3, 1048576)
                                     os.execve('/bin/bash', ['bash', '--noprofile', '--norc', '-i'], {
@@ -259,9 +299,15 @@ def run(session):
 
 if __name__ == '__main__':
     try:
-        if len(sys.argv) != 2: raise ValueError('TERMINAL_INVALID')
-        run(sys.argv[1])
-    except (OSError, ValueError, KeyError, TimeoutError, binascii.Error):
+        if len(sys.argv) != 3 or not re.fullmatch(r'[a-f0-9]{32}', sys.argv[2]): raise ValueError('TERMINAL_INVALID')
+        action, session = sys.argv[1:]
+        if action == 'run': run(session)
+        elif action in ('reserve', 'finish') and os.geteuid() == 0:
+            invocation()
+            if action == 'reserve': approved_host(); identity(); reserve(session)
+            else: finish(session)
+        else: raise PermissionError('TERMINAL_DENIED')
+    except (OSError, ValueError, KeyError, TypeError, RecursionError, TimeoutError, binascii.Error):
         try: emit({'type': 'error', 'code': 'TERMINAL_REJECTED'})
         except (OSError, TimeoutError): pass
         raise SystemExit(2)

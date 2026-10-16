@@ -117,6 +117,7 @@ internal static partial class TerminalProbe
                 }
             }
             Check(!File.ReadAllText("/var/lib/whaledeck-terminal/" + id + ".json").Contains(transcriptMarker, StringComparison.Ordinal));
+            Check(!RecordActive(id), "record-not-closed");
             Phase = "capability-and-uuid-replay";
             await Denied(Guid.NewGuid().ToString("N"), Headers(capability), StatusCode.PermissionDenied);
             await Denied(id, Headers(), StatusCode.FailedPrecondition);
@@ -153,8 +154,9 @@ internal static partial class TerminalProbe
                     Check(kill.ExitCode == 0);
                 }
                 call.Dispose();
-                for (var attempt = 0; attempt < 50 && ProcessStart(pid) == instance; attempt++) await Task.Delay(100);
-                Check(ProcessStart(pid) != instance);
+                for (var attempt = 0; attempt < 100 && (ProcessStart(pid) == instance || RecordActive(session)); attempt++) await Task.Delay(100);
+                Check(ProcessStart(pid) != instance, "descendant-remained");
+                Check(!RecordActive(session), "record-not-closed");
             }
         }
         finally { CryptographicOperations.ZeroMemory(key); }
@@ -177,6 +179,12 @@ internal static partial class TerminalProbe
         catch (IOException) { return null; }
     }
     private static void Check(bool valid, string code = "assertion") { if (!valid) { FailureCode = code; throw new InvalidOperationException("Terminal acceptance failed"); } }
+    private static bool RecordActive(string session)
+    {
+        using var record = JsonDocument.Parse(File.ReadAllText("/var/lib/whaledeck-terminal/" + session + ".json"));
+        Check(record.RootElement.GetProperty("version").GetInt32() == 2, "record-version-invalid");
+        return record.RootElement.GetProperty("active").GetBoolean();
+    }
     [GeneratedRegex("WD_CHILD=([0-9]{1,10})")]
     private static partial Regex Child();
 }
