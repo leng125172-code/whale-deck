@@ -32,3 +32,12 @@
 继续同源码CI/冻结PG含双连接争用及晚获得Job锁后的租约检查，再覆盖部署、真实OIDC/BFF/Worker/UDS与普通/管理员网页验收。最后签收运行时仍3f47300/Agent1.22；本轮不能据本地UI给整个P1-11/P2-03签完。
 
 最后复核修复一个实际边界：两个合法4029字节的Emoji相对路径，经JSON转义/Base64后超过旧32KiB票据上限；新计划的Verify上限有界为64KiB，长路径完整签发/验证与超过边界拒绝测试通过。本地现为757 Unit/115 Integration，6原生本机跳过。SQL补测还要求从pg_stat_activity实际观察到等待Job行锁，不能仅凭线程调度延迟假称复现租约竞争。真实BFF审计检查按实际AuditEventDto不含DetailJson的契约执行，存储脱敏由原生SQL检查，去掉了用空默认值验证未返回字段的无效断言。
+
+## 最终源码签收：3e2da89（尚未覆盖运行时）
+
+- 源码`3e2da891917a588ef99c57cd6d520599a4752730`，[CI38954590064](https://github.com/leng125172-code/whale-deck/actions/runs/38954590064) installer/backend/frontend/native-postgres四作业全部成功。新UI门禁已加入原授权/宿主容器终端/文件回归命令，不只跑旧页面。前一96afbc8的CI38953798095也四作业成功，保留历史，不用前一提交替代最终源码证据。
+- 最终同源码工作站冻结PG报告`dispatch-38b5023336054f81ba64fda790a61f59.json`，2026-10-16 19:25:16–19:26:56 UTC，executedTests=passedTests=1，cleanupConfirmed=true。新双连接共享源争用及实际Job行锁等待后的租约过期均真正执行通过；其SQL/Application Agent传输stub仍不算安装态BFF。第一次拉取96afbc8遇TLS握手失败，未启动验收；之后固定HTTP/1.1单次重试拉取最终源码成功，没有关闭TLS验证或重启未知活跃进程。
+- 本地757 Unit/115 Integration、Release零警告/零错误，Windows6原生跳过；前端200单元、24文件浏览器、类型/lint/格式/生产构建通过。真实Linux61项已在相同未变的root引擎源码上通过。独立生产构建交互浏览器、上下文和预览服务已关闭，未创建真实用户/文件或外部通知；冻结数据库/测试SDK容器清理已确认。
+- 最后检查11核心healthy、Agent/维护服务active、user原开发sudo保留；没有调度新覆盖更新，最后实机签收仍3f47300/协议1.22。1.23新探针、实际OIDC/BFF/Worker/UDS脚本与真实网页普通/管理员验收是明确下一步；不会把准备好脚本或本地fixture当作已发布功能。
+
+其后继续目录树/搜索/编辑前HDD备份（覆盖上传同策略）/回收站/归档、容器文件、租户隔离与长期清理。P1-11/P2-03/P2-04及完整76项继续，不改变完成口径。

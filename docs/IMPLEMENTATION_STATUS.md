@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-17 最终源码**3e2da89**（未覆盖运行时）：文件变更BFF/任务/Worker/人类审计/API/WebUI全部接通本次子范围，757 Unit/115 Integration、200前端单元/24文件浏览器及Release/类型/lint/格式/生产构建通过；CI38954590064四作业全成功。同源码冻结PG实际执行1通过并清理，含跨工作流锁、双连接共享源争用、实际Job锁等待后过期、HMAC/JSONB、取消/Unknown和审计事务失败；相同root引擎61 Linux通过。独立生产构建浏览器目测及手机/主题交互通过，验证预览/浏览器已清理。11核心healthy且宿主服务正常，实际runtime仍3f47300/Agent1.22。下一步覆盖部署及真实OIDC/BFF/Worker/UDS/网页验收，见[最终源码记录](qa/FILE_MUTATION_WORKFLOW.md#最终源码签收3e2da89尚未覆盖运行时)。不签完整文件/终端或76项。
+
 - 2026-10-17 文件变更BFF/SQL/Worker/API与WebUI已继续实现，当前处于最终原生验证/待覆盖签收：永久HMAC意图、共享上传/源/目标锁、Job/Outbox/人类审计、1.23取消tombstone、旧请求冻结恢复和Unknown显式处置；页面新增目录及文件行更多→复制/移动/权限，路由任务ID支持刷新。后端77e73ac已通过756 Unit/115 Integration、四作业CI38950535172和同源码真实PG/清理，Linux61项通过；新UI200单元/24文件浏览器、类型/lint/格式/生产构建及独立目测通过，正在补双连接争用/真实锁等待后租约验证和新UI CI。真实工作站运行时仍3f47300/Agent1.22；新Probe/BFF验证脚本准备不算已执行。详见[工作流账本](qa/FILE_MUTATION_WORKFLOW.md)。完整76项继续，不把源码实现当作部署或完整文件管理。
 
 - 2026-10-17 runtime **`3f47300`** 文件变更Agent基础已覆盖部署：1.22独立Plan/Apply/Inspect强类型RPC、固定helper/安全模块加载、仅旧默认注册表升级/保留自定义、与上传共用namespace提交锁。733 Unit/115 Integration、57真实Linux、Release及CI38935700816四作业全绿；同源码冻结PG实际1通过/清理。实际更新unit01:04:26 CST成功终态；同源码原生UDS探针通过实际已安装helper/sandbox的目录/复制/移动/权限、能力/重放/保护/旧版本/owner、原文件保留与历史不重做。原33MiB上传下载/7秒停顿、身份/权限、宿主与容器终端、通知/8资产、安装态验证与11核心healthy通过，临时账号/文件/活跃传输0，PKCS10.0.13及sudo保留。详见 [文件变更Agent签收](FILE_MUTATIONS.md#最终安装态agent子范围3f473002026-10-17)。新变更BFF/SQL/Worker/人类审计/UI尚未实现；目录树/编辑HDD备份/回收站/归档、容器文件/隔离/清理与全部76项继续，不签完整文件管理。
