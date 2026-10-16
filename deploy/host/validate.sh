@@ -34,6 +34,7 @@ assert_metadata /etc/whaledeck/resources.json '640:root:whaledeck'
 assert_metadata /etc/whaledeck/agent.env '640:root:whaledeck'
 assert_metadata /usr/local/libexec/whaledeck-privileged '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-files.py '750:root:root'
+assert_metadata /usr/local/libexec/whaledeck-file-operations.py '750:root:root'
 assert_metadata /var/lib/whaledeck-files '700:root:root'
 [[ ! -L /etc/whaledeck/file-roots.json && $(stat -c %u /etc/whaledeck/file-roots.json) == 0 ]]
 [[ $(stat -c %a /etc/whaledeck/file-roots.json) =~ ^(600|640|644)$ ]]

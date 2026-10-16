@@ -12,6 +12,7 @@ import errno
 import fcntl
 import hashlib
 import heapq
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -156,6 +157,23 @@ def trusted_directory(path):
         os.close(descriptor)
         raise Rejected('FILES_PRIVATE_DIRECTORY_UNSAFE')
     return descriptor
+
+
+@contextlib.contextmanager
+def namespace_lock():
+    """One nonblocking commit gate shared by uploads and file mutations."""
+    state = trusted_directory(STATE); lock = None
+    try:
+        lock = os.open('namespace.lock', os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=state)
+        value = os.fstat(lock)
+        if not stat.S_ISREG(value.st_mode) or value.st_uid != 0 or value.st_nlink != 1 or value.st_mode & 0o077:
+            raise Rejected('FILES_RECEIPT_UNSAFE')
+        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError: raise Rejected('FILES_OPERATION_BUSY') from None
+        yield
+    finally:
+        if lock is not None: os.close(lock)
+        os.close(state)
 
 
 def roots():
@@ -480,26 +498,27 @@ def upload(request, source, staged_only=False):
                     os.fsync(private)
                     record['state'] = 'Staged'; save_receipt(state, operation, record)
                     return {**public_receipt(record), 'replayed': False, 'bindingCurrent': False}
-                latest = current(parent, leaf)
-                if (version(latest) if latest else 'ABSENT') != request['expectedVersion']:
-                    raise Rejected('FILES_VERSION_CONFLICT')
-                record['state'] = 'Applying'; save_receipt(state, operation, record)
-                # NOREPLACE for creates; EXCHANGE retains the entire old object
-                # privately, instead of truncating or deleting it before commit.
-                exchange(private, temporary, parent, leaf, 1 if original is None else 2)
-                os.fsync(parent); os.fsync(private)
-                if original:
-                    displaced = current(private, temporary)
-                    if displaced is None or publication_identity(displaced) != record['originalIdentity'] or checksum(private, temporary) != record['originalSha256']:
+                with namespace_lock():
+                    latest = current(parent, leaf)
+                    if (version(latest) if latest else 'ABSENT') != request['expectedVersion']:
+                        raise Rejected('FILES_VERSION_CONFLICT')
+                    record['state'] = 'Applying'; save_receipt(state, operation, record)
+                    # NOREPLACE for creates; EXCHANGE retains the entire old object
+                    # privately, instead of truncating or deleting it before commit.
+                    exchange(private, temporary, parent, leaf, 1 if original is None else 2)
+                    os.fsync(parent); os.fsync(private)
+                    if original:
+                        displaced = current(private, temporary)
+                        if displaced is None or publication_identity(displaced) != record['originalIdentity'] or checksum(private, temporary) != record['originalSha256']:
+                            record['state'] = 'Unknown'; save_receipt(state, operation, record)
+                            raise Rejected('FILES_CONCURRENT_PUBLICATION_UNKNOWN')
+                        record['previousRetained'] = True
+                    actual = current(parent, leaf)
+                    if actual is None or actual.st_ino != record['newInode'] or actual.st_dev != record['newDevice'] or checksum(parent, leaf) != request['sha256']:
                         record['state'] = 'Unknown'; save_receipt(state, operation, record)
                         raise Rejected('FILES_CONCURRENT_PUBLICATION_UNKNOWN')
-                    record['previousRetained'] = True
-                actual = current(parent, leaf)
-                if actual is None or actual.st_ino != record['newInode'] or actual.st_dev != record['newDevice'] or checksum(parent, leaf) != request['sha256']:
-                    record['state'] = 'Unknown'; save_receipt(state, operation, record)
-                    raise Rejected('FILES_CONCURRENT_PUBLICATION_UNKNOWN')
-                record.update(state='Completed', version=version(actual)); save_receipt(state, operation, record)
-                return {**public_receipt(record), 'replayed': False, 'bindingCurrent': True}
+                    record.update(state='Completed', version=version(actual)); save_receipt(state, operation, record)
+                    return {**public_receipt(record), 'replayed': False, 'bindingCurrent': True}
             finally:
                 if descriptor is not None: os.close(descriptor)
                 if created and record and record['state'] == 'Receiving':
@@ -556,19 +575,20 @@ def staged_action(request, action):
                 if not owns_pending or pending.st_size != record['sizeBytes'] or checksum(private, temporary) != record['sha256']:
                     record['state'] = 'Unknown'; save_receipt(state, operation, record)
                     return {**public_receipt(record), 'bindingCurrent': False}
-                original = current(parent, leaf)
-                if (version(original) if original else 'ABSENT') != record['expectedVersion']:
-                    os.unlink(temporary, dir_fd=private); os.fsync(private)
-                    record['state'] = 'Aborted'; save_receipt(state, operation, record)
-                    raise Rejected('FILES_VERSION_CONFLICT')
-                if original is not None and (publication_identity(original) != record['originalIdentity'] or checksum(parent, leaf) != record['originalSha256']):
-                    raise Rejected('FILES_VERSION_CONFLICT')
-                record['state'] = 'Applying'; save_receipt(state, operation, record)
-                exchange(private, temporary, parent, leaf, 1 if original is None else 2)
-                os.fsync(parent); os.fsync(private)
-                # Recovery verifies new inode/digest and any complete displaced object.
-                record = recover(record, parent, private, state)
-                return {**public_receipt(record), 'bindingCurrent': record['state'] == 'Completed'}
+                with namespace_lock():
+                    original = current(parent, leaf)
+                    if (version(original) if original else 'ABSENT') != record['expectedVersion']:
+                        os.unlink(temporary, dir_fd=private); os.fsync(private)
+                        record['state'] = 'Aborted'; save_receipt(state, operation, record)
+                        raise Rejected('FILES_VERSION_CONFLICT')
+                    if original is not None and (publication_identity(original) != record['originalIdentity'] or checksum(parent, leaf) != record['originalSha256']):
+                        raise Rejected('FILES_VERSION_CONFLICT')
+                    record['state'] = 'Applying'; save_receipt(state, operation, record)
+                    exchange(private, temporary, parent, leaf, 1 if original is None else 2)
+                    os.fsync(parent); os.fsync(private)
+                    # Recovery verifies new inode/digest and any complete displaced object.
+                    record = recover(record, parent, private, state)
+                    return {**public_receipt(record), 'bindingCurrent': record['state'] == 'Completed'}
             finally: os.close(private)
     finally:
         if lock is not None: os.close(lock)
@@ -591,22 +611,23 @@ def status(request):
         try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError: return {**public_receipt(record), 'isInProgress': True}
         if record['state'] in ('Applying', 'Receiving'):
-            try:
-                with directory({'rootId': record['rootId'], 'path': record['path']}, 'upload') as (_, parent, leaf):
-                    private = staging(parent)
-                    try:
-                        if record['state'] == 'Applying': record = recover(record, parent, private, state)
-                        else:
-                            pending = current(private, operation + '.upload')
-                            if pending is not None and pending.st_ino == record['newInode'] and pending.st_dev == record['newDevice']:
-                                os.unlink(operation + '.upload', dir_fd=private); os.fsync(private)
-                                record['state'] = 'Aborted'
-                            elif pending is None: record['state'] = 'Aborted'
-                            else: record['state'] = 'Unknown'
-                            save_receipt(state, operation, record)
-                    finally: os.close(private)
-            except (OSError, Rejected):
-                record['state'] = 'Unknown'; save_receipt(state, operation, record)
+            with namespace_lock() if record['state'] == 'Applying' else contextlib.nullcontext():
+                try:
+                    with directory({'rootId': record['rootId'], 'path': record['path']}, 'upload') as (_, parent, leaf):
+                        private = staging(parent)
+                        try:
+                            if record['state'] == 'Applying': record = recover(record, parent, private, state)
+                            else:
+                                pending = current(private, operation + '.upload')
+                                if pending is not None and pending.st_ino == record['newInode'] and pending.st_dev == record['newDevice']:
+                                    os.unlink(operation + '.upload', dir_fd=private); os.fsync(private)
+                                    record['state'] = 'Aborted'
+                                elif pending is None: record['state'] = 'Aborted'
+                                else: record['state'] = 'Unknown'
+                                save_receipt(state, operation, record)
+                        finally: os.close(private)
+                except (OSError, Rejected):
+                    record['state'] = 'Unknown'; save_receipt(state, operation, record)
         try:
             with directory({'rootId': record['rootId'], 'path': record['path']}, 'stat') as (_, parent, leaf):
                 actual = current(parent, leaf)
@@ -635,8 +656,18 @@ def slot():
         os.close(state)
 
 
+def operation_engine():
+    module_path = Path(__file__).with_name('whaledeck-file-operations.py')
+    info = os.stat(module_path, follow_symlinks=False)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or info.st_mode & 0o022 or info.st_size > 131072:
+        raise Rejected('FILES_MODULE_UNSAFE')
+    specification = importlib.util.spec_from_file_location('whaledeck_file_operations', module_path)
+    module = importlib.util.module_from_spec(specification); specification.loader.exec_module(module)
+    return module.FileOperations(sys.modules[__name__])
+
+
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status'):
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status'):
         raise Rejected('FILES_ACTION_INVALID')
     invocation = identity(os.environ.get('INVOCATION_ID'))
     emit({'type': 'driver', 'invocationId': invocation})
@@ -652,6 +683,9 @@ def main():
     elif action == 'upload': emit(upload(request, source))
     elif action == 'stage': emit(upload(request, source, staged_only=True))
     elif action in ('publish', 'discard'): emit(staged_action(request, action))
+    elif action.startswith('operation-'):
+        source.finish(); engine = operation_engine()
+        emit(engine.plan(request) if action == 'operation-plan' else engine.apply(request) if action == 'operation-apply' else engine.lookup(request))
     else: emit(status(request))
 
 

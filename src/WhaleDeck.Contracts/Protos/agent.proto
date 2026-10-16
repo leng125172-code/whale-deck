@@ -600,3 +600,50 @@ service FileTransferService {
   rpc DiscardUpload(FileUploadLookup) returns (FileUploadReceipt);
   rpc GetUploadStatus(FileUploadLookup) returns (FileUploadReceipt);
 }
+
+// File mutations are separate method capabilities, not arbitrary commands.
+enum FileOperationKind {
+  FILE_OPERATION_KIND_UNSPECIFIED = 0;
+  FILE_OPERATION_KIND_CREATE_DIRECTORY = 1;
+  FILE_OPERATION_KIND_COPY_FILE = 2;
+  FILE_OPERATION_KIND_MOVE_FILE = 3;
+  FILE_OPERATION_KIND_SET_PERMISSIONS = 4;
+}
+message FileOperationCommand {
+  FileOperationKind kind = 1;
+  FileLocation source = 2;
+  FileLocation target = 3;
+  string expected_version = 4;
+  string mode = 5;
+}
+message FileDirectoryIdentity { uint64 device = 1; uint64 inode = 2; }
+message FileObjectIdentity {
+  uint64 device = 1; uint64 inode = 2; uint32 mode = 3;
+  uint32 owner_uid = 4; uint32 owner_gid = 5; uint64 link_count = 6;
+  int64 size_bytes = 7; int64 modified_at_unix_ns = 8;
+}
+message FileOperationPlan {
+  FileOperationCommand command = 1;
+  FileObjectIdentity source_identity = 2;
+  FileDirectoryIdentity source_parent = 3;
+  FileDirectoryIdentity target_parent = 4;
+  int64 size_bytes = 5;
+  string sha256 = 6;
+  string fingerprint = 7;
+}
+message FileOperationPlanRequest { FileOperationCommand command = 1; RequestContext context = 2; }
+message FileOperationApplyRequest {
+  string operation_id = 1; string owner = 2;
+  FileOperationPlan plan = 3; RequestContext context = 4;
+}
+message FileOperationLookup { string operation_id = 1; string owner = 2; }
+message FileOperationReceipt {
+  string operation_id = 1; FileOperationKind kind = 2; string state = 3;
+  string fingerprint = 4; string version = 5; int64 size_bytes = 6;
+  string sha256 = 7; bool source_retained = 8; bool binding_current = 9;
+}
+service FileOperationService {
+  rpc Plan(FileOperationPlanRequest) returns (FileOperationPlan);
+  rpc Apply(FileOperationApplyRequest) returns (FileOperationReceipt);
+  rpc Inspect(FileOperationLookup) returns (FileOperationReceipt);
+}

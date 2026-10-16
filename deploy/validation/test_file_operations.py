@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import signal
 import select
+import sys
 import stat
 import subprocess
 import time
@@ -230,6 +231,64 @@ class FileOperationTests(unittest.TestCase):
             os.close(release_write); os.close(ready_read)
             self.assertEqual(os.waitstatus_to_exitcode(self.wait_child(child)), 0)
         self.assertEqual(self.lookup(request)['state'], 'Completed')
+
+    def test_upload_commit_uses_the_same_namespace_gate_and_keeps_staged_bytes(self):
+        (self.root / 'source').write_bytes(b'body'); request = self.request(self.command())
+        content = b'upload-body'
+        upload = common.FileTransportTests.command(self, content, name='uploaded')
+        driver.upload(upload, common.FileTransportTests.body(self, content), staged_only=True)
+        ready_read, ready_write = os.pipe(); release_read, release_write = os.pipe(); child = os.fork()
+        if child == 0:
+            os.close(ready_read); os.close(release_write); original = self.engine.hash_descriptor
+            def held(descriptor, info, output=None):
+                if output is not None: os.write(ready_write, b'R'); os.read(release_read, 1)
+                return original(descriptor, info, output)
+            try:
+                with patch.object(self.engine, 'hash_descriptor', side_effect=held): self.engine.apply(request)
+            except BaseException: os._exit(90)
+            os._exit(0)
+        os.close(ready_write); os.close(release_read)
+        lookup = {key: upload[key] for key in ('operationId', 'owner')}
+        try:
+            self.assertTrue(select.select([ready_read], [], [], 5)[0]); self.assertEqual(os.read(ready_read, 1), b'R')
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_OPERATION_BUSY'): driver.staged_action(lookup, 'publish')
+            self.assertEqual(driver.status(lookup)['state'], 'Staged'); self.assertFalse((self.root / 'uploaded').exists())
+            inline = common.FileTransportTests.command(self, content, name='inline')
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_OPERATION_BUSY'): driver.upload(inline, common.FileTransportTests.body(self, content))
+            self.assertEqual(driver.status({key: inline[key] for key in ('operationId', 'owner')})['state'], 'Aborted')
+            self.assertFalse((self.root / 'inline').exists())
+        finally:
+            with contextlib.suppress(BrokenPipeError): os.write(release_write, b'R')
+            os.close(release_write); os.close(ready_read); self.assertEqual(os.waitstatus_to_exitcode(self.wait_child(child)), 0)
+        self.assertEqual(driver.staged_action(lookup, 'publish')['state'], 'Completed'); self.assertEqual((self.root / 'uploaded').read_bytes(), content)
+
+    def test_fixed_module_loader_rejects_untrusted_mode_and_uses_only_its_adjacent_module(self):
+        module = self.base / 'whaledeck-file-operations.py'
+        module.write_bytes(Path(operations.__file__).read_bytes()); module.chmod(0o750)
+        with patch.object(driver, '__file__', str(self.base / 'whaledeck-files.py')), patch.dict(sys.modules, {driver.__name__: driver}):
+            loaded = driver.operation_engine()
+            request = self.request(self.command('mkdir', target='loader-test', mode='0750'))
+            self.assertEqual(loaded.apply(request)['state'], 'Completed')
+            module.chmod(0o777)
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.operation_engine()
+
+    def test_busy_namespace_does_not_register_a_false_unknown_mutation(self):
+        (self.root / 'source').write_bytes(b'body'); request = self.request(self.command())
+        with driver.namespace_lock():
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_OPERATION_BUSY'): self.engine.apply(request)
+        with self.assertRaisesRegex(driver.Rejected, 'FILES_OPERATION_NOT_FOUND'): self.lookup(request)
+        self.assertEqual(self.engine.apply(request)['state'], 'Completed')
+
+    def test_unknown_receipt_never_exposes_an_unverified_completed_version(self):
+        request = self.request(self.command('mkdir', target='folder', mode='0755')); original = self.engine.check_parent; calls = 0
+        def changed(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 2: raise driver.Rejected('FILES_PARENT_CHANGED')
+            return original(*args, **kwargs)
+        with patch.object(self.engine, 'check_parent', side_effect=changed): result = self.engine.apply(request)
+        self.assertEqual(result['state'], 'Unknown'); self.assertEqual(result['version'], ''); self.assertFalse(result['sourceRetained'])
+        self.assertTrue((self.root / 'folder').is_dir()); self.assertEqual(self.lookup(request)['state'], 'Unknown')
 
     def test_real_process_crash_between_move_steps_is_unknown_and_keeps_both(self):
         (self.root / 'source').write_bytes(b'move-body'); request = self.request(self.command('move'))

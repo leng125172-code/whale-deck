@@ -44,6 +44,7 @@ if [[ ! -e /etc/whaledeck/file-roots.json ]]; then
 fi
 [[ $(stat -c %u /etc/whaledeck/file-roots.json) == 0 ]] || exit 1
 [[ $(stat -c %a /etc/whaledeck/file-roots.json) =~ ^(600|640|644)$ ]] || exit 1
+python3 "$(dirname "$0")/upgrade-file-roots.py"
 install -d -o root -g root -m 0755 /opt/whaledeck-agent /opt/whaledeck-maintenance /usr/local/libexec
 # GNU cp otherwise truncates an existing executable in place and fails with
 # ETXTBSY while the old service process is still running. Replacing the
@@ -70,6 +71,7 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-notification-config.p
 install -o root -g root -m 0755 "$(dirname "$0")/whaledeck-host-terminal.py" /usr/local/libexec/whaledeck-host-terminal.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-terminal.py" /usr/local/libexec/whaledeck-container-terminal.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-files.py" /usr/local/libexec/whaledeck-files.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-file-operations.py" /usr/local/libexec/whaledeck-file-operations.py
 install -d -o root -g root -m 0700 /var/lib/whaledeck-application-backup /data/DockerData/whaledeck/application-backups
 for unit in whaledeck-application-backup-recovery.service whaledeck-application-backup-recovery.timer; do
   install -o root -g root -m 0644 "$(dirname "$0")/$unit" "/etc/systemd/system/$unit"

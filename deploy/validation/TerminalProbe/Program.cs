@@ -13,6 +13,7 @@ try
 {
     if (args.Length == 1 && args[0] == "container") await ContainerTerminalProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "files") await FileTransferProbe.RunAsync();
+    else if (args.Length == 1 && args[0] == "file-operations") await FileOperationProbe.RunAsync();
     else if (args.Length == 0) await TerminalProbe.RunAsync();
     else throw new ArgumentException("Unsupported probe mode");
     return 0;
@@ -23,7 +24,7 @@ catch (Exception error)
     var rpc = error as RpcException;
     var detail = rpc?.Status.Detail;
     var ownFileCode = detail is { Length: <= 80 } && detail.StartsWith("FILES_", StringComparison.Ordinal) && detail.All(c => char.IsAsciiLetterUpper(c) || c == '_') ? detail : null;
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = args is ["files"] ? FileTransferProbe.Phase : TerminalProbe.Phase,
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = args is ["files"] ? FileTransferProbe.Phase : args is ["file-operations"] ? FileOperationProbe.Phase : TerminalProbe.Phase,
         code = TerminalProbe.FailureCode, failureType = error.GetType().Name, rpcStatus = rpc?.StatusCode.ToString(), fileCode = ownFileCode }));
     return 1;
 }

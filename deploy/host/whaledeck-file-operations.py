@@ -112,14 +112,12 @@ class FileOperations:
             try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError: self.reject('FILES_OPERATION_BUSY')
             if writing:
-                exclusive = os.open('mutations.lock', os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=state)
-                try: fcntl.flock(exclusive, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError: self.reject('FILES_OPERATION_BUSY')
+                exclusive = self.f.namespace_lock(); exclusive.__enter__()
             record = self.read(state, operation)
             if record is not None and record['owner'] != owner: self.reject('FILES_OPERATION_NOT_FOUND')
             yield state, record
         finally:
-            if exclusive is not None: os.close(exclusive)
+            if exclusive is not None: exclusive.__exit__(None, None, None)
             if lock is not None: os.close(lock)
             if state is not None: os.close(state)
             os.close(base)
@@ -297,7 +295,8 @@ class FileOperations:
     def lookup(self, request):
         if not isinstance(request, dict) or set(request) != {'operationId', 'owner'}: self.reject('FILES_STATUS_INVALID')
         with self.state(request['operationId'], request['owner']) as (state, record):
-            self.recover(state, record)
+            with self.f.namespace_lock() if record['state'] not in ('Completed', 'Aborted', 'Unknown') else contextlib.nullcontext():
+                self.recover(state, record)
             return self.public(record)
 
     def public(self, record):
@@ -311,5 +310,5 @@ class FileOperations:
                     finally: os.close(descriptor)
             except (OSError, self.f.Rejected): pass
         return {'operationId': record['operationId'], 'kind': kind, 'state': record['state'], 'fingerprint': plan['fingerprint'],
-                'version': record.get('version', ''), 'sizeBytes': plan['sizeBytes'], 'sha256': plan['sha256'],
-                'sourceRetained': bool(record.get('sourceRetained')), 'bindingCurrent': binding}
+                'version': record.get('version', '') if record['state'] == 'Completed' else '', 'sizeBytes': plan['sizeBytes'], 'sha256': plan['sha256'],
+                'sourceRetained': record['state'] == 'Completed' and bool(record.get('sourceRetained')), 'bindingCurrent': binding}

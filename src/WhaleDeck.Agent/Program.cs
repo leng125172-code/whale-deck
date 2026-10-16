@@ -69,4 +69,5 @@ app.MapGrpcService<NotificationConfigurationGrpcService>();
 app.MapGrpcService<HostTerminalGrpcService>();
 app.MapGrpcService<ContainerTerminalGrpcService>();
 app.MapGrpcService<FileTransferGrpcService>();
+app.MapGrpcService<FileOperationGrpcService>();
 await app.RunAsync();

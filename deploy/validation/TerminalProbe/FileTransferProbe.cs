@@ -125,7 +125,7 @@ internal static class FileTransferProbe
                 catch (RpcException error) when (error.StatusCode == StatusCode.NotFound) { /* Cancellation before helper created a receipt is also no publication. */ }
             }
             Console.WriteLine(JsonSerializer.Serialize(new { nativeFilesAgent = "passed", binaryBytes = payload.Length, methodCapabilityReplay = "passed", protectedRootAndPath = "passed",
-                uploadDownloadChecksum = "passed", overwritePreviousAndIdempotency = "passed", disconnectCleanup = "passed", bffAndUi = "not-implemented" }));
+                uploadDownloadChecksum = "passed", overwritePreviousAndIdempotency = "passed", disconnectCleanup = "passed", bffAndUi = "not-exercised-by-agent-probe" }));
         }
         finally
         {
