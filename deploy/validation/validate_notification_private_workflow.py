@@ -38,6 +38,8 @@ def main():
         raise AssertionError('Private workflow observation budget expired; inspect the original job')
     def change(action, ticket=None):
         channel = channels()
+        metadata = session.get(endpoint + 'channels/' + channel_id + '/private', timeout=15)
+        assert metadata.status_code == 200 and metadata.json()['channelVersion'] == channel['version'], 'Private metadata version did not match channel'
         response = post('channels/' + channel_id + '/private/plan', {'expectedChannelVersion': channel['version'], 'action': action, 'inputTicket': ticket})
         assert response.status_code == 200, 'Private plan failed'
         plan = response.json()
@@ -69,6 +71,7 @@ def main():
         change('remove')
         snapshot = session.get(endpoint + 'channels/' + channel_id + '/private', timeout=15)
         assert snapshot.status_code == 200 and not snapshot.json()['hasTarget']
+        assert channels()['privateConfigurationBlocked'], 'Removed private binding did not block sending'
         doc = session.get(base + '/openapi/v1.json', timeout=15); doc.raise_for_status()
         assert '/api/v1/notifications/manage/channels/{id}/private/plan' in doc.json()['paths']
         print(json.dumps({'privateConfigurationRealWorkflow': 'passed', 'oidcApiValkeyWorkerAgent': 'passed', 'asynchronousPermanentReplay': 'passed', 'channelNeverEnabled': True, 'externalSends': 0}))

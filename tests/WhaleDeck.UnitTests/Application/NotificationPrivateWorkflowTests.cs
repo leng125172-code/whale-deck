@@ -30,6 +30,15 @@ public sealed class NotificationPrivateWorkflowTests : IDisposable
     private static NotificationContext Context(bool admin = true) => new("fixture-owner", admin, "trace", null, Guid.NewGuid().ToString("D"));
 
     [Fact]
+    public async Task InspectionIncludesFreshChannelVersionButNoPrivateInput()
+    {
+        var metadata = await _workflow.InspectAsync(Context(), _repo.Channel.Id, default);
+        Assert.Equal(_repo.Channel.Version, metadata.ChannelVersion);
+        Assert.DoesNotContain("example.invalid", JsonSerializer.Serialize(metadata));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _workflow.InspectAsync(Context(false), _repo.Channel.Id, default));
+    }
+
+    [Fact]
     public async Task ExactDurableReplayWorksAfterPlanAndInputExpire()
     {
         var context = Context(); var ticket = await _staged.StoreAsync(context.Subject, Input, default);

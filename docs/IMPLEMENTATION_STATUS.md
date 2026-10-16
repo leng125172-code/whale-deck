@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-16 通知私有配置 WebUI 已实现并本地验证：结构化输入/保留替换移除、计划确认/冻结原请求重试、任务状态/未知确认、关闭与降权清空、渠道版本及发送阻断提示；562 Unit/73 Integration、Release/类型/lint/前端构建和20浏览器联合回归通过，6原生本机跳过。两个已知工作站网卡 SSH 当前均超时，本增量未调度部署、未执行新的原生或远端验收，最后已签收 runtime 保持历史 `39c990b`，不推断当前健康。见 [UI恢复点](qa/NOTIFICATION_PRIVATE_UI.md)。P4-06/76项完整目标仍在推进。
+
 - 2026-10-14 最新 runtime `39c990b` 已验收通知私有配置后端流程：管理员签名 Plan/确认202 Job/Status/Unknown确认、Valkey短时输入且PG不存目标密码或票据、独立Worker租约/回执优先、原子入队暂停渠道/Job/Outbox/审计、发送阻断。561 Unit/73 Integration、Release、冻结原生PG新增流程/恢复/清理通过，真实 OIDC→API→Valkey→Worker→Agent应用/移除与永久重放通过，渠道始终停用、外部发送0、临时对象精确清理/审计保留；普通匿名新入口拒绝、migration/UDS/8 HTTP资源/宿主和11核心健康及sudo通过。见 [流程验收](qa/NOTIFICATION_PRIVATE_WORKFLOW.md)。下一步配置 WebUI、更多并发/取消/Unknown人工确认故障组合；P4-06与76项仍未整体完成。
 
 - 2026-10-14 最新 runtime `71b0b43` 签收通知私有配置宿主基础：Agent 1.17 独立契约、固定 root 原子 writer、回执/过期输入恢复/被取代标记、HMAC 不透明版本与受限 transient unit。553 Unit/73 Integration、Release 及 18 条真实 Linux 文件系统/并发/恢复用例、冻结原生依赖回归通过；首次 5b166ab Inspect 只读命名空间失败已实测并修复覆盖。最终真实 UDS 读取/能力重放与危险输入拒绝、生产 registry 不变、OIDC/8 HTTP资源/宿主与11核心健康、sudo 保留。见 [私有配置宿主验收](qa/NOTIFICATION_PRIVATE_CONFIGURATION.md)。下一步仍须 API/永久幂等审计/跨存储一致性/凭据暂存与 WebUI；此模块和76项整体不算完成。

@@ -6,6 +6,6 @@
   "summary": "面向 Precision 7920 工作站的容器化控制平面，包含管理界面、主机 Agent 与维护入口。MVP/P1 主体已部署，P0–P5 扩展目标仍在推进。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-14）",
-  "nextStep": "继续通知私有值管理与 Agent 安全写入；76 项完整目标尚未完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-16）",
+  "nextStep": "通知私有配置 WebUI 本地已验证，待工作站原生测试与覆盖部署验收；继续76项完整目标。"
 }

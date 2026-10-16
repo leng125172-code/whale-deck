@@ -20,6 +20,7 @@ export interface NotificationChannel {
   destinationReference: string
   hasCredential: boolean
   isEnabled: boolean
+  privateConfigurationBlocked?: boolean
   version: number
   createdAtUtc: string
 }

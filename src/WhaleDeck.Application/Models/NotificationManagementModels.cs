@@ -4,7 +4,7 @@ public sealed record NotificationManagementQuery(int Page = 1, int Take = 25);
 public sealed record NotificationAttemptDto(int AttemptNumber, DateTimeOffset StartedAtUtc, DateTimeOffset? FinishedAtUtc, string? ResultCode);
 public sealed record NotificationManagementPage<T>(IReadOnlyCollection<T> Items, bool HasMore, int Page, int Take);
 public sealed record NotificationChannelDto(Guid Id, string Name, string Provider, string DestinationReference,
-    bool HasCredential, bool IsEnabled, long Version, DateTimeOffset CreatedAtUtc);
+    bool HasCredential, bool IsEnabled, long Version, DateTimeOffset CreatedAtUtc, bool PrivateConfigurationBlocked = false);
 public sealed record NotificationRouteDto(Guid Id, Guid ChannelId, string SourceKind, string MinimumSeverity,
     bool IncludeRecovery, bool IsEnabled, long Version, DateTimeOffset CreatedAtUtc);
 public sealed record NotificationDeliveryDto(Guid Id, Guid NotificationId, Guid ChannelId, long ChannelVersion,

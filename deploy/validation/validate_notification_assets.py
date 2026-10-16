@@ -23,7 +23,7 @@ def main():
     assert len(lazy) == 1, 'Notification management lazy artifact was not referenced'
     path = lazy.pop(); content = verify(session, base, path)
     text = content.decode('utf-8')
-    assert all(token in text for token in ('notifications/manage/', 'Idempotency-Key', '外部发送需要私有配置', '重试原请求', '/attempts', '/test', '/retry-unknown', '接受风险并重试', '已有重试记录')), 'New page contract was not served'
+    assert all(token in text for token in ('notifications/manage/', 'Idempotency-Key', '外部发送需要私有配置', '重试原请求', '/attempts', '/test', '/retry-unknown', '接受风险并重试', '已有重试记录', '/private/plan', '/acknowledge-unknown', '关闭并清空', '准备配置计划', '提交响应可能丢失，原请求已冻结')), 'New page contract was not served'
     verified.append({'path': path, 'sha256': hashlib.sha256(content).hexdigest()})
     print(json.dumps({'notificationAssets': 'passed', 'httpMatchesActiveGatewayBytes': True, 'verified': verified, 'productionIdentityBrowser': 'not-tested'}))
 

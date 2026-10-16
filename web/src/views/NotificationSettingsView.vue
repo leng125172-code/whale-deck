@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
+import NotificationPrivateEditor from '@/components/NotificationPrivateEditor.vue'
 import {
   executeNotificationIntent,
   notificationIntent,
@@ -18,6 +19,7 @@ import {
 } from '@/services/notificationManagement'
 
 const active = ref<'channels' | 'routes' | 'deliveries'>('channels')
+const privateChannel = ref<NotificationChannel | null>(null)
 const channels = ref<NotificationChannel[]>([])
 const choices = ref<NotificationChannel[]>([])
 const routes = ref<NotificationRoute[]>([])
@@ -84,6 +86,7 @@ function closeEditor() {
   })
 }
 function clearPrivate() {
+  privateChannel.value = null
   generation++
   controller.abort()
   controller = new AbortController()
@@ -372,7 +375,7 @@ onUnmounted(clearPrivate)
     </header>
     <el-alert
       title="外部发送需要私有配置"
-      description="发送 Worker 已接入。请先在服务器私有配置中登记批准目标及凭据，再启用渠道。当前表单只保存引用标识；已接受不代表收件人已收到，结果未知不会自动重发。"
+      description="通过渠道的私有配置登记批准目标与凭据，确认计划后由宿主写入并对账；保存后保持停用。元数据表单不填写秘密；已接受不代表收件人已收到，结果未知不会自动重发。"
       type="info"
       :closable="false"
       show-icon
@@ -436,19 +439,21 @@ onUnmounted(clearPrivate)
             row.hasCredential ? '已配置' : '未配置'
           }}</template></el-table-column
         >
-        <el-table-column label="状态" width="80"
+        <el-table-column label="状态" width="120"
           ><template #default="{ row }"
             ><el-tag :type="row.isEnabled ? 'success' : 'info'">{{
-              row.isEnabled ? '启用' : '停用'
+              row.privateConfigurationBlocked ? '配置阻断' : row.isEnabled ? '启用' : '停用'
             }}</el-tag></template
           ></el-table-column
         >
-        <el-table-column label="操作" width="194"
+        <el-table-column label="操作" width="260"
           ><template #default="{ row }"
+            ><el-button link type="primary" :disabled="saving" @click="privateChannel = { ...row }"
+              >私有配置</el-button
             ><el-button
               link
               type="primary"
-              :disabled="saving"
+              :disabled="saving || row.privateConfigurationBlocked"
               @click="submitNotification('test', row)"
               >测试</el-button
             ><el-button link type="primary" :disabled="saving" @click="openChannel(row)"
@@ -569,6 +574,13 @@ onUnmounted(clearPrivate)
         >
       </el-table>
     </el-drawer>
+    <NotificationPrivateEditor
+      v-if="privateChannel && authorized"
+      :channel="privateChannel"
+      @close="privateChannel = null"
+      @changed="load"
+      @forbidden="clearPrivate"
+    />
     <el-dialog
       :model-value="editor !== null"
       :title="editor === 'channel' ? '渠道配置' : '路由配置'"

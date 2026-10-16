@@ -15,7 +15,7 @@ public sealed class NotificationManagementRepository(PlatformDbContext db) : INo
     {
         var rows = await db.NotificationChannels.AsNoTracking().OrderByDescending(item => item.CreatedAtUtc).ThenByDescending(item => item.Id)
             .Skip((query.Page - 1) * query.Take).Take(query.Take + 1).Select(item => new NotificationChannelDto(item.Id, item.Name, item.Provider,
-                item.DestinationReference, item.CredentialReference != null, item.IsEnabled, item.Version, item.CreatedAtUtc)).ToArrayAsync(cancellationToken);
+                item.DestinationReference, item.CredentialReference != null, item.IsEnabled, item.Version, item.CreatedAtUtc, item.PrivateConfigurationBlocked)).ToArrayAsync(cancellationToken);
         return Page(rows, query);
     }
 
@@ -62,7 +62,7 @@ public sealed class NotificationManagementRepository(PlatformDbContext db) : INo
                     credential_reference={credential},is_enabled={command.IsEnabled},version={version} WHERE id={target}
                     """, cancellationToken);
             return new NotificationChannelDto(target, command.Name, command.Provider, command.DestinationReference, credential is not null,
-                command.IsEnabled, version, existing?.CreatedAtUtc ?? now);
+                command.IsEnabled, version, existing?.CreatedAtUtc ?? now, existing?.PrivateConfigurationBlocked ?? false);
         }, async () => Map(await Channel(target, cancellationToken)), cancellationToken);
     }
 
@@ -205,7 +205,7 @@ public sealed class NotificationManagementRepository(PlatformDbContext db) : INo
     private static NotificationManagementPage<T> Page<T>(T[] rows, NotificationManagementQuery query) => new(rows.Take(query.Take).ToArray(), rows.Length > query.Take, query.Page, query.Take);
 
     private static NotificationChannelDto Map(NotificationChannel item) => new(item.Id, item.Name, item.Provider, item.DestinationReference,
-        item.CredentialReference is not null, item.IsEnabled, item.Version, item.CreatedAtUtc);
+        item.CredentialReference is not null, item.IsEnabled, item.Version, item.CreatedAtUtc, item.PrivateConfigurationBlocked);
     private static NotificationRouteDto Map(NotificationRoute item) => new(item.Id, item.ChannelId, item.SourceKind, item.MinimumSeverity,
         item.IncludeRecovery, item.IsEnabled, item.Version, item.CreatedAtUtc);
     private static Guid StableId(NotificationContext context, string scope) => new(SHA256.HashData(Encoding.UTF8.GetBytes(

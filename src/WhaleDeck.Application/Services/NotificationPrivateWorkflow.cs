@@ -12,8 +12,8 @@ public sealed class NotificationPrivateWorkflow(INotificationPrivateRepository r
     public async Task<NotificationPrivateMetadata> InspectAsync(NotificationContext context, Guid channelId, CancellationToken cancellationToken)
     {
         Authorize(context); Identity(channelId);
-        await repository.ChannelAsync(channelId, cancellationToken);
-        return await agent.InspectAsync(channelId, cancellationToken);
+        var channel = await repository.ChannelAsync(channelId, cancellationToken);
+        return (await agent.InspectAsync(channelId, cancellationToken)) with { ChannelVersion = channel.Version };
     }
 
     public async Task<NotificationPrivatePlanDto> PlanAsync(NotificationContext context, Guid channelId, NotificationPrivatePlanCommand command, CancellationToken cancellationToken)

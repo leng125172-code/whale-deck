@@ -9,7 +9,7 @@ public interface INotificationPrivateGateway
 }
 
 public sealed record NotificationPrivateMetadata(string Revision, string DestinationReference, string? CredentialReference,
-    bool HasTarget, bool HasCredential, bool Applied, bool Replayed, Guid? OperationId, bool BindingCurrent);
+    bool HasTarget, bool HasCredential, bool Applied, bool Replayed, Guid? OperationId, bool BindingCurrent, long? ChannelVersion = null);
 
 public sealed class NotificationPrivateUpdate
 {
