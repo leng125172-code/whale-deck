@@ -186,6 +186,65 @@ class FileTransportTests(unittest.TestCase):
                 with driver.slot(): pass
         with driver.slot(): pass
 
+    def test_staged_upload_waits_for_publish_and_replays_without_rewriting(self):
+        payload = b'\x00\xffstaged-bytes'; command = self.command(payload, 'staged')
+        staged = driver.upload(command, self.body(payload), staged_only=True)
+        self.assertEqual(staged['state'], 'Staged'); self.assertFalse((self.root / 'staged').exists())
+        self.assertEqual(driver.upload(command, self.body(payload), staged_only=True)['state'], 'Staged')
+        lookup = {'operationId': command['operationId'], 'owner': command['owner']}
+        published = driver.staged_action(lookup, 'publish')
+        self.assertEqual(published['state'], 'Completed'); self.assertTrue(published['bindingCurrent'])
+        (self.root / 'staged').write_bytes(b'external-new')
+        replay = driver.staged_action(lookup, 'publish')
+        self.assertEqual(replay['state'], 'Completed'); self.assertFalse(replay['bindingCurrent'])
+        self.assertEqual((self.root / 'staged').read_bytes(), b'external-new')
+        self.assertEqual(driver.staged_action(lookup, 'discard')['state'], 'Completed')
+        self.assertEqual((self.root / 'staged').read_bytes(), b'external-new')
+
+    def test_staged_overwrite_preserves_old_target_until_explicit_publish(self):
+        target = self.root / 'file'; target.write_bytes(b'old'); command = self.command(b'new', 'file', self.revision('file'))
+        driver.upload(command, self.body(b'new'), staged_only=True)
+        self.assertEqual(target.read_bytes(), b'old')
+        result = driver.staged_action({'operationId': command['operationId'], 'owner': command['owner']}, 'publish')
+        self.assertEqual(result['state'], 'Completed'); self.assertTrue(result['previousRetained'])
+        self.assertEqual((self.root / driver.STAGING / (command['operationId'] + '.upload')).read_bytes(), b'old')
+
+    def test_staged_conflict_aborts_without_overwriting_external_change(self):
+        target = self.root / 'file'; target.write_bytes(b'old'); command = self.command(b'new', 'file', self.revision('file'))
+        driver.upload(command, self.body(b'new'), staged_only=True); target.write_bytes(b'external-new')
+        lookup = {'operationId': command['operationId'], 'owner': command['owner']}
+        with self.assertRaisesRegex(driver.Rejected, 'FILES_VERSION_CONFLICT'): driver.staged_action(lookup, 'publish')
+        self.assertEqual(target.read_bytes(), b'external-new'); self.assertEqual(driver.status(lookup)['state'], 'Aborted')
+
+    def test_discarded_stage_cannot_publish_and_wrong_owner_cannot_discard(self):
+        command = self.command(b'new', 'file'); driver.upload(command, self.body(b'new'), staged_only=True)
+        lookup = {'operationId': command['operationId'], 'owner': command['owner']}
+        with self.assertRaisesRegex(driver.Rejected, 'FILES_OPERATION_NOT_FOUND'): driver.staged_action({**lookup, 'owner': 'B' * 64}, 'discard')
+        self.assertEqual(driver.status(lookup)['state'], 'Staged')
+        self.assertEqual(driver.staged_action(lookup, 'discard')['state'], 'Aborted')
+        self.assertEqual(driver.staged_action(lookup, 'publish')['state'], 'Aborted')
+        self.assertFalse((self.root / 'file').exists())
+
+    def test_cancellation_before_receive_has_a_durable_tombstone_against_late_body(self):
+        command = self.command(b'late', 'file'); lookup = {'operationId': command['operationId'], 'owner': command['owner']}
+        self.assertEqual(driver.staged_action(lookup, 'discard')['state'], 'Aborted')
+        self.assertEqual(driver.status(lookup)['state'], 'Aborted')
+        with self.assertRaisesRegex(driver.Rejected, 'FILES_IDEMPOTENCY_CONFLICT'):
+            driver.upload(command, self.body(b'late'), staged_only=True)
+        self.assertFalse((self.root / 'file').exists())
+
+    def test_staged_publish_after_real_process_death_recovers_exact_result(self):
+        target = self.root / 'file'; target.write_bytes(b'old'); command = self.command(b'new', 'file', self.revision('file'))
+        driver.upload(command, self.body(b'new'), staged_only=True)
+        original_exchange = driver.exchange
+        def crash(*args): original_exchange(*args); os._exit(78)
+        def action():
+            with patch.object(driver, 'exchange', side_effect=crash): driver.staged_action({'operationId': command['operationId'], 'owner': command['owner']}, 'publish')
+        child = self.fork(action); self.assertEqual(os.waitpid(child, 0)[1] >> 8, 78)
+        result = driver.status({'operationId': command['operationId'], 'owner': command['owner']})
+        self.assertEqual(result['state'], 'Completed'); self.assertTrue(result['previousRetained'])
+        self.assertEqual(target.read_bytes(), b'new')
+
     def fork(self, action):
         child = os.fork()
         if child == 0:

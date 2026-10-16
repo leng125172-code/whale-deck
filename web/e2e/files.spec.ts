@@ -1,0 +1,76 @@
+import { expect, test } from '@playwright/test'
+import { Buffer } from 'node:buffer'
+import { installFileFixture } from './fixtures/files.mjs'
+
+for (const width of [320, 1045, 1440]) for (const colorScheme of ['light', 'dark'] as const) {
+  test(`${width} ${colorScheme}: browse protected files, download, upload confirmation and durable task`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 }); await page.emulateMedia({ colorScheme })
+    const errors: string[] = []; page.on('pageerror', (error) => errors.push(error.message))
+    const control = await installFileFixture(page)
+    await page.goto('/files'); await expect(page.getByRole('heading', { name: '文件管理', exact: true })).toBeVisible()
+    await expect(page.getByText('受保护', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: '资料', exact: true }).click(); await expect(page.getByText('此目录暂无可显示的文件')).toBeVisible()
+    await page.getByRole('button', { name: '根目录', exact: true }).click()
+    const downloaded = page.waitForEvent('download'); await page.getByRole('button', { name: '下载', exact: true }).click(); const artifact = await downloaded
+    expect(artifact.suggestedFilename()).toBe(control.entry.name); await artifact.delete()
+    await page.getByLabel('选择上传文件', { exact: true }).setInputFiles({ name: '你好.txt', mimeType: 'application/octet-stream', buffer: Buffer.from('中文-file') })
+    await page.getByRole('button', { name: '校验并上传', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()
+    expect(control.state.bodyCount).toBe(0); expect(control.state.accepted).toBe(false)
+    await page.getByLabel('选择上传文件', { exact: true }).setInputFiles({ name: '你好.txt', mimeType: 'application/octet-stream', buffer: Buffer.from('中文-file') })
+    await page.getByRole('button', { name: '校验并上传', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '确认并上传', exact: true }).click()
+    await expect(page.getByText('已发布', { exact: true })).toBeVisible()
+    expect(control.state.bodyCount).toBe(1)
+    expect(control.state.writes.filter((item: { path: string }) => item.path === 'uploads')).toHaveLength(1)
+    await expect(page.getByText('你好.txt', { exact: true })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+    await page.screenshot({ path: `test-results/files-${width}-${colorScheme}.png`, fullPage: false })
+    expect(errors).toEqual([])
+  })
+}
+test('uncertain registration retries the identical frozen request, never a second upload intent', async ({ page }) => {
+  const control = await installFileFixture(page, { loseCreateResponse: true })
+  await page.goto('/files')
+  await page.getByLabel('选择上传文件', { exact: true }).setInputFiles({ name: 'retry.txt', mimeType: 'text/plain', buffer: Buffer.from('retry') })
+  await page.getByRole('button', { name: '校验并上传', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确认并上传', exact: true }).click()
+  await expect(page.getByRole('button', { name: '重试原登记', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '重试原登记', exact: true }).click()
+  await expect(page.getByText('已发布', { exact: true })).toBeVisible()
+  const creates = control.state.writes.filter((item: { path: string }) => item.path === 'uploads')
+  expect(creates).toHaveLength(2); expect(creates[0].body).toEqual(creates[1].body)
+  expect(creates[0].headers['idempotency-key']).toBe(creates[1].headers['idempotency-key']); expect(control.state.bodyCount).toBe(1)
+})
+test('unknown publication never automatically resends, and cancellation waits for durable state', async ({ page }) => {
+  const control = await installFileFixture(page, { unknown: true })
+  await page.goto('/files')
+  await page.getByLabel('选择上传文件', { exact: true }).setInputFiles({ name: 'unknown.txt', mimeType: 'text/plain', buffer: Buffer.from('unknown') })
+  await page.getByRole('button', { name: '校验并上传', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确认并上传', exact: true }).click()
+  await expect(page.getByText('结果未知，禁止自动重试', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '查询原任务', exact: true }).click(); expect(control.state.bodyCount).toBe(1)
+  await page.locator('.file-transfer').getByRole('button', { name: '取消', exact: true }).click()
+  await expect(page.getByText('结果未知，禁止自动重试', { exact: true })).toBeVisible(); expect(control.state.bodyCount).toBe(1)
+})
+test('canceling a staged task waits for its status instead of assuming 202 is terminal', async ({ page }) => {
+  const control = await installFileFixture(page, { hold: true })
+  await page.goto('/files')
+  await page.getByLabel('选择上传文件', { exact: true }).setInputFiles({ name: 'cancel.txt', mimeType: 'text/plain', buffer: Buffer.from('cancel') })
+  await page.getByRole('button', { name: '校验并上传', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确认并上传', exact: true }).click()
+  await expect(page.getByText('已暂存，等待发布', { exact: true })).toBeVisible()
+  const reads = control.state.reads
+  await page.locator('.file-transfer').getByRole('button', { name: '取消', exact: true }).click()
+  await expect(page.getByText('已取消', { exact: true })).toBeVisible()
+  expect(control.state.reads).toBeGreaterThan(reads); expect(control.state.bodyCount).toBe(1)
+})
+test('offline root loading can be retried; permission loss clears names', async ({ page }) => {
+  const control = await installFileFixture(page); control.state.rootStatus = 503
+  await page.goto('/files'); await expect(page.getByText('Agent 暂时不可用', { exact: true })).toBeVisible()
+  control.state.rootStatus = 200; await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await expect(page.getByText(control.entry.name, { exact: true })).toBeVisible()
+  control.state.entryStatus = 403; await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await expect(page.getByText(control.entry.name, { exact: true })).toHaveCount(0)
+  await expect(page.getByText('权限不足或此文件受到保护', { exact: true })).toBeVisible()
+})

@@ -6,6 +6,15 @@ import { installTerminalFixture } from './fixtures/terminal.mjs'
 test.describe('production initial authentication', () => {
   test.skip(!process.env.WHALEDECK_PRODUCTION_PREVIEW_URL, 'Requires a built production preview')
   test.use({ baseURL: process.env.WHALEDECK_PRODUCTION_PREVIEW_URL })
+  for (const status of [200, 401]) test(`file manager direct authorization ${status} has no file surface or requests`, async ({ page }) => {
+    let fileRequests = 0
+    page.on('request', (request) => { if (new URL(request.url()).pathname.startsWith('/api/v1/files/')) fileRequests++ })
+    await installTerminalFixture(page, { administrator: false, authenticationStatus: status, authenticationDelayMs: 350 })
+    await page.goto('/files')
+    await expect(page).toHaveURL(status === 401 ? /\/login\?/ : /\/forbidden$/)
+    await expect(page.getByTestId('files-page')).toHaveCount(0)
+    expect(fileRequests).toBe(0)
+  })
   for (const authenticationStatus of [200, 401]) {
     test(`container terminal direct authorization: ${authenticationStatus}`, async ({ page }) => {
       const control = await installTerminalFixture(page, {

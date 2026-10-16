@@ -80,6 +80,15 @@ def main():
         terminal_id = str(uuid.uuid4()); terminal_key = str(uuid.uuid4())
         terminal_headers = {ordinary_csrf['headerName']: ordinary_csrf['token'], 'Origin': base, 'Idempotency-Key': terminal_key}
         terminal_root = base + '/api/v1/terminals/'
+        file_root = base + '/api/v1/files/'
+        for suffix in ('roots', 'entries?rootId=whaledeck.files.shared', 'entry?rootId=whaledeck.files.shared&path=ordinary-denied', 'download?rootId=whaledeck.files.shared&path=ordinary-denied&expectedVersion=' + 'A' * 64, 'uploads/' + terminal_id):
+            assert ordinary.get(file_root + suffix, timeout=15, allow_redirects=False).status_code == 403
+            assert anonymous.get(file_root + suffix, timeout=15, allow_redirects=False).status_code == 401
+        for suffix in ('uploads/plan', 'uploads', 'uploads/' + terminal_id + '/cancel'):
+            assert ordinary.post(file_root + suffix, json={}, headers=terminal_headers, timeout=15, allow_redirects=False).status_code == 403
+            assert anonymous.post(file_root + suffix, json={}, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 401
+        assert ordinary.put(file_root + 'uploads/' + terminal_id + '/content', data=b'', headers={**terminal_headers, 'Content-Type': 'application/octet-stream'}, timeout=15, allow_redirects=False).status_code == 403
+        assert anonymous.put(file_root + 'uploads/' + terminal_id + '/content', data=b'', headers={'Origin': base, 'Content-Type': 'application/octet-stream'}, timeout=15, allow_redirects=False).status_code == 401
         for suffix in (terminal_id, terminal_id + '/connect', 'containers/' + 'a' * 64):
             assert ordinary.get(terminal_root + suffix, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 403
             assert anonymous.get(terminal_root + suffix, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 401

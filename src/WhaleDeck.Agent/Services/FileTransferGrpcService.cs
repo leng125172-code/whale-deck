@@ -42,12 +42,24 @@ public sealed class FileTransferGrpcService(FileTransferRunner runner) : FileTra
         return runner.DownloadAsync(JsonSerializer.Serialize(new { rootId = request.Location.RootId, path = request.Location.Path, expectedVersion = request.ExpectedVersion }), responseStream, context.CancellationToken);
     }
     public override async Task<FileUploadReceipt> Upload(IAsyncStreamReader<FileUploadFrame> requestStream, ServerCallContext context)
+        => await Receive(requestStream, context, staged: false);
+    public override async Task<FileUploadReceipt> StageUpload(IAsyncStreamReader<FileUploadFrame> requestStream, ServerCallContext context)
+        => await Receive(requestStream, context, staged: true);
+    private async Task<FileUploadReceipt> Receive(IAsyncStreamReader<FileUploadFrame> requestStream, ServerCallContext context, bool staged)
     {
         using var first = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken); first.CancelAfter(TimeSpan.FromSeconds(5));
         if (!await requestStream.MoveNext(first.Token)) throw new ArgumentException("FILES_HEADER_REQUIRED");
         var header = requestStream.Current;
         var input = FileTransferPolicy.Open(header);
-        return await runner.UploadAsync(input, header.Header.SizeBytes, requestStream, context.CancellationToken);
+        return await runner.UploadAsync(input, header.Header.SizeBytes, requestStream, context.CancellationToken, staged);
+    }
+    public override Task<FileUploadReceipt> PublishUpload(FileUploadLookup request, ServerCallContext context) => StagedAction("publish", request, context);
+    public override Task<FileUploadReceipt> DiscardUpload(FileUploadLookup request, ServerCallContext context) => StagedAction("discard", request, context);
+    private async Task<FileUploadReceipt> StagedAction(string action, FileUploadLookup request, ServerCallContext context)
+    {
+        FileTransferPolicy.Identity(request.OperationId); FileTransferPolicy.Hash(request.Owner);
+        using var result = await runner.OnceAsync(action, JsonSerializer.Serialize(new { operationId = request.OperationId, owner = request.Owner }), context.CancellationToken);
+        return FileTransferPolicy.Receipt(result.RootElement);
     }
     public override async Task<FileUploadReceipt> GetUploadStatus(FileUploadLookup request, ServerCallContext context)
     {
@@ -146,10 +158,10 @@ public sealed class FileTransferRunner
         }
         await FinishAsync(result, cancellationToken);
     }
-    public async Task<FileUploadReceipt> UploadAsync(string input, long size, IAsyncStreamReader<FileUploadFrame> frames, CancellationToken cancellationToken)
+    public async Task<FileUploadReceipt> UploadAsync(string input, long size, IAsyncStreamReader<FileUploadFrame> frames, CancellationToken cancellationToken, bool staged = false)
     {
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); lifetime.CancelAfter(TimeSpan.FromMinutes(10));
-        using var result = await StartAsync("upload", input, lifetime.Token);
+        using var result = await StartAsync(staged ? "stage" : "upload", input, lifetime.Token);
         var writing = Write(); var reading = ReadJsonAsync(result, lifetime.Token);
         try
         {

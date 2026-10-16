@@ -67,6 +67,11 @@ public static class DependencyInjection
         services.AddScoped<IPortalRepository, PortalRepository>();
         services.AddScoped<IJobRepository, JobRepository>();
         services.AddScoped<ITerminalSessionRepository, TerminalSessionRepository>();
+        services.AddScoped<IFileUploadRepository, FileUploadRepository>();
+        services.AddSingleton<IFilePlanProtector, FilePlanProtector>();
+        services.AddSingleton<IFileGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddScoped<FileManagementService>();
+        services.AddScoped<FileUploadDispatcher>();
         services.AddSingleton<ITerminalGrantSigner, TerminalGrantSigner>();
         services.AddScoped<TerminalSessionService>();
         services.AddScoped<IGovernanceRepository, GovernanceRepository>();

@@ -50,6 +50,12 @@ const router = createRouter({
         },
         { path: 'portal', name: 'portal', component: PortalView, meta: { title: '我的门户' } },
         {
+          path: 'files',
+          name: 'files',
+          component: () => import('@/views/FilesView.vue'),
+          meta: { administratorOnly: true, title: '文件管理' },
+        },
+        {
           path: 'settings/notifications',
           name: 'notification-settings',
           component: NotificationSettingsView,

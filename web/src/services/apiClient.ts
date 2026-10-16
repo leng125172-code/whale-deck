@@ -27,7 +27,7 @@ export function apiUrl(path: string) {
   return `${base}/${path.replace(/^\//, '')}`
 }
 
-async function csrfHeaders(signal: AbortSignal) {
+export async function csrfHeaders(signal: AbortSignal) {
   if (!csrf) {
     const response = await fetch(apiUrl('auth/csrf'), {
       credentials: 'include',
@@ -40,7 +40,7 @@ async function csrfHeaders(signal: AbortSignal) {
   return { [csrf.headerName]: csrf.token }
 }
 
-async function toApiError(response: Response) {
+export async function toApiError(response: Response) {
   let problem: ApiProblem = { status: response.status }
   try {
     problem = { ...problem, ...((await response.json()) as ApiProblem) }

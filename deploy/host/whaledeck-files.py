@@ -400,8 +400,9 @@ def recover(record, parent, private, state):
     return record
 
 
-def upload(request, source):
+def upload(request, source, staged_only=False):
     fingerprint = bound(request); operation = request['operationId']
+    if staged_only: fingerprint = hashlib.sha256((fingerprint + ':stage-v1').encode()).hexdigest().upper()
     registered = roots().get(request['rootId'])
     if not registered or 'files-upload' not in registered['allowedActions']: raise Rejected('FILES_ROOT_FORBIDDEN')
     relative(request['path'])
@@ -420,7 +421,7 @@ def upload(request, source):
                 if record:
                     if record.get('fingerprint') != fingerprint: raise Rejected('FILES_IDEMPOTENCY_CONFLICT')
                     record = recover(record, parent, private, state)
-                    if record['state'] != 'Completed': raise Rejected('FILES_PREVIOUS_OPERATION_INCOMPLETE')
+                    if record['state'] not in ('Staged', 'Completed'): raise Rejected('FILES_PREVIOUS_OPERATION_INCOMPLETE')
                 else:
                     original = current(parent, leaf)
                     if (version(original) if original else 'ABSENT') != request['expectedVersion']:
@@ -436,7 +437,8 @@ def upload(request, source):
                     saved = os.fstat(descriptor)
                     record = {'operationId': operation, 'owner': request['owner'], 'rootId': request['rootId'], 'path': request['path'],
                               'leaf': leaf, 'fingerprint': fingerprint, 'state': 'Receiving', 'newInode': saved.st_ino, 'newDevice': saved.st_dev,
-                              'sizeBytes': request['sizeBytes'], 'sha256': request['sha256'], 'createdAtUnixMs': time.time_ns() // 1000000}
+                              'sizeBytes': request['sizeBytes'], 'sha256': request['sha256'], 'createdAtUnixMs': time.time_ns() // 1000000,
+                              'expectedVersion': request['expectedVersion'], 'stagedOnly': staged_only}
                     if original:
                         record['originalIdentity'] = publication_identity(original)
                         record['originalSha256'] = checksum(parent, leaf)
@@ -474,6 +476,10 @@ def upload(request, source):
                 else:
                     os.fchown(descriptor, registered.get('ownerUid', 0), registered.get('ownerGid', 0))
                 os.fsync(descriptor)
+                if staged_only:
+                    os.fsync(private)
+                    record['state'] = 'Staged'; save_receipt(state, operation, record)
+                    return {**public_receipt(record), 'replayed': False, 'bindingCurrent': False}
                 latest = current(parent, leaf)
                 if (version(latest) if latest else 'ABSENT') != request['expectedVersion']:
                     raise Rejected('FILES_VERSION_CONFLICT')
@@ -504,6 +510,71 @@ def upload(request, source):
         os.close(lock); os.close(state)
 
 
+def staged_action(request, action):
+    if set(request) != {'operationId', 'owner'} or action not in ('publish', 'discard'):
+        raise Rejected('FILES_STATUS_INVALID')
+    operation = identity(request['operationId']); state = trusted_directory(STATE); lock = None
+    try:
+        record = read_receipt(state, operation)
+        if record and record.get('owner') != request['owner']: raise Rejected('FILES_OPERATION_NOT_FOUND')
+        if not record and action != 'discard': raise Rejected('FILES_OPERATION_NOT_FOUND')
+        if len(os.listdir(state)) >= 20032: raise Rejected('FILES_RECEIPT_LIMIT')
+        lock = os.open(operation + '.lock', os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=state)
+        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError: raise Rejected('FILES_OPERATION_BUSY') from None
+        # Re-read after acquiring the same lock held by receiving/publication.
+        record = read_receipt(state, operation)
+        if record is None and action == 'discard':
+            if not isinstance(request['owner'], str) or not re.fullmatch(r'[A-F0-9]{64}', request['owner']): raise Rejected('FILES_UPLOAD_INVALID')
+            if sum(name.endswith('.json') for name in os.listdir(state)) >= 10000: raise Rejected('FILES_RECEIPT_LIMIT')
+            record = {'operationId': operation, 'owner': request['owner'], 'stagedOnly': True, 'canceledBeforeReceive': True,
+                      'state': 'Aborted', 'sizeBytes': 0, 'sha256': '0' * 64}
+            save_receipt(state, operation, record)
+        if not record or record.get('owner') != request['owner']: raise Rejected('FILES_OPERATION_NOT_FOUND')
+        if not record.get('stagedOnly'): raise Rejected('FILES_STAGED_OPERATION_REQUIRED')
+        if record.get('canceledBeforeReceive'): return {**public_receipt(record), 'bindingCurrent': False}
+        with directory({'rootId': record['rootId'], 'path': record['path']}, 'upload') as (_, parent, leaf):
+            private = staging(parent); temporary = operation + '.upload'
+            try:
+                record = recover(record, parent, private, state)
+                if record['state'] == 'Completed':
+                    actual = current(parent, leaf)
+                    return {**public_receipt(record), 'replayed': True, 'bindingCurrent': actual is not None and version(actual) == record.get('version')}
+                if record['state'] in ('Unknown', 'Applying'):
+                    return {**public_receipt(record), 'bindingCurrent': False}
+                pending = current(private, temporary)
+                owns_pending = pending is not None and pending.st_ino == record['newInode'] and pending.st_dev == record['newDevice']
+                if action == 'discard' or record['state'] in ('Receiving', 'Aborted'):
+                    if pending is not None and not owns_pending:
+                        record['state'] = 'Unknown'
+                    else:
+                        if owns_pending: os.unlink(temporary, dir_fd=private); os.fsync(private)
+                        record['state'] = 'Aborted'
+                    save_receipt(state, operation, record)
+                    return {**public_receipt(record), 'bindingCurrent': False}
+                if record['state'] != 'Staged': raise Rejected('FILES_PREVIOUS_OPERATION_INCOMPLETE')
+                if not owns_pending or pending.st_size != record['sizeBytes'] or checksum(private, temporary) != record['sha256']:
+                    record['state'] = 'Unknown'; save_receipt(state, operation, record)
+                    return {**public_receipt(record), 'bindingCurrent': False}
+                original = current(parent, leaf)
+                if (version(original) if original else 'ABSENT') != record['expectedVersion']:
+                    os.unlink(temporary, dir_fd=private); os.fsync(private)
+                    record['state'] = 'Aborted'; save_receipt(state, operation, record)
+                    raise Rejected('FILES_VERSION_CONFLICT')
+                if original is not None and (publication_identity(original) != record['originalIdentity'] or checksum(parent, leaf) != record['originalSha256']):
+                    raise Rejected('FILES_VERSION_CONFLICT')
+                record['state'] = 'Applying'; save_receipt(state, operation, record)
+                exchange(private, temporary, parent, leaf, 1 if original is None else 2)
+                os.fsync(parent); os.fsync(private)
+                # Recovery verifies new inode/digest and any complete displaced object.
+                record = recover(record, parent, private, state)
+                return {**public_receipt(record), 'bindingCurrent': record['state'] == 'Completed'}
+            finally: os.close(private)
+    finally:
+        if lock is not None: os.close(lock)
+        os.close(state)
+
+
 def public_receipt(record):
     return {key: record[key] for key in ('operationId', 'state', 'sizeBytes', 'sha256', 'version', 'previousRetained') if key in record}
 
@@ -515,6 +586,7 @@ def status(request):
     try:
         record = read_receipt(state, operation)
         if not record or record.get('owner') != request['owner']: raise Rejected('FILES_OPERATION_NOT_FOUND')
+        if record.get('canceledBeforeReceive'): return {**public_receipt(record), 'bindingCurrent': False, 'isInProgress': False}
         lock = os.open(operation + '.lock', os.O_WRONLY | os.O_NOFOLLOW, dir_fd=state)
         try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError: return {**public_receipt(record), 'isInProgress': True}
@@ -564,7 +636,7 @@ def slot():
 
 
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'stat', 'download', 'upload', 'status'):
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status'):
         raise Rejected('FILES_ACTION_INVALID')
     invocation = identity(os.environ.get('INVOCATION_ID'))
     emit({'type': 'driver', 'invocationId': invocation})
@@ -578,6 +650,8 @@ def main():
     elif action == 'stat': emit(inspect(request))
     elif action == 'download': download(request)
     elif action == 'upload': emit(upload(request, source))
+    elif action == 'stage': emit(upload(request, source, staged_only=True))
+    elif action in ('publish', 'discard'): emit(staged_action(request, action))
     else: emit(status(request))
 
 

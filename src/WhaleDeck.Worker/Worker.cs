@@ -426,7 +426,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        var messages = await db.OutboxMessages.Where(item => item.MessageType != "NotificationPrivateRequested" && item.MessageType != "NotificationPrivateCancellationRequested" && item.ProcessedAtUtc == null && item.AvailableAtUtc <= DateTimeOffset.UtcNow)
+        var messages = await db.OutboxMessages.Where(item => item.MessageType != "NotificationPrivateRequested" && item.MessageType != "NotificationPrivateCancellationRequested" && item.MessageType != "FileUploadRequested" && item.MessageType != "FileUploadCancellationRequested" && item.ProcessedAtUtc == null && item.AvailableAtUtc <= DateTimeOffset.UtcNow)
             .OrderBy(item => item.OccurredAtUtc).Take(10).ToArrayAsync(cancellationToken);
         foreach (var message in messages)
         {

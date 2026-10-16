@@ -9,6 +9,7 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 {
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<TerminalSession> TerminalSessions => Set<TerminalSession>();
+    public DbSet<FileUploadOperation> FileUploadOperations => Set<FileUploadOperation>();
     public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
     public DbSet<PortalItem> PortalItems => Set<PortalItem>();
     public DbSet<PublicPortalPreference> PublicPortalPreferences => Set<PublicPortalPreference>();
@@ -359,6 +360,24 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     private static void ConfigureJobsAndMetrics(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<FileUploadOperation>(entity =>
+        {
+            entity.ToTable("file_upload_operations", table =>
+            {
+                table.HasCheckConstraint("ck_file_upload_state", "state IN ('AwaitingUpload','Receiving','Ready','Publishing','Unknown','Succeeded','Superseded','Canceled','Failed')");
+                table.HasCheckConstraint("ck_file_upload_limits", "size_bytes BETWEEN 0 AND 1073741824 AND version >= 0 AND expires_at_utc > created_at_utc");
+                table.HasCheckConstraint("ck_file_upload_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND owner_hash ~ '^[A-F0-9]{64}$' AND target_hash ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$' AND sha256 ~ '^[A-F0-9]{64}$' AND (expected_version = 'ABSENT' OR expected_version ~ '^[A-F0-9]{64}$')");
+            });
+            entity.HasKey(item => item.Id); entity.Property(item => item.ActorSubject).HasMaxLength(256);
+            entity.Property(item => item.RootId).HasMaxLength(64); entity.Property(item => item.RelativePath).HasMaxLength(4096);
+            entity.Property(item => item.State).HasMaxLength(16); entity.Property(item => item.ResultCode).HasMaxLength(64);
+            foreach (var name in new[] { nameof(FileUploadOperation.LoginBinding), nameof(FileUploadOperation.OwnerHash), nameof(FileUploadOperation.TargetHash), nameof(FileUploadOperation.RequestHash), nameof(FileUploadOperation.Sha256), nameof(FileUploadOperation.ExpectedVersion), nameof(FileUploadOperation.PublishedVersion) }) entity.Property(name).HasMaxLength(64);
+            entity.Property(item => item.Version).IsConcurrencyToken();
+            entity.HasIndex(item => item.TargetHash).IsUnique().HasFilter("completed_at_utc IS NULL");
+            entity.HasIndex(item => item.LeaseToken).IsUnique().HasFilter("lease_token IS NOT NULL");
+            entity.HasIndex(item => new { item.NextAttemptAtUtc, item.Id }).HasFilter("completed_at_utc IS NULL");
+            entity.HasOne<OperationJob>().WithOne().HasForeignKey<FileUploadOperation>(item => item.Id).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<NotificationPrivateOperation>(entity =>
         {
             entity.ToTable("notification_private_operations", table =>

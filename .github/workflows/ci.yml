@@ -105,7 +105,7 @@ jobs:
       - run: corepack pnpm build
       - name: Install Chromium for production authorization regression
         run: corepack pnpm exec playwright install chromium --with-deps
-      - name: Check production authorization and host/container terminal UI
+      - name: Check production authorization, file transfers and host/container terminal UI
         env:
           WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
-        run: corepack pnpm exec playwright test e2e/auth-deep-link.production.spec.ts e2e/host-terminal.spec.ts e2e/container-terminal.spec.ts --reporter=line
+        run: corepack pnpm exec playwright test e2e/auth-deep-link.production.spec.ts e2e/host-terminal.spec.ts e2e/container-terminal.spec.ts e2e/files.spec.ts --reporter=line

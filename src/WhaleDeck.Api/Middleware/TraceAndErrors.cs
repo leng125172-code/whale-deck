@@ -17,6 +17,8 @@ public static class TraceAndErrors
             RpcException { StatusCode: StatusCode.NotFound } => (StatusCodes.Status404NotFound, "AGENT_RESOURCE_NOT_FOUND", "The Agent resource was not found."),
             RpcException { StatusCode: StatusCode.PermissionDenied } => (StatusCodes.Status403Forbidden, "AGENT_OPERATION_FORBIDDEN", "The Agent operation is not permitted."),
             RpcException { StatusCode: StatusCode.FailedPrecondition } => (StatusCodes.Status409Conflict, "AGENT_PRECONDITION_FAILED", "The Agent operation prerequisites are not satisfied."),
+            RpcException { StatusCode: StatusCode.Aborted } => (StatusCodes.Status409Conflict, "AGENT_VERSION_CONFLICT", "The resource changed since planning."),
+            RpcException { StatusCode: StatusCode.ResourceExhausted } => (StatusCodes.Status429TooManyRequests, "AGENT_RESOURCE_BUDGET", "The Agent resource budget is exhausted. Try again later."),
             RpcException { StatusCode: StatusCode.Unavailable or StatusCode.DeadlineExceeded } => (StatusCodes.Status503ServiceUnavailable, "AGENT_UNAVAILABLE", "The Agent is temporarily unavailable."),
             RpcException { StatusCode: StatusCode.Unimplemented } => (StatusCodes.Status503ServiceUnavailable, "AGENT_CAPABILITY_UNSUPPORTED", "The Agent does not support this capability."),
             UnauthorizedAccessException => (StatusCodes.Status403Forbidden, "AUTH_FORBIDDEN", "The operation is not permitted."),

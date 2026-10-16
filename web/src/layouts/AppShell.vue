@@ -17,6 +17,7 @@ import {
   Connection,
   Tickets,
   UploadFilled,
+  FolderOpened,
 } from '@element-plus/icons-vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -73,6 +74,7 @@ const navigationGroups = [
       { index: '/host/resources', label: '主机设备', icon: Connection, administratorOnly: true },
       { index: '/host/processes', label: '主机进程', icon: Monitor, administratorOnly: true },
       { index: '/host/terminal', label: '宿主终端', icon: Monitor, administratorOnly: true },
+      { index: '/files', label: '文件管理', icon: FolderOpened, administratorOnly: true },
       { index: '/host/logs', label: '系统日志', icon: Tickets, administratorOnly: true },
       { index: '/host/updates', label: '系统更新', icon: UploadFilled, administratorOnly: true },
       { index: '/jobs', label: '任务中心', icon: Setting, administratorOnly: true },
