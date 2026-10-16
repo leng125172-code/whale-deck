@@ -283,6 +283,10 @@ def run(base, session):
                         data = stream.recv(4096)
                         if not data:
                             status = api('GET', '/exec/' + row['execId'] + '/json')
+                            deadline = time.monotonic() + 2
+                            while status.get('Running') and time.monotonic() < deadline:
+                                time.sleep(.05)
+                                status = api('GET', '/exec/' + row['execId'] + '/json')
                             if status.get('Running'): raise ValueError('EXEC_STREAM_LOST')
                             exit_code = status.get('ExitCode', -1); return
                         outgoing += len(data)
@@ -319,13 +323,15 @@ def run(base, session):
                             if status.get('Running') is not True or type(pid) is not int or pid <= 1 or status.get('ContainerID') != identifier:
                                 raise ValueError('EXEC_START_FAILED')
                             process_start, namespace = process_identity(pid)
-                            if pid == inspected['State']['Pid'] or namespace != Path(f'/proc/{inspected["State"]["Pid"]}/ns/pid').stat().st_ino:
+                            current_container = api('GET', '/containers/' + identifier + '/json')
+                            current_target = target(current_container, identifier, registry())
+                            if pid == current_container['State']['Pid'] or namespace != Path(f'/proc/{current_container["State"]["Pid"]}/ns/pid').stat().st_ino or namespace == Path('/proc/1/ns/pid').stat().st_ino:
                                 raise ValueError('EXEC_IDENTITY_CHANGED')
                             row.update(execPid=pid, execStart=process_start, pidNamespace=namespace)
                             save(session, row)
                             # Reinspect startup after launch; a concurrent restart must
                             # not silently redirect the grant into a new instance.
-                            if target(api('GET', '/containers/' + identifier + '/json'), identifier, registry())['instanceId'] != info['instanceId']:
+                            if current_target['instanceId'] != info['instanceId']:
                                 raise ValueError('CONTAINER_INSTANCE_CHANGED')
                             stream.setblocking(False); selector.register(stream, selectors.EVENT_READ)
                             api('POST', '/exec/' + exec_id + '/resize?h=' + str(command['rows']) + '&w=' + str(command['columns']))
