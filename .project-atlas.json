@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-17）",
-  "nextStep": "3e2da89文件变更BFF/永久意图、共享上传源目标锁、Job/Outbox/Worker/人类审计及WebUI源码已签收；757后端单元/115集成、61 Linux、200前端单元/24文件浏览器、四作业CI及同源码真实PG通过/清理。下一步覆盖部署及真实OIDC/BFF/UDS/网页验收；运行时仍3f47300/Agent1.22。之后目录树、编辑HDD备份、回收站/归档及隔离清理，全部76项保持active。"
+  "nextStep": "已部署1e72ac4/Agent1.23，文件变更真实OIDC/BFF/SQL/Worker/UDS及管理员/普通用户网页子范围已验收，CI四作业与同源码真实PG通过并清理。继续目录树/名称搜索、编辑前HDD备份（覆盖上传同策略）、回收站/归档、容器文件及隔离/长期清理；全部76项保持active。"
 }
