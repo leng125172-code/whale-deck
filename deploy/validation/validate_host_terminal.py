@@ -17,6 +17,8 @@ import uuid
 
 from validate_oidc import authenticate, required_environment
 
+PHASE = 'startup'
+
 
 class WireSocket:
     """Small bounded RFC6455 validation client, not production transport."""
@@ -84,6 +86,8 @@ class WireSocket:
 
 
 def main():
+    global PHASE
+    PHASE = 'authenticate'
     base = os.environ.get('WHALEDECK_URL', 'http://192.168.100.13:8080').rstrip('/')
     session, _ = authenticate(base, required_environment('VALIDATION_USERNAME'), required_environment('VALIDATION_PASSWORD'))
     csrf = session.get(base + '/api/v1/auth/csrf', timeout=15).json()
@@ -106,7 +110,9 @@ def main():
         assert 'grantHash' not in value and 'connectToken' not in value and 'loginBinding' not in value
         return value
     try:
+        PHASE = 'grant-and-idempotency'
         ticket = grant(); identifier = ticket['sessionId']; path = '/api/v1/terminals/' + identifier + '/connect'
+        PHASE = 'origin-and-query-rejection'
         wrong = WireSocket(base, path, cookie, origin='http://example.invalid')
         try: assert wrong.status == 403, 'TERMINAL_ORIGIN_NOT_REJECTED'
         finally: wrong.close()
@@ -115,6 +121,7 @@ def main():
         finally: bad_query.close()
         assert status(identifier)['state'] == 'Issued'
         stream = WireSocket(base, path, cookie)
+        PHASE = 'ready-resize-output-exit'
         marker = 'wd-bff-terminal-' + uuid.uuid4().hex
         transcript = bytearray()
         try:
@@ -135,11 +142,13 @@ def main():
             assert exited and marker.encode() in transcript and b'40 120' in transcript and uid and int(uid[1]) > 0, 'TERMINAL_OUTPUT_ASSERTION'
         finally: stream.close()
         for _ in range(40):
+            PHASE = 'durable-close'
             result = status(identifier)
             if result['state'] == 'Closed': break
             time.sleep(.25)
         assert result['state'] == 'Closed' and result['exitCode'] == 7, 'TERMINAL_CLOSE_NOT_DURABLE'
         replay = WireSocket(base, path, cookie)
+        PHASE = 'consumed-grant-replay'
         try:
             assert replay.status == 101
             replay.send({'token': ticket['connectToken']})
@@ -148,6 +157,7 @@ def main():
         assert status(identifier)['exitCode'] == 7
         # Explicit close is observed by the live-session lease monitor.
         live = grant(); live_id = live['sessionId']
+        PHASE = 'explicit-close-protocol-frame'
         active = WireSocket(base, '/api/v1/terminals/' + live_id + '/connect', cookie)
         try:
             assert active.status == 101; active.send({'token': live['connectToken']}); assert active.read()['kind'] == 'ready'
@@ -168,5 +178,7 @@ def main():
 if __name__ == '__main__':
     try: main()
     except Exception as error:
-        print(json.dumps({'hostTerminalAcceptance': 'failed', 'failureType': type(error).__name__}))
+        candidate = error.args[0] if error.args else None
+        code = candidate if isinstance(candidate, str) and re.fullmatch(r'TERMINAL_[A-Z_]{1,80}', candidate) else None
+        print(json.dumps({'hostTerminalAcceptance': 'failed', 'phase': PHASE, 'code': code, 'failureType': type(error).__name__}))
         raise SystemExit(1)

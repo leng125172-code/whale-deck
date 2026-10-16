@@ -34,7 +34,7 @@ public sealed class TerminalSessionServiceTests
         Assert.Null(repository.Row);
     }
     [Theory]
-    [InlineData("issue")][InlineData("claim")][InlineData("get")][InlineData("renew")]
+    [InlineData("issue")][InlineData("claim")][InlineData("get")][InlineData("renew")][InlineData("verify")]
     public async Task OrdinaryUserCannotIssueClaimReadOrRenew(string action)
     {
         var service = Service(new(), new(), false);
@@ -44,6 +44,7 @@ public sealed class TerminalSessionServiceTests
             if (action == "claim") await service.ClaimAsync(Actor, Guid.NewGuid(), new('B', 64), default);
             if (action == "get") await service.GetAsync(Actor, Guid.NewGuid(), default);
             if (action == "renew") await service.RenewAsync(Actor, Guid.NewGuid(), default);
+            if (action == "verify") await service.RequireConnectingAsync(Actor, Guid.NewGuid(), default);
         });
     }
     [Fact]

@@ -41,7 +41,7 @@ public sealed class TerminalCookieIdentityTests
         context.Request.Headers.Cookie = "";
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => reader.ReadAsync(context));
     }
-    private static async Task<(TerminalCookieIdentity Reader, ServerSideTicketStore Store, DefaultHttpContext Context, string Key)> Setup()
+    internal static async Task<(TerminalCookieIdentity Reader, ServerSideTicketStore Store, DefaultHttpContext Context, string Key)> Setup()
     {
         var protection = new EphemeralDataProtectionProvider();
         var store = new ServerSideTicketStore(new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())), protection);

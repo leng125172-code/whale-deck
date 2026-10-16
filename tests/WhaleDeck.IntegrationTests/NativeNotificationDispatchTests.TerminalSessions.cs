@@ -35,7 +35,11 @@ public sealed partial class NativeNotificationDispatchTests
         }));
         Assert.Single(claims, value => value);
         Assert.Single(await db.AuditEvents.Where(item => item.Action == "terminal.connecting").ToArrayAsync());
+        Assert.Null((await repository.FindOwnedAsync(actor, issued.Id, default))!.ConnectedAtUtc);
         Assert.True(await repository.RenewAsync(actor, issued.Id, now.AddSeconds(1), default));
+        Assert.True(await repository.RenewAsync(actor, issued.Id, now.AddSeconds(2), default));
+        Assert.NotNull((await repository.FindOwnedAsync(actor, issued.Id, default))!.ConnectedAtUtc);
+        Assert.Single(await db.AuditEvents.Where(item => item.Action == "terminal.opened").ToArrayAsync());
         Assert.False(await repository.RenewAsync(actor with { LoginBinding = new('B', 64) }, issued.Id, now.AddSeconds(2), default));
         Assert.False(await repository.RenewAsync(actor, issued.Id, now.AddMinutes(1), default));
         await repository.CloseAsync(actor, issued.Id, "TERMINAL_CLOSED", 7, now.AddSeconds(2), default);

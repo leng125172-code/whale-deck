@@ -17,3 +17,10 @@
 新增隔离原生PG验证覆盖双连接并发抢票、错误主体/登录/哈希、不可重放、续租/过期/终态、全局/主体预算、审计失败回滚，以及等行锁期间到期拒绝。新增真实OIDC/代理/BFF/UDS/PTy验收脚本，但本文件写入时尚未执行新增原生或发布，不得视为已通过。
 
 尚缺：前端xterm界面与浏览器走查、容器Exec、文件传输、长期会话元数据清理、进程重启/更多故障组合及完整P1-11签收。
+
+## 首轮实际结果与修正
+
+- 冻结 `61c97c187e2a6ed33a8637555cf21e1bdbdb4f54` 的原生报告 `dispatch-354b48dfb3744f7c91022b556203c5af.json`：2026-10-16 03:57:15–03:59:18 UTC实际执行1/通过1、cleanupConfirmed=true。SDK ID `sha256:c0790639332692a0d56cdd81ed581cfd24d040d9839764c138994866df89a3b6`。包含新增真实PG抢票/预算/审计事务与行锁到期测试。
+- 更新Job `ecf433a5-afdb-401f-a63f-30c788972b6c` 提交，实际更新unit于12:02:17 CST成功结束，inactive/dead、Result=success、ExecMainStatus=0。真实BFF验证首次失败RuntimeError：两条测试会话最终均Closed，正常shell的exit 7已持久化，另一个主动关闭会话未收到协议关闭帧。测试会话已关闭，审计保留，无残留终端unit。
+- 根因是取消待接收WebSocket操作先中止了socket，关闭帧随后无法发送。修正为与输出互斥地先发CloseOutput，再取消接收/清理；不放宽验证脚本的EOF断言。新增传输回归模拟待接收取消即abort，验证正常close帧先于取消、exit 7最终持久化。异常只记UUID/异常类型，无正文/异常对象。
+- 同时区分Connecting与实际Ready：签发Agent capability前仅验证Connecting；Agent返回Ready后，Active/ConnectedAt与terminal.opened审计同事务，仅一次写入；定时续租不重复审计。修正后642 Unit、90 Integration及Release通过，6原生在Windows跳过；新原生/覆盖发布与最终链路验收尚待继续。

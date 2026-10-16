@@ -48,6 +48,13 @@ public sealed class TerminalSessionService(ITerminalSessionRepository repository
         return await repository.RenewAsync(actor, id, time.GetUtcNow(), cancellationToken);
     }
 
+    public async Task<bool> RequireConnectingAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken)
+    {
+        await AuthorizeAsync(actor, cancellationToken);
+        var row = await repository.FindOwnedAsync(actor, id, cancellationToken); var now = time.GetUtcNow();
+        return row is { State: "Connecting" } && row.ExpiresAtUtc > now && row.LeaseExpiresAtUtc > now;
+    }
+
     // Cleanup must work after logout/demotion. Repository still binds both
     // owner and login, and may only close, never create/renew a capability.
     public Task CloseAsync(TerminalActor actor, Guid id, string code, int? exitCode, CancellationToken cancellationToken)

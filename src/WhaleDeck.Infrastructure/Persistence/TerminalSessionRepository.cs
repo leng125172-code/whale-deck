@@ -37,7 +37,7 @@ public sealed class TerminalSessionRepository(PlatformDbContext db) : ITerminalS
         if (DateTimeOffset.UtcNow > now) now = DateTimeOffset.UtcNow;
         if (row.State != "Issued" || row.GrantExpiresAtUtc <= now || row.ExpiresAtUtc <= now || !EqualHash(row.GrantHash, grantHash))
             throw new InvalidOperationException("TERMINAL_GRANT_USED_OR_EXPIRED");
-        row.State = "Connecting"; row.ConnectedAtUtc = now; row.LeaseExpiresAtUtc = now.AddSeconds(20); row.Version++;
+        row.State = "Connecting"; row.LeaseExpiresAtUtc = now.AddSeconds(20); row.Version++;
         Audit(row, "terminal.connecting", "Connecting", actor.TraceId, actor.SourceIp, now);
         await db.SaveChangesAsync(cancellationToken); return row;
     }, cancellationToken);
@@ -45,13 +45,20 @@ public sealed class TerminalSessionRepository(PlatformDbContext db) : ITerminalS
     public Task<TerminalSession?> FindOwnedAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) =>
         Owned(actor).SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
 
-    public async Task<bool> RenewAsync(TerminalActor actor, Guid id, DateTimeOffset now, CancellationToken cancellationToken)
+    public Task<bool> RenewAsync(TerminalActor actor, Guid id, DateTimeOffset now, CancellationToken cancellationToken) => Transaction(async () =>
     {
-        var changed = await Owned(actor).Where(item => item.Id == id && (item.State == "Connecting" || item.State == "Active") &&
-            item.ExpiresAtUtc > now && item.LeaseExpiresAtUtc > now).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.State, "Active")
-            .SetProperty(item => item.LeaseExpiresAtUtc, now.AddSeconds(35)).SetProperty(item => item.Version, item => item.Version + 1), cancellationToken);
-        return changed == 1;
-    }
+        var row = await db.TerminalSessions.FromSqlInterpolated($"SELECT * FROM terminal_sessions WHERE id={id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
+        if (DateTimeOffset.UtcNow > now) now = DateTimeOffset.UtcNow;
+        if (row is null || row.ActorSubject != actor.Subject || row.LoginBinding != actor.LoginBinding ||
+            row.State is not ("Connecting" or "Active") || row.ExpiresAtUtc <= now || row.LeaseExpiresAtUtc <= now) return false;
+        if (row.State == "Connecting")
+        {
+            row.ConnectedAtUtc = now;
+            Audit(row, "terminal.opened", "Active", actor.TraceId, actor.SourceIp, now);
+        }
+        row.State = "Active"; row.LeaseExpiresAtUtc = now.AddSeconds(35); row.Version++;
+        await db.SaveChangesAsync(cancellationToken); return true;
+    }, cancellationToken);
 
     public Task CloseAsync(TerminalActor actor, Guid id, string code, int? exitCode, DateTimeOffset now, CancellationToken cancellationToken) => Transaction(async () =>
     {
