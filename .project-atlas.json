@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-16）",
-  "nextStep": "8c5ac86已修复PKCS依赖、CI及部署运行时并验收；继续本地前端终端、容器Exec/文件传输、隔离与清理；全部76项仍在推进。"
+  "nextStep": "1068b27已验收PKCS容器与宿主运行库修复、受限宿主终端WebUI及初始路由授权；继续容器Exec/文件传输、团队隔离与长期清理，P1-11及全部76项仍在推进。"
 }

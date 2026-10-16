@@ -132,3 +132,63 @@ gate. Publication from frozen source 640654e produced host-publish.7dG1kC:
 both included frameworks and actual PKCS informational metadata are 10.0.13.
 This package was validated but is **not yet installed**; a corrected frozen
 native run and final deployment/service checks remain required.
+
+## Installed host-runtime acceptance (e85c44a)
+
+The preceding pending statements are historical. Source e85c44a's CI
+[38866436307](https://github.com/leng125172-code/whale-deck/actions/runs/38866436307)
+passed all three jobs, including Release build/tests and the complete transitive
+dependency audit. Frozen SDK 10.0.402 dispatch report
+`dispatch-e6309cdb8ba04d2cb09d47ad57a510bb.json` executed/passed 1 with cleanup,
+07:21:16–07:23:10 UTC. No external notification was sent.
+
+Update Job `432df14a-4ac0-4aa6-b61c-5a74cba93366` scheduled the real deployment;
+the actual update unit terminated successfully at **15:31:39 CST**, inactive/dead,
+Result=success, ExecMainStatus=0. Direct inspection of both installed host bundles
+confirms .NET/ASP.NET 10.0.13 and PKCS product version
+`10.0.13+4099f83977f4d29604a9aeb971fb0a7bc1d5f699`, SHA-256
+`e562a8977d9dd59e4329f1ad0941c99d10dc27c069c15f8b10be647103c144e4`.
+Installed runtime validation, systemd/permissions/UDS, dynamic entry points and
+all 11 core containers passed; user-managed sudo was preserved.
+
+SDK 10.0.402 uses the patched ASP.NET shared PKCS in API rather than copying a
+redundant app-local DLL. The API's actual shared-framework DLL has the above
+10.0.13 product version/hash; missing `/app/System.Security.Cryptography.Pkcs.dll`
+is therefore not a deployment failure. Worker retains its official package DLL,
+product 10.0.13 and SHA-256 `eff9ed505c194f0f5c9faef1a175459cd0560eeb4ad08890c7c0c0e1ff4d34c3`.
+Both running containers report runtime 10.0.13 and healthy. The first inspector
+incorrectly required an app-local API DLL and failed; the corrected inspector
+checks actual product metadata in app/shared framework files, not deps.json alone.
+
+Real OIDC authorization/notification-management and eight HTTP-asset checks
+passed. Terminal regression found a separate idle-stream EOF at explicit close;
+its temporary sessions were cleaned and that check was **not** signed off.
+The stable proxy's 5-second ActivityTimeout is shorter than both the terminal's
+10-second revocation monitor and 20-second keep-alive. A dedicated bounded
+stream cluster is being verified; security patching remains installed, with
+no audit suppression or rollback to an affected runtime. See the terminal UI
+record for its final result. Presence/version checks do not establish whether
+any vulnerability was exploited.
+
+## Final streaming regression and retained patched runtime (1068b27)
+
+[CI 38868581495](https://github.com/leng125172-code/whale-deck/actions/runs/38868581495)
+is green: 646 Unit / 92 Integration passed (6 explicit native skips), Release,
+full transitive audit, installer and production-built authorization browser gate
+all passed. No known vulnerable packages were reported by the configured sources
+at that time; this is not a universal vulnerability guarantee.
+Frozen-source SDK 10.0.402 report `dispatch-fe7c549d63224b2caec314d79601e853.json`
+executed/passed 1 with cleanup, 07:39:57–07:41:34 UTC.
+
+Job `b0cb79f2-e94f-4588-9686-b271e7cc86ca` scheduled the final overwrite deployment.
+The actual update unit ended **15:43:57 CST**, inactive/dead, Result=success,
+ExecMainStatus=0. Both host bundles and the API shared/Worker package DLLs were
+independently rechecked and retain the fixed 10.0.13 product versions/hashes
+recorded above. Real OIDC/BFF/UDS/PTy, silent-six-second-then-close with actual
+RFC6455 acknowledgment, resize/exit persistence and consumed-grant replay passed;
+test sessions were cleaned. Real admin/ordinary/anonymous permissions, CSRF/Origin,
+notification-management and eight HTTP assets also passed, external sends zero.
+Host runtime/permissions/UDS/dynamic entry checks and isolated installed-maintenance
+malformed/oversized/missing-state checks passed; isolated process/files removed.
+No host/Docker reboot, production fault injection, audit suppression or
+affected-runtime rollback was used. Broader P0–P5 work remains active.

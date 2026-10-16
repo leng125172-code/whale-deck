@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-16 runtime `1068b27` 已覆盖发布并签收宿主运行库安全补全与受限宿主终端WebUI子范围：实际Agent/维护包、API共享PKCS与Worker包均核实10.0.13；SDK10.0.402锁定摘要，发布/安装/在位校验，保持NuGetAudit与警告即错误。CI 38868581495全绿、646 Unit/92 Integration、171前端单元及3项生产授权浏览器门禁；冻结原生PG实际1通过/清理。更新unit15:43:57 CST终态成功；真实终端静默6秒正常Close/尺寸/退出持久化/重放、身份/通知/8资产和宿主UDS/权限/动态入口与隔离维护页通过，11核心healthy。实机UI管理员中文/IME/主题/resize/退出及普通用户冷启动403证据见 [终端UI记录](qa/HOST_TERMINAL_UI.md)，原5秒代理EOF及检查器误要求API本地DLL的失败保留并修正；[安全记录](qa/DEPENDENCY_SECURITY_2026_10.md)区分初版容器修复与本次宿主遗漏补全。不作入侵取证结论；P1-11仍缺容器Exec/文件传输/团队隔离/长期清理，全部76项继续，以下runtime为历史。
+
 - 2026-10-16 runtime `8c5ac86` PKCS 安全修复已签收：核实 MailKit→MimeKit→Pkcs 10.0.0，显式锁定10.0.13、保持全间接依赖审计和警告即错误；容器 .NET/ASP.NET 基础镜像同步锁定10.0.13官方摘要。CI 38855112870全部绿色，643 Unit/92 Integration、Release和依赖审计通过；冻结原生PG/TLS SMTP派发实际1通过/清理，未发送外部通知。真实更新unit13:25:20 CST成功结束；API/Worker依赖清单和DLL哈希、Migrator镜像、运行时均核实修复版本，11核心healthy；真实OIDC/权限/通知/宿主终端/8资产与宿主回归通过。见 [安全修复证据](qa/DEPENDENCY_SECURITY_2026_10.md)。仅关闭此依赖问题，不作未遭入侵的取证结论；本地终端WebUI仍在开发、未随此补丁提交部署，全部76项继续。
 
 - 2026-10-16 runtime `5bc2551` 受限宿主终端后端签收：642 Unit/92 Integration、Release无警告错误，冻结原生PG执行1/通过1/清理；真实OIDC/稳定代理/Gateway/BFF/UDS/PTy、一次性/幂等/Origin/尺寸/exit持久化/关闭握手和撤销通过。普通/匿名新终端全部入口403/401、原任务1006事件/通知全链路/8资产/UDS/宿主回归通过，更新unit12:31:12 CST成功结束、11核心healthy、sudo保留。首两次EOF失败与未放宽断言的修正见 [BFF证据](qa/HOST_TERMINAL_BFF.md)。前端尚未生成，本机pnpm新依赖TLS失败，未改全局代理或关闭TLS验证；继续前端、容器Exec/文件传输、隔离/清理与全76项，不能当作完整终端完成。

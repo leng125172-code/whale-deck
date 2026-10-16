@@ -31,6 +31,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+- 2026-10-16 runtime `1068b27` 最新覆盖签收：PKCS全链路及实际宿主自包含包均10.0.13，SDK10.0.402锁定；CI 38868581495全绿、646 Unit/92 Integration、171前端及3项生产授权浏览器门禁，冻结PG实际通过并清理。受限宿主终端WebUI、真实管理员中文/IME/主题/resize/退出及普通用户初始403已验收，5秒代理静默EOF已修复，实机静默6秒正常Close/持久化/重放通过。实际更新unit15:43:57 CST成功结束，身份/通知/8资产/UDS/宿主回归及11核心健康，sudo保留。见 [UI及失败记录](qa/HOST_TERMINAL_UI.md)、[容器与宿主安全补全](qa/DEPENDENCY_SECURITY_2026_10.md)。P1-11仍部分实现，容器Exec/文件传输/团队隔离/长期清理和全部76项继续；下方为历史证据。
+
 - 2026-10-16 runtime `5bc2551` 签收受限宿主终端BFF后端：登录绑定/一次性30秒票据、持久元数据与事务审计、同源WebSocket、Ready激活/续租/有界关闭握手；642 Unit/92 Integration、Release、冻结原生PG通过并清理。真实OIDC/维护代理/Gateway/UDS/PTy、尺寸/exit/关闭/重放/撤销与普通匿名403/401通过，原任务/通知/资产/宿主回归及11核心健康、sudo保留。见 [失败记录和最终证据](qa/HOST_TERMINAL_BFF.md)。前端、容器Exec/文件传输、租户级隔离与长期清理仍缺，完整P1-11/76项不签完；下方runtime为历史。
 
 - 2026-10-16 runtime `c9568e3` 签收宿主PTY基础：真实UDS鉴权/重放/重复会话、非特权身份/resize/退出码、断线和仅强杀测试driver后的setsid子进程清理、正文不进journal/记录均通过。610 Unit/86 Integration及Release通过，冻结原生PG实际执行通过并清理；覆盖更新unit成功结束、原任务/通知/身份/资产/宿主回归通过，11核心healthy、sudo保留。见 [终端基础证据](qa/HOST_TERMINAL_PTY.md)。BFF会话/前端/容器Exec及文件传输仍缺，不签完整P1-11或全部76项；下方runtime为历史。
