@@ -56,6 +56,7 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-privileged" /usr/loca
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-application-backup.py" /usr/local/libexec/whaledeck-application-backup.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-notification-config.py" /usr/local/libexec/whaledeck-notification-config.py
 install -o root -g root -m 0755 "$(dirname "$0")/whaledeck-host-terminal.py" /usr/local/libexec/whaledeck-host-terminal.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-terminal.py" /usr/local/libexec/whaledeck-container-terminal.py
 install -d -o root -g root -m 0700 /var/lib/whaledeck-application-backup /data/DockerData/whaledeck/application-backups
 for unit in whaledeck-application-backup-recovery.service whaledeck-application-backup-recovery.timer; do
   install -o root -g root -m 0644 "$(dirname "$0")/$unit" "/etc/systemd/system/$unit"

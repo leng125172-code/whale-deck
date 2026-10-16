@@ -545,3 +545,23 @@ message HostTerminalEvent {
 service HostTerminalService {
   rpc Connect(stream HostTerminalFrame) returns (stream HostTerminalEvent);
 }
+
+// Container Exec has a dedicated method capability. Only the first frame may
+// bind a full immutable container ID, startup instance and fixed shell choice.
+message ContainerTerminalFrame {
+  HostTerminalFrame payload = 1;
+  string container_id = 2;
+  string instance_id = 3;
+  string shell = 4;
+}
+message ContainerTerminalTarget {
+  string container_id = 1;
+  string name = 2;
+  string instance_id = 3;
+  string image_id = 4;
+  string configured_user = 5;
+}
+service ContainerTerminalService {
+  rpc Inspect(ResourceReference) returns (ContainerTerminalTarget);
+  rpc Connect(stream ContainerTerminalFrame) returns (stream HostTerminalEvent);
+}

@@ -82,13 +82,21 @@ public sealed class HostTerminalRunner : IDisposable
 
     public async Task RunAsync(string sessionId, string open, IAsyncStreamReader<HostTerminalFrame> requests,
         IServerStreamWriter<HostTerminalEvent> responses, CancellationToken cancellationToken)
+        => await RunCoreAsync("host-terminal", sessionId, open, requests, responses, cancellationToken);
+
+    public async Task RunContainerAsync(string sessionId, string open, IAsyncStreamReader<HostTerminalFrame> requests,
+        IServerStreamWriter<HostTerminalEvent> responses, CancellationToken cancellationToken)
+        => await RunCoreAsync("container-terminal", sessionId, open, requests, responses, cancellationToken);
+
+    private async Task RunCoreAsync(string action, string sessionId, string open, IAsyncStreamReader<HostTerminalFrame> requests,
+        IServerStreamWriter<HostTerminalEvent> responses, CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsLinux()) throw new InvalidOperationException("TERMINAL_LINUX_REQUIRED");
         if (!await slots.WaitAsync(0, cancellationToken)) throw new RpcException(new Status(StatusCode.ResourceExhausted, "TERMINAL_SESSION_LIMIT"));
         if (!active.TryAdd(sessionId, 0)) { slots.Release(); throw new RpcException(new Status(StatusCode.AlreadyExists, "TERMINAL_SESSION_EXISTS")); }
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         lifetime.CancelAfter(TimeSpan.FromMinutes(10));
-        using var process = new Process { StartInfo = Start("host-terminal", sessionId) };
+        using var process = new Process { StartInfo = Start(action, sessionId) };
         Task input = Task.CompletedTask, output = Task.CompletedTask, errors = Task.CompletedTask;
         string? invocationId = null;
         try

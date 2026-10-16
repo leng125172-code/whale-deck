@@ -66,4 +66,5 @@ app.MapGrpcService<OperationGrpcService>();
 app.MapGrpcService<ManagedResourceGrpcService>();
 app.MapGrpcService<NotificationConfigurationGrpcService>();
 app.MapGrpcService<HostTerminalGrpcService>();
+app.MapGrpcService<ContainerTerminalGrpcService>();
 await app.RunAsync();

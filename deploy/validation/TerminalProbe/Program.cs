@@ -11,7 +11,9 @@ using WhaleDeck.Contracts.Agent.V1;
 
 try
 {
-    await TerminalProbe.RunAsync();
+    if (args.Length == 1 && args[0] == "container") await ContainerTerminalProbe.RunAsync();
+    else if (args.Length == 0) await TerminalProbe.RunAsync();
+    else throw new ArgumentException("Unsupported probe mode");
     return 0;
 }
 catch (Exception error)
