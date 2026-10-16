@@ -22,7 +22,7 @@
 
 1.23增加`Discard(FileOperationApplyRequest)`和`files.mutation-tombstones`能力；仅此方法的签名可调用固定`operation-discard`动作。新记录只写原owner/UUID/计划绑定的Aborted回执，不需要源路径仍可读；迟到Apply只重放Aborted，不执行。已有Completed不回滚，已有非终态只观察恢复，Unknown不重做。新BFF要求此能力，不能对1.22旧Agent静默绕过取消保护；源码实现不等于安装态已签收，见[工作流账本](qa/FILE_MUTATION_WORKFLOW.md)。
 
-固定helper只新增operation-plan/operation-apply/operation-status三枚举；相邻执行模块须root所有、单链接、不可组/他人写。上传和变更共用非阻塞namespace提交锁，忙时不误标Unknown；新注册根须明确files-mutate。安装只升级与旧默认完全相等的注册表并原子备份，任何自定义/收紧规则原样保留。当前源码已接入，安装态/真实RPC验收状态见[文件变更](FILE_MUTATIONS.md)；尚未注册新的BFF/任务/Worker/UI，不代表完整文件管理。
+固定helper现有operation-plan/operation-apply/operation-status/operation-discard四枚举；相邻执行模块须root所有、单链接、不可组/他人写。上传和变更共用非阻塞namespace提交锁，忙时不误标Unknown；新注册根须明确files-mutate。安装只升级与旧默认完全相等的注册表并原子备份，任何自定义/收紧规则原样保留。新BFF/持久任务/Worker/人类审计/UI在3e2da89源码中已通过门禁，尚未覆盖该运行时；最后安装态仍3f47300/1.22。见[文件变更](FILE_MUTATIONS.md)及[源码验收](qa/FILE_MUTATION_WORKFLOW.md)，不代表完整文件管理。
 
 ### 登记文件传输（1.20；1.21增加暂存发布）
 
