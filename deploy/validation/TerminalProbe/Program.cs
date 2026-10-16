@@ -17,7 +17,7 @@ try
 catch (Exception error)
 {
     // No exception text, terminal transcript, credential or capability output.
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = TerminalProbe.Phase, failureType = error.GetType().Name }));
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = TerminalProbe.Phase, code = TerminalProbe.FailureCode, failureType = error.GetType().Name }));
     return 1;
 }
 
@@ -25,6 +25,7 @@ internal static partial class TerminalProbe
 {
     private const string Method = "/whaledeck.agent.v1.HostTerminalService/Connect";
     public static string Phase { get; private set; } = "startup";
+    public static string FailureCode { get; private set; } = "";
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(20);
     private static readonly string[] KillArguments = ["kill", "--kill-whom=main", "--signal=KILL"];
 
@@ -87,12 +88,17 @@ internal static partial class TerminalProbe
                 while (await call.ResponseStream.MoveNext())
                 {
                     var row = call.ResponseStream.Current; Capture(text, row);
-                    if (row.Kind == "exit") { Check(row.ExitCode == 7); exit = true; await call.RequestStream.CompleteAsync(); }
-                    Check(row.Kind != "error");
+                    if (row.Kind == "exit") { Check(row.ExitCode == 7, "exit-code-" + row.ExitCode); exit = true; await call.RequestStream.CompleteAsync(); }
+                    Check(row.Kind != "error", "driver-error-" + row.Code);
                 }
                 var uid = File.ReadLines("/etc/passwd").Single(line => line.StartsWith("whaledeck-shell:", StringComparison.Ordinal)).Split(':')[2];
-                Check(exit && text.ToString().Contains(transcriptMarker, StringComparison.Ordinal) && text.ToString().Contains("WD_UID=" + uid, StringComparison.Ordinal) && text.ToString().Contains("WD_GROUPS=whaledeck-shell", StringComparison.Ordinal) &&
-                    text.ToString().Contains("WD_HOME=/var/lib/whaledeck-shell", StringComparison.Ordinal) && text.ToString().Contains("40 120", StringComparison.Ordinal) && text.ToString().Contains("WD_KEY_NO", StringComparison.Ordinal));
+                Check(exit, "missing-exit");
+                Check(text.ToString().Contains(transcriptMarker, StringComparison.Ordinal), "missing-marker");
+                Check(text.ToString().Contains("WD_UID=" + uid, StringComparison.Ordinal), "wrong-uid");
+                Check(text.ToString().Contains("WD_GROUPS=whaledeck-shell", StringComparison.Ordinal), "wrong-groups");
+                Check(text.ToString().Contains("WD_HOME=/var/lib/whaledeck-shell", StringComparison.Ordinal), "wrong-home");
+                Check(text.ToString().Contains("40 120", StringComparison.Ordinal), "wrong-size");
+                Check(text.ToString().Contains("WD_KEY_NO", StringComparison.Ordinal), "key-readable");
             }
             Phase = "transcript-not-in-journal-or-record";
             var journalStart = new ProcessStartInfo("/usr/bin/journalctl") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
@@ -128,7 +134,7 @@ internal static partial class TerminalProbe
                 var session = Guid.NewGuid().ToString("N");
                 using var call = Connect(Headers());
                 await call.RequestStream.WriteAsync(Open(session)); await Ready(call);
-                await Input(call, "python3 -c 'import os,time;os.setsid();time.sleep(300)' & printf 'WD_CHILD=%s\\n' \"$!\"\n");
+                await Input(call, "python3 -c 'import os,time; p=os.fork(); os._exit(0) if p else None; os.setsid(); print(\"WD_CHILD=\"+str(os.getpid()),flush=True); time.sleep(300)' &\n");
                 var text = new StringBuilder(); Match match;
                 do
                 {
@@ -170,7 +176,7 @@ internal static partial class TerminalProbe
         try { var row = File.ReadAllText($"/proc/{pid}/stat"); return row[(row.LastIndexOf(')') + 2)..].Split(' ')[19]; }
         catch (IOException) { return null; }
     }
-    private static void Check(bool valid) { if (!valid) throw new InvalidOperationException("Terminal acceptance failed"); }
+    private static void Check(bool valid, string code = "assertion") { if (!valid) { FailureCode = code; throw new InvalidOperationException("Terminal acceptance failed"); } }
     [GeneratedRegex("WD_CHILD=([0-9]{1,10})")]
     private static partial Regex Child();
 }
