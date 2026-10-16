@@ -2260,6 +2260,108 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.ToTable("scheduled_task_runs", (string)null);
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.TerminalSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActorSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("actor_subject");
+
+                    b.Property<string>("CloseCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("close_code");
+
+                    b.Property<DateTimeOffset?>("ClosedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at_utc");
+
+                    b.Property<DateTimeOffset?>("ConnectedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("connected_at_utc");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("exit_code");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<DateTimeOffset>("GrantExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("grant_expires_at_utc");
+
+                    b.Property<string>("GrantHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("grant_hash");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_expires_at_utc");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("state");
+
+                    b.Property<string>("TargetId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("target_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("State", "LeaseExpiresAtUtc");
+
+                    b.HasIndex("ActorSubject", "LoginBinding", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("terminal_sessions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_terminal_expiry", "grant_expires_at_utc > created_at_utc AND grant_expires_at_utc <= created_at_utc + INTERVAL '30 seconds' AND expires_at_utc > created_at_utc AND expires_at_utc <= created_at_utc + INTERVAL '10 minutes'");
+
+                            t.HasCheckConstraint("ck_terminal_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND grant_hash ~ '^[A-F0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_terminal_state", "state IN ('Issued','Connecting','Active','Closed') AND version >= 0");
+
+                            t.HasCheckConstraint("ck_terminal_target", "target_id = 'whaledeck.host'");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.NotificationDelivery", b =>
                 {
                     b.HasOne("WhaleDeck.Domain.Entities.NotificationChannel", null)

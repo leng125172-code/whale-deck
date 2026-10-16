@@ -116,6 +116,8 @@ try
     }
 
     builder.Services.AddScoped<IAuthorizationHandler, AdministratorAuthorizationHandler>();
+    builder.Services.AddScoped<TerminalCookieIdentity>();
+    builder.Services.AddScoped<WhaleDeck.Api.Terminals.HostTerminalWebSocket>();
     var authorization = builder.Services.AddAuthorizationBuilder()
         .AddPolicy("Administrator", policy => policy.RequireAuthenticatedUser().AddRequirements(new AdministratorRequirement()));
     authorization.SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
@@ -128,6 +130,7 @@ try
 
     var app = builder.Build();
     app.UseForwardedHeaders();
+    app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
     // Keep request logging outside the exception handler. Expected conflicts
     // are converted to their final Problem Details response before Serilog
     // observes the status, so a normal 409 is not emitted as a 500 stack trace.

@@ -8,6 +8,7 @@ namespace WhaleDeck.Infrastructure.Persistence;
 public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> options) : DbContext(options)
 {
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<TerminalSession> TerminalSessions => Set<TerminalSession>();
     public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
     public DbSet<PortalItem> PortalItems => Set<PortalItem>();
     public DbSet<PublicPortalPreference> PublicPortalPreferences => Set<PublicPortalPreference>();
@@ -215,6 +216,28 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     private static void ConfigureAuditAndSettings(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<TerminalSession>(entity =>
+        {
+            entity.ToTable("terminal_sessions", table =>
+            {
+                table.HasCheckConstraint("ck_terminal_state", "state IN ('Issued','Connecting','Active','Closed') AND version >= 0");
+                table.HasCheckConstraint("ck_terminal_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND grant_hash ~ '^[A-F0-9]{64}$'");
+                table.HasCheckConstraint("ck_terminal_target", "target_id = 'whaledeck.host'");
+                table.HasCheckConstraint("ck_terminal_expiry", "grant_expires_at_utc > created_at_utc AND grant_expires_at_utc <= created_at_utc + INTERVAL '30 seconds' AND expires_at_utc > created_at_utc AND expires_at_utc <= created_at_utc + INTERVAL '10 minutes'");
+            });
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.ActorSubject).HasMaxLength(256);
+            entity.Property(item => item.LoginBinding).HasMaxLength(64);
+            entity.Property(item => item.IdempotencyKey).HasMaxLength(36);
+            entity.Property(item => item.GrantHash).HasMaxLength(64);
+            entity.Property(item => item.TargetId).HasMaxLength(64);
+            entity.Property(item => item.State).HasMaxLength(16);
+            entity.Property(item => item.CloseCode).HasMaxLength(32);
+            entity.Property(item => item.Version).IsConcurrencyToken();
+            entity.HasIndex(item => new { item.ActorSubject, item.LoginBinding, item.IdempotencyKey }).IsUnique();
+            entity.HasIndex(item => new { item.State, item.LeaseExpiresAtUtc });
+            entity.HasIndex(item => item.CreatedAtUtc);
+        });
         modelBuilder.Entity<AuditEvent>(entity =>
         {
             entity.ToTable("audit_events");
