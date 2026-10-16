@@ -31,6 +31,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+- 2026-10-16 当前runtime9d5775e已签收重启后维护状态修复：576 Unit/73 Integration、Release、冻结原生执行通过/清理与安装后二进制隔离HTTP测试通过，更新unit实际08:44:30成功结束；前一eabac51私有配置对应实际身份/API/Worker/Agent与8资产/宿主通过，临时资源精确清理、未启用发送。MariaDB启动挂载故障恢复、Docker存储挂载依赖已安装且未重启Docker。见 [当前P0证据](qa/BOOT_MAINTENANCE_STATUS.md)。生产身份UI、更多故障组合和实际重启演练仍未完成，全部76项继续。
+
 - 2026-10-16 私有配置 WebUI 已完成本地实现与验证，20项联合浏览器、562 Unit/73 Integration及Release/类型/lint/前端构建通过；6原生本机跳过。两个已知工作站入口 SSH 超时，未调度本增量部署，不能算真实验收或新运行时签收。见 [UI恢复点](qa/NOTIFICATION_PRIVATE_UI.md)。继续原生/工作站验收及更多故障组合，P4-06与全部76项不缩减。
 
 - 2026-10-14 runtime `39c990b` 验收通知私有配置后端工作流：561 Unit/73 Integration、原生PG事务/恢复、真实 OIDC→API→Valkey→Worker→Agent 应用/移除/永久重放及精确清理通过，渠道未启用/外部发送0，普通匿名新入口拒绝、迁移/健康/UDS/HTTP资源一致，sudo保留。详见 [后端流程](qa/NOTIFICATION_PRIVATE_WORKFLOW.md)。配置 WebUI 与更多故障组合仍缺，76项完整目标不缩减；下方 runtime 为历史。

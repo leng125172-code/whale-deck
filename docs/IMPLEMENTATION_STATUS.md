@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-16 最新runtime `9d5775e` 已签收重启后维护状态修复；576 Unit/73 Integration与Release通过，冻结原生dispatch执行/通过并清理、真实安装后二进制独立HTTP验证通过，宿主更新08:44:30成功结束。此前eabac51私有配置真实应用/移除/永久重放、版本及发送阻断、权限/CSRF/Origin/UDS、8资产字节与宿主通过，外部发送0。MariaDB启动挂载故障已恢复，数据库平台a3f734a启动依赖实际安装且未重启Docker，缺失配置bind原生拒绝通过；没有重建数据库、重启主机或卸载HDD。见 [重连与P0修复](qa/BOOT_MAINTENANCE_STATUS.md)。生产身份UI、更多通知故障组合、完整重启演练及76项全量仍继续。
+
 - 2026-10-16 通知私有配置 WebUI 已实现并本地验证：结构化输入/保留替换移除、计划确认/冻结原请求重试、任务状态/未知确认、关闭与降权清空、渠道版本及发送阻断提示；562 Unit/73 Integration、Release/类型/lint/前端构建和20浏览器联合回归通过，6原生本机跳过。两个已知工作站网卡 SSH 当前均超时，本增量未调度部署、未执行新的原生或远端验收，最后已签收 runtime 保持历史 `39c990b`，不推断当前健康。见 [UI恢复点](qa/NOTIFICATION_PRIVATE_UI.md)。P4-06/76项完整目标仍在推进。
 
 - 2026-10-14 最新 runtime `39c990b` 已验收通知私有配置后端流程：管理员签名 Plan/确认202 Job/Status/Unknown确认、Valkey短时输入且PG不存目标密码或票据、独立Worker租约/回执优先、原子入队暂停渠道/Job/Outbox/审计、发送阻断。561 Unit/73 Integration、Release、冻结原生PG新增流程/恢复/清理通过，真实 OIDC→API→Valkey→Worker→Agent应用/移除与永久重放通过，渠道始终停用、外部发送0、临时对象精确清理/审计保留；普通匿名新入口拒绝、migration/UDS/8 HTTP资源/宿主和11核心健康及sudo通过。见 [流程验收](qa/NOTIFICATION_PRIVATE_WORKFLOW.md)。下一步配置 WebUI、更多并发/取消/Unknown人工确认故障组合；P4-06与76项仍未整体完成。

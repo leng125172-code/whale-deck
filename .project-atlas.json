@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-16）",
-  "nextStep": "通知私有配置 WebUI 本地已验证，待工作站原生测试与覆盖部署验收；继续76项完整目标。"
+  "nextStep": "私有配置正向链路及维护状态修复已验收；继续通知故障组合、生产身份UI及76项完整目标。"
 }
