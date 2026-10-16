@@ -77,6 +77,15 @@ def main():
             assert ordinary.get(endpoint + path, timeout=15, allow_redirects=False).status_code == 403
             assert anonymous.get(endpoint + path, timeout=15, allow_redirects=False).status_code == 401
         ordinary_csrf = ordinary.get(base + '/api/v1/auth/csrf', timeout=15).json()
+        terminal_id = str(uuid.uuid4()); terminal_key = str(uuid.uuid4())
+        terminal_headers = {ordinary_csrf['headerName']: ordinary_csrf['token'], 'Origin': base, 'Idempotency-Key': terminal_key}
+        terminal_root = base + '/api/v1/terminals/'
+        for suffix in (terminal_id, terminal_id + '/connect'):
+            assert ordinary.get(terminal_root + suffix, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 403
+            assert anonymous.get(terminal_root + suffix, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 401
+        for suffix, body in (('host/grants', {'confirmed': True, 'idempotencyKey': terminal_key}), (terminal_id + '/close', {})):
+            assert ordinary.post(terminal_root + suffix, json=body, headers=terminal_headers, timeout=15, allow_redirects=False).status_code == 403
+            assert anonymous.post(terminal_root + suffix, json=body, headers={'Origin': base}, timeout=15, allow_redirects=False).status_code == 401
         for path, body in ((test_path, {'expectedChannelVersion': 0, 'confirmed': True}), (retry_path, {**retry_body, 'acceptDuplicateRisk': True})):
             ordinary_headers = {ordinary_csrf['headerName']: ordinary_csrf['token'], 'Origin': base, 'Idempotency-Key': str(uuid.uuid4())}
             assert ordinary.post(endpoint + path, json=body, headers=ordinary_headers, timeout=15, allow_redirects=False).status_code == 403
@@ -92,6 +101,7 @@ def main():
         assert all('/api/v1/notifications/manage/' + path in doc.json()['paths'] for path in ('channels', 'routes', 'deliveries'))
         assert '/api/v1/notifications/manage/channels/{id}/test' in doc.json()['paths']
         assert '/api/v1/notifications/manage/deliveries/{id}/retry-unknown' in doc.json()['paths']
+        assert all('/api/v1/terminals/' + suffix in doc.json()['paths'] for suffix in ('host/grants', '{id}', '{id}/connect', '{id}/close'))
         delete_key = str(uuid.uuid4()); delete_body = {'expectedVersion': route_version, 'confirmed': True}
         assert write('DELETE', 'routes/' + route_id, delete_body, delete_key).status_code == 204
         assert write('DELETE', 'routes/' + route_id, delete_body, delete_key).status_code == 204
@@ -101,7 +111,7 @@ def main():
         current = next(item for item in channels if item['id'] == channel_id)
         assert write('DELETE', 'channels/' + channel_id, {'expectedVersion': current['version'], 'confirmed': True}).status_code == 204
         channel_id = None
-        print(json.dumps({'notificationManagementAcceptance': 'passed', 'realOidcCrudIdempotencyVersionsOriginCsrf': 'passed', 'adminOrdinaryAnonymousOpenApi': 'passed', 'externalSends': 0, 'temporaryConfigurationRemoved': True}))
+        print(json.dumps({'notificationManagementAcceptance': 'passed', 'realOidcCrudIdempotencyVersionsOriginCsrf': 'passed', 'adminOrdinaryAnonymousOpenApi': 'passed', 'terminalOrdinaryAnonymousReadGrantConnectClose': 'passed', 'externalSends': 0, 'temporaryConfigurationRemoved': True}))
     finally:
         try:
             if route_id is not None:
