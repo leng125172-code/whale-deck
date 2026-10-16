@@ -594,5 +594,9 @@ service FileTransferService {
   rpc Inspect(FileLocation) returns (FileEntry);
   rpc Download(FileDownloadRequest) returns (stream FileDownloadFrame);
   rpc Upload(stream FileUploadFrame) returns (FileUploadReceipt);
+  // Separate method capabilities: API may stage bytes, Worker may publish or discard.
+  rpc StageUpload(stream FileUploadFrame) returns (FileUploadReceipt);
+  rpc PublishUpload(FileUploadLookup) returns (FileUploadReceipt);
+  rpc DiscardUpload(FileUploadLookup) returns (FileUploadReceipt);
   rpc GetUploadStatus(FileUploadLookup) returns (FileUploadReceipt);
 }
