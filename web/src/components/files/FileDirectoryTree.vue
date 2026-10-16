@@ -4,6 +4,7 @@ import { ElTree } from 'element-plus'
 import type { RenderContentContext } from 'element-plus'
 import { apiRequest } from '@/services/apiClient'
 import { filePath, fileQuery } from '@/services/fileManagement'
+import { fileTreeKey } from '@/services/fileBrowser'
 import type { FilePage } from '@/services/fileManagement'
 const props = defineProps<{ rootId: string; name: string; disabled: boolean; revision: number }>()
 const emit = defineEmits<{ navigate: [path: string]; failure: [reason: unknown] }>()
@@ -21,7 +22,7 @@ const tree = ref<InstanceType<typeof ElTree>>(),
   expanded = ref(false),
   epoch = ref(0)
 const root = computed<Branch[]>(() =>
-  props.rootId ? [{ key: ':', label: props.name, path: '', leaf: false }] : [],
+  props.rootId ? [{ key: fileTreeKey(''), label: props.name, path: '', leaf: false }] : [],
 )
 const requests = new Set<AbortController>(),
   branches = new Map<string, Branch[]>(),
@@ -45,14 +46,14 @@ async function children(path: string, after = '', version = '') {
     if (request.signal.aborted) return null
     if (version && page.version !== version) throw new Error('目录已变化，请刷新目录树后重试')
     const rows: Branch[] = page.entries.map((entry) => ({
-      key: ':' + filePath(path, entry.name),
+      key: fileTreeKey(filePath(path, entry.name)),
       label: entry.name,
       path: filePath(path, entry.name),
       leaf: false,
     }))
     if (page.nextCursor)
       rows.push({
-        key: ':more:' + path,
+        key: fileTreeKey(path, true),
         label: '加载更多目录',
         path,
         after: page.nextCursor,

@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-17）",
-  "nextStep": "已部署eee26bf/Agent1.24，目录树/名称搜索真实OIDC/BFF/UDS、管理员与普通用户网页子范围已验收；运行时代码CI四作业和同源码真实PG通过并清理。QA-only afb1472的前端CI取消后单独重跑已成功（attempt2）。继续窄屏顶栏区域边界复查、UTF-8编辑与覆盖上传统一HDD前置备份、回收站/归档、容器文件及隔离/长期清理；全部76项active。"
+  "nextStep": "已部署eee26bf/Agent1.24并实机签收目录树/名称搜索子范围，QA-only afb1472 CI取消后attempt2成功。新目录/续页键命名空间修正已通过204前端单元与14浏览器，尚待CI及覆盖验收。然后复查窄屏顶栏区域边界，继续UTF-8编辑与覆盖上传统一HDD前置备份、回收站/归档、容器文件和隔离/长期清理；全部76项active。"
 }

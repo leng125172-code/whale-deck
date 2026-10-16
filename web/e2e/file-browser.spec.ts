@@ -107,3 +107,20 @@ test('tree continuation detects directory changes, refresh retries rather than i
   await page.getByRole('button', { name: '刷新目录树', exact: true }).click()
   await expect(page.locator('.tree-label', { hasText: '加载更多目录' })).toHaveCount(0)
 })
+
+test('a legal more: directory cannot collide with root continuation nodes', async ({ page }) => {
+  await fixture(page)
+  await page.route('**/api/v1/files/directories?**', route => {
+    const after = new URL(route.request().url()).searchParams.get('after')
+    return route.fulfill({ json: { entries: [{ name: after ? 'next' : 'more:', kind: 'Directory', sizeBytes: 0, modifiedAtUnixMs: 0, version: 'A'.repeat(64), mode: '0750', isProtected: false }], nextCursor: after ? '' : 'more:', version: 'A'.repeat(64) } })
+  })
+  await page.goto('/files')
+  await page.getByRole('button', { name: '展开目录树', exact: true }).click()
+  await page.locator('.el-tree-node__expand-icon').first().click()
+  await expect(page.locator('.tree-label').filter({ hasText: /^more:$/ })).toBeVisible()
+  await page.locator('.tree-label', { hasText: '加载更多目录' }).click()
+  await expect(page.locator('.tree-label').filter({ hasText: /^more:$/ })).toBeVisible()
+  await expect(page.locator('.tree-label').filter({ hasText: /^next$/ })).toBeVisible()
+  await page.locator('.tree-label').filter({ hasText: /^more:$/ }).click()
+  await expect(page.getByText('此目录暂无可显示的文件')).toBeVisible()
+})

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { parentDirectory, searchSummary, validFileSearch } from '@/services/fileBrowser'
+import {
+  fileTreeKey,
+  parentDirectory,
+  searchSummary,
+  validFileSearch,
+} from '@/services/fileBrowser'
 import type { FileSearchPage } from '@/services/fileBrowser'
 const page: FileSearchPage = {
   entries: [],
@@ -11,6 +16,12 @@ const page: FileSearchPage = {
   depthLimited: false,
 }
 describe('registered directory browser', () => {
+  it('keeps continuation markers distinct from every legal directory name', () => {
+    const paths = ['', 'more:', 'more:资料', 'directory:', '资料/more:']
+    const keys = paths.flatMap((path) => [fileTreeKey(path), fileTreeKey(path, true)])
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(fileTreeKey('more:')).not.toBe(fileTreeKey('', true))
+  })
   it('validates literal names using UTF8 byte budgets rather than character counts', () => {
     expect(validFileSearch('a[1]*.中文')).toBe(true)
     expect(validFileSearch('中'.repeat(85))).toBe(true)

@@ -28,6 +28,9 @@ export function validFileSearch(value: string) {
 export function parentDirectory(path: string) {
   return path.slice(0, Math.max(0, path.lastIndexOf('/')))
 }
+export function fileTreeKey(path: string, continuation = false) {
+  return `${continuation ? 'more' : 'directory'}:${path}`
+}
 export function searchSummary(result: FileSearchPage) {
   if (result.complete) return '搜索完成（不含受保护目录、链接和嵌套挂载）'
   if (result.stopReason === 'DirectoryScanLimit')
