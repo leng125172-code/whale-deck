@@ -31,6 +31,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+- 2026-10-16 当前已签收runtime `df8f00a`：通知私有配置最终开始前取消复核、租约失效写入隔离、已有开始标记仍保留Unknown、持久确认离线重放和一次终态事件；591 Unit/73 Integration、133前端/23浏览器、Release/类型/lint/构建及冻结原生PG实际执行通过/清理。宿主覆盖更新成功，真实正向链路/已结束任务SSE续传、权限/8资产/UDS/维护入口/11核心健康通过，sudo保留、外部发送0。见 [证据与边界](qa/NOTIFICATION_PRIVATE_BOUNDARIES.md)。仍缺生产身份UI、通用实时SSE终态竞争及厂商端/完整重启演练，全部76项继续；本增量不签完整P4-06。
+
 - 2026-10-16 当前runtime9d5775e已签收重启后维护状态修复：576 Unit/73 Integration、Release、冻结原生执行通过/清理与安装后二进制隔离HTTP测试通过，更新unit实际08:44:30成功结束；前一eabac51私有配置对应实际身份/API/Worker/Agent与8资产/宿主通过，临时资源精确清理、未启用发送。MariaDB启动挂载故障恢复、Docker存储挂载依赖已安装且未重启Docker。见 [当前P0证据](qa/BOOT_MAINTENANCE_STATUS.md)。生产身份UI、更多故障组合和实际重启演练仍未完成，全部76项继续。
 
 - 2026-10-16 私有配置 WebUI 已完成本地实现与验证，20项联合浏览器、562 Unit/73 Integration及Release/类型/lint/前端构建通过；6原生本机跳过。两个已知工作站入口 SSH 超时，未调度本增量部署，不能算真实验收或新运行时签收。见 [UI恢复点](qa/NOTIFICATION_PRIVATE_UI.md)。继续原生/工作站验收及更多故障组合，P4-06与全部76项不缩减。

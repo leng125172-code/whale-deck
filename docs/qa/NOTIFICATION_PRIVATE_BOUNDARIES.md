@@ -18,6 +18,22 @@
 
 新增原生场景覆盖多个真实连接：最终开始前提交取消、开始后中断仍Unknown、90秒及活跃租约拒绝确认、Agent查询失败不接受新确认、并发同键确认一次审计/一次终态事件、Agent不可用时持久重放、换请求冲突、并发抢占/继任令牌保护、旧调用方时钟与输入到期、同渠道竞争提交和相同请求并发重放。它们使用隔离数据库和禁止Apply的测试网关，不冒称这些故障段调用了真实Agent；原有丢回复段也只使用测试回执适配器。真正工作站链路另行验收，不制造生产故障。
 
-首轮本地编译发现新增测试对init属性赋值及xUnit断言规范错误，已修正再测试。原生、发布与实机结果将在冻结源码执行后追加；不得用本地跳过冒充通过。
+首轮本地编译发现新增测试对init属性赋值及xUnit断言规范错误，已修正再测试。不能用本地跳过冒充原生通过；以下单独记录实际结果。
 
 GLM/glm-5.3-flash只读盘点成功1次/重试0，15434ms，输入23282、缓存256、输出384 Tokens；费用及资源包扣减未知。GPT完成判断、修改与复核，没有委派权限或核心架构决策。
+
+## 冻结原生与覆盖发布
+
+冻结源码 `df8f00acc5edac44f449aca5837f1a732de245b2`；原生报告 `dispatch-3e51d5dc64a04771ae9d2a7457f71ea5.json`，2026-10-16 01:35:18.483852–01:37:18.819714 UTC，state Passed、executedTests 1、passedTests 1、cleanupConfirmed true。SDK image ID `sha256:c0790639332692a0d56cdd81ed581cfd24d040d9839764c138994866df89a3b6`。新增私有配置竞争/取消/租约/未知确认场景实际运行在该隔离 PostgreSQL 套件中；外部投递0。
+
+Job `6b0e6dba-54ff-4114-94ff-94ae65beca5a` 调度开发覆盖发布。随后实际 `whaledeck-platform-update.service` 为 inactive/dead、Result success、ExecMainStatus 0，journal `Deactivated successfully`；root运行时记录与上述冻结完整SHA一致。没有自动回滚、主机重启或Docker重启。
+
+## 已部署实机验收
+
+- 真实 OIDC→API→Valkey→Worker→Agent 配置应用/移除、原请求永久重放、渠道版本及发送阻断通过；两个已结束任务的 SSE 终态和 Last-Event-ID 最后一条续传实际通过。临时渠道/任务精确清理、不可变审计保留、渠道从未启用，外部发送0。
+- 实际管理员/普通用户/匿名、元数据 CRUD/幂等/并发版本/Origin/CSRF 和 OpenAPI 回归通过，临时账户/配置清理。
+- 8个实际HTTP资源与活动Gateway逐字节一致，包含新增未知确认提示的通知懒加载分块；不冒称生产身份浏览器走查完成。
+- 私有UDS方法与短时capability重放/危险目标拒绝通过，生产registry未改变。安装后MaintenanceHost二进制在临时监听/状态文件验证通过并清理，未改生产维护状态。
+- 最终11个核心容器全部healthy，Agent/维护入口/自动更新timer均active，维护入口200/healthy/Ready，动态发现的物理地址8080/8081及回环通过，user全量sudo按授权保留。
+
+原生新增故障组合使用真实PostgreSQL和测试网关；线上仅执行正向真实链路，未制造Agent掉线/生产Unknown或发真实群消息。生产身份UI、厂商端验收及长期压力仍缺。通用Jobs SSE在事件查询后才提交终态的实时竞争窗口尚未修复；本次只证明持久终态存在和结束后续传，不冒称全部实时流边界完成。P4-06和76项全量目标保持未完成。
