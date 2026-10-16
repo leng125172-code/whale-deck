@@ -23,8 +23,10 @@ def main():
     for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(number, interrupted)
     payload = json.loads(sys.stdin.readline(2049))
-    assert set(payload) == {'username', 'password'}
+    assert set(payload) in ({'username', 'password'}, {'username', 'password', 'administrator'})
     username, password = payload['username'], payload['password']
+    administrator = payload.get('administrator', True)
+    assert isinstance(administrator, bool)
     assert isinstance(username, str) and re.fullmatch(r'wd-browser-[a-f0-9]{32}', username)
     assert isinstance(password, str) and re.fullmatch(r'[A-Za-z0-9_!.-]{40,96}', password)
     values = container_environment()
@@ -35,7 +37,7 @@ def main():
     try:
         created = session.post(AUTHENTIK_API + 'core/users/', json={
             'username': username, 'name': 'Whale Deck browser acceptance', 'email': '',
-            'is_active': True, 'groups': [require(values, 'Authentication__Authentik__AdministratorGroupId')],
+            'is_active': True, 'groups': [require(values, 'Authentication__Authentik__AdministratorGroupId')] if administrator else [],
         }, timeout=15)
         created.raise_for_status()
         result = created.json()
