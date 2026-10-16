@@ -35,8 +35,7 @@ PRIVATE = {'.git', '.ssh', '.gnupg', 'secrets', 'manifest.json', 'compose.yml', 
 LIBC = ctypes.CDLL(None, use_errno=True)
 # syscall(2) returns long; variadic arguments must have explicit native widths.
 # In particular sizeof(open_how) is size_t, not ctypes' implicit signed int.
-# Otherwise unused upper register bits can turn a valid size into EINVAL under
-# a different call frame (including the installed systemd sandbox).
+# Do not rely on implicit argument/register extension across C ABI variants.
 LIBC.syscall.restype = ctypes.c_long
 
 
