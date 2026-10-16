@@ -12,6 +12,7 @@ import errno
 import fcntl
 import hashlib
 import heapq
+import hmac
 import importlib.util
 import json
 import os
@@ -30,6 +31,7 @@ BASE = '/data/WhaleDeck'
 STATE = '/var/lib/whaledeck-files'
 CHUNK = 32768
 MAX_BYTES = 1024 * 1024 * 1024
+SEARCH_VISITS = 10000
 STAGING = '.whaledeck-files'
 PRIVATE = {'.git', '.ssh', '.gnupg', 'secrets', 'manifest.json', 'compose.yml', 'compose.yaml',
            'docker-compose.yml', 'docker-compose.yaml', 'resources.json', 'agent-capability.key'}
@@ -281,6 +283,188 @@ def list_directory(request):
             return {'entries': rows, 'nextCursor': selected[request['take'] - 1] if len(selected) > request['take'] else '', 'version': before}
         finally:
             os.close(folder)
+
+
+def browse_names(folder, after, deadline, directories=False):
+    """Bounded lexical batches, no readdir-order or offset-as-snapshot assumption."""
+    def candidates():
+        with os.scandir(folder) as iterator:
+            for index, entry in enumerate(iterator):
+                if index >= 250000 or time.monotonic() > deadline:
+                    raise Rejected('FILES_DIRECTORY_SCAN_LIMIT')
+                try: relative(entry.name)
+                except (Rejected, UnicodeError): continue
+                if any(127 <= ord(character) < 160 for character in entry.name): continue
+                if protected(entry.name) or entry.name <= after: continue
+                if directories:
+                    info = entry.stat(follow_symlinks=False)
+                    if not stat.S_ISDIR(info.st_mode): continue
+                    try: child = open_at(folder, entry.name, os.O_RDONLY | os.O_DIRECTORY)
+                    except OSError: continue
+                    else: os.close(child)
+                yield entry.name
+    return heapq.nsmallest(101 if directories else 128, candidates())
+
+
+def list_directories(request):
+    if set(request) != {'rootId', 'path', 'after', 'take'} or type(request['take']) is not int or not 1 <= request['take'] <= 100:
+        raise Rejected('FILES_LIST_INVALID')
+    after = relative(request['after'], empty=True)
+    if '/' in after: raise Rejected('FILES_CURSOR_INVALID')
+    with directory(request, 'list', allow_empty=True) as (_, parent, leaf):
+        folder = open_at(parent, leaf or '.', os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            before = version(os.fstat(folder))
+            selected = browse_names(folder, after, time.monotonic() + 5, directories=True)
+            rows = [metadata(name, os.stat(name, dir_fd=folder, follow_symlinks=False)) for name in selected[:request['take']]]
+            if any(row['kind'] != 'Directory' or row['isProtected'] for row in rows) or before != version(os.fstat(folder)):
+                raise Rejected('FILES_VERSION_CONFLICT')
+            return {'entries': rows, 'nextCursor': selected[request['take'] - 1] if len(selected) > request['take'] else '', 'version': before}
+        finally: os.close(folder)
+
+
+def browse_key():
+    state = trusted_directory(STATE)
+    try:
+        try: descriptor = os.open('browse-cursor.key', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=state)
+        except FileNotFoundError:
+            with namespace_lock():
+                try:
+                    key = os.open('browse-cursor.key', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=state)
+                except FileExistsError: pass
+                else:
+                    try: os.write(key, os.urandom(32)); os.fsync(key)
+                    finally: os.close(key)
+                    os.fsync(state)
+            descriptor = os.open('browse-cursor.key', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=state)
+        try:
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or info.st_mode & 0o077 or info.st_size != 32:
+                raise Rejected('FILES_CURSOR_KEY_UNSAFE')
+            key = os.read(descriptor, 33)
+            if len(key) != 32: raise Rejected('FILES_CURSOR_KEY_UNSAFE')
+            return key
+        finally: os.close(descriptor)
+    finally: os.close(state)
+
+
+def search_cursor(value, scope):
+    if not isinstance(value, str) or len(value) > 32768:
+        raise Rejected('FILES_CURSOR_INVALID')
+    if not value:
+        return {'scope': scope, 'expires': int(time.time()) + 600, 'stack': [{'name': '', 'after': '', 'version': ''}], 'depthLimited': False}
+    try:
+        payload, mac = value.split('.')
+        if not re.fullmatch('[A-Za-z0-9_-]+', payload) or not re.fullmatch('[a-f0-9]{64}', mac): raise ValueError()
+        if not hmac.compare_digest(hmac.new(browse_key(), payload.encode('ascii'), hashlib.sha256).hexdigest(), mac): raise ValueError()
+        result = json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4)), object_pairs_hook=unique_object)
+        if set(result) != {'scope', 'expires', 'stack', 'depthLimited'} or result['scope'] != scope or type(result['expires']) is not int or not time.time() < result['expires'] <= time.time() + 601:
+            raise ValueError()
+        if type(result['depthLimited']) is not bool or not isinstance(result['stack'], list) or not 1 <= len(result['stack']) <= 33: raise ValueError()
+        names = []
+        for index, frame in enumerate(result['stack']):
+            if set(frame) != {'name', 'after', 'version'}: raise ValueError()
+            relative(frame['name'], empty=index == 0); relative(frame['after'], empty=True)
+            if '/' in frame['name'] or '/' in frame['after'] or index == 0 and frame['name'] != '' or protected(frame['name']): raise ValueError()
+            if not isinstance(frame['version'], str) or not re.fullmatch('[A-F0-9]{64}', frame['version']): raise ValueError()
+            if index: names.append(frame['name'])
+        relative('/'.join(filter(None, [scope[1], *names])), empty=True)
+        return result
+    except (ValueError, TypeError, KeyError, UnicodeError):
+        raise Rejected('FILES_CURSOR_INVALID') from None
+
+
+def encode_search_cursor(value):
+    payload = base64.urlsafe_b64encode(json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode()).decode().rstrip('=')
+    token = payload + '.' + hmac.new(browse_key(), payload.encode('ascii'), hashlib.sha256).hexdigest()
+    if len(token) > 32768: raise Rejected('FILES_CURSOR_LIMIT')
+    return token
+
+
+def search_files(request):
+    if set(request) != {'rootId', 'path', 'query', 'kind', 'matchCase', 'cursor', 'take'}:
+        raise Rejected('FILES_SEARCH_INVALID')
+    query = request['query']
+    if not isinstance(query, str) or not query.strip() or len(query.encode('utf-8')) > 256 or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in query) or '/' in query or '\\' in query or request['kind'] not in ('All', 'File', 'Directory') or type(request['matchCase']) is not bool or type(request['take']) is not int or not 1 <= request['take'] <= 100:
+        raise Rejected('FILES_SEARCH_INVALID')
+    scope = [request['rootId'], relative(request['path'], empty=True), query, request['kind'], request['matchCase']]
+    state = search_cursor(request['cursor'], scope)
+    rows = []; scanned = excluded = output_bytes = 0; reason = ''; hard_limit = False
+    needle = query if request['matchCase'] else query.casefold()
+    deadline = time.monotonic() + 5
+    with directory(request, 'list', allow_empty=True) as (_, parent, leaf):
+        start = open_at(parent, leaf or '.', os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            # Retained ancestors must still match, not only the deepest frame.
+            for index, frame in enumerate(state['stack']):
+                descriptor = open_at(start, '/'.join(item['name'] for item in state['stack'][1:index + 1]) or '.', os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    if frame['version'] and frame['version'] != version(os.fstat(descriptor)): raise Rejected('FILES_VERSION_CONFLICT')
+                finally: os.close(descriptor)
+            while state['stack']:
+                frame = state['stack'][-1]
+                subpath = '/'.join(item['name'] for item in state['stack'][1:])
+                folder = open_at(start, subpath or '.', os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    before = version(os.fstat(folder))
+                    if frame['version'] and frame['version'] != before: raise Rejected('FILES_VERSION_CONFLICT')
+                    frame['version'] = before
+                    if scanned >= SEARCH_VISITS or time.monotonic() > deadline:
+                        reason = 'ScanBudget'; break
+                    try: selected = browse_names(folder, frame['after'], deadline)
+                    except Rejected as error:
+                        if str(error) != 'FILES_DIRECTORY_SCAN_LIMIT': raise
+                        reason = 'DirectoryScanLimit'; hard_limit = True; break
+                    descend = False
+                    for name in selected:
+                        if scanned >= SEARCH_VISITS or time.monotonic() > deadline:
+                            reason = 'ScanBudget'; break
+                        info = os.stat(name, dir_fd=folder, follow_symlinks=False)
+                        entry = metadata(name, info)
+                        path = '/'.join(filter(None, [request['path'], subpath, name]))
+                        try: relative(path)
+                        except Rejected:
+                            excluded += 1; frame['after'] = name; scanned += 1; continue
+                        child = None
+                        if entry['kind'] == 'Directory':
+                            try: child = open_at(folder, name, os.O_RDONLY | os.O_DIRECTORY)
+                            except OSError: pass
+                        elif entry['kind'] == 'File' and not entry['isProtected']:
+                            # NO_XDEV rejects file bind mounts too; no content is read.
+                            try: descriptor = open_at(folder, name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+                            except OSError: entry['isProtected'] = True
+                            else:
+                                try:
+                                    if version(os.fstat(descriptor)) != entry['version']: raise Rejected('FILES_VERSION_CONFLICT')
+                                finally: os.close(descriptor)
+                        eligible = not entry['isProtected'] and (entry['kind'] == 'File' or child is not None)
+                        hit = eligible and (request['kind'] == 'All' or request['kind'] == entry['kind']) and needle in (name if request['matchCase'] else name.casefold())
+                        row = {'path': path, 'entry': entry}
+                        size = len(json.dumps(row, ensure_ascii=False).encode())
+                        if hit and output_bytes + size > 20000:
+                            if child is not None: os.close(child)
+                            reason = 'ResultBytes'; break
+                        frame['after'] = name; scanned += 1
+                        if not eligible: excluded += 1
+                        if hit: rows.append(row); output_bytes += size
+                        if child is not None:
+                            try:
+                                if len(state['stack']) <= 32:
+                                    state['stack'].append({'name': name, 'after': '', 'version': version(os.fstat(child))}); descend = True
+                                else: state['depthLimited'] = True
+                            finally: os.close(child)
+                        if len(rows) >= request['take']: reason = 'ResultPage'
+                        if descend or reason: break
+                    if before != version(os.fstat(folder)): raise Rejected('FILES_VERSION_CONFLICT')
+                    if reason: break
+                    if descend: continue
+                    if len(selected) < 128: state['stack'].pop()
+                finally: os.close(folder)
+        finally: os.close(start)
+    cursor = encode_search_cursor(state) if state['stack'] and not hard_limit else ''
+    if not cursor and not reason and state['depthLimited']: reason = 'DepthLimit'
+    return {'entries': rows, 'nextCursor': cursor, 'scannedEntries': scanned, 'excludedEntries': excluded,
+            'complete': not state['stack'] and not state['depthLimited'], 'stopReason': reason, 'depthLimited': state['depthLimited']}
 
 
 def inspect(request):
@@ -667,7 +851,7 @@ def operation_engine():
 
 
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard'):
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard'):
         raise Rejected('FILES_ACTION_INVALID')
     invocation = identity(os.environ.get('INVOCATION_ID'))
     emit({'type': 'driver', 'invocationId': invocation})
@@ -678,6 +862,8 @@ def main():
         if request != {}: raise Rejected('FILES_ROOTS_INVALID')
         emit({'roots': [{'id': key, 'name': item['externalId'], 'actions': item['allowedActions']} for key, item in roots().items()]})
     elif action == 'list': emit(list_directory(request))
+    elif action == 'directories': emit(list_directories(request))
+    elif action == 'search': emit(search_files(request))
     elif action == 'stat': emit(inspect(request))
     elif action == 'download': download(request)
     elif action == 'upload': emit(upload(request, source))

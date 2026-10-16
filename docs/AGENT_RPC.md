@@ -4,9 +4,11 @@
 
 本文定义 `WhaleDeck.Api/Worker` 与宿主机 `WhaleDeck.Agent` 的内部契约。Agent 是唯一可以访问 Docker Engine、systemd、journald 和批准宿主机资源的组件。
 
-开发空间拟新增专用 `RPC-DEV-001..007`，只处理登记空间/环境/run/session ID，按能力协商启用。代码执行和调试发生在隔离空间内，不新增任意宿主命令/路径接口；调试适配器与 IDE 不持有 Docker/Agent Socket。契约与数据流见 [开发空间 Agent 契约](DEVELOPMENT_WORKSPACES.md#6-agentworker-契约)。此处是待实现设计，**源码协议 1.23 尚未包含开发空间能力**，登记开发文件根不代表空间运行时已实现。
+开发空间拟新增专用 `RPC-DEV-001..007`，只处理登记空间/环境/run/session ID，按能力协商启用。代码执行和调试发生在隔离空间内，不新增任意宿主命令/路径接口；调试适配器与 IDE 不持有 Docker/Agent Socket。契约与数据流见 [开发空间 Agent 契约](DEVELOPMENT_WORKSPACES.md#6-agentworker-契约)。此处是待实现设计，**源码协议 1.24 尚未包含开发空间能力**，登记开发文件根不代表空间运行时已实现。
 
 ## 1. 传输与版本
+
+2026-10-17实际运行时1e72ac4/Agent1.23已完成文件变更BFF/Worker及真实身份WebUI子范围验收，下面3f47300/1.22未覆盖说明为历史；详见[最终签收](qa/FILE_MUTATION_WORKFLOW.md#最终运行时签收1e72ac4)。新源码协议1.24新增`files.bounded-browser`与FileTransferService.Directories/Search，当前尚未部署；登记根files-list授权不扩大为任意路径/正文搜索。Directories为安全目录分页，Search为有界字面名称搜索，签名续页与所有祖先版本绑定、预算与不完整状态显式，详见[契约及验收清单](qa/FILE_BROWSER.md)。开发空间能力仍待实现，不因次版本升级而自动存在。
 
 - 协议：gRPC，包名 `whaledeck.agent.v1`。
 - 传输：Unix Domain Socket `/run/whaledeck/agent.sock`，不监听 TCP。
@@ -14,7 +16,7 @@
 - Agent 使用 Unix peer credentials 校验调用进程，并验证短时签名能力声明。
 - `GetCapabilities` 返回 Agent 版本、协议版本和方法能力；未知主版本直接拒绝，次版本按能力协商。
 - 浏览器不得连接 Agent。宿主机稳定入口只读取 Agent 原子写入的脱敏维护快照。
-- 当前源码协议版本为 `1.23`，增加 `files.mutation-tombstones` 与独立 Discard 方法；`1.22` 新增 `files.registered-mutations`；`1.21` 为 `files.staged-publication`，`1.20` 为 `files.registered-streams`，`1.19` 为 `docker.terminal.exec`，`1.18` 为 `host.terminal.pty`，`1.17` 为 `notifications.private-configuration`。历史 `1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`，`1.15` 增加 `backups.capacity`，`1.16` 增加 `host.load-average`；旧次版本按能力协商并安全降级。
+- 当前源码协议版本为 `1.24`，新增 `files.bounded-browser` 与目录树/名称搜索（新源码待部署）；`1.23` 增加 `files.mutation-tombstones` 与独立 Discard 方法；`1.22` 新增 `files.registered-mutations`；`1.21` 为 `files.staged-publication`，`1.20` 为 `files.registered-streams`，`1.19` 为 `docker.terminal.exec`，`1.18` 为 `host.terminal.pty`，`1.17` 为 `notifications.private-configuration`。历史 `1.4` 增加普通 Docker 网络与孤立卷管理，`1.5` 增加有界 Docker 事件缓冲与时间线能力 `docker.events`，`1.6` 将数据库、备份、Compose、主机与平台维护预检分流到 `ManagedResourceService.PlanAction`，`1.7` 增加只读进程能力 `host.processes`，`1.8` 扩展容器摘要（`docker.container-summary`），`1.9` 增加 `host.disk-io`，`1.10` 增加 `docker.usage`，`1.11` 增加兼容只读字段 `docker.relationships`，`1.12` 增加 `applications.configuration`，`1.13` 增加 `applications.backups`，`1.14` 增加 `applications.backup-retention`，`1.15` 增加 `backups.capacity`，`1.16` 增加 `host.load-average`；旧次版本按能力协商并安全降级。
 
 ### 登记文件变更（1.22）
 
@@ -30,7 +32,7 @@
 
 ### 宿主PTY（1.18）
 
-源码为**1.23**；1.19已增加专用 `ContainerTerminalService.Inspect/Connect` 和 `docker.terminal.exec`。新文件能力部署状态见文件通道与BFF记录，下方1.18为宿主能力加入时的历史版本，仍保持兼容。
+源码为**1.24**；1.19已增加专用 `ContainerTerminalService.Inspect/Connect` 和 `docker.terminal.exec`。新文件能力部署状态见文件通道与BFF记录，下方1.18为宿主能力加入时的历史版本，仍保持兼容。
 
 独立 `HostTerminalService/Connect` 双向流同时验证UDS peer与方法绑定、单次nonce的短时capability；首帧只接受canonical UUID、主体、open与2–400列/行。后续仅4KiB内的二进制input、resize、close，不可更换目标、主体、UID、路径或启动程序。root与Agent注册表共同批准固定宿主资源，helper在独立systemd cgroup里以固定非特权身份启动，管道正文不进入操作存储/日志。退出/断线/超时清理，防重放元数据由root原子维护，停止必须匹配systemd InvocationID。原生证据见 [PTY基础](qa/HOST_TERMINAL_PTY.md)。
 

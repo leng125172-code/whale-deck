@@ -36,6 +36,38 @@ public sealed class FileTransferGrpcService(FileTransferRunner runner) : FileTra
         using var result = await runner.OnceAsync("stat", JsonSerializer.Serialize(new { rootId = request.RootId, path = request.Path }), context.CancellationToken);
         return FileTransferPolicy.Entry(result.RootElement);
     }
+    public override async Task<FileListResponse> Directories(FileListRequest request, ServerCallContext context)
+    {
+        FileTransferPolicy.Location(request.Location, true);
+        if (request.Take is < 1 or > 100 || Encoding.UTF8.GetByteCount(request.After) > 255 || request.After.Any(char.IsControl) || request.After.Contains('/', StringComparison.Ordinal) || request.After.Contains('\\', StringComparison.Ordinal) || request.After is "." or "..") throw new ArgumentException("FILES_LIST_INVALID");
+        using var result = await runner.OnceAsync("directories", JsonSerializer.Serialize(new { rootId = request.Location.RootId, path = request.Location.Path, after = request.After, take = request.Take }), context.CancellationToken);
+        var response = new FileListResponse { NextCursor = result.RootElement.GetProperty("nextCursor").GetString(), Version = result.RootElement.GetProperty("version").GetString() };
+        response.Entries.AddRange(result.RootElement.GetProperty("entries").EnumerateArray().Select(FileTransferPolicy.Entry));
+        if (response.Entries.Count > request.Take || response.Entries.Any(item => item.Kind != "Directory" || item.IsProtected)) throw new InvalidOperationException("FILES_OUTPUT_INVALID");
+        return response;
+    }
+    public override async Task<FileSearchResponse> Search(FileSearchRequest request, ServerCallContext context)
+    {
+        FileTransferPolicy.Search(request);
+        using var result = await runner.OnceAsync("search", JsonSerializer.Serialize(new { rootId = request.Location.RootId, path = request.Location.Path,
+            query = request.Query, kind = request.Kind, matchCase = request.MatchCase, cursor = request.Cursor, take = request.Take }), context.CancellationToken);
+        var value = result.RootElement;
+        var response = new FileSearchResponse { NextCursor = value.GetProperty("nextCursor").GetString() ?? throw new InvalidOperationException("FILES_OUTPUT_INVALID"), ScannedEntries = value.GetProperty("scannedEntries").GetUInt32(),
+            ExcludedEntries = value.GetProperty("excludedEntries").GetUInt32(), Complete = value.GetProperty("complete").GetBoolean(),
+            StopReason = value.GetProperty("stopReason").GetString(), DepthLimited = value.GetProperty("depthLimited").GetBoolean() };
+        foreach (var hit in value.GetProperty("entries").EnumerateArray())
+        {
+            var path = hit.GetProperty("path").GetString()!;
+            FileTransferPolicy.Location(new() { RootId = request.Location.RootId, Path = path });
+            var entry = FileTransferPolicy.Entry(hit.GetProperty("entry"));
+            if (entry.IsProtected || entry.Kind is not ("File" or "Directory") || !path.EndsWith("/" + entry.Name, StringComparison.Ordinal) && path != entry.Name ||
+                request.Location.Path.Length > 0 && !path.StartsWith(request.Location.Path + "/", StringComparison.Ordinal)) throw new InvalidOperationException("FILES_OUTPUT_INVALID");
+            response.Entries.Add(new FileSearchHit { Path = path, Entry = entry });
+        }
+        if (response.Entries.Count > request.Take || response.ScannedEntries > 10000 || response.NextCursor.Length > 32768 ||
+            response.Complete && (response.NextCursor.Length != 0 || response.DepthLimited) || response.StopReason is not ("" or "ScanBudget" or "DirectoryScanLimit" or "ResultBytes" or "ResultPage" or "DepthLimit")) throw new InvalidOperationException("FILES_OUTPUT_INVALID");
+        return response;
+    }
     public override Task Download(FileDownloadRequest request, IServerStreamWriter<FileDownloadFrame> responseStream, ServerCallContext context)
     {
         FileTransferPolicy.Location(request.Location); FileTransferPolicy.Hash(request.ExpectedVersion);
@@ -72,6 +104,13 @@ public sealed class FileTransferGrpcService(FileTransferRunner runner) : FileTra
 internal static class FileTransferPolicy
 {
     public const long MaximumBytes = 1024L * 1024 * 1024;
+    public static void Search(FileSearchRequest request)
+    {
+        Location(request.Location, true);
+        if (string.IsNullOrWhiteSpace(request.Query) || Encoding.UTF8.GetByteCount(request.Query) > 256 || request.Query.Any(char.IsControl) || request.Query.Contains('/', StringComparison.Ordinal) || request.Query.Contains('\\', StringComparison.Ordinal) ||
+            request.Kind is not ("All" or "File" or "Directory") || request.Take is < 1 or > 100 || request.Cursor.Length > 32768 || request.Cursor.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.')))
+            throw new ArgumentException("FILES_SEARCH_INVALID");
+    }
     public static void Location(FileLocation? value, bool allowEmpty = false)
     {
         if (value is null || value.RootId.Length is < 1 or > 64 || value.RootId.Any(c => !(char.IsAsciiDigit(c) || c is >= 'a' and <= 'z' or '.' or '-')) ||

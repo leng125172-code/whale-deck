@@ -17,11 +17,14 @@ import {
 } from '@/services/fileManagement'
 import type { FileEntry, FileIntent, FilePage, FilePlan, FileRoot } from '@/services/fileManagement'
 import FileMutationPanel from '@/components/files/FileMutationPanel.vue'
+import FileDirectoryTree from '@/components/files/FileDirectoryTree.vue'
+import FileSearchPanel from '@/components/files/FileSearchPanel.vue'
 import { mutationEligible } from '@/services/fileMutations'
 import type { FileMutationKind } from '@/services/fileMutations'
 
 const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
   mutationLocked = ref(false)
+const treeRevision = ref(0)
 const canMutate = computed(
   () =>
     roots.value.find((root) => root.id === rootId.value)?.actions.includes('files-mutate') === true,
@@ -84,6 +87,7 @@ function message(reason: unknown) {
   ) {
     entries.value = []
     roots.value = []
+    rootId.value = ''
     stop()
     chosen.value = null
     frozen.value = null
@@ -333,6 +337,7 @@ watch(authorized, (value) => {
     stop()
     entries.value = []
     roots.value = []
+    rootId.value = ''
     chosen.value = null
     frozen.value = null
     intent.value = null
@@ -359,8 +364,13 @@ async function loadRoots() {
   }
 }
 function refresh() {
+  treeRevision.value++
   if (roots.value.length === 0) void loadRoots()
   else void load(true)
+}
+function afterMutation() {
+  treeRevision.value++
+  void load(true)
 }
 onMounted(loadRoots)
 onBeforeUnmount(() => {
@@ -440,7 +450,7 @@ onBeforeUnmount(() => {
         :path="path"
         :disabled="busy || activeIntent || !!frozen"
         @locked="mutationLocked = $event"
-        @changed="load(true)"
+        @changed="afterMutation"
         @failure="message"
       />
       <el-breadcrumb class="file-crumbs"
@@ -459,6 +469,23 @@ onBeforeUnmount(() => {
           </button></el-breadcrumb-item
         ></el-breadcrumb
       >
+      <div class="file-browser-tools">
+        <FileDirectoryTree
+          :root-id="rootId"
+          :name="roots.find((root) => root.id === rootId)?.name || '根目录'"
+          :disabled="busy || !!frozen || mutationLocked"
+          :revision="treeRevision"
+          @navigate="navigate"
+          @failure="message"
+        />
+        <FileSearchPanel
+          :root-id="rootId"
+          :path="path"
+          :disabled="busy || !!frozen || mutationLocked"
+          @navigate="navigate"
+          @failure="message"
+        />
+      </div>
       <div v-if="chosen" class="file-picked" :title="chosen.name">
         {{ chosen.name }} · {{ formatBytes(chosen.size) }}
       </div>
@@ -574,6 +601,18 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: grid;
   gap: 16px;
+}
+.file-browser-tools {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .file-browser-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .files-row-actions {
   display: flex;
