@@ -351,6 +351,13 @@ a {
   gap: 4px;
 }
 
+/* Element Plus badges extend beyond the icon's hit box. Reserve that
+   overhang so multi-digit counts cannot cover the next button/switch. */
+.topbar__actions .icon-action {
+  flex-shrink: 0;
+  margin-inline-end: 12px;
+}
+
 .connection-state {
   display: inline-flex;
   align-items: center;
@@ -1693,6 +1700,10 @@ a {
 
   .topbar__actions {
     gap: 2px;
+  }
+
+  .topbar__actions .icon-action {
+    margin-inline-end: 20px;
   }
 
   .theme-switch {
