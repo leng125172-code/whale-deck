@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-16）",
-  "nextStep": "c9568e3宿主PTY基础已部署并原生验收；继续BFF一次性授权/会话审计/撤权、前端终端及容器Exec/文件传输，全部76项仍在推进。"
+  "nextStep": "5bc2551受限宿主终端后端已发布并真实链路验收；继续前端终端、容器Exec/文件传输、隔离与清理，解决依赖安装TLS问题；全部76项仍在推进。"
 }

@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-16 runtime `5bc2551` 受限宿主终端后端签收：642 Unit/92 Integration、Release无警告错误，冻结原生PG执行1/通过1/清理；真实OIDC/稳定代理/Gateway/BFF/UDS/PTy、一次性/幂等/Origin/尺寸/exit持久化/关闭握手和撤销通过。普通/匿名新终端全部入口403/401、原任务1006事件/通知全链路/8资产/UDS/宿主回归通过，更新unit12:31:12 CST成功结束、11核心healthy、sudo保留。首两次EOF失败与未放宽断言的修正见 [BFF证据](qa/HOST_TERMINAL_BFF.md)。前端尚未生成，本机pnpm新依赖TLS失败，未改全局代理或关闭TLS验证；继续前端、容器Exec/文件传输、隔离/清理与全76项，不能当作完整终端完成。
+
 - 2026-10-16 runtime `c9568e3` 宿主PTY基础实际签收：610 Unit/86 Integration、Release及冻结原生PG通过/清理；同源码原生UDS探针验证固定非特权身份、尺寸/exit、能力/UUID重放、活跃重复不误停、断线/仅强杀测试driver后setsid子进程清理与正文不进入journal/root记录。实际更新unit11:30:52 CST成功结束，任务SSE/通知私有链路/权限/8资产/UDS/宿主回归通过，11核心healthy、sudo保留。见 [证据与首版失败记录](qa/HOST_TERMINAL_PTY.md)。P1-11只部分实现，BFF票据/审计/撤权、前端、容器Exec/文件传输仍待继续，76项不缩减。
 
 - 2026-10-16 最新已部署runtime `1dd3fa5` 修复通用任务SSE终态竞争、500条以上历史尾部、camelCase协议与浏览器续传/去重/清理。591 Unit/86 Integration、146前端单元/27联合浏览器及Release/类型/lint/构建通过；冻结PG两个连接的1006事件实际通过并清理。宿主更新成功结束，真实OIDC/Gateway流中途追加终态、1006完整/续传/尾部/400/404/401与临时清理通过，私有配置/权限/8资产/UDS/宿主回归通过，11核心healthy、sudo保留。见 [本轮证据](qa/JOB_EVENT_STREAM.md)。P0-03与全部76项仍未完整签收，生产身份UI与其他大功能继续。

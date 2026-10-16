@@ -17,6 +17,12 @@
 
 ## 2. 已有实体
 
+### `DM-TERMINAL-SESSION` `terminal_sessions`
+
+2026-10-16新增EF migration `TerminalSessionLifecycle`：UUID、Authentik主体、当前登录的不透明SHA256绑定、UUID幂等键、连接票据哈希、固定宿主目标、Issued/Connecting/Active/Closed、创建/30秒票据期限/10分钟硬期限、实际Ready时间、租约/关闭时间/关闭码/退出码与并发版本。主体+登录绑定+幂等键唯一；活动租约和创建时间索引、目标/哈希/状态/期限约束由PostgreSQL校验。票据原文、服务器Cookie引用和终端正文不入表。
+
+票据行锁消费、实际Ready激活和终止与不可变审计同事务；全局4/每主体2个待用或活动会话的创建预算由事务锁串行化。仅同主体同登录可查/续租/关闭，终态不覆盖。当前管理员宿主会话不是P3开发空间或P5租户会话模型；长期清理和更广故障恢复仍须补齐。实现及未验收项见 [BFF会话层](qa/HOST_TERMINAL_BFF.md)。
+
 ### `DM-AUDIT` `audit_events`
 
 当前代码已有 `AuditEvent`。后续 migration 在保留历史数据的前提下扩展：

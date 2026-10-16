@@ -30,3 +30,13 @@
 随后补全有界Close握手：CloseOutput后最多等待2秒，让接收中的客户端Close确认自然完成，超时才强制取消；仅提前写CloseOutput仍会因立即Abort导致代理来不及转发。验证客户端收到Close必须回送RFC6455确认，依然不接受裸EOF。新增真实TCP回环上的.NET ManagedWebSocket双端测试，要求完整Close而非Aborted，以及遵从/不遵从确认的两个有界传输测试；当前3项专项通过。它证明本地传输，不替代真实代理链路重测。
 
 前端尚未生成。本机pnpm 12.10.1原生客户端在官方源、系统代理及镜像源均遇TLS handshake eof；没有关闭TLS验证或更改全局代理，失败安装没有改动package/lock。官方元数据通过Windows HTTP读取确认候选依赖@xterm/xterm 6.0.0、@xterm/addon-fit 0.11.0，后续仍须正常锁定/干净安装及UI验收，不能视为已安装。
+
+## 最终后端签收：5bc2551
+
+- 源码 `5bc25519639b0d53896b642f395754522185e03d`，本地642 Unit、92 Integration通过，6原生在Windows明确跳过；Release全方案0警告/0错误。包含真实TCP回环ManagedWebSocket关闭握手、确认/不确认的有界清理，不以抽象Socket替身单独证明.NET行为。
+- 冻结原生报告 `dispatch-cd51c0b4c6f141f493aaf88ac1e9609b.json`：2026-10-16 04:27:39–04:29:43 UTC，实际执行1/通过1、cleanupConfirmed=true；SDK ID与前两轮一致。迁移/并发抢票/预算/事务审计/行锁到期和原通知恢复实际通过。
+- 更新Job `5ddc975c-b32b-4faa-b79f-969413dcc70d`，实际更新unit于12:31:12 CST成功结束：inactive/dead、Result=success、ExecMainStatus=0、Deactivated successfully。无自动回滚。
+- 真实OIDC Cookie → 维护代理 → Gateway → BFF → UDS → 宿主PTY通过：幂等票据、同源/query拒绝、Ready/120×40/非root身份/exit 7、持久关闭、已消费票据不重开、显式关闭后协议Close握手和租约撤销通过。没有放宽EOF断言，正文/票据/Cookie未输出。测试会话均关闭，元数据和不可变审计按设计保留，无终端transient unit残留。
+- 普通用户/匿名对新终端读取、申请、连接和关闭入口分别真实403/401，管理员OpenAPI存在；原任务SSE 1006条/续传/终态/错误及清理通过。通知管理/私有值全链路与永久重放、8个HTTP资产和私有配置UDS拒绝回归通过；外部发送0。11核心容器healthy，Agent/维护/timer active，开发sudo保留。
+
+签收边界仅为受限宿主终端后端。没有前端终端、容器Exec或文件传输，也没有真实身份浏览器走查、完整进程重启和宿主掉电演练。固定whaledeck-shell是管理员共享维护身份，不能据此宣称租户级内核/文件系统隔离或root控制台完成；长期会话清理与更广隔离仍是缺口。完整P1-11和全部76项保持进行中。
