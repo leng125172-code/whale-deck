@@ -16,6 +16,19 @@ import {
   uploadFile,
 } from '@/services/fileManagement'
 import type { FileEntry, FileIntent, FilePage, FilePlan, FileRoot } from '@/services/fileManagement'
+import FileMutationPanel from '@/components/files/FileMutationPanel.vue'
+import { mutationEligible } from '@/services/fileMutations'
+import type { FileMutationKind } from '@/services/fileMutations'
+
+const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
+  mutationLocked = ref(false)
+const canMutate = computed(
+  () =>
+    roots.value.find((root) => root.id === rootId.value)?.actions.includes('files-mutate') === true,
+)
+function openMutation(kind: FileMutationKind, entry?: FileEntry) {
+  mutationPanel.value?.open(kind, entry)
+}
 
 const roots = ref<FileRoot[]>([]),
   rootId = ref(''),
@@ -148,7 +161,14 @@ async function createIntent(signal: AbortSignal) {
   return result
 }
 async function start(retry = false) {
-  if (!authorized.value || !chosen.value || busy.value || activeIntent.value) return
+  if (
+    !authorized.value ||
+    !chosen.value ||
+    busy.value ||
+    activeIntent.value ||
+    mutationLocked.value
+  )
+    return
   if (chosen.value.size > maximumFileBytes) {
     error.value = '单文件最多 1 GiB'
     return
@@ -276,7 +296,7 @@ async function cancel() {
   }
 }
 async function download(entry: FileEntry) {
-  if (busy.value || activeIntent.value || entry.isProtected) return
+  if (busy.value || activeIntent.value || mutationLocked.value || entry.isProtected) return
   transfer = new AbortController()
   const request = transfer
   const token = ++generation
@@ -380,29 +400,49 @@ onBeforeUnmount(() => {
         <el-select
           v-model="rootId"
           aria-label="文件根目录"
-          :disabled="busy || !!frozen"
+          :disabled="busy || !!frozen || mutationLocked"
           @change="navigate('')"
           ><el-option v-for="root in roots" :key="root.id" :value="root.id" :label="root.name"
         /></el-select>
         <div class="files-upload">
+          <el-button
+            v-if="canMutate"
+            :disabled="busy || activeIntent || !!frozen || mutationLocked"
+            @click="openMutation('mkdir')"
+            >新建目录</el-button
+          >
           <input
             ref="fileInput"
             type="file"
             class="file-input"
             aria-label="选择上传文件"
-            :disabled="busy || activeIntent || !!frozen || !canUpload"
+            :disabled="busy || activeIntent || !!frozen || !canUpload || mutationLocked"
             @change="selectFile"
           />
           <el-button
-            :disabled="busy || activeIntent || !!frozen || !canUpload"
+            :disabled="busy || activeIntent || !!frozen || !canUpload || mutationLocked"
             @click="fileInput?.click()"
             ><el-icon><Upload /></el-icon>选择文件</el-button
           >
-          <el-button v-if="chosen" type="primary" :disabled="busy" @click="start(!!frozen)">{{
-            frozen ? '重试原登记' : '校验并上传'
-          }}</el-button>
+          <el-button
+            v-if="chosen"
+            type="primary"
+            :disabled="busy || mutationLocked"
+            @click="start(!!frozen)"
+            >{{ frozen ? '重试原登记' : '校验并上传' }}</el-button
+          >
         </div>
       </div>
+      <FileMutationPanel
+        ref="mutationPanel"
+        :roots="roots"
+        :root-id="rootId"
+        :path="path"
+        :disabled="busy || activeIntent || !!frozen"
+        @locked="mutationLocked = $event"
+        @changed="load(true)"
+        @failure="message"
+      />
       <el-breadcrumb class="file-crumbs"
         ><el-breadcrumb-item
           ><button class="file-link" :disabled="busy || !!frozen" @click="navigate('')">
@@ -477,17 +517,41 @@ onBeforeUnmount(() => {
             }}</template></el-table-column
           >
           <el-table-column prop="mode" label="权限" width="80" />
-          <el-table-column label="操作" width="100" fixed="right"
+          <el-table-column label="操作" width="160" fixed="right"
             ><template #default="{ row }"
-              ><el-tag v-if="row.isProtected" type="info" size="small">受保护</el-tag
-              ><el-button
-                v-else-if="row.kind === 'File'"
-                link
-                type="primary"
-                :disabled="busy || activeIntent"
-                @click="download(row)"
-                ><el-icon><Download /></el-icon>下载</el-button
-              ><span v-else>目录</span></template
+              ><el-tag v-if="row.isProtected" type="info" size="small">受保护</el-tag>
+              <div v-else-if="row.kind === 'File'" class="files-row-actions">
+                <el-button
+                  link
+                  type="primary"
+                  :disabled="busy || activeIntent || mutationLocked"
+                  @click="download(row)"
+                  ><el-icon><Download /></el-icon>下载</el-button
+                >
+                <el-dropdown
+                  v-if="canMutate && mutationEligible(row)"
+                  :disabled="busy || activeIntent || !!frozen || mutationLocked"
+                  @command="openMutation($event, row)"
+                >
+                  <el-button
+                    link
+                    type="primary"
+                    :disabled="busy || activeIntent || !!frozen || mutationLocked"
+                    :aria-label="`更多文件操作 ${row.name}`"
+                    >更多</el-button
+                  >
+                  <template #dropdown
+                    ><el-dropdown-menu
+                      ><el-dropdown-item command="copy">复制文件</el-dropdown-item
+                      ><el-dropdown-item command="move">移动文件</el-dropdown-item
+                      ><el-dropdown-item command="chmod"
+                        >修改权限</el-dropdown-item
+                      ></el-dropdown-menu
+                    ></template
+                  >
+                </el-dropdown>
+              </div>
+              <span v-else>目录</span></template
             ></el-table-column
           >
         </el-table>
@@ -510,6 +574,12 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: grid;
   gap: 16px;
+}
+.files-row-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: nowrap;
 }
 .files-panel {
   min-width: 0;

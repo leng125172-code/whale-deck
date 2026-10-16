@@ -49,6 +49,9 @@ public sealed class FileMutationTests : IDisposable
             binding with { Plan = plan with { Command = plan.Command with { Target = new("test.files", "elsewhere") } } }, binding with { Plan = plan with { Fingerprint = new('F', 64) } } })
         { Assert.NotEqual(row.RequestHash, _protector.Fingerprint(changed)); }
         Assert.DoesNotContain(Actor.LoginBinding, JsonSerializer.Serialize(FileMutationService.Map(row)));
+        var uploadPlan = ((FilePlanProtector)_protector).Sign(new FileUploadPlanClaims(Actor.Subject, Actor.LoginBinding,
+            new("test.files", "source", 3, new('B', 64), "ABSENT"), expiry));
+        Assert.Throws<ArgumentException>(() => _protector.VerifyMutation(uploadPlan));
     }
     [Theory]
     [InlineData("4755")][InlineData("1777")][InlineData("777")][InlineData("0999")][InlineData("")]

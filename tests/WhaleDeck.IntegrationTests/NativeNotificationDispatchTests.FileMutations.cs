@@ -58,6 +58,24 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal(3, await db.OperationJobEvents.CountAsync(item => item.JobId == id));
             Assert.Equal(2, await db.AuditEvents.CountAsync(item => item.JobId == id));
             Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM outbox_messages WHERE message_type='FileMutationRequested' AND payload_json->>'jobId'={id.ToString("D")} AND processed_at_utc IS NULL) AS \"Value\"").SingleAsync());
+            // Two real connections race different targets sharing a source.
+            // A per-table unique target index cannot enforce this boundary.
+            var racer = actor with { Subject = "native-mutation-racer" };
+            var competing = await Task.WhenAll(Enumerable.Range(0, 2).Select(index => Task.Run(async () =>
+            {
+                await using var contender = new PlatformDbContext(options);
+                var contenderService = new FileMutationService(authorization, gateway, new FileMutationRepository(contender), protector, TimeProvider.System);
+                var value = Command("concurrent-" + index) with { Source = new("test.mutation", "shared-concurrent-source") };
+                var planned = await contenderService.PlanAsync(racer, value, default);
+                try { return (Intent: await contenderService.SubmitAsync(racer, new(planned.PlanHash, true, Guid.NewGuid().ToString("D")), default), Busy: false); }
+                catch (InvalidOperationException error) when (error.Message == "FILES_TARGET_BUSY") { return (Intent: (FileMutationIntentDto?)null, Busy: true); }
+            })));
+            var raceWinner = Assert.Single(competing, item => !item.Busy).Intent!;
+            Assert.Single(competing, item => item.Busy); Assert.Equal(2, await db.FilePathLocks.CountAsync(item => item.OperationId == raceWinner.Id));
+            await service.CancelAsync(racer, raceWinner.Id, default);
+            var raceClaim = Assert.IsType<FileMutationOperation>(await repository.ClaimAsync(DateTimeOffset.UtcNow, default)); Assert.Equal(raceWinner.Id, raceClaim.Id);
+            var raceReceipt = NativeMutationGateway.Complete(FileMutationService.ReadPlan(raceClaim)) with { State = "Aborted", Version = "", BindingCurrent = false };
+            Assert.True(await repository.FinishAsync(raceClaim, "Canceled", "FILES_CANCELED", raceReceipt, default));
             // Inverse conflict: upload owns the source/target logical namespace.
             var upload = await Upload("source-upload-lock");
             await Assert.ThrowsAsync<InvalidOperationException>(() => Create("upload-lock"));
@@ -107,6 +125,27 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.DoesNotContain(await db.FileMutationOperations.AsNoTracking().Select(item => item.PlanJson).ToArrayAsync(), value => value.Contains("audit-failure", StringComparison.Ordinal));
             await Assert.ThrowsAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE file_mutation_operations SET state='imaginary' WHERE id={id}"));
             await Assert.ThrowsAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE file_mutation_operations SET completed_at_utc=NULL WHERE id={id}"));
+            var late = await Create("late-job-lock");
+            var lateClaim = Assert.IsType<FileMutationOperation>(await repository.ClaimAsync(DateTimeOffset.UtcNow, default)); Assert.Equal(late.Intent.Id, lateClaim.Id);
+            await db.FileMutationOperations.Where(item => item.Id == lateClaim.Id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.LeaseExpiresAtUtc, DateTimeOffset.UtcNow.AddMilliseconds(500)));
+            await using (var locker = new PlatformDbContext(options))
+            {
+                await using var transaction = await locker.Database.BeginTransactionAsync();
+                await locker.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM operation_jobs WHERE id={lateClaim.Id} FOR UPDATE");
+                var blocked = Task.Run(async () => { await using var contender = new PlatformDbContext(options); return await new FileMutationRepository(contender).StartedAsync(lateClaim, default); });
+                var observedWait = false;
+                for (var attempt = 0; attempt < 40; attempt++)
+                {
+                    observedWait = await db.Database.SqlQueryRaw<bool>("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename=current_user AND pid<>pg_backend_pid() AND wait_event_type='Lock' AND query LIKE '%operation_jobs%' AND query LIKE '%FOR UPDATE%') AS \"Value\"").SingleAsync();
+                    if (observedWait) break;
+                    await Task.Delay(25);
+                }
+                Assert.True(observedWait, "The contender must actually be blocked on the Job row, not merely return after a scheduling delay.");
+                await Task.Delay(1200); await transaction.CommitAsync(); Assert.Equal(FileUploadStartResult.LeaseLost, await blocked);
+            }
+            Assert.Null((await repository.OwnedAsync(actor, lateClaim.Id, default))!.RootStartedAtUtc);
+            await service.CancelAsync(actor, lateClaim.Id, default); await Due(lateClaim.Id); Assert.True(await worker.TickAsync(default));
+            Assert.Equal("Canceled", (await service.GetAsync(actor, lateClaim.Id, default)).State);
             var seal = await Create("tampered-seal");
             await db.FileMutationOperations.Where(item => item.Id == seal.Intent.Id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ExpiresAtUtc, DateTimeOffset.UtcNow.AddHours(1)));
             applied = gateway.Applied; Assert.True(await worker.TickAsync(default)); Assert.Equal(applied, gateway.Applied);

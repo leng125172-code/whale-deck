@@ -5,8 +5,8 @@ import { installTerminalFixture } from './terminal.mjs'
 // UI protocol fixture only. Does not prove PostgreSQL, Worker or host file I/O.
 export async function installFileFixture(page, options = {}) {
   await installTerminalFixture(page, options)
-  const state = { writes: [], rootStatus: 200, entryStatus: 200, reads: 0, bodyCount: 0, accepted: false, hold: options.hold || false, unknown: options.unknown || false }
-  const root = { id: 'whaledeck.files.shared', name: '共享文件', actions: ['files-list', 'files-stat', 'files-upload', 'files-download'] }
+  const state = { writes: [], rootStatus: 200, entryStatus: 200, reads: 0, bodyCount: 0, accepted: false, hold: options.hold || false, unknown: options.unknown || false, extraEntries: [], hideEntry: false }
+  const root = { id: 'whaledeck.files.shared', name: '共享文件', actions: ['files-list', 'files-stat', 'files-upload', 'files-download', ...(options.mutations ? ['files-mutate'] : [])] }
   const entry = { name: '一个很长但应该省略并能显示完整提示的文件名称-abcdefghijklmnopqrstuvwxyz-0123456789.txt', kind: 'File', sizeBytes: 3, modifiedAtUnixMs: 1792150000000, version: 'A'.repeat(64), mode: '0600', isProtected: false }
   const folder = { ...entry, name: '资料', kind: 'Directory', sizeBytes: 0 }
   const intent = { id: '7d4fec0a-01b7-494a-9b55-e96e265503a1', jobId: '7d4fec0a-01b7-494a-9b55-e96e265503a1', rootId: root.id, path: '', sizeBytes: 0, sha256: '', state: 'AwaitingUpload', expiresAtUtc: new Date(Date.now() + 900000).toISOString(), version: 0, resultCode: null, publishedVersion: null, previousRetained: false }
@@ -18,7 +18,7 @@ export async function installFileFixture(page, options = {}) {
     if (path === 'roots') return reply(state.rootStatus === 200 ? [root] : { status: state.rootStatus }, state.rootStatus)
     if (path === 'entries') {
       if (state.entryStatus !== 200) return reply({ status: state.entryStatus, code: 'AUTH_FORBIDDEN', traceId: 'file-fixture-trace' }, state.entryStatus)
-      return reply({ entries: url.searchParams.get('path') ? [] : [folder, entry, { ...entry, name: '.env', isProtected: true }, ...(intent.state === 'Succeeded' ? [{ ...entry, name: intent.path, sizeBytes: intent.sizeBytes }] : [])], nextCursor: '', version: 'F'.repeat(64) })
+      return reply({ entries: url.searchParams.get('path') ? [] : [folder, ...(state.hideEntry ? [] : [entry]), { ...entry, name: '.env', isProtected: true }, ...state.extraEntries, ...(intent.state === 'Succeeded' ? [{ ...entry, name: intent.path, sizeBytes: intent.sizeBytes }] : [])], nextCursor: '', version: 'F'.repeat(64) })
     }
     if (path === 'entry') return reply({ status: 404 }, 404)
     if (path === 'uploads/plan') { metadata = request.postDataJSON(); return reply({ planHash: 'ui-fixture-signed-plan', expiresAtUtc: new Date(Date.now() + 300000).toISOString(), overwrites: false, warning: '先暂存校验，再由任务发布。' }) }

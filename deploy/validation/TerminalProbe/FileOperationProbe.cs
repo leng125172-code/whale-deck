@@ -57,7 +57,7 @@ internal static class FileOperationProbe
         {
             Phase = "capability-methods-and-protection";
             var capability = await new AgentService.AgentServiceClient(channel).GetCapabilitiesAsync(new());
-            Require(capability.ProtocolMajor == 1 && capability.ProtocolMinor >= 22 && capability.Capabilities.Contains("files.registered-mutations"));
+            Require(capability.ProtocolMajor == 1 && capability.ProtocolMinor >= 23 && capability.Capabilities.Contains("files.mutation-tombstones"));
             var directory = PlanRequest(FileOperationKind.CreateDirectory, target: directoryName, mode: "0750");
             await Denied(async () => await client.PlanAsync(directory, new Metadata()), StatusCode.PermissionDenied);
             await Denied(async () => await client.PlanAsync(directory, Headers(Prefix + "Apply")), StatusCode.PermissionDenied);
@@ -72,10 +72,17 @@ internal static class FileOperationProbe
 
             Phase = "directory-and-upload-fixture";
             Require(!Directory.Exists(Path.Combine("/data/WhaleDeck/files", directoryName)));
+            var canceled = ApplyRequest(directoryPlan);
+            await Denied(async () => await client.DiscardAsync(canceled, Headers(Prefix + "Apply")), StatusCode.PermissionDenied);
+            Require((await client.DiscardAsync(canceled, Headers(Prefix + "Discard"))).State == "Aborted");
+            Require((await client.ApplyAsync(canceled, Headers(Prefix + "Apply"))).State == "Aborted");
+            Require(!Directory.Exists(Path.Combine("/data/WhaleDeck/files", directoryName)));
             var mkdir = ApplyRequest(directoryPlan);
             Require((await client.ApplyAsync(mkdir, Headers(Prefix + "Apply"), deadline: DateTime.UtcNow.AddSeconds(30))).State == "Completed");
             Require((await client.ApplyAsync(mkdir, Headers(Prefix + "Apply"))).State == "Completed");
             Require(Directory.Exists(Path.Combine("/data/WhaleDeck/files", directoryName)));
+            Require((await client.DiscardAsync(mkdir, Headers(Prefix + "Discard"))).State == "Completed");
+            Require((await client.ApplyAsync(canceled, Headers(Prefix + "Apply"))).State == "Aborted");
             Require((File.GetUnixFileMode(Path.Combine("/data/WhaleDeck/files", directoryName)) & (UnixFileMode)0xFFF) == (UnixFileMode)0x1E8);
             using (var upload = files.Upload(Headers(Files + "Upload"), deadline: DateTime.UtcNow.AddSeconds(60)))
             {
@@ -111,9 +118,11 @@ internal static class FileOperationProbe
             File.WriteAllBytes(Path.Combine("/data/WhaleDeck/files", sourceName), changed);
             await Denied(async () => await client.ApplyAsync(stale, Headers(Prefix + "Apply")), StatusCode.Aborted);
             Require(!File.Exists(Path.Combine("/data/WhaleDeck/files", marker + ".stale")));
+            Require((await client.DiscardAsync(stale, Headers(Prefix + "Discard"))).State == "Aborted");
+            Require((await client.ApplyAsync(stale, Headers(Prefix + "Apply"))).State == "Aborted");
             Console.WriteLine(JsonSerializer.Serialize(new { installedFileOperationsAgent = "passed", protocolMinor = capability.ProtocolMinor,
                 methodCapabilityReplayAndProtection = "passed", directoryCopyMovePermissions = "passed", ownerStaleVersionAndHistoricalReplay = "passed",
-                fullSourceRetentionChecksum = "passed", bffAndUi = "not-yet-implemented-for-mutations" }));
+                fullSourceRetentionChecksum = "passed", durableCancelAndDelayedApply = "passed", bffAndUi = "not-exercised-by-agent-probe" }));
         }
         finally
         {
