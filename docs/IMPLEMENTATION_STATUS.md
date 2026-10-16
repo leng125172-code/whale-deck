@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-16 runtime **`15378ec`** 登记目录文件管理BFF/持久意图与Job/Worker/人类审计/WebUI已覆盖部署并签收子范围：710 Unit/115 Integration、189前端单元/47联合浏览器、Release、四作业CI38914558130全绿，同源码冻结PG实际1通过/清理。实际更新unit22:25:41 CST成功结束；真实OIDC→稳定代理→Gateway→API/SQL/Worker→UDS/root驱动验证33MiB+7上传、7秒暂停、完整下载/覆盖保留/幂等/登录隔离/取消tombstone/坏摘要/旧版本/审计；真实网页管理员手机上传发布、独立下载SHA一致，普通与匿名surface0/文件请求0。首版stage提前关闭stdin导致409已实测修复，不抹去失败。原终端/通知/8资产/宿主验证与11核心健康通过，PKCS10.0.13和sudo保留；临时文件与账号清理，回执审计保留。详见 [文件管理签收](qa/FILE_MANAGEMENT.md#最终已部署子范围15378ec2026-10-16)。继续编辑/搜索/复制移动/权限/归档、Unknown人工处置、容器文件、回收站/HDD与隔离/长期清理；P1-11/P2-03和全部76项仍active。下方为历史。
+
 - 2026-10-16 runtime **`6bf4222`** 登记目录文件传输Agent基础已签收：协议1.20，安全路径/流式二进制/版本冲突/私有前序对象/幂等/断线回执；实际systemd的RestrictSUIDSGID拦截openat2及拒绝清理刷新两个实机失败已修复。Release、700 Unit/100 Integration、22真实Linux文件、CI38896550960四作业与同源码冻结PG实际1通过/清理。更新unit19:54:10 CST成功结束，同源码UDS探针和实际安装helper各2MiB+7上传校验通过、前者完整下载/覆盖/重放/权限/断线通过；测试文件和transient清理。身份/宿主与容器终端/通知/8资产/宿主validate通过，11核心healthy、PKCS10.0.13和sudo保留。见 [原始失败、证据和边界](FILE_TRANSPORT.md#最终安装态agent签收6bf4222)。文件API/人类审计/任务/Worker与WebUI、容器文件及回收站/HDD/隔离仍缺，P1-11/P2-03仅部分实现，全部76项继续。下方为历史。
 
 - 2026-10-16 最新已部署runtime **`085acef`** 容器终端BFF/共享WebUI子范围签收：683 Unit/100 Integration、176前端/35浏览器与四作业CI全绿，新增非超级用户CI PostgreSQL实际升级/约束/持久审计1通过；同源码工作站冻结PG实际1通过/清理。更新unit18:07:25 CST成功终态，真实OIDC/BFF/UDS/Exec、核心保护/CSRF/Origin/作用域/幂等/resize/exit/撤销及原Host通过。真实网页临时管理员中文IME/读屏/手机/主题/清屏/exit7/重连断开、普通用户首次/直达/刷新403且surface0通过；独立核实账号/助手/临时容器0、所有会话Closed。通知/8资产/宿主UDS/动态入口及11核心healthy，PKCS10.0.13与sudo保留。初始离线、UI locator及600秒fixture到期失败没有抹去，见 [最终实机记录](qa/CONTAINER_TERMINAL_BFF_UI.md)。继续文件传输、租户隔离/长期清理和更广故障；P1-11及完整76项仍active，下方为历史。

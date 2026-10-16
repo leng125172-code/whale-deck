@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-16）",
-  "nextStep": "6bf4222登记目录文件传输Agent已覆盖部署并通过真实安装态sandbox、完整UDS二进制/权限/版本/重放/断线及既有业务回归。继续文件管理API/任务审计/Worker/WebUI、容器文件、HDD回收站及隔离/清理；全部76项保持active。"
+  "nextStep": "15378ec登记目录浏览/上传下载的BFF、持久任务/Worker、人类审计与WebUI已覆盖部署并通过真实身份、大文件/暂停/校验/取消及普通用户拒绝。继续编辑/搜索/复制移动/权限/归档、Unknown人工处置、容器文件、HDD回收站及隔离/清理；全部76项保持active。"
 }
