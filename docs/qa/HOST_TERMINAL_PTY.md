@@ -22,3 +22,15 @@ Python协议测试不创建PTY或更改宿主，原生探针将验证真实UDS�
 首版b07cf14已覆盖发布但尚未签收：真实探针在shell初始化退出126，独立临时单元复现setuid阶段EPERM，CapBnd=e0而实际CapEff/CapPrm=60，缺少手动降权需要的CAP_SETUID。没有因此扩权，而改由PID1直接启动低权PTY；固定root元数据钩子保留文件系统/NoNewPrivileges限制、不向PTY授予capability。冻结b07cf14原生PG回归实际执行1/通过1/清理，报告dispatch-9ece9cee4a5b47dfa26df29eeb65d546.json；它不证明PTY通过。期间诊断探针修正了setsid测试夹具（交互shell后台任务本身是组长，需fork后再setsid）并只报告固定断言码，不输出正文。新验证探针发布从git archive读取跟踪源码，不再把含私有env的完整工作区挂入SDK。
 
 GLM/glm-5.3-flash只读定位成功1次、重试0、163900ms，输入546218/缓存489216/输出4383 Tokens，费用及资源包扣减未知。其“没有peer guard”判断错误，GPT已按真实 `PeerCredentialGuard.cs` 纠正，未采纳；权限/生命周期/实际修改由GPT复核。未向外援传凭据或委派核心判断。
+
+## c9568e3 原生与工作站基础签收
+
+- 冻结源码 `c9568e3c39a280aa9344560cd124cb7adec67084` 的独立 PostgreSQL dispatch 报告 `dispatch-f72b9660df6f42a28a8d67f0706ca13d.json`：2026-10-16 03:21:56–03:23:58 UTC，实际执行1/通过1、`cleanupConfirmed=true`。SDK镜像ID `sha256:c0790639332692a0d56cdd81ed581cfd24d040d9839764c138994866df89a3b6`。此回归不替代PTY测试。
+- 开发覆盖更新Job `9b132496-bf42-4bd2-841c-7c33c63a8379` 只用于提交更新。实际 `whaledeck-platform-update.service` 在2026-10-16 11:30:52 CST成功结束：inactive/dead、Result=success、ExecMainStatus=0、journal记录Deactivated successfully，未请求回滚。
+- 从同一冻结源码git archive构建的 `terminal-probe.XUevIV` 经SHA256SUMS检查后以root运行，实际UDS能力缺失/错方法/nonce重放拒绝、UUID重放拒绝、活跃重复ID不误停原会话、固定非特权UID/组/工作目录、私钥不可读、40×120 resize和exit 7全部通过。
+- 实际断线、仅强杀本次测试driver两种情况下，主动fork/setsid脱离会话的子进程均被清理，root元数据active=false。探针检查journal与root记录均无终端正文。未停止Agent/Docker/生产容器来制造故障，尚不证明Agent重启或宿主掉电演练。
+- Python原生9项协议/真实root临时元数据测试通过。宿主安装校验、真实OIDC/Gateway任务1006事件与续传/终态/错误/清理、通知私有值完整链路、管理权限/CSRF/Origin、8个HTTP资产及私有配置UDS回归通过，外部发送0。临时对象按验证脚本清理，所有终端transient unit均已退出；11核心容器healthy，Agent/维护入口/timer active，user开发sudo保留。
+
+这只签收宿主PTY基础；完整P1-11仍在开发，不代表已有浏览器终端、BFF一次性票据/持久会话审计、容器Exec或文件传输。
+
+后续BFF接入前由GLM/glm-5.3-flash机械只读定位源码1次成功、重试0：263107ms，输入587191/缓存545600/输出5676 Tokens，费用未返回。GPT核对现有AgentGateway、鉴权handler和持久化调用；不存在WebSocket传输，模型未作权限或核心架构裁决，未向其传递凭据。

@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-16）",
-  "nextStep": "1dd3fa5任务事件流修复已部署并真实验收；继续生产身份UI、完整恢复组合和容器/系统/网站/开发空间等76项缺口。"
+  "nextStep": "c9568e3宿主PTY基础已部署并原生验收；继续BFF一次性授权/会话审计/撤权、前端终端及容器Exec/文件传输，全部76项仍在推进。"
 }

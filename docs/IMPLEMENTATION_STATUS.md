@@ -6,6 +6,8 @@
 
 ## 新增范围与当前继续点
 
+- 2026-10-16 runtime `c9568e3` 宿主PTY基础实际签收：610 Unit/86 Integration、Release及冻结原生PG通过/清理；同源码原生UDS探针验证固定非特权身份、尺寸/exit、能力/UUID重放、活跃重复不误停、断线/仅强杀测试driver后setsid子进程清理与正文不进入journal/root记录。实际更新unit11:30:52 CST成功结束，任务SSE/通知私有链路/权限/8资产/UDS/宿主回归通过，11核心healthy、sudo保留。见 [证据与首版失败记录](qa/HOST_TERMINAL_PTY.md)。P1-11只部分实现，BFF票据/审计/撤权、前端、容器Exec/文件传输仍待继续，76项不缩减。
+
 - 2026-10-16 最新已部署runtime `1dd3fa5` 修复通用任务SSE终态竞争、500条以上历史尾部、camelCase协议与浏览器续传/去重/清理。591 Unit/86 Integration、146前端单元/27联合浏览器及Release/类型/lint/构建通过；冻结PG两个连接的1006事件实际通过并清理。宿主更新成功结束，真实OIDC/Gateway流中途追加终态、1006完整/续传/尾部/400/404/401与临时清理通过，私有配置/权限/8资产/UDS/宿主回归通过，11核心healthy、sudo保留。见 [本轮证据](qa/JOB_EVENT_STREAM.md)。P0-03与全部76项仍未完整签收，生产身份UI与其他大功能继续。
 
 - 2026-10-16 最新已部署runtime `df8f00a` 签收通知私有配置取消/租约/未知确认增量：591 Unit/73 Integration、Release、133前端单元/23浏览器、类型/lint/构建通过；冻结原生PG实际执行1/通过1并清理。覆盖发布unit成功结束，真实OIDC→API→Valkey→Worker→Agent应用/移除/永久重放、已结束任务SSE终态/Last-Event-ID、权限/CSRF/Origin、8 HTTP资源、UDS及宿主验证通过，11核心healthy，sudo保留；外部发送0。详见 [本轮证据](qa/NOTIFICATION_PRIVATE_BOUNDARIES.md)。生产身份UI、通用SSE实时终态竞争、更多通知/厂商验收及全部76项继续，下方runtime均为历史记录。
