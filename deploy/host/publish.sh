@@ -6,6 +6,8 @@ runtime_id="${WHALEDECK_RUNTIME_ID:-linux-x64}"
 requested_output=${1:-}
 
 command -v docker >/dev/null 2>&1 || { echo 'Docker is required.' >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo 'Python 3 is required for runtime servicing validation.' >&2; exit 1; }
+command -v git >/dev/null 2>&1 || { echo 'Git is required to freeze public build inputs.' >&2; exit 1; }
 images_env="$repo_root/.images.env"
 [[ -r $images_env ]] || { echo "Missing $images_env." >&2; exit 1; }
 sdk_image=$(awk -F= '$1 == "DOTNET_SDK_IMAGE" {print substr($0, index($0, "=") + 1); exit}' "$images_env")
@@ -24,19 +26,35 @@ else
   artifacts_root=$(mktemp -d "$repo_root/deploy/artifacts/host-publish.XXXXXX")
 fi
 
+source_revision=$(git -c "safe.directory=$repo_root" -C "$repo_root" rev-parse HEAD)
+[[ $source_revision =~ ^[a-f0-9]{40}$ ]] || exit 2
+public_source=$(mktemp -d "$repo_root/deploy/artifacts/host-source.XXXXXX")
+cleanup_source() {
+  # Only this invocation's verified mktemp child may be removed, never the checkout.
+  [[ $public_source == "$repo_root/deploy/artifacts/host-source."* && -d $public_source && ! -L $public_source ]] || return 1
+  rm -rf -- "$public_source"
+}
+trap cleanup_source EXIT
+git -c "safe.directory=$repo_root" -C "$repo_root" archive "$source_revision" | tar -xf - -C "$public_source"
+
 docker run --rm \
-  --mount "type=bind,src=$repo_root,dst=/src,readonly" \
+  --mount "type=bind,src=$public_source,dst=/src,readonly" \
   --mount "type=bind,src=$artifacts_root,dst=/out" \
   --workdir /src \
   --env DOTNET_CLI_HOME=/tmp/dotnet \
+  --env WHALEDECK_BUILD_REVISION="$source_revision" \
   "$sdk_image" sh -ec '
     dotnet publish src/WhaleDeck.Agent/WhaleDeck.Agent.csproj \
       --configuration Release --runtime '"$runtime_id"' --self-contained true \
-      --artifacts-path /tmp/artifacts/agent --output /out/agent
+      --artifacts-path /tmp/artifacts/agent --output /out/agent \
+      -p:SourceRevisionId="$WHALEDECK_BUILD_REVISION"
     dotnet publish src/WhaleDeck.MaintenanceHost/WhaleDeck.MaintenanceHost.csproj \
       --configuration Release --runtime '"$runtime_id"' --self-contained true \
-      --artifacts-path /tmp/artifacts/maintenance --output /out/maintenance
+      --artifacts-path /tmp/artifacts/maintenance --output /out/maintenance \
+      -p:SourceRevisionId="$WHALEDECK_BUILD_REVISION"
   '
+
+python3 "$repo_root/deploy/host/validate-runtime.py" "$artifacts_root"
 
 (
   cd "$artifacts_root"

@@ -83,3 +83,34 @@ Both list 10.0.0–10.0.12 as affected and 10.0.13 as patched.
 The in-progress terminal WebUI was neither committed nor deployed with this
 security patch. The complete 76-item P0–P5 objective remains active; this record
 only closes the reported PKCS dependency/CI/runtime remediation.
+
+## Follow-up: self-contained host bundle (not yet accepted)
+
+Further direct inspection found that the installed Agent and MaintenanceHost
+both bundle PKCS **10.0.8**, product version
+`10.0.8+94ea82652cdd4e0f8046b5bd5becbd11461482ca`, SHA-256
+`4ec9233f0bf14effe257ae74d92b27477e264f3cb694d8a789b6137ecad93724`.
+Their included .NET/ASP.NET frameworks are also 10.0.8. The earlier absence of
+a NuGet dependency path did not exclude a self-contained framework DLL. This
+was a verification gap: the earlier acceptance above proves containers and CI,
+not that every installed host artifact was patched.
+
+The official .NET 10.0.13 release metadata lists supported SDK 10.0.402; SDK
+10.0.305 was checked and is not published, so no inferred SDK version is used.
+SDK 10.0.402's manifest was verified against Microsoft's registry and the exact
+accelerated-image digest downloaded. global.json, all SDK Docker defaults and
+the example pins now select this supported SDK. Runtime images stay 10.0.13.
+
+New independent runtime checks reject old included frameworks, stale PKCS
+informational metadata, missing/oversized/corrupt files and unsupported major
+versions. Twelve synthetic Python regression tests pass. Publishing checks the
+result before checksums; installing checks before service/file changes; host
+validation rechecks the actual /opt files. Formal preparation adds Python 3.
+Host SDK builds now mount only frozen tracked Git source, never the private
+checkout containing .env; their temporary source can be reconstructed from Git
+and is precisely cleaned after the build.
+
+The new validator was run read-only against the old installed bundle and
+correctly rejected it. New-SDK Release/tests, actual bundle publication and
+installation, PKCS product-version checks and service regression are still
+pending. No exploitation assessment is inferred from presence of this DLL.

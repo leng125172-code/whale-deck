@@ -14,6 +14,8 @@ if [[ -f "$source_root/SHA256SUMS" ]]; then
   )
 fi
 
+python3 "$(dirname "$0")/validate-runtime.py" "$source_root"
+
 getent group whaledeck >/dev/null || groupadd --system whaledeck
 id whaledeck-agent >/dev/null 2>&1 || useradd --system --gid whaledeck --groups docker,systemd-journal --home-dir /var/lib/whaledeck-agent --shell /usr/sbin/nologin whaledeck-agent
 id whaledeck-maintenance >/dev/null 2>&1 || useradd --system --gid whaledeck --home-dir /nonexistent --shell /usr/sbin/nologin whaledeck-maintenance

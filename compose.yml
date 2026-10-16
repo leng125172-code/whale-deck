@@ -66,7 +66,7 @@ services:
       context: .
       dockerfile: src/WhaleDeck.Api/Dockerfile
       args:
-        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0.300}
+        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0.402@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa}
         ASPNET_IMAGE: ${ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0.13@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac}
     expose:
       - "8080"
@@ -130,7 +130,7 @@ services:
       context: .
       dockerfile: src/WhaleDeck.Worker/Dockerfile
       args:
-        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0.300}
+        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0.402@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa}
         DOTNET_RUNTIME_IMAGE: ${DOTNET_RUNTIME_IMAGE:-mcr.microsoft.com/dotnet/runtime:10.0.13@sha256:939555726cae4c916d212323ac3c0792996dcac2614f00e82cc40fcf059e1af3}
     environment:
       DOTNET_ENVIRONMENT: Production
@@ -176,7 +176,7 @@ services:
       context: .
       dockerfile: src/WhaleDeck.Migrator/Dockerfile
       args:
-        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0.300}
+        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0.402@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa}
         DOTNET_RUNTIME_IMAGE: ${DOTNET_RUNTIME_IMAGE:-mcr.microsoft.com/dotnet/runtime:10.0.13@sha256:939555726cae4c916d212323ac3c0792996dcac2614f00e82cc40fcf059e1af3}
     environment:
       ConnectionStrings__WhaleDeck: Host=postgres;Port=5432;Database=${WHALEDECK_DB_NAME:-whaledeck};Username=${WHALEDECK_DB_USER:-whaledeck};Password=${WHALEDECK_DB_PASSWORD:?set WHALEDECK_DB_PASSWORD};Application Name=whaledeck-migrator

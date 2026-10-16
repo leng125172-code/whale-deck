@@ -107,7 +107,7 @@ install_base_tools() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
   local missing=() package
-  for package in ca-certificates curl git gnupg jq openssl rsync tar xz-utils sudo; do
+  for package in ca-certificates curl git gnupg jq openssl python3 rsync tar xz-utils sudo; do
     if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -qx 'install ok installed'; then missing+=("$package"); fi
   done
   ((${#missing[@]} == 0)) || apt-get install -y --no-install-recommends "${missing[@]}"

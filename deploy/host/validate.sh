@@ -3,6 +3,7 @@ set -Eeuo pipefail
 umask 077
 
 [[ $EUID -eq 0 ]] || { echo 'Run this validator with sudo.' >&2; exit 1; }
+python3 "$(dirname "$0")/validate-runtime.py" --installed /opt
 
 assert_metadata() {
   local path=$1 expected=$2 actual

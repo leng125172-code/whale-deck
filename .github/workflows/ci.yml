@@ -20,6 +20,7 @@ jobs:
           bash -n deploy/host/publish-and-install.sh
           bash -n deploy/host/install.sh
           bash tests/installer-cli.sh
+          python3 -m unittest discover -s tests -p test_host_runtime.py
 
   backend:
     runs-on: ubuntu-latest
