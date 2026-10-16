@@ -43,4 +43,12 @@ public sealed class AgentErrorInterceptorTests
         Assert.Equal(StatusCode.InvalidArgument, error.StatusCode);
         Assert.DoesNotContain("private terminal input", error.Status.Detail, StringComparison.Ordinal);
     }
+    [Fact]
+    public async Task ClientStreamingRejectedInputNeverExposesUploadedContentInStatus()
+    {
+        var error = await Assert.ThrowsAsync<RpcException>(() => new AgentErrorInterceptor().ClientStreamingServerHandler<string, string>(
+            null!, null!, (_, _) => Task.FromException<string>(new ArgumentException("private uploaded bytes"))));
+        Assert.Equal(StatusCode.InvalidArgument, error.StatusCode);
+        Assert.DoesNotContain("private uploaded bytes", error.Status.Detail, StringComparison.Ordinal);
+    }
 }

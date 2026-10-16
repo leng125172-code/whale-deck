@@ -12,6 +12,7 @@ using WhaleDeck.Contracts.Agent.V1;
 try
 {
     if (args.Length == 1 && args[0] == "container") await ContainerTerminalProbe.RunAsync();
+    else if (args.Length == 1 && args[0] == "files") await FileTransferProbe.RunAsync();
     else if (args.Length == 0) await TerminalProbe.RunAsync();
     else throw new ArgumentException("Unsupported probe mode");
     return 0;
@@ -19,7 +20,7 @@ try
 catch (Exception error)
 {
     // No exception text, terminal transcript, credential or capability output.
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = TerminalProbe.Phase, code = TerminalProbe.FailureCode, failureType = error.GetType().Name }));
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = args is ["files"] ? FileTransferProbe.Phase : TerminalProbe.Phase, code = TerminalProbe.FailureCode, failureType = error.GetType().Name }));
     return 1;
 }
 

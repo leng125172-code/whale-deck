@@ -1,0 +1,591 @@
+#!/usr/bin/env python3
+"""Fixed registered-root file transport. No shell, arbitrary root, or transcript log.
+
+JSON-lines over private stdin/stdout. Only regular files; Linux openat2 is
+mandatory. Upload receipts distinguish receiving/applying/completed/unknown;
+an uncertain operation is never automatically executed again.
+"""
+import base64
+import contextlib
+import ctypes
+import errno
+import fcntl
+import hashlib
+import heapq
+import json
+import os
+from pathlib import Path
+import platform
+import re
+import select
+import signal
+import stat
+import sys
+import time
+import uuid
+
+REGISTRY = '/etc/whaledeck/file-roots.json'
+BASE = '/data/WhaleDeck'
+STATE = '/var/lib/whaledeck-files'
+CHUNK = 32768
+MAX_BYTES = 1024 * 1024 * 1024
+STAGING = '.whaledeck-files'
+PRIVATE = {'.git', '.ssh', '.gnupg', 'secrets', 'manifest.json', 'compose.yml', 'compose.yaml',
+           'docker-compose.yml', 'docker-compose.yaml', 'resources.json', 'agent-capability.key'}
+LIBC = ctypes.CDLL(None, use_errno=True)
+
+
+class Rejected(Exception):
+    pass
+
+
+class OpenHow(ctypes.Structure):
+    _fields_ = [('flags', ctypes.c_uint64), ('mode', ctypes.c_uint64), ('resolve', ctypes.c_uint64)]
+
+
+class InputLines:
+    def __init__(self, descriptor):
+        self.descriptor = descriptor
+        self.buffer = bytearray()
+
+    def readline(self, maximum):
+        while True:
+            index = self.buffer.find(b'\n')
+            if index >= 0:
+                value = bytes(self.buffer[:index + 1]); del self.buffer[:index + 1]
+                return value
+            if len(self.buffer) >= maximum:
+                raise Rejected('FILES_INPUT_LIMIT')
+            if not select.select([self.descriptor], [], [], 30)[0]:
+                raise Rejected('FILES_INPUT_TIMEOUT')
+            content = os.read(self.descriptor, 65536)
+            if not content:
+                value = bytes(self.buffer); self.buffer.clear(); return value
+            self.buffer.extend(content)
+
+    def finish(self):
+        if self.buffer or not select.select([self.descriptor], [], [], 5)[0] or os.read(self.descriptor, 1):
+            raise Rejected('FILES_COMMIT_TRAILING_DATA')
+
+
+def open_at(root, path, flags, mode=0, cross_mount=False):
+    if platform.machine() not in ('x86_64', 'aarch64'):
+        raise Rejected('FILES_KERNEL_UNSUPPORTED')
+    # BENEATH | NO_SYMLINKS | NO_MAGICLINKS, and NO_XDEV below the registered root.
+    how = OpenHow(flags | os.O_CLOEXEC, mode, 0x08 | 0x04 | 0x02 | (0 if cross_mount else 0x01))
+    result = LIBC.syscall(437, root, os.fsencode(path), ctypes.byref(how), ctypes.sizeof(how))
+    if result < 0:
+        number = ctypes.get_errno()
+        if number in (errno.ENOSYS, errno.EINVAL):
+            raise Rejected('FILES_KERNEL_UNSUPPORTED')
+        raise OSError(number, 'FILES_PATH_REJECTED')
+    return result
+
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise Rejected('FILES_DUPLICATE_FIELD')
+        result[key] = value
+    return result
+
+
+def line(stream, timeout=30):
+    if hasattr(stream, 'fileno'):
+        try:
+            descriptor = stream.fileno()
+        except (OSError, ValueError):
+            descriptor = None
+        if descriptor is not None and not select.select([descriptor], [], [], timeout)[0]:
+            raise Rejected('FILES_INPUT_TIMEOUT')
+    value = stream.readline(65537)
+    if not value or len(value) > 65536 or not value.endswith(b'\n'):
+        raise Rejected('FILES_INPUT_TRUNCATED')
+    try:
+        result = json.loads(value, object_pairs_hook=unique_object)
+    except (ValueError, UnicodeDecodeError):
+        raise Rejected('FILES_INPUT_INVALID') from None
+    if not isinstance(result, dict):
+        raise Rejected('FILES_INPUT_INVALID')
+    return result
+
+
+def emit(value, output=None):
+    output = output or sys.stdout.buffer
+    encoded = json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8') + b'\n'
+    if len(encoded) > 65536:
+        raise Rejected('FILES_OUTPUT_LIMIT')
+    output.write(encoded)
+    output.flush()
+
+
+def relative(value, empty=False):
+    if not isinstance(value, str) or len(value.encode('utf-8')) > 4096 or '\\' in value or any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise Rejected('FILES_PATH_INVALID')
+    if empty and value == '':
+        return value
+    parts = value.split('/')
+    if any(part in ('', '.', '..') or len(part.encode('utf-8')) > 255 for part in parts):
+        raise Rejected('FILES_PATH_INVALID')
+    return value
+
+
+def protected(path):
+    return any(part.lower() in PRIVATE or part.lower().startswith(('.env', '.images.env', '.whaledeck-')) or
+               part.lower().endswith(('.pem', '.key', '.p12', '.pfx', '.jks')) for part in path.split('/'))
+
+
+def identity(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[a-f0-9]{32}', value) or uuid.UUID(value).int == 0:
+        raise Rejected('FILES_OPERATION_INVALID')
+    return value
+
+
+def trusted_directory(path):
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    value = os.fstat(descriptor)
+    if value.st_uid != 0 or value.st_mode & 0o022:
+        os.close(descriptor)
+        raise Rejected('FILES_PRIVATE_DIRECTORY_UNSAFE')
+    return descriptor
+
+
+def roots():
+    descriptor = os.open(REGISTRY, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022 or info.st_size > 65536:
+            raise Rejected('FILES_REGISTRY_UNSAFE')
+        data = os.read(descriptor, 65537)
+    finally:
+        os.close(descriptor)
+    items = json.loads(data, object_pairs_hook=unique_object)
+    if not isinstance(items, list):
+        raise Rejected('FILES_REGISTRY_INVALID')
+    found = {}
+    for item in items:
+        if not isinstance(item, dict) or item.get('type') != 'FileRoot':
+            continue
+        key, path = item.get('id'), item.get('path')
+        if not isinstance(key, str) or not re.fullmatch(r'[a-z0-9.-]{1,64}', key) or key in found or item.get('protectionLevel') != 'Managed':
+            raise Rejected('FILES_REGISTRY_INVALID')
+        if not isinstance(item.get('externalId'), str) or not 1 <= len(item['externalId']) <= 80 or any(ord(c) < 32 for c in item['externalId']):
+            raise Rejected('FILES_REGISTRY_INVALID')
+        if not isinstance(path, str) or not path.startswith(BASE + '/') or relative(path[len(BASE) + 1:]) != path[len(BASE) + 1:] or protected(path):
+            raise Rejected('FILES_REGISTRY_INVALID')
+        actions = item.get('allowedActions', [])
+        if not isinstance(actions, list) or not actions or any(action not in ('files-list', 'files-stat', 'files-download', 'files-upload') for action in actions):
+            raise Rejected('FILES_REGISTRY_INVALID')
+        if any(type(item.get(field, 0)) is not int or not 0 <= item.get(field, 0) < 2 ** 31 for field in ('ownerUid', 'ownerGid')):
+            raise Rejected('FILES_REGISTRY_INVALID')
+        found[key] = item
+    return found
+
+
+@contextlib.contextmanager
+def directory(request, action, allow_empty=False):
+    root_id = request.get('rootId')
+    registered = roots().get(root_id) if isinstance(root_id, str) else None
+    if registered is None or 'files-' + action not in registered['allowedActions']:
+        raise Rejected('FILES_ROOT_FORBIDDEN')
+    path = relative(request.get('path'), empty=allow_empty)
+    if protected(path):
+        raise Rejected('FILES_PROTECTED')
+    # /data may be a dedicated disk. Cross-mount resolution is allowed only
+    # while opening the root selected by the root-owned registry, never below it.
+    slash = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    root = parent = None
+    try:
+        root = open_at(slash, registered['path'].lstrip('/'), os.O_RDONLY | os.O_DIRECTORY, cross_mount=True)
+        parent_path, _, leaf = path.rpartition('/')
+        parent = open_at(root, parent_path or '.', os.O_RDONLY | os.O_DIRECTORY)
+        yield root, parent, leaf
+    finally:
+        if parent is not None: os.close(parent)
+        if root is not None: os.close(root)
+        os.close(slash)
+
+
+def version(info):
+    return hashlib.sha256(json.dumps([info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
+        info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns], separators=(',', ':')).encode()).hexdigest().upper()
+
+
+def regular(descriptor):
+    info = os.fstat(descriptor)
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise Rejected('FILES_REGULAR_SINGLE_LINK_REQUIRED')
+    if info.st_size > MAX_BYTES:
+        raise Rejected('FILES_SIZE_LIMIT')
+    return info
+
+
+def metadata(name, info):
+    kind = 'Directory' if stat.S_ISDIR(info.st_mode) else 'File' if stat.S_ISREG(info.st_mode) else 'Symlink' if stat.S_ISLNK(info.st_mode) else 'Special'
+    return {'name': name, 'kind': kind, 'sizeBytes': info.st_size, 'modifiedAtUnixMs': info.st_mtime_ns // 1000000,
+            'version': version(info), 'mode': format(stat.S_IMODE(info.st_mode), '04o'),
+            'isProtected': protected(name) or kind not in ('Directory', 'File') or kind == 'File' and info.st_nlink != 1}
+
+
+def list_directory(request):
+    if set(request) != {'rootId', 'path', 'after', 'take'} or type(request['take']) is not int or not 1 <= request['take'] <= 100:
+        raise Rejected('FILES_LIST_INVALID')
+    after = relative(request['after'], empty=True)
+    if '/' in after:
+        raise Rejected('FILES_CURSOR_INVALID')
+    with directory(request, 'list', allow_empty=True) as (root, parent, leaf):
+        folder = open_at(parent, leaf or '.', os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            before = version(os.fstat(folder))
+            deadline = time.monotonic() + 5
+            def names():
+                with os.scandir(folder) as iterator:
+                    for index, entry in enumerate(iterator):
+                        if index >= 250000 or time.monotonic() > deadline:
+                            raise Rejected('FILES_DIRECTORY_SCAN_LIMIT')
+                        if entry.name.startswith('.whaledeck-'):
+                            continue
+                        try: relative(entry.name)
+                        except (Rejected, UnicodeError): continue
+                        if entry.name > after: yield entry.name
+            selected = heapq.nsmallest(request['take'] + 1, names())
+            rows = [metadata(name, os.stat(name, dir_fd=folder, follow_symlinks=False)) for name in selected[:request['take']]]
+            if before != version(os.fstat(folder)):
+                raise Rejected('FILES_VERSION_CONFLICT')
+            return {'entries': rows, 'nextCursor': selected[request['take'] - 1] if len(selected) > request['take'] else '', 'version': before}
+        finally:
+            os.close(folder)
+
+
+def inspect(request):
+    if set(request) != {'rootId', 'path'}:
+        raise Rejected('FILES_STAT_INVALID')
+    with directory(request, 'stat') as (_, parent, leaf):
+        descriptor = open_at(parent, leaf, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(descriptor)
+            if not stat.S_ISDIR(info.st_mode): info = regular(descriptor)
+            return metadata(leaf, info)
+        finally: os.close(descriptor)
+
+
+def download(request, output=None):
+    if set(request) != {'rootId', 'path', 'expectedVersion'}:
+        raise Rejected('FILES_DOWNLOAD_INVALID')
+    with directory(request, 'download') as (_, parent, leaf):
+        descriptor = open_at(parent, leaf, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+        try:
+            info = regular(descriptor)
+            if request['expectedVersion'] != version(info):
+                raise Rejected('FILES_VERSION_CONFLICT')
+            emit({'type': 'metadata', **metadata(leaf, info)}, output)
+            digest = hashlib.sha256(); offset = 0
+            while offset < info.st_size:
+                content = os.read(descriptor, min(CHUNK, info.st_size - offset))
+                if not content: raise Rejected('FILES_READ_CHANGED')
+                emit({'type': 'chunk', 'offset': offset, 'data': base64.b64encode(content).decode('ascii')}, output)
+                digest.update(content); offset += len(content)
+            if version(regular(descriptor)) != version(info):
+                raise Rejected('FILES_READ_CHANGED')
+            emit({'type': 'end', 'sizeBytes': offset, 'sha256': digest.hexdigest().upper(), 'version': version(info)}, output)
+        finally:
+            os.close(descriptor)
+
+
+def save_receipt(state, operation, value):
+    temporary = '.' + operation + '-' + uuid.uuid4().hex
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=state)
+    try:
+        payload = json.dumps(value, separators=(',', ':')).encode()
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(payload); stream.flush(); os.fsync(stream.fileno())
+        os.replace(temporary, operation + '.json', src_dir_fd=state, dst_dir_fd=state)
+        os.fsync(state)
+    finally:
+        with contextlib.suppress(FileNotFoundError): os.unlink(temporary, dir_fd=state)
+
+
+def read_receipt(state, operation):
+    try: descriptor = os.open(operation + '.json', os.O_RDONLY | os.O_NOFOLLOW, dir_fd=state)
+    except FileNotFoundError: return None
+    try:
+        info = os.fstat(descriptor)
+        if info.st_uid != 0 or info.st_mode & 0o077 or not stat.S_ISREG(info.st_mode) or info.st_size > 16384:
+            raise Rejected('FILES_RECEIPT_UNSAFE')
+        return json.loads(os.read(descriptor, 16385), object_pairs_hook=unique_object)
+    finally: os.close(descriptor)
+
+
+def exchange(source, name, target, leaf, flags):
+    result = LIBC.renameat2(source, os.fsencode(name), target, os.fsencode(leaf), flags)
+    if result != 0: raise OSError(ctypes.get_errno(), 'FILES_PUBLISH_REJECTED')
+
+
+def staging(parent):
+    try: os.mkdir(STAGING, 0o700, dir_fd=parent)
+    except FileExistsError: pass
+    descriptor = open_at(parent, STAGING, os.O_RDONLY | os.O_DIRECTORY)
+    info = os.fstat(descriptor)
+    if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
+        os.close(descriptor); raise Rejected('FILES_STAGING_UNSAFE')
+    return descriptor
+
+
+def bound(request):
+    allowed = {'rootId', 'path', 'operationId', 'owner', 'sizeBytes', 'sha256', 'expectedVersion'}
+    if set(request) != allowed or type(request.get('sizeBytes')) is not int or not 0 <= request['sizeBytes'] <= MAX_BYTES:
+        raise Rejected('FILES_UPLOAD_INVALID')
+    identity(request['operationId'])
+    if any(not isinstance(request.get(key), str) or not re.fullmatch(r'[A-F0-9]{64}', request[key]) for key in ('owner', 'sha256')):
+        raise Rejected('FILES_UPLOAD_INVALID')
+    if request['expectedVersion'] != 'ABSENT' and not re.fullmatch(r'[A-F0-9]{64}', request['expectedVersion'] or ''):
+        raise Rejected('FILES_UPLOAD_INVALID')
+    return hashlib.sha256(json.dumps(request, sort_keys=True, separators=(',', ':')).encode()).hexdigest().upper()
+
+
+def current(parent, leaf):
+    try: descriptor = open_at(parent, leaf, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+    except FileNotFoundError: return None
+    try: return regular(descriptor)
+    finally: os.close(descriptor)
+
+
+def publication_identity(info):
+    # rename changes ctime; content/mtime/mode/owner/identity must not change.
+    return [info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid, info.st_nlink, info.st_size, info.st_mtime_ns]
+
+
+def checksum(parent, leaf):
+    descriptor = open_at(parent, leaf, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+    try:
+        before = regular(descriptor); digest = hashlib.sha256(); count = 0
+        while count < before.st_size:
+            value = os.read(descriptor, min(CHUNK, before.st_size - count))
+            if not value: raise Rejected('FILES_READ_CHANGED')
+            count += len(value); digest.update(value)
+        if version(before) != version(regular(descriptor)): raise Rejected('FILES_READ_CHANGED')
+        return digest.hexdigest().upper()
+    finally: os.close(descriptor)
+
+
+def recover(record, parent, private, state):
+    if record['state'] != 'Applying': return record
+    actual = current(parent, record['leaf'])
+    pending = current(private, record['operationId'] + '.upload')
+    valid = actual is not None and actual.st_ino == record['newInode'] and actual.st_dev == record['newDevice'] and checksum(parent, record['leaf']) == record['sha256']
+    if valid and record.get('originalIdentity'):
+        displaced = current(private, record['operationId'] + '.upload')
+        valid = displaced is not None and publication_identity(displaced) == record['originalIdentity'] and checksum(private, record['operationId'] + '.upload') == record['originalSha256']
+        if valid: record['previousRetained'] = True
+    if valid:
+        record.update(state='Completed', version=version(actual))
+    elif pending is not None and pending.st_ino == record['newInode'] and pending.st_dev == record['newDevice']:
+        # The private staging name still owns the new inode: rename never
+        # published it. Cleanup must not touch the possibly changed target.
+        os.unlink(record['operationId'] + '.upload', dir_fd=private); os.fsync(private)
+        record['state'] = 'Aborted'
+    else:
+        # An ambiguous commit or concurrent external writer is not a license to
+        # overwrite again. Preserve the private staged/displaced files for review.
+        record['state'] = 'Unknown'
+    save_receipt(state, record['operationId'], record)
+    return record
+
+
+def upload(request, source):
+    fingerprint = bound(request); operation = request['operationId']
+    registered = roots().get(request['rootId'])
+    if not registered or 'files-upload' not in registered['allowedActions']: raise Rejected('FILES_ROOT_FORBIDDEN')
+    relative(request['path'])
+    if protected(request['path']): raise Rejected('FILES_PROTECTED')
+    state = trusted_directory(STATE)
+    if len(os.listdir(state)) >= 20032:
+        os.close(state); raise Rejected('FILES_RECEIPT_LIMIT')
+    lock = os.open(operation + '.lock', os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=state)
+    try:
+        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError: raise Rejected('FILES_OPERATION_BUSY') from None
+        with directory(request, 'upload') as (_, parent, leaf):
+            private = staging(parent); temporary = operation + '.upload'; created = False; descriptor = None
+            record = read_receipt(state, operation)
+            try:
+                if record:
+                    if record.get('fingerprint') != fingerprint: raise Rejected('FILES_IDEMPOTENCY_CONFLICT')
+                    record = recover(record, parent, private, state)
+                    if record['state'] != 'Completed': raise Rejected('FILES_PREVIOUS_OPERATION_INCOMPLETE')
+                else:
+                    original = current(parent, leaf)
+                    if (version(original) if original else 'ABSENT') != request['expectedVersion']:
+                        raise Rejected('FILES_VERSION_CONFLICT')
+                    space = os.fstatvfs(parent)
+                    reserve_bytes = max(512 * 1024 * 1024, space.f_blocks * space.f_frsize // 20) + 4 * MAX_BYTES
+                    if space.f_bavail * space.f_frsize < request['sizeBytes'] + reserve_bytes:
+                        raise Rejected('FILES_CAPACITY_REQUIRED')
+                    if sum(name.endswith('.json') for name in os.listdir(state)) >= 10000:
+                        raise Rejected('FILES_RECEIPT_LIMIT')
+                    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=private)
+                    created = True
+                    saved = os.fstat(descriptor)
+                    record = {'operationId': operation, 'owner': request['owner'], 'rootId': request['rootId'], 'path': request['path'],
+                              'leaf': leaf, 'fingerprint': fingerprint, 'state': 'Receiving', 'newInode': saved.st_ino, 'newDevice': saved.st_dev,
+                              'sizeBytes': request['sizeBytes'], 'sha256': request['sha256'], 'createdAtUnixMs': time.time_ns() // 1000000}
+                    if original:
+                        record['originalIdentity'] = publication_identity(original)
+                        record['originalSha256'] = checksum(parent, leaf)
+                        if version(current(parent, leaf)) != request['expectedVersion']: raise Rejected('FILES_VERSION_CONFLICT')
+                    save_receipt(state, operation, record)
+                digest = hashlib.sha256(); offset = 0
+                while True:
+                    row = line(source)
+                    if row == {'type': 'commit'}:
+                        if hasattr(source, 'finish'): source.finish()
+                        elif source.read(1): raise Rejected('FILES_COMMIT_TRAILING_DATA')
+                        break
+                    if set(row) != {'type', 'offset', 'data'} or row['type'] != 'chunk' or type(row['offset']) is not int or row['offset'] != offset or not isinstance(row['data'], str) or len(row['data']) > 43692:
+                        raise Rejected('FILES_CHUNK_INVALID')
+                    try: content = base64.b64decode(row['data'], validate=True)
+                    except ValueError: raise Rejected('FILES_CHUNK_INVALID') from None
+                    if not content or len(content) > CHUNK or offset + len(content) > request['sizeBytes']:
+                        raise Rejected('FILES_SIZE_MISMATCH')
+                    digest.update(content); offset += len(content)
+                    if created:
+                        view = memoryview(content)
+                        while view:
+                            count = os.write(descriptor, view)
+                            if count <= 0: raise Rejected('FILES_WRITE_FAILED')
+                            view = view[count:]
+                if offset != request['sizeBytes'] or digest.hexdigest().upper() != request['sha256']:
+                    raise Rejected('FILES_CHECKSUM_MISMATCH')
+                if not created:
+                    actual = current(parent, leaf)
+                    return {**public_receipt(record), 'replayed': True, 'bindingCurrent': actual is not None and version(actual) == record.get('version')}
+                # Preserve ordinary permissions/ownership, never setuid/setgid.
+                if original:
+                    os.fchown(descriptor, original.st_uid, original.st_gid)
+                    os.fchmod(descriptor, stat.S_IMODE(original.st_mode) & 0o777)
+                else:
+                    os.fchown(descriptor, registered.get('ownerUid', 0), registered.get('ownerGid', 0))
+                os.fsync(descriptor)
+                latest = current(parent, leaf)
+                if (version(latest) if latest else 'ABSENT') != request['expectedVersion']:
+                    raise Rejected('FILES_VERSION_CONFLICT')
+                record['state'] = 'Applying'; save_receipt(state, operation, record)
+                # NOREPLACE for creates; EXCHANGE retains the entire old object
+                # privately, instead of truncating or deleting it before commit.
+                exchange(private, temporary, parent, leaf, 1 if original is None else 2)
+                os.fsync(parent); os.fsync(private)
+                if original:
+                    displaced = current(private, temporary)
+                    if displaced is None or publication_identity(displaced) != record['originalIdentity'] or checksum(private, temporary) != record['originalSha256']:
+                        record['state'] = 'Unknown'; save_receipt(state, operation, record)
+                        raise Rejected('FILES_CONCURRENT_PUBLICATION_UNKNOWN')
+                    record['previousRetained'] = True
+                actual = current(parent, leaf)
+                if actual is None or actual.st_ino != record['newInode'] or actual.st_dev != record['newDevice'] or checksum(parent, leaf) != request['sha256']:
+                    record['state'] = 'Unknown'; save_receipt(state, operation, record)
+                    raise Rejected('FILES_CONCURRENT_PUBLICATION_UNKNOWN')
+                record.update(state='Completed', version=version(actual)); save_receipt(state, operation, record)
+                return {**public_receipt(record), 'replayed': False, 'bindingCurrent': True}
+            finally:
+                if descriptor is not None: os.close(descriptor)
+                if created and record and record['state'] == 'Receiving':
+                    with contextlib.suppress(FileNotFoundError): os.unlink(temporary, dir_fd=private)
+                    record['state'] = 'Aborted'; save_receipt(state, operation, record)
+                os.close(private)
+    finally:
+        os.close(lock); os.close(state)
+
+
+def public_receipt(record):
+    return {key: record[key] for key in ('operationId', 'state', 'sizeBytes', 'sha256', 'version', 'previousRetained') if key in record}
+
+
+def status(request):
+    if set(request) != {'operationId', 'owner'}:
+        raise Rejected('FILES_STATUS_INVALID')
+    operation = identity(request['operationId']); state = trusted_directory(STATE); lock = None
+    try:
+        record = read_receipt(state, operation)
+        if not record or record.get('owner') != request['owner']: raise Rejected('FILES_OPERATION_NOT_FOUND')
+        lock = os.open(operation + '.lock', os.O_WRONLY | os.O_NOFOLLOW, dir_fd=state)
+        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError: return {**public_receipt(record), 'isInProgress': True}
+        if record['state'] in ('Applying', 'Receiving'):
+            try:
+                with directory({'rootId': record['rootId'], 'path': record['path']}, 'upload') as (_, parent, leaf):
+                    private = staging(parent)
+                    try:
+                        if record['state'] == 'Applying': record = recover(record, parent, private, state)
+                        else:
+                            pending = current(private, operation + '.upload')
+                            if pending is not None and pending.st_ino == record['newInode'] and pending.st_dev == record['newDevice']:
+                                os.unlink(operation + '.upload', dir_fd=private); os.fsync(private)
+                                record['state'] = 'Aborted'
+                            elif pending is None: record['state'] = 'Aborted'
+                            else: record['state'] = 'Unknown'
+                            save_receipt(state, operation, record)
+                    finally: os.close(private)
+            except (OSError, Rejected):
+                record['state'] = 'Unknown'; save_receipt(state, operation, record)
+        try:
+            with directory({'rootId': record['rootId'], 'path': record['path']}, 'stat') as (_, parent, leaf):
+                actual = current(parent, leaf)
+                binding = actual is not None and version(actual) == record.get('version')
+        except (OSError, Rejected): binding = False
+        return {**public_receipt(record), 'bindingCurrent': binding, 'isInProgress': False}
+    finally:
+        if lock is not None: os.close(lock)
+        os.close(state)
+
+
+@contextlib.contextmanager
+def slot():
+    state = trusted_directory(STATE); lease = None
+    try:
+        for index in range(4):
+            candidate = os.open('slot-' + str(index) + '.lock', os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=state)
+            try: fcntl.flock(candidate, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(candidate); continue
+            lease = candidate; break
+        if lease is None: raise Rejected('FILES_TRANSFER_LIMIT')
+        yield
+    finally:
+        if lease is not None: os.close(lease)
+        os.close(state)
+
+
+def main():
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'stat', 'download', 'upload', 'status'):
+        raise Rejected('FILES_ACTION_INVALID')
+    invocation = identity(os.environ.get('INVOCATION_ID'))
+    emit({'type': 'driver', 'invocationId': invocation})
+    source = InputLines(sys.stdin.fileno())
+    request = line(source)
+    action = sys.argv[1]
+    if action == 'roots':
+        if request != {}: raise Rejected('FILES_ROOTS_INVALID')
+        emit({'roots': [{'id': key, 'name': item['externalId'], 'actions': item['allowedActions']} for key, item in roots().items()]})
+    elif action == 'list': emit(list_directory(request))
+    elif action == 'stat': emit(inspect(request))
+    elif action == 'download': download(request)
+    elif action == 'upload': emit(upload(request, source))
+    else: emit(status(request))
+
+
+if __name__ == '__main__':
+    try:
+        signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(Rejected('FILES_CANCELLED')))
+        signal.alarm(600)
+        with slot(): main()
+    except BaseException as error:
+        code = str(error) if isinstance(error, Rejected) and re.fullmatch(r'FILES_[A-Z_]{1,64}', str(error)) else 'FILES_IO_REJECTED'
+        if isinstance(error, FileNotFoundError): code = 'FILES_NOT_FOUND'
+        elif isinstance(error, PermissionError): code = 'FILES_ACCESS_DENIED'
+        elif isinstance(error, OSError):
+            code = {errno.ELOOP: 'FILES_PATH_REJECTED', errno.EXDEV: 'FILES_PATH_REJECTED', errno.ENOTDIR: 'FILES_PATH_REJECTED',
+                    errno.EEXIST: 'FILES_VERSION_CONFLICT', errno.ENOSPC: 'FILES_CAPACITY_REQUIRED', errno.EDQUOT: 'FILES_CAPACITY_REQUIRED'}.get(error.errno, code)
+        # Never emit an exception object, user path or file content.
+        print(json.dumps({'errorCode': code}), file=sys.stderr)
+        raise SystemExit(2) from None

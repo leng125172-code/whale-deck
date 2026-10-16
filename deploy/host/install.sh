@@ -32,6 +32,18 @@ install -d -o root -g whaledeck -m 0750 /etc/whaledeck
 [[ ! -L /etc/whaledeck/notifications ]] || { echo 'Notification private directory must not be a symlink.' >&2; exit 1; }
 install -d -o root -g whaledeck -m 0750 /etc/whaledeck/notifications
 install -d -o whaledeck-agent -g whaledeck -m 0750 /data/WhaleDeck/apps
+for files_root in /data/WhaleDeck/files /data/WhaleDeck/sites /data/WhaleDeck/workspaces /var/lib/whaledeck-files; do
+  [[ ! -L $files_root ]] || { echo 'File transport roots must not be symlinks.' >&2; exit 1; }
+  if [[ ! -e $files_root ]]; then install -d -o root -g root -m 0755 "$files_root"; fi
+done
+[[ $(stat -c %u /var/lib/whaledeck-files) == 0 ]] || exit 1
+chmod 0700 /var/lib/whaledeck-files
+[[ ! -L /etc/whaledeck/file-roots.json ]] || exit 1
+if [[ ! -e /etc/whaledeck/file-roots.json ]]; then
+  install -o root -g whaledeck -m 0640 "$(dirname "$0")/file-roots.json" /etc/whaledeck/file-roots.json
+fi
+[[ $(stat -c %u /etc/whaledeck/file-roots.json) == 0 ]] || exit 1
+[[ $(stat -c %a /etc/whaledeck/file-roots.json) =~ ^(600|640|644)$ ]] || exit 1
 install -d -o root -g root -m 0755 /opt/whaledeck-agent /opt/whaledeck-maintenance /usr/local/libexec
 # GNU cp otherwise truncates an existing executable in place and fails with
 # ETXTBSY while the old service process is still running. Replacing the
@@ -57,6 +69,7 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-application-backup.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-notification-config.py" /usr/local/libexec/whaledeck-notification-config.py
 install -o root -g root -m 0755 "$(dirname "$0")/whaledeck-host-terminal.py" /usr/local/libexec/whaledeck-host-terminal.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-terminal.py" /usr/local/libexec/whaledeck-container-terminal.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-files.py" /usr/local/libexec/whaledeck-files.py
 install -d -o root -g root -m 0700 /var/lib/whaledeck-application-backup /data/DockerData/whaledeck/application-backups
 for unit in whaledeck-application-backup-recovery.service whaledeck-application-backup-recovery.timer; do
   install -o root -g root -m 0644 "$(dirname "$0")/$unit" "/etc/systemd/system/$unit"

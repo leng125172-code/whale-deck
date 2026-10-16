@@ -565,3 +565,34 @@ service ContainerTerminalService {
   rpc Inspect(ResourceReference) returns (ContainerTerminalTarget);
   rpc Connect(stream ContainerTerminalFrame) returns (stream HostTerminalEvent);
 }
+
+// Registered host roots only; paths are relative and never host executables.
+message FileLocation { string root_id = 1; string path = 2; }
+message FileRoot { string id = 1; string name = 2; repeated string actions = 3; }
+message FileRoots { repeated FileRoot roots = 1; }
+message FileEntry {
+  string name = 1; string kind = 2; int64 size_bytes = 3;
+  int64 modified_at_unix_ms = 4; string version = 5; string mode = 6; bool is_protected = 7;
+}
+message FileListRequest { FileLocation location = 1; string after = 2; uint32 take = 3; }
+message FileListResponse { repeated FileEntry entries = 1; string next_cursor = 2; string version = 3; }
+message FileDownloadRequest { FileLocation location = 1; string expected_version = 2; }
+message FileDownloadFrame { string kind = 1; FileEntry metadata = 2; bytes data = 3; int64 offset = 4; string sha256 = 5; string version = 6; int64 size_bytes = 7; }
+message FileUploadHeader {
+  FileLocation location = 1; string operation_id = 2; string owner = 3;
+  int64 size_bytes = 4; string sha256 = 5; string expected_version = 6; RequestContext context = 7;
+}
+message FileUploadFrame { FileUploadHeader header = 1; bytes data = 2; int64 offset = 3; bool commit = 4; }
+message FileUploadLookup { string operation_id = 1; string owner = 2; }
+message FileUploadReceipt {
+  string operation_id = 1; string state = 2; int64 size_bytes = 3; string sha256 = 4;
+  string version = 5; bool previous_retained = 6; bool replayed = 7; bool binding_current = 8; bool is_in_progress = 9;
+}
+service FileTransferService {
+  rpc ListRoots(google.protobuf.Empty) returns (FileRoots);
+  rpc List(FileListRequest) returns (FileListResponse);
+  rpc Inspect(FileLocation) returns (FileEntry);
+  rpc Download(FileDownloadRequest) returns (stream FileDownloadFrame);
+  rpc Upload(stream FileUploadFrame) returns (FileUploadReceipt);
+  rpc GetUploadStatus(FileUploadLookup) returns (FileUploadReceipt);
+}

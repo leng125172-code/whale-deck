@@ -36,6 +36,13 @@ public sealed class AgentErrorInterceptor : Interceptor
         catch (Exception exception) when (Map(exception) is not null) { throw Map(exception)!; }
     }
 
+    public override async Task<TResponse> ClientStreamingServerHandler<TRequest, TResponse>(IAsyncStreamReader<TRequest> requestStream,
+        ServerCallContext context, ClientStreamingServerMethod<TRequest, TResponse> continuation)
+    {
+        try { return await continuation(requestStream, context); }
+        catch (Exception exception) when (Map(exception) is not null) { throw Map(exception)!; }
+    }
+
     private static RpcException? Map(Exception exception)
     {
         var code = exception switch
