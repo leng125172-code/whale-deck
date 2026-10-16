@@ -126,6 +126,15 @@ class FileBrowserTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(key.stat().st_mode), 0o600); self.assertEqual(key.stat().st_size, 32); key.chmod(0o644)
         with self.assertRaisesRegex(driver.Rejected, 'FILES_CURSOR_KEY_UNSAFE'): self.search(cursor=cursor)
 
+    def test_cursor_key_is_atomic_and_existing_key_cannot_be_replaced(self):
+        with patch.object(driver, 'exchange', side_effect=driver.Rejected('FILES_TEST_INTERRUPTION')), self.assertRaises(driver.Rejected): driver.browse_key()
+        self.assertFalse((self.state / 'browse-cursor.key').exists())
+        self.assertEqual(list(self.state.glob('browse-cursor-*.key')), [])
+        original = driver.browse_key()
+        with patch.object(driver, 'exchange', side_effect=AssertionError('existing-key-must-not-be-replaced')):
+            self.assertEqual(driver.browse_key(), original)
+        self.assertEqual((self.state / 'browse-cursor.key').stat().st_nlink, 1)
+
     def test_bad_query_cursor_path_and_typed_limits(self):
         for values in ({'query': ''}, {'query': ' '}, {'query': 'a\n'}, {'query': 'a\u0085'}, {'query': '../'}, {'query': '中' * 86}, {'query': 'a\\b'},
                        {'take': True}, {'take': 101}, {'kind': 'Symlink'}, {'matchCase': 1}, {'cursor': 'x' * 32769},

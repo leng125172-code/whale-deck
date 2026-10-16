@@ -111,7 +111,9 @@ onBeforeUnmount(() => stop(true))
           busy
             ? '正在搜索…'
             : canceled
-              ? '搜索已停止；可继续上一次扫描或重新搜索'
+              ? result?.nextCursor
+                ? '搜索已停止；可继续上一次扫描或重新搜索'
+                : '搜索已停止，可重新搜索'
               : result
                 ? searchSummary(result)
                 : ''

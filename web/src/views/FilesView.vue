@@ -94,6 +94,15 @@ function message(reason: unknown) {
     intent.value = null
   }
 }
+function browserFailure(reason: unknown) {
+  if (reason instanceof ApiError && (reason.status === 409 || reason.status === 429)) {
+    error.value =
+      reason.status === 409
+        ? '目录已变化或搜索续页已过期，请刷新目录树或重新搜索。'
+        : '文件服务当前繁忙，请稍后重新搜索或展开目录。'
+    trace.value = reason.problem.traceId || ''
+  } else message(reason)
+}
 function stop() {
   listing?.abort()
   transfer?.abort()
@@ -476,14 +485,14 @@ onBeforeUnmount(() => {
           :disabled="busy || !!frozen || mutationLocked"
           :revision="treeRevision"
           @navigate="navigate"
-          @failure="message"
+          @failure="browserFailure"
         />
         <FileSearchPanel
           :root-id="rootId"
           :path="path"
           :disabled="busy || !!frozen || mutationLocked"
           @navigate="navigate"
-          @failure="message"
+          @failure="browserFailure"
         />
       </div>
       <div v-if="chosen" class="file-picked" :title="chosen.name">

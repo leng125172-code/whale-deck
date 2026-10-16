@@ -329,13 +329,22 @@ def browse_key():
         try: descriptor = os.open('browse-cursor.key', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=state)
         except FileNotFoundError:
             with namespace_lock():
+                temporary = 'browse-cursor-' + uuid.uuid4().hex + '.key'
+                key = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=state)
                 try:
-                    key = os.open('browse-cursor.key', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=state)
-                except FileExistsError: pass
-                else:
-                    try: os.write(key, os.urandom(32)); os.fsync(key)
-                    finally: os.close(key)
+                    content = os.urandom(32); offset = 0
+                    while offset < len(content):
+                        written = os.write(key, content[offset:])
+                        if written <= 0: raise Rejected('FILES_CURSOR_KEY_UNSAFE')
+                        offset += written
+                    os.fsync(key)
+                    try: exchange(state, temporary, state, 'browse-cursor.key', 1)
+                    except FileExistsError: pass
                     os.fsync(state)
+                finally:
+                    os.close(key)
+                    try: os.unlink(temporary, dir_fd=state)
+                    except FileNotFoundError: pass
             descriptor = os.open('browse-cursor.key', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=state)
         try:
             info = os.fstat(descriptor)
