@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Diagnostics;
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WhaleDeck.Api.Security;
@@ -11,6 +13,7 @@ namespace WhaleDeck.Api.Controllers;
 [Route("api/v1/jobs")]
 public sealed class JobsController(OperationService operations, JobRetryService retries) : ControllerBase
 {
+    private static readonly JsonSerializerOptions EventJson = new(JsonSerializerDefaults.Web);
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] int take = 50, CancellationToken cancellationToken = default) =>
         Ok(await operations.ListAsync(take, cancellationToken));
@@ -29,24 +32,37 @@ public sealed class JobsController(OperationService operations, JobRetryService 
         return Accepted();
     }
 
+    /// <summary>Streams ordered progress, including all persisted terminal history. Reconnect with Last-Event-ID.</summary>
+    /// <remarks>Connections rotate after one minute so authentication and authorization run again on reconnect.</remarks>
     [HttpGet("{id:guid}/events")]
-    public async Task Events(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Events(Guid id, CancellationToken cancellationToken)
     {
+        var cursor = Request.Headers["Last-Event-ID"];
+        if (cursor.Count > 1 || cursor.Count == 1 && (cursor[0]?.Length > 19 ||
+            !long.TryParse(cursor[0], NumberStyles.None, CultureInfo.InvariantCulture, out _) || cursor[0]?.StartsWith('-') == true))
+            throw new ArgumentException("Last-Event-ID must be a non-negative integer.");
+        var after = cursor.Count == 0 ? 0 : long.Parse(cursor[0]!, CultureInfo.InvariantCulture);
+        var batch = await operations.EventBatchAsync(id, after, cancellationToken);
+        if (batch is null) return NotFound();
         Response.Headers.ContentType = "text/event-stream";
-        var after = long.TryParse(Request.Headers["Last-Event-ID"], out var sequence) ? sequence : 0;
-        while (!cancellationToken.IsCancellationRequested)
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers["X-Accel-Buffering"] = "no";
+        await Response.WriteAsync("retry: 2000\n\n", cancellationToken);
+        var started = Stopwatch.GetTimestamp();
+        while (batch is not null && !cancellationToken.IsCancellationRequested)
         {
-            var events = await operations.EventsAsync(id, after, cancellationToken);
-            foreach (var item in events)
+            foreach (var item in batch.Events)
             {
-                await Response.WriteAsync($"id: {item.Sequence}\nevent: progress\ndata: {JsonSerializer.Serialize(item)}\n\n", cancellationToken);
+                await Response.WriteAsync($"id: {item.Sequence}\nevent: progress\ndata: {JsonSerializer.Serialize(item, EventJson)}\n\n", cancellationToken);
                 after = item.Sequence;
             }
+            if (batch.Events.Count == 0) await Response.WriteAsync(": waiting\n\n", cancellationToken);
             await Response.Body.FlushAsync(cancellationToken);
-            var job = await operations.FindAsync(id, cancellationToken);
-            if (job is null || job.State is "Succeeded" or "Failed" or "Canceled" or "RolledBack") return;
-            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+            if (batch.IsTerminal && batch.Events.Count == 0 || Stopwatch.GetElapsedTime(started) >= TimeSpan.FromMinutes(1)) break;
+            if (!batch.IsTerminal) await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+            batch = await operations.EventBatchAsync(id, after, cancellationToken);
         }
+        return new EmptyResult();
     }
 
     /// <summary>Describes a retry and whether a new one-time secret is required.</summary>

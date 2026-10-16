@@ -2,17 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import JobsView from '@/views/JobsView.vue'
+import type { JobEvent } from '@/services/contracts'
 
-const { request, stage } = vi.hoisted(() => ({
+const { request, stage, subscribe } = vi.hoisted(() => ({
   request: vi.fn<(path: string, init?: RequestInit) => Promise<unknown>>(),
   stage: vi.fn<(value?: string) => Promise<{ token: string }>>(),
+  subscribe:
+    vi.fn<
+      (
+        id: string,
+        handlers: { progress: (event: JobEvent) => void; error: () => void },
+      ) => () => void
+    >(),
 }))
 vi.mock('@/services/apiClient', () => ({
   apiRequest: request,
   apiUrl: (path: string) => `/api/v1/${path}`,
   createIdempotencyKey: () => 'new-retry-key',
 }))
-vi.mock('@/services/operations', () => ({ stageSecret: stage, subscribeToJob: () => () => {} }))
+vi.mock('@/services/operations', () => ({ stageSecret: stage, subscribeToJob: subscribe }))
 
 const source = {
   id: 'source-job',
@@ -53,6 +61,8 @@ const wrappers: ReturnType<typeof mount>[] = []
 beforeEach(() => {
   request.mockReset()
   stage.mockReset()
+  subscribe.mockReset()
+  subscribe.mockReturnValue(() => {})
   request.mockImplementation(async (path: string) => {
     if (path === 'jobs?take=100') return [source]
     if (path === `jobs/${source.id}`) return source
@@ -68,6 +78,29 @@ afterEach(() => {
 })
 
 describe('Job retry', () => {
+  it('loads persisted events even for a finished job and closes the subscription on unmount', async () => {
+    const close = vi.fn<() => void>()
+    subscribe.mockReturnValue(close)
+    const wrapper = mount(JobsView, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    await wrapper.get('.el-table__body tr').trigger('click')
+    await flushPromises()
+    expect(subscribe).toHaveBeenCalledWith(source.id, expect.any(Object))
+    const handler = subscribe.mock.calls[0]![1]
+    handler.progress({
+      sequence: 1,
+      state: 'Failed',
+      phase: '已记录的失败',
+      progressPercent: null,
+      messageCode: 'FAILED',
+      occurredAtUtc: source.completedAtUtc,
+    })
+    await flushPromises()
+    expect(wrapper.find('.el-timeline').text()).toContain('已记录的失败')
+    wrapper.unmount()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
   it('previews current changes and submits only after explicit confirmation with a new key', async () => {
     const wrapper = mount(JobsView, { global: { plugins: [ElementPlus], stubs } })
     wrappers.push(wrapper)

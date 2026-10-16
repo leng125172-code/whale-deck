@@ -213,6 +213,8 @@ public sealed record JobEventDto(
     string MessageCode,
     DateTimeOffset OccurredAtUtc);
 
+public sealed record JobEventBatchDto(IReadOnlyCollection<JobEventDto> Events, bool IsTerminal);
+
 public sealed record PlanDto(
     string PlanHash,
     DateTimeOffset ExpiresAtUtc,

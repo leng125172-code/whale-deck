@@ -82,6 +82,17 @@ public sealed class OperationService(IJobRepository jobs)
     public async Task<IReadOnlyCollection<JobEventDto>> EventsAsync(Guid id, long afterSequence, CancellationToken cancellationToken) =>
         (await jobs.ListEventsAsync(id, afterSequence, cancellationToken)).Select(item => new JobEventDto(item.Sequence, item.State, item.Phase, item.ProgressPercent, item.MessageCode, item.OccurredAtUtc)).ToArray();
 
+    public async Task<JobEventBatchDto?> EventBatchAsync(Guid id, long afterSequence, CancellationToken cancellationToken)
+    {
+        // Read status BEFORE events. A terminal job and its final event commit
+        // atomically; querying events first can miss that commit and close early.
+        // Terminal snapshots must still be drained across every bounded page.
+        var job = await jobs.FindAsync(id, cancellationToken);
+        if (job is null) return null;
+        var terminal = job.State is "Succeeded" or "Failed" or "Canceled" or "RolledBack";
+        return new(await EventsAsync(id, afterSequence, cancellationToken), terminal);
+    }
+
     public Task CancelAsync(Guid id, string actorSubject, CancellationToken cancellationToken) =>
         jobs.RequestCancellationAsync(id, actorSubject, cancellationToken);
 

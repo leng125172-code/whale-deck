@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiRequest, apiUrl, createIdempotencyKey } from '@/services/apiClient'
 import { stageSecret, subscribeToJob, type OperationPlan } from '@/services/operations'
@@ -9,9 +9,12 @@ const jobs = ref<Job[]>([])
 const loading = ref(false)
 const selected = ref<Job | null>(null)
 const events = ref<JobEvent[]>([])
+const streamNotice = ref('')
+const eventsTruncated = ref(false)
 const drawerVisible = ref(false)
 let timer: number | undefined
 let unsubscribe: (() => void) | undefined
+let openVersion = 0
 const terminalStates = new Set(['Succeeded', 'Failed', 'Canceled', 'RolledBack'])
 const canCancel = computed(() => selected.value && !terminalStates.has(selected.value.state))
 const canRetry = computed(
@@ -64,24 +67,45 @@ async function load() {
 }
 
 async function openJob(job: Job) {
+  const version = ++openVersion
   unsubscribe?.()
   events.value = []
-  selected.value = await apiRequest<Job>(`jobs/${job.id}`)
+  streamNotice.value = ''
+  eventsTruncated.value = false
+  const detail = await apiRequest<Job>(`jobs/${job.id}`)
+  if (version !== openVersion) return
+  selected.value = detail
   drawerVisible.value = true
-  if (!terminalStates.has(selected.value.state)) {
-    unsubscribe = subscribeToJob(job.id, {
-      progress(event) {
-        events.value.push(event)
-        if (selected.value) {
-          selected.value.state = event.state
-          selected.value.phase = event.phase
-          selected.value.progressPercent = event.progressPercent
-        }
-      },
-      error: () => void load(),
-    })
-  }
+  unsubscribe = subscribeToJob(job.id, {
+    progress(event) {
+      if (version !== openVersion || !drawerVisible.value) return
+      streamNotice.value = ''
+      events.value.push(event)
+      if (events.value.length > 500) {
+        eventsTruncated.value = true
+        events.value = events.value.slice(-500)
+      }
+      if (selected.value) {
+        selected.value.state = event.state
+        selected.value.phase = event.phase
+        selected.value.progressPercent = event.progressPercent
+      }
+      if (terminalStates.has(event.state)) void load().catch(() => {})
+    },
+    error: () => {
+      if (version !== openVersion || !drawerVisible.value) return
+      streamNotice.value = '事件连接中断，请刷新或重新打开详情核对状态。'
+      void load().catch(() => {})
+    },
+  })
 }
+
+watch(drawerVisible, (visible) => {
+  if (!visible) {
+    openVersion++
+    unsubscribe?.()
+  }
+})
 
 async function cancelJob() {
   if (!selected.value) return
@@ -183,6 +207,7 @@ onMounted(() => {
   timer = window.setInterval(load, 6000)
 })
 onBeforeUnmount(() => {
+  openVersion++
   window.clearInterval(timer)
   unsubscribe?.()
 })
@@ -227,13 +252,7 @@ onBeforeUnmount(() => {
       </el-table>
     </section>
 
-    <el-drawer
-      v-model="drawerVisible"
-      title="任务详情"
-      size="min(560px, 94vw)"
-      destroy-on-close
-      @closed="unsubscribe?.()"
-    >
+    <el-drawer v-model="drawerVisible" title="任务详情" size="min(560px, 94vw)" destroy-on-close>
       <template v-if="selected">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="任务 ID">{{ selected.id }}</el-descriptions-item>
@@ -259,6 +278,13 @@ onBeforeUnmount(() => {
           </el-descriptions-item>
         </el-descriptions>
         <h3 class="job-events-title">实时事件</h3>
+        <el-alert
+          v-if="eventsTruncated"
+          title="当前显示最近500条事件，完整历史保留在服务端。"
+          type="info"
+          :closable="false"
+        />
+        <el-alert v-if="streamNotice" :title="streamNotice" type="warning" :closable="false" />
         <el-timeline>
           <el-timeline-item
             v-for="event in events"
