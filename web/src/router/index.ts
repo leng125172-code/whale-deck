@@ -68,6 +68,13 @@ const router = createRouter({
           meta: { administratorOnly: true, title: '容器' },
         },
         {
+          path: 'containers/:containerId/terminal',
+          name: 'container-terminal',
+          component: () => import('@/views/ContainerTerminalView.vue'),
+          props: true,
+          meta: { administratorOnly: true, title: '容器终端' },
+        },
+        {
           path: 'docker/images',
           name: 'images',
           component: ResourceListView,

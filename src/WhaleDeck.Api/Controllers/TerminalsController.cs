@@ -23,6 +23,17 @@ public sealed class TerminalsController(TerminalSessionService sessions, Termina
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<TerminalSessionDto>> Get(Guid id, CancellationToken cancellationToken) =>
         Ok(await sessions.GetAsync((await identity.ReadAsync(HttpContext)).Actor, id, cancellationToken));
+    /// <summary>Inspect an eligible, unprotected running container. Full immutable ID only; never returns environment variables.</summary>
+    [HttpGet("containers/{containerId}")]
+    public async Task<ActionResult<ContainerTerminalTargetDto>> InspectContainer(string containerId, CancellationToken cancellationToken) =>
+        Ok(await sessions.InspectContainerAsync((await identity.ReadAsync(HttpContext)).Actor, containerId, cancellationToken));
+    /// <summary>Confirmed one-time grant bound to the exact container/start instance and fixed shell. Uses the container configured user, not a host shell.</summary>
+    [HttpPost("containers/grants")]
+    public async Task<ActionResult<TerminalGrantDto>> IssueContainer(CreateContainerTerminalCommand command, CancellationToken cancellationToken)
+    {
+        if (Request.Headers["Idempotency-Key"].Count != 1 || Request.Headers["Idempotency-Key"].ToString() != command.IdempotencyKey) return BadRequest();
+        return Ok(await sessions.IssueContainerAsync((await identity.ReadAsync(HttpContext)).Actor, command, cancellationToken));
+    }
     [HttpPost("{id:guid}/close")]
     public async Task<IActionResult> Close(Guid id, CancellationToken cancellationToken)
     {

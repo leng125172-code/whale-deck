@@ -7,7 +7,7 @@ using WhaleDeck.Application.Services;
 namespace WhaleDeck.Api.Terminals;
 
 /// <summary>HTTP/WS transport only. Business state, tokens, authorization and durable audit live in Application.</summary>
-public sealed class HostTerminalWebSocket(TerminalSessionService sessions, TerminalCookieIdentity identity, IHostTerminalGateway gateway, ILogger<HostTerminalWebSocket> logger)
+public sealed class HostTerminalWebSocket(TerminalSessionService sessions, TerminalCookieIdentity identity, IHostTerminalGateway gateway, ILogger<HostTerminalWebSocket> logger, IContainerTerminalGateway containers)
 {
     private static readonly Action<ILogger, Guid, string, Exception?> LogFailure = LoggerMessage.Define<Guid, string>(
         LogLevel.Warning, new EventId(9041, "TerminalTransportFailure"), "Terminal session {SessionId} failed with type {FailureType}");
@@ -27,13 +27,21 @@ public sealed class HostTerminalWebSocket(TerminalSessionService sessions, Termi
             using var first = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); first.CancelAfter(TimeSpan.FromSeconds(5));
             var packet = await Message(socket, 256, first.Token) ?? throw new ArgumentException("TERMINAL_TICKET_REQUIRED");
             var token = TerminalFramePolicy.Grant(packet);
-            await sessions.ClaimAsync(login.Actor, id, token, first.Token); claimed = true;
+            var session = await sessions.ClaimAsync(login.Actor, id, token, first.Token); claimed = true;
             // Re-read the live server ticket immediately before capability
             // signing; a cached AuthenticateAsync result cannot prove logout.
             var current = await identity.ReadAsync(context, login.Key);
             if (current.Actor.Subject != login.Actor.Subject || current.Actor.LoginBinding != login.Actor.LoginBinding ||
                 !await sessions.RequireConnectingAsync(current.Actor, id, first.Token)) throw new UnauthorizedAccessException("TERMINAL_SESSION_REVOKED");
-            connection = await gateway.OpenHostAsync(id, login.Actor, lifetime.Token);
+            // Dispatch only persisted, claimed metadata. No WS frame/URL may select a target.
+            connection = session.TargetKind switch
+            {
+                "Host" when session.TargetId == "whaledeck.host" && session.InstanceId is null && session.Shell is null =>
+                    await gateway.OpenHostAsync(id, current.Actor, lifetime.Token),
+                "Container" when session.InstanceId is not null && session.Shell is not null =>
+                    await containers.OpenContainerAsync(id, current.Actor, session.TargetId, session.InstanceId, session.Shell, lifetime.Token),
+                _ => throw new InvalidOperationException("TERMINAL_TARGET_INVALID")
+            };
             input = PumpInput(); output = PumpOutput(); monitor = Monitor();
             var ended = await Task.WhenAny(input, output, monitor);
             await ended;

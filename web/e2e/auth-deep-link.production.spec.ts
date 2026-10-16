@@ -6,6 +6,21 @@ import { installTerminalFixture } from './fixtures/terminal.mjs'
 test.describe('production initial authentication', () => {
   test.skip(!process.env.WHALEDECK_PRODUCTION_PREVIEW_URL, 'Requires a built production preview')
   test.use({ baseURL: process.env.WHALEDECK_PRODUCTION_PREVIEW_URL })
+  for (const authenticationStatus of [200, 401]) {
+    test(`container terminal direct authorization: ${authenticationStatus}`, async ({ page }) => {
+      const control = await installTerminalFixture(page, {
+        administrator: false,
+        authenticationStatus,
+        authenticationDelayMs: 350,
+      })
+      await page.goto('/containers/' + 'a'.repeat(64) + '/terminal')
+      await expect(page).toHaveURL(authenticationStatus === 401 ? /\/login\?/ : /\/forbidden$/)
+      await expect(page.locator('.terminal-surface')).toHaveCount(0)
+      expect(control.state.inspections).toBe(0)
+      expect(control.state.writes).toHaveLength(0)
+      expect(control.state.sockets).toBe(0)
+    })
+  }
 
   test('ordinary direct terminal navigation waits for identity then shows 403 without loading the terminal', async ({
     page,

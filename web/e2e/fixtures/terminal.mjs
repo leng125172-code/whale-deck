@@ -13,6 +13,7 @@ export async function installTerminalFixture(page, options = {}) {
     grantStatus: options.grantStatus || 200,
     administrator: options.administrator ?? true,
     authReads: 0,
+    inspections: 0,
   }
   let active
   let currentId
@@ -40,7 +41,14 @@ export async function installTerminalFixture(page, options = {}) {
         permissionExpiresAtUtc: new Date(Date.now() + 7200000).toISOString(),
       })
     }
-    if (path === 'terminals/host/grants') {
+    if (path.startsWith('terminals/containers/') && request.method() === 'GET') {
+      state.inspections++
+      return fulfill(
+        options.containerTarget || { title: 'Fixture target missing' },
+        options.inspectStatus || (options.containerTarget ? 200 : 404),
+      )
+    }
+    if (path === 'terminals/host/grants' || path === 'terminals/containers/grants') {
       if (state.grantStatus !== 200)
         return fulfill(
           { title: 'Fixture unavailable', traceId: 'fixture-trace', status: state.grantStatus },
@@ -51,7 +59,14 @@ export async function installTerminalFixture(page, options = {}) {
       return fulfill({
         sessionId: currentId,
         connectToken: 'A'.repeat(64),
-        targetId: 'whaledeck.host',
+        targetId:
+          path === 'terminals/containers/grants'
+            ? options.containerTarget.containerId
+            : 'whaledeck.host',
+        targetKind: path === 'terminals/containers/grants' ? 'Container' : 'Host',
+        instanceId:
+          path === 'terminals/containers/grants' ? options.containerTarget.instanceId : null,
+        shell: path === 'terminals/containers/grants' ? request.postDataJSON().shell : null,
         grantExpiresAtUtc: new Date(Date.now() + 30000).toISOString(),
         expiresAtUtc: new Date(Date.now() + 600000).toISOString(),
       })

@@ -7,7 +7,18 @@ export interface TerminalGrant {
   grantExpiresAtUtc: string
   expiresAtUtc: string
   targetId: string
+  targetKind?: 'Host' | 'Container'
+  instanceId?: string | null
+  shell?: string | null
 }
+export interface ContainerTerminalTarget {
+  containerId: string
+  name: string
+  instanceId: string
+  imageId: string
+  configuredUser: string
+}
+export type ContainerShell = 'sh' | 'bash' | 'ash'
 export interface TerminalSink {
   state: (phase: TerminalPhase, message: string, exitCode?: number) => void
   write: (bytes: Uint8Array, consumed: () => void) => void
@@ -42,6 +53,20 @@ export function terminalSocketUrl(id: string, location: string) {
 }
 
 export function createHostTerminal(sink: TerminalSink, provided: Partial<Dependencies> = {}) {
+  return createTerminal(sink, provided)
+}
+export function createContainerTerminal(
+  sink: TerminalSink,
+  selection: () => { target: ContainerTerminalTarget; shell: ContainerShell },
+  provided: Partial<Dependencies> = {},
+) {
+  return createTerminal(sink, provided, selection)
+}
+function createTerminal(
+  sink: TerminalSink,
+  provided: Partial<Dependencies>,
+  selection?: () => { target: ContainerTerminalTarget; shell: ContainerShell },
+) {
   const dependencies: Dependencies = {
     request: apiRequest,
     socket: (url, protocol) => new WebSocket(url, protocol),
@@ -55,6 +80,7 @@ export function createHostTerminal(sink: TerminalSink, provided: Partial<Depende
   let socket: WebSocket | null = null
   let sessionId: string | null = null
   let pendingKey: string | null = null
+  let pendingScope = ''
   let controller: AbortController | null = null
   let readyTimer: number | undefined
   let pollTimer: number | undefined
@@ -152,18 +178,61 @@ export function createHostTerminal(sink: TerminalSink, provided: Partial<Depende
     state('preparing', '正在申请一次性连接许可…')
     controller = new AbortController()
     try {
+      const selected = selection?.()
+      if (
+        selected &&
+        (!/^[a-f0-9]{64}$/.test(selected.target.containerId) ||
+          !selected.target.instanceId ||
+          selected.target.instanceId.length > 80 ||
+          !['sh', 'bash', 'ash'].includes(selected.shell))
+      )
+        throw new Error('容器目标无效。')
+      const scope = JSON.stringify(
+        selected
+          ? {
+              containerId: selected.target.containerId,
+              instanceId: selected.target.instanceId,
+              shell: selected.shell,
+            }
+          : null,
+      )
+      if (pendingScope !== scope) {
+        pendingKey = null
+        pendingScope = scope
+      }
       pendingKey ??= dependencies.key()
       terminalSocketUrl('00000000-0000-4000-8000-000000000001', dependencies.location)
-      const grant = await dependencies.request<TerminalGrant>('terminals/host/grants', {
-        method: 'POST',
-        headers: { 'Idempotency-Key': pendingKey },
-        body: JSON.stringify({ confirmed: true, idempotencyKey: pendingKey }),
-        signal: controller.signal,
-      })
+      const grant = await dependencies.request<TerminalGrant>(
+        selected ? 'terminals/containers/grants' : 'terminals/host/grants',
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': pendingKey },
+          body: JSON.stringify({
+            confirmed: true,
+            idempotencyKey: pendingKey,
+            ...(selected
+              ? {
+                  containerId: selected.target.containerId,
+                  instanceId: selected.target.instanceId,
+                  shell: selected.shell,
+                }
+              : {}),
+          }),
+          signal: controller.signal,
+        },
+      )
       if (
         !identifier.test(grant.sessionId) ||
         !/^[A-F0-9]{64}$/.test(grant.connectToken) ||
-        grant.targetId !== 'whaledeck.host'
+        (selected
+          ? grant.targetKind !== 'Container' ||
+            grant.targetId !== selected.target.containerId ||
+            grant.instanceId !== selected.target.instanceId ||
+            grant.shell !== selected.shell
+          : grant.targetId !== 'whaledeck.host' ||
+            (grant.targetKind ?? 'Host') !== 'Host' ||
+            grant.instanceId != null ||
+            grant.shell != null)
       )
         throw new Error('终端服务返回了无效的连接许可。')
       if (current !== generation || disposed) {
@@ -178,7 +247,7 @@ export function createHostTerminal(sink: TerminalSink, provided: Partial<Depende
         'whaledeck.terminal.v1',
       )
       socket = active
-      state('connecting', '正在连接受限宿主终端…')
+      state('connecting', selected ? '正在连接容器终端…' : '正在连接受限宿主终端…')
       readyTimer = window.setTimeout(() => {
         if (current === generation) fail('连接超时，请手动重新连接。')
       }, 15_000)
@@ -203,7 +272,7 @@ export function createHostTerminal(sink: TerminalSink, provided: Partial<Depende
             case 'ready':
               if (phase !== 'connecting') throw new Error()
               window.clearTimeout(readyTimer)
-              state('open', '已连接 · 受限宿主身份')
+              state('open', selected ? '已连接 · 容器配置身份' : '已连接 · 受限宿主身份')
               sentDimensions = ''
               resize(dimensions.columns, dimensions.rows)
               sink.ready()
@@ -239,7 +308,11 @@ export function createHostTerminal(sink: TerminalSink, provided: Partial<Depende
               state('closed', `进程已结束 · 退出码 ${exitCode}`)
               break
             case 'error':
-              fail('宿主终端未能完成操作，请检查服务状态后重新连接。')
+              fail(
+                selected
+                  ? '容器终端未能完成操作，请检查容器状态和所选 Shell。'
+                  : '宿主终端未能完成操作，请检查服务状态后重新连接。',
+              )
               break
             default:
               throw new Error()

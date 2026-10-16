@@ -15,5 +15,5 @@ public interface ITerminalSessionRepository
 /// <summary>Purpose-separated deterministic token for retrying the same unconsumed grant. Never persisted in plaintext.</summary>
 public interface ITerminalGrantSigner
 {
-    string Sign(Guid sessionId, string actorSubject, string loginBinding);
+    string Sign(Guid sessionId, string actorSubject, string loginBinding, string targetId = "whaledeck.host", string? instanceId = null, string? shell = null);
 }

@@ -95,15 +95,33 @@ def main():
     csrf = session.get(base + '/api/v1/auth/csrf', timeout=15).json()
     headers = {csrf['headerName']: csrf['token'], 'Origin': base}
     endpoint = base + '/api/v1/terminals'
+    container_id = os.environ.get('VALIDATION_CONTAINER_ID')
+    target = None
+    if container_id:
+        assert re.fullmatch(r'[a-f0-9]{64}', container_id), 'TERMINAL_CONTAINER_ID_INVALID'
+        inspected = session.get(endpoint + '/containers/' + container_id, timeout=15)
+        assert inspected.status_code == 200, 'TERMINAL_CONTAINER_INSPECTION_FAILED'
+        target = inspected.json()
+        assert target['containerId'] == container_id and target['configuredUser'] == '1000:1000', 'TERMINAL_CONTAINER_TARGET_INVALID'
+        assert 'env' not in target and 'environment' not in target
+    grant_path = '/containers/grants' if target else '/host/grants'
     cookie = '; '.join(item.name + '=' + item.value for item in session.cookies)
     issued = []
     def grant():
         key = str(uuid.uuid4()); body = {'confirmed': True, 'idempotencyKey': key}
-        response = session.post(endpoint + '/host/grants', json=body, headers={**headers, 'Idempotency-Key': key}, timeout=15)
+        if target: body.update(containerId=container_id, instanceId=target['instanceId'], shell='sh')
+        request_headers = {**headers, 'Idempotency-Key': key}
+        response = session.post(endpoint + grant_path, json=body, headers=request_headers, timeout=15)
         assert response.status_code == 200, 'TERMINAL_GRANT_FAILED'
         first = response.json(); issued.append(str(uuid.UUID(first['sessionId'])))
-        replay = session.post(endpoint + '/host/grants', json=body, headers={**headers, 'Idempotency-Key': key}, timeout=15)
+        replay = session.post(endpoint + grant_path, json=body, headers=request_headers, timeout=15)
         assert replay.status_code == 200 and replay.json() == first, 'TERMINAL_GRANT_RETRY_CHANGED'
+        if target:
+            assert first['targetKind'] == 'Container' and first['targetId'] == container_id and first['instanceId'] == target['instanceId'] and first['shell'] == 'sh', 'TERMINAL_CONTAINER_SCOPE_MISMATCH'
+            wrong_shell = session.post(endpoint + grant_path, json={**body, 'shell': 'bash'}, headers=request_headers, timeout=15)
+            assert wrong_shell.status_code == 409, 'TERMINAL_SCOPE_CONFLICT_NOT_REJECTED'
+            wrong_host = session.post(endpoint + '/host/grants', json={'confirmed': True, 'idempotencyKey': key}, headers=request_headers, timeout=15)
+            assert wrong_host.status_code == 409, 'TERMINAL_HOST_SCOPE_CONFLICT_NOT_REJECTED'
         return first
     def status(identifier):
         response = session.get(endpoint + '/' + identifier, timeout=15)
@@ -170,7 +188,7 @@ def main():
             deadline = time.monotonic() + 15
             while active.read() is not None: assert time.monotonic() < deadline
         finally: active.close()
-        print(json.dumps({'realBffHostTerminal': 'passed', 'oidcCookieProxyGatewayUdsPty': 'passed',
+        print(json.dumps({'realBffContainerTerminal' if target else 'realBffHostTerminal': 'passed', 'oidcCookieProxyGatewayUdsPty': 'passed',
                           'originQueryRejectionAndGrantReplay': 'passed', 'resizeExitDurableCloseAndRevocation': 'passed',
                           'productionContainersModified': False, 'terminalTranscriptPrinted': False}))
     finally:

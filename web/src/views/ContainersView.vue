@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Box, Delete, Plus, RefreshRight, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError, apiRequest, apiUrl } from '@/services/apiClient'
@@ -38,6 +38,14 @@ interface Container {
 
 const items = ref<Container[]>([])
 const route = useRoute()
+const router = useRouter()
+function terminalAllowed(item: Container) {
+  return !item.isProtected && item.state === 'running' && /^[a-f0-9]{64}$/.test(item.id)
+}
+function openTerminal(item: Container) {
+  if (terminalAllowed(item))
+    void router.push({ name: 'container-terminal', params: { containerId: item.id } })
+}
 const search = ref('')
 const viewMode = ref('cards')
 const wideTable = ref(window.innerWidth > 1045)
@@ -719,6 +727,13 @@ onMounted(() => {
           ><template #default="{ row }"
             ><div class="container-table__actions">
               <el-button link type="primary" @click="openDetails(row)">详情 / 日志</el-button
+              ><el-button
+                v-if="!row.isProtected"
+                link
+                type="primary"
+                :disabled="!terminalAllowed(row)"
+                @click="openTerminal(row)"
+                >终端</el-button
               ><el-dropdown
                 v-if="!row.isProtected"
                 trigger="click"
@@ -789,6 +804,14 @@ onMounted(() => {
         />
         <div class="container-card__actions">
           <el-button link type="primary" @click="openDetails(item)">详情</el-button>
+          <el-button
+            v-if="!item.isProtected"
+            link
+            type="primary"
+            :disabled="!terminalAllowed(item)"
+            @click="openTerminal(item)"
+            >终端</el-button
+          >
           <el-button v-if="canUpdate(item)" link type="primary" @click="updateContainer(item)"
             ><el-icon><RefreshRight /></el-icon>更新</el-button
           >
@@ -931,6 +954,12 @@ onMounted(() => {
     >
       <div v-loading="detailLoading" class="container-detail">
         <div class="container-detail__actions">
+          <el-button
+            v-if="selected && !selected.isProtected"
+            :disabled="!terminalAllowed(selected)"
+            @click="openTerminal(selected)"
+            >容器终端</el-button
+          >
           <el-button :disabled="!selected" @click="selected && downloadDiagnostics(selected)"
             >导出诊断</el-button
           >

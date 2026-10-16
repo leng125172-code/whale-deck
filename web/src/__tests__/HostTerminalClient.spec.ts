@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type apiRequest } from '@/services/apiClient'
-import { createHostTerminal, terminalSocketUrl, type TerminalSink } from '@/services/hostTerminal'
+import {
+  createHostTerminal,
+  createContainerTerminal,
+  terminalSocketUrl,
+  type TerminalSink,
+  type TerminalGrant,
+} from '@/services/hostTerminal'
 
 const grant = {
   sessionId: '4871e73a-84ac-4267-a3f1-a243221ddf16',
@@ -36,6 +42,36 @@ class FakeSocket {
   }
 }
 const clients: ReturnType<typeof createHostTerminal>[] = []
+function containerSetup(overrides: Partial<TerminalGrant> = {}) {
+  const base = setup()
+  const target = {
+    containerId: 'a'.repeat(64),
+    instanceId: '10:2026-10-16T00:00:00Z',
+    name: 'ui-only',
+    imageId: 'image',
+    configuredUser: '1000',
+  }
+  base.request.mockImplementation(async (path) =>
+    path.endsWith('containers/grants')
+      ? {
+          ...grant,
+          targetKind: 'Container',
+          targetId: target.containerId,
+          instanceId: target.instanceId,
+          shell: 'sh',
+          ...overrides,
+        }
+      : { state: 'Active' },
+  )
+  const client = createContainerTerminal(base.sink, () => ({ target, shell: 'sh' }), {
+    request: base.request as typeof apiRequest,
+    socket: base.factory,
+    location: 'http://127.0.0.1:5174/containers/terminal',
+    key: () => '1a122a65-5b5b-4203-8985-f6c0198cd046',
+  })
+  clients.push(client)
+  return { ...base, client, target }
+}
 function setup(key = () => '1a122a65-5b5b-4203-8985-f6c0198cd046') {
   const socket = new FakeSocket()
   const request = vi.fn<(path: string, init?: RequestInit) => Promise<unknown>>(async (path) =>
@@ -78,6 +114,36 @@ afterEach(() => {
 })
 
 describe('host terminal lifecycle', () => {
+  it('container grant includes exact target and startup instance but WS accepts only the one-time token', async () => {
+    const { client, target, request, socket, factory } = containerSetup()
+    await client.connect()
+    const issue = request.mock.calls.find(([path]) => path === 'terminals/containers/grants')
+    expect(JSON.parse(issue?.[1]?.body as string)).toEqual({
+      confirmed: true,
+      idempotencyKey: '1a122a65-5b5b-4203-8985-f6c0198cd046',
+      containerId: target.containerId,
+      instanceId: target.instanceId,
+      shell: 'sh',
+    })
+    socket.open()
+    expect(socket.sent).toEqual([{ token: grant.connectToken }])
+    expect(JSON.stringify(factory.mock.calls)).not.toContain(target.containerId)
+    socket.row({ kind: 'ready' })
+    expect(client.input('中文')).toBe(true)
+    client.disconnect()
+    expect(socket.readyState).toBe(WebSocket.CLOSED)
+  })
+  it.each([
+    { targetId: 'b'.repeat(64) },
+    { targetKind: 'Host' as const },
+    { instanceId: 'restarted' },
+    { shell: 'bash' },
+  ])('rejects a container grant for a different selection: %j', async (overrides) => {
+    const { client, factory, sink } = containerSetup(overrides)
+    await client.connect()
+    expect(factory).not.toHaveBeenCalled()
+    expect(sink.state).toHaveBeenLastCalledWith('error', expect.any(String), undefined)
+  })
   it('leaves preparation state when secure request-key generation fails and allows manual retry', async () => {
     const key = vi
       .fn<() => string>()

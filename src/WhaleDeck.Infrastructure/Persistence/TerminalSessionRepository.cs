@@ -73,7 +73,8 @@ public sealed class TerminalSessionRepository(PlatformDbContext db) : ITerminalS
     private void Audit(TerminalSession row, string action, string result, string trace, string? ip, DateTimeOffset now) => db.AuditEvents.Add(new()
     {
         ActorSubject = row.ActorSubject, Action = action, TargetType = "terminal-session", TargetId = row.Id.ToString("D"),
-        Result = result, TraceId = trace, SourceIp = ip, OccurredAtUtc = now
+        Result = result, TraceId = trace, SourceIp = ip, OccurredAtUtc = now,
+        DetailJson = System.Text.Json.JsonSerializer.Serialize(new { row.TargetKind, row.TargetId, row.InstanceId, row.Shell })
     });
     private static bool EqualHash(string first, string second) => first.Length == 64 && second.Length == 64 &&
         System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(System.Text.Encoding.ASCII.GetBytes(first), System.Text.Encoding.ASCII.GetBytes(second));

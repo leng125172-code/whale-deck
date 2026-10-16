@@ -9,7 +9,10 @@ vi.mock('@/services/apiClient', async (original) => ({
   ...(await original<typeof import('@/services/apiClient')>()),
   apiRequest: request,
 }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: {}, params: {} }) }))
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {}, params: {} }),
+  useRouter: () => ({ push: vi.fn<(target: unknown) => void>() }),
+}))
 const container = {
   id: 'core',
   name: 'core-worker',

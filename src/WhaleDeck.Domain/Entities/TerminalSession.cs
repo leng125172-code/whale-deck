@@ -9,6 +9,9 @@ public sealed class TerminalSession
     public required string IdempotencyKey { get; init; }
     public required string GrantHash { get; init; }
     public string TargetId { get; init; } = "whaledeck.host";
+    public string TargetKind { get; init; } = "Host";
+    public string? InstanceId { get; init; }
+    public string? Shell { get; init; }
     public string State { get; set; } = "Issued";
     public DateTimeOffset CreatedAtUtc { get; init; }
     public DateTimeOffset GrantExpiresAtUtc { get; init; }

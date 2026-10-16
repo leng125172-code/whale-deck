@@ -49,6 +49,27 @@ public sealed partial class NativeNotificationDispatchTests
         Assert.Single(await db.AuditEvents.Where(item => item.Action == "terminal.closed").ToArrayAsync());
         await Assert.ThrowsAsync<InvalidOperationException>(() => repository.ClaimAsync(actor, issued.Id, hash, now.AddSeconds(4), default));
 
+        // Persist and reload container bindings with the same atomic single-use lifecycle.
+        var container = new TerminalSession { ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding,
+            IdempotencyKey = Guid.NewGuid().ToString("D"), GrantHash = hash, TargetKind = "Container", TargetId = new('a', 64),
+            InstanceId = "10:2026-10-16T00:00:00Z", Shell = "sh", CreatedAtUtc = now,
+            GrantExpiresAtUtc = now.AddSeconds(30), ExpiresAtUtc = now.AddMinutes(10) };
+        await repository.IssueAsync(actor, container, now, default);
+        var loadedContainer = await repository.FindOwnedAsync(actor, container.Id, default);
+        Assert.Equal(container.InstanceId, loadedContainer!.InstanceId); Assert.Equal("Container", loadedContainer.TargetKind);
+        await repository.ClaimAsync(actor, container.Id, hash, now, default);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => repository.ClaimAsync(actor, container.Id, hash, now, default));
+        await repository.RenewAsync(actor, container.Id, now, default);
+        await repository.CloseAsync(actor, container.Id, "TERMINAL_CLOSED", 7, now, default);
+        var metadata = await db.AuditEvents.AsNoTracking().Where(item => item.TargetId == container.Id.ToString("D")).ToArrayAsync();
+        Assert.Equal(4, metadata.Length);
+        Assert.All(metadata, item => { Assert.Equal(actor.Subject, item.ActorSubject); Assert.Contains(container.TargetId, item.DetailJson!); Assert.Contains(container.InstanceId, item.DetailJson!); Assert.DoesNotContain(hash, item.DetailJson!); });
+        // PostgreSQL must reject cross-kind or incomplete metadata, independently of Application validation.
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE terminal_sessions SET target_kind='Host' WHERE id={container.Id}"));
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE terminal_sessions SET shell=NULL WHERE id={container.Id}"));
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE terminal_sessions SET instance_id=NULL WHERE id={container.Id}"));
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE terminal_sessions SET target_id='alias' WHERE id={container.Id}"));
+
         // Expired grants cannot be claimed; a new issue closes stale metadata.
         var expired = await repository.IssueAsync(actor, Session(actor, now.AddMinutes(-2)), now, default);
         await Assert.ThrowsAsync<InvalidOperationException>(() => repository.ClaimAsync(actor, expired.Id, hash, now, default));

@@ -222,7 +222,7 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             {
                 table.HasCheckConstraint("ck_terminal_state", "state IN ('Issued','Connecting','Active','Closed') AND version >= 0");
                 table.HasCheckConstraint("ck_terminal_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND grant_hash ~ '^[A-F0-9]{64}$'");
-                table.HasCheckConstraint("ck_terminal_target", "target_id = 'whaledeck.host'");
+                table.HasCheckConstraint("ck_terminal_target", "(target_kind = 'Host' AND target_id = 'whaledeck.host' AND instance_id IS NULL AND shell IS NULL) OR (target_kind = 'Container' AND target_id ~ '^[a-f0-9]{64}$' AND instance_id IS NOT NULL AND length(instance_id) BETWEEN 1 AND 80 AND shell IS NOT NULL AND shell IN ('sh','bash','ash'))");
                 table.HasCheckConstraint("ck_terminal_expiry", "grant_expires_at_utc > created_at_utc AND grant_expires_at_utc <= created_at_utc + INTERVAL '30 seconds' AND expires_at_utc > created_at_utc AND expires_at_utc <= created_at_utc + INTERVAL '10 minutes'");
             });
             entity.HasKey(item => item.Id);
@@ -231,6 +231,9 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             entity.Property(item => item.IdempotencyKey).HasMaxLength(36);
             entity.Property(item => item.GrantHash).HasMaxLength(64);
             entity.Property(item => item.TargetId).HasMaxLength(64);
+            entity.Property(item => item.TargetKind).HasMaxLength(16).HasDefaultValue("Host");
+            entity.Property(item => item.InstanceId).HasMaxLength(80);
+            entity.Property(item => item.Shell).HasMaxLength(8);
             entity.Property(item => item.State).HasMaxLength(16);
             entity.Property(item => item.CloseCode).HasMaxLength(32);
             entity.Property(item => item.Version).IsConcurrencyToken();
