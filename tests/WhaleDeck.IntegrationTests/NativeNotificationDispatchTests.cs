@@ -7,6 +7,8 @@ using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
 using WhaleDeck.Application.Services;
@@ -30,7 +32,17 @@ public sealed partial class NativeNotificationDispatchTests
             throw new InvalidOperationException("Native dispatch test requires its isolated database namespace.");
         var options = new DbContextOptionsBuilder<PlatformDbContext>().UseNpgsql(connection.ConnectionString).Options;
         await using var db = new PlatformDbContext(options);
+        Assert.False(await db.Database.SqlQueryRaw<bool>("SELECT rolsuper AS \"Value\" FROM pg_roles WHERE rolname = current_user").SingleAsync());
+        await db.GetService<IMigrator>().MigrateAsync("20261016034243_TerminalSessionLifecycle");
+        var upgradeId = Guid.NewGuid(); var upgradeAt = DateTimeOffset.UtcNow; var upgradeHash = new string('A', 64); var upgradeKey = Guid.NewGuid().ToString("D");
+        // Seed a real pre-extension row without referencing any new columns.
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO terminal_sessions (id,actor_subject,login_binding,idempotency_key,grant_hash,target_id,state,created_at_utc,grant_expires_at_utc,expires_at_utc,closed_at_utc,version) VALUES ({upgradeId},'native-upgrade',{upgradeHash},{upgradeKey},{upgradeHash},'whaledeck.host','Closed',{upgradeAt},{upgradeAt.AddSeconds(30)},{upgradeAt.AddMinutes(10)},{upgradeAt},0)");
         await db.Database.MigrateAsync(); Assert.False(db.Database.HasPendingModelChanges());
+        var upgradedHost = await db.TerminalSessions.SingleAsync(item => item.Id == upgradeId);
+        Assert.Equal("Host", upgradedHost.TargetKind); Assert.Equal("whaledeck.host", upgradedHost.TargetId);
+        Assert.Null(upgradedHost.InstanceId); Assert.Null(upgradedHost.Shell); Assert.Equal(upgradeKey, upgradedHost.IdempotencyKey);
+        db.TerminalSessions.Remove(upgradedHost); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        Console.WriteLine("INBOX_PHASE=terminal-target-real-upgrade");
         Console.WriteLine("INBOX_PHASE=dispatch-migrated");
         var now = DateTimeOffset.UtcNow;
         var channel = new NotificationChannel { Name = "isolated-test", Provider = "Webhook", DestinationReference = "approved-test", IsEnabled = true, CreatedAtUtc = now.AddMinutes(-1) };
