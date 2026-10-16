@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\WhaleDeck.Domain\WhaleDeck.Domain.csproj" />
     <ProjectReference Include="..\..\src\WhaleDeck.Agent\WhaleDeck.Agent.csproj" />
     <ProjectReference Include="..\..\src\WhaleDeck.Worker\WhaleDeck.Worker.csproj" />
+    <ProjectReference Include="..\..\src\WhaleDeck.MaintenanceHost\WhaleDeck.MaintenanceHost.csproj" />
   </ItemGroup>
 
 </Project>

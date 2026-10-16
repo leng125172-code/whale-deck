@@ -1,8 +1,8 @@
-using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Serilog;
 using Serilog.Formatting.Json;
+using WhaleDeck.MaintenanceHost;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestHeadersTotalSize = 64 * 1024);
@@ -16,6 +16,15 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 // The stable maintenance proxy has no cookies or persisted protected state.
 // Make that explicit so it never writes key material or emits key-repository warnings.
 builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
+builder.Services.AddHttpClient("maintenance-status", client => client.Timeout = TimeSpan.FromSeconds(2))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        UseProxy = false, AllowAutoRedirect = false, UseCookies = false,
+        MaxConnectionsPerServer = 2, MaxResponseHeadersLength = 16,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(1), MaxResponseDrainSize = 1024
+    });
+builder.Services.AddSingleton(services => new MaintenanceStatusReader(
+    services.GetRequiredService<IHttpClientFactory>().CreateClient("maintenance-status"), TimeProvider.System));
 
 builder.Services.AddReverseProxy()
     .LoadFromMemory(
@@ -92,17 +101,15 @@ app.UseStatusCodePages(async context =>
 
     context.HttpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
     context.HttpContext.Response.ContentType = "text/html; charset=utf-8";
-    await context.HttpContext.Response.WriteAsync(MaintenancePage(statusPath));
+    var status = await context.HttpContext.RequestServices.GetRequiredService<MaintenanceStatusReader>()
+        .ReadAsync(statusPath, context.HttpContext.RequestAborted);
+    await context.HttpContext.Response.WriteAsync(MaintenancePage(status.Body.Message));
 });
-app.MapGet("/maintenance/status", () =>
+app.MapGet("/maintenance/status", async (MaintenanceStatusReader reader, HttpContext context) =>
 {
-    if (!File.Exists(statusPath))
-    {
-        return Results.Json(new { state = "Unavailable", phase = "GatewayOffline" }, statusCode: 503);
-    }
-
-    using var document = JsonDocument.Parse(File.ReadAllText(statusPath));
-    return Results.Json(document.RootElement.Clone());
+    context.Response.Headers.CacheControl = "no-store";
+    var status = await reader.ReadAsync(statusPath, context.RequestAborted);
+    return Results.Json(status.Body, statusCode: status.StatusCode);
 }).WithOrder(-1000);
 app.MapReverseProxy();
 await app.RunAsync();
@@ -110,25 +117,8 @@ await app.RunAsync();
 static IReadOnlyList<IReadOnlyDictionary<string, string>> PreserveOriginalHost() =>
     [new Dictionary<string, string> { ["RequestHeaderOriginalHost"] = "true" }];
 
-static string MaintenancePage(string statusPath)
+static string MaintenancePage(string status)
 {
-    var status = "平台服务正在启动，请稍候。";
-    if (File.Exists(statusPath))
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(statusPath));
-            if (document.RootElement.TryGetProperty("message", out var message))
-            {
-                status = message.GetString() ?? status;
-            }
-        }
-        catch (JsonException)
-        {
-            status = "维护状态暂不可用，正在等待平台恢复。";
-        }
-    }
-
     return $$"""
         <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <meta http-equiv="refresh" content="6"><title>Whale Deck 维护中</title>
