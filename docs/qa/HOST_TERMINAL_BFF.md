@@ -24,3 +24,9 @@
 - 更新Job `ecf433a5-afdb-401f-a63f-30c788972b6c` 提交，实际更新unit于12:02:17 CST成功结束，inactive/dead、Result=success、ExecMainStatus=0。真实BFF验证首次失败RuntimeError：两条测试会话最终均Closed，正常shell的exit 7已持久化，另一个主动关闭会话未收到协议关闭帧。测试会话已关闭，审计保留，无残留终端unit。
 - 根因是取消待接收WebSocket操作先中止了socket，关闭帧随后无法发送。修正为与输出互斥地先发CloseOutput，再取消接收/清理；不放宽验证脚本的EOF断言。新增传输回归模拟待接收取消即abort，验证正常close帧先于取消、exit 7最终持久化。异常只记UUID/异常类型，无正文/异常对象。
 - 同时区分Connecting与实际Ready：签发Agent capability前仅验证Connecting；Agent返回Ready后，Active/ConnectedAt与terminal.opened审计同事务，仅一次写入；定时续租不重复审计。修正后642 Unit、90 Integration及Release通过，6原生在Windows跳过；新原生/覆盖发布与最终链路验收尚待继续。
+
+第二轮 `2e9e512dde96078d9ea546dcf8db992ef755e1a6` 原生报告 `dispatch-5a6037b248b6428a8c1d8d2fc9e81de6.json` 于04:13:50–04:15:47 UTC执行1/通过1并清理，含Opened一次审计。更新Job `ca0f66f3-98c0-456d-9eeb-5e174dbd2508` 对应实际unit12:18:06 CST成功结束，但真实链路仍在 `explicit-close-protocol-frame` 失败 `TERMINAL_TRANSPORT_EOF`，不能签收BFF。测试会话再次精确关闭。
+
+随后补全有界Close握手：CloseOutput后最多等待2秒，让接收中的客户端Close确认自然完成，超时才强制取消；仅提前写CloseOutput仍会因立即Abort导致代理来不及转发。验证客户端收到Close必须回送RFC6455确认，依然不接受裸EOF。新增真实TCP回环上的.NET ManagedWebSocket双端测试，要求完整Close而非Aborted，以及遵从/不遵从确认的两个有界传输测试；当前3项专项通过。它证明本地传输，不替代真实代理链路重测。
+
+前端尚未生成。本机pnpm 12.10.1原生客户端在官方源、系统代理及镜像源均遇TLS handshake eof；没有关闭TLS验证或更改全局代理，失败安装没有改动package/lock。官方元数据通过Windows HTTP读取确认候选依赖@xterm/xterm 6.0.0、@xterm/addon-fit 0.11.0，后续仍须正常锁定/干净安装及UI验收，不能视为已安装。

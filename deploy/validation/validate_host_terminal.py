@@ -74,7 +74,9 @@ class WireSocket:
             if length == 127: length = struct.unpack('!Q', self.exact(8))[0]
             assert length <= 16384 and len(message) + length <= 16384
             body = self.exact(length); opcode = first & 15
-            if opcode == 8: return None
+            if opcode == 8:
+                self.send(body, 8)  # RFC6455 close acknowledgment, not an EOF fallback.
+                return None
             if opcode == 9: self.send(body, 10); continue
             if opcode == 10: continue
             assert opcode in (0, 1)

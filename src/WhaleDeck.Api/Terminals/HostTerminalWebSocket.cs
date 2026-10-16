@@ -51,6 +51,7 @@ public sealed class HostTerminalWebSocket(TerminalSessionService sessions, Termi
         finally
         {
             if (connection is not null) await connection.DisposeAsync();
+            var closeSent = false;
             // Canceling ManagedWebSocket.ReceiveAsync aborts the socket. Send
             // the close frame first, serialized with output, so the browser
             // receives the actual outcome instead of an unexplained TCP EOF.
@@ -62,11 +63,19 @@ public sealed class HostTerminalWebSocket(TerminalSessionService sessions, Termi
                 {
                     await writes.WaitAsync(closing.Token); entered = true;
                     if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+                    {
                         await socket.CloseOutputAsync(code == "TERMINAL_CLOSED" ? WebSocketCloseStatus.NormalClosure : WebSocketCloseStatus.PolicyViolation, code, closing.Token);
+                        closeSent = true;
+                    }
                 }
                 catch (Exception exception) when (exception is OperationCanceledException or WebSocketException) { }
                 finally { if (entered) writes.Release(); }
             }
+            // A successful write is not a completed close handshake. Immediate
+            // receive cancellation aborts the upgraded HTTP stream and proxies
+            // can discard the just-written frame. Give a compliant peer its
+            // bounded opportunity to acknowledge before forcing teardown.
+            if (closeSent && !input.IsCompleted) await Task.WhenAny(input, Task.Delay(TimeSpan.FromSeconds(2)));
             lifetime.Cancel();
             try { await Task.WhenAll(input, output, monitor); } catch (Exception) { /* No transcript/exception text in logs or responses. */ }
             if (claimed)

@@ -1,4 +1,6 @@
 using System.Net.WebSockets;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -13,26 +15,67 @@ namespace WhaleDeck.IntegrationTests.Security;
 
 public sealed class HostTerminalWebSocketTests
 {
-    [Fact]
-    public async Task ExitSendsAProtocolCloseBeforeCancelingThePendingReceiveAndPersistsExitCode()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExitSendsAProtocolCloseAndWaitsBoundedlyForPeerAcknowledgment(bool acknowledge)
     {
         var (identity, _, context, _) = await TerminalCookieIdentityTests.Setup();
         var login = await identity.ReadAsync(context); var repository = new Metadata();
         var sessions = new TerminalSessionService(repository, new Signer(), new Directory(), TimeProvider.System);
-        using var socket = new TestSocket(); context.Features.Set<IHttpWebSocketFeature>(new Feature(socket));
+        using var socket = new TestSocket(acknowledge); context.Features.Set<IHttpWebSocketFeature>(new Feature(socket));
         await new HostTerminalWebSocket(sessions, identity, new Gateway(), NullLogger<HostTerminalWebSocket>.Instance).RunAsync(context, Guid.NewGuid(), login);
-        Assert.True(socket.ProtocolCloseSent); Assert.True(socket.PendingReceiveCanceled); Assert.True(socket.ClosePrecededCancellation);
+        Assert.True(socket.ProtocolCloseSent); Assert.Equal(!acknowledge, socket.PendingReceiveCanceled);
+        if (!acknowledge) Assert.True(socket.ClosePrecededCancellation);
+        else Assert.True(socket.PeerAcknowledged);
         Assert.Equal("TERMINAL_CLOSED", repository.ClosedCode); Assert.Equal(7, repository.ExitCode);
     }
-    private sealed class Feature(TestSocket socket) : IHttpWebSocketFeature
-    { public bool IsWebSocketRequest => true; public Task<WebSocket> AcceptAsync(WebSocketAcceptContext context) => Task.FromResult<WebSocket>(socket); }
-    private sealed class TestSocket : WebSocket
+    [Fact]
+    public async Task RealManagedWebSocketsCompleteCloseHandshakeWithoutAbortingTheServerStream()
     {
+        var (identity, _, context, _) = await TerminalCookieIdentityTests.Setup(); var login = await identity.ReadAsync(context);
+        var repository = new Metadata(); var sessions = new TerminalSessionService(repository, new Signer(), new Directory(), TimeProvider.System);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
+        using var client = new TcpClient(); var opening = client.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port, deadline.Token);
+        using var server = await listener.AcceptTcpClientAsync(deadline.Token); await opening; listener.Stop();
+        using var serverSocket = WebSocket.CreateFromStream(server.GetStream(), true, "whaledeck.terminal.v1", TimeSpan.FromSeconds(20));
+        using var clientSocket = WebSocket.CreateFromStream(client.GetStream(), false, "whaledeck.terminal.v1", TimeSpan.FromSeconds(20));
+        context.Features.Set<IHttpWebSocketFeature>(new Feature(serverSocket));
+        var running = new HostTerminalWebSocket(sessions, identity, new Gateway(), NullLogger<HostTerminalWebSocket>.Instance).RunAsync(context, Guid.NewGuid(), login);
+        try
+        {
+            await clientSocket.SendAsync(Encoding.UTF8.GetBytes("{\"token\":\"" + new string('A', 64) + "\"}").AsMemory(), WebSocketMessageType.Text, true, deadline.Token);
+            var buffer = new byte[8192]; var rows = 0;
+            while (true)
+            {
+                var result = await clientSocket.ReceiveAsync(buffer.AsMemory(), deadline.Token);
+                if (result.MessageType == WebSocketMessageType.Close) break;
+                Assert.Equal(WebSocketMessageType.Text, result.MessageType); rows++;
+            }
+            Assert.Equal(2, rows);
+            await clientSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", deadline.Token);
+            await running.WaitAsync(deadline.Token);
+            Assert.Equal(WebSocketState.Closed, serverSocket.State);
+            Assert.Equal("TERMINAL_CLOSED", repository.ClosedCode); Assert.Equal(7, repository.ExitCode);
+        }
+        finally
+        {
+            clientSocket.Dispose(); serverSocket.Dispose();
+            try { await running.WaitAsync(TimeSpan.FromSeconds(5)); } catch (TimeoutException) { context.Abort(); }
+        }
+    }
+    private sealed class Feature(WebSocket socket) : IHttpWebSocketFeature
+    { public bool IsWebSocketRequest => true; public Task<WebSocket> AcceptAsync(WebSocketAcceptContext context) => Task.FromResult<WebSocket>(socket); }
+    private sealed class TestSocket(bool acknowledge) : WebSocket
+    {
+        private readonly TaskCompletionSource<bool> closeAcknowledgment = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private WebSocketState state = WebSocketState.Open;
         private bool sentTicket;
         public bool ProtocolCloseSent { get; private set; }
         public bool PendingReceiveCanceled { get; private set; }
         public bool ClosePrecededCancellation { get; private set; }
+        public bool PeerAcknowledged { get; private set; }
         public override WebSocketCloseStatus? CloseStatus => null;
         public override string? CloseStatusDescription => null;
         public override WebSocketState State => state;
@@ -40,7 +83,7 @@ public sealed class HostTerminalWebSocketTests
         public override void Abort() => state = WebSocketState.Aborted;
         public override Task CloseAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken) => CloseOutputAsync(closeStatus, statusDescription, cancellationToken);
         public override Task CloseOutputAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken)
-        { ProtocolCloseSent = true; state = WebSocketState.CloseSent; return Task.CompletedTask; }
+        { ProtocolCloseSent = true; state = WebSocketState.CloseSent; if (acknowledge) closeAcknowledgment.TrySetResult(true); return Task.CompletedTask; }
         public override void Dispose() => state = WebSocketState.Closed;
         public override async Task<WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer, CancellationToken cancellationToken)
         {
@@ -49,9 +92,13 @@ public sealed class HostTerminalWebSocketTests
                 sentTicket = true; var bytes = Encoding.UTF8.GetBytes("{\"token\":\"" + new string('A', 64) + "\"}"); bytes.CopyTo(buffer.AsSpan());
                 return new(bytes.Length, WebSocketMessageType.Text, true);
             }
-            try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
+            try
+            {
+                await closeAcknowledgment.Task.WaitAsync(cancellationToken);
+                PeerAcknowledged = true; state = WebSocketState.Closed;
+                return new(0, WebSocketMessageType.Close, true);
+            }
             catch (OperationCanceledException) { PendingReceiveCanceled = true; ClosePrecededCancellation = ProtocolCloseSent; Abort(); throw; }
-            throw new InvalidOperationException();
         }
         public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken) => Task.CompletedTask;
     }
