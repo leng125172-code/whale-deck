@@ -8,6 +8,8 @@
 
 ## 1. 传输与版本
 
+最新上层运行时 **39cb274/Agent1.28**：移动异步BFF/永久双任务/共享锁/Worker与人类审计已通过实际身份/SQL/安装态UDS验收，见[后端证据](qa/FILE_TREE_MOVE_BFF.md)。移动WebUI仅本地候选，未生产签收；协议仍1.28，不把下方历史“尚未接通/未安装”当作当前状态。
+
 **最新已安装1.28 / 4fd9ba7**：独立移动RPC/固定helper/显式根策略/旧默认备份，以及真实UDS的2MiB+7、1GiB+7、完整字节/原inode保留/取消栅栏/清理已通过。源码四CI、冻结实际PG、真实更新unit终态/安装SHA/权限见[安装态签收](qa/FILE_TREE_MOVE_AGENT.md)。移动BFF/Worker/UI仍未接通；下方“候选/1.27”为历史，不代表当前Agent。
 
 2026-10-18候选协议**1.28，尚未安装**：新增独立`FileTreeMoveService.Plan/Apply/Inspect/Discard`与`files.tree-move-intents`。固定helper枚举`tree-move-*`及源/目标显式`files-tree-move`根授权；复制域不授予移动权限。只传既有copy摘要+源父UInt64身份+外层fingerprint，不传完整清单/任意路径/UID；回执新增`destinationPublished/sourceRemoved/sourceRetained/partialRetained`，未知结果不重新Apply。旧默认根策略精确升级，自定义保持；验证和边界见[Agent候选证据](qa/FILE_TREE_MOVE_AGENT.md)。BFF/Worker/UI尚未实现，以下1.27仍是当前线上。

@@ -46,7 +46,10 @@ def main():
     ids = []; execution_ids = []; acceptance = None
 
     def get(path, status=200, **kwargs):
-        result = session.get(base + '/api/v1/' + path, timeout=30, **kwargs); assert result.status_code == status, 'read-status-mismatch'; return result
+        result = session.get(base + '/api/v1/' + path, timeout=30, **kwargs)
+        if result.status_code != status:
+            print(json.dumps({'moveProbeHttpStatus': result.status_code, 'expectedStatus': status, 'phase': PHASE}), flush=True)
+        assert result.status_code == status, 'read-status-mismatch'; return result
 
     def post(path, body=None, status=202, key=None):
         result = session.post(base + '/api/v1/' + path, json=body, headers={**api.headers, **({'Idempotency-Key': key} if key else {})}, timeout=40)
@@ -103,7 +106,7 @@ def main():
         assert denied.status_code == 403
 
         PHASE = 'ordinary-identity-real-cookie-and-csrf-denied'
-        helper = subprocess.Popen([sys.executable, '-u', str(Path(__file__).with_name('ephemeral_browser_user.py'))],
+        helper = subprocess.Popen([sys.executable, '-u', str(Path(__file__).resolve().parents[2] / 'deploy/validation/ephemeral_browser_user.py')],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         ordinary_name = 'wd-browser-' + uuid.uuid4().hex; ordinary_password = 'Wd!' + secrets.token_hex(40)
         try:
@@ -161,8 +164,18 @@ def main():
 
         PHASE = 'changed-descendant-after-plan-never-replayed'
         stale_ready = wait(queue(command('stale-source', 'stale-copy'))['id'], ('Ready',)); stale_file.write_bytes(b'changed-after-plan')
-        stale_copy, _ = confirm(stale_ready); assert wait(stale_copy['id'], TERMINAL, reconcile_unknown=True)['state'] == 'Failed'
+        stale_copy, _ = confirm(stale_ready)
+        stale_result = wait(stale_copy['id'], TERMINAL + ('Unknown',), reconcile_unknown=True)
         assert not (folder / 'stale-copy').exists() and stale_file.read_bytes() == b'changed-after-plan'
+        if stale_result['state'] == 'Unknown':
+            # Missing child receipt after a durable start is deliberately unknown,
+            # even if this observer can prove its own target absent. Never force
+            # that permanent Root state to Aborted or wait for it to turn Failed.
+            original_execution = stale_result['executionJobId']
+            post('files/tree-moves/' + stale_copy['id'] + '/acknowledge', {'confirmed': True, 'version': stale_result['version']}, key=stale_copy['id'])
+            stale_result = get('files/tree-moves/' + stale_copy['id']).json()
+            assert stale_result['state'] == 'Acknowledged' and stale_result['executionJobId'] == original_execution
+        else: assert stale_result['state'] == 'Failed'
 
         PHASE = 'human-audit-and-real-sql-observer'
         subject = get('auth/me').json()['subject']; audits = get('audit', params={'actorSubject': subject, 'take': 500}).json()
@@ -192,6 +205,7 @@ def main():
             'sourceAndTargetFullBytesModesMtimeAndOwnership': 'passed', 'retainedOriginalInodeFullBytesAndPrivateManifest': 'passed',
             'realOrdinaryCookieCsrfGetAndPostDenied': 'passed',
             'cancelProtectedAndChangedDescendantNoReplay': 'passed',
+            'changedSourceOutcome': stale_result['state'],
             'exactOwnedFixtureRemoved': True, 'immutableJobsAuditIntentsAndRootReceiptsRetained': True, 'realBrowserAndProductionFaultInjection': 'separate-evidence'}
     finally:
         if folder.exists(): print(json.dumps({'ownedMoveBffFixturePreserved': marker, 'phase': PHASE}))

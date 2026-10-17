@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-18）",
-  "nextStep": "4fd9ba7/Agent1.28目录移动RPC已实际安装，2MiB+7/1GiB+7独立全字节/原inode/计划/权限/取消与清理通过，移动BFF签名/ID基础仅本地。继续BFF双任务/永久模型与migration/共享锁owner/Worker/人类审计/WebUI及实机身份验收，再做目录回收归档、正文搜索、容器文件/长期清理和完整76项；不把Agent签收当完整文件管理完成。"
+  "nextStep": "39cb274/Agent1.28移动后端已实际部署，四CI/同源码实际PG及真实身份双任务/审计/UDS完整字节和原inode保留通过；WebUI仅本地候选。继续页面冻结门禁/发布/真实网页验收，补原登录丢失后的当前管理员Unknown处置，再做目录回收归档、正文搜索、容器文件/长期清理及全部76项；不把子项签收当完整文件管理完成。"
 }

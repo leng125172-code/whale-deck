@@ -149,6 +149,12 @@ public sealed partial class NativeNotificationDispatchTests
             await service.AcknowledgeAsync(actor, unknown.Id, new(unknownRow.Version, true), default); gateway.Unknown = false;
             Assert.Equal("Acknowledged", (await service.GetAsync(actor, unknown.Id, default)).State);
             Assert.Empty(await db.FilePathLocks.Where(item => item.OperationId == unknownRow.ExecutionJobId).ToArrayAsync());
+            var unpublished = await Confirm(await Ready("unknown-unpublished")); gateway.Unknown = true; gateway.UnknownPublished = false;
+            Assert.True(await worker.TickAsync(default)); var unpublishedRow = await service.GetAsync(actor, unpublished.Id, default);
+            Assert.Equal("Unknown", unpublishedRow.State); Assert.False(unpublishedRow.DestinationPublished); Assert.False(unpublishedRow.PartialRetained);
+            await service.AcknowledgeAsync(actor, unpublished.Id, new(unpublishedRow.Version, true), default);
+            Assert.Equal("Acknowledged", (await service.GetAsync(actor, unpublished.Id, default)).State);
+            gateway.Unknown = false; gateway.UnknownPublished = true;
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE audit_events ADD CONSTRAINT native_move_tree_audit_failure CHECK (action NOT LIKE 'files.tree-move.%') NOT VALID");
             var rollbackKey = Guid.NewGuid().ToString("D"); var rollbackId = FileTreeMoveValidation.IntentId(actor, rollbackKey);
             try { await Assert.ThrowsAsync<DbUpdateException>(() => service.QueueAsync(actor, Command("audit-rollback"), rollbackKey, default)); }
@@ -197,7 +203,7 @@ public sealed partial class NativeNotificationDispatchTests
     private sealed class NativeMoveTreeGateway : IFileTreeMoveGateway
     {
         private readonly Dictionary<Guid, FileTreeMoveReceipt> _receipts = [];
-        public bool LoseResponse { get; set; } public bool Unknown { get; set; } public bool ReceiptUnavailable { get; set; } public int Applies { get; private set; }
+        public bool LoseResponse { get; set; } public bool Unknown { get; set; } public bool UnknownPublished { get; set; } = true; public bool ReceiptUnavailable { get; set; } public int Applies { get; private set; }
         public Task<FileTreeMovePlan> PlanTreeMoveAsync(TerminalActor actor, FileTreeCopyCommand command, CancellationToken cancellationToken) => Task.FromResult(
             new FileTreeMovePlan(new(command, new('C', 64), 4, 1073741831, new(ulong.MaxValue, 9007199254740993UL), new('D', 64), new('E', 64), new('F', 64)), new(9007199254740995UL, ulong.MaxValue), new('A', 64)));
         public Task<FileTreeMoveReceipt?> InspectTreeMoveAsync(FileTreeMoveOperation operation, CancellationToken cancellationToken) => ReceiptUnavailable
@@ -211,10 +217,10 @@ public sealed partial class NativeNotificationDispatchTests
         {
             var id = operation.ExecutionJobId!.Value; var result = _receipts.GetValueOrDefault(id) ?? Result(operation, "Aborted"); _receipts[id] = result; return Task.FromResult(result);
         }
-        private static FileTreeMoveReceipt Result(FileTreeMoveOperation row, string state)
+        private FileTreeMoveReceipt Result(FileTreeMoveOperation row, string state)
         {
             var plan = FileTreeMoveValidation.ReadPlan(row);
-            return new(row.ExecutionJobId!.Value, state, plan.Fingerprint, plan.EntryCount, plan.TotalBytes, state == "Completed" ? new('A', 64) : "", state is "Completed" or "Unknown", state == "Completed", state == "Completed", state == "Unknown");
+            return new(row.ExecutionJobId!.Value, state, plan.Fingerprint, plan.EntryCount, plan.TotalBytes, state == "Completed" ? new('A', 64) : "", state == "Completed" || state == "Unknown" && UnknownPublished, state == "Completed", state == "Completed", state == "Unknown" && UnknownPublished);
         }
     }
 }

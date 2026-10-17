@@ -23,7 +23,9 @@ import FileSearchPanel from '@/components/files/FileSearchPanel.vue'
 import FileTextEditor from '@/components/files/FileTextEditor.vue'
 import FileArchivePanel from '@/components/files/FileArchivePanel.vue'
 import FileTreeCopyPanel from '@/components/files/FileTreeCopyPanel.vue'
+import FileTreeMovePanel from '@/components/files/FileTreeMovePanel.vue'
 import { canCopyDirectory } from '@/services/fileTreeCopies'
+import { canMoveDirectory } from '@/services/fileTreeMoves'
 import { archiveEligible } from '@/services/fileArchives'
 import { textEligible } from '@/services/fileText'
 import type { PreparedFileText } from '@/services/fileText'
@@ -34,18 +36,27 @@ const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
   mutationOperationLocked = ref(false),
   editorLocked = ref(false),
   archiveOperationLocked = ref(false),
-  treeCopyLocked = ref(false)
+  treeCopyLocked = ref(false),
+  treeMoveLocked = ref(false)
 const archivePanel = ref<InstanceType<typeof FileArchivePanel> | null>(null)
 const treeCopyPanel = ref<InstanceType<typeof FileTreeCopyPanel> | null>(null)
+const treeMovePanel = ref<InstanceType<typeof FileTreeMovePanel> | null>(null)
 const mutationLocked = computed(
   () =>
     mutationOperationLocked.value ||
     editorLocked.value ||
     archiveOperationLocked.value ||
-    treeCopyLocked.value,
+    treeCopyLocked.value ||
+    treeMoveLocked.value,
 )
 function canTreeCopy(entry: FileEntry) {
   return canCopyDirectory(
+    roots.value.find((root) => root.id === rootId.value),
+    entry,
+  )
+}
+function canTreeMove(entry: FileEntry) {
+  return canMoveDirectory(
     roots.value.find((root) => root.id === rootId.value),
     entry,
   )
@@ -612,7 +623,8 @@ onBeforeUnmount(() => {
           !!frozen ||
           editorLocked ||
           archiveOperationLocked ||
-          treeCopyLocked
+          treeCopyLocked ||
+          treeMoveLocked
         "
         @locked="mutationOperationLocked = $event"
         @changed="afterMutation"
@@ -628,7 +640,8 @@ onBeforeUnmount(() => {
           !!frozen ||
           mutationOperationLocked ||
           archiveOperationLocked ||
-          treeCopyLocked
+          treeCopyLocked ||
+          treeMoveLocked
         "
         @locked="editorLocked = $event"
         @prepared="acceptText"
@@ -645,7 +658,8 @@ onBeforeUnmount(() => {
           !!frozen ||
           mutationOperationLocked ||
           editorLocked ||
-          treeCopyLocked
+          treeCopyLocked ||
+          treeMoveLocked
         "
         @locked="archiveOperationLocked = $event"
         @changed="afterMutation"
@@ -662,9 +676,28 @@ onBeforeUnmount(() => {
           !!frozen ||
           mutationOperationLocked ||
           editorLocked ||
-          archiveOperationLocked
+          archiveOperationLocked ||
+          treeMoveLocked
         "
         @locked="treeCopyLocked = $event"
+        @changed="afterMutation"
+        @failure="message"
+      />
+      <FileTreeMovePanel
+        ref="treeMovePanel"
+        :roots="roots"
+        :root-id="rootId"
+        :path="path"
+        :disabled="
+          busy ||
+          activeIntent ||
+          !!frozen ||
+          mutationOperationLocked ||
+          editorLocked ||
+          archiveOperationLocked ||
+          treeCopyLocked
+        "
+        @locked="treeMoveLocked = $event"
         @changed="afterMutation"
         @failure="message"
       />
@@ -815,14 +848,24 @@ onBeforeUnmount(() => {
                   >
                 </el-dropdown>
               </div>
-              <el-button
-                v-else-if="canTreeCopy(row)"
-                link
-                type="primary"
-                :disabled="busy || activeIntent || !!frozen || mutationLocked"
-                @click="treeCopyPanel?.open(row)"
-                >复制目录</el-button
-              >
+              <div v-else-if="canTreeCopy(row) || canTreeMove(row)" class="file-directory-actions">
+                <el-button
+                  v-if="canTreeCopy(row)"
+                  link
+                  type="primary"
+                  :disabled="busy || activeIntent || !!frozen || mutationLocked"
+                  @click="treeCopyPanel?.open(row)"
+                  >复制目录</el-button
+                >
+                <el-button
+                  v-if="canTreeMove(row)"
+                  link
+                  type="primary"
+                  :disabled="busy || activeIntent || !!frozen || mutationLocked"
+                  @click="treeMovePanel?.open(row)"
+                  >移动目录</el-button
+                >
+              </div>
               <span v-else>目录</span></template
             ></el-table-column
           >
@@ -842,6 +885,14 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.file-directory-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.file-directory-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
 .files-page {
   min-width: 0;
   display: grid;
