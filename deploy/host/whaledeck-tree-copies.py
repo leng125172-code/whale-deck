@@ -18,6 +18,10 @@ import time
 
 
 class FileTreeCopies:
+    DOMAIN = b'whaledeck-tree-copy-v1\n'
+    STATE_DIRECTORY = 'tree-copies'
+    SOURCE_ACTIONS = frozenset(('files-list', 'files-download', 'files-tree-copy'))
+    TARGET_ACTIONS = frozenset(('files-mutate', 'files-upload', 'files-tree-copy'))
     TERMINAL = ('Completed', 'Aborted', 'Unknown')
     COMMAND_FIELDS = {'source', 'target'}
     PLAN_FIELDS = {'command', 'manifestSha256', 'entryCount', 'totalBytes', 'targetParent', 'sourcePolicyHash', 'targetPolicyHash', 'fingerprint'}
@@ -31,7 +35,7 @@ class FileTreeCopies:
     @staticmethod
     def encode(value): return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode('utf-8')
 
-    def digest(self, value): return hashlib.sha256(b'whaledeck-tree-copy-v1\n' + self.encode(value)).hexdigest().upper()
+    def digest(self, value): return hashlib.sha256(self.DOMAIN + self.encode(value)).hexdigest().upper()
 
     @staticmethod
     def parent_identity(descriptor):
@@ -64,7 +68,7 @@ class FileTreeCopies:
 
     def policies(self, command):
         roots = self.f.roots(); source = roots.get(command['source']['rootId']); target = roots.get(command['target']['rootId'])
-        if source is None or target is None or not {'files-list', 'files-download', 'files-tree-copy'} <= set(source['allowedActions']) or not {'files-mutate', 'files-upload', 'files-tree-copy'} <= set(target['allowedActions']):
+        if source is None or target is None or not self.SOURCE_ACTIONS <= set(source['allowedActions']) or not self.TARGET_ACTIONS <= set(target['allowedActions']):
             self.reject('FILES_ROOT_FORBIDDEN')
         # Registered roots can overlap. Check their absolute normalized relation,
         # not just root IDs, and still use openat2 for every actual filesystem I/O.
@@ -95,9 +99,9 @@ class FileTreeCopies:
         if type(owner) is not str or not re.fullmatch('[A-F0-9]{64}', owner): self.reject('FILES_OPERATION_INVALID')
         base = self.f.trusted_directory(self.f.STATE); state = lock = None
         try:
-            try: os.mkdir('tree-copies', 0o700, dir_fd=base); os.fsync(base)
+            try: os.mkdir(self.STATE_DIRECTORY, 0o700, dir_fd=base); os.fsync(base)
             except FileExistsError: pass
-            state = self.f.open_at(base, 'tree-copies', os.O_RDONLY | os.O_DIRECTORY)
+            state = self.f.open_at(base, self.STATE_DIRECTORY, os.O_RDONLY | os.O_DIRECTORY)
             info = os.fstat(state)
             if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700: self.reject('FILES_RECEIPT_UNSAFE')
             record = self.read(state, operation)
