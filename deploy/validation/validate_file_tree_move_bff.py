@@ -116,6 +116,7 @@ def main():
             ordinary_api = Api(base, ordinary)
             assert ordinary.get(base + '/api/v1/auth/me', timeout=20).json()['isAdministrator'] is False
             assert ordinary.get(base + '/api/v1/files/tree-moves/' + ready['id'], timeout=20).status_code == 403
+            assert ordinary.get(base + '/api/v1/files/recovery', timeout=20).status_code == 403
             assert ordinary.post(base + '/api/v1/files/tree-moves', json=command('stale-source', 'ordinary-denied'),
                 headers={**ordinary_api.headers, 'Idempotency-Key': str(uuid.uuid4())}, timeout=20).status_code == 403
             ordinary.close()
@@ -168,6 +169,48 @@ def main():
         stale_result = wait(stale_copy['id'], TERMINAL + ('Unknown',), reconcile_unknown=True)
         assert not (folder / 'stale-copy').exists() and stale_file.read_bytes() == b'changed-after-plan'
         if stale_result['state'] == 'Unknown':
+            PHASE = 'new-current-administrator-readonly-inventory'
+            execution = uuid.UUID(stale_result['executionJobId']).hex
+            permanent = Path('/var/lib/whaledeck-files/tree-moves') / (execution + '.json')
+            root_before = hashlib.sha256(permanent.read_bytes()).digest()
+            helper = subprocess.Popen([sys.executable, '-u', str(Path(__file__).resolve().parents[2] / 'deploy/validation/ephemeral_browser_user.py')],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            operator_name = 'wd-browser-' + uuid.uuid4().hex; operator_password = 'Wd!' + secrets.token_hex(40)
+            try:
+                helper.stdin.write(json.dumps({'username': operator_name, 'password': operator_password, 'administrator': True}) + '\n'); helper.stdin.flush()
+                assert json.loads(helper.stdout.readline())['ready'] is True
+                operator, _ = authenticate(base, operator_name, operator_password); operator_password = None
+                operator_api = Api(base, operator)
+                assert operator.get(base + '/api/v1/auth/me', timeout=20).json()['subject'] != get('auth/me').json()['subject']
+                # Current administrator reads only safe recovery metadata. The
+                # original-login route remains private to its original owner.
+                assert operator.get(base + '/api/v1/files/tree-moves/' + stale_result['id'], timeout=20).status_code == 404
+                metadata = operator.get(base + '/api/v1/files/recovery/tree-move/' + stale_result['id'], timeout=20)
+                assert metadata.status_code == 200
+                value = metadata.json()
+                assert value['kind'] == 'tree-move' and value['intentId'] == stale_result['id'] and value['executionJobId'] == stale_result['executionJobId']
+                assert value['integrity'] == 'Verified' and value['source'] == {'rootId': ROOT, 'path': marker + '/stale-source'}
+                assert value['target'] == {'rootId': ROOT, 'path': marker + '/stale-copy'}
+                assert not set(value) & {'loginBinding', 'ownerHash', 'requestHash', 'planHash', 'planJson', 'commandJson', 'originalBindingHash'}
+                page = operator.get(base + '/api/v1/files/recovery', params={'take': 1}, timeout=20)
+                assert page.status_code == 200 and any(row['intentId'] == stale_result['id'] for row in page.json()['entries'])
+                assert operator.get(base + '/api/v1/files/recovery', params={'take': 51}, timeout=20).status_code == 400
+                assert operator.get(base + '/api/v1/files/recovery', params={'after': '../escape'}, timeout=20).status_code == 400
+                assert hashlib.sha256(permanent.read_bytes()).digest() == root_before
+                assert not (folder / 'stale-copy').exists() and stale_file.read_bytes() == b'changed-after-plan'
+                assert get('files/tree-moves/' + stale_result['id']).json()['state'] == 'Unknown'
+                lock_sql = "SELECT count(*) FROM file_path_locks WHERE operation_id='" + stale_result['executionJobId'] + "';"
+                locks = subprocess.check_output(['docker', 'exec', '-u', 'postgres', 'database-platform-postgres', 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-d', 'whaledeck', '-At', '-c', lock_sql], text=True)
+                assert locks.strip() == '2'
+                assert operator_api.headers and '/api/v1/files/recovery' in schema.json()['paths']
+                assert 'post' not in schema.json()['paths']['/api/v1/files/recovery']
+                operator.close()
+            finally:
+                operator_password = None; helper.stdin.close()
+                cleanup = helper.stdout.read(); private_error = helper.stderr.read(); helper.wait(timeout=45)
+                assert helper.returncode == 0 and any(json.loads(line).get('temporaryBrowserUserRemoved') is True for line in cleanup.splitlines())
+                private_error = None
+            PHASE = 'original-owner-cleanup-not-current-admin-disposition'
             # Missing child receipt after a durable start is deliberately unknown,
             # even if this observer can prove its own target absent. Never force
             # that permanent Root state to Aborted or wait for it to turn Failed.
@@ -175,7 +218,7 @@ def main():
             post('files/tree-moves/' + stale_copy['id'] + '/acknowledge', {'confirmed': True, 'version': stale_result['version']}, key=stale_copy['id'])
             stale_result = get('files/tree-moves/' + stale_copy['id']).json()
             assert stale_result['state'] == 'Acknowledged' and stale_result['executionJobId'] == original_execution
-        else: assert stale_result['state'] == 'Failed'
+        else: raise AssertionError('expected-owned-unknown-fixture-for-inventory')
 
         PHASE = 'human-audit-and-real-sql-observer'
         subject = get('auth/me').json()['subject']; audits = get('audit', params={'actorSubject': subject, 'take': 500}).json()
@@ -204,6 +247,9 @@ def main():
         acceptance = {'realDirectoryMoveBff': 'passed', 'binaryBytes': len(content), 'originalLoginPlansJobsSqlWorkerInstalledUdsHumanAudit': 'passed',
             'sourceAndTargetFullBytesModesMtimeAndOwnership': 'passed', 'retainedOriginalInodeFullBytesAndPrivateManifest': 'passed',
             'realOrdinaryCookieCsrfGetAndPostDenied': 'passed',
+            'newAdministratorReadonlyRecoveryMetadataAndOrdinaryDenial': 'passed',
+            'inventoryNeverReleasedLocksOrRewroteRootReceipt': 'passed',
+            'currentAdministratorDispositionImplemented': False,
             'cancelProtectedAndChangedDescendantNoReplay': 'passed',
             'changedSourceOutcome': stale_result['state'],
             'exactOwnedFixtureRemoved': True, 'immutableJobsAuditIntentsAndRootReceiptsRetained': True, 'realBrowserAndProductionFaultInjection': 'separate-evidence'}
