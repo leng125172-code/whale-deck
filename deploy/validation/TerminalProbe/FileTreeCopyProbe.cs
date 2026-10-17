@@ -44,12 +44,16 @@ internal static class FileTreeCopyProbe
             var reused = Headers(treeService + "Plan");
             var planned = await trees.PlanAsync(new() { Command = command, Context = context }, reused, deadline: DateTime.UtcNow.AddMinutes(5));
             Check(planned.Command.Equals(command) && planned.EntryCount == 4 && planned.TotalBytes == 2 * 1024 * 1024 + 7);
-            await Denied(async () => _ = await trees.PlanAsync(new() { Command = command, Context = context }, reused), StatusCode.Unauthenticated);
+            Phase = "tree-plan-replay-rejection";
+            await Denied(async () => _ = await trees.PlanAsync(new() { Command = command, Context = context }, reused), StatusCode.PermissionDenied);
+            Phase = "tree-stale-version-rejection";
             var stale = command.Clone(); stale.ExpectedVersion = new('A', 64);
             await Denied(async () => _ = await trees.PlanAsync(new() { Command = stale, Context = context }, Headers(treeService + "Plan")), StatusCode.Aborted);
 
             var request = new FileTreeCopyApplyRequest { OperationId = Guid.NewGuid().ToString("N"), Owner = owner, Plan = planned, Context = context };
-            await Denied(async () => _ = await trees.ApplyAsync(request, Headers(treeService + "Plan")), StatusCode.Unauthenticated);
+            Phase = "tree-method-bound-rejection";
+            await Denied(async () => _ = await trees.ApplyAsync(request, Headers(treeService + "Plan")), StatusCode.PermissionDenied);
+            Phase = "tree-plan-tamper-rejection";
             var changed = request.Clone(); changed.OperationId = Guid.NewGuid().ToString("N"); changed.Plan.Fingerprint = new('0', 64);
             await Denied(async () => _ = await trees.ApplyAsync(changed, Headers(treeService + "Apply")), StatusCode.FailedPrecondition);
             Phase = "tree-copy";
