@@ -7,7 +7,7 @@ using WhaleDeck.Application.Models;
 
 namespace WhaleDeck.Infrastructure.Agent;
 
-public sealed partial class FilePlanProtector(IConfiguration configuration) : IFilePlanProtector, IFileMutationProtector, IFileArchiveProtector, IFileTreeCopyProtector
+public sealed partial class FilePlanProtector(IConfiguration configuration) : IFilePlanProtector, IFileMutationProtector, IFileArchiveProtector, IFileTreeCopyProtector, IFileTreeMoveProtector
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { MaxDepth = 8 };
     private string Mac(string payload, string domain = "whaledeck-file-plan-v1")
