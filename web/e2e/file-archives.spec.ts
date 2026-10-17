@@ -16,6 +16,42 @@ async function trash(page: import('@playwright/test').Page, name: string) {
 }
 const creates = (control) => control.archive.writes.filter((item) => item.path === '')
 
+test('320px long directory link remains pointer-clickable beside the fixed action column', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 760 })
+  const directoryName = 'wdv-archive-web-long-directory-name-0123456789'
+  await installArchiveFixture(page, { directoryName })
+  await page.goto('/files')
+  const directory = page.getByRole('button', { name: directoryName, exact: true })
+  await directory.scrollIntoViewIfNeeded()
+  const pointerHitsLink = await directory.evaluate((el) => {
+    const box = el.getBoundingClientRect()
+    const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+    return hit === el || (!!hit && el.contains(hit))
+  })
+  expect(pointerHitsLink).toBe(true)
+  await expect(directory).toHaveAttribute('title', directoryName)
+  expect(
+    await directory
+      .locator('.file-name-label')
+      .evaluate(
+        (el) => getComputedStyle(el).textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth,
+      ),
+  ).toBe(true)
+  await directory.click()
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Breadcrumb' })
+      .getByRole('button', { name: directoryName, exact: true }),
+  ).toBeVisible()
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true)
+})
+
 for (const width of [320, 1045, 1440])
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`${width} ${colorScheme}: history, frozen trash confirmation and completed task fit`, async ({

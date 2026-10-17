@@ -1,6 +1,6 @@
 # 历史与回收站交互验收清单
 
-2026-10-17，清单已用于新WebUI实现和本地浏览器验证；**真实身份/工作站验收尚未进行，未部署**。以下矩阵为完整检查要求，不能把尚无证据的行当作通过。范围见`docs/GOAL_P0_P5.md`及`docs/FILE_HISTORY_RECYCLE.md`。
+2026-10-17，运行时7ece209/Agent1.26已通过普通文件历史/回收/恢复/版本清理的真实后端与管理员/普通用户网页子范围，详见文末及`docs/FILE_HISTORY_RECYCLE.md`。实机发现的小屏长目录指针问题已有修复源码，尚未部署。以下矩阵是完整要求，不把尚无证据的行当作通过；全部76项继续。
 
 按`playwright-interactive`同时覆盖需求、实际新增交互及最终拟声明结果；自动化fixture、独立目测和真实身份/工作站验收分开记，不互相替代。
 
@@ -28,3 +28,10 @@
 - 截图（本地gitignored `web/test-results/`）：`archive-interactive-desktop-history.jpg`、`archive-interactive-320-light-history.jpg`、`archive-interactive-final-320-dark-history.jpg`、`archive-interactive-final-320-dark-plan.jpg`及自动矩阵截图。前两张属于提高说明色之前的独立检查；最终暗色和自动矩阵来自最终构建，不混同版本。
 - 实际鼠标/触摸式点击探索跨多次短调用超过30秒：关闭/重开历史、恢复计划取消后再清理计划、主题往返和长路径布局。手工错误曾误点隐藏switch input导致超时；改可见外壳。原生窗口、全部错误/Unknown状态独立目测与工作站真实管理员/普通浏览器仍待补，不能仅凭自动断言签其视觉质量。
 - 新实际链路脚本已准备，未运行。P2-03/P2-04和全量76项保持active，不能由此签完文件管理。
+
+## 7ece209真实网页与后续小屏修复
+
+- 真正Authentik临时管理员（无route fixture），桌面回收计划/Issued刷新不确认、320px暗色历史和恢复不存在目标、完整42字节独立下载及单版本purge、明色已完成/原文件保留/所选历史为空通过。实际三个Job/root私有回执/HDD删除与SQL审计由独立root观察者复核，并精确清理测试文件；长期记录保留。真实普通用户首次/刷新文件surface0/请求0，历史GET及带真实CSRF/Origin的计划POST403。临时账号/浏览器/凭据已清理；详情和任务ID见主证据文档。
+- 真正截图：`archive-real-admin-dark-trash-plan.jpg`、`archive-real-admin-320-dark-history.jpg`、`archive-real-admin-320-dark-restore-plan.jpg`、`archive-real-admin-320-light-purge-result.jpg`、`archive-real-ordinary-320-light-denied.jpg`。结果截图捕获时目录刷新尚在加载，之后独立等待已验证原文件仍显示与历史为空，不用空表瞬间冒充文件丢失/已清理。
+- 原生窗口929×917已补正常回收确认、Unknown/保留待调查、历史503/刷新/空与人工接受未知（不冒充成功），截图`archive-interactive-native-dark-plan.jpg`、`archive-interactive-native-dark-unknown.jpg`、`archive-interactive-native-dark-history-error.jpg`；仍是本地协议fixture。最终320明色说明对比也已目测`archive-interactive-final-320-light-history.jpg`。
+- 实机指针缺陷：320px固定操作列覆盖长目录button中心；使用键盘可继续不等于指针可用。候选限制button命中区、文本span省略+完整title，新自动用例先检查中心命中再正常click；候选25生产预览/218单元及类型/lint/格式/构建通过。独立候选320/305内容区button x43/w80/right123、无重叠/横滚、图标和省略显示及普通点击通过；尚未覆盖线上，不能把候选截图`archive-long-directory-320-light-candidate.jpg`当作实机修复证据。

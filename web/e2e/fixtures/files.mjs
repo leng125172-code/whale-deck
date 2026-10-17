@@ -8,7 +8,7 @@ export async function installFileFixture(page, options = {}) {
   const state = { writes: [], rootStatus: 200, entryStatus: 200, reads: 0, bodyCount: 0, accepted: false, hold: options.hold || false, unknown: options.unknown || false, extraEntries: [], hideEntry: false }
   const root = { id: 'whaledeck.files.shared', name: '共享文件', actions: ['files-list', 'files-stat', 'files-upload', 'files-download', ...(options.mutations ? ['files-mutate'] : [])] }
   const entry = { name: '一个很长但应该省略并能显示完整提示的文件名称-abcdefghijklmnopqrstuvwxyz-0123456789.txt', kind: 'File', sizeBytes: 3, modifiedAtUnixMs: 1792150000000, version: 'A'.repeat(64), mode: '0600', isProtected: false }
-  const folder = { ...entry, name: '资料', kind: 'Directory', sizeBytes: 0 }
+  const folder = { ...entry, name: options.directoryName || '资料', kind: 'Directory', sizeBytes: 0 }
   const intent = { id: '7d4fec0a-01b7-494a-9b55-e96e265503a1', jobId: '7d4fec0a-01b7-494a-9b55-e96e265503a1', rootId: root.id, path: '', sizeBytes: 0, sha256: '', state: 'AwaitingUpload', expiresAtUtc: new Date(Date.now() + 900000).toISOString(), version: 0, resultCode: null, publishedVersion: null, previousRetained: false }
   let metadata
   await page.route('**/api/v1/files/**', async (route) => {

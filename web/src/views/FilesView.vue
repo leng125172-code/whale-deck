@@ -697,10 +697,11 @@ onBeforeUnmount(() => {
                 v-if="row.kind === 'Directory' && !row.isProtected"
                 class="file-link file-name"
                 :title="row.name"
-                :disabled="busy || !!frozen"
+                :disabled="busy || !!frozen || mutationLocked"
                 @click="navigate(filePath(path, row.name))"
               >
-                <el-icon><FolderOpened /></el-icon>{{ row.name }}</button
+                <el-icon><FolderOpened /></el-icon
+                ><span class="file-name-label">{{ row.name }}</span></button
               ><span v-else class="file-name" :title="row.name">{{ row.name }}</span></template
             ></el-table-column
           >
@@ -865,6 +866,15 @@ onBeforeUnmount(() => {
 .file-name:not(button) {
   display: block;
 }
+.file-name > .el-icon {
+  flex-shrink: 0;
+}
+.file-name-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .file-crumbs .file-link {
   max-width: 180px;
   overflow: hidden;
@@ -904,6 +914,11 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-secondary);
 }
 @media (max-width: 600px) {
+  /* Keep the whole directory link's hit target inside the area left of the
+     fixed action column; a long label's center must not sit underneath it. */
+  button.file-name {
+    max-width: min(100%, calc(100vw - 240px));
+  }
   .files-panel {
     padding: 12px;
   }

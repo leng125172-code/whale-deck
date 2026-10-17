@@ -1,8 +1,8 @@
 # 文件历史、回收站与恢复
 
-2026-10-17，接续运行时931a24c/Agent1.25的完整HDD覆盖前备份。本文是正在实现的下一阶段，不把独立执行模块/测试称为API、页面或安装态完成，完整P0–P5的76项保持。
+2026-10-17，最新运行时7ece209/Agent1.26已覆盖发布，普通文件历史/回收/恢复/单HDD版本清理已通过真实身份、后台及网页验证；小屏长目录指针遮挡修复另有源码，尚待发布。下方基础阶段“尚未注册/未部署”为历史，最终证据见文末。目录/归档、容器文件、隔离及长期清理和完整P0–P5的76项继续，不签完整文件管理。
 
-## 交付结构与当前状态
+## 交付结构与基础阶段状态（历史）
 
 - 独立FileArchive契约、Application用例、永久意图/Job/Outbox/共享路径锁/人类审计、Agent/root执行与WebUI；不修改旧上传/变更的签名JSON结构，不让历史永久任务失去校验能力。
 - SQL关系化`file_versions`及`file_archive_operations`：版本来源操作、根/相对路径、旧源版本、字节/完整SHA、捕获原因/生命周期/可用性、创建与观测时间；操作存人类主体/登录绑定、不可逆owner、HMAC意图、类型化计划、期限、租约、阶段、结果和版本。无文件正文、浏览器Token或私有宿主路径；每次schema变更配EF migration。
@@ -70,3 +70,22 @@ CI39006685063已最终completed/success，安装、后端、原生PostgreSQL及�
 - GLM glm-5.3-flash仅只读UI样式草案，GPT审阅，实际状态/权限/安全/实现/验证由GPT负责。1次成功/0重试，input25710/cached11008/output3347 Tokens，100947ms，费用未返回；草案明确占位，未将其按钮当实现或验收。
 
 线上仍931a24c/Agent1.25，未安装1.26新服务、应用新migration或覆盖本次WebUI。下一步同源码门禁与实际发布、真实BFF/HDD及管理员/普通用户网页验收；目录、压缩解压、容器文件、隔离和长期清理及全部76项继续。
+
+## 实际覆盖与已验证子范围：7ece209 / Agent1.26
+
+- 源码7ece209d08aa86d0317d99890f212b0427439f5d的CI39016011071四作业最终completed/success，856 Unit/117 Integration、218前端单元、135 CI联合浏览器及127 Linux通过。工作站冻结原生报告`dispatch-c18a3716597747bf88332f293b86f321.json`实际executed=passed=1、cleanupConfirmed=true，仍明确其Agent传输为stub。
+- 发布前活跃上传/变更/路径锁/终端全0；第一次预检错误地逐字节比较JSON排版，未执行调度。严格JSON无重复键/所有权/单链接检查后确认与1.25默认语义全等，才调用既有固定发布helper。没有改自定义策略、sudo范围或网络/KDE。实际unit16:23:47开始、16:25:27 CST Deactivated successfully，inactive/dead/MainPID0/Resultsuccess/ExecMain0。宿主两个在位程序集包含完整7ece209来源且SHA与实际发布包一致；HDD策略/systemd/权限/UDS/helper/动态入口校验通过，宿主运行库和PKCS仍10.0.13。
+- 实际Cookie→维护入口/Gateway→API/SQL→Worker→UDS/已安装helper：五分钟原登录计划找回、取消栅栏/迟到提交拒绝、不同登录404、CSRF/Origin/匿名/保护/路径拒绝，普通文件回收、恢复不存在目标及完整uid/gid/mode/mtime、覆盖前另做完整HDD备份、只purge所选版本、原文件与本地私有保留/永久证据保持，真实Job/人类审计/关系目录及共享锁释放通过。`validate_file_archives.py`初轮辅助函数`path`与查询参数重名，在首个读取前TypeError；未执行回收，测试文件已清理。QA-only e37a4fd修正后实际执行通过且cleanup确认；没有为QA脚本重新发布相同应用二进制。
+- 真正浏览器无route fixture：全新临时管理员经Authentik用户名/密码/授权进入文件页，桌面确认原42字节文件；刷新Issued只找回同一计划且无POST，随后确认回收，320px深色历史/恢复，独立下载完整42字节SHA相同，再按选定版本清理HDD副本。等待列表刷新确认原文件仍在、该文件历史为空。永久任务依次d018f9fa-b1bb-c69e-083e-84c1aa138f2a、9086a460-1a5a-fe88-701d-e31558c6c2a2、e2c272f1-e2e1-b63c-c779-3805ed091052，实际SQL三终态/三成功审计/锁0、root回执与完整SHA独立复核后，只清本次源文件/私有测试保留；Job/审计/目录/根回执不删。
+- 实际共享源与HDD版本在同设备，明确只为版本留存，不冒称异盘容灾。物理不同设备→HDD及强杀故障仍见独立基础证据，不冒称在生产BFF注入缺盘/满盘/断电等全部组合。
+- 新建独立普通用户、首次/刷新isAdministrator=false，没有文件界面或文件API请求；历史GET403，持有效CSRF及正确Origin的计划POST403。两个真实浏览器账号均精确删除，独立目录查询剩余0、凭据/私钥内存引用已清，所有浏览器已正常关闭；首次私有SSH子进程exit255，改用现成RSA加密封装通道，不输出明文凭据。Authentik页面语言重绘曾清空密码框，补填后正常，未关闭安全校验。
+- 新旧流程原生回归全部通过：33MiB+7/7秒暂停代理上传下载/覆盖/幂等、65543字节目录/普通文件复制移动/权限、人类审计、目录树/递归名称搜索/游标/保护/转义预算、UTF-8/BOM/CRLF/空/边界与完整HDD旧版本；各自精确清理完成。通知8个在位静态资产HTTP/Gateway一致。11核心healthy、宿主服务active、sudo保留，活跃上传/变更/归档/锁/终端全0。
+- 本地已测7ece209 FilesView-BoddqrdN.js SHA256 `e55bab01dd1db4f53ce5681b294657a77ca76b83a48375f2374628614953bff1`、FilesView-DR26AcoL.css `bfa5e76a41ba077bcc6fc8b524b56f666bed3227204e4df434ae356c047bb154`，与实际HTTP及Gateway字节三方相同。后续小屏修复是新产物，不能沿用此SHA声明已部署。
+
+### 实机探索发现的小屏长目录点击问题（修复源码，待部署）
+
+320px固定操作列遮住长目录button的中心，真实指针点击被拦截；管理员流程暂以正常键盘Enter继续，不将它算作指针通过。新源码只在600px以下限长目录button命中区，独立文本span真正ellipsis/完整title、图标不压扁，并使归档互锁时目录按钮显示禁用。新增用例先检查elementFromPoint中心确实命中链接，再普通click进入，不用force或删固定列规避。
+
+218单元、类型/lint/格式/生产构建通过，新18归档用例+7首次授权生产预览共25通过。独立headed候选320窗口/305内容区：button x43/w80/right123、中心未遮挡、ellipsis、正常点击及无页面横向溢出已目测。源码尚待提交后CI与覆盖发布及实机再验；截图`archive-long-directory-320-light-candidate.jpg`不冒称线上修复。
+
+未签收：目录回收/复制移动/压缩解压、正文搜索、容器文件、完整租户隔离和长期隔离对象/过期清理；生产BFF故障全组合尚缺。P2-03/P2-04与全部76项保持active。
