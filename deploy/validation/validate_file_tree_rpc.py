@@ -33,6 +33,24 @@ def checksum(path):
     return digest.hexdigest()
 
 
+def client_failure(stdout, stderr):
+    """Print only allowlisted structured diagnostics, never raw client output."""
+    failures = []
+    for output in (stdout, stderr):
+        for line in output.splitlines()[-8:]:
+            try: value = json.loads(line)
+            except ValueError: continue
+            if not isinstance(value, dict) or value.get('terminalProbe') != 'failed': continue
+            detail, phase, status = value.get('fileCode'), value.get('phase'), value.get('rpcStatus')
+            if detail is not None and not re.fullmatch('FILES_[A-Z_]{1,64}', str(detail)): detail = None
+            if not isinstance(phase, str) or not re.fullmatch('[a-z0-9-]{1,80}', phase): phase = None
+            if status not in ('Cancelled', 'Unknown', 'InvalidArgument', 'DeadlineExceeded', 'NotFound', 'AlreadyExists',
+                    'PermissionDenied', 'ResourceExhausted', 'FailedPrecondition', 'Aborted', 'OutOfRange', 'Unimplemented',
+                    'Internal', 'Unavailable', 'DataLoss', 'Unauthenticated'): status = None
+            failures.append({'treeClientFailed': True, 'clientPhase': phase, 'fileCode': detail, 'rpcStatus': status})
+    return failures
+
+
 def main():
     global PHASE
     assert os.geteuid() == 0 and DATA.is_dir() and not DATA.is_symlink(), 'owned-root-validation-required'
@@ -92,13 +110,7 @@ def main():
             execution = subprocess.run(['docker', 'start', '--attach', client], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600)
             output = execution.stdout
             if execution.returncode != 0 or call(['docker', 'inspect', '--format', '{{.State.ExitCode}}', client]) != '0':
-                for line in output.splitlines()[-8:]:
-                    try: value = json.loads(line)
-                    except ValueError: continue
-                    detail = value.get('fileCode'); client_phase = value.get('phase')
-                    if detail is not None and not re.fullmatch('FILES_[A-Z_]{1,64}', str(detail)): detail = None
-                    if not isinstance(client_phase, str) or not re.fullmatch('[a-z0-9-]{1,80}', client_phase): client_phase = None
-                    print(json.dumps({'treeClientFailed': True, 'clientPhase': client_phase, 'fileCode': detail}), flush=True)
+                for failure in client_failure(output, execution.stderr): print(json.dumps(failure), flush=True)
                 raise RuntimeError('client-rpc-failed')
             result = json.loads(output.splitlines()[-1]); assert result['installedTreeCopyRpc'] == 'passed'
             assert result['smallBytes'] == 2 * 1024**2 + 7 and result['largeBytes'] == 1024**3 + 7
