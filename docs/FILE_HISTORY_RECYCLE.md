@@ -32,3 +32,11 @@
 - 实盘模块字节SHA256：files `1059130508e28764cf3d1d7f668158e9d3dcc0ff0508f52367b627c57c2d788e`；backups `a30a3c7b220fed969034391d4270992c2bc85493d1d418ae61117addecfa601b`；archives `a953a4265cfc55570fba1ae55ef50cfc19705a33d89efb5ad2ee5dad7f21f751`。实盘清理仅表示探针对象清理，不代表产品长期隔离对象清理策略已实现；HDD版本purge不会顺带删除仍被永久操作回执引用的本地保留对象，后续有界清理必须单独接入。
 - GLM glm-5.3-flash只读定位四个实体/任务配置文件，实际Controller为FileMutationsController而非请求中不存在的FileOperationsController；GPT复核。1次成功/0重试，input81234/cached57024/output1642 Tokens，64662ms，费用未返回。安全与架构、实现、权限和实际操作由GPT负责。
 - 后续GLM glm-5.3-flash只读整理四个现有测试文件的夹具/清理/入口；GPT实际阅读复核后编写测试。1次成功/0重试，input287502/cached243648/output4189 Tokens，159553ms，费用未返回。其过滤命令是建议，原生实际执行与清理由冻结源码验证器负责，不因只读分析计作测试通过。
+
+## 基础源码签收（241e5bc，尚未部署）
+
+`78b1b10`独立执行引擎/契约/模型与`241e5bc`精确RESTRICT断言/实盘探针已推送dev。修正后822 Unit、116 Integration通过，6项原生在Windows明确跳过；123真实Linux用例通过。同源码工作站冻结PostgreSQL验证实际执行1项通过（非超级角色、旧schema升级、不可变事实/Job主体绑定、状态及FK保护），报告`dispatch-ff22e835fd174749acbc76ebc2507448.json`为Passed、executed=passed=1、cleanupConfirmed=true；这是隔离库，不给生产应用此migration。首轮失败报告`dispatch-b8e1144424714dddb9391b90dd560057.json`保留，不抹去或作为成功。
+
+从工作站已提交的241e5bc再次执行实盘探针，三个生产Python模块字节SHA与上面完全一致，原文/身份/元数据/回收/恢复覆盖/历史/精确HDD版本purge及错误UUID拒绝再次通过，两个专用root-only目录已清理。独立Linux代码副本也在确切目录身份、所有权、无链接/文件类型白名单与无活跃Python验证进程检查后清理；永久原生状态报告保留。
+
+CI39006685063已最终completed/success，安装、后端、原生PostgreSQL及前端四作业全部成功。宿主已安装运行时与Pkcs10.0.13、稳定动态入口、systemd/权限/受限helper/UDS及11核心healthy再次复核，新增archive helper确认不存在。线上仍为931a24c/Agent1.25，没有增加helper枚举/Agent服务能力/HTTP写入口或默认目录权限；不据此签收产品回收站、完整文件管理或全部76项。下一步接独立Agent RPC/固定helper、BFF持久任务/共享锁/Worker/人类审计及页面，再继续目录、容器文件、Unknown和长期清理等完整范围。

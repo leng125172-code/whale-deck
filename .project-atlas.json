@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-17）",
-  "nextStep": "已部署931a24c/Agent1.25：UTF-8预览编辑、版本冻结保存与覆盖统一完整HDD前置备份通过四作业CI、100 Linux、118 CI/81本地联合浏览器、冻结PG及真实BFF/管理员网页/普通用户403/完整HDD旧字节与SQL审计验收；安装祖先权限误判已修且保留失败。继续历史/回收站/恢复、目录复制移动/归档、容器文件和隔离/长期清理；完整76项保持active。"
+  "nextStep": "线上931a24c/Agent1.25；历史/回收站基础源码241e5bc未部署，123 Linux、822 Unit/116 Integration、冻结PG实际1通过并清理、真实HDD回收恢复覆盖/历史/版本清理通过。继续独立Agent RPC/helper、BFF永久任务/锁/Worker/人类审计及页面，再做目录/归档、容器文件和隔离/长期清理，完整76项保持active。"
 }
