@@ -26,7 +26,8 @@ public sealed class FileMutationRepository(PlatformDbContext db) : IFileMutation
         var now = DateTimeOffset.UtcNow; FileMutationService.Validate(claims.Plan);
         if (claims.ExpiresAtUtc <= now) throw new InvalidOperationException("FILES_PLAN_EXPIRED");
         if (await db.OperationJobs.AnyAsync(item => item.ActorSubject == actor.Subject && item.IdempotencyKey == key, cancellationToken)) throw new InvalidOperationException("FILES_IDEMPOTENCY_CONFLICT");
-        await FilePathLocks.Acquire(db, id, actor.Subject, FileMutationService.PathHashes(claims.Plan), cancellationToken);
+        await FilePathLocks.Acquire(db, id, actor.Subject,
+            new[] { claims.Plan.Command.Source, claims.Plan.Command.Target }.OfType<FileLocationDto>(), [], cancellationToken);
         var row = new FileMutationOperation { Id = id, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding,
             OwnerHash = FileManagementService.Hash("file-owner-v1:" + actor.Subject + ":" + actor.LoginBinding), RequestHash = requestHash,
             PlanJson = JsonSerializer.Serialize(claims.Plan), ExpiresAtUtc = expires, CreatedAtUtc = now, NextAttemptAtUtc = now };

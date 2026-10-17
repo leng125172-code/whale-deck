@@ -1,13 +1,20 @@
 using Microsoft.EntityFrameworkCore;
+using WhaleDeck.Application.Models;
+using WhaleDeck.Application.Services;
 using WhaleDeck.Domain.Entities;
 
 namespace WhaleDeck.Infrastructure.Persistence;
 
-/// <summary>Called inside the shared 41307341 advisory transaction by both workflows.</summary>
+/// <summary>All callers hold advisory transaction 41307341. Lease expiry never releases a path.</summary>
 internal static class FilePathLocks
 {
-    internal static async Task Acquire(PlatformDbContext db, Guid id, string actor, IEnumerable<string> hashes, CancellationToken cancellationToken)
+    internal static async Task Acquire(PlatformDbContext db, Guid id, string actor, IEnumerable<FileLocationDto> locations,
+        IEnumerable<string> tokenHashes, CancellationToken cancellationToken)
     {
+        if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("FILES_LOCK_TRANSACTION_REQUIRED");
+        // Re-entrant for current repositories; also fences a future caller that
+        // opened a transaction but forgot the shared gate before checking.
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(41307341);", cancellationToken);
         if (await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) >= 64 ||
@@ -15,10 +22,71 @@ internal static class FilePathLocks
             await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
             await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) >= 4)
             throw new InvalidOperationException("FILES_OPERATION_BUDGET_EXHAUSTED");
-        var targets = hashes.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-        if (await db.FilePathLocks.AnyAsync(item => targets.Contains(item.PathHash), cancellationToken)) throw new InvalidOperationException("FILES_TARGET_BUSY");
-        foreach (var hash in targets) db.FilePathLocks.Add(new() { PathHash = hash, OperationId = id });
+        var paths = locations.Select(item => new FilePathScope(item)).Distinct().ToArray();
+        var tokens = tokenHashes.Distinct(StringComparer.Ordinal).ToArray();
+        if (paths.Length is < 1 or > 2 || tokens.Length > 1 || tokens.Any(item => !FileManagementService.Hex(item)))
+            throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+        var targets = paths.Select(item => item.Hash).Concat(tokens).Distinct(StringComparer.Ordinal).ToArray();
+        var held = await db.FilePathLocks.OrderBy(item => item.PathHash).Take(257).ToArrayAsync(cancellationToken);
+        if (held.Length > 256) throw new InvalidOperationException("FILES_LOCK_SCOPE_UNVERIFIABLE");
+        // Resolve every held row from its owning intent, including migrated rows.
+        // A missing/malformed intent is NOT permission to drop the old lock.
+        var resolved = await Resolve(db, held, cancellationToken);
+        foreach (var current in held)
+        {
+            if (targets.Contains(current.PathHash, StringComparer.Ordinal) || current.ScopeKind == "Path" &&
+                paths.Any(item => item.Conflicts(resolved[current.PathHash]!))) throw new InvalidOperationException("FILES_TARGET_BUSY");
+        }
+        foreach (var path in paths) db.FilePathLocks.Add(new()
+            { PathHash = path.Hash, OperationId = id, ScopeKind = "Path", RootId = path.RootId, RelativePath = path.Path });
+        foreach (var token in tokens) db.FilePathLocks.Add(new() { PathHash = token, OperationId = id, ScopeKind = "Token" });
     }
+
+    private static async Task<Dictionary<string, FilePathScope?>> Resolve(PlatformDbContext db, FilePathLock[] held, CancellationToken cancellationToken)
+    {
+        var ids = held.Select(item => item.OperationId).Distinct().ToArray();
+        var uploads = await db.FileUploadOperations.AsNoTracking().Where(item => ids.Contains(item.Id)).ToDictionaryAsync(item => item.Id, cancellationToken);
+        var mutations = await db.FileMutationOperations.AsNoTracking().Where(item => ids.Contains(item.Id)).ToDictionaryAsync(item => item.Id, cancellationToken);
+        var archives = await db.FileArchiveOperations.AsNoTracking().Where(item => ids.Contains(item.Id)).ToDictionaryAsync(item => item.Id, cancellationToken);
+        var result = new Dictionary<string, FilePathScope?>(StringComparer.Ordinal);
+        foreach (var row in held)
+        {
+            try
+            {
+                FilePathScope? scope = null; var token = false;
+                var owners = (uploads.ContainsKey(row.OperationId) ? 1 : 0) + (mutations.ContainsKey(row.OperationId) ? 1 : 0) + (archives.ContainsKey(row.OperationId) ? 1 : 0);
+                if (owners != 1) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+                if (uploads.TryGetValue(row.OperationId, out var upload))
+                {
+                    scope = new(new(upload.RootId, upload.RelativePath));
+                    if (upload.TargetHash != scope.Hash || scope.Hash != row.PathHash) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+                }
+                else if (mutations.TryGetValue(row.OperationId, out var mutation))
+                {
+                    var plan = FileMutationService.ReadPlan(mutation); FileMutationService.Validate(plan);
+                    scope = new[] { plan.Command.Source, plan.Command.Target }.OfType<FileLocationDto>().Select(item => new FilePathScope(item))
+                        .SingleOrDefault(item => item.Hash == row.PathHash);
+                    if (scope is null) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+                }
+                else if (archives.TryGetValue(row.OperationId, out var archive))
+                {
+                    var location = new FilePathScope(new(archive.RootId, archive.RelativePath));
+                    if (location.Hash != archive.TargetHash) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+                    if (row.PathHash == location.Hash) scope = location;
+                    else if (archive.ArchiveVersionId is { } version && row.PathHash == FileManagementService.Hash("file-version-v1:" + version.ToString("N"))) token = true;
+                    else throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+                }
+                var kind = token ? "Token" : "Path";
+                if (row.ScopeKind != "Legacy" && (row.ScopeKind != kind || row.RootId != scope?.RootId || row.RelativePath != scope?.Path)) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+                if (row.ScopeKind == "Legacy") { row.ScopeKind = kind; row.RootId = scope?.RootId; row.RelativePath = scope?.Path; }
+                result.Add(row.PathHash, scope);
+            }
+            catch (Exception error) when (error is ArgumentException or System.Text.Json.JsonException or InvalidOperationException)
+            { throw new InvalidOperationException("FILES_LOCK_SCOPE_UNVERIFIABLE"); }
+        }
+        return result;
+    }
+
     internal static Task<int> Release(PlatformDbContext db, Guid id, CancellationToken cancellationToken) =>
         db.FilePathLocks.Where(item => item.OperationId == id).ExecuteDeleteAsync(cancellationToken);
 }

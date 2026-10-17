@@ -1200,6 +1200,24 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("operation_id");
 
+                    b.Property<string>("RelativePath")
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("relative_path");
+
+                    b.Property<string>("RootId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("root_id");
+
+                    b.Property<string>("ScopeKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasDefaultValue("Legacy")
+                        .HasColumnName("scope_kind");
+
                     b.HasKey("PathHash");
 
                     b.HasIndex("OperationId");
@@ -1207,6 +1225,8 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.ToTable("file_path_locks", null, t =>
                         {
                             t.HasCheckConstraint("ck_file_path_hash", "path_hash ~ '^[A-F0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_file_path_scope", "(scope_kind IN ('Legacy','Token') AND root_id IS NULL AND relative_path IS NULL) OR (scope_kind='Path' AND root_id IS NOT NULL AND relative_path IS NOT NULL AND root_id ~ '^[a-z0-9.-]{1,64}$' AND octet_length(relative_path) BETWEEN 1 AND 4096)");
                         });
                 });
 

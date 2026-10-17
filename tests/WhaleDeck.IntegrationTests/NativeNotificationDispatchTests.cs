@@ -59,6 +59,8 @@ public sealed partial class NativeNotificationDispatchTests
         await db.FileArchiveRegistrations.Where(item => item.Id == archiveUpgradeId).ExecuteDeleteAsync();
         await db.OperationJobs.Where(item => item.Id == archiveUpgradeId).ExecuteDeleteAsync();
         Assert.Equal(uploadUpgradeId, (await db.FilePathLocks.SingleAsync(item => item.PathHash == upgradeHash)).OperationId);
+        var legacyPathLock = await db.FilePathLocks.SingleAsync(item => item.PathHash == upgradeHash);
+        Assert.Equal("Legacy", legacyPathLock.ScopeKind); Assert.Null(legacyPathLock.RootId); Assert.Null(legacyPathLock.RelativePath);
         await db.FilePathLocks.Where(item => item.OperationId == uploadUpgradeId).ExecuteDeleteAsync();
         await db.FileUploadOperations.Where(item => item.Id == uploadUpgradeId).ExecuteDeleteAsync();
         await db.OperationJobs.Where(item => item.Id == uploadUpgradeId).ExecuteDeleteAsync(); db.ChangeTracker.Clear();
@@ -151,6 +153,7 @@ public sealed partial class NativeNotificationDispatchTests
         await FileMutationBoundaries(options);
         await FileArchiveBoundaries(options);
         await FileArchiveWorkflowBoundaries(options);
+        await FileHierarchyLockBoundaries(options);
     }
 
     private static async Task PrivateWorkflow(PlatformDbContext db)

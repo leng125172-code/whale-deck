@@ -106,7 +106,8 @@ public sealed class FileArchiveRepository(PlatformDbContext db, IFileArchiveProt
         if (command.VersionId is { } version && !await db.FileVersions.AnyAsync(item => item.Id == version && item.RootId == command.Location.RootId &&
             item.RelativePath == command.Location.Path && item.CaptureState != "Purged" && item.Sha256 == claims.Plan.Sha256 && item.SizeBytes == claims.Plan.SizeBytes, cancellationToken))
             throw new InvalidOperationException("FILES_ARCHIVE_CATALOG_CONFLICT");
-        await FilePathLocks.Acquire(db, id, actor.Subject, FileArchiveService.PathHashes(claims.Plan), cancellationToken);
+        await FilePathLocks.Acquire(db, id, actor.Subject, [command.Location],
+            command.VersionId is { } lockedVersion ? [FileManagementService.Hash("file-version-v1:" + lockedVersion.ToString("N"))] : [], cancellationToken);
         var row = new FileArchiveOperation { Id = id, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding, RequestHash = requestHash,
             OwnerHash = FileManagementService.Hash("file-owner-v1:" + actor.Subject + ":" + actor.LoginBinding), Kind = command.Kind, RootId = command.Location.RootId,
             RelativePath = command.Location.Path, TargetHash = FileManagementService.Hash(command.Location.RootId + ":" + command.Location.Path), ArchiveVersionId = command.VersionId,

@@ -367,8 +367,14 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
     {
         modelBuilder.Entity<FilePathLock>(entity =>
         {
-            entity.ToTable("file_path_locks", table => table.HasCheckConstraint("ck_file_path_hash", "path_hash ~ '^[A-F0-9]{64}$'"));
+            entity.ToTable("file_path_locks", table =>
+            {
+                table.HasCheckConstraint("ck_file_path_hash", "path_hash ~ '^[A-F0-9]{64}$'");
+                table.HasCheckConstraint("ck_file_path_scope", "(scope_kind IN ('Legacy','Token') AND root_id IS NULL AND relative_path IS NULL) OR (scope_kind='Path' AND root_id IS NOT NULL AND relative_path IS NOT NULL AND root_id ~ '^[a-z0-9.-]{1,64}$' AND octet_length(relative_path) BETWEEN 1 AND 4096)");
+            });
             entity.HasKey(item => item.PathHash); entity.Property(item => item.PathHash).HasMaxLength(64);
+            entity.Property(item => item.ScopeKind).HasMaxLength(8).HasDefaultValue("Legacy");
+            entity.Property(item => item.RootId).HasMaxLength(64); entity.Property(item => item.RelativePath).HasMaxLength(4096);
             entity.HasIndex(item => item.OperationId);
             entity.HasOne<OperationJob>().WithMany().HasForeignKey(item => item.OperationId).OnDelete(DeleteBehavior.Restrict);
         });

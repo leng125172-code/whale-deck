@@ -23,9 +23,12 @@ public sealed class FileMutationOperation
     public long Version { get; set; }
 }
 
-/// <summary>Shared upload/mutation logical lock. Unknown outcomes retain ownership.</summary>
+/// <summary>Shared file hierarchy lock. Unknown outcomes retain ownership; legacy rows are resolved, never silently ignored.</summary>
 public sealed class FilePathLock
 {
     public required string PathHash { get; init; }
     public Guid OperationId { get; init; }
+    public string ScopeKind { get; set; } = "Legacy";
+    public string? RootId { get; set; }
+    public string? RelativePath { get; set; }
 }

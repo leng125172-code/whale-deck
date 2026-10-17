@@ -19,7 +19,7 @@ public sealed class FileUploadRepository(PlatformDbContext db) : IFileUploadRepo
         if (claims.ExpiresAtUtc <= now) throw new InvalidOperationException("FILES_PLAN_EXPIRED");
         if (await db.OperationJobs.AnyAsync(item => item.ActorSubject == actor.Subject && item.IdempotencyKey == key, cancellationToken)) throw new InvalidOperationException("FILES_IDEMPOTENCY_CONFLICT");
         var file = claims.File; var targetHash = FileManagementService.Hash(file.RootId + ":" + file.Path);
-        await FilePathLocks.Acquire(db, id, actor.Subject, [targetHash], cancellationToken);
+        await FilePathLocks.Acquire(db, id, actor.Subject, [new(file.RootId, file.Path)], [], cancellationToken);
         var operation = new FileUploadOperation { Id = id, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding,
             OwnerHash = FileManagementService.Hash("file-owner-v1:" + actor.Subject + ":" + actor.LoginBinding), RootId = file.RootId, RelativePath = file.Path,
             TargetHash = targetHash, RequestHash = requestHash, ExpectedVersion = file.ExpectedVersion, Sha256 = file.Sha256, SizeBytes = file.SizeBytes,
