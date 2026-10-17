@@ -83,7 +83,11 @@ def configure(check=False):
             # Pin each directory FD below the verified mount; never traverse a
             # symlink/cross-mount ancestor or chmod/adopt an unsafe old target.
             info = os.fstat(mounted)
-            if info.st_uid != 0 or info.st_mode & 0o022:
+            # Data mount/container-storage ancestors may legitimately belong
+            # to the workstation user. Never chown those shared directories.
+            # Walk them via no-symlink/no-cross-mount FDs, reject world-write,
+            # and require the immediate backup namespace to be root-controlled.
+            if info.st_mode & 0o002 or index == len(parts) - 1 and (info.st_uid != 0 or info.st_mode & 0o022):
                 raise RuntimeError('FILES_BACKUP_DIRECTORY_UNSAFE')
             try: os.mkdir(part, 0o700 if index == len(parts) - 1 else 0o755, dir_fd=mounted); os.fsync(mounted)
             except FileExistsError: pass

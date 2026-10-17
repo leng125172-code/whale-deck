@@ -40,3 +40,11 @@
 - `validate_file_text.py`已准备实际OIDC/API/SQL/Worker/UDS/已安装helper预览保存、真实HDD旧版本和SQL元数据审计/精确清理探针；尚未部署执行，不能将脚本存在计为通过。
 
 - 随后18项新编辑浏览器全部通过（1.8min）；最终长标题title源码已重新类型检查/格式/生产构建，FilesView-D0AvlaYo.js。生产构建81项联合文件/变更/搜索/编辑/角标回归仍在执行。持久浏览器一次手工保存后重开等待超时导致REPL重置，未计为成功证据；已核实旧自动化浏览器随pipe退出、重建短调用。独立生产预览原生窗口929×917、抽屉x29/width900/height917，暗色标题/完整tip/格式/正文/footer截图已目测；不是工作站浏览器证据。
+
+## 源码216e7cc与首次覆盖失败（保留真实失败）
+
+- 807 Unit/115 Integration、215前端单元、生产构建81联合浏览器通过；CI38997841912四作业成功，118联合浏览器通过（8.8min）。工作站冻结PG dispatch-aa8cce74204d4ef594057c5b2fbba3a6：216e7cc80981bf8423a94001e45ddd9acc25ef7e，03:12:42–03:14:23 UTC，实际1执行/1通过/cleanupConfirmed=true。冻结同源码97 Linux及2097159字节物理HDD探针通过。
+- 覆盖前活动上传/变更/路径锁/终端均0。调度Job66cab478-904a-4a5b-a311-620053d35be2成功只表示接受调度；实际unit于11:23:14开始、11:23:47 CST失败，稳定错误FILES_BACKUP_CONFIGURATION_FAILED。后续systemctl当前属性已重置成inactive/success，因此必须保留并检查实际journal，不能据当前属性冒称更新成功。
+- 原因：挂载点/data为user所有755、DockerData为user所有775，而WhaleDeck私有namespace已root所有700。安装新检查误要求每层祖先均root所有。未替换Agent/API/Worker二进制，11核心仍healthy、宿主服务active；首次钉住的0600策略保留。没有改数据盘所有权、回滚或重复执行调度。
+- 修正只允许既有用户所有的真实挂载/存储祖先经no-symlink/no-cross-mount FD遍历，仍拒绝world-write；紧邻备份目录的namespace必须root控制、不可组/他人写，最终目录root700，既有不安全namespace拒绝且不接管。新增三项真实Linux用例覆盖既有/新建私有namespace下用户所有mount/storage与不接管不安全目录。待重跑、提交与覆盖。
+- 生产预览原生暗色编辑、保留/放弃草稿及390px触摸编辑/确认/已发布正常（只发送一次正文、原版本绑定、无横向溢出）；本地浏览器已正常关闭。这些明确是UI fixture，不冒充真实工作站文件写入。

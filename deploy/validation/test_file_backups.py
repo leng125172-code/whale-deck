@@ -91,6 +91,35 @@ class FileBackupTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'FILES_BACKUP_DIRECTORY_UNSAFE'): self.install(target=relative)
         self.assertFalse((ancestor / 'versions').exists())
 
+    def user_owned_mount(self, existing_namespace):
+        self.configuration.unlink()
+        private_configuration = self.disk / 'configuration'; private_configuration.mkdir(mode=0o700)
+        self.configuration = private_configuration / 'policy.json'
+        relative = 'DockerData/whaledeck/file-backups'
+        data = self.disk / 'DockerData'; data.mkdir(mode=0o775); data.chmod(0o775); os.chown(data, 1000, 1000)
+        if existing_namespace: (data / 'whaledeck').mkdir(mode=0o700)
+        os.chown(self.disk, 1000, 1000); self.disk.chmod(0o755)
+        before = self.disk.stat(), data.stat()
+        with patch.object(backups, 'CONFIGURATION', str(self.configuration)): self.install(target=relative)
+        self.assertEqual([(item.st_uid, item.st_gid, stat.S_IMODE(item.st_mode)) for item in before],
+            [(item.stat().st_uid, item.stat().st_gid, stat.S_IMODE(item.stat().st_mode)) for item in (self.disk, data)])
+        for path in (data / 'whaledeck', self.disk / relative):
+            self.assertEqual(path.stat().st_uid, 0); self.assertFalse(path.stat().st_mode & 0o022)
+        self.assertEqual(stat.S_IMODE((self.disk / relative).stat().st_mode), 0o700)
+
+    def test_existing_root_private_namespace_below_user_owned_mount_and_storage_is_preserved(self):
+        self.user_owned_mount(existing_namespace=True)
+
+    def test_fresh_root_namespace_below_user_owned_mount_and_storage_is_created_without_chown(self):
+        self.user_owned_mount(existing_namespace=False)
+
+    def test_existing_non_root_backup_namespace_is_not_adopted_or_changed(self):
+        relative = 'DockerData/whaledeck/file-backups'
+        self.policy['targetRelative'] = relative; self.write_policy()
+        namespace = self.disk / 'DockerData' / 'whaledeck'; namespace.mkdir(parents=True); os.chown(namespace, 1000, 1000)
+        with self.assertRaisesRegex(RuntimeError, 'FILES_BACKUP_DIRECTORY_UNSAFE'): self.install(target=relative)
+        self.assertEqual(namespace.stat().st_uid, 1000); self.assertFalse((namespace / 'file-backups').exists())
+
     def test_installer_creates_policy_atomically_then_preserves_user_configuration(self):
         self.configuration.unlink(); self.install()
         self.assertEqual(json.loads(self.configuration.read_bytes()), self.policy)
