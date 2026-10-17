@@ -42,7 +42,7 @@ case "$action" in
       --property=LimitCORE=0 --property=LimitNOFILE=64 --property=LimitFSIZE=1073741824 \
       --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
       --property="CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_CHOWN" \
-      --property="ReadWritePaths=/var/lib/whaledeck-files /data/WhaleDeck" \
+      --property="ReadWritePaths=/var/lib/whaledeck-files /data/WhaleDeck /data/DockerData/whaledeck/file-backups" \
       /usr/bin/python3 -I /usr/local/libexec/whaledeck-files.py "$2"
     ;;
   file-transport-stop)

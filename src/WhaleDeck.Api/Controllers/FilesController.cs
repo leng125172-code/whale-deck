@@ -9,7 +9,7 @@ namespace WhaleDeck.Api.Controllers;
 
 [ApiController, Authorize(Policy = "Administrator"), Route("api/v1/files")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class FilesController(FileManagementService files, TerminalCookieIdentity identity, FileHttpTransport transport) : ControllerBase
+public sealed class FilesController(FileManagementService files, FileTextService text, TerminalCookieIdentity identity, FileHttpTransport transport) : ControllerBase
 {
     /// <summary>Registered roots only. Never returns arbitrary host paths or protected configuration roots.</summary>
     [HttpGet("roots")]
@@ -21,6 +21,10 @@ public sealed class FilesController(FileManagementService files, TerminalCookieI
     [HttpGet("entry")]
     public async Task<ActionResult<FileEntryDto>> Inspect([FromQuery] string rootId, [FromQuery] string path, CancellationToken cancellationToken) =>
         Ok(await files.InspectAsync((await identity.ReadAsync(HttpContext)).Actor, new(rootId, path), cancellationToken));
+    /// <summary>Version-bound UTF-8 text up to 1 MiB. Full SHA256 and durable metadata-only audit precede content delivery. Binary/NUL and incomplete streams are rejected; BOM and line endings are reported, never silently converted.</summary>
+    [HttpGet("text")]
+    public async Task<ActionResult<FileTextDto>> Text([FromQuery] string rootId, [FromQuery] string path, [FromQuery] string expectedVersion, CancellationToken cancellationToken) =>
+        Ok(await text.ReadAsync((await identity.ReadAsync(HttpContext)).Actor, new(rootId, path), expectedVersion, cancellationToken));
     /// <summary>Prepare a five-minute plan bound to this login, exact relative path, size, SHA256 and expected target version (ABSENT for creates).</summary>
     [HttpPost("uploads/plan")]
     public async Task<ActionResult<FileUploadPlanDto>> Plan(FileUploadPlanCommand command, CancellationToken cancellationToken) =>

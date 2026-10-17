@@ -35,6 +35,11 @@ assert_metadata /etc/whaledeck/agent.env '640:root:whaledeck'
 assert_metadata /usr/local/libexec/whaledeck-privileged '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-files.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-operations.py '750:root:root'
+assert_metadata /usr/local/libexec/whaledeck-file-backups.py '750:root:root'
+[[ ! -L /etc/whaledeck/file-backups.json && $(stat -c %u /etc/whaledeck/file-backups.json) == 0 && $(stat -c %h /etc/whaledeck/file-backups.json) == 1 ]]
+[[ $(stat -c %a /etc/whaledeck/file-backups.json) =~ ^(600|640|644)$ ]]
+assert_metadata /data/DockerData/whaledeck/file-backups '700:root:root'
+python3 "$(dirname "$0")/configure-file-backups.py" --check
 assert_metadata /var/lib/whaledeck-files '700:root:root'
 [[ ! -L /etc/whaledeck/file-roots.json && $(stat -c %u /etc/whaledeck/file-roots.json) == 0 ]]
 [[ $(stat -c %a /etc/whaledeck/file-roots.json) =~ ^(600|640|644)$ ]]

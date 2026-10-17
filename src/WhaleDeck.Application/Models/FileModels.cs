@@ -12,7 +12,10 @@ public sealed record SubmitFileUploadCommand(string PlanHash, bool Confirmed, st
 public sealed record FileCancelDto(Guid JobId, string State);
 public sealed record FileUploadIntentDto(Guid Id, Guid JobId, string RootId, string Path, long SizeBytes, string Sha256,
     string State, DateTimeOffset ExpiresAtUtc, string? ResultCode, long Version, string? PublishedVersion, bool PreviousRetained);
-public sealed record FileUploadReceiptDto(string State, long SizeBytes, string Sha256, string Version, bool PreviousRetained, bool BindingCurrent, bool IsInProgress);
+public sealed record FileHddBackupDto(string OperationId, string StorageId, string SourceVersion, long SizeBytes, string Sha256, long CreatedAtUnixMs, bool DifferentSourceDevice);
+public sealed record FileUploadReceiptDto(string State, long SizeBytes, string Sha256, string Version, bool PreviousRetained, bool BindingCurrent, bool IsInProgress, FileHddBackupDto? HddBackup = null, string? ResultCode = null);
 public sealed record FileDownloadPart(string Kind, FileEntryDto? Metadata, ReadOnlyMemory<byte> Data, long Offset, string Sha256, string Version, long SizeBytes);
+public enum FileReadPurpose { Download, TextPreview }
+public sealed record FileTextDto(string RootId, string Path, string Version, long SizeBytes, string Sha256, string Text, bool Utf8Bom, string LineEnding);
 public enum FileUploadStartResult { Started, LeaseLost, Canceled, Expired }
 public sealed class FileTransferRejectedException : InvalidOperationException { }

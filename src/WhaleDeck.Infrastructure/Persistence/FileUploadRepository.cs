@@ -84,6 +84,16 @@ public sealed class FileUploadRepository(PlatformDbContext db) : IFileUploadRepo
             return ids.Length == 0 ? null : await db.FileUploadOperations.AsNoTracking().SingleAsync(item => item.Id == ids[0], cancellationToken);
         }, cancellationToken);
     }
+    public Task<bool> RenewAsync(FileUploadOperation operation, DateTimeOffset now, CancellationToken cancellationToken) => Transaction(async () =>
+    {
+        // Lock rechecks wall time AFTER any actual row-lock wait. An earlier
+        // caller timestamp cannot resurrect an expired or replaced lease.
+        var current = await Lock(operation, cancellationToken);
+        if (current is null || current.LeaseExpiresAtUtc <= now) return false;
+        return await db.FileUploadOperations.Where(item => item.Id == current.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.LeaseExpiresAtUtc, DateTimeOffset.UtcNow.AddSeconds(90))
+                .SetProperty(item => item.Version, item => item.Version + 1), cancellationToken) == 1;
+    }, cancellationToken);
     public Task<bool> CancellationRequestedAsync(Guid id, CancellationToken cancellationToken) => db.OperationJobs.AsNoTracking().AnyAsync(item => item.Id == id && item.CancelRequestedAtUtc != null, cancellationToken);
     public Task<FileUploadStartResult> StartedAsync(FileUploadOperation operation, DateTimeOffset now, CancellationToken cancellationToken) => Transaction(async () =>
     {
@@ -138,10 +148,11 @@ public sealed class FileUploadRepository(PlatformDbContext db) : IFileUploadRepo
             .SetProperty(item => item.LeaseToken, (Guid?)null).SetProperty(item => item.LeaseExpiresAtUtc, (DateTimeOffset?)null).SetProperty(item => item.Version, item => item.Version + 1), cancellationToken);
         return true;
     }, cancellationToken);
-    public async Task AuditDownloadAsync(TerminalActor actor, FileLocationDto location, string result, CancellationToken cancellationToken)
+    public async Task AuditReadAsync(TerminalActor actor, FileLocationDto location, string result, FileReadPurpose purpose, CancellationToken cancellationToken)
     {
         if (result is not ("Started" or "Validated" or "Incomplete")) throw new ArgumentException("FILES_DOWNLOAD_RESULT_INVALID");
-        Audit(actor.Subject, "files.download", location.RootId, null, actor.TraceId, actor.SourceIp, result, FileManagementService.Hash(location.RootId + ":" + location.Path));
+        var action = purpose switch { FileReadPurpose.Download => "files.download", FileReadPurpose.TextPreview => "files.text-preview", _ => throw new ArgumentException("FILES_READ_PURPOSE_INVALID") };
+        Audit(actor.Subject, action, location.RootId, null, actor.TraceId, actor.SourceIp, result, FileManagementService.Hash(location.RootId + ":" + location.Path));
         await db.SaveChangesAsync(cancellationToken);
     }
     private async Task<FileUploadOperation?> Lock(FileUploadOperation operation, CancellationToken cancellationToken)

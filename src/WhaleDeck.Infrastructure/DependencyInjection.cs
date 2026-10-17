@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddScoped<FileManagementService>();
         services.AddSingleton<IFileBrowserGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<FileBrowserService>();
+        services.AddScoped<FileTextService>();
         services.AddScoped<FileUploadDispatcher>();
         services.AddScoped<IFileMutationRepository, FileMutationRepository>();
         services.AddSingleton<IFileMutationProtector, FilePlanProtector>();

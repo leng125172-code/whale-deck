@@ -28,7 +28,7 @@ public sealed class FileTransportTests
     [Fact]
     public async Task IntentAndReceiveKeysAreValidatedBeforeAnyCookieOrAgentAccess()
     {
-        var controller = new FilesController(null!, null!, null!) { ControllerContext = new() { HttpContext = new DefaultHttpContext() } };
+        var controller = new FilesController(null!, null!, null!, null!) { ControllerContext = new() { HttpContext = new DefaultHttpContext() } };
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await controller.Create(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await controller.Content(Guid.NewGuid(), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await controller.Cancel(Guid.NewGuid(), default));

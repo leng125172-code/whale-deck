@@ -150,8 +150,24 @@ internal static class FileTransferPolicy
     {
         string Value(string name) => item.TryGetProperty(name, out var value) ? value.GetString() ?? string.Empty : string.Empty;
         bool Flag(string name) => item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
-        return new() { OperationId = Value("operationId"), State = Value("state"), SizeBytes = item.GetProperty("sizeBytes").GetInt64(), Sha256 = Value("sha256"),
-            Version = Value("version"), PreviousRetained = Flag("previousRetained"), Replayed = Flag("replayed"), BindingCurrent = Flag("bindingCurrent"), IsInProgress = Flag("isInProgress") };
+        var result = new FileUploadReceipt { OperationId = Value("operationId"), State = Value("state"), SizeBytes = item.GetProperty("sizeBytes").GetInt64(), Sha256 = Value("sha256"),
+            Version = Value("version"), PreviousRetained = Flag("previousRetained"), Replayed = Flag("replayed"), BindingCurrent = Flag("bindingCurrent"), IsInProgress = Flag("isInProgress"), ResultCode = Value("resultCode") };
+        if (result.ResultCode.Length > 0 && (result.ResultCode.Length <= 13 || result.ResultCode.Length > 64 || !result.ResultCode.StartsWith("FILES_BACKUP_", StringComparison.Ordinal) || result.ResultCode.Any(c => c is not (>= 'A' and <= 'Z' or '_'))))
+            throw new InvalidOperationException("FILES_RESULT_CODE_INVALID");
+        if (item.TryGetProperty("hddBackup", out var proof))
+        {
+            var id = proof.GetProperty("operationId").GetString() ?? string.Empty;
+            var sourceVersion = proof.GetProperty("sourceVersion").GetString() ?? string.Empty;
+            var checksum = proof.GetProperty("sha256").GetString() ?? string.Empty;
+            var storage = proof.GetProperty("storageId").GetString() ?? string.Empty; var size = proof.GetProperty("sizeBytes").GetInt64();
+            var created = proof.GetProperty("createdAtUnixMs").GetInt64();
+            Identity(id); Hash(sourceVersion); Hash(checksum);
+            if (id != result.OperationId || storage != "database-platform.backup.hdd" || size is < 0 or > MaximumBytes || created is < 0 or > 253402300799999)
+                throw new InvalidOperationException("FILES_BACKUP_PROOF_INVALID");
+            result.HddBackup = new() { OperationId = id, StorageId = storage, SourceVersion = sourceVersion, SizeBytes = size,
+                Sha256 = checksum, CreatedAtUnixMs = created, DifferentSourceDevice = proof.GetProperty("differentSourceDevice").GetBoolean() };
+        }
+        return result;
     }
 }
 

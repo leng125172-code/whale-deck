@@ -628,6 +628,26 @@ def recover(record, parent, private, state):
     return record
 
 
+def ensure_hdd_backup(record, parent, leaf, private, state, temporary):
+    # This is only called before Applying/rename while holding both the
+    # operation and namespace locks. A definite backup failure can abort the
+    # owned stage; an uncertain publication cannot use this shortcut.
+    try:
+        record['hddBackup'] = backup_engine().ensure(record, parent, leaf)
+        save_receipt(state, record['operationId'], record)
+    except (Rejected, OSError) as error:
+        code = str(error) if isinstance(error, Rejected) else 'FILES_BACKUP_UNAVAILABLE'
+        if not code.startswith('FILES_BACKUP_'): raise
+        pending = current(private, temporary)
+        if pending is not None and pending.st_ino == record['newInode'] and pending.st_dev == record['newDevice']:
+            os.unlink(temporary, dir_fd=private); os.fsync(private)
+            record.update(state='Aborted', resultCode=code)
+        else:
+            record['state'] = 'Unknown'
+        save_receipt(state, record['operationId'], record)
+        raise Rejected(code) from None
+
+
 def upload(request, source, staged_only=False):
     fingerprint = bound(request); operation = request['operationId']
     if staged_only: fingerprint = hashlib.sha256((fingerprint + ':stage-v1').encode()).hexdigest().upper()
@@ -670,7 +690,8 @@ def upload(request, source, staged_only=False):
                     if original:
                         record['originalIdentity'] = publication_identity(original)
                         record['originalSha256'] = checksum(parent, leaf)
-                        if version(current(parent, leaf)) != request['expectedVersion']: raise Rejected('FILES_VERSION_CONFLICT')
+                        latest = current(parent, leaf)
+                        if latest is None or version(latest) != request['expectedVersion']: raise Rejected('FILES_VERSION_CONFLICT')
                     save_receipt(state, operation, record)
                 digest = hashlib.sha256(); offset = 0
                 while True:
@@ -712,6 +733,10 @@ def upload(request, source, staged_only=False):
                     latest = current(parent, leaf)
                     if (version(latest) if latest else 'ABSENT') != request['expectedVersion']:
                         raise Rejected('FILES_VERSION_CONFLICT')
+                    if original:
+                        ensure_hdd_backup(record, parent, leaf, private, state, temporary)
+                        latest = current(parent, leaf)
+                        if latest is None or version(latest) != request['expectedVersion']: raise Rejected('FILES_VERSION_CONFLICT')
                     record['state'] = 'Applying'; save_receipt(state, operation, record)
                     # NOREPLACE for creates; EXCHANGE retains the entire old object
                     # privately, instead of truncating or deleting it before commit.
@@ -793,6 +818,10 @@ def staged_action(request, action):
                         raise Rejected('FILES_VERSION_CONFLICT')
                     if original is not None and (publication_identity(original) != record['originalIdentity'] or checksum(parent, leaf) != record['originalSha256']):
                         raise Rejected('FILES_VERSION_CONFLICT')
+                    if original is not None:
+                        ensure_hdd_backup(record, parent, leaf, private, state, temporary)
+                        latest = current(parent, leaf)
+                        if latest is None or version(latest) != record['expectedVersion']: raise Rejected('FILES_VERSION_CONFLICT')
                     record['state'] = 'Applying'; save_receipt(state, operation, record)
                     exchange(private, temporary, parent, leaf, 1 if original is None else 2)
                     os.fsync(parent); os.fsync(private)
@@ -806,7 +835,7 @@ def staged_action(request, action):
 
 
 def public_receipt(record):
-    return {key: record[key] for key in ('operationId', 'state', 'sizeBytes', 'sha256', 'version', 'previousRetained') if key in record}
+    return {key: record[key] for key in ('operationId', 'state', 'sizeBytes', 'sha256', 'version', 'previousRetained', 'hddBackup', 'resultCode') if key in record}
 
 
 def status(request):
@@ -874,6 +903,16 @@ def operation_engine():
     specification = importlib.util.spec_from_file_location('whaledeck_file_operations', module_path)
     module = importlib.util.module_from_spec(specification); specification.loader.exec_module(module)
     return module.FileOperations(sys.modules[__name__])
+
+
+def backup_engine():
+    module_path = Path(__file__).with_name('whaledeck-file-backups.py')
+    info = os.stat(module_path, follow_symlinks=False)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or info.st_mode & 0o022 or info.st_size > 131072:
+        raise Rejected('FILES_MODULE_UNSAFE')
+    specification = importlib.util.spec_from_file_location('whaledeck_file_backups', module_path)
+    module = importlib.util.module_from_spec(specification); specification.loader.exec_module(module)
+    return module.FileBackups(sys.modules[__name__])
 
 
 def main():

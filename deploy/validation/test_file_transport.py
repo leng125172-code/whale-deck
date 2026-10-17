@@ -39,8 +39,11 @@ class FileTransportTests(unittest.TestCase):
             'allowedActions': ['files-list', 'files-stat', 'files-download', 'files-upload']}]))
         self.patches = [patch.object(driver, 'BASE', str(self.base)), patch.object(driver, 'REGISTRY', str(self.registry)), patch.object(driver, 'STATE', str(self.state))]
         for item in self.patches: item.start()
+        from file_backup_fixture import FileBackupFixture
+        self.backups = FileBackupFixture(driver)
 
     def tearDown(self):
+        self.backups.close()
         for item in reversed(self.patches): item.stop()
         self.temporary.cleanup()
 
@@ -237,13 +240,45 @@ class FileTransportTests(unittest.TestCase):
         target = self.root / 'file'; target.write_bytes(b'old'); command = self.command(b'new', 'file', self.revision('file'))
         driver.upload(command, self.body(b'new'), staged_only=True)
         original_exchange = driver.exchange
-        def crash(*args): original_exchange(*args); os._exit(78)
+        def crash(*args):
+            original_exchange(*args)
+            if args[3] == 'file' and args[4] == 2: os._exit(78)
         def action():
             with patch.object(driver, 'exchange', side_effect=crash): driver.staged_action({'operationId': command['operationId'], 'owner': command['owner']}, 'publish')
         child = self.fork(action); self.assertEqual(os.waitpid(child, 0)[1] >> 8, 78)
         result = driver.status({'operationId': command['operationId'], 'owner': command['owner']})
         self.assertEqual(result['state'], 'Completed'); self.assertTrue(result['previousRetained'])
         self.assertEqual(target.read_bytes(), b'new')
+
+    def test_both_inline_and_worker_publication_require_verified_backup_before_overwrite(self):
+        for staged in (False, True):
+            with self.subTest(staged=staged):
+                name = 'file-' + str(staged); target = self.root / name; old = b'previous\x00\xff'
+                target.write_bytes(old); before = target.stat()
+                command = self.command(b'new', name, self.revision(name)); lookup = {'operationId': command['operationId'], 'owner': command['owner']}
+                if staged: driver.upload(command, self.body(b'new'), staged_only=True)
+                with patch.object(self.backups.engine, 'ensure', side_effect=driver.Rejected('FILES_BACKUP_UNAVAILABLE')), self.assertRaisesRegex(driver.Rejected, 'FILES_BACKUP_UNAVAILABLE'):
+                    if staged: driver.staged_action(lookup, 'publish')
+                    else: driver.upload(command, self.body(b'new'))
+                self.assertEqual(target.read_bytes(), old)
+                self.assertEqual((target.stat().st_dev, target.stat().st_ino), (before.st_dev, before.st_ino))
+                self.assertEqual(driver.status(lookup)['resultCode'], 'FILES_BACKUP_UNAVAILABLE')
+                if staged: self.assertEqual(driver.staged_action(lookup, 'discard')['state'], 'Aborted')
+                else: self.assertEqual(driver.status(lookup)['state'], 'Aborted')
+                command = self.command(b'new', name, self.revision(name)); lookup = {'operationId': command['operationId'], 'owner': command['owner']}
+                if staged:
+                    driver.upload(command, self.body(b'new'), staged_only=True); result = driver.staged_action(lookup, 'publish')
+                else: result = driver.upload(command, self.body(b'new'))
+                self.assertEqual(result['hddBackup']['sha256'], hashlib.sha256(old).hexdigest().upper())
+                self.assertEqual(result['hddBackup']['sourceVersion'], command['expectedVersion'])
+                self.assertEqual((self.backups.target / (command['operationId'] + '.data')).read_bytes(), old)
+                self.assertEqual(target.read_bytes(), b'new'); self.assertTrue(result['previousRetained'])
+
+    def test_create_has_no_previous_version_and_does_not_need_an_overwrite_backup(self):
+        command = self.command(b'first', 'new-file')
+        with patch.object(self.backups.engine, 'ensure', side_effect=AssertionError('no previous file to copy')):
+            result = driver.upload(command, self.body(b'first'))
+        self.assertEqual(result['state'], 'Completed'); self.assertNotIn('hddBackup', result)
 
     def fork(self, action):
         child = os.fork()
@@ -325,7 +360,7 @@ class FileTransportTests(unittest.TestCase):
     def test_external_race_preserves_displaced_bytes_and_marks_unknown_without_reapply(self):
         target = self.root / 'file'; target.write_bytes(b'previous'); command = self.command(b'new', 'file', self.revision('file')); exchange = driver.exchange
         def race(*args):
-            target.write_bytes(b'external-newer')
+            if args[3] == 'file' and args[4] == 2: target.write_bytes(b'external-newer')
             exchange(*args)
         with patch.object(driver, 'exchange', side_effect=race), self.assertRaisesRegex(driver.Rejected, 'FILES_CONCURRENT_PUBLICATION_UNKNOWN'):
             driver.upload(command, self.body(b'new'))

@@ -9,6 +9,7 @@ import {
   downloadFile,
   filePath,
   fileQuery,
+  fileResult,
   fileState,
   fileTerminal,
   hashFile,
@@ -19,11 +20,24 @@ import type { FileEntry, FileIntent, FilePage, FilePlan, FileRoot } from '@/serv
 import FileMutationPanel from '@/components/files/FileMutationPanel.vue'
 import FileDirectoryTree from '@/components/files/FileDirectoryTree.vue'
 import FileSearchPanel from '@/components/files/FileSearchPanel.vue'
+import FileTextEditor from '@/components/files/FileTextEditor.vue'
+import { textEligible } from '@/services/fileText'
+import type { PreparedFileText } from '@/services/fileText'
 import { mutationEligible } from '@/services/fileMutations'
 import type { FileMutationKind } from '@/services/fileMutations'
 
 const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
-  mutationLocked = ref(false)
+  mutationOperationLocked = ref(false),
+  editorLocked = ref(false)
+const mutationLocked = computed(() => mutationOperationLocked.value || editorLocked.value)
+const textEditor = ref<InstanceType<typeof FileTextEditor> | null>(null),
+  editorSource = ref<PreparedFileText | null>(null)
+const canEdit = computed(
+  () =>
+    canUpload.value &&
+    roots.value.find((root) => root.id === rootId.value)?.actions.includes('files-download') ===
+      true,
+)
 const treeRevision = ref(0)
 const canMutate = computed(
   () =>
@@ -31,6 +45,30 @@ const canMutate = computed(
 )
 function openMutation(kind: FileMutationKind, entry?: FileEntry) {
   mutationPanel.value?.open(kind, entry)
+}
+function fileAction(command: unknown, entry: FileEntry) {
+  if (command === 'edit' && canEdit.value) void textEditor.value?.open(entry)
+  else if (command === 'copy' || command === 'move' || command === 'chmod')
+    openMutation(command, entry)
+}
+function acceptText(prepared: PreparedFileText) {
+  if (
+    !authorized.value ||
+    busy.value ||
+    activeIntent.value ||
+    frozen.value ||
+    mutationLocked.value ||
+    !canEdit.value
+  )
+    return
+  if (
+    prepared.rootId !== rootId.value ||
+    prepared.path !== filePath(path.value, prepared.file.name)
+  )
+    return
+  chosen.value = prepared.file
+  editorSource.value = prepared
+  void start()
 }
 
 const roots = ref<FileRoot[]>([]),
@@ -90,6 +128,8 @@ function message(reason: unknown) {
     rootId.value = ''
     stop()
     chosen.value = null
+    editorSource.value = null
+    revokeDrafts()
     frozen.value = null
     intent.value = null
   }
@@ -158,8 +198,43 @@ function nextPage() {
   void load()
 }
 function selectFile(event: Event) {
+  editorSource.value = null
   chosen.value = (event.target as HTMLInputElement).files?.[0] || null
   if (fileInput.value) fileInput.value.value = ''
+}
+const draftUrls = new Set<string>()
+function revokeDrafts() {
+  for (const url of draftUrls) URL.revokeObjectURL(url)
+  draftUrls.clear()
+}
+function downloadDraft() {
+  if (!authorized.value || !editorSource.value || !chosen.value) return
+  const url = URL.createObjectURL(editorSource.value.file),
+    anchor = document.createElement('a')
+  draftUrls.add(url)
+  anchor.href = url
+  anchor.download = editorSource.value.file.name + '.draft'
+  anchor.click()
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url)
+    draftUrls.delete(url)
+  }, 1000)
+}
+async function discardDraft() {
+  if (busy.value || activeIntent.value || frozen.value || !editorSource.value) return
+  try {
+    await ElMessageBox.confirm('仅丢弃本页尚未提交的文本草稿，不会修改服务器文件。', '放弃草稿？', {
+      type: 'warning',
+      confirmButtonText: '放弃草稿',
+      cancelButtonText: '保留草稿',
+    })
+  } catch {
+    return
+  }
+  chosen.value = null
+  editorSource.value = null
+  phase.value = intent.value ? fileState(intent.value.state) : ''
+  revokeDrafts()
 }
 async function createIntent(signal: AbortSignal) {
   if (!frozen.value) throw new Error('没有待登记的请求')
@@ -187,6 +262,7 @@ async function start(retry = false) {
     return
   }
   const file = chosen.value
+  const source = editorSource.value
   transfer = new AbortController()
   const request = transfer
   const token = ++generation
@@ -201,6 +277,11 @@ async function start(retry = false) {
         if (token === generation) progress.value = value
       })
       const targetPath = filePath(path.value, file.name)
+      if (
+        source &&
+        (source.file !== file || source.rootId !== rootId.value || source.path !== targetPath)
+      )
+        throw new Error('编辑目录上下文已变化，请重新打开文件')
       let existing: FileEntry | null = null
       try {
         existing = await apiRequest<FileEntry>(
@@ -212,6 +293,8 @@ async function start(retry = false) {
       }
       if (existing && (existing.kind !== 'File' || existing.isProtected))
         throw new Error('不能覆盖目录或受保护文件')
+      if (source && existing?.version !== source.expectedVersion)
+        throw new Error('文件版本已变化，未保存；请重新打开后编辑')
       const plan = await apiRequest<FilePlan>('files/uploads/plan', {
         method: 'POST',
         signal: request.signal,
@@ -220,7 +303,7 @@ async function start(retry = false) {
           path: targetPath,
           sizeBytes: file.size,
           sha256: digest,
-          expectedVersion: existing?.version || 'ABSENT',
+          expectedVersion: source?.expectedVersion || existing?.version || 'ABSENT',
         }),
       })
       phase.value = '等待确认'
@@ -255,11 +338,17 @@ async function start(retry = false) {
       await checkIntent(token)
     }
   } catch (reason) {
+    if (source && (reason === 'cancel' || reason === 'close')) phase.value = '编辑草稿尚未提交'
     if (!request.signal.aborted && reason !== 'cancel' && reason !== 'close') message(reason)
   } finally {
     if (token === generation) {
       busy.value = false
-      chosen.value = frozen.value ? file : null
+      chosen.value =
+        frozen.value ||
+        (source && intent.value?.state !== 'Succeeded' && intent.value?.state !== 'Superseded')
+          ? file
+          : null
+      if (!chosen.value) editorSource.value = null
     }
   }
 }
@@ -274,6 +363,10 @@ async function checkIntent(token = generation) {
     intent.value = result
     phase.value = fileState(result.state)
     if (fileTerminal(result.state)) {
+      if (result.state === 'Succeeded' || result.state === 'Superseded') {
+        chosen.value = null
+        editorSource.value = null
+      }
       if (result.state === 'Succeeded') {
         ElMessage.success('文件已校验并发布')
         void load(true)
@@ -292,6 +385,7 @@ async function cancel() {
   stop()
   frozen.value = null
   chosen.value = null
+  editorSource.value = null
   if (current && !fileTerminal(current.state)) {
     try {
       await apiRequest(`files/uploads/${current.id}/cancel`, {
@@ -343,11 +437,13 @@ async function download(entry: FileEntry) {
 }
 watch(authorized, (value) => {
   if (!value) {
+    revokeDrafts()
     stop()
     entries.value = []
     roots.value = []
     rootId.value = ''
     chosen.value = null
+    editorSource.value = null
     frozen.value = null
     intent.value = null
   }
@@ -383,6 +479,7 @@ function afterMutation() {
 }
 onMounted(loadRoots)
 onBeforeUnmount(() => {
+  revokeDrafts()
   const current = intent.value
   const cancelReceiving = busy.value && current?.state === 'AwaitingUpload'
   stop()
@@ -446,9 +543,21 @@ onBeforeUnmount(() => {
           <el-button
             v-if="chosen"
             type="primary"
-            :disabled="busy || mutationLocked"
+            :disabled="busy || activeIntent || mutationLocked"
             @click="start(!!frozen)"
-            >{{ frozen ? '重试原登记' : '校验并上传' }}</el-button
+            >{{ frozen ? '重试原登记' : editorSource ? '校验并保存' : '校验并上传' }}</el-button
+          >
+          <el-button
+            v-if="chosen && editorSource"
+            :disabled="busy || mutationLocked"
+            @click="downloadDraft"
+            >下载草稿</el-button
+          >
+          <el-button
+            v-if="chosen && editorSource && !activeIntent && !frozen"
+            :disabled="busy || mutationLocked"
+            @click="discardDraft"
+            >放弃草稿</el-button
           >
         </div>
       </div>
@@ -457,9 +566,18 @@ onBeforeUnmount(() => {
         :roots="roots"
         :root-id="rootId"
         :path="path"
-        :disabled="busy || activeIntent || !!frozen"
-        @locked="mutationLocked = $event"
+        :disabled="busy || activeIntent || !!frozen || editorLocked"
+        @locked="mutationOperationLocked = $event"
         @changed="afterMutation"
+        @failure="message"
+      />
+      <FileTextEditor
+        ref="textEditor"
+        :root-id="rootId"
+        :path="path"
+        :disabled="busy || activeIntent || !!frozen || mutationOperationLocked"
+        @locked="editorLocked = $event"
+        @prepared="acceptText"
         @failure="message"
       />
       <el-breadcrumb class="file-crumbs"
@@ -514,7 +632,9 @@ onBeforeUnmount(() => {
           <p>
             任务 <router-link :to="`/jobs?jobId=${intent.jobId}`">{{ intent.jobId }}</router-link>
           </p>
-          <p v-if="intent.resultCode">{{ intent.resultCode }}</p>
+          <p v-if="intent.resultCode" :title="intent.resultCode">
+            {{ fileResult(intent.resultCode) }}
+          </p>
           <el-alert
             v-if="intent.state === 'Unknown'"
             title="结果未知：可能已经发布，请勿重新上传覆盖。保留现场，待回执核实。"
@@ -565,9 +685,10 @@ onBeforeUnmount(() => {
                   ><el-icon><Download /></el-icon>下载</el-button
                 >
                 <el-dropdown
-                  v-if="canMutate && mutationEligible(row)"
+                  v-if="(canMutate || canEdit) && mutationEligible(row)"
+                  trigger="click"
                   :disabled="busy || activeIntent || !!frozen || mutationLocked"
-                  @command="openMutation($event, row)"
+                  @command="fileAction($event, row)"
                 >
                   <el-button
                     link
@@ -578,9 +699,14 @@ onBeforeUnmount(() => {
                   >
                   <template #dropdown
                     ><el-dropdown-menu
-                      ><el-dropdown-item command="copy">复制文件</el-dropdown-item
-                      ><el-dropdown-item command="move">移动文件</el-dropdown-item
-                      ><el-dropdown-item command="chmod"
+                      ><el-dropdown-item
+                        v-if="canEdit"
+                        command="edit"
+                        :disabled="!textEligible(row)"
+                        >编辑文本</el-dropdown-item
+                      ><el-dropdown-item v-if="canMutate" command="copy">复制文件</el-dropdown-item
+                      ><el-dropdown-item v-if="canMutate" command="move">移动文件</el-dropdown-item
+                      ><el-dropdown-item v-if="canMutate" command="chmod"
                         >修改权限</el-dropdown-item
                       ></el-dropdown-menu
                     ></template

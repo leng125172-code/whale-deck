@@ -34,11 +34,16 @@ public sealed partial class NativeNotificationDispatchTests
         await repository.ReadyAsync(receiving, default); await Due(first.Id);
         var claim = Assert.IsType<WhaleDeck.Domain.Entities.FileUploadOperation>(await repository.ClaimAsync(DateTimeOffset.UtcNow, default));
         Assert.Equal(first.Id, claim.Id); Assert.Null(await repository.ClaimAsync(DateTimeOffset.UtcNow, default));
+        var priorLease = claim.LeaseExpiresAtUtc;
+        Assert.True(await repository.RenewAsync(claim, DateTimeOffset.UtcNow, default));
+        Assert.True((await repository.OwnedAsync(actor, claim.Id, default))!.LeaseExpiresAtUtc >= priorLease);
+        Assert.False(await repository.RenewAsync(first, DateTimeOffset.UtcNow, default));
         Assert.Equal(FileUploadStartResult.Started, await repository.StartedAsync(claim, DateTimeOffset.UtcNow, default));
         var completed = new FileUploadReceiptDto("Completed", 3, new('B', 64), new('D', 64), true, true, false);
         await Assert.ThrowsAsync<InvalidOperationException>(() => repository.FinishAsync(claim, "Succeeded", "FILES_PUBLISHED", completed with { Sha256 = new('E', 64) }, default));
         Assert.True(await repository.FinishAsync(claim, "Succeeded", "FILES_PUBLISHED", completed, default));
         Assert.False(await repository.FinishAsync(claim, "Succeeded", "FILES_PUBLISHED", completed, default));
+        Assert.False(await repository.RenewAsync(claim, DateTimeOffset.UtcNow, default));
         var finished = await repository.OwnedAsync(actor, first.Id, default); Assert.Equal("Succeeded", finished!.State); Assert.True(finished.PreviousRetained);
         Assert.Equal(4, await db.OperationJobEvents.CountAsync(item => item.JobId == first.Id));
         Assert.Equal(2, await db.AuditEvents.CountAsync(item => item.JobId == first.Id));
@@ -54,9 +59,12 @@ public sealed partial class NativeNotificationDispatchTests
         var raced = await Create("lease-recovery"); await Due(raced.Id);
         var expired = Assert.IsType<WhaleDeck.Domain.Entities.FileUploadOperation>(await repository.ClaimAsync(DateTimeOffset.UtcNow, default));
         await db.FileUploadOperations.Where(item => item.Id == raced.Id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.LeaseExpiresAtUtc, DateTimeOffset.UtcNow.AddMinutes(-1)));
+        Assert.False(await repository.RenewAsync(expired, DateTimeOffset.UtcNow, default));
         await using var concurrent = new PlatformDbContext(options); var second = new FileUploadRepository(concurrent);
         var winner = Assert.IsType<WhaleDeck.Domain.Entities.FileUploadOperation>(await second.ClaimAsync(DateTimeOffset.UtcNow, default));
         Assert.NotEqual(expired.LeaseToken, winner.LeaseToken);
+        Assert.False(await repository.RenewAsync(expired, DateTimeOffset.UtcNow, default));
+        Assert.True(await second.RenewAsync(winner, DateTimeOffset.UtcNow, default));
         Assert.False(await repository.FinishAsync(expired, "Succeeded", "FILES_PUBLISHED", completed, default));
         Assert.True(await second.FinishAsync(winner, "Unknown", "FILES_RESULT_UNKNOWN", null, default));
         await db.FileUploadOperations.Where(item => item.Id == raced.Id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.NextAttemptAtUtc, DateTimeOffset.UtcNow.AddHours(1)));
@@ -111,6 +119,19 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal(FileUploadStartResult.LeaseLost, await pending);
         }
         Assert.Null((await repository.OwnedAsync(actor, late.Id, default))!.RootStartedAtUtc);
+        await db.FileUploadOperations.Where(item => item.Id == late.Id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.LeaseExpiresAtUtc, DateTimeOffset.UtcNow.AddMilliseconds(500)));
+        await using (var locker = new PlatformDbContext(options))
+        {
+            await using var transaction = await locker.Database.BeginTransactionAsync();
+            await locker.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM file_upload_operations WHERE id={late.Id} FOR UPDATE");
+            var pendingRenewal = Task.Run(async () =>
+            {
+                await using var contender = new PlatformDbContext(options);
+                return await new FileUploadRepository(contender).RenewAsync(lateClaim, DateTimeOffset.UtcNow, default);
+            });
+            await Task.Delay(1200); await transaction.CommitAsync();
+            Assert.False(await pendingRenewal);
+        }
         Console.WriteLine("INBOX_PHASE=file-intents-owner-audit-leases-cancel-native-sql");
     }
 }

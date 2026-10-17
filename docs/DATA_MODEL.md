@@ -8,6 +8,8 @@
 
 ## 1. 设计约束
 
+本轮UTF-8编辑复用现有`file_upload_operations`、共享路径锁、Job/Outbox和不可变`files.text-preview`/上传审计，没有schema变更或正文列。发布时续租沿用token及到期字段，不复活已过期owner；私有HDD数据/JSON与root回执绑定原UUID/版本和完整摘要，不是新增SQL备份历史表。审计详情只有目标哈希，不存文本、相对路径或HDD绝对路径；正文仅在单次请求和未提交浏览器内存草稿。完整历史管理/保留清理/恢复仍待实现，详见[当前证据](qa/FILE_TEXT_HDD.md)。
+
 - PostgreSQL 保存平台配置、个人门户、资源注册、任务、审计、指标、告警、备份与同步历史。
 - Valkey 保存可重建的权限快照、概览缓存、心跳、短期资源状态、锁和任务进度。
 - 长期 Secret、OIDC Token、现有数据库密码、私钥、SQL Server 产品密钥和 Git 凭据不得进入 PostgreSQL、Valkey、审计或日志。数据库账号创建/轮换后生成的新密码只允许进入 5 分钟、单次消费的 Valkey Secret，读取后原子删除。

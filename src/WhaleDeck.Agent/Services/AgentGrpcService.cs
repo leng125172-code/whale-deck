@@ -12,7 +12,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = 24,
+            ProtocolMinor = 25,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
@@ -21,6 +21,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
             "files.registered-mutations",
             "files.mutation-tombstones",
             "files.bounded-browser",
+            "files.hdd-versions",
             "host.terminal.pty",
             "docker.terminal.exec",
             "notifications.private-configuration",

@@ -29,9 +29,10 @@ public interface IFileUploadRepository
     Task ReadyAsync(FileUploadOperation operation, CancellationToken cancellationToken);
     Task CancelAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken);
     Task<FileUploadOperation?> ClaimAsync(DateTimeOffset now, CancellationToken cancellationToken);
+    Task<bool> RenewAsync(FileUploadOperation operation, DateTimeOffset now, CancellationToken cancellationToken);
     Task<bool> CancellationRequestedAsync(Guid id, CancellationToken cancellationToken);
     Task<FileUploadStartResult> StartedAsync(FileUploadOperation operation, DateTimeOffset now, CancellationToken cancellationToken);
     Task<bool> FinishAsync(FileUploadOperation operation, string state, string code, FileUploadReceiptDto? receipt, CancellationToken cancellationToken);
     Task DeferAsync(FileUploadOperation operation, CancellationToken cancellationToken);
-    Task AuditDownloadAsync(TerminalActor actor, FileLocationDto location, string result, CancellationToken cancellationToken);
+    Task AuditReadAsync(TerminalActor actor, FileLocationDto location, string result, FileReadPurpose purpose, CancellationToken cancellationToken);
 }

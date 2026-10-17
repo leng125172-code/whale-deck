@@ -596,6 +596,12 @@ message FileUploadLookup { string operation_id = 1; string owner = 2; }
 message FileUploadReceipt {
   string operation_id = 1; string state = 2; int64 size_bytes = 3; string sha256 = 4;
   string version = 5; bool previous_retained = 6; bool replayed = 7; bool binding_current = 8; bool is_in_progress = 9;
+  FileHddBackupProof hdd_backup = 10;
+  string result_code = 11;
+}
+message FileHddBackupProof {
+  string operation_id = 1; string storage_id = 2; string source_version = 3;
+  int64 size_bytes = 4; string sha256 = 5; int64 created_at_unix_ms = 6; bool different_source_device = 7;
 }
 service FileTransferService {
   rpc ListRoots(google.protobuf.Empty) returns (FileRoots);

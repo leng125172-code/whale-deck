@@ -40,6 +40,13 @@ export interface FileIntent {
   previousRetained: boolean
 }
 export const maximumFileBytes = 1024 ** 3
+export function fileResult(code: string) {
+  if (code === 'FILES_BACKUP_PROOF_INVALID') return '备份凭据无法核实，结果未知；请勿重新覆盖'
+  if (code === 'FILES_BACKUP_CAPACITY_REQUIRED') return 'HDD 备份空间不足，本次操作未覆盖源文件'
+  if (code === 'FILES_BACKUP_HISTORY_LIMIT') return 'HDD 版本留存已达上限，本次操作未覆盖源文件'
+  if (code.startsWith('FILES_BACKUP_')) return 'HDD 备份未通过校验，本次操作未覆盖源文件'
+  return code
+}
 export function fileQuery(rootId: string, path: string, extra: Record<string, string> = {}) {
   return new URLSearchParams({ rootId, path, ...extra }).toString()
 }

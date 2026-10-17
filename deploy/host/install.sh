@@ -29,6 +29,9 @@ install -d -o whaledeck-shell -g whaledeck-shell -m 0700 /var/lib/whaledeck-shel
 install -d -o root -g root -m 0700 /var/lib/whaledeck-terminal
 
 install -d -o root -g whaledeck -m 0750 /etc/whaledeck
+# Attest the HDD before creating data roots or replacing any installed binary.
+# A missing/wrong mount must not leave files on the OS-disk fallback path.
+python3 "$(dirname "$0")/configure-file-backups.py"
 [[ ! -L /etc/whaledeck/notifications ]] || { echo 'Notification private directory must not be a symlink.' >&2; exit 1; }
 install -d -o root -g whaledeck -m 0750 /etc/whaledeck/notifications
 install -d -o whaledeck-agent -g whaledeck -m 0750 /data/WhaleDeck/apps
@@ -72,6 +75,7 @@ install -o root -g root -m 0755 "$(dirname "$0")/whaledeck-host-terminal.py" /us
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-terminal.py" /usr/local/libexec/whaledeck-container-terminal.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-files.py" /usr/local/libexec/whaledeck-files.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-file-operations.py" /usr/local/libexec/whaledeck-file-operations.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-file-backups.py" /usr/local/libexec/whaledeck-file-backups.py
 install -d -o root -g root -m 0700 /var/lib/whaledeck-application-backup /data/DockerData/whaledeck/application-backups
 for unit in whaledeck-application-backup-recovery.service whaledeck-application-backup-recovery.timer; do
   install -o root -g root -m 0644 "$(dirname "$0")/$unit" "/etc/systemd/system/$unit"

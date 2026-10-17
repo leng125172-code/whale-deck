@@ -18,10 +18,10 @@ export async function installFileFixture(page, options = {}) {
     if (path === 'roots') return reply(state.rootStatus === 200 ? [root] : { status: state.rootStatus }, state.rootStatus)
     if (path === 'entries') {
       if (state.entryStatus !== 200) return reply({ status: state.entryStatus, code: 'AUTH_FORBIDDEN', traceId: 'file-fixture-trace' }, state.entryStatus)
-      return reply({ entries: url.searchParams.get('path') ? [] : [folder, ...(state.hideEntry ? [] : [entry]), { ...entry, name: '.env', isProtected: true }, ...state.extraEntries, ...(intent.state === 'Succeeded' ? [{ ...entry, name: intent.path, sizeBytes: intent.sizeBytes }] : [])], nextCursor: '', version: 'F'.repeat(64) })
+      return reply({ entries: url.searchParams.get('path') ? [] : [folder, ...(state.hideEntry || intent.state === 'Succeeded' && intent.path === entry.name ? [] : [entry]), { ...entry, name: '.env', isProtected: true }, ...state.extraEntries, ...(intent.state === 'Succeeded' ? [{ ...entry, name: intent.path, sizeBytes: intent.sizeBytes }] : [])], nextCursor: '', version: 'F'.repeat(64) })
     }
     if (path === 'entry') return reply({ status: 404 }, 404)
-    if (path === 'uploads/plan') { metadata = request.postDataJSON(); return reply({ planHash: 'ui-fixture-signed-plan', expiresAtUtc: new Date(Date.now() + 300000).toISOString(), overwrites: false, warning: '先暂存校验，再由任务发布。' }) }
+    if (path === 'uploads/plan') { metadata = request.postDataJSON(); return reply({ planHash: 'ui-fixture-signed-plan', expiresAtUtc: new Date(Date.now() + 300000).toISOString(), overwrites: metadata.expectedVersion !== 'ABSENT', warning: metadata.expectedVersion !== 'ABSENT' ? '覆盖前必须完成旧版本HDD备份与校验。' : '先暂存校验，再由任务发布。' }) }
     if (path === 'uploads') {
       Object.assign(intent, { path: metadata.path, sizeBytes: metadata.sizeBytes, sha256: metadata.sha256 })
       const prior = state.accepted; state.accepted = true
@@ -38,6 +38,7 @@ export async function installFileFixture(page, options = {}) {
       state.reads++
       if (intent.state === 'Ready' && !state.hold) intent.state = state.unknown ? 'Unknown' : state.reads > 1 ? 'Succeeded' : 'Publishing'
       else if (intent.state === 'Publishing' && !state.hold) intent.state = 'Succeeded'
+      if (intent.state === 'Succeeded' && intent.path === entry.name) { entry.version = 'B'.repeat(64); entry.sizeBytes = intent.sizeBytes }
       return reply(intent)
     }
     if (path === 'download') return route.fulfill({ status: 200, headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': '3' }, body: Buffer.from([1, 2, 3]) })

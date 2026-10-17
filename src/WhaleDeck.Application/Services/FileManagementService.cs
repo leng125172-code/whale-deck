@@ -41,7 +41,7 @@ public sealed class FileManagementService(IFileGateway gateway, IFileUploadRepos
         if ((file?.Version ?? "ABSENT") != command.ExpectedVersion) throw new InvalidOperationException("FILES_VERSION_CONFLICT");
         var expires = clock.GetUtcNow().AddMinutes(5);
         return new(plans.Sign(new(actor.Subject, actor.LoginBinding, command, expires)), expires, file is not null,
-            file is null ? "文件将先暂存校验，再由任务发布。不会自动重试结果未知的写入。" : "确认覆盖此版本；完整前序文件仅保留在宿主私有目录，目前不是可点击的HDD备份或回收站。外部并发写入可能导致结果未知，届时不会自动重试。");
+            file is null ? "文件将先暂存校验，再由任务发布。不会自动重试结果未知的写入。" : "覆盖前必须完成旧版本的HDD完整备份及校验，备份盘身份或空间不满足时不会覆盖。同盘备份属于版本留存，不代表异盘冗余；当前尚无回收站或恢复入口。外部并发写入可能导致结果未知，届时不会自动重试。");
     }
     public async Task<FileUploadIntentDto> SubmitAsync(TerminalActor actor, SubmitFileUploadCommand command, CancellationToken cancellationToken)
     {
@@ -119,7 +119,7 @@ public sealed class FileManagementService(IFileGateway gateway, IFileUploadRepos
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await AuthorizeAsync(actor, cancellationToken); Location(location); RequireHash(version);
-        await repository.AuditDownloadAsync(actor, location, "Started", cancellationToken);
+        await repository.AuditReadAsync(actor, location, "Started", FileReadPurpose.Download, cancellationToken);
         var completed = false; var next = clock.GetUtcNow();
         try
         {
@@ -133,7 +133,7 @@ public sealed class FileManagementService(IFileGateway gateway, IFileUploadRepos
         finally
         {
             using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await repository.AuditDownloadAsync(actor, location, completed ? "Validated" : "Incomplete", cleanup.Token);
+            await repository.AuditReadAsync(actor, location, completed ? "Validated" : "Incomplete", FileReadPurpose.Download, cleanup.Token);
         }
     }
     private async Task<FileUploadOperation> Owned(TerminalActor actor, Guid id, CancellationToken cancellationToken)
@@ -170,6 +170,15 @@ public sealed class FileManagementService(IFileGateway gateway, IFileUploadRepos
         if (value.ExpectedVersion != "ABSENT") RequireHash(value.ExpectedVersion);
     }
     public static bool Hex(string? value) => value is { Length: 64 } && value.All(c => char.IsAsciiDigit(c) || c is >= 'A' and <= 'F');
+    public static bool IsBackupFailureCode(string? code) => code is { Length: > 13 and <= 64 } && code.StartsWith("FILES_BACKUP_", StringComparison.Ordinal) && code.All(c => c is >= 'A' and <= 'Z' or '_');
+    public static void ValidateBackup(FileUploadOperation operation, FileHddBackupDto? backup)
+    {
+        if (operation.ExpectedVersion == "ABSENT")
+        { if (backup is not null) throw new FileTransferRejectedException(); return; }
+        if (backup is null || backup.OperationId != operation.Id.ToString("N") || backup.StorageId != "database-platform.backup.hdd" ||
+            backup.SourceVersion != operation.ExpectedVersion || !Hex(backup.Sha256) || backup.SizeBytes is < 0 or > MaximumBytes ||
+            backup.CreatedAtUnixMs is < 0 or > 253402300799999) throw new FileTransferRejectedException();
+    }
     private static void RequireHash(string value) { if (!Hex(value)) throw new ArgumentException("FILES_HASH_INVALID"); }
     public static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     public static FileUploadIntentDto Map(FileUploadOperation row) => new(row.Id, row.Id, row.RootId, row.RelativePath, row.SizeBytes, row.Sha256, row.State,
@@ -195,7 +204,7 @@ public sealed class FileUploadDispatcher(IFileUploadRepository repository, IFile
             if (receipt?.State == "Unknown")
             { await repository.FinishAsync(operation, "Unknown", "FILES_RESULT_UNKNOWN", receipt, cancellationToken); return true; }
             bool administrator;
-            try { administrator = (await identity.ResolveCurrentAsync(operation.ActorSubject, null, [], cancellationToken)).IsAdministrator; }
+            try { administrator = await AdministratorAsync(operation, cancellationToken); }
             catch (UnauthorizedAccessException) { administrator = false; }
             var canceled = await repository.CancellationRequestedAsync(operation.Id, cancellationToken);
             if (canceled || !administrator || operation.ExpiresAtUtc <= clock.GetUtcNow() || receipt?.State == "Aborted")
@@ -205,7 +214,7 @@ public sealed class FileUploadDispatcher(IFileUploadRepository repository, IFile
                 var discarded = await gateway.DiscardFileAsync(operation, cancellationToken);
                 if (discarded.State == "Completed") await Complete(discarded);
                 else if (discarded.State == "Aborted") await repository.FinishAsync(operation, canceled || !administrator ? "Canceled" : "Failed",
-                    canceled || !administrator ? "FILES_CANCELED" : "FILES_UPLOAD_EXPIRED_OR_ABORTED", discarded, cancellationToken);
+                    canceled || !administrator ? "FILES_CANCELED" : FileManagementService.IsBackupFailureCode(discarded.ResultCode) ? discarded.ResultCode! : "FILES_UPLOAD_EXPIRED_OR_ABORTED", discarded, cancellationToken);
                 else await repository.FinishAsync(operation, "Unknown", "FILES_RESULT_UNKNOWN", discarded, cancellationToken);
                 return true;
             }
@@ -213,7 +222,7 @@ public sealed class FileUploadDispatcher(IFileUploadRepository repository, IFile
             if (receipt.SizeBytes != operation.SizeBytes || receipt.Sha256 != operation.Sha256) throw new FileTransferRejectedException();
             var started = await repository.StartedAsync(operation, clock.GetUtcNow(), cancellationToken);
             if (started != FileUploadStartResult.Started) { await repository.DeferAsync(operation, cancellationToken); return true; }
-            var published = await gateway.PublishFileAsync(operation, cancellationToken);
+            var published = await PublishWithLeaseAsync(operation, cancellationToken);
             if (published.State == "Completed") await Complete(published);
             else if (published.State == "Unknown") await repository.FinishAsync(operation, "Unknown", "FILES_RESULT_UNKNOWN", published, cancellationToken);
             else await repository.DeferAsync(operation, cancellationToken);
@@ -230,7 +239,65 @@ public sealed class FileUploadDispatcher(IFileUploadRepository repository, IFile
         async Task Complete(FileUploadReceiptDto result)
         {
             if (result.SizeBytes != operation.SizeBytes || result.Sha256 != operation.Sha256 || !FileManagementService.Hex(result.Version)) throw new FileTransferRejectedException();
+            try { FileManagementService.ValidateBackup(operation, result.HddBackup); }
+            catch (FileTransferRejectedException)
+            {
+                await repository.FinishAsync(operation, "Unknown", "FILES_BACKUP_PROOF_INVALID", null, cancellationToken);
+                return;
+            }
             await repository.FinishAsync(operation, result.BindingCurrent ? "Succeeded" : "Superseded", result.BindingCurrent ? "FILES_PUBLISHED" : "FILES_TARGET_CHANGED", result, cancellationToken);
+        }
+    }
+
+    private async Task<bool> AdministratorAsync(FileUploadOperation operation, CancellationToken cancellationToken)
+    {
+        var current = await identity.ResolveCurrentAsync(operation.ActorSubject, null, [], cancellationToken);
+        return current.IsAdministrator && current.Subject == operation.ActorSubject && current.PermissionExpiresAtUtc > clock.GetUtcNow();
+    }
+
+    private async Task<FileUploadReceiptDto> PublishWithLeaseAsync(FileUploadOperation operation, CancellationToken cancellationToken)
+    {
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        lifetime.CancelAfter(TimeSpan.FromMinutes(10));
+        await Guard();
+        var publish = gateway.PublishFileAsync(operation, lifetime.Token);
+        try
+        {
+            while (!publish.IsCompleted)
+            {
+                using var waiting = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+                var interval = Task.Delay(TimeSpan.FromSeconds(6), clock, waiting.Token);
+                if (await Task.WhenAny(publish, interval) == publish)
+                {
+                    await waiting.CancelAsync();
+                    break;
+                }
+                await interval;
+                // This does not bypass the directory's two-hour snapshot TTL.
+                // Expired/unavailable authorization cannot extend publication.
+                await Guard();
+            }
+            return await publish;
+        }
+        finally
+        {
+            // Cancel the one in-flight invocation even when a DB/identity check
+            // fails. Agent stops its exact helper invocation; a lost response
+            // is reconciled from durable receipts, never blind re-publication.
+            await lifetime.CancelAsync();
+            try { await publish; }
+            catch (Exception) { /* Observe only; preserve the original outcome. */ }
+        }
+        async Task Guard()
+        {
+            using var checking = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+            checking.CancelAfter(TimeSpan.FromSeconds(10));
+            checking.Token.ThrowIfCancellationRequested();
+            if (operation.ExpiresAtUtc <= clock.GetUtcNow() ||
+                await repository.CancellationRequestedAsync(operation.Id, checking.Token) ||
+                !await AdministratorAsync(operation, checking.Token) ||
+                !await repository.RenewAsync(operation, clock.GetUtcNow(), checking.Token))
+                throw new FileTransferRejectedException();
         }
     }
 }
