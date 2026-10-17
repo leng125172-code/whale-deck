@@ -1,8 +1,9 @@
 # Directory move BFF implementation
 
-2026-10-18. **39cb274 / Agent 1.28 BFF and Worker are deployed and accepted
-through real identity/API/SQL/installed UDS. The move WebUI is implemented
-locally but not published or production-browser accepted yet.** Agent evidence is in
+2026-10-18. **Latest installed 1399563 / Agent1.28 includes accepted real
+administrator/ordinary WebUI and repeat installed move/copy BFF validation**;
+see [final UI and release evidence](FILE_TREE_MOVE_UI.md). The earlier 39cb274
+backend acceptance below remains its own historical evidence. Agent evidence is in
 [its separate report](FILE_TREE_MOVE_AGENT.md). The earlier foundation-only
 paragraphs below describe 80d3de4, not the current candidate.
 
