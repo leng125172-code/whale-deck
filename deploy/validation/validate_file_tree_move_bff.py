@@ -109,7 +109,7 @@ def main():
         try:
             helper.stdin.write(json.dumps({'username': ordinary_name, 'password': ordinary_password, 'administrator': False}) + '\n'); helper.stdin.flush()
             assert json.loads(helper.stdout.readline())['ready'] is True
-            ordinary, _ = authenticate(base, ordinary_name, ordinary_password); ordinary_password = None
+            ordinary, _ = authenticate(base, ordinary_name, ordinary_password, require_administrator=False); ordinary_password = None
             ordinary_api = Api(base, ordinary)
             assert ordinary.get(base + '/api/v1/auth/me', timeout=20).json()['isAdministrator'] is False
             assert ordinary.get(base + '/api/v1/files/tree-moves/' + ready['id'], timeout=20).status_code == 403
