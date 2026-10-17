@@ -58,7 +58,9 @@ public sealed partial class NativeNotificationDispatchTests
             .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.State, "Succeeded")));
         Assert.Equal("ck_file_archive_terminal", terminal.ConstraintName);
         var retained = await Assert.ThrowsAsync<PostgresException>(() => db.FileVersions.Where(item => item.Id == id).ExecuteDeleteAsync());
-        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, retained.SqlState);
+        Assert.Equal(PostgresErrorCodes.RestrictViolation, retained.SqlState);
+        Assert.Equal("FK_file_archive_operations_file_versions_archive_version_id", retained.ConstraintName);
+        Assert.Equal(1, await db.FileVersions.CountAsync(item => item.Id == id));
         Assert.Equal(1, await db.FileArchiveOperations.Where(item => item.Id == other).ExecuteDeleteAsync());
         Assert.Equal(1, await db.FileVersions.Where(item => item.Id == id).ExecuteDeleteAsync());
         await db.OperationJobs.Where(item => item.Id == id || item.Id == other).ExecuteDeleteAsync();
