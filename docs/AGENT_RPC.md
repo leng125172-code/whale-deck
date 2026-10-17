@@ -8,6 +8,8 @@
 
 ## 1. 传输与版本
 
+2026-10-18候选协议**1.28，尚未安装**：新增独立`FileTreeMoveService.Plan/Apply/Inspect/Discard`与`files.tree-move-intents`。固定helper枚举`tree-move-*`及源/目标显式`files-tree-move`根授权；复制域不授予移动权限。只传既有copy摘要+源父UInt64身份+外层fingerprint，不传完整清单/任意路径/UID；回执新增`destinationPublished/sourceRemoved/sourceRetained/partialRetained`，未知结果不重新Apply。旧默认根策略精确升级，自定义保持；验证和边界见[Agent候选证据](qa/FILE_TREE_MOVE_AGENT.md)。BFF/Worker/UI尚未实现，以下1.27仍是当前线上。
+
 最新上层运行时 **6c5b1d6/Agent1.27**：独立目录复制异步BFF/双任务/共享锁owner/Worker与WebUI已实机签收；原登录计划、刷新只读恢复、暂态Unknown保锁/不重新Apply及真实管理员/普通用户链路见[最终证据](qa/FILE_TREE_COPY_UI.md)。协议版本不变；下方“候选/未接通”为当时历史状态，不代表当前运行时。
 
 新增上层候选（尚未发布，不变更Agent1.27协议）：目录复制采用异步BFF计划/永久双任务/确认/Worker，不在HTTP请求中等待扫描；原登录绑定登记键只通过GET恢复。Root开始后若传输失败，BFF持久Unknown并保留共享路径锁，后续只Inspect/Discard原执行ID，禁止重新Apply。源码2ece1c1及后续WebUI证据见[目录操作](DIRECTORY_TREE_OPERATIONS.md)和[页面验收边界](qa/FILE_TREE_COPY_UI.md)；运行时仍以下方e0efb8e为准。

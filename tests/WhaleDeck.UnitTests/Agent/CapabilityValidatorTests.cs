@@ -128,6 +128,25 @@ public sealed class CapabilityValidatorTests : IDisposable
         Assert.Equal(StatusCode.PermissionDenied, replay.StatusCode); Assert.False(invoked);
     }
 
+    [Theory]
+    [InlineData("Plan")][InlineData("Apply")][InlineData("Inspect")][InlineData("Discard")]
+    public async Task DirectoryMoveCannotReuseDirectoryCopyCapabilityOrNonce(string action)
+    {
+        var method = "/whaledeck.agent.v1.FileTreeMoveService/" + action;
+        var interceptor = new CapabilityInterceptor(_validator); var invoked = false;
+        Task<string> Continue(string _, ServerCallContext __) { invoked = true; return Task.FromResult("ok"); }
+        var missing = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, null), Continue));
+        Assert.Equal(StatusCode.PermissionDenied, missing.StatusCode); Assert.False(invoked);
+        var copy = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "move-wrong-method-nonce", "/whaledeck.agent.v1.FileTreeCopyService/" + action);
+        var mismatch = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, copy), Continue));
+        Assert.Equal(StatusCode.PermissionDenied, mismatch.StatusCode); Assert.False(invoked);
+        var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "move-correct-method-nonce", method);
+        Assert.Equal("ok", await interceptor.UnaryServerHandler("", new Context(method, token), Continue));
+        Assert.True(invoked); invoked = false;
+        var replay = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, token), Continue));
+        Assert.Equal(StatusCode.PermissionDenied, replay.StatusCode); Assert.False(invoked);
+    }
+
     private sealed class Context(string method, string? token) : ServerCallContext
     {
         protected override string MethodCore => method;

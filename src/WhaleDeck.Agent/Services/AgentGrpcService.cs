@@ -12,7 +12,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = 27,
+            ProtocolMinor = 28,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
@@ -24,6 +24,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
             "files.hdd-versions",
             "files.archive-intents",
             "files.tree-copy-intents",
+            "files.tree-move-intents",
             "host.terminal.pty",
             "docker.terminal.exec",
             "notifications.private-configuration",

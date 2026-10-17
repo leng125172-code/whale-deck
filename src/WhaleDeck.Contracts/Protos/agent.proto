@@ -752,3 +752,30 @@ service FileTreeCopyService {
   rpc Inspect(FileTreeCopyLookup) returns (FileTreeCopyReceipt);
   rpc Discard(FileTreeCopyApplyRequest) returns (FileTreeCopyReceipt);
 }
+
+// Independent move intent: copy to a new target, retain original source leaves,
+// remove only empty source directories. Never reinterpret old copy plans.
+message FileTreeMovePlan {
+  FileTreeCopyPlan copy_plan = 1; FileDirectoryIdentity source_parent = 2;
+  string fingerprint = 3;
+}
+message FileTreeMovePlanRequest { FileTreeCopyCommand command = 1; RequestContext context = 2; }
+message FileTreeMoveApplyRequest {
+  string operation_id = 1; string owner = 2; FileTreeMovePlan plan = 3;
+  RequestContext context = 4;
+}
+message FileTreeMoveLookup { string operation_id = 1; string owner = 2; }
+message FileTreeMoveReceipt {
+  string operation_id = 1; string state = 2; string fingerprint = 3;
+  uint32 entry_count = 4; int64 total_bytes = 5; string version = 6;
+  bool destination_published = 7; bool source_removed = 8;
+  // Original file leaves are retained privately; empty directory metadata is
+  // represented by the verified manifest. This is not an HDD backup proof.
+  bool source_retained = 9; bool partial_retained = 10;
+}
+service FileTreeMoveService {
+  rpc Plan(FileTreeMovePlanRequest) returns (FileTreeMovePlan);
+  rpc Apply(FileTreeMoveApplyRequest) returns (FileTreeMoveReceipt);
+  rpc Inspect(FileTreeMoveLookup) returns (FileTreeMoveReceipt);
+  rpc Discard(FileTreeMoveApplyRequest) returns (FileTreeMoveReceipt);
+}

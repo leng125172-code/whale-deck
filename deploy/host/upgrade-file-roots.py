@@ -27,7 +27,7 @@ def read(path):
 
 
 def upgrade(path, baseline, desired, backup_suffix='.pre-mutations.json'):
-    if backup_suffix not in ('.pre-mutations.json', '.pre-archives.json', '.pre-tree-copy.json'): raise ValueError('FILES_REGISTRY_BACKUP_INVALID')
+    if backup_suffix not in ('.pre-mutations.json', '.pre-archives.json', '.pre-tree-copy.json', '.pre-tree-move.json'): raise ValueError('FILES_REGISTRY_BACKUP_INVALID')
     payload, current, info = read(path)
     if current == desired: return 'unchanged'
     if current != baseline: return 'custom-preserved'
@@ -57,19 +57,25 @@ def upgrade(path, baseline, desired, backup_suffix='.pre-mutations.json'):
         os.close(parent)
 
 
+def upgrade_defaults(path, folder):
+    baseline = json.loads((folder / 'file-roots.v1.json').read_text(), object_pairs_hook=unique)
+    desired = json.loads((folder / 'file-roots.json').read_text(), object_pairs_hook=unique)
+    previous = json.loads((folder / 'file-roots.v1.25.json').read_text(), object_pairs_hook=unique)
+    archives = json.loads((folder / 'file-roots.v1.26.json').read_text(), object_pairs_hook=unique)
+    copies = json.loads((folder / 'file-roots.v1.27.json').read_text(), object_pairs_hook=unique)
+    current = read(path)[1]
+    if current == copies: return upgrade(path, copies, desired, '.pre-tree-move.json')
+    if current == archives: return upgrade(path, archives, desired, '.pre-tree-copy.json')
+    if current == previous: return upgrade(path, previous, desired, '.pre-archives.json')
+    return upgrade(path, baseline, desired)
+
+
 if __name__ == '__main__':
     try:
         if os.geteuid() != 0: raise ValueError('FILES_ROOT_REQUIRED')
         folder = Path(__file__).resolve().parent
-        baseline = json.loads((folder / 'file-roots.v1.json').read_text(), object_pairs_hook=unique)
-        desired = json.loads((folder / 'file-roots.json').read_text(), object_pairs_hook=unique)
         path = Path('/etc/whaledeck/file-roots.json')
-        previous = json.loads((folder / 'file-roots.v1.25.json').read_text(), object_pairs_hook=unique)
-        archives = json.loads((folder / 'file-roots.v1.26.json').read_text(), object_pairs_hook=unique)
-        current = read(path)[1]
-        if current == archives: result = upgrade(path, archives, desired, '.pre-tree-copy.json')
-        elif current == previous: result = upgrade(path, previous, desired, '.pre-archives.json')
-        else: result = upgrade(path, baseline, desired)
+        result = upgrade_defaults(path, folder)
         print(json.dumps({'fileRootsUpgrade': result}))
     except Exception:
         print(json.dumps({'fileRootsUpgrade': 'rejected'}))

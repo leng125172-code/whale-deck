@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Internal directory move engine, not registered as an RPC or CLI.
+"""Directory move engine behind a distinct fixed helper and signed UDS RPC.
 
 Publish a fully verified target, then retain individually verified original
 files in an operation-owned private tree. Never rename a source ancestor or

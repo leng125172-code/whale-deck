@@ -5,8 +5,10 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import stat
 import subprocess
+import sys
 import unittest
 import uuid
 import test_file_transport as common
@@ -345,3 +347,30 @@ class FileTreeMoveTests(unittest.TestCase):
         with self.assertRaises(FileExistsError): self.engine.move(request)
         self.assertEqual(manifest.read_bytes(), b'other-retained-evidence'); self.assertEqual(self.file.read_bytes(), self.content)
         self.assertFalse(self.retained(request).exists()); self.assertEqual(self.lookup(request)['state'], 'Unknown')
+
+    def test_fixed_driver_loader_uses_exact_trusted_modules_and_registered_move_policy(self):
+        from unittest.mock import patch
+        modules = self.base / 'installed-modules'; modules.mkdir(mode=0o700)
+        for name in ('whaledeck-file-tree.py', 'whaledeck-tree-copies.py', 'whaledeck-tree-moves.py'):
+            target = modules / name; shutil.copyfile(Path(driver.__file__).with_name(name), target); target.chmod(0o640)
+        with patch.dict(sys.modules, {driver.__name__: driver}), patch.object(driver, '__file__', str(modules / 'whaledeck-files.py')):
+            loaded = driver.tree_move_engine(); request = self.request()
+            self.assertEqual(loaded.plan(request['plan']['copyPlan']['command']), request['plan'])
+            self.assertEqual(loaded.move(request)['state'], 'Completed')
+        self.assertEqual((self.root / 'target/代码/run.bin').read_bytes(), self.content); self.assertFalse(self.source.exists())
+
+    def test_move_loader_rejects_writable_foreign_hardlinked_and_symlink_modules(self):
+        from unittest.mock import patch
+        modules = self.base / 'installed-modules'; modules.mkdir(mode=0o700)
+        for name in ('whaledeck-file-tree.py', 'whaledeck-tree-copies.py', 'whaledeck-tree-moves.py'):
+            target = modules / name; shutil.copyfile(Path(driver.__file__).with_name(name), target); target.chmod(0o640)
+        target = modules / 'whaledeck-tree-moves.py'
+        with patch.dict(sys.modules, {driver.__name__: driver}), patch.object(driver, '__file__', str(modules / 'whaledeck-files.py')):
+            target.chmod(0o660)
+            with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_move_engine()
+            target.chmod(0o640); alias = modules / 'linked'; os.link(target, alias)
+            with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_move_engine()
+            alias.unlink(); os.chown(target, 12345, 0)
+            with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_move_engine()
+            os.chown(target, 0, 0); original = modules / 'original.py'; target.rename(original); target.symlink_to(original)
+            with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_move_engine()
