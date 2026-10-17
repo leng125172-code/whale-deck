@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-18）",
-  "nextStep": "目录移动内部执行引擎已有30真实Linux/176既有文件复制/3诊断验证，含1GiB+7、跨设备、真实强杀与原inode保留；验证代码副本清理，尚未安装或开放。线上仍6c5b1d6/Agent1.27目录复制。继续移动独立RPC/固定helper/安装态、BFF双任务/锁owner/Worker/人类审计/WebUI，再做目录回收归档、正文搜索、容器文件/长期清理及完整76项。"
+  "nextStep": "4fd9ba7/Agent1.28目录移动RPC已实际安装，2MiB+7/1GiB+7独立全字节/原inode/计划/权限/取消与清理通过，移动BFF签名/ID基础仅本地。继续BFF双任务/永久模型与migration/共享锁owner/Worker/人类审计/WebUI及实机身份验收，再做目录回收归档、正文搜索、容器文件/长期清理和完整76项；不把Agent签收当完整文件管理完成。"
 }
