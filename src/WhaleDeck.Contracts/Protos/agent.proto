@@ -666,3 +666,58 @@ service FileOperationService {
   // Durable cancellation tombstone, including before a delayed Apply arrives.
   rpc Discard(FileOperationApplyRequest) returns (FileOperationReceipt);
 }
+
+// Dedicated history/trash capability; never changes old signed mutation plans.
+enum FileArchiveKind {
+  FILE_ARCHIVE_KIND_UNSPECIFIED = 0;
+  FILE_ARCHIVE_KIND_TRASH = 1;
+  FILE_ARCHIVE_KIND_RESTORE = 2;
+  FILE_ARCHIVE_KIND_PURGE = 3;
+}
+message FileHistoryRequest {
+  FileLocation location = 1; string after = 2; uint32 take = 3;
+  string expected_version = 4;
+}
+message FileVersionRecord {
+  string version_id = 1; FileLocation location = 2; string source_version = 3;
+  int64 size_bytes = 4; string sha256 = 5; int64 created_at_unix_ms = 6;
+  string capture_kind = 7; string capture_state = 8; string availability = 9;
+  bool different_source_device = 10;
+}
+message FileHistoryPage {
+  repeated FileVersionRecord entries = 1; string next_cursor = 2;
+  string version = 3; uint32 scanned = 4; uint32 invalid_records = 5;
+  bool complete = 6;
+}
+message FileArchiveCommand {
+  FileArchiveKind kind = 1; FileLocation location = 2;
+  string version_id = 3; string expected_version = 4;
+}
+message FileArchiveIdentity {
+  string metadata_hash = 1; FileObjectIdentity data_identity = 2;
+}
+message FileArchivePlan {
+  FileArchiveCommand command = 1; FileDirectoryIdentity parent_identity = 2;
+  FileObjectIdentity source_identity = 3; string source_sha256 = 4;
+  FileArchiveIdentity archive_identity = 5; FileObjectIdentity restore_metadata = 6;
+  int64 size_bytes = 7; string sha256 = 8; string fingerprint = 9;
+}
+message FileArchivePlanRequest { FileArchiveCommand command = 1; RequestContext context = 2; }
+message FileArchiveApplyRequest {
+  string operation_id = 1; string owner = 2; FileArchivePlan plan = 3;
+  RequestContext context = 4;
+}
+message FileArchiveLookup { string operation_id = 1; string owner = 2; }
+message FileArchiveReceipt {
+  string operation_id = 1; FileArchiveKind kind = 2; string state = 3;
+  string fingerprint = 4; string version = 5; int64 size_bytes = 6;
+  string sha256 = 7; bool source_retained = 8; bool binding_current = 9;
+  string version_id = 10; FileHddBackupProof hdd_backup = 11;
+}
+service FileArchiveService {
+  rpc List(FileHistoryRequest) returns (FileHistoryPage);
+  rpc Plan(FileArchivePlanRequest) returns (FileArchivePlan);
+  rpc Apply(FileArchiveApplyRequest) returns (FileArchiveReceipt);
+  rpc Inspect(FileArchiveLookup) returns (FileArchiveReceipt);
+  rpc Discard(FileArchiveApplyRequest) returns (FileArchiveReceipt);
+}

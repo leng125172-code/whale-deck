@@ -5,13 +5,15 @@ using WhaleDeck.Application.Services;
 
 namespace WhaleDeck.Infrastructure.Persistence;
 
-public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> options) : DbContext(options)
+public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext> options) : DbContext(options)
 {
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<TerminalSession> TerminalSessions => Set<TerminalSession>();
     public DbSet<FileUploadOperation> FileUploadOperations => Set<FileUploadOperation>();
     public DbSet<FileMutationOperation> FileMutationOperations => Set<FileMutationOperation>();
     public DbSet<FilePathLock> FilePathLocks => Set<FilePathLock>();
+    public DbSet<FileVersion> FileVersions => Set<FileVersion>();
+    public DbSet<FileArchiveOperation> FileArchiveOperations => Set<FileArchiveOperation>();
     public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
     public DbSet<PortalItem> PortalItems => Set<PortalItem>();
     public DbSet<PublicPortalPreference> PublicPortalPreferences => Set<PublicPortalPreference>();
@@ -85,6 +87,7 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ConfigureFileArchives(modelBuilder);
         ConfigureAuditAndSettings(modelBuilder);
         ConfigureIdentityAndPortals(modelBuilder);
         ConfigureResourcesAndApplications(modelBuilder);

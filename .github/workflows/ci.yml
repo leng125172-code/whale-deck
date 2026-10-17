@@ -28,6 +28,7 @@ jobs:
           sudo python3 -m unittest discover -s deploy/validation -p test_file_roots_upgrade.py
           sudo python3 -m unittest discover -s deploy/validation -p test_file_browser.py
           sudo python3 -m unittest discover -s deploy/validation -p test_file_backups.py
+          sudo python3 -m unittest discover -s deploy/validation -p test_file_archives.py
 
   backend:
     runs-on: ubuntu-latest

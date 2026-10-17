@@ -7,7 +7,7 @@ using WhaleDeck.Application.Models;
 
 namespace WhaleDeck.Infrastructure.Agent;
 
-public sealed class FilePlanProtector(IConfiguration configuration) : IFilePlanProtector, IFileMutationProtector
+public sealed class FilePlanProtector(IConfiguration configuration) : IFilePlanProtector, IFileMutationProtector, IFileArchiveProtector
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { MaxDepth = 8 };
     private string Mac(string payload, string domain = "whaledeck-file-plan-v1")
@@ -26,6 +26,21 @@ public sealed class FilePlanProtector(IConfiguration configuration) : IFilePlanP
         return payload + "." + Mac(payload);
     }
     public string Fingerprint(FileUploadBinding binding) => Mac(JsonSerializer.Serialize(binding), "whaledeck-file-intent-v1");
+    string IFileArchiveProtector.Fingerprint(FileArchiveBinding binding) => Mac(JsonSerializer.Serialize(binding), "whaledeck-file-archive-intent-v1");
+    string IFileArchiveProtector.Sign(FileArchivePlanClaims claims)
+    {
+        var payload = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(claims));
+        return payload + "." + Mac(payload, "whaledeck-file-archive-plan-v1");
+    }
+    public FileArchivePlanClaims VerifyArchive(string plan)
+    {
+        if (string.IsNullOrWhiteSpace(plan) || plan.Length > 65536) throw new ArgumentException("FILES_PLAN_INVALID");
+        var parts = plan.Split('.');
+        if (parts.Length != 2 || parts[1].Length != 64 || !CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(parts[1]), Encoding.ASCII.GetBytes(Mac(parts[0], "whaledeck-file-archive-plan-v1"))))
+            throw new ArgumentException("FILES_PLAN_SIGNATURE_INVALID");
+        try { return JsonSerializer.Deserialize<FileArchivePlanClaims>(Convert.FromBase64String(parts[0]), WhaleDeck.Application.Services.FileArchiveValidation.JsonOptions) ?? throw new ArgumentException("FILES_PLAN_INVALID"); }
+        catch (Exception error) when (error is JsonException or FormatException) { throw new ArgumentException("FILES_PLAN_INVALID"); }
+    }
     string IFileMutationProtector.Fingerprint(FileMutationBinding binding) => Mac(JsonSerializer.Serialize(binding), "whaledeck-file-mutation-intent-v1");
     string IFileMutationProtector.Sign(FileMutationPlanClaims claims)
     {

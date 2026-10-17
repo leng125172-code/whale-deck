@@ -143,12 +143,21 @@ class FileBackups:
         finally: os.close(descriptor)
         if self.f.checksum(target, operation + '.data') != expected['sha256']: self.reject('FILES_BACKUP_CONTENT_INVALID')
 
-    def ensure(self, record, parent, leaf):
+    def check_capacity(self, target, configuration, size):
+        objects = os.listdir(target)
+        if len(objects) >= configuration['maxVersions'] * 3 or sum(name.endswith('.json') for name in objects) >= configuration['maxVersions']:
+            self.reject('FILES_BACKUP_HISTORY_LIMIT')
+        usage = os.fstatvfs(target)
+        reserve = max(configuration['reserveBytes'], usage.f_blocks * usage.f_frsize * configuration['reservePercent'] // 100) + 4 * self.f.MAX_BYTES
+        if usage.f_bavail * usage.f_frsize < size + reserve: self.reject('FILES_BACKUP_CAPACITY_REQUIRED')
+
+    def ensure(self, record, parent, leaf, capture_kind='Overwrite'):
         """No target namespace publication until this returns a verified copy.
 
         Preparing without a complete data object is explicit incomplete state,
         not permission to truncate/re-copy it or overwrite the source again.
         """
+        if capture_kind not in ('Overwrite', 'Trash'): self.reject('FILES_BACKUP_METADATA_UNSAFE')
         original = self.f.current(parent, leaf)
         if original is None or self.f.version(original) != record['expectedVersion'] or self.f.publication_identity(original) != record['originalIdentity']:
             self.reject('FILES_VERSION_CONFLICT')
@@ -157,6 +166,7 @@ class FileBackups:
             try: saved = self.read_json(target, operation + '.json')
             except FileNotFoundError: saved = None
             if saved is not None:
+                if saved.get('captureKind', 'Overwrite') != capture_kind: self.reject('FILES_BACKUP_IDEMPOTENCY_CONFLICT')
                 if any(saved.get(key) != value for key, value in expected.items()) or saved.get('state') not in ('Preparing', 'Verified') or type(saved.get('createdAtUnixMs')) is not int or not 0 <= saved['createdAtUnixMs'] <= 253402300799999 or type(saved.get('differentSourceDevice')) is not bool:
                     self.reject('FILES_BACKUP_IDEMPOTENCY_CONFLICT')
                 try: self.verify_data(target, operation, expected)
@@ -166,12 +176,7 @@ class FileBackups:
                 if saved['state'] != 'Verified':
                     saved['state'] = 'Verified'; self.f.save_receipt(target, operation, saved)
                 return self.public(saved)
-            objects = os.listdir(target)
-            if len(objects) >= configuration['maxVersions'] * 3 or sum(name.endswith('.json') for name in objects) >= configuration['maxVersions']:
-                self.reject('FILES_BACKUP_HISTORY_LIMIT')
-            usage = os.fstatvfs(target)
-            reserve = max(configuration['reserveBytes'], usage.f_blocks * usage.f_frsize * configuration['reservePercent'] // 100) + 4 * self.f.MAX_BYTES
-            if usage.f_bavail * usage.f_frsize < original.st_size + reserve: self.reject('FILES_BACKUP_CAPACITY_REQUIRED')
+            self.check_capacity(target, configuration, original.st_size)
             source = self.f.open_at(parent, leaf, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
             pending = operation + '.partial'; output = None
             try:
@@ -181,7 +186,8 @@ class FileBackups:
                 if not 0 <= created <= 253402300799999: self.reject('FILES_BACKUP_METADATA_UNSAFE')
                 try: output = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=target)
                 except FileExistsError: self.reject('FILES_BACKUP_INCOMPLETE')
-                saved = {**expected, 'state': 'Preparing', 'createdAtUnixMs': created,
+                saved = {**expected, 'state': 'Preparing', 'createdAtUnixMs': created, 'captureKind': capture_kind,
+                    'captureState': 'Pending' if capture_kind == 'Trash' else 'Available',
                     'differentSourceDevice': before.st_dev != os.fstat(target).st_dev}
                 self.f.save_receipt(target, operation, saved)
                 checksum = hashlib.sha256(); count = 0

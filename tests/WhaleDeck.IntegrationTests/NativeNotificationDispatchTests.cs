@@ -136,6 +136,7 @@ public sealed partial class NativeNotificationDispatchTests
         await TerminalSessionBoundaries(options);
         await FileUploadBoundaries(options);
         await FileMutationBoundaries(options);
+        await FileArchiveBoundaries(options);
     }
 
     private static async Task PrivateWorkflow(PlatformDbContext db)
