@@ -64,6 +64,7 @@ public sealed class FileMutationRepository(PlatformDbContext db) : IFileMutation
             var ids = await db.Database.SqlQuery<Guid>($"""
                 WITH candidate AS (
                   SELECT id FROM file_mutation_operations WHERE completed_at_utc IS NULL AND next_attempt_at_utc<={now}
+                    AND NOT EXISTS (SELECT 1 FROM file_recovery_operations r WHERE r.kind='mutation' AND r.original_intent_id=file_mutation_operations.id AND r.completed_at_utc IS NULL)
                     AND (lease_expires_at_utc IS NULL OR lease_expires_at_utc<={now})
                   ORDER BY next_attempt_at_utc,id LIMIT 1 FOR UPDATE SKIP LOCKED
                 ) UPDATE file_mutation_operations f SET lease_token={token},lease_expires_at_utc={expiry},version=f.version+1

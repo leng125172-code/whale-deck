@@ -50,11 +50,11 @@ public sealed partial class AgentGateway : IFileArchiveGateway
     }
     public Task<App.FileArchiveReceipt> ApplyArchiveAsync(FileArchiveOperation operation, CancellationToken cancellationToken) => ArchiveAction(operation, false, cancellationToken);
     public Task<App.FileArchiveReceipt> DiscardArchiveAsync(FileArchiveOperation operation, CancellationToken cancellationToken) => ArchiveAction(operation, true, cancellationToken);
-    private async Task<App.FileArchiveReceipt> ArchiveAction(FileArchiveOperation operation, bool discard, CancellationToken cancellationToken)
+    private async Task<App.FileArchiveReceipt> ArchiveAction(FileArchiveOperation operation, bool discard, CancellationToken cancellationToken, App.TerminalActor? recoveryActor = null)
     {
         var client = await Archives(cancellationToken); var plan = FileArchiveValidation.ReadPlan(operation); FileArchiveValidation.Plan(plan);
         var request = new FileArchiveApplyRequest { OperationId = operation.Id.ToString("N"), Owner = operation.OwnerHash,
-            Context = new() { ActorSubject = operation.ActorSubject, TraceId = operation.Id.ToString("D") }, Plan = new() {
+            Context = new() { ActorSubject = recoveryActor?.Subject ?? operation.ActorSubject, TraceId = recoveryActor?.TraceId ?? operation.Id.ToString("D") }, Plan = new() {
                 Command = ArchiveCommand(plan.Command), ParentIdentity = Parent(plan.ParentIdentity), SourceIdentity = ArchiveSource(plan.SourceIdentity), SourceSha256 = plan.SourceSha256,
                 ArchiveIdentity = plan.ArchiveIdentity is null ? null : new() { MetadataHash = plan.ArchiveIdentity.MetadataHash, DataIdentity = ArchiveSource(plan.ArchiveIdentity.DataIdentity) },
                 RestoreMetadata = ArchiveSource(plan.RestoreMetadata), SizeBytes = plan.SizeBytes, Sha256 = plan.Sha256, Fingerprint = plan.Fingerprint } };

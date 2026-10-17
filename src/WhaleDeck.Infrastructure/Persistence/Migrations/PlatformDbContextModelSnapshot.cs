@@ -1230,6 +1230,209 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.FileRecoveryOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActorSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("actor_subject");
+
+                    b.Property<DateTimeOffset?>("CancelRequestedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancel_requested_at_utc");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Disposition")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("disposition");
+
+                    b.Property<DateTimeOffset?>("ExecutionExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("execution_expires_at_utc");
+
+                    b.Property<Guid?>("ExecutionJobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_job_id");
+
+                    b.Property<DateTimeOffset?>("FenceStartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fence_started_at_utc");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_expires_at_utc");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at_utc");
+
+                    b.Property<bool?>("ObservationBindingCurrent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("observation_binding_current");
+
+                    b.Property<string>("ObservationHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("observation_hash");
+
+                    b.Property<string>("ObservationJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("observation_json");
+
+                    b.Property<string>("OriginalBindingHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("original_binding_hash");
+
+                    b.Property<Guid>("OriginalExecutionJobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("original_execution_job_id");
+
+                    b.Property<Guid>("OriginalIntentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("original_intent_id");
+
+                    b.Property<string>("OriginalJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("original_json");
+
+                    b.Property<string>("OriginalResolution")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("original_resolution");
+
+                    b.Property<long>("OriginalVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("original_version");
+
+                    b.Property<string>("PlanHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("plan_hash");
+
+                    b.Property<DateTimeOffset>("PlanningExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("planning_expires_at_utc");
+
+                    b.Property<DateTimeOffset?>("ReadyAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ready_at_utc");
+
+                    b.Property<DateTimeOffset?>("ReadyExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ready_expires_at_utc");
+
+                    b.Property<string>("ReasonCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("reason_code");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_hash");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("result_code");
+
+                    b.Property<string>("RootState")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("root_state");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("state");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionJobId")
+                        .IsUnique()
+                        .HasFilter("execution_job_id IS NOT NULL");
+
+                    b.HasIndex("LeaseToken")
+                        .IsUnique()
+                        .HasFilter("lease_token IS NOT NULL");
+
+                    b.HasIndex("OriginalExecutionJobId");
+
+                    b.HasIndex("Kind", "OriginalIntentId")
+                        .IsUnique()
+                        .HasFilter("completed_at_utc IS NULL");
+
+                    b.HasIndex("NextAttemptAtUtc", "Id")
+                        .HasFilter("completed_at_utc IS NULL");
+
+                    b.HasIndex("ActorSubject", "LoginBinding", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("file_recovery_operations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_file_recovery_execution", "(execution_job_id IS NULL)=(execution_expires_at_utc IS NULL) AND (execution_job_id IS NULL OR (plan_hash IS NOT NULL AND execution_job_id<>id AND execution_expires_at_utc>created_at_utc)) AND (fence_started_at_utc IS NULL OR execution_job_id IS NOT NULL) AND (state NOT IN ('DispositionQueued','Fencing','Unknown','Disposed') OR execution_job_id IS NOT NULL) AND (lease_token IS NULL)=(lease_expires_at_utc IS NULL)");
+
+                            t.HasCheckConstraint("ck_file_recovery_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND original_binding_hash ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$' AND (plan_hash IS NULL OR plan_hash ~ '^[A-F0-9]{64}$') AND (observation_hash IS NULL OR observation_hash ~ '^[A-F0-9]{64}$')");
+
+                            t.HasCheckConstraint("ck_file_recovery_kind", "kind IN ('upload','mutation','archive','tree-copy','tree-move') AND disposition IN ('AcknowledgeUnknown','ReconcileCompleted') AND reason_code IN ('OriginalSessionLost','OperatorHandover','IncidentReview')");
+
+                            t.HasCheckConstraint("ck_file_recovery_limits", "version>=0 AND original_version>=0 AND planning_expires_at_utc=created_at_utc+INTERVAL '15 minutes' AND octet_length(original_json::text)<=262144 AND jsonb_typeof(original_json)='object' AND idempotency_key ~ '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' AND (observation_json IS NULL OR octet_length(observation_json::text)<=16384)");
+
+                            t.HasCheckConstraint("ck_file_recovery_plan", "(plan_hash IS NULL)=(observation_hash IS NULL) AND (plan_hash IS NULL)=(observation_json IS NULL) AND (plan_hash IS NULL)=(root_state IS NULL) AND (plan_hash IS NULL)=(observation_binding_current IS NULL) AND (plan_hash IS NULL)=(ready_at_utc IS NULL) AND (plan_hash IS NULL)=(ready_expires_at_utc IS NULL) AND (ready_expires_at_utc IS NULL OR ready_expires_at_utc=ready_at_utc+INTERVAL '5 minutes') AND (root_state IS NULL OR root_state IN ('Missing','Aborted','Unknown','Completed')) AND (state NOT IN ('Ready','DispositionQueued','Fencing','Unknown','Disposed') OR plan_hash IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_file_recovery_resolution", "(state='Disposed')=(original_resolution IS NOT NULL) AND (original_resolution IS NULL OR original_resolution IN ('Acknowledged','Succeeded','Superseded','Failed'))");
+
+                            t.HasCheckConstraint("ck_file_recovery_state", "state IN ('Queued','Planning','Ready','DispositionQueued','Fencing','Unknown','Disposed','Failed','Canceled','Expired') AND (completed_at_utc IS NULL)=(state IN ('Queued','Planning','Ready','DispositionQueued','Fencing','Unknown'))");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.FileTreeCopyOperation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3406,6 +3609,26 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
                         .WithMany()
                         .HasForeignKey("OperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.FileRecoveryOperation", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithMany()
+                        .HasForeignKey("ExecutionJobId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithMany()
+                        .HasForeignKey("Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithMany()
+                        .HasForeignKey("OriginalExecutionJobId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

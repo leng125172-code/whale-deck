@@ -16,7 +16,8 @@ public sealed class FileManagementService(IFileGateway gateway, IFileUploadRepos
         if (string.IsNullOrWhiteSpace(actor.Subject) || actor.Subject.Length > 256 || actor.Subject.Any(char.IsControl) || !Hex(actor.LoginBinding) ||
             string.IsNullOrWhiteSpace(actor.TraceId) || actor.TraceId.Length > 64 || actor.TraceId.Any(char.IsControl)) throw new ArgumentException("FILES_ACTOR_INVALID");
         var current = await identity.ResolveCurrentAsync(actor.Subject, actor.Name, actor.Groups, cancellationToken);
-        if (!current.IsAdministrator || current.Subject != actor.Subject) throw new UnauthorizedAccessException("FILES_ADMINISTRATOR_REQUIRED");
+        if (!current.IsAdministrator || current.Subject != actor.Subject || current.PermissionExpiresAtUtc <= clock.GetUtcNow())
+            throw new UnauthorizedAccessException("FILES_ADMINISTRATOR_REQUIRED");
     }
     public async Task<IReadOnlyCollection<FileRootDto>> RootsAsync(TerminalActor actor, CancellationToken cancellationToken)
     { await AuthorizeAsync(actor, cancellationToken); return await gateway.RootsAsync(cancellationToken); }

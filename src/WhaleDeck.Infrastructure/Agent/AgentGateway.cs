@@ -20,9 +20,12 @@ public sealed partial class AgentGateway : IAgentGateway, IManagementQuery, IHos
     private readonly ManagedResourceService.ManagedResourceServiceClient _resources;
     private readonly OperationService.OperationServiceClient _operations;
     private readonly byte[]? _capabilityKey;
+    private readonly FileRecoveryMaterial _recoveryMaterial;
 
     public AgentGateway(IConfiguration configuration)
     {
+        var recoveryProtector = new FilePlanProtector(configuration);
+        _recoveryMaterial = new(recoveryProtector, recoveryProtector, recoveryProtector, recoveryProtector, recoveryProtector);
         var socketPath = configuration["Agent:SocketPath"] ?? "/run/whaledeck/agent.sock";
         var keyFile = configuration["Agent:CapabilityKeyFile"] ?? "/run/secrets/agent-capability.key";
         _capabilityKey = File.Exists(keyFile) ? File.ReadAllBytes(keyFile) : null;

@@ -80,7 +80,8 @@ public static class DependencyInjection
         services.AddSingleton<IFileMutationGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IFileArchiveProtector, FilePlanProtector>();
         services.AddSingleton<IFileArchiveGateway>(provider => provider.GetRequiredService<AgentGateway>());
-        services.AddScoped<IFileArchiveRepository, FileArchiveRepository>();
+        services.AddScoped<FileArchiveRepository>();
+        services.AddScoped<IFileArchiveRepository>(provider => provider.GetRequiredService<FileArchiveRepository>());
         services.AddScoped<FileArchiveService>();
         services.AddScoped<FileArchiveDispatcher>();
         services.AddSingleton<IFileTreeCopyProtector, FilePlanProtector>();
@@ -96,6 +97,12 @@ public static class DependencyInjection
         services.AddSingleton<IFileRecoveryProtector, FilePlanProtector>();
         services.AddScoped<IFileRecoveryInventory, FileRecoveryInventory>();
         services.AddScoped<FileRecoveryInventoryService>();
+        services.AddSingleton<FileRecoveryMaterial>();
+        services.AddScoped<FileRecoverySources>();
+        services.AddScoped<IFileRecoveryRepository, FileRecoveryRepository>();
+        services.AddSingleton<IFileRecoveryGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddScoped<FileRecoveryService>();
+        services.AddScoped<FileRecoveryDispatcher>();
         services.AddScoped<FileMutationService>();
         services.AddScoped<FileMutationDispatcher>();
         services.AddSingleton<ITerminalGrantSigner, TerminalGrantSigner>();

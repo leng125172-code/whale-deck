@@ -49,11 +49,11 @@ public sealed partial class AgentGateway : IFileTreeMoveGateway
     }
     public Task<App.FileTreeMoveReceipt> ApplyTreeMoveAsync(FileTreeMoveOperation operation, CancellationToken cancellationToken) => MoveTreeAction(operation, false, cancellationToken);
     public Task<App.FileTreeMoveReceipt> DiscardTreeMoveAsync(FileTreeMoveOperation operation, CancellationToken cancellationToken) => MoveTreeAction(operation, true, cancellationToken);
-    private async Task<App.FileTreeMoveReceipt> MoveTreeAction(FileTreeMoveOperation operation, bool discard, CancellationToken cancellationToken)
+    private async Task<App.FileTreeMoveReceipt> MoveTreeAction(FileTreeMoveOperation operation, bool discard, CancellationToken cancellationToken, App.TerminalActor? recoveryActor = null)
     {
         var client = await MoveTreeClient(cancellationToken); var plan = FileTreeMoveValidation.ReadPlan(operation); FileTreeMoveValidation.Plan(plan); var copy = plan.CopyPlan;
         var request = new FileTreeMoveApplyRequest { OperationId = MoveTreeExecution(operation).ToString("N"), Owner = operation.OwnerHash,
-            Context = new() { ActorSubject = operation.ActorSubject, TraceId = operation.Id.ToString("D") }, Plan = new() {
+            Context = new() { ActorSubject = recoveryActor?.Subject ?? operation.ActorSubject, TraceId = recoveryActor?.TraceId ?? operation.Id.ToString("D") }, Plan = new() {
                 CopyPlan = new() { Command = TreeCommand(copy.Command), ManifestSha256 = copy.ManifestSha256, EntryCount = (uint)copy.EntryCount, TotalBytes = copy.TotalBytes,
                     TargetParent = new() { Device = copy.TargetParent.Device, Inode = copy.TargetParent.Inode }, SourcePolicyHash = copy.SourcePolicyHash,
                     TargetPolicyHash = copy.TargetPolicyHash, Fingerprint = copy.Fingerprint },

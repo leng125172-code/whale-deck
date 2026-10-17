@@ -47,11 +47,11 @@ public sealed partial class AgentGateway : IFileTreeCopyGateway
     }
     public Task<App.FileTreeCopyReceipt> ApplyTreeCopyAsync(FileTreeCopyOperation operation, CancellationToken cancellationToken) => TreeAction(operation, false, cancellationToken);
     public Task<App.FileTreeCopyReceipt> DiscardTreeCopyAsync(FileTreeCopyOperation operation, CancellationToken cancellationToken) => TreeAction(operation, true, cancellationToken);
-    private async Task<App.FileTreeCopyReceipt> TreeAction(FileTreeCopyOperation operation, bool discard, CancellationToken cancellationToken)
+    private async Task<App.FileTreeCopyReceipt> TreeAction(FileTreeCopyOperation operation, bool discard, CancellationToken cancellationToken, App.TerminalActor? recoveryActor = null)
     {
         var client = await TreeClient(cancellationToken); var plan = FileTreeCopyValidation.ReadPlan(operation); FileTreeCopyValidation.Plan(plan);
         var request = new FileTreeCopyApplyRequest { OperationId = TreeExecution(operation).ToString("N"), Owner = operation.OwnerHash,
-            Context = new() { ActorSubject = operation.ActorSubject, TraceId = operation.Id.ToString("D") }, Plan = new() {
+            Context = new() { ActorSubject = recoveryActor?.Subject ?? operation.ActorSubject, TraceId = recoveryActor?.TraceId ?? operation.Id.ToString("D") }, Plan = new() {
                 Command = TreeCommand(plan.Command), ManifestSha256 = plan.ManifestSha256, EntryCount = (uint)plan.EntryCount, TotalBytes = plan.TotalBytes,
                 TargetParent = new() { Device = plan.TargetParent.Device, Inode = plan.TargetParent.Inode }, SourcePolicyHash = plan.SourcePolicyHash,
                 TargetPolicyHash = plan.TargetPolicyHash, Fingerprint = plan.Fingerprint } };

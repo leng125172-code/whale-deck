@@ -8,6 +8,8 @@ namespace WhaleDeck.Infrastructure.Agent;
 
 public sealed partial class FilePlanProtector
 {
+    public string FingerprintRecoveryRequest(FileRecoveryRequestBinding binding) => Mac(JsonSerializer.Serialize(binding), "whaledeck-administrator-recovery-request-v1");
+    public string FingerprintRecoveryReady(FileRecoveryPlanClaims claims) => Mac(JsonSerializer.Serialize(claims), "whaledeck-administrator-recovery-ready-v1");
     private static readonly HashSet<string> RecoveryClaimFields = ["Id", "Actor", "LoginBinding", "Target", "ObservationHash", "RootState", "Disposition", "ReasonCode", "IssuedAtUtc", "ExpiresAtUtc"];
     private static readonly HashSet<string> RecoveryTargetFields = ["Kind", "IntentId", "ExecutionJobId", "OriginalVersion", "OriginalBindingHash"];
     public string SignRecovery(FileRecoveryPlanClaims claims)

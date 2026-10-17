@@ -145,6 +145,7 @@ public sealed class FileArchiveRepository(PlatformDbContext db, IFileArchiveProt
             var ids = await db.Database.SqlQuery<Guid>($"""
                 WITH candidate AS (
                   SELECT id FROM file_archive_operations WHERE completed_at_utc IS NULL AND next_attempt_at_utc<={now}
+                    AND NOT EXISTS (SELECT 1 FROM file_recovery_operations r WHERE r.kind='archive' AND r.original_intent_id=file_archive_operations.id AND r.completed_at_utc IS NULL)
                     AND (lease_expires_at_utc IS NULL OR lease_expires_at_utc<={now})
                   ORDER BY next_attempt_at_utc,id LIMIT 1 FOR UPDATE SKIP LOCKED
                 ) UPDATE file_archive_operations f SET lease_token={token},lease_expires_at_utc={expiry},version=f.version+1
@@ -196,6 +197,11 @@ public sealed class FileArchiveRepository(PlatformDbContext db, IFileArchiveProt
         if (terminal) await Complete(row.Id, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken); return true;
     }, cancellationToken);
+    internal Task CaptureRecoveryAsync(FileArchiveOperation row, FileArchiveReceipt receipt, CancellationToken cancellationToken)
+    {
+        if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("FILES_RECOVERY_TRANSACTION_REQUIRED");
+        return Capture(row, receipt, DateTimeOffset.UtcNow, cancellationToken);
+    }
     private async Task Capture(FileArchiveOperation row, FileArchiveReceipt receipt, DateTimeOffset now, CancellationToken cancellationToken)
     {
         if (receipt.HddBackup is { } proof)

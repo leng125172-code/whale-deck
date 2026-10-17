@@ -37,11 +37,11 @@ public sealed partial class AgentGateway : IFileMutationGateway
     }
     public Task<FileMutationReceipt> ApplyMutationAsync(FileMutationOperation operation, CancellationToken cancellationToken) => MutationAction(operation, false, cancellationToken);
     public Task<FileMutationReceipt> DiscardMutationAsync(FileMutationOperation operation, CancellationToken cancellationToken) => MutationAction(operation, true, cancellationToken);
-    private async Task<FileMutationReceipt> MutationAction(FileMutationOperation operation, bool discard, CancellationToken cancellationToken)
+    private async Task<FileMutationReceipt> MutationAction(FileMutationOperation operation, bool discard, CancellationToken cancellationToken, TerminalActor? recoveryActor = null)
     {
         var client = await Mutations(cancellationToken); var plan = FileMutationService.ReadPlan(operation);
         var request = new FileOperationApplyRequest { OperationId = operation.Id.ToString("N"), Owner = operation.OwnerHash,
-            Context = new() { ActorSubject = operation.ActorSubject, TraceId = operation.Id.ToString("D") }, Plan = new() { Command = MutationCommand(plan.Command),
+            Context = new() { ActorSubject = recoveryActor?.Subject ?? operation.ActorSubject, TraceId = recoveryActor?.TraceId ?? operation.Id.ToString("D") }, Plan = new() { Command = MutationCommand(plan.Command),
                 SourceIdentity = plan.SourceIdentity is not { } source ? null : new() { Device = source.Device, Inode = source.Inode, Mode = source.Mode, OwnerUid = source.OwnerUid,
                     OwnerGid = source.OwnerGid, LinkCount = source.LinkCount, SizeBytes = source.SizeBytes, ModifiedAtUnixNs = source.ModifiedAtUnixNs },
                 SourceParent = Parent(plan.SourceParent), TargetParent = Parent(plan.TargetParent), SizeBytes = plan.SizeBytes, Sha256 = plan.Sha256, Fingerprint = plan.Fingerprint } };

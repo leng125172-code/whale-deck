@@ -100,6 +100,7 @@ public sealed partial class FileTreeMoveRepository(PlatformDbContext db, IFileTr
             var ids = await db.Database.SqlQuery<Guid>($"""
                 WITH candidate AS (
                   SELECT id FROM file_tree_move_operations WHERE completed_at_utc IS NULL AND next_attempt_at_utc<={now}
+                    AND NOT EXISTS (SELECT 1 FROM file_recovery_operations r WHERE r.kind='tree-move' AND r.original_intent_id=file_tree_move_operations.id AND r.completed_at_utc IS NULL)
                     AND (state<>'Ready' OR ready_expires_at_utc<={now} OR cancel_requested_at_utc IS NOT NULL)
                     AND (lease_expires_at_utc IS NULL OR lease_expires_at_utc<={now})
                   ORDER BY next_attempt_at_utc,id LIMIT 1 FOR UPDATE SKIP LOCKED

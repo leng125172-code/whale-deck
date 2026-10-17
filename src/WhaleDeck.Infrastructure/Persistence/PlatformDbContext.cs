@@ -16,6 +16,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
     public DbSet<FileArchiveOperation> FileArchiveOperations => Set<FileArchiveOperation>();
     public DbSet<FileTreeCopyOperation> FileTreeCopyOperations => Set<FileTreeCopyOperation>();
     public DbSet<FileTreeMoveOperation> FileTreeMoveOperations => Set<FileTreeMoveOperation>();
+    public DbSet<FileRecoveryOperation> FileRecoveryOperations => Set<FileRecoveryOperation>();
     public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
     public DbSet<PortalItem> PortalItems => Set<PortalItem>();
     public DbSet<PublicPortalPreference> PublicPortalPreferences => Set<PublicPortalPreference>();
@@ -92,6 +93,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
         ConfigureFileArchives(modelBuilder);
         ConfigureTreeCopies(modelBuilder);
         ConfigureTreeMoves(modelBuilder);
+        ConfigureFileRecovery(modelBuilder);
         ConfigureAuditAndSettings(modelBuilder);
         ConfigureIdentityAndPortals(modelBuilder);
         ConfigureResourcesAndApplications(modelBuilder);

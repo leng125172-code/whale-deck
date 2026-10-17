@@ -2,12 +2,46 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using WhaleDeck.Application.Models;
+using WhaleDeck.Application.Abstractions;
+using WhaleDeck.Domain.Entities;
 
 namespace WhaleDeck.Application.Services;
 
 public static class FileRecoveryValidation
 {
     public const int MaximumPageSize = 50;
+    public static string ReceiptHash(string kind, Guid execution, string state, string canonicalJson) => Convert.ToHexString(SHA256.HashData(
+        Encoding.UTF8.GetBytes("files-recovery-observation-v1\n" + kind + "\n" + execution.ToString("N") + "\n" + state + "\n" + canonicalJson)));
+    public static void Command(QueueFileRecoveryCommand command)
+    {
+        Kind(command.Kind);
+        if (command.IntentId == Guid.Empty || command.OriginalVersion < 0 || command.Disposition is not ("AcknowledgeUnknown" or "ReconcileCompleted") ||
+            command.ReasonCode is not ("OriginalSessionLost" or "OperatorHandover" or "IncidentReview")) throw new ArgumentException("FILES_RECOVERY_COMMAND_INVALID");
+    }
+    public static FileRecoveryTargetBinding Target(FileRecoveryOperation row) => new(row.Kind, row.OriginalIntentId, row.OriginalExecutionJobId, row.OriginalVersion, row.OriginalBindingHash);
+    public static FileRecoverySnapshot Snapshot(FileRecoveryOperation row) => new(row.Kind, row.OriginalJson, Target(row));
+    public static FileRecoveryRequestBinding Request(FileRecoveryOperation row) => new(row.Id, row.ActorSubject, row.LoginBinding, row.IdempotencyKey,
+        Target(row), row.Disposition, row.ReasonCode, row.CreatedAtUtc, row.PlanningExpiresAtUtc);
+    public static FileRecoveryPlanClaims Ready(FileRecoveryOperation row) => new(row.Id, row.ActorSubject, row.LoginBinding, Target(row),
+        row.ObservationHash ?? throw new InvalidOperationException("FILES_RECOVERY_PLAN_MISSING"), row.RootState ?? throw new InvalidOperationException("FILES_RECOVERY_PLAN_MISSING"),
+        row.Disposition, row.ReasonCode, row.ReadyAtUtc ?? throw new InvalidOperationException("FILES_RECOVERY_PLAN_MISSING"), row.ReadyExpiresAtUtc ?? throw new InvalidOperationException("FILES_RECOVERY_PLAN_MISSING"));
+    public static bool Bound(FileRecoveryOperation row, IFileRecoveryProtector protector)
+    {
+        try
+        {
+            var actor = new TerminalActor(row.ActorSubject, null, [], row.LoginBinding, row.Id.ToString("D"), null);
+            Command(new(row.Kind, row.OriginalIntentId, row.OriginalVersion, row.Disposition, row.ReasonCode)); Target(Target(row));
+            if (RegistrationId(actor, row.IdempotencyKey) != row.Id || row.PlanningExpiresAtUtc != row.CreatedAtUtc.AddMinutes(15) ||
+                !Equal(row.RequestHash, protector.FingerprintRecoveryRequest(Request(row)))) return false;
+            if (row.PlanHash is null) return row.RootState is null && row.ObservationHash is null && row.ObservationJson is null && row.ReadyAtUtc is null && row.ReadyExpiresAtUtc is null && row.ExecutionJobId is null;
+            var claims = Ready(row); Claims(claims);
+            return Equal(row.PlanHash, protector.FingerprintRecoveryReady(claims)) && row.ObservationJson is not null && row.ObservationBindingCurrent is not null &&
+                (row.ExecutionJobId is null || row.ExecutionJobId == ExecutionId(row.Id));
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException) { return false; }
+    }
+    private static bool Equal(string? left, string right) => FileManagementService.Hex(left) && FileManagementService.Hex(right) &&
+        CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(left!), Encoding.ASCII.GetBytes(right));
     public static void Kind(string kind)
     {
         if (!FileRecoveryKinds.All.Contains(kind, StringComparer.Ordinal)) throw new ArgumentException("FILES_RECOVERY_KIND_INVALID");
