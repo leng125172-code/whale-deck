@@ -13,7 +13,10 @@ from run_with_ephemeral_admin import container_environment
 
 
 def main() -> None:
-    bootstrap = len(sys.argv) == 2
+    bootstrap = len(sys.argv) in (2, 3)
+    if len(sys.argv) == 3 and sys.argv[2] not in ('admin', 'ordinary'):
+        raise RuntimeError('Unexpected browser fixture role.')
+    administrator = len(sys.argv) != 3 or sys.argv[2] != 'ordinary'
     data = {
         "action": "create", "username": "whaledeck-browser-" + secrets.token_hex(8),
         "password": "Wd!" + secrets.token_urlsafe(20) + "9Aa",
@@ -29,7 +32,7 @@ def main() -> None:
     if data["action"] == "create":
         response = client.post(api, json={
             "username": username, "name": "Whale Deck browser QA", "is_active": True,
-            "groups": [values["Authentication__Authentik__AdministratorGroupId"]],
+            "groups": [values["Authentication__Authentik__AdministratorGroupId"]] if administrator else [],
         }, timeout=20)
         response.raise_for_status()
         user_id = response.json()["pk"]

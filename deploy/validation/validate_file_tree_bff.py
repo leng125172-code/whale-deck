@@ -59,12 +59,12 @@ def main():
         assert post('files/tree-copies', value, key=key).json()['id'] == row['id']
         return row
 
-    def wait(identifier, states):
+    def wait(identifier, states, reconcile_unknown=False):
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
             row = get('files/tree-copies/' + identifier).json()
             if row['state'] in states: return row
-            assert row['state'] not in TERMINAL + ('Unknown',), 'unexpected-terminal-result'
+            assert row['state'] not in TERMINAL + (() if reconcile_unknown else ('Unknown',)), 'unexpected-terminal-result'
             time.sleep(0.4)
         raise RuntimeError('directory-task-deadline')
 
@@ -116,7 +116,7 @@ def main():
 
         PHASE = 'changed-descendant-after-plan-never-replayed'
         stale_ready = wait(queue(command('stale-source', 'stale-copy'))['id'], ('Ready',)); stale_file.write_bytes(b'changed-after-plan')
-        stale_copy, _ = confirm(stale_ready); assert wait(stale_copy['id'], TERMINAL + ('Unknown',))['state'] == 'Failed'
+        stale_copy, _ = confirm(stale_ready); assert wait(stale_copy['id'], TERMINAL, reconcile_unknown=True)['state'] == 'Failed'
         assert not (folder / 'stale-copy').exists() and stale_file.read_bytes() == b'changed-after-plan'
 
         PHASE = 'human-audit-and-real-sql-observer'
