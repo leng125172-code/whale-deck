@@ -161,7 +161,7 @@ public sealed partial class NativeNotificationDispatchTests
             gateway.Unknown = false; gateway.UnknownPublished = true;
             var recoveryTarget = await Confirm(await Ready("current-administrator-recovery")); gateway.Unknown = true;
             Assert.True(await worker.TickAsync(default)); gateway.Unknown = false;
-            await FileRecoveryWorkflowBoundaries(options, (FilePlanProtector)protector, FileRecoveryKinds.TreeMove, recoveryTarget.Id, true);
+            await FileRecoveryWorkflowBoundaries(options, (FilePlanProtector)protector, FileRecoveryKinds.TreeMove, recoveryTarget.Id, true, true);
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE audit_events ADD CONSTRAINT native_move_tree_audit_failure CHECK (action NOT LIKE 'files.tree-move.%') NOT VALID");
             var rollbackKey = Guid.NewGuid().ToString("D"); var rollbackId = FileTreeMoveValidation.IntentId(actor, rollbackKey);
             try { await Assert.ThrowsAsync<DbUpdateException>(() => service.QueueAsync(actor, Command("audit-rollback"), rollbackKey, default)); }

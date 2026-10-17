@@ -62,5 +62,7 @@ public sealed partial class NativeNotificationDispatchTests
         Assert.Equal(beforeLocks, await db.FilePathLocks.CountAsync());
         Assert.Empty(db.ChangeTracker.Entries());
         await FileRecoveryWorkflowBoundaries(options, protector, kind, id);
+        var clone = await CloneRecoverySource(options, protector, kind, id);
+        await FileRecoveryWorkflowBoundaries(options, protector, kind, clone, true);
     }
 }

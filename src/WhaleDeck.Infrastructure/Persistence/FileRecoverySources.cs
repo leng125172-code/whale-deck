@@ -13,26 +13,31 @@ public sealed partial class FileRecoverySources(PlatformDbContext db, FileRecove
     {
         if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("FILES_RECOVERY_TRANSACTION_REQUIRED");
         FileRecoveryValidation.Kind(kind);
-        FileRecoverySnapshot snapshot; DateTimeOffset? lease;
+        FileRecoverySnapshot snapshot; DateTimeOffset? lease; string originalActor;
         switch (kind)
         {
             case FileRecoveryKinds.Upload:
                 var upload = await db.FileUploadOperations.FromSqlInterpolated($"SELECT * FROM file_upload_operations WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw Missing();
-                snapshot = material.Capture(upload); lease = upload.LeaseExpiresAtUtc; break;
+                snapshot = material.Capture(upload); lease = upload.LeaseExpiresAtUtc; originalActor = upload.ActorSubject; break;
             case FileRecoveryKinds.Mutation:
                 var mutation = await db.FileMutationOperations.FromSqlInterpolated($"SELECT * FROM file_mutation_operations WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw Missing();
-                snapshot = material.Capture(mutation); lease = mutation.LeaseExpiresAtUtc; break;
+                snapshot = material.Capture(mutation); lease = mutation.LeaseExpiresAtUtc; originalActor = mutation.ActorSubject; break;
             case FileRecoveryKinds.Archive:
                 var archive = await db.FileArchiveOperations.FromSqlInterpolated($"SELECT * FROM file_archive_operations WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw Missing();
-                snapshot = material.Capture(archive); lease = archive.LeaseExpiresAtUtc; break;
+                snapshot = material.Capture(archive); lease = archive.LeaseExpiresAtUtc; originalActor = archive.ActorSubject; break;
             case FileRecoveryKinds.TreeCopy:
                 var copy = await db.FileTreeCopyOperations.FromSqlInterpolated($"SELECT * FROM file_tree_copy_operations WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw Missing();
-                snapshot = material.Capture(copy); lease = copy.LeaseExpiresAtUtc; break;
+                snapshot = material.Capture(copy); lease = copy.LeaseExpiresAtUtc; originalActor = copy.ActorSubject; break;
             default:
                 var move = await db.FileTreeMoveOperations.FromSqlInterpolated($"SELECT * FROM file_tree_move_operations WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw Missing();
-                snapshot = material.Capture(move); lease = move.LeaseExpiresAtUtc; break;
+                snapshot = material.Capture(move); lease = move.LeaseExpiresAtUtc; originalActor = move.ActorSubject; break;
         }
         if (lease > clock.GetUtcNow()) throw new InvalidOperationException("FILES_RECOVERY_ORIGINAL_BUSY");
+        var job = await db.OperationJobs.AsNoTracking().SingleOrDefaultAsync(row => row.Id == snapshot.Binding.ExecutionJobId, cancellationToken);
+        var expectedType = kind == FileRecoveryKinds.Upload ? "files.upload" : kind == FileRecoveryKinds.Mutation ? "files.mutation" :
+            kind == FileRecoveryKinds.Archive ? "files.archive" : kind == FileRecoveryKinds.TreeCopy ? "files.tree-copy" : "files.tree-move";
+        if (job is null || job.ActorSubject != originalActor || job.JobType != expectedType || job.CompletedAtUtc is not null)
+            throw new InvalidOperationException("FILES_RECOVERY_ORIGINAL_CHANGED");
         return snapshot;
     }
     public async Task RequireAsync(FileRecoveryOperation operation, CancellationToken cancellationToken)

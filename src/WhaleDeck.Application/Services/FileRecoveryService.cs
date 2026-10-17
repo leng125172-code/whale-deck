@@ -53,7 +53,7 @@ public sealed class FileRecoveryService(FileManagementService authorization, IFi
         if (!FileRecoveryValidation.Bound(row, protector)) throw new InvalidOperationException("FILES_RECOVERY_BINDING_CHANGED");
         var ready = row.State == "Ready" && row.CancelRequestedAtUtc is null && row.ReadyExpiresAtUtc > clock.GetUtcNow();
         var confirmation = ready ? new FileRecoveryConfirmationDto(protector.SignRecovery(FileRecoveryValidation.Ready(row)), row.ReadyExpiresAtUtc!.Value,
-            row.Disposition == "ReconcileCompleted" ? "仅按原任务的完整可信回执对账，不重新执行文件操作；原主体和永久回执保留，当前管理员另行审计。" :
+            row.Disposition == "ReconcileCompleted" ? "仅按原任务的完整可信回执对账，不重新执行文件操作。完整回执是历史事实，不保证当前目标未变化；对账不会覆盖当前文件。原主体和永久回执保留，当前管理员另行审计。" :
                 "明确接受原文件任务的历史不确定性。只有原任务停止且迟到操作已封存后才解除原锁；不表示文件操作成功，不重做、不删除留存对象。") : null;
         return new(row.Id, row.Id, row.ExecutionJobId, row.Kind, row.OriginalIntentId, row.OriginalExecutionJobId, row.OriginalVersion,
             row.State == "Ready" && !ready ? "Expired" : row.State, row.Disposition, row.ReasonCode, row.RootState,

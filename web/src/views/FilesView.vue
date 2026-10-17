@@ -24,6 +24,7 @@ import FileTextEditor from '@/components/files/FileTextEditor.vue'
 import FileArchivePanel from '@/components/files/FileArchivePanel.vue'
 import FileTreeCopyPanel from '@/components/files/FileTreeCopyPanel.vue'
 import FileTreeMovePanel from '@/components/files/FileTreeMovePanel.vue'
+import FileRecoveryPanel from '@/components/files/FileRecoveryPanel.vue'
 import { canCopyDirectory } from '@/services/fileTreeCopies'
 import { canMoveDirectory } from '@/services/fileTreeMoves'
 import { archiveEligible } from '@/services/fileArchives'
@@ -544,9 +545,12 @@ onBeforeUnmount(() => {
         <h1>文件管理</h1>
         <p>仅访问登记目录；数据库、系统配置和密钥使用专用管理入口。</p>
       </div>
-      <el-button :loading="loading" @click="refresh"
-        ><el-icon><RefreshRight /></el-icon>刷新</el-button
-      >
+      <div class="page-heading__actions">
+        <FileRecoveryPanel @changed="afterMutation" @failure="message" />
+        <el-button :loading="loading" @click="refresh"
+          ><el-icon><RefreshRight /></el-icon>刷新</el-button
+        >
+      </div>
     </header>
     <el-alert
       v-if="error"

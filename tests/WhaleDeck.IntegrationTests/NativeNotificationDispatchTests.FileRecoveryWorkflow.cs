@@ -15,11 +15,11 @@ public sealed partial class NativeNotificationDispatchTests
     // Real SQL, immutable source material and transactions. Root transport is
     // deliberately a stub; this is not evidence of filesystem or browser work.
     private static async Task FileRecoveryWorkflowBoundaries(DbContextOptions<PlatformDbContext> options,
-        FilePlanProtector protector, string kind, Guid originalId, bool dispose = false)
+        FilePlanProtector protector, string kind, Guid originalId, bool dispose = false, bool exclusiveMove = false)
     {
         await using var db = new PlatformDbContext(options);
         var material = new FileRecoveryMaterial(protector, protector, protector, protector, protector);
-        var clock = TimeProvider.System;
+        var clock = new NativeRecoveryClock();
         FileRecoveryRepository Repository(PlatformDbContext context) => new(context, new(context, material, clock), material, new(context, protector), protector, clock);
         var repository = Repository(db); var identity = new NativeRecoveryIdentity();
         var authorization = new FileManagementService(null!, null!, null!, identity, clock);
@@ -41,7 +41,7 @@ public sealed partial class NativeNotificationDispatchTests
         Assert.NotEqual(actor.Subject, JsonDocument.Parse(stored.OriginalJson).RootElement.GetProperty("ActorSubject").GetString());
         Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
         Assert.Equal(lockCount, await db.FilePathLocks.CountAsync(row => row.OperationId == originalExecution));
-        if (dispose)
+        if (exclusiveMove)
         {
             // At this point the original move is the only nonterminal move.
             Assert.Null(await new FileTreeMoveRepository(db, protector, clock).ClaimAsync(clock.GetUtcNow(), default));
@@ -83,11 +83,42 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
             Assert.Equal(lockCount, await db.FilePathLocks.CountAsync(row => row.OperationId == originalExecution));
             await db.FileRecoveryOperations.Where(row => row.Id == ready.Id).ExecuteUpdateAsync(setters => setters.SetProperty(row => row.NextAttemptAtUtc, clock.GetUtcNow()));
+            if (exclusiveMove)
+            {
+                await using var locker = new PlatformDbContext(options);
+                await using var transaction = await locker.Database.BeginTransactionAsync();
+                await locker.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM operation_jobs WHERE id={originalExecution} FOR UPDATE");
+                var waiting = Task.Run(async () =>
+                {
+                    await using var concurrent = new PlatformDbContext(options);
+                    return await new FileRecoveryDispatcher(Repository(concurrent), gateway, identity, protector, clock).TickAsync(default);
+                });
+                var observed = false;
+                for (var attempt = 0; attempt < 40; attempt++)
+                {
+                    observed = await db.Database.SqlQueryRaw<bool>("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename=current_user AND pid<>pg_backend_pid() AND wait_event_type='Lock' AND query LIKE '%operation_jobs%' AND query LIKE '%FOR UPDATE%') AS \"Value\"").SingleAsync();
+                    if (observed) break;
+                    await Task.Delay(25);
+                }
+                Assert.True(observed, "Observe the real original Job lock wait before expiring the recovery lease.");
+                clock.Now = clock.Now.AddMinutes(2); await transaction.CommitAsync(); Assert.True(await waiting);
+            }
+            // Even after the source result and path release were staged, the
+            // post-wait lease check must roll back all original changes.
+            Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
+            Assert.Equal(lockCount, await db.FilePathLocks.CountAsync(row => row.OperationId == originalExecution));
             Assert.True(await worker.TickAsync(default)); var disposed = await service.GetAsync(actor, ready.Id, default);
-            Assert.Equal("Disposed", disposed.State); Assert.Equal("Acknowledged", disposed.OriginalResolution); Assert.Equal(1, gateway.Fences);
+            var resolution = kind == FileRecoveryKinds.Upload ? "Failed" : "Acknowledged";
+            Assert.Equal("Disposed", disposed.State); Assert.Equal(resolution, disposed.OriginalResolution); Assert.Equal(1, gateway.Fences);
             Assert.Empty(await db.FilePathLocks.Where(row => row.OperationId == originalExecution).ToArrayAsync());
-            var original = await db.FileTreeMoveOperations.AsNoTracking().SingleAsync(row => row.Id == originalId);
-            Assert.Equal("Acknowledged", original.State); Assert.NotEqual(actor.Subject, original.ActorSubject);
+            var original = kind switch {
+                FileRecoveryKinds.Upload => await db.FileUploadOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),
+                FileRecoveryKinds.Mutation => await db.FileMutationOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),
+                FileRecoveryKinds.Archive => await db.FileArchiveOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),
+                FileRecoveryKinds.TreeCopy => await db.FileTreeCopyOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),
+                _ => await db.FileTreeMoveOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync()
+            };
+            Assert.Equal(resolution, original.State); Assert.NotEqual(actor.Subject, original.ActorSubject);
             Assert.NotEqual(actor.LoginBinding, original.LoginBinding); Assert.Null(original.PublishedVersion);
             Assert.Equal("Failed", (await db.OperationJobs.AsNoTracking().SingleAsync(row => row.Id == originalExecution)).State);
             Assert.Equal("Succeeded", (await db.OperationJobs.AsNoTracking().SingleAsync(row => row.Id == execution)).State);
@@ -99,6 +130,12 @@ public sealed partial class NativeNotificationDispatchTests
         Assert.Equal("23514", (await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM file_recovery_operations WHERE id={ready.Id}"))).SqlState);
         Assert.Equal("23514", (await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE file_recovery_operations SET request_hash={new string('9', 64)} WHERE id={ready.Id}"))).SqlState);
         Console.WriteLine("INBOX_PHASE=file-recovery-" + kind + (dispose ? "-atomic-current-admin-disposition" : "-reservation-plan-cancel-immutable"));
+    }
+    private sealed record RecoveryOriginalFacts(string State, string ActorSubject, string LoginBinding, string? PublishedVersion);
+    private sealed class NativeRecoveryClock : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = FileTreeCopyValidation.Timestamp(DateTimeOffset.UtcNow);
+        public override DateTimeOffset GetUtcNow() => Now;
     }
     private sealed class NativeRecoveryIdentity : IIdentityDirectory
     {
