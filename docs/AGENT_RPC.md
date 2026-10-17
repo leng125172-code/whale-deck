@@ -8,6 +8,8 @@
 
 ## 1. 传输与版本
 
+新增上层候选（尚未发布，不变更Agent1.27协议）：目录复制采用异步BFF计划/永久双任务/确认/Worker，不在HTTP请求中等待扫描；原登录绑定登记键只通过GET恢复。Root开始后若传输失败，BFF持久Unknown并保留共享路径锁，后续只Inspect/Discard原执行ID，禁止重新Apply。源码2ece1c1及后续WebUI证据见[目录操作](DIRECTORY_TREE_OPERATIONS.md)和[页面验收边界](qa/FILE_TREE_COPY_UI.md)；运行时仍以下方e0efb8e为准。
+
 **已安装1.27，运行时e0efb8e**：独立`FileTreeCopyService.Plan/Apply/Inspect/Discard`和`files.tree-copy-intents`能力。只传登记源/目标、原版本、有界计划摘要/父目录UInt64身份与回执，不传16MiB完整清单或任意宿主路径/UID/命令；旧普通文件计划与签名JSON不变。新增固定tree-copy枚举与独立`files-tree-copy`根授权，仅精确旧默认配置自动升级，自定义/收紧策略保持；新树操作独立16GiB/384MiB/128FD/1CPU预算，不放宽旧1GiB上传。2MiB+7与1GiB+7的安装态SDK/UDS/helper复制、完整字节/元数据/回执、方法与nonce、owner/版本/取消栅栏及清理实际通过。BFF异步计划、持久目录任务与人类审计/UI尚未接通，不能在HTTP请求内直接等待整树散列。见[安装态验收和失败记录](qa/FILE_TREE_COPY_AGENT.md)，全部76项继续。
 
 2026-10-17最新运行时6dd60dd/Agent1.26：FileArchiveService已安装，普通文件历史/回收恢复及共享层级锁已通过实机链路；下方“1.26尚未安装”为历史。目录完整清单/复制内部引擎尚未安装或注册独立RPC，开发空间仍未实现，不可从现有FileRoot推断新能力。见[最新签收](qa/FILE_HIERARCHY_LOCKS.md)。

@@ -22,6 +22,8 @@ import FileDirectoryTree from '@/components/files/FileDirectoryTree.vue'
 import FileSearchPanel from '@/components/files/FileSearchPanel.vue'
 import FileTextEditor from '@/components/files/FileTextEditor.vue'
 import FileArchivePanel from '@/components/files/FileArchivePanel.vue'
+import FileTreeCopyPanel from '@/components/files/FileTreeCopyPanel.vue'
+import { canCopyDirectory } from '@/services/fileTreeCopies'
 import { archiveEligible } from '@/services/fileArchives'
 import { textEligible } from '@/services/fileText'
 import type { PreparedFileText } from '@/services/fileText'
@@ -31,11 +33,23 @@ import type { FileMutationKind } from '@/services/fileMutations'
 const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
   mutationOperationLocked = ref(false),
   editorLocked = ref(false),
-  archiveOperationLocked = ref(false)
+  archiveOperationLocked = ref(false),
+  treeCopyLocked = ref(false)
 const archivePanel = ref<InstanceType<typeof FileArchivePanel> | null>(null)
+const treeCopyPanel = ref<InstanceType<typeof FileTreeCopyPanel> | null>(null)
 const mutationLocked = computed(
-  () => mutationOperationLocked.value || editorLocked.value || archiveOperationLocked.value,
+  () =>
+    mutationOperationLocked.value ||
+    editorLocked.value ||
+    archiveOperationLocked.value ||
+    treeCopyLocked.value,
 )
+function canTreeCopy(entry: FileEntry) {
+  return canCopyDirectory(
+    roots.value.find((root) => root.id === rootId.value),
+    entry,
+  )
+}
 const canHistory = computed(() =>
   ['files-list', 'files-download', 'files-history'].every((action) =>
     roots.value.find((root) => root.id === rootId.value)?.actions.includes(action),
@@ -592,7 +606,14 @@ onBeforeUnmount(() => {
         :roots="roots"
         :root-id="rootId"
         :path="path"
-        :disabled="busy || activeIntent || !!frozen || editorLocked || archiveOperationLocked"
+        :disabled="
+          busy ||
+          activeIntent ||
+          !!frozen ||
+          editorLocked ||
+          archiveOperationLocked ||
+          treeCopyLocked
+        "
         @locked="mutationOperationLocked = $event"
         @changed="afterMutation"
         @failure="message"
@@ -602,7 +623,12 @@ onBeforeUnmount(() => {
         :root-id="rootId"
         :path="path"
         :disabled="
-          busy || activeIntent || !!frozen || mutationOperationLocked || archiveOperationLocked
+          busy ||
+          activeIntent ||
+          !!frozen ||
+          mutationOperationLocked ||
+          archiveOperationLocked ||
+          treeCopyLocked
         "
         @locked="editorLocked = $event"
         @prepared="acceptText"
@@ -613,8 +639,32 @@ onBeforeUnmount(() => {
         :roots="roots"
         :root-id="rootId"
         :path="path"
-        :disabled="busy || activeIntent || !!frozen || mutationOperationLocked || editorLocked"
+        :disabled="
+          busy ||
+          activeIntent ||
+          !!frozen ||
+          mutationOperationLocked ||
+          editorLocked ||
+          treeCopyLocked
+        "
         @locked="archiveOperationLocked = $event"
+        @changed="afterMutation"
+        @failure="message"
+      />
+      <FileTreeCopyPanel
+        ref="treeCopyPanel"
+        :roots="roots"
+        :root-id="rootId"
+        :path="path"
+        :disabled="
+          busy ||
+          activeIntent ||
+          !!frozen ||
+          mutationOperationLocked ||
+          editorLocked ||
+          archiveOperationLocked
+        "
+        @locked="treeCopyLocked = $event"
         @changed="afterMutation"
         @failure="message"
       />
@@ -765,6 +815,14 @@ onBeforeUnmount(() => {
                   >
                 </el-dropdown>
               </div>
+              <el-button
+                v-else-if="canTreeCopy(row)"
+                link
+                type="primary"
+                :disabled="busy || activeIntent || !!frozen || mutationLocked"
+                @click="treeCopyPanel?.open(row)"
+                >复制目录</el-button
+              >
               <span v-else>目录</span></template
             ></el-table-column
           >

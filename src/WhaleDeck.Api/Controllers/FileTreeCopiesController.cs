@@ -22,6 +22,10 @@ public sealed class FileTreeCopiesController(FileTreeCopyService trees, Terminal
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<FileTreeCopyIntentDto>> Status(Guid id, CancellationToken cancellationToken) =>
         Ok(await trees.GetAsync((await identity.ReadAsync(HttpContext)).Actor, id, cancellationToken));
+    /// <summary>Read-only lookup of a lost registration response, bound to the current original login. Not found never creates or retries a planning job.</summary>
+    [HttpGet("by-key/{key}")]
+    public async Task<ActionResult<FileTreeCopyIntentDto>> ByKey(string key, CancellationToken cancellationToken) =>
+        Ok(await trees.GetByKeyAsync((await identity.ReadAsync(HttpContext)).Actor, key, cancellationToken));
     /// <summary>Confirm the sealed original plan and acquire hierarchical locks, returning a separate execution job. Same confirmation never creates another execution.</summary>
     [HttpPost("{id:guid}/confirm"), ProducesResponseType<FileTreeCopyIntentDto>(StatusCodes.Status202Accepted)]
     public async Task<ActionResult<FileTreeCopyIntentDto>> Confirm(Guid id, ConfirmFileTreeCopyCommand command, CancellationToken cancellationToken)

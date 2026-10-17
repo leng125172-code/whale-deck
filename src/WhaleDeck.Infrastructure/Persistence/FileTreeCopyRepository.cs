@@ -170,6 +170,18 @@ public sealed partial class FileTreeCopyRepository(PlatformDbContext db, IFileTr
     public Task DeferAsync(FileTreeCopyOperation claimed, CancellationToken cancellationToken) => Transaction(async () =>
     {
         var row = await Lease(claimed, cancellationToken); if (row is null) return false;
+        if (row.RootStartedAtUtc is not null && row.ExecutionJobId is { } id && row.State != "Unknown")
+        {
+            var job = await Job(id, cancellationToken);
+            if (row.LeaseExpiresAtUtc <= Now()) return false;
+            // A lost response is not evidence that copying is still running.
+            // Keep the intent and shared path locks until the root receipt is
+            // reconciled; subsequent attempts may inspect/discard, never apply.
+            row.State = "Unknown"; row.ResultCode = "FILES_RECEIPT_UNAVAILABLE";
+            job.State = "Running"; job.Phase = "AwaitingTreeReceipt"; job.ErrorCode = row.ResultCode; job.Version++;
+            await Event(job, row.ResultCode, cancellationToken);
+            Audit(row, id, "files.tree-copy.result", "Unknown", row.Id.ToString("D"), null);
+        }
         row.NextAttemptAtUtc = Now().AddSeconds(6); row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
         await db.SaveChangesAsync(cancellationToken); return true;
     }, cancellationToken);

@@ -14,6 +14,8 @@ public sealed class FileTreeCopyService(FileManagementService authorization, IFi
     }
     public async Task<FileTreeCopyIntentDto> GetAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken)
     { await authorization.AuthorizeAsync(actor, cancellationToken); return Map(await Owned(actor, id, cancellationToken)); }
+    public Task<FileTreeCopyIntentDto> GetByKeyAsync(TerminalActor actor, string key, CancellationToken cancellationToken) =>
+        GetAsync(actor, FileTreeCopyValidation.IntentId(actor, key), cancellationToken);
     public async Task<FileTreeCopyIntentDto> ConfirmAsync(TerminalActor actor, Guid id, ConfirmFileTreeCopyCommand command, CancellationToken cancellationToken)
     {
         await authorization.AuthorizeAsync(actor, cancellationToken);

@@ -40,6 +40,8 @@ public sealed partial class NativeNotificationDispatchTests
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.QueueAsync(actor, Command("denied"), Guid.NewGuid().ToString("D"), default)); identity.Admin = true;
             var requestKey = Guid.NewGuid().ToString("D"); var queued = await service.QueueAsync(actor, Command("one"), requestKey, default);
             Assert.Equal(queued.Id, (await service.QueueAsync(actor, Command("one"), requestKey, default)).Id);
+            Assert.Equal(queued.Id, (await service.GetByKeyAsync(actor, requestKey, default)).Id);
+            await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetByKeyAsync(actor with { LoginBinding = new('C', 64) }, requestKey, default));
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.QueueAsync(actor, Command("different"), requestKey, default));
             Assert.Null((await repository.OwnedAsync(actor with { LoginBinding = new('C', 64) }, queued.Id, default)));
             Assert.Empty(await db.FilePathLocks.Where(item => item.OperationId == queued.Id).ToArrayAsync());
@@ -85,6 +87,16 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal("Canceled", (await service.GetAsync(actor, downgrade.Id, default)).State);
             var lost = await Confirm(await Ready("lost")); gateway.LoseResponse = true;
             Assert.True(await worker.TickAsync(default)); applied = gateway.Applies; Assert.NotNull((await repository.OwnedAsync(actor, lost.Id, default))!.RootStartedAtUtc);
+            Assert.Equal("Unknown", (await service.GetAsync(actor, lost.Id, default)).State);
+            Assert.Equal(2, await db.FilePathLocks.CountAsync(item => item.OperationId == lost.ExecutionJobId));
+            Assert.Equal("AwaitingTreeReceipt", (await db.OperationJobs.AsNoTracking().SingleAsync(item => item.Id == lost.ExecutionJobId)).Phase);
+            var lostEvents = await db.OperationJobEvents.CountAsync(item => item.JobId == lost.ExecutionJobId);
+            var lostAudit = await db.AuditEvents.CountAsync(item => item.JobId == lost.ExecutionJobId);
+            gateway.ReceiptUnavailable = true; clock.Now = clock.Now.AddSeconds(7); await Due(lost.Id); Assert.True(await worker.TickAsync(default));
+            Assert.Equal(lostEvents, await db.OperationJobEvents.CountAsync(item => item.JobId == lost.ExecutionJobId));
+            Assert.Equal(lostAudit, await db.AuditEvents.CountAsync(item => item.JobId == lost.ExecutionJobId));
+            Assert.Equal(applied, gateway.Applies); Assert.Equal(2, await db.FilePathLocks.CountAsync(item => item.OperationId == lost.ExecutionJobId));
+            gateway.ReceiptUnavailable = false;
             clock.Now = clock.Now.AddSeconds(7); await Due(lost.Id); Assert.True(await worker.TickAsync(default));
             Assert.Equal(applied, gateway.Applies); Assert.Equal("Succeeded", (await service.GetAsync(actor, lost.Id, default)).State);
             var missing = await Confirm(await Ready("started-no-receipt")); var claim = Assert.IsType<FileTreeCopyOperation>(await repository.ClaimAsync(clock.GetUtcNow(), default));
@@ -157,10 +169,11 @@ public sealed partial class NativeNotificationDispatchTests
     private sealed class NativeTreeGateway : IFileTreeCopyGateway
     {
         private readonly Dictionary<Guid, FileTreeCopyReceipt> _receipts = [];
-        public bool LoseResponse { get; set; } public bool Unknown { get; set; } public int Applies { get; private set; }
+        public bool LoseResponse { get; set; } public bool Unknown { get; set; } public bool ReceiptUnavailable { get; set; } public int Applies { get; private set; }
         public Task<FileTreeCopyPlan> PlanTreeCopyAsync(TerminalActor actor, FileTreeCopyCommand command, CancellationToken cancellationToken) => Task.FromResult(
             new FileTreeCopyPlan(command, new('C', 64), 4, 1073741831, new(ulong.MaxValue, 9007199254740993UL), new('D', 64), new('E', 64), new('F', 64)));
-        public Task<FileTreeCopyReceipt?> InspectTreeCopyAsync(FileTreeCopyOperation operation, CancellationToken cancellationToken) => Task.FromResult(_receipts.GetValueOrDefault(operation.ExecutionJobId!.Value));
+        public Task<FileTreeCopyReceipt?> InspectTreeCopyAsync(FileTreeCopyOperation operation, CancellationToken cancellationToken) => ReceiptUnavailable
+            ? throw new IOException("test-only receipt transport unavailable") : Task.FromResult(_receipts.GetValueOrDefault(operation.ExecutionJobId!.Value));
         public Task<FileTreeCopyReceipt> ApplyTreeCopyAsync(FileTreeCopyOperation operation, CancellationToken cancellationToken)
         {
             Applies++; var result = Result(operation, Unknown ? "Unknown" : "Completed"); _receipts[operation.ExecutionJobId!.Value] = result;
