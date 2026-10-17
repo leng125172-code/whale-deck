@@ -69,8 +69,30 @@ def main():
         search(409, cursor=cursor, query='other')
         files['late-name.txt'] = b'owned-directory-change'; (fixture / 'late-name.txt').write_bytes(files['late-name.txt'])
         search(409, cursor=cursor)
+        PHASE = 'escaped-list-frame-pagination'
+        names = sorted('"' * 248 + f'{index:07}' for index in range(213)) + ['中' * 80 + '"' * 8 + '0000000']
+        names.sort()
+        for kind, route in (('long-files', 'entries'), ('long-directories', 'directories')):
+            parent = fixture / kind; parent.mkdir(mode=0o700); directories.append(kind)
+            for entry in names:
+                relative = kind + '/' + entry
+                if kind == 'long-files':
+                    files[relative] = b'owned-long-name'; (fixture / relative).write_bytes(files[relative])
+                else:
+                    (fixture / relative).mkdir(mode=0o700); directories.append(relative)
+            after = ''; found = []; versions = set()
+            for page in range(20):
+                result = get(route, path=name + '/' + kind, take=100, after=after)
+                entries = result['entries']; assert entries and len(entries) <= 100, 'escaped-page-size'
+                if page == 0: assert len(entries) < 100, 'escaped-page-not-budgeted'
+                found.extend(entry['name'] for entry in entries); versions.add(result['version'])
+                after = result['nextCursor']
+                if not after: break
+                assert after == entries[-1]['name'], 'escaped-cursor-skips-entries'
+            else: raise RuntimeError('escaped-list-did-not-terminate')
+            assert found == names and len(versions) == 1, 'escaped-list-content-or-version'
         print(json.dumps({'realFileBrowserBff': 'passed', 'oidcApiUdsRoot': 'passed', 'recursiveNamePaginationAndFilters': 'passed',
-            'protectedLinkFifoCsrfOriginAndCursorVersion': 'passed', 'fileContentSearchHddAndDirectoryMutation': 'not-covered'}))
+            'protectedLinkFifoCsrfOriginAndCursorVersion': 'passed', 'escapedFileAndDirectoryPages': 'passed', 'fileContentSearchHddAndDirectoryMutation': 'not-covered'}))
     finally:
         current = fixture.lstat(); assert stat.S_ISDIR(current.st_mode) and (current.st_dev, current.st_ino) == (original.st_dev, original.st_ino)
         if os.path.lexists(link):

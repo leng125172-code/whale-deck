@@ -358,6 +358,11 @@ a {
   margin-inline-end: 12px;
 }
 
+.topbar__actions .el-badge__content.is-fixed {
+  right: 0;
+  transform: translate(50%, -50%);
+}
+
 .connection-state {
   display: inline-flex;
   align-items: center;
@@ -1700,10 +1705,6 @@ a {
 
   .topbar__actions {
     gap: 2px;
-  }
-
-  .topbar__actions .icon-action {
-    margin-inline-end: 20px;
   }
 
   .theme-switch {

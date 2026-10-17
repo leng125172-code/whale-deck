@@ -1,5 +1,6 @@
 """Real Linux filesystem tree/search checks, never a mocked permission pass."""
 import json
+import io
 import os
 import stat
 import subprocess
@@ -40,6 +41,34 @@ class FileBrowserTests(unittest.TestCase):
         self.assertEqual([x['name'] for x in first['entries'] + second['entries']], ['a', 'b', '中文'])
         self.assertEqual(first['version'], second['version'])
         self.assertTrue(all(x['kind'] == 'Directory' and not x['isProtected'] for x in first['entries']))
+
+    def test_escaped_names_fit_actual_output_frames_without_lost_listing_entries(self):
+        for kind, listing in (('File', driver.list_directory), ('Directory', driver.list_directories)):
+            with self.subTest(kind=kind):
+                folder = self.root / kind; folder.mkdir()
+                names = sorted(prefix + f'{index:07}' for prefix in ('"' * 248, '中' * 80 + '"' * 8) for index in range(213))
+                for name in names:
+                    target = folder / name
+                    if kind == 'File': target.write_bytes(b'x')
+                    else: target.mkdir()
+                found = []; after = ''; versions = set(); pages = []
+                for _ in range(20):
+                    result = listing({'rootId': 'test.shared', 'path': kind, 'after': after, 'take': 100})
+                    frame = io.BytesIO(); driver.emit(result, frame)
+                    self.assertLessEqual(len(frame.getvalue()), 65536)
+                    self.assertEqual(json.loads(frame.getvalue()), result)
+                    self.assertTrue(result['entries']); self.assertLessEqual(len(result['entries']), 100)
+                    found.extend(row['name'] for row in result['entries']); versions.add(result['version'])
+                    pages.append(len(result['entries'])); after = result['nextCursor']
+                    if not after: break
+                    self.assertEqual(after, result['entries'][-1]['name'])
+                else: self.fail('escaped-name listing did not terminate')
+                self.assertEqual(found, names); self.assertEqual(len(versions), 1)
+                self.assertLess(pages[0], 100, 'byte budget must shorten an oversized page')
+                single = listing({'rootId': 'test.shared', 'path': kind, 'after': '', 'take': 1})
+                self.assertEqual(single['nextCursor'], names[0]); self.assertEqual(len(single['entries']), 1)
+                empty = listing({'rootId': 'test.shared', 'path': kind, 'after': names[-1], 'take': 100})
+                self.assertEqual(empty['entries'], []); self.assertEqual(empty['nextCursor'], '')
 
     def test_recursive_pages_resume_inside_matched_directories_without_duplicates(self):
         for directory in ('a-report', 'b', '中文'):

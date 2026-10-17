@@ -32,6 +32,7 @@ STATE = '/var/lib/whaledeck-files'
 CHUNK = 32768
 MAX_BYTES = 1024 * 1024 * 1024
 SEARCH_VISITS = 10000
+LIST_ENTRIES_BYTES = 48 * 1024
 STAGING = '.whaledeck-files'
 PRIVATE = {'.git', '.ssh', '.gnupg', 'secrets', 'manifest.json', 'compose.yml', 'compose.yaml',
            'docker-compose.yml', 'docker-compose.yaml', 'resources.json', 'agent-capability.key'}
@@ -255,6 +256,21 @@ def metadata(name, info):
             'isProtected': protected(name) or kind not in ('Directory', 'File') or kind == 'File' and info.st_nlink != 1}
 
 
+def listing_page(folder, selected, take, before):
+    # Count the actual UTF-8 JSON encoding, including quote escaping. A valid
+    # 255-byte Linux name can double in JSON. Reserve frame space for the
+    # cursor/version/envelope instead of increasing the private 64 KiB limit.
+    rows = []; size = 0
+    for name in selected[:take]:
+        row = metadata(name, os.stat(name, dir_fd=folder, follow_symlinks=False))
+        encoded_size = len(json.dumps(row, ensure_ascii=False, separators=(',', ':')).encode('utf-8')) + 1
+        if size + encoded_size > LIST_ENTRIES_BYTES:
+            if not rows: raise Rejected('FILES_OUTPUT_LIMIT')
+            break
+        rows.append(row); size += encoded_size
+    return {'entries': rows, 'nextCursor': rows[-1]['name'] if len(selected) > len(rows) else '', 'version': before}
+
+
 def list_directory(request):
     if set(request) != {'rootId', 'path', 'after', 'take'} or type(request['take']) is not int or not 1 <= request['take'] <= 100:
         raise Rejected('FILES_LIST_INVALID')
@@ -277,10 +293,10 @@ def list_directory(request):
                         except (Rejected, UnicodeError): continue
                         if entry.name > after: yield entry.name
             selected = heapq.nsmallest(request['take'] + 1, names())
-            rows = [metadata(name, os.stat(name, dir_fd=folder, follow_symlinks=False)) for name in selected[:request['take']]]
+            result = listing_page(folder, selected, request['take'], before)
             if before != version(os.fstat(folder)):
                 raise Rejected('FILES_VERSION_CONFLICT')
-            return {'entries': rows, 'nextCursor': selected[request['take'] - 1] if len(selected) > request['take'] else '', 'version': before}
+            return result
         finally:
             os.close(folder)
 
@@ -316,10 +332,11 @@ def list_directories(request):
         try:
             before = version(os.fstat(folder))
             selected = browse_names(folder, after, time.monotonic() + 5, directories=True)
-            rows = [metadata(name, os.stat(name, dir_fd=folder, follow_symlinks=False)) for name in selected[:request['take']]]
+            result = listing_page(folder, selected, request['take'], before)
+            rows = result['entries']
             if any(row['kind'] != 'Directory' or row['isProtected'] for row in rows) or before != version(os.fstat(folder)):
                 raise Rejected('FILES_VERSION_CONFLICT')
-            return {'entries': rows, 'nextCursor': selected[request['take'] - 1] if len(selected) > request['take'] else '', 'version': before}
+            return result
         finally: os.close(folder)
 
 
