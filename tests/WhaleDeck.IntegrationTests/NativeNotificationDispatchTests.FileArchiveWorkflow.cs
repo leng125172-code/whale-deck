@@ -94,6 +94,7 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal("Purged", purged.CaptureState); Assert.Equal("Purged", purged.Availability); Assert.Equal(actor.Subject, purged.CreatedBySubject);
             var unknown = await Create(Command("unknown")); gateway.Unknown = true;
             Assert.True(await worker.TickAsync(default)); var uncertain = await service.GetAsync(actor, unknown.Intent.Id, default); Assert.Equal("Unknown", uncertain.State);
+            await FileRecoveryInventoryReadOnly(options, (FilePlanProtector)protector, FileRecoveryKinds.Archive, unknown.Intent.Id);
             Assert.Single(await db.FilePathLocks.Where(item => item.OperationId == unknown.Intent.Id).ToArrayAsync());
             await service.AcknowledgeAsync(actor, unknown.Intent.Id, new(uncertain.Version, true), default);
             Assert.Equal("Acknowledged", (await service.GetAsync(actor, unknown.Intent.Id, default)).State);

@@ -93,6 +93,9 @@ public static class DependencyInjection
         services.AddScoped<IFileTreeMoveRepository, FileTreeMoveRepository>();
         services.AddScoped<FileTreeMoveService>();
         services.AddScoped<FileTreeMoveDispatcher>();
+        services.AddSingleton<IFileRecoveryProtector, FilePlanProtector>();
+        services.AddScoped<IFileRecoveryInventory, FileRecoveryInventory>();
+        services.AddScoped<FileRecoveryInventoryService>();
         services.AddScoped<FileMutationService>();
         services.AddScoped<FileMutationDispatcher>();
         services.AddSingleton<ITerminalGrantSigner, TerminalGrantSigner>();

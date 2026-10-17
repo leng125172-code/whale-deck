@@ -97,6 +97,7 @@ public sealed partial class NativeNotificationDispatchTests
             var unknown = await Create("unknown"); gateway.Unknown = true;
             Assert.True(await worker.TickAsync(default)); var unknownRow = await service.GetAsync(actor, unknown.Intent.Id, default);
             Assert.Equal("Unknown", unknownRow.State); Assert.Equal(2, await db.FilePathLocks.CountAsync(item => item.OperationId == unknownRow.Id));
+            await FileRecoveryInventoryReadOnly(options, (FilePlanProtector)protector, FileRecoveryKinds.Mutation, unknownRow.Id);
             await Assert.ThrowsAsync<InvalidOperationException>(() => Upload("unknown"));
             var events = await db.OperationJobEvents.CountAsync(item => item.JobId == unknownRow.Id);
             await Due(unknownRow.Id); Assert.True(await worker.TickAsync(default));

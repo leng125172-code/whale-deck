@@ -125,6 +125,7 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal("Canceled", (await service.GetAsync(actor, late.Id, default)).State);
             var unknown = await Confirm(await Ready("unknown")); gateway.Unknown = true; Assert.True(await worker.TickAsync(default));
             var unknownRow = await service.GetAsync(actor, unknown.Id, default); Assert.Equal("Unknown", unknownRow.State); Assert.True(unknownRow.PartialRetained);
+            await FileRecoveryInventoryReadOnly(options, (FilePlanProtector)protector, FileRecoveryKinds.TreeCopy, unknown.Id);
             Assert.Equal(2, await db.FilePathLocks.CountAsync(item => item.OperationId == unknownRow.ExecutionJobId));
             var beforeEvents = await db.OperationJobEvents.CountAsync(item => item.JobId == unknownRow.ExecutionJobId);
             await Due(unknown.Id); Assert.True(await worker.TickAsync(default)); Assert.Equal(beforeEvents, await db.OperationJobEvents.CountAsync(item => item.JobId == unknownRow.ExecutionJobId));

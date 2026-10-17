@@ -92,6 +92,11 @@ public sealed partial class NativeNotificationDispatchTests
             var seal = protector.Fingerprint(new(sealId, actor.Subject, actor.LoginBinding, claims.File, expiry));
             await repository.EnqueueAsync(actor, sealId, Guid.NewGuid().ToString("D"), seal, claims, expiry, default);
             var sealedRow = await repository.OwnedAsync(actor, sealId, default); Assert.True(FileManagementService.HasValidBinding(sealedRow!, protector));
+            // Synthetic SQL metadata only: no Root upload or physical file I/O.
+            // The permanent request binding stays unchanged through observation.
+            await db.FileUploadOperations.Where(item => item.Id == sealId).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.State, "Unknown"));
+            await FileRecoveryInventoryReadOnly(options, protector, FileRecoveryKinds.Upload, sealId);
+            await db.FileUploadOperations.Where(item => item.Id == sealId).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.State, sealedRow!.State));
             await db.FileUploadOperations.Where(item => item.Id == sealId).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ExpiresAtUtc, expiry.AddSeconds(1)));
             Assert.False(FileManagementService.HasValidBinding((await repository.OwnedAsync(actor, sealId, default))!, protector));
             await db.FileUploadOperations.Where(item => item.Id == sealId).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ExpiresAtUtc, expiry));

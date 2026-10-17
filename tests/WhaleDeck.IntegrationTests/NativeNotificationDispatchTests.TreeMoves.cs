@@ -142,6 +142,10 @@ public sealed partial class NativeNotificationDispatchTests
             var unknown = await Confirm(await Ready("unknown")); gateway.Unknown = true; Assert.True(await worker.TickAsync(default));
             var unknownRow = await service.GetAsync(actor, unknown.Id, default); Assert.Equal("Unknown", unknownRow.State); Assert.True(unknownRow.PartialRetained);
             Assert.True(unknownRow.DestinationPublished); Assert.False(unknownRow.SourceRemoved); Assert.False(unknownRow.SourceRetained);
+            var buddy = await Confirm(await Ready("recovery-inventory-same-time")); Assert.True(await worker.TickAsync(default));
+            var buddyRow = await service.GetAsync(actor, buddy.Id, default); Assert.Equal("Unknown", buddyRow.State);
+            await FileRecoveryInventoryReadOnly(options, (FilePlanProtector)protector, FileRecoveryKinds.TreeMove, unknown.Id);
+            await service.AcknowledgeAsync(actor, buddy.Id, new(buddyRow.Version, true), default);
             Assert.Equal(2, await db.FilePathLocks.CountAsync(item => item.OperationId == unknownRow.ExecutionJobId));
             var beforeEvents = await db.OperationJobEvents.CountAsync(item => item.JobId == unknownRow.ExecutionJobId);
             await Due(unknown.Id); Assert.True(await worker.TickAsync(default)); Assert.Equal(beforeEvents, await db.OperationJobEvents.CountAsync(item => item.JobId == unknownRow.ExecutionJobId));
