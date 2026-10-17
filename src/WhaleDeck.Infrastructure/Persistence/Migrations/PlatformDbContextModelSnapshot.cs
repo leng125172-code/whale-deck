@@ -1015,6 +1015,69 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.FileArchiveRegistration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActorSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("actor_subject");
+
+                    b.Property<DateTimeOffset?>("CanceledAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("canceled_at_utc");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<string>("PlanJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("plan_json");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_hash");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("ActorSubject", "LoginBinding", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("file_archive_registrations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_file_archive_registration_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$' AND idempotency_key ~ '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'");
+
+                            t.HasCheckConstraint("ck_file_archive_registration_limits", "id<>'00000000-0000-0000-0000-000000000000'::uuid AND expires_at_utc>created_at_utc AND octet_length(plan_json::text)<=32768");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.FileMutationOperation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2947,6 +3010,12 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ArchiveVersionId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("WhaleDeck.Domain.Entities.FileArchiveRegistration", null)
+                        .WithOne()
+                        .HasForeignKey("WhaleDeck.Domain.Entities.FileArchiveOperation", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
                         .WithOne()

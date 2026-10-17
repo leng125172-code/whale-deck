@@ -10,9 +10,10 @@ public sealed record FileArchiveIdentity(string MetadataHash, FileObjectIdentity
 public sealed record FileArchivePlan(FileArchiveCommand Command, FileParentIdentity? ParentIdentity,
     FileObjectIdentityDto? SourceIdentity, string SourceSha256, FileArchiveIdentity? ArchiveIdentity,
     FileObjectIdentityDto? RestoreMetadata, long SizeBytes, string Sha256, string Fingerprint);
-public sealed record FileArchivePlanClaims(string Actor, string LoginBinding, FileArchivePlan Plan, DateTimeOffset ExpiresAtUtc);
+public sealed record FileArchivePlanClaims(string Actor, string LoginBinding, FileArchivePlan Plan, DateTimeOffset ExpiresAtUtc, string IdempotencyKey = "");
 public sealed record FileArchiveBinding(Guid Id, string Actor, string LoginBinding, FileArchivePlan Plan, DateTimeOffset ExpiresAtUtc);
-public sealed record FileArchivePlanDto(string PlanHash, DateTimeOffset ExpiresAtUtc, FileArchiveCommand Command, long SizeBytes, string Warning);
+public sealed record FileArchivePlanDto(string PlanHash, DateTimeOffset ExpiresAtUtc, FileArchiveCommand Command, long SizeBytes, string Warning, Guid OperationId, string IdempotencyKey);
+public sealed record FileArchiveRegistrationDto(Guid Id, string State, FileArchivePlanDto? Plan, FileArchiveIntentDto? Intent);
 public sealed record SubmitFileArchiveCommand(string PlanHash, bool Confirmed, string IdempotencyKey);
 public sealed record AcknowledgeFileArchiveCommand(long Version, bool Confirmed);
 public sealed record FileArchiveIntentDto(Guid Id, Guid JobId, FileArchiveCommand Command, long SizeBytes, string State,

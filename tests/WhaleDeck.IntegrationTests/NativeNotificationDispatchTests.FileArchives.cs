@@ -50,6 +50,8 @@ public sealed partial class NativeNotificationDispatchTests
         var version = await db.FileVersions.AsNoTracking().SingleAsync(item => item.Id == id);
         Assert.Equal("source", version.RelativePath); Assert.Equal(hash, version.Sha256); Assert.Equal(7, version.SizeBytes);
         Assert.Equal("native-archive-admin", version.CreatedBySubject); Assert.Equal("Restored", version.CaptureState);
+        db.FileArchiveRegistrations.Add(new() { Id = other, ActorSubject = "native-other-admin", LoginBinding = hash, IdempotencyKey = other.ToString("D"),
+            RequestHash = hash, PlanJson = "{}", CreatedAtUtc = now, ExpiresAtUtc = now.AddMinutes(5) });
         db.FileArchiveOperations.Add(new() { Id = other, ActorSubject = "native-other-admin", LoginBinding = hash, OwnerHash = hash, RequestHash = hash,
             Kind = "restore", RootId = "test.archive", RelativePath = "source", TargetHash = hash, ArchiveVersionId = id,
             ExpectedVersion = "ABSENT", Sha256 = hash, SizeBytes = 7, PlanJson = "{}", CreatedAtUtc = now, ExpiresAtUtc = now.AddMinutes(10), NextAttemptAtUtc = now });
@@ -62,6 +64,7 @@ public sealed partial class NativeNotificationDispatchTests
         Assert.Equal("FK_file_archive_operations_file_versions_archive_version_id", retained.ConstraintName);
         Assert.Equal(1, await db.FileVersions.CountAsync(item => item.Id == id));
         Assert.Equal(1, await db.FileArchiveOperations.Where(item => item.Id == other).ExecuteDeleteAsync());
+        await db.FileArchiveRegistrations.Where(item => item.Id == other).ExecuteDeleteAsync();
         Assert.Equal(1, await db.FileVersions.Where(item => item.Id == id).ExecuteDeleteAsync());
         await db.OperationJobs.Where(item => item.Id == id || item.Id == other).ExecuteDeleteAsync();
         Console.WriteLine("INBOX_PHASE=file-archive-constraints");

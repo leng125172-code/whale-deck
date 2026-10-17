@@ -27,6 +27,7 @@ public sealed class FilePlanProtector(IConfiguration configuration) : IFilePlanP
     }
     public string Fingerprint(FileUploadBinding binding) => Mac(JsonSerializer.Serialize(binding), "whaledeck-file-intent-v1");
     string IFileArchiveProtector.Fingerprint(FileArchiveBinding binding) => Mac(JsonSerializer.Serialize(binding), "whaledeck-file-archive-intent-v1");
+    public string FingerprintRegistration(FileArchiveBinding binding) => Mac(JsonSerializer.Serialize(binding), "whaledeck-file-archive-registration-v1");
     string IFileArchiveProtector.Sign(FileArchivePlanClaims claims)
     {
         var payload = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(claims));

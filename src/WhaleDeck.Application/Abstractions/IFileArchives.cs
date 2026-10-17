@@ -16,9 +16,14 @@ public interface IFileArchiveProtector
     string Sign(FileArchivePlanClaims claims);
     FileArchivePlanClaims VerifyArchive(string plan);
     string Fingerprint(FileArchiveBinding binding);
+    string FingerprintRegistration(FileArchiveBinding binding);
 }
 public interface IFileArchiveRepository
 {
+    Task<FileArchiveRegistration> RememberAsync(TerminalActor actor, Guid id, string key, FileArchivePlan plan, DateTimeOffset expires, CancellationToken cancellationToken);
+    Task<(FileArchiveRegistration? Registration, FileArchiveOperation? Operation, bool Expired)> RegistrationAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken);
+    Task<int> PruneRegistrationsAsync(DateTimeOffset now, CancellationToken cancellationToken);
+    Task CancelRegistrationAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken);
     Task ObserveAsync(IReadOnlyCollection<FileVersionDto> versions, CancellationToken cancellationToken);
     Task<FileArchiveOperation?> OwnedAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken);
     Task<FileArchiveOperation?> ResolveExpiredRegistrationAsync(TerminalActor actor, Guid id, DateTimeOffset expiry, CancellationToken cancellationToken);

@@ -17,8 +17,23 @@ public sealed class FileArchivesController(FileArchiveService archives, Terminal
         Ok(await archives.HistoryAsync((await identity.ReadAsync(HttpContext)).Actor, new(rootId, path, after, take, expectedVersion), cancellationToken));
     /// <summary>Five-minute exact-version plan. Trash/restore/purge support regular files; full HDD backup is mandatory before trash and restore-overwrite. Purge addresses one HDD capture, not local journal retention.</summary>
     [HttpPost("plan")]
-    public async Task<ActionResult<FileArchivePlanDto>> Plan(FileArchiveCommand command, CancellationToken cancellationToken) =>
-        Ok(await archives.PlanAsync((await identity.ReadAsync(HttpContext)).Actor, command, cancellationToken));
+    public async Task<ActionResult<FileArchivePlanDto>> Plan(FileArchiveCommand command, CancellationToken cancellationToken)
+    {
+        var key = Request.Headers["Idempotency-Key"].ToString();
+        if (!KeyMatches(key) || !Guid.TryParseExact(key, "D", out var parsed) || parsed == Guid.Empty || parsed.ToString("D") != key) return BadRequest();
+        return Ok(await archives.PlanAsync((await identity.ReadAsync(HttpContext)).Actor, command, cancellationToken, key));
+    }
+    /// <summary>Recover the exact session-bound plan or registered job after reload. Issued is not confirmation; Expired is sampled together with job absence under the enqueue gate.</summary>
+    [HttpGet("registrations/{id:guid}")]
+    public async Task<ActionResult<FileArchiveRegistrationDto>> Registration(Guid id, CancellationToken cancellationToken) =>
+        Ok(await archives.RegistrationAsync((await identity.ReadAsync(HttpContext)).Actor, id, cancellationToken));
+    /// <summary>Fence an unconfirmed plan against late submission. An already registered task is returned, never silently canceled or undone.</summary>
+    [HttpPost("registrations/{id:guid}/cancel")]
+    public async Task<ActionResult<FileArchiveRegistrationDto>> CancelRegistration(Guid id, CancellationToken cancellationToken)
+    {
+        if (!KeyMatches(id.ToString("D"))) return BadRequest();
+        return Ok(await archives.CancelRegistrationAsync((await identity.ReadAsync(HttpContext)).Actor, id, cancellationToken));
+    }
     /// <summary>Confirm a permanent login-bound intent with shared locks, Job, Outbox and audit. Never synchronously claim success.</summary>
     [HttpPost, ProducesResponseType<FileArchiveIntentDto>(StatusCodes.Status202Accepted)]
     public async Task<ActionResult<FileArchiveIntentDto>> Create(SubmitFileArchiveCommand command, CancellationToken cancellationToken)

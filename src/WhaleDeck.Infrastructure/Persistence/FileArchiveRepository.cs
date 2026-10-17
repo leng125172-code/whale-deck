@@ -9,6 +9,46 @@ namespace WhaleDeck.Infrastructure.Persistence;
 
 public sealed class FileArchiveRepository(PlatformDbContext db, IFileArchiveProtector protector) : IFileArchiveRepository
 {
+    public Task<FileArchiveRegistration> RememberAsync(TerminalActor actor, Guid id, string key, FileArchivePlan plan, DateTimeOffset expires, CancellationToken cancellationToken) => Transaction(async () =>
+    {
+        FileArchiveValidation.Plan(plan);
+        if (id != FileArchiveService.IntentId(actor, key)) throw new InvalidOperationException("FILES_IDEMPOTENCY_CONFLICT");
+        var prior = await db.FileArchiveRegistrations.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (prior is not null)
+        {
+            if (prior.ActorSubject != actor.Subject || prior.LoginBinding != actor.LoginBinding || prior.IdempotencyKey != key ||
+                prior.RequestHash != protector.FingerprintRegistration(new(id, actor.Subject, actor.LoginBinding, plan, prior.ExpiresAtUtc))) throw new InvalidOperationException("FILES_IDEMPOTENCY_CONFLICT");
+            if (prior.CanceledAtUtc is not null || prior.ExpiresAtUtc <= DateTimeOffset.UtcNow) throw new InvalidOperationException("FILES_PLAN_EXPIRED"); return prior;
+        }
+        var now = DateTimeOffset.UtcNow; if (expires <= now || expires > now.AddMinutes(5)) throw new InvalidOperationException("FILES_PLAN_EXPIRED");
+        if (await db.FileArchiveRegistrations.Where(item => !db.FileArchiveOperations.Any(operation => operation.Id == item.Id)).Take(50000).CountAsync(cancellationToken) >= 50000 ||
+            await db.FileArchiveRegistrations.CountAsync(item => item.CanceledAtUtc == null && item.ExpiresAtUtc > now && !db.FileArchiveOperations.Any(operation => operation.Id == item.Id), cancellationToken) >= 128 ||
+            await db.FileArchiveRegistrations.CountAsync(item => item.ActorSubject == actor.Subject && item.CanceledAtUtc == null && item.ExpiresAtUtc > now && !db.FileArchiveOperations.Any(operation => operation.Id == item.Id), cancellationToken) >= 16)
+            throw new InvalidOperationException("FILES_OPERATION_BUDGET_EXHAUSTED");
+        var row = new FileArchiveRegistration { Id = id, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding, IdempotencyKey = key, PlanJson = JsonSerializer.Serialize(plan),
+            RequestHash = protector.FingerprintRegistration(new(id, actor.Subject, actor.LoginBinding, plan, expires)), CreatedAtUtc = now, ExpiresAtUtc = expires };
+        db.FileArchiveRegistrations.Add(row); await db.SaveChangesAsync(cancellationToken); return row;
+    }, cancellationToken);
+    public Task<(FileArchiveRegistration? Registration, FileArchiveOperation? Operation, bool Expired)> RegistrationAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) => Transaction(async () =>
+    {
+        var row = await db.FileArchiveRegistrations.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id && item.ActorSubject == actor.Subject && item.LoginBinding == actor.LoginBinding, cancellationToken);
+        var operation = await OwnedAsync(actor, id, cancellationToken);
+        return (row, operation, row is not null && row.ExpiresAtUtc <= DateTimeOffset.UtcNow);
+    }, cancellationToken);
+    public Task<int> PruneRegistrationsAsync(DateTimeOffset now, CancellationToken cancellationToken) => Transaction(async () =>
+    {
+        var cutoff = now.AddDays(-1);
+        var ids = await db.FileArchiveRegistrations.Where(item => item.ExpiresAtUtc < cutoff && !db.FileArchiveOperations.Any(operation => operation.Id == item.Id))
+            .OrderBy(item => item.ExpiresAtUtc).ThenBy(item => item.Id).Select(item => item.Id).Take(1000).ToArrayAsync(cancellationToken);
+        return await db.FileArchiveRegistrations.Where(item => ids.Contains(item.Id)).ExecuteDeleteAsync(cancellationToken);
+    }, cancellationToken);
+    public Task CancelRegistrationAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) => Transaction(async () =>
+    {
+        var row = await db.FileArchiveRegistrations.SingleOrDefaultAsync(item => item.Id == id && item.ActorSubject == actor.Subject && item.LoginBinding == actor.LoginBinding, cancellationToken)
+            ?? throw new KeyNotFoundException("FILES_PLAN_NOT_FOUND");
+        if (await db.FileArchiveOperations.AnyAsync(item => item.Id == id, cancellationToken)) return true;
+        row.CanceledAtUtc ??= DateTimeOffset.UtcNow; await db.SaveChangesAsync(cancellationToken); return true;
+    }, cancellationToken);
     public Task ObserveAsync(IReadOnlyCollection<FileVersionDto> versions, CancellationToken cancellationToken) => Transaction(async () =>
     {
         if (versions.Count > 50) throw new ArgumentException("FILES_ARCHIVE_LIST_INVALID");
@@ -56,6 +96,11 @@ public sealed class FileArchiveRepository(PlatformDbContext db, IFileArchiveProt
         var now = DateTimeOffset.UtcNow; FileArchiveValidation.Plan(claims.Plan);
         if (claims.ExpiresAtUtc <= now || expires <= now) throw new InvalidOperationException("FILES_PLAN_EXPIRED");
         if (claims.Actor != actor.Subject || claims.LoginBinding != actor.LoginBinding) throw new UnauthorizedAccessException("FILES_PLAN_OWNER_REQUIRED");
+        var registration = await db.FileArchiveRegistrations.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (id != FileArchiveService.IntentId(actor, key) || claims.IdempotencyKey != key || registration is null || registration.ActorSubject != actor.Subject || registration.LoginBinding != actor.LoginBinding ||
+            registration.IdempotencyKey != key || registration.ExpiresAtUtc != claims.ExpiresAtUtc || registration.CanceledAtUtc is not null || registration.ExpiresAtUtc <= now ||
+            registration.RequestHash != protector.FingerprintRegistration(new(id, actor.Subject, actor.LoginBinding, claims.Plan, registration.ExpiresAtUtc)))
+            throw new InvalidOperationException("FILES_IDEMPOTENCY_CONFLICT");
         if (await db.OperationJobs.AnyAsync(item => item.ActorSubject == actor.Subject && item.IdempotencyKey == key, cancellationToken)) throw new InvalidOperationException("FILES_IDEMPOTENCY_CONFLICT");
         var command = claims.Plan.Command;
         if (command.VersionId is { } version && !await db.FileVersions.AnyAsync(item => item.Id == version && item.RootId == command.Location.RootId &&

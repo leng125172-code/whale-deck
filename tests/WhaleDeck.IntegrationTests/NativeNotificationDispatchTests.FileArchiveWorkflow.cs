@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Npgsql;
 using WhaleDeck.Application.Abstractions;
 using WhaleDeck.Application.Models;
 using WhaleDeck.Application.Services;
@@ -29,12 +30,28 @@ public sealed partial class NativeNotificationDispatchTests
             async Task<(FileArchiveIntentDto Intent, SubmitFileArchiveCommand Submit)> Create(FileArchiveCommand command)
             {
                 var plan = await service.PlanAsync(actor, command, default);
-                var submit = new SubmitFileArchiveCommand(plan.PlanHash, true, Guid.NewGuid().ToString("D"));
+                var submit = new SubmitFileArchiveCommand(plan.PlanHash, true, plan.IdempotencyKey);
                 return (await service.SubmitAsync(actor, submit, default), submit);
             }
             identity.Admin = false;
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.PlanAsync(actor, Command("denied"), default)); identity.Admin = true;
+            var recoveredPlan = await service.PlanAsync(actor, Command("recovered"), default);
+            Assert.False(await db.OperationJobs.AnyAsync(item => item.Id == recoveredPlan.OperationId));
+            await using (var reloadedDb = new PlatformDbContext(options))
+            {
+                var reloadedService = new FileArchiveService(authorization, gateway, new FileArchiveRepository(reloadedDb, protector), protector, TimeProvider.System);
+                var recovered = await reloadedService.RegistrationAsync(actor, recoveredPlan.OperationId, default);
+                Assert.Equal("Issued", recovered.State); Assert.Null(recovered.Intent);
+                Assert.Equal(recoveredPlan.PlanHash, recovered.Plan!.PlanHash); Assert.Equal(recoveredPlan.IdempotencyKey, recovered.Plan.IdempotencyKey);
+                await Assert.ThrowsAsync<KeyNotFoundException>(() => reloadedService.RegistrationAsync(actor with { LoginBinding = new('B', 64) }, recoveredPlan.OperationId, default));
+                await Assert.ThrowsAsync<InvalidOperationException>(() => reloadedService.SubmitAsync(actor, new(recovered.Plan.PlanHash, true, Guid.NewGuid().ToString("D")), default));
+                var recoveredIntent = await reloadedService.SubmitAsync(actor, new(recovered.Plan.PlanHash, true, recovered.Plan.IdempotencyKey), default);
+                Assert.Equal(recoveredPlan.OperationId, recoveredIntent.Id);
+                Assert.Equal("Registered", (await reloadedService.RegistrationAsync(actor, recoveredPlan.OperationId, default)).State);
+            }
+            Assert.True(await worker.TickAsync(default));
             var one = await Create(Command("one"));
+            Assert.Equal("Registered", (await service.CancelRegistrationAsync(actor, one.Intent.Id, default)).State);
             Assert.Equal(one.Intent.Id, (await service.SubmitAsync(actor, one.Submit, default)).Id);
             Assert.Null(await repository.OwnedAsync(actor with { LoginBinding = new('B', 64) }, one.Intent.Id, default));
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.SubmitAsync(actor with { LoginBinding = new('B', 64) }, one.Submit, default));
@@ -86,6 +103,27 @@ public sealed partial class NativeNotificationDispatchTests
             applied = gateway.Applied; Assert.True(await worker.TickAsync(default)); Assert.Equal(applied, gateway.Applied);
             Assert.Equal("Unknown", (await repository.OwnedAsync(actor, tampered.Intent.Id, default))!.State);
             Assert.Single(await db.FilePathLocks.Where(item => item.OperationId == tampered.Intent.Id).ToArrayAsync());
+            var unconfirmed = await service.PlanAsync(actor, Command("unconfirmed-cancel"), default);
+            Assert.Equal("Canceled", (await service.CancelRegistrationAsync(actor, unconfirmed.OperationId, default)).State);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.SubmitAsync(actor, new(unconfirmed.PlanHash, true, unconfirmed.IdempotencyKey), default));
+            Assert.False(await db.OperationJobs.AnyAsync(item => item.Id == unconfirmed.OperationId));
+            var cannotUncancel = await Assert.ThrowsAsync<PostgresException>(() => db.FileArchiveRegistrations.Where(item => item.Id == unconfirmed.OperationId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.CanceledAtUtc, (DateTimeOffset?)null)));
+            Assert.Equal("file_archive_registration_immutable", cannotUncancel.MessageText);
+            var expiryKey = Guid.NewGuid().ToString("D"); var expiryId = FileArchiveService.IntentId(actor, expiryKey);
+            var expiryPlan = await gateway.PlanArchiveAsync(actor, Command("expired-plan"), default); var expiry = DateTimeOffset.UtcNow.AddMilliseconds(150); expiry = expiry.AddTicks(-(expiry.Ticks % 10));
+            await repository.RememberAsync(actor, expiryId, expiryKey, expiryPlan, expiry, default);
+            var token = protector.Sign(new(actor.Subject, actor.LoginBinding, expiryPlan, expiry, expiryKey));
+            await Task.Delay(200);
+            var expired = await service.RegistrationAsync(actor, expiryId, default); Assert.Equal("Expired", expired.State); Assert.Null(expired.Intent); Assert.Null(expired.Plan);
+            var rejected = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SubmitAsync(actor, new(token, true, expiryKey), default)); Assert.Equal("FILES_PLAN_EXPIRED", rejected.Message);
+            Assert.False(await db.OperationJobs.AnyAsync(item => item.Id == expiryId));
+            var immutable = await Assert.ThrowsAsync<PostgresException>(() => db.FileArchiveRegistrations.Where(item => item.Id == expiryId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ExpiresAtUtc, expiry.AddMinutes(5))));
+            Assert.Equal("file_archive_registration_immutable", immutable.MessageText);
+            Assert.True(await repository.PruneRegistrationsAsync(DateTimeOffset.UtcNow.AddDays(2), default) >= 1);
+            Assert.False(await db.FileArchiveRegistrations.AnyAsync(item => item.Id == expiryId));
+            Assert.True(await db.FileArchiveRegistrations.AnyAsync(item => item.Id == one.Intent.Id));
             Console.WriteLine("INBOX_PHASE=file-archive-real-jsonb-catalog-shared-locks-seal-jobs-audit-cancel-recovery");
         }
         finally { File.Delete(key); }

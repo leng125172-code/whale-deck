@@ -39,10 +39,12 @@ public sealed class FileTransportTests
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await mutations.Resolve(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await mutations.Cancel(Guid.NewGuid(), default));
         var archives = new FileArchivesController(null!, null!) { ControllerContext = new() { HttpContext = new DefaultHttpContext() } };
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await archives.Plan(new("trash", new("test.files", "source"), null, new('A', 64)), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await archives.Create(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await archives.Resolve(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await archives.Cancel(Guid.NewGuid(), default));
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await archives.Acknowledge(Guid.NewGuid(), new(0, true), default));
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await archives.CancelRegistration(Guid.NewGuid(), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await mutations.Acknowledge(Guid.NewGuid(), new(1, true), default));
     }
     [Fact]

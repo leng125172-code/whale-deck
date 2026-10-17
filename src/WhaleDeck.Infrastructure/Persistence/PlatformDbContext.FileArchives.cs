@@ -5,8 +5,22 @@ namespace WhaleDeck.Infrastructure.Persistence;
 
 public sealed partial class PlatformDbContext
 {
+    public DbSet<FileArchiveRegistration> FileArchiveRegistrations => Set<FileArchiveRegistration>();
     private static void ConfigureFileArchives(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<FileArchiveRegistration>(entity =>
+        {
+            entity.ToTable("file_archive_registrations", table =>
+            {
+                table.HasCheckConstraint("ck_file_archive_registration_limits", "id<>'00000000-0000-0000-0000-000000000000'::uuid AND expires_at_utc>created_at_utc AND octet_length(plan_json::text)<=32768");
+                table.HasCheckConstraint("ck_file_archive_registration_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$' AND idempotency_key ~ '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'");
+            });
+            entity.HasKey(item => item.Id); entity.Property(item => item.ActorSubject).HasMaxLength(256);
+            entity.Property(item => item.LoginBinding).HasMaxLength(64); entity.Property(item => item.IdempotencyKey).HasMaxLength(36);
+            entity.Property(item => item.RequestHash).HasMaxLength(64); entity.Property(item => item.PlanJson).HasColumnType("jsonb");
+            entity.HasIndex(item => item.ExpiresAtUtc);
+            entity.HasIndex(item => new { item.ActorSubject, item.LoginBinding, item.IdempotencyKey }).IsUnique();
+        });
         modelBuilder.Entity<FileVersion>(entity =>
         {
             entity.ToTable("file_versions", table =>
@@ -54,6 +68,7 @@ public sealed partial class PlatformDbContext
             entity.HasIndex(item => new { item.ActorSubject, item.CreatedAtUtc });
             entity.HasIndex(item => item.TargetHash).HasFilter("completed_at_utc IS NULL");
             entity.HasOne<OperationJob>().WithOne().HasForeignKey<FileArchiveOperation>(item => item.Id).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<FileArchiveRegistration>().WithOne().HasForeignKey<FileArchiveOperation>(item => item.Id).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<FileVersion>().WithMany().HasForeignKey(item => item.ArchiveVersionId).OnDelete(DeleteBehavior.Restrict);
         });
     }

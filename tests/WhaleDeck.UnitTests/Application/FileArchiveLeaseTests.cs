@@ -96,6 +96,10 @@ public sealed class FileArchiveLeaseTests : IDisposable
     }
     private sealed class Repository(FileArchiveOperation row) : IFileArchiveRepository
     {
+        public Task<FileArchiveRegistration> RememberAsync(TerminalActor actor, Guid id, string key, FileArchivePlan plan, DateTimeOffset expires, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<(FileArchiveRegistration? Registration, FileArchiveOperation? Operation, bool Expired)> RegistrationAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<int> PruneRegistrationsAsync(DateTimeOffset now, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task CancelRegistrationAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Func<bool> OnRenew { get; set; } = () => true; public int Renewals { get; private set; } public bool Canceled { get; set; } public string? Finished { get; private set; } public int Deferrals { get; private set; }
         public Task<FileArchiveOperation?> ClaimAsync(DateTimeOffset now, CancellationToken cancellationToken) => Task.FromResult<FileArchiveOperation?>(row);
         public Task<bool> RenewAsync(FileArchiveOperation operation, DateTimeOffset now, CancellationToken cancellationToken) { Renewals++; return Task.FromResult(OnRenew()); }

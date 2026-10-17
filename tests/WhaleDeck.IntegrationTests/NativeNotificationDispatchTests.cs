@@ -44,7 +44,20 @@ public sealed partial class NativeNotificationDispatchTests
             RootId = "test.upgrade", RelativePath = "pending", TargetHash = upgradeHash, RequestHash = upgradeHash, ExpectedVersion = "ABSENT", Sha256 = upgradeHash,
             CreatedAtUtc = upgradeAt, ExpiresAtUtc = upgradeAt.AddMinutes(15), State = "Unknown" });
         await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        await db.GetService<IMigrator>().MigrateAsync("20261017044943_FileHistoryAndRecycle");
+        var archiveUpgradeId = Guid.NewGuid();
+        db.OperationJobs.Add(new() { Id = archiveUpgradeId, JobType = "files.archive", ActorSubject = "native-upgrade", IdempotencyKey = archiveUpgradeId.ToString("D") });
+        db.FileArchiveOperations.Add(new() { Id = archiveUpgradeId, ActorSubject = "native-upgrade", LoginBinding = upgradeHash, OwnerHash = upgradeHash, RequestHash = upgradeHash,
+            Kind = "trash", RootId = "test.upgrade", RelativePath = "pending", TargetHash = upgradeHash, ExpectedVersion = upgradeHash, Sha256 = upgradeHash,
+            PlanJson = "{}", CreatedAtUtc = upgradeAt, ExpiresAtUtc = upgradeAt.AddMinutes(15), NextAttemptAtUtc = upgradeAt });
+        await db.SaveChangesAsync(); db.ChangeTracker.Clear();
         await db.Database.MigrateAsync(); Assert.False(db.Database.HasPendingModelChanges());
+        var archiveRegistration = await db.FileArchiveRegistrations.AsNoTracking().SingleAsync(item => item.Id == archiveUpgradeId);
+        Assert.Equal("native-upgrade", archiveRegistration.ActorSubject); Assert.Equal(archiveUpgradeId.ToString("D"), archiveRegistration.IdempotencyKey);
+        Assert.Equal(upgradeHash, archiveRegistration.RequestHash);
+        await db.FileArchiveOperations.Where(item => item.Id == archiveUpgradeId).ExecuteDeleteAsync();
+        await db.FileArchiveRegistrations.Where(item => item.Id == archiveUpgradeId).ExecuteDeleteAsync();
+        await db.OperationJobs.Where(item => item.Id == archiveUpgradeId).ExecuteDeleteAsync();
         Assert.Equal(uploadUpgradeId, (await db.FilePathLocks.SingleAsync(item => item.PathHash == upgradeHash)).OperationId);
         await db.FilePathLocks.Where(item => item.OperationId == uploadUpgradeId).ExecuteDeleteAsync();
         await db.FileUploadOperations.Where(item => item.Id == uploadUpgradeId).ExecuteDeleteAsync();

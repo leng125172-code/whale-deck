@@ -80,6 +80,7 @@ public sealed class FileArchiveTests : IDisposable
             PlanJson = json ?? JsonSerializer.Serialize(plan), ExpiresAtUtc = expiry
         };
         Assert.True(FileArchiveValidation.HasValidBinding(Row(), _protector));
+        Assert.NotEqual(_protector.Fingerprint(binding), _protector.FingerprintRegistration(binding));
         Assert.False(FileArchiveValidation.HasValidBinding(Row(kind: "purge"), _protector));
         Assert.False(FileArchiveValidation.HasValidBinding(Row(path: "elsewhere"), _protector));
         Assert.False(FileArchiveValidation.HasValidBinding(Row(sha: new('F', 64)), _protector));
