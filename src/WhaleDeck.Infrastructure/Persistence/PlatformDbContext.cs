@@ -14,6 +14,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
     public DbSet<FilePathLock> FilePathLocks => Set<FilePathLock>();
     public DbSet<FileVersion> FileVersions => Set<FileVersion>();
     public DbSet<FileArchiveOperation> FileArchiveOperations => Set<FileArchiveOperation>();
+    public DbSet<FileTreeCopyOperation> FileTreeCopyOperations => Set<FileTreeCopyOperation>();
     public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
     public DbSet<PortalItem> PortalItems => Set<PortalItem>();
     public DbSet<PublicPortalPreference> PublicPortalPreferences => Set<PublicPortalPreference>();
@@ -88,6 +89,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigureFileArchives(modelBuilder);
+        ConfigureTreeCopies(modelBuilder);
         ConfigureAuditAndSettings(modelBuilder);
         ConfigureIdentityAndPortals(modelBuilder);
         ConfigureResourcesAndApplications(modelBuilder);

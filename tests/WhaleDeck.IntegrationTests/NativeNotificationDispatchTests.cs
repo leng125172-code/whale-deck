@@ -154,6 +154,7 @@ public sealed partial class NativeNotificationDispatchTests
         await FileArchiveBoundaries(options);
         await FileArchiveWorkflowBoundaries(options);
         await FileHierarchyLockBoundaries(options);
+        await FileTreeCopyWorkflowBoundaries(options);
     }
 
     private static async Task PrivateWorkflow(PlatformDbContext db)
