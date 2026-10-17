@@ -43,8 +43,8 @@ def main():
     operations = []; plans = []; allowed = {digest(original), digest(changed)}
     captured = {}; retained = {}; verified = False
 
-    def get(path, expected=200, target=session, **params):
-        result = target.get(base + '/api/v1/' + path, params=params, timeout=35)
+    def get(route_name, expected=200, target=session, **params):
+        result = target.get(base + '/api/v1/' + route_name, params=params, timeout=35)
         assert result.status_code == expected, 'unexpected-read-status'
         return result
 
