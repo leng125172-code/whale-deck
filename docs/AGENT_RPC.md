@@ -8,6 +8,8 @@
 
 ## 1. 传输与版本
 
+2026-10-17最新运行时6dd60dd/Agent1.26：FileArchiveService已安装，普通文件历史/回收恢复及共享层级锁已通过实机链路；下方“1.26尚未安装”为历史。目录完整清单/复制内部引擎尚未安装或注册独立RPC，开发空间仍未实现，不可从现有FileRoot推断新能力。见[最新签收](qa/FILE_HIERARCHY_LOCKS.md)。
+
 源码扩展1.26（尚未安装）：专用`FileArchiveService.List/Plan/Apply/Inspect/Discard`，能力`files.archive-intents`；与旧上传/变更wire和永久签名JSON分离。固定helper仅增加archive-list/plan/apply/status/discard枚举，模块root所有/单链接/不可组或其他用户写；历史页50返回/500扫描/有界JSON，Exact UInt64身份/纳秒/完整SHA和HDD证明逐层验证。只接受登记根、相对路径和版本/操作UUID，不接受HDD绝对路径、任意UID或命令。新目录权仅对精确原始/1.25默认注册表升级，任何自定义/收紧策略保持。源码及实际证据见[文件历史与回收站](FILE_HISTORY_RECYCLE.md)，不能将协议/SQL测试当作安装态或UI通过。
 
 2026-10-17实际运行时931a24c/Agent1.25已经签收UTF-8预览编辑、版本冻结确认保存及覆盖统一完整HDD前置备份，见[最终证据](qa/FILE_TEXT_HDD.md#最终运行时签收931a24c--agent125)。原文件变更及1.24有界目录树/名称搜索保持，下面旧未部署说明为历史；目录树/搜索仍依赖files-list授权，不扩大到任意路径或正文搜索。历史管理/恢复、开发空间、目录复制移动及完整文件管理仍待继续。
