@@ -70,4 +70,5 @@ app.MapGrpcService<HostTerminalGrpcService>();
 app.MapGrpcService<ContainerTerminalGrpcService>();
 app.MapGrpcService<FileTransferGrpcService>();
 app.MapGrpcService<FileOperationGrpcService>();
+app.MapGrpcService<FileArchiveGrpcService>();
 await app.RunAsync();

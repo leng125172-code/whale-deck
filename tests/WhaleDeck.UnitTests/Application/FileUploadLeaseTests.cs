@@ -14,6 +14,33 @@ public sealed class FileUploadLeaseTests
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
             System.CreateTimer(callback, state, TimeSpan.FromMilliseconds(5), period);
     }
+    internal sealed class StepClock : TimeProvider, IDisposable
+    {
+        public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => Now;
+        private readonly Queue<StepTimer> _timers = new();
+        private readonly SemaphoreSlim _created = new(0);
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new StepTimer(callback, state);
+            lock (_timers) _timers.Enqueue(timer);
+            _created.Release(); return timer;
+        }
+        public async Task AdvanceAsync()
+        {
+            Assert.True(await _created.WaitAsync(TimeSpan.FromSeconds(5)));
+            StepTimer timer; lock (_timers) timer = _timers.Dequeue(); timer.Fire();
+        }
+        public void Dispose() => _created.Dispose();
+        private sealed class StepTimer(TimerCallback callback, object? state) : ITimer
+        {
+            private int _disposed;
+            public void Fire() { if (Interlocked.Exchange(ref _disposed, 1) == 0) callback(state); }
+            public bool Change(TimeSpan dueTime, TimeSpan period) => false;
+            public void Dispose() => Interlocked.Exchange(ref _disposed, 1);
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
+    }
     private sealed class Plans : IFilePlanProtector
     {
         public string Fingerprint(FileUploadBinding binding) => new('D', 64);
@@ -34,9 +61,11 @@ public sealed class FileUploadLeaseTests
     [Fact]
     public async Task PublicationRenewsItsLeaseUntilTheSameInvocationReturnsVerifiedProof()
     {
-        var operation = Operation(); var repository = new Repository(operation); var gateway = new Gateway(operation); var identity = new Identity(); var clock = new FastClock();
+        var operation = Operation(); var repository = new Repository(operation); var gateway = new Gateway(operation); var identity = new Identity(); using var clock = new StepClock();
         repository.OnRenew = () => { if (repository.Renewals == 3) gateway.Result.TrySetResult(Completed(operation)); return true; };
-        Assert.True(await new FileUploadDispatcher(repository, gateway, identity, clock, new Plans()).TickAsync(default).WaitAsync(TimeSpan.FromSeconds(5)));
+        var tick = new FileUploadDispatcher(repository, gateway, identity, clock, new Plans()).TickAsync(default);
+        await clock.AdvanceAsync(); await clock.AdvanceAsync();
+        Assert.True(await tick.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal(3, repository.Renewals); Assert.Equal(1, gateway.Publishes); Assert.False(gateway.Canceled);
         Assert.Equal("Succeeded", repository.Finished); Assert.Equal(0, repository.Deferrals);
     }

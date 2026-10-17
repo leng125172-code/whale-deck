@@ -78,6 +78,11 @@ public static class DependencyInjection
         services.AddScoped<IFileMutationRepository, FileMutationRepository>();
         services.AddSingleton<IFileMutationProtector, FilePlanProtector>();
         services.AddSingleton<IFileMutationGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddSingleton<IFileArchiveProtector, FilePlanProtector>();
+        services.AddSingleton<IFileArchiveGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddScoped<IFileArchiveRepository, FileArchiveRepository>();
+        services.AddScoped<FileArchiveService>();
+        services.AddScoped<FileArchiveDispatcher>();
         services.AddScoped<FileMutationService>();
         services.AddScoped<FileMutationDispatcher>();
         services.AddSingleton<ITerminalGrantSigner, TerminalGrantSigner>();

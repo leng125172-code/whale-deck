@@ -26,13 +26,14 @@ def read(path):
     finally: os.close(descriptor)
 
 
-def upgrade(path, baseline, desired):
+def upgrade(path, baseline, desired, backup_suffix='.pre-mutations.json'):
+    if backup_suffix not in ('.pre-mutations.json', '.pre-archives.json'): raise ValueError('FILES_REGISTRY_BACKUP_INVALID')
     payload, current, info = read(path)
     if current == desired: return 'unchanged'
     if current != baseline: return 'custom-preserved'
     parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     temporary = '.' + path.name + '-' + uuid.uuid4().hex
-    backup = path.name + '.pre-mutations.json'
+    backup = path.name + backup_suffix
     try:
         try:
             descriptor = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
@@ -62,7 +63,9 @@ if __name__ == '__main__':
         folder = Path(__file__).resolve().parent
         baseline = json.loads((folder / 'file-roots.v1.json').read_text(), object_pairs_hook=unique)
         desired = json.loads((folder / 'file-roots.json').read_text(), object_pairs_hook=unique)
-        print(json.dumps({'fileRootsUpgrade': upgrade(Path('/etc/whaledeck/file-roots.json'), baseline, desired)}))
+        path = Path('/etc/whaledeck/file-roots.json')
+        previous = json.loads((folder / 'file-roots.v1.25.json').read_text(), object_pairs_hook=unique)
+        print(json.dumps({'fileRootsUpgrade': upgrade(path, previous, desired, '.pre-archives.json') if read(path)[1] == previous else upgrade(path, baseline, desired)}))
     except Exception:
         print(json.dumps({'fileRootsUpgrade': 'rejected'}))
         raise SystemExit(1) from None

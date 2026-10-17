@@ -63,5 +63,25 @@ class FileRootUpgradeTests(unittest.TestCase):
         self.assertEqual(self.current.read_bytes(), original)
         self.assertFalse(any(item.name.startswith('.file-roots.json-') for item in self.folder.iterdir()))
 
+    def test_previous_mutation_default_upgrades_without_conflicting_with_its_old_backup(self):
+        previous = json.loads((Path(__file__).resolve().parents[1] / 'host/file-roots.v1.25.json').read_text())
+        self.current.write_text(json.dumps(previous)); original = self.current.read_bytes()
+        old = self.folder / 'file-roots.json.pre-mutations.json'; old.write_text(json.dumps(self.baseline)); old.chmod(0o600)
+        self.assertEqual(upgrade.upgrade(self.current, previous, self.desired, '.pre-archives.json'), 'upgraded-defaults')
+        self.assertEqual(json.loads(old.read_bytes()), self.baseline)
+        self.assertEqual((self.folder / 'file-roots.json.pre-archives.json').read_bytes(), original)
+        self.assertEqual(upgrade.upgrade(self.current, previous, self.desired, '.pre-archives.json'), 'unchanged')
+
+    def test_tightened_previous_default_is_preserved_and_new_backup_conflict_fails_closed(self):
+        previous = json.loads((Path(__file__).resolve().parents[1] / 'host/file-roots.v1.25.json').read_text())
+        current = json.loads(json.dumps(previous)); current[0]['allowedActions'].remove('files-mutate')
+        self.current.write_text(json.dumps(current)); original = self.current.read_bytes()
+        self.assertEqual(upgrade.upgrade(self.current, previous, self.desired, '.pre-archives.json'), 'custom-preserved')
+        self.assertEqual(self.current.read_bytes(), original)
+        self.current.write_text(json.dumps(previous)); original = self.current.read_bytes()
+        conflict = self.folder / 'file-roots.json.pre-archives.json'; conflict.write_text('[]'); conflict.chmod(0o600)
+        with self.assertRaisesRegex(ValueError, 'FILES_REGISTRY_BACKUP_CONFLICT'): upgrade.upgrade(self.current, previous, self.desired, '.pre-archives.json')
+        self.assertEqual(self.current.read_bytes(), original)
+
 
 if __name__ == '__main__': unittest.main()

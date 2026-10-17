@@ -9,9 +9,11 @@ internal static class FilePathLocks
     internal static async Task Acquire(PlatformDbContext db, Guid id, string actor, IEnumerable<string> hashes, CancellationToken cancellationToken)
     {
         if (await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
-            await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) >= 64 ||
+            await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
+            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) >= 64 ||
             await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
-            await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) >= 4)
+            await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
+            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) >= 4)
             throw new InvalidOperationException("FILES_OPERATION_BUDGET_EXHAUSTED");
         var targets = hashes.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         if (await db.FilePathLocks.AnyAsync(item => targets.Contains(item.PathHash), cancellationToken)) throw new InvalidOperationException("FILES_TARGET_BUSY");

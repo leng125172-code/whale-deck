@@ -73,6 +73,17 @@ public sealed class CapabilityValidatorTests : IDisposable
         Assert.False(_validator.Validate(token, method));
     }
 
+    [Theory]
+    [InlineData("List")][InlineData("Plan")][InlineData("Apply")][InlineData("Inspect")][InlineData("Discard")]
+    public void ArchiveMethodsRequireTheirOwnNonReplayableCapability(string action)
+    {
+        var method = "/whaledeck.agent.v1.FileArchiveService/" + action;
+        Assert.False(_validator.Validate(null, method));
+        Assert.False(_validator.Validate(Sign(DateTimeOffset.UtcNow.AddSeconds(45), "archive-other-method", "/whaledeck.agent.v1.FileOperationService/Apply"), method));
+        var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "archive-correct-method", method);
+        Assert.True(_validator.Validate(token, method)); Assert.False(_validator.Validate(token, method));
+    }
+
     public void Dispose()
     {
         Directory.Delete(_directory, recursive: true);

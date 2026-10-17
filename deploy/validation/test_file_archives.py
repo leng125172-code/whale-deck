@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import signal
 import stat
+import sys
+import tempfile
 import time
 import unittest
 import uuid
@@ -162,6 +164,36 @@ class FileArchiveTests(unittest.TestCase):
                 filename.write_text(json.dumps({**original, 'captureKind': kind, 'captureState': state}))
                 result = self.listing(); self.assertEqual(result['invalidRecords'], 1); self.assertEqual(result['entries'], [])
                 with self.assertRaisesRegex(driver.Rejected, 'FILES_ARCHIVE_METADATA_INVALID'): self.engine.plan(self.command('purge', version=version))
+
+    def test_fixed_archive_module_loader_rejects_untrusted_metadata_and_loads_only_its_sibling(self):
+        folder = self.base / 'modules'; folder.mkdir(); module = folder / 'whaledeck-file-archives.py'
+        module.write_bytes(Path(archives.__file__).read_bytes()); module.chmod(0o750)
+        with patch.object(driver, '__file__', str(folder / 'whaledeck-files.py')), patch.object(driver, 'backup_engine', return_value=self.backups.engine), patch.dict(sys.modules, {driver.__name__: driver}):
+            (self.root / 'source').write_bytes(b'keep')
+            self.assertEqual(driver.archive_engine().plan(self.command())['sha256'], hashlib.sha256(b'keep').hexdigest().upper())
+            module.chmod(0o770)
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.archive_engine()
+            module.chmod(0o750); os.chown(module, 1000, 1000)
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.archive_engine()
+            os.chown(module, 0, 0); os.link(module, folder / 'linked')
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.archive_engine()
+            (folder / 'linked').unlink(); module.rename(folder / 'real'); module.symlink_to(folder / 'real')
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.archive_engine()
+
+    def test_fixed_archive_cli_actions_dispatch_after_metadata_eof_and_reject_trailing_body(self):
+        (self.root / 'source').write_bytes(b'keep'); request = self.request(self.command())
+        commands = [('archive-plan', request['plan']['command']), ('archive-discard', request), ('archive-status', {key: request[key] for key in ('operationId', 'owner')}),
+            ('archive-apply', request), ('archive-list', dict(rootId='test.shared', path='', after='', take=50, expectedVersion=''))]
+        for action, payload in commands:
+            with self.subTest(action=action), tempfile.TemporaryFile() as stream:
+                stream.write(json.dumps(payload).encode() + b'\n'); stream.seek(0); replies = []
+                with patch.object(driver.sys, 'stdin', stream), patch.object(driver.sys, 'argv', ['driver', action]), patch.dict(os.environ, {'INVOCATION_ID': uuid.uuid4().hex}), patch.object(driver, 'emit', side_effect=replies.append), patch.object(driver, 'archive_engine', return_value=self.engine):
+                    driver.main()
+                self.assertEqual(replies[0]['type'], 'driver'); self.assertEqual(len(replies), 2)
+        with tempfile.TemporaryFile() as stream:
+            stream.write(json.dumps(request).encode() + b'\nextra-body\n'); stream.seek(0)
+            with patch.object(driver.sys, 'stdin', stream), patch.object(driver.sys, 'argv', ['driver', 'archive-apply']), patch.dict(os.environ, {'INVOCATION_ID': uuid.uuid4().hex}), patch.object(driver, 'emit'), patch.object(driver, 'archive_engine', side_effect=AssertionError('must reject before loading execution module')):
+                with self.assertRaisesRegex(driver.Rejected, 'FILES_COMMIT_TRAILING_DATA'): driver.main()
 
     def test_hdd_unavailability_stops_preflight_and_a_late_backup_failure_keeps_the_original(self):
         (self.root / 'source').write_bytes(b'keep'); request = self.request(self.command())

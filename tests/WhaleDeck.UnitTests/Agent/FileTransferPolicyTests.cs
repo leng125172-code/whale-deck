@@ -78,6 +78,8 @@ public sealed class FileTransferPolicyTests
     [InlineData("download", false)][InlineData("status", false)][InlineData("publish", false)][InlineData("discard", false)]
     [InlineData("operation-plan", false)][InlineData("operation-apply", false)][InlineData("operation-status", false)]
     [InlineData("operation-discard", false)]
+    [InlineData("archive-list", false)][InlineData("archive-plan", false)][InlineData("archive-apply", false)]
+    [InlineData("archive-status", false)][InlineData("archive-discard", false)]
     public void ReceiveModesKeepBodyPipeOpenAfterReadyButUnaryActionsSendEof(string action, bool streaming)
     {
         using var pipe = new MemoryStream();

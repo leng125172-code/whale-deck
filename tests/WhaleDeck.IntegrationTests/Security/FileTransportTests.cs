@@ -21,6 +21,8 @@ public sealed class FileTransportTests
         Assert.Empty(typeof(FilesController).GetMethods().SelectMany(method => method.GetCustomAttributes<AllowAnonymousAttribute>()));
         Assert.Contains(typeof(FileMutationsController).GetCustomAttributes<AuthorizeAttribute>(), item => item.Policy == "Administrator");
         Assert.Empty(typeof(FileMutationsController).GetMethods().SelectMany(method => method.GetCustomAttributes<AllowAnonymousAttribute>()));
+        Assert.Contains(typeof(FileArchivesController).GetCustomAttributes<AuthorizeAttribute>(), item => item.Policy == "Administrator");
+        Assert.Empty(typeof(FileArchivesController).GetMethods().SelectMany(method => method.GetCustomAttributes<AllowAnonymousAttribute>()));
     }
     [Theory]
     [InlineData("/etc/passwd")][InlineData("a/../b")][InlineData("a//b")][InlineData("a\\b")][InlineData("a\nb")]
@@ -36,6 +38,11 @@ public sealed class FileTransportTests
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await mutations.Create(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await mutations.Resolve(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await mutations.Cancel(Guid.NewGuid(), default));
+        var archives = new FileArchivesController(null!, null!) { ControllerContext = new() { HttpContext = new DefaultHttpContext() } };
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await archives.Create(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>((await archives.Resolve(new("signed-plan", true, Guid.NewGuid().ToString("D")), default)).Result);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await archives.Cancel(Guid.NewGuid(), default));
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await archives.Acknowledge(Guid.NewGuid(), new(0, true), default));
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestResult>(await mutations.Acknowledge(Guid.NewGuid(), new(1, true), default));
     }
     [Fact]

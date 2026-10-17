@@ -915,8 +915,18 @@ def backup_engine():
     return module.FileBackups(sys.modules[__name__])
 
 
+def archive_engine():
+    module_path = Path(__file__).with_name('whaledeck-file-archives.py')
+    info = os.stat(module_path, follow_symlinks=False)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or info.st_mode & 0o022 or info.st_size > 131072:
+        raise Rejected('FILES_MODULE_UNSAFE')
+    specification = importlib.util.spec_from_file_location('whaledeck_file_archives', module_path)
+    module = importlib.util.module_from_spec(specification); specification.loader.exec_module(module)
+    return module.FileArchives(sys.modules[__name__], backup_engine())
+
+
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard'):
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard', 'archive-list', 'archive-plan', 'archive-apply', 'archive-status', 'archive-discard'):
         raise Rejected('FILES_ACTION_INVALID')
     invocation = identity(os.environ.get('INVOCATION_ID'))
     emit({'type': 'driver', 'invocationId': invocation})
@@ -937,6 +947,9 @@ def main():
     elif action.startswith('operation-'):
         source.finish(); engine = operation_engine()
         emit(engine.plan(request) if action == 'operation-plan' else engine.apply(request) if action == 'operation-apply' else engine.discard(request) if action == 'operation-discard' else engine.lookup(request))
+    elif action.startswith('archive-'):
+        source.finish(); engine = archive_engine()
+        emit(engine.list(request) if action == 'archive-list' else engine.plan(request) if action == 'archive-plan' else engine.apply(request) if action == 'archive-apply' else engine.discard(request) if action == 'archive-discard' else engine.lookup(request))
     else: emit(status(request))
 
 
