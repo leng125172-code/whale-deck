@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-17）",
-  "nextStep": "线上931a24c/Agent1.25；历史/回收站基础源码241e5bc未部署，123 Linux、822 Unit/116 Integration、冻结PG实际1通过并清理、真实HDD回收恢复覆盖/历史/版本清理通过。继续独立Agent RPC/helper、BFF永久任务/锁/Worker/人类审计及页面，再做目录/归档、容器文件和隔离/长期清理，完整76项保持active。"
+  "nextStep": "线上931a24c/Agent1.25；未部署的新源码已接历史回收站RPC、BFF/SQL/Worker/审计、刷新计划恢复与WebUI。856 Unit/117 Integration、127 Linux、8da9f90冻结PG实际1通过并清理与四作业CI成功；218前端单元、71文件联合浏览器和最终24生产预览通过。继续同源码门禁、实际发布和真实身份/HDD/页面验收，再做目录/归档、容器文件和隔离/长期清理，完整76项保持active。"
 }

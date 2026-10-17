@@ -21,6 +21,8 @@ import FileMutationPanel from '@/components/files/FileMutationPanel.vue'
 import FileDirectoryTree from '@/components/files/FileDirectoryTree.vue'
 import FileSearchPanel from '@/components/files/FileSearchPanel.vue'
 import FileTextEditor from '@/components/files/FileTextEditor.vue'
+import FileArchivePanel from '@/components/files/FileArchivePanel.vue'
+import { archiveEligible } from '@/services/fileArchives'
 import { textEligible } from '@/services/fileText'
 import type { PreparedFileText } from '@/services/fileText'
 import { mutationEligible } from '@/services/fileMutations'
@@ -28,8 +30,24 @@ import type { FileMutationKind } from '@/services/fileMutations'
 
 const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
   mutationOperationLocked = ref(false),
-  editorLocked = ref(false)
-const mutationLocked = computed(() => mutationOperationLocked.value || editorLocked.value)
+  editorLocked = ref(false),
+  archiveOperationLocked = ref(false)
+const archivePanel = ref<InstanceType<typeof FileArchivePanel> | null>(null)
+const mutationLocked = computed(
+  () => mutationOperationLocked.value || editorLocked.value || archiveOperationLocked.value,
+)
+const canHistory = computed(() =>
+  ['files-list', 'files-download', 'files-history'].every((action) =>
+    roots.value.find((root) => root.id === rootId.value)?.actions.includes(action),
+  ),
+)
+const canArchive = computed(
+  () =>
+    canHistory.value &&
+    ['files-upload', 'files-mutate', 'files-archive'].every((action) =>
+      roots.value.find((root) => root.id === rootId.value)?.actions.includes(action),
+    ),
+)
 const textEditor = ref<InstanceType<typeof FileTextEditor> | null>(null),
   editorSource = ref<PreparedFileText | null>(null)
 const canEdit = computed(
@@ -47,7 +65,9 @@ function openMutation(kind: FileMutationKind, entry?: FileEntry) {
   mutationPanel.value?.open(kind, entry)
 }
 function fileAction(command: unknown, entry: FileEntry) {
-  if (command === 'edit' && canEdit.value) void textEditor.value?.open(entry)
+  if (command === 'history' && canHistory.value) archivePanel.value?.openHistory(entry)
+  else if (command === 'trash' && canArchive.value) archivePanel.value?.trash(entry)
+  else if (command === 'edit' && canEdit.value) void textEditor.value?.open(entry)
   else if (command === 'copy' || command === 'move' || command === 'chmod')
     openMutation(command, entry)
 }
@@ -522,6 +542,12 @@ onBeforeUnmount(() => {
         /></el-select>
         <div class="files-upload">
           <el-button
+            v-if="canHistory"
+            :disabled="busy || activeIntent || !!frozen || mutationOperationLocked || editorLocked"
+            @click="archivePanel?.openHistory()"
+            >历史与回收站</el-button
+          >
+          <el-button
             v-if="canMutate"
             :disabled="busy || activeIntent || !!frozen || mutationLocked"
             @click="openMutation('mkdir')"
@@ -566,7 +592,7 @@ onBeforeUnmount(() => {
         :roots="roots"
         :root-id="rootId"
         :path="path"
-        :disabled="busy || activeIntent || !!frozen || editorLocked"
+        :disabled="busy || activeIntent || !!frozen || editorLocked || archiveOperationLocked"
         @locked="mutationOperationLocked = $event"
         @changed="afterMutation"
         @failure="message"
@@ -575,21 +601,37 @@ onBeforeUnmount(() => {
         ref="textEditor"
         :root-id="rootId"
         :path="path"
-        :disabled="busy || activeIntent || !!frozen || mutationOperationLocked"
+        :disabled="
+          busy || activeIntent || !!frozen || mutationOperationLocked || archiveOperationLocked
+        "
         @locked="editorLocked = $event"
         @prepared="acceptText"
         @failure="message"
       />
+      <FileArchivePanel
+        ref="archivePanel"
+        :roots="roots"
+        :root-id="rootId"
+        :path="path"
+        :disabled="busy || activeIntent || !!frozen || mutationOperationLocked || editorLocked"
+        @locked="archiveOperationLocked = $event"
+        @changed="afterMutation"
+        @failure="message"
+      />
       <el-breadcrumb class="file-crumbs"
         ><el-breadcrumb-item
-          ><button class="file-link" :disabled="busy || !!frozen" @click="navigate('')">
+          ><button
+            class="file-link"
+            :disabled="busy || !!frozen || mutationLocked"
+            @click="navigate('')"
+          >
             根目录
           </button></el-breadcrumb-item
         >
         <el-breadcrumb-item v-for="(part, index) in crumbs" :key="index"
           ><button
             class="file-link"
-            :disabled="busy || !!frozen"
+            :disabled="busy || !!frozen || mutationLocked"
             @click="navigate(crumbs.slice(0, index + 1).join('/'))"
           >
             {{ part }}
@@ -685,7 +727,9 @@ onBeforeUnmount(() => {
                   ><el-icon><Download /></el-icon>下载</el-button
                 >
                 <el-dropdown
-                  v-if="(canMutate || canEdit) && mutationEligible(row)"
+                  v-if="
+                    canHistory || ((canMutate || canEdit || canArchive) && mutationEligible(row))
+                  "
                   trigger="click"
                   :disabled="busy || activeIntent || !!frozen || mutationLocked"
                   @command="fileAction($event, row)"
@@ -704,10 +748,17 @@ onBeforeUnmount(() => {
                         command="edit"
                         :disabled="!textEligible(row)"
                         >编辑文本</el-dropdown-item
+                      ><el-dropdown-item v-if="canHistory" command="history"
+                        >历史版本</el-dropdown-item
                       ><el-dropdown-item v-if="canMutate" command="copy">复制文件</el-dropdown-item
                       ><el-dropdown-item v-if="canMutate" command="move">移动文件</el-dropdown-item
-                      ><el-dropdown-item v-if="canMutate" command="chmod"
-                        >修改权限</el-dropdown-item
+                      ><el-dropdown-item v-if="canMutate" command="chmod">修改权限</el-dropdown-item
+                      ><el-dropdown-item
+                        v-if="canArchive"
+                        command="trash"
+                        :disabled="!archiveEligible(row)"
+                        divided
+                        >移入回收站</el-dropdown-item
                       ></el-dropdown-menu
                     ></template
                   >
