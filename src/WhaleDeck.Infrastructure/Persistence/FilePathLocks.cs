@@ -43,13 +43,14 @@ internal static class FilePathLocks
         var mutations = await db.FileMutationOperations.AsNoTracking().Where(item => ids.Contains(item.Id)).ToDictionaryAsync(item => item.Id, cancellationToken);
         var archives = await db.FileArchiveOperations.AsNoTracking().Where(item => ids.Contains(item.Id)).ToDictionaryAsync(item => item.Id, cancellationToken);
         var trees = await db.FileTreeCopyOperations.AsNoTracking().Where(item => item.ExecutionJobId != null && ids.Contains(item.ExecutionJobId.Value)).ToDictionaryAsync(item => item.ExecutionJobId!.Value, cancellationToken);
+        var moves = await db.FileTreeMoveOperations.AsNoTracking().Where(item => item.ExecutionJobId != null && ids.Contains(item.ExecutionJobId.Value)).ToDictionaryAsync(item => item.ExecutionJobId!.Value, cancellationToken);
         var result = new Dictionary<string, FilePathScope?>(StringComparer.Ordinal);
         foreach (var row in held)
         {
             try
             {
                 FilePathScope? scope = null; var token = false;
-                var owners = (uploads.ContainsKey(row.OperationId) ? 1 : 0) + (mutations.ContainsKey(row.OperationId) ? 1 : 0) + (archives.ContainsKey(row.OperationId) ? 1 : 0) + (trees.ContainsKey(row.OperationId) ? 1 : 0);
+                var owners = (uploads.ContainsKey(row.OperationId) ? 1 : 0) + (mutations.ContainsKey(row.OperationId) ? 1 : 0) + (archives.ContainsKey(row.OperationId) ? 1 : 0) + (trees.ContainsKey(row.OperationId) ? 1 : 0) + (moves.ContainsKey(row.OperationId) ? 1 : 0);
                 if (owners != 1) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
                 if (uploads.TryGetValue(row.OperationId, out var upload))
                 {
@@ -81,6 +82,16 @@ internal static class FilePathLocks
                     scope = new[] { source, target }.SingleOrDefault(item => item.Hash == row.PathHash);
                     if (scope is null) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
                 }
+                else if (moves.TryGetValue(row.OperationId, out var move))
+                {
+                    var command = FileTreeMoveValidation.ReadCommand(move); FileTreeMoveValidation.Command(command);
+                    var plan = FileTreeMoveValidation.ReadPlan(move); FileTreeMoveValidation.Plan(plan);
+                    var source = new FilePathScope(command.Source); var target = new FilePathScope(command.Target);
+                    if (plan.Command != command || move.SourceHash != source.Hash || move.TargetHash != target.Hash || move.ExecutionJobId != FileTreeMoveValidation.ExecutionId(move.Id))
+                        throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+                    scope = new[] { source, target }.SingleOrDefault(item => item.Hash == row.PathHash);
+                    if (scope is null) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+                }
                 var kind = token ? "Token" : "Path";
                 if (row.ScopeKind != "Legacy" && (row.ScopeKind != kind || row.RootId != scope?.RootId || row.RelativePath != scope?.Path)) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
                 if (row.ScopeKind == "Legacy") { row.ScopeKind = kind; row.RootId = scope?.RootId; row.RelativePath = scope?.Path; }
@@ -100,12 +111,13 @@ internal static class FilePathLocks
         if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("FILES_LOCK_TRANSACTION_REQUIRED");
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(41307341);", cancellationToken);
         var trees = db.FileTreeCopyOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
+        var moves = db.FileTreeMoveOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         if (await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
-            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) + await trees.CountAsync(cancellationToken) >= 64 ||
+            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) + await trees.CountAsync(cancellationToken) + await moves.CountAsync(cancellationToken) >= 64 ||
             await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
             await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
-            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) + await trees.CountAsync(item => item.ActorSubject == actor, cancellationToken) >= 4)
+            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) + await trees.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await moves.CountAsync(item => item.ActorSubject == actor, cancellationToken) >= 4)
             throw new InvalidOperationException("FILES_OPERATION_BUDGET_EXHAUSTED");
     }
 }

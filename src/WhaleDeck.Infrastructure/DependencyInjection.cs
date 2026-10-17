@@ -88,6 +88,11 @@ public static class DependencyInjection
         services.AddScoped<IFileTreeCopyRepository, FileTreeCopyRepository>();
         services.AddScoped<FileTreeCopyService>();
         services.AddScoped<FileTreeCopyDispatcher>();
+        services.AddSingleton<IFileTreeMoveProtector, FilePlanProtector>();
+        services.AddSingleton<IFileTreeMoveGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddScoped<IFileTreeMoveRepository, FileTreeMoveRepository>();
+        services.AddScoped<FileTreeMoveService>();
+        services.AddScoped<FileTreeMoveDispatcher>();
         services.AddScoped<FileMutationService>();
         services.AddScoped<FileMutationDispatcher>();
         services.AddSingleton<ITerminalGrantSigner, TerminalGrantSigner>();

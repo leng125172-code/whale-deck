@@ -1,0 +1,87 @@
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using WhaleDeck.Application.Models;
+using WhaleDeck.Application.Services;
+using WhaleDeck.Domain.Entities;
+
+namespace WhaleDeck.Infrastructure.Persistence;
+
+public sealed partial class FileTreeMoveRepository
+{
+    public Task<bool> FinishAsync(FileTreeMoveOperation claimed, string state, string code, FileTreeMoveReceipt? receipt, CancellationToken cancellationToken) => Transaction(async () =>
+    {
+        if (state is not ("Succeeded" or "Unknown" or "Canceled" or "Failed")) throw new ArgumentException("FILES_RESULT_INVALID");
+        var row = await Lease(claimed, cancellationToken); if (row?.ExecutionJobId is not { } id) return false;
+        var valid = FileTreeMoveValidation.HasValidBinding(row, protector);
+        if (!valid && (state != "Unknown" || receipt is not null)) throw new InvalidOperationException("FILES_INTENT_BINDING_CHANGED");
+        if (receipt is not null) FileTreeMoveValidation.Receipt(id, FileTreeMoveValidation.ReadPlan(row), receipt);
+        if (state == "Succeeded" && receipt?.State != "Completed" || state is "Canceled" or "Failed" && receipt?.State != "Aborted") throw new InvalidOperationException("FILES_RECEIPT_REQUIRED");
+        var job = await Job(id, cancellationToken); var now = Now(); if (row.LeaseExpiresAtUtc <= now) return false;
+        var terminal = state != "Unknown"; var changed = row.State != state;
+        row.State = state; row.ResultCode = code; row.CompletedAtUtc = terminal ? now : null;
+        row.DestinationPublished = receipt?.DestinationPublished ?? row.DestinationPublished; row.SourceRemoved = receipt?.SourceRemoved ?? row.SourceRemoved;
+        row.SourceRetained = receipt?.SourceRetained ?? row.SourceRetained;
+        row.PublishedVersion = receipt?.State == "Completed" ? receipt.Version : null; row.PartialRetained = receipt?.PartialRetained ?? row.PartialRetained;
+        row.NextAttemptAtUtc = now.AddSeconds(30); row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
+        if (changed || terminal)
+        {
+            if (terminal) await FinishJob(job, state == "Succeeded" ? "Succeeded" : state == "Canceled" ? "Canceled" : "Failed", state, code, cancellationToken);
+            else { job.State = "Running"; job.Phase = "AwaitingTreeReceipt"; job.ErrorCode = code; job.Version++; await Event(job, code, cancellationToken); }
+            Audit(row, id, "files.tree-move.result", state, row.Id.ToString("D"), null);
+        }
+        if (terminal) { await FilePathLocks.Release(db, id, cancellationToken); await Processed(id, now, cancellationToken); }
+        await db.SaveChangesAsync(cancellationToken); return true;
+    }, cancellationToken);
+    public Task AcknowledgeAsync(TerminalActor actor, Guid id, long version, FileTreeMoveReceipt receipt, CancellationToken cancellationToken) => Transaction(async () =>
+    {
+        var row = await Row(id, cancellationToken); RequireOwner(row, actor);
+        if (row.State != "Unknown" || row.Version != version || row.CompletedAtUtc is not null || row.LeaseExpiresAtUtc > Now() || row.ExecutionJobId is not { } execution ||
+            !FileTreeMoveValidation.HasValidBinding(row, protector)) throw new InvalidOperationException("FILES_ACKNOWLEDGMENT_CONFLICT");
+        FileTreeMoveValidation.Receipt(execution, FileTreeMoveValidation.ReadPlan(row), receipt);
+        if (receipt.State == "Completed") throw new InvalidOperationException("FILES_RECEIPT_AVAILABLE");
+        var job = await Job(execution, cancellationToken); var now = Now();
+        row.State = "Acknowledged"; row.CompletedAtUtc = now; row.ResultCode = "FILES_UNKNOWN_ACKNOWLEDGED"; row.PartialRetained = receipt.PartialRetained;
+        row.DestinationPublished = receipt.DestinationPublished; row.SourceRemoved = receipt.SourceRemoved; row.SourceRetained = receipt.SourceRetained;
+        row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
+        await FinishJob(job, "Failed", "Acknowledged", row.ResultCode, cancellationToken);
+        Audit(row, execution, "files.tree-move.unknown-acknowledged", receipt.State, actor.TraceId, actor.SourceIp);
+        await FilePathLocks.Release(db, execution, cancellationToken); await Processed(execution, now, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken); return true;
+    }, cancellationToken);
+    private DateTimeOffset Now() => FileTreeMoveValidation.Timestamp(clock.GetUtcNow());
+    private static void RequireOwner(FileTreeMoveOperation row, TerminalActor actor)
+    { if (row.ActorSubject != actor.Subject || row.LoginBinding != actor.LoginBinding) throw new KeyNotFoundException("FILES_OPERATION_NOT_FOUND"); }
+    private async Task<FileTreeMoveOperation> Row(Guid id, CancellationToken cancellationToken) => await db.FileTreeMoveOperations
+        .FromSqlInterpolated($"SELECT * FROM file_tree_move_operations WHERE id={id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken) ?? throw new KeyNotFoundException("FILES_OPERATION_NOT_FOUND");
+    private async Task<FileTreeMoveOperation?> Lease(FileTreeMoveOperation claimed, CancellationToken cancellationToken)
+    {
+        var row = await Row(claimed.Id, cancellationToken);
+        return claimed.LeaseToken is not null && row.LeaseToken == claimed.LeaseToken && row.LeaseExpiresAtUtc > Now() && row.CompletedAtUtc is null ? row : null;
+    }
+    private Task<OperationJob> Job(Guid id, CancellationToken cancellationToken) => db.OperationJobs.FromSqlInterpolated($"SELECT * FROM operation_jobs WHERE id={id} FOR UPDATE").SingleAsync(cancellationToken);
+    private void Message(Guid id) => db.OutboxMessages.Add(new() { MessageType = "FileTreeMoveRequested", PayloadJson = JsonSerializer.Serialize(new { jobId = id }) });
+    private Task<int> Processed(Guid id, DateTimeOffset now, CancellationToken cancellationToken) => db.Database.ExecuteSqlInterpolatedAsync(
+        $"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('FileTreeMoveRequested','FileTreeMoveCancellationRequested') AND payload_json->>'jobId'={id.ToString("D")}", cancellationToken);
+    private async Task FinishJob(OperationJob job, string state, string phase, string code, CancellationToken cancellationToken)
+    {
+        job.State = state; job.Phase = phase; job.ErrorCode = state == "Succeeded" ? null : code; job.CompletedAtUtc = Now();
+        job.ProgressPercent = state == "Succeeded" ? (short)100 : null; job.Version++; await Event(job, code, cancellationToken);
+    }
+    private async Task Event(OperationJob job, string code, CancellationToken cancellationToken)
+    {
+        var sequence = (await db.OperationJobEvents.Where(item => item.JobId == job.Id).MaxAsync(item => (long?)item.Sequence, cancellationToken) ?? 0) + 1;
+        db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
+    }
+    private void Audit(FileTreeMoveOperation row, Guid job, string action, string result, string trace, string? source)
+    {
+        db.AuditEvents.Add(new() { ActorSubject = row.ActorSubject, Action = action, TargetType = "file-tree", TargetId = row.Id.ToString("D"),
+            JobId = job, TraceId = trace, SourceIp = source, Result = result,
+            DetailJson = JsonSerializer.Serialize(new { intentId = row.Id, sourceHash = row.SourceHash, targetHash = row.TargetHash, row.DestinationPublished, row.SourceRemoved, row.SourceRetained, row.PartialRetained }) });
+    }
+    private Task<T> Transaction<T>(Func<Task<T>> action, CancellationToken cancellationToken) => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+    {
+        db.ChangeTracker.Clear(); await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='10s'; SELECT pg_advisory_xact_lock(41307341);", cancellationToken);
+        var result = await action(); await transaction.CommitAsync(cancellationToken); return result;
+    });
+}

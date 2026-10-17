@@ -1,11 +1,17 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using WhaleDeck.Application.Abstractions;
 using WhaleDeck.Application.Models;
+using WhaleDeck.Domain.Entities;
 
 namespace WhaleDeck.Application.Services;
 
 public static class FileTreeMoveValidation
 {
+    public static readonly JsonSerializerOptions JsonOptions = FileTreeCopyValidation.JsonOptions;
+    public static DateTimeOffset Timestamp(DateTimeOffset value) => FileTreeCopyValidation.Timestamp(value);
+    public static void Command(FileTreeCopyCommand command) => FileTreeCopyValidation.Command(command);
     public static Guid IntentId(TerminalActor actor, string key)
     {
         _ = FileTreeCopyValidation.IntentId(actor, key); // Preserve the canonical public idempotency-key rules.
@@ -30,4 +36,25 @@ public static class FileTreeMoveValidation
             receipt.State == "Aborted" && receipt.DestinationPublished || !completed && receipt.DestinationPublished && !receipt.PartialRetained)
             throw new FileTransferRejectedException();
     }
+    public static FileTreeCopyCommand ReadCommand(FileTreeMoveOperation row) => JsonSerializer.Deserialize<FileTreeCopyCommand>(row.CommandJson, JsonOptions) ?? throw new ArgumentException("FILES_TREE_COMMAND_REQUIRED");
+    public static FileTreeMovePlan ReadPlan(FileTreeMoveOperation row) => JsonSerializer.Deserialize<FileTreeMovePlan>(row.PlanJson ?? "null", JsonOptions) ?? throw new ArgumentException("FILES_TREE_PLAN_REQUIRED");
+    public static FileTreeMoveRequestBinding RequestBinding(FileTreeMoveOperation row) => new(row.Id, row.ActorSubject, row.LoginBinding, ReadCommand(row), row.PlanningExpiresAtUtc);
+    public static FileTreeMovePlanBinding PlanBinding(FileTreeMoveOperation row) => new(row.Id, row.ActorSubject, row.LoginBinding, ReadPlan(row), row.ReadyExpiresAtUtc ?? throw new ArgumentException("FILES_TREE_PLAN_REQUIRED"));
+    public static bool HasValidBinding(FileTreeMoveOperation row, IFileTreeMoveProtector protector)
+    {
+        try
+        {
+            var command = ReadCommand(row); Command(command);
+            if (row.Id != IntentId(new(row.ActorSubject, null, [], row.LoginBinding, "", null), row.IdempotencyKey) || !FileManagementService.Hex(row.LoginBinding) ||
+                row.OwnerHash != FileManagementService.Hash("file-owner-v1:" + row.ActorSubject + ":" + row.LoginBinding) || row.SourceHash != new FilePathScope(command.Source).Hash ||
+                row.TargetHash != new FilePathScope(command.Target).Hash || !Equal(row.RequestHash, protector.FingerprintRequest(RequestBinding(row)))) return false;
+            if (row.PlanJson is null) return row.PlanHash is null && row.ReadyExpiresAtUtc is null && row.ExecutionJobId is null;
+            var plan = ReadPlan(row); Plan(plan);
+            return plan.Command == command && row.ReadyExpiresAtUtc is not null && Equal(row.PlanHash, protector.FingerprintPlan(PlanBinding(row))) &&
+                (row.ExecutionJobId is null && row.ExecutionExpiresAtUtc is null || row.ExecutionJobId == ExecutionId(row.Id) && row.ExecutionExpiresAtUtc is not null);
+        }
+        catch (Exception error) when (error is ArgumentException or JsonException or InvalidOperationException) { return false; }
+    }
+    private static bool Equal(string? left, string right) => left is not null && FileManagementService.Hex(left) && FileManagementService.Hex(right) &&
+        CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(left!), Encoding.ASCII.GetBytes(right));
 }

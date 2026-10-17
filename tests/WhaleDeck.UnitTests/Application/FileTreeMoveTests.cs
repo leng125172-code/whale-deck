@@ -1,8 +1,11 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Configuration;
 using WhaleDeck.Application.Models;
+using WhaleDeck.Application.Abstractions;
 using WhaleDeck.Application.Services;
+using WhaleDeck.Domain.Entities;
 using WhaleDeck.Infrastructure.Agent;
 
 namespace WhaleDeck.UnitTests.Application;
@@ -11,13 +14,25 @@ public sealed class FileTreeMoveTests : IDisposable
 {
     private readonly string _key = Path.Combine(Path.GetTempPath(), "wd-move-seal-" + Guid.NewGuid().ToString("N"));
     private readonly FilePlanProtector _protector;
+    public IFileTreeMoveProtector Protector => _protector;
     public FileTreeMoveTests()
     {
         File.WriteAllBytes(_key, RandomNumberGenerator.GetBytes(32));
         _protector = new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = _key }).Build());
     }
     public void Dispose() => File.Delete(_key);
-    private static FileTreeMovePlan Plan() => new(FileTreeCopyTests.Plan(), new(9007199254740995UL, ulong.MaxValue), new('F', 64));
+    public static FileTreeMovePlan Plan() => new(FileTreeCopyTests.Plan(), new(9007199254740995UL, ulong.MaxValue), new('F', 64));
+    public FileTreeMoveOperation Operation(bool execution = true)
+    {
+        var actor = new TerminalActor("tree-admin", null, [], new('A', 64), "tree-unit", null); var key = Guid.NewGuid().ToString("D"); var id = FileTreeMoveValidation.IntentId(actor, key);
+        var now = FileTreeMoveValidation.Timestamp(DateTimeOffset.UtcNow); var plan = Plan(); var expiry = now.AddMinutes(15); var ready = now.AddMinutes(5);
+        return new() { Id = id, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding, IdempotencyKey = key, OwnerHash = FileManagementService.Hash("file-owner-v1:" + actor.Subject + ":" + actor.LoginBinding),
+            RequestHash = Protector.FingerprintRequest(new(id, actor.Subject, actor.LoginBinding, plan.Command, expiry)), SourceHash = new FilePathScope(plan.Command.Source).Hash,
+            TargetHash = new FilePathScope(plan.Command.Target).Hash, CommandJson = JsonSerializer.Serialize(plan.Command), CreatedAtUtc = now, PlanningExpiresAtUtc = expiry,
+            PlanJson = JsonSerializer.Serialize(plan), PlanHash = Protector.FingerprintPlan(new(id, actor.Subject, actor.LoginBinding, plan, ready)), ReadyExpiresAtUtc = ready,
+            ExecutionJobId = execution ? FileTreeMoveValidation.ExecutionId(id) : null, ExecutionExpiresAtUtc = execution ? now.AddMinutes(15) : null,
+            State = execution ? "MoveQueued" : "Ready", LeaseToken = Guid.NewGuid(), LeaseExpiresAtUtc = now.AddSeconds(90) };
+    }
 
     [Fact]
     public void ImmutablePlansPreserveAllUnsignedBitsAndIndependentDigest()
@@ -28,6 +43,26 @@ public sealed class FileTreeMoveTests : IDisposable
         Assert.NotEqual(plan.Fingerprint, plan.CopyPlan.Fingerprint);
         Assert.Throws<ArgumentException>(() => FileTreeMoveValidation.Plan(plan with { SourceParent = new(1, 0) }));
         Assert.Throws<ArgumentException>(() => FileTreeMoveValidation.Plan(plan with { Fingerprint = "bad" }));
+        Assert.Equal(3, JsonSerializer.SerializeToElement(plan).EnumerateObject().Count());
+    }
+    [Theory]
+    [InlineData("RequestHash")][InlineData("SourceHash")][InlineData("TargetHash")][InlineData("OwnerHash")][InlineData("LoginBinding")][InlineData("PlanHash")]
+    public void DurableMoveIntentCannotBeReboundThroughMutableMetadata(string field)
+    {
+        var row = Operation(); Assert.True(FileTreeMoveValidation.HasValidBinding(row, Protector));
+        var node = JsonNode.Parse(JsonSerializer.Serialize(row))!; node[field] = new string('9', 64);
+        Assert.False(FileTreeMoveValidation.HasValidBinding(node.Deserialize<FileTreeMoveOperation>()!, Protector));
+    }
+    [Fact]
+    public void SourceParentReadyExpiryAndOriginalCommandAreAllSealed()
+    {
+        var row = Operation(); var node = JsonNode.Parse(JsonSerializer.Serialize(row))!;
+        node["PlanJson"] = JsonSerializer.Serialize(Plan() with { SourceParent = new(1, 2) });
+        Assert.False(FileTreeMoveValidation.HasValidBinding(node.Deserialize<FileTreeMoveOperation>()!, Protector));
+        node = JsonNode.Parse(JsonSerializer.Serialize(row))!; node["ReadyExpiresAtUtc"] = row.ReadyExpiresAtUtc!.Value.AddSeconds(1);
+        Assert.False(FileTreeMoveValidation.HasValidBinding(node.Deserialize<FileTreeMoveOperation>()!, Protector));
+        node = JsonNode.Parse(JsonSerializer.Serialize(row))!; node["CommandJson"] = JsonSerializer.Serialize(Plan().Command with { Target = new("test.tree", "other") });
+        Assert.False(FileTreeMoveValidation.HasValidBinding(node.Deserialize<FileTreeMoveOperation>()!, Protector));
     }
     [Fact]
     public void CopyAndMoveCannotShareRegistrationExecutionOrConfirmationDomains()

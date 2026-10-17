@@ -125,7 +125,7 @@ public sealed class JobRepository(PlatformDbContext dbContext) : IJobRepository
         }
         job.CancelRequestedAtUtc = DateTimeOffset.UtcNow;
         job.Version++;
-        dbContext.OutboxMessages.Add(new OutboxMessage { MessageType = job.JobType switch { "notifications.private-configuration" => "NotificationPrivateCancellationRequested", "files.upload" => "FileUploadCancellationRequested", "files.mutation" => "FileMutationCancellationRequested", "files.tree-copy-plan" or "files.tree-copy" => "FileTreeCopyCancellationRequested", _ => "OperationCancellationRequested" }, PayloadJson = System.Text.Json.JsonSerializer.Serialize(new { jobId = id, actor = actorSubject }) });
+        dbContext.OutboxMessages.Add(new OutboxMessage { MessageType = job.JobType switch { "notifications.private-configuration" => "NotificationPrivateCancellationRequested", "files.upload" => "FileUploadCancellationRequested", "files.mutation" => "FileMutationCancellationRequested", "files.tree-copy-plan" or "files.tree-copy" => "FileTreeCopyCancellationRequested", "files.tree-move-plan" or "files.tree-move" => "FileTreeMoveCancellationRequested", _ => "OperationCancellationRequested" }, PayloadJson = System.Text.Json.JsonSerializer.Serialize(new { jobId = id, actor = actorSubject }) });
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

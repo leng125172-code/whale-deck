@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 新增目录移动完整后端候选（尚未部署）：独立API/永久双任务与migration/共享层级锁owner/Worker租约取消与不重做/人类审计已接通；发布/源移除/原件保留在Root回执前为nullable未知事实。997 Unit/122 Integration和脚本AST通过，6原生明确跳过；真实SQL、安装态身份BFF及页面仍待验收，见[移动BFF](qa/FILE_TREE_MOVE_BFF.md)。线上仍4fd9ba7/Agent1.28，不把Root 1GiB探针当本批业务链路证据，完整76项保持active。
+
 - 最新实际部署**4fd9ba7/Agent1.28**：目录移动独立RPC/helper/显式根授权已安装。CI39054987899四作业成功、同源码实际PG1执行1通过且清理；实际更新02:01:18 CST成功，宿主程序集提交/模块哈希/root权限/旧策略备份与宿主校验通过。安装态2MiB+7及1GiB+7全字节、原inode保留/目标独立、方法/nonce/owner/版本/计划/取消栅栏与精确清理通过；仅Agent范围，移动BFF/Worker/人类审计/UI仍缺。见[安装态证据](qa/FILE_TREE_MOVE_AGENT.md)。下方“候选/未安装”是历史，完整76项保持active。
 
 - 2026-10-18新增Agent1.28目录移动候选：独立RPC/固定helper/受信loader/显式根授权/旧默认精确升级及安装态验证脚本已生成，尚未部署。32真实Linux移动/loader、152旧文件/root和26目录复制通过；源码最终门禁和实机证据见[移动Agent](qa/FILE_TREE_MOVE_AGENT.md)。线上仍6c5b1d6/1.27。下方“缺RPC”为88d265e内部引擎阶段历史，BFF/Worker/UI仍待接通，76项目标不缩减。

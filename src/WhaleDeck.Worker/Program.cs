@@ -27,6 +27,7 @@ builder.Services.AddHostedService<FileUploadWorker>();
 builder.Services.AddHostedService<FileMutationWorker>();
 builder.Services.AddHostedService<FileArchiveWorker>();
 builder.Services.AddHostedService<FileTreeCopyWorker>();
+builder.Services.AddHostedService<FileTreeMoveWorker>();
 
 var host = builder.Build();
 await host.RunAsync();
