@@ -324,9 +324,11 @@ public sealed class FileTransferRunner
         }
         throw new RpcException(new(code switch
         {
-            "FILES_PROTECTED" or "FILES_ROOT_FORBIDDEN" or "FILES_ACCESS_DENIED" or "FILES_PATH_REJECTED" or "FILES_REGULAR_SINGLE_LINK_REQUIRED" => StatusCode.PermissionDenied,
-            "FILES_VERSION_CONFLICT" or "FILES_IDEMPOTENCY_CONFLICT" => StatusCode.Aborted,
-            "FILES_OPERATION_BUSY" or "FILES_TRANSFER_LIMIT" or "FILES_RECEIPT_LIMIT" or "FILES_CAPACITY_REQUIRED" => StatusCode.ResourceExhausted,
+            "FILES_PROTECTED" or "FILES_ROOT_FORBIDDEN" or "FILES_ACCESS_DENIED" or "FILES_PATH_REJECTED" or "FILES_REGULAR_SINGLE_LINK_REQUIRED" or "FILES_TREE_PROTECTED" => StatusCode.PermissionDenied,
+            "FILES_VERSION_CONFLICT" or "FILES_IDEMPOTENCY_CONFLICT" or "FILES_TREE_CHANGED" => StatusCode.Aborted,
+            "FILES_OPERATION_BUSY" or "FILES_TRANSFER_LIMIT" or "FILES_RECEIPT_LIMIT" or "FILES_CAPACITY_REQUIRED" or "FILES_TREE_ENTRY_LIMIT" or "FILES_TREE_SIZE_LIMIT" or "FILES_TREE_DEPTH_LIMIT" or "FILES_TREE_MANIFEST_LIMIT" => StatusCode.ResourceExhausted,
+            "FILES_TREE_DEADLINE" => StatusCode.DeadlineExceeded,
+            "FILES_TREE_CANCELED" => StatusCode.Cancelled,
             "FILES_OPERATION_NOT_FOUND" or "FILES_NOT_FOUND" => StatusCode.NotFound,
             _ => StatusCode.FailedPrecondition
         }, code));

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Internal descriptor-bound tree inventory for forthcoming directory workflows.
 
-Not a CLI, installed helper, RPC or permission grant. A manifest is an optimistic
+Not a stand-alone CLI, RPC or permission grant. A manifest is an optimistic
 per-entry inventory, not an atomic filesystem snapshot. Callers must seal its
 digest, stage and verify copies, acquire hierarchical locks and handle partial
 source retention before exposing directory writes. Never rename an unverified

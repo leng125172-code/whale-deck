@@ -203,7 +203,7 @@ def roots():
         if not isinstance(path, str) or not path.startswith(BASE + '/') or relative(path[len(BASE) + 1:]) != path[len(BASE) + 1:] or protected(path):
             raise Rejected('FILES_REGISTRY_INVALID')
         actions = item.get('allowedActions', [])
-        if not isinstance(actions, list) or not actions or any(action not in ('files-list', 'files-stat', 'files-download', 'files-upload', 'files-mutate', 'files-history', 'files-archive') for action in actions):
+        if not isinstance(actions, list) or not actions or any(action not in ('files-list', 'files-stat', 'files-download', 'files-upload', 'files-mutate', 'files-history', 'files-archive', 'files-tree-copy') for action in actions):
             raise Rejected('FILES_REGISTRY_INVALID')
         if any(type(item.get(field, 0)) is not int or not 0 <= item.get(field, 0) < 2 ** 31 for field in ('ownerUid', 'ownerGid')):
             raise Rejected('FILES_REGISTRY_INVALID')
@@ -925,8 +925,19 @@ def archive_engine():
     return module.FileArchives(sys.modules[__name__], backup_engine())
 
 
+def tree_copy_engine():
+    modules = []
+    for filename in ('whaledeck-file-tree.py', 'whaledeck-tree-copies.py'):
+        path = Path(__file__).with_name(filename); info = os.stat(path, follow_symlinks=False)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or info.st_mode & 0o022 or info.st_size > 131072:
+            raise Rejected('FILES_MODULE_UNSAFE')
+        specification = importlib.util.spec_from_file_location(filename.replace('-', '_'), path)
+        module = importlib.util.module_from_spec(specification); specification.loader.exec_module(module); modules.append(module)
+    return modules[1].FileTreeCopies(sys.modules[__name__], modules[0].FileTreeManifest)
+
+
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard', 'archive-list', 'archive-plan', 'archive-apply', 'archive-status', 'archive-discard'):
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard', 'archive-list', 'archive-plan', 'archive-apply', 'archive-status', 'archive-discard', 'tree-copy-plan', 'tree-copy-apply', 'tree-copy-status', 'tree-copy-discard'):
         raise Rejected('FILES_ACTION_INVALID')
     invocation = identity(os.environ.get('INVOCATION_ID'))
     emit({'type': 'driver', 'invocationId': invocation})
@@ -947,6 +958,9 @@ def main():
     elif action.startswith('operation-'):
         source.finish(); engine = operation_engine()
         emit(engine.plan(request) if action == 'operation-plan' else engine.apply(request) if action == 'operation-apply' else engine.discard(request) if action == 'operation-discard' else engine.lookup(request))
+    elif action.startswith('tree-copy-'):
+        source.finish(); engine = tree_copy_engine()
+        emit(engine.plan(request) if action == 'tree-copy-plan' else engine.copy(request) if action == 'tree-copy-apply' else engine.discard(request) if action == 'tree-copy-discard' else engine.lookup(request))
     elif action.startswith('archive-'):
         source.finish(); engine = archive_engine()
         emit(engine.list(request) if action == 'archive-list' else engine.plan(request) if action == 'archive-plan' else engine.apply(request) if action == 'archive-apply' else engine.discard(request) if action == 'archive-discard' else engine.lookup(request))

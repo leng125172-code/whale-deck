@@ -721,3 +721,34 @@ service FileArchiveService {
   rpc Inspect(FileArchiveLookup) returns (FileArchiveReceipt);
   rpc Discard(FileArchiveApplyRequest) returns (FileArchiveReceipt);
 }
+
+// Dedicated directory protocol; never changes old signed regular-file plans.
+// The complete bounded manifest stays at the Agent. No large JSON frame or
+// arbitrary host path, UID, executable or archive command crosses this RPC.
+message FileTreeCopyCommand {
+  FileLocation source = 1; string expected_version = 2; FileLocation target = 3;
+}
+message FileTreeCopyPlan {
+  FileTreeCopyCommand command = 1; string manifest_sha256 = 2;
+  uint32 entry_count = 3; int64 total_bytes = 4;
+  FileDirectoryIdentity target_parent = 5;
+  string source_policy_hash = 6; string target_policy_hash = 7;
+  string fingerprint = 8;
+}
+message FileTreeCopyPlanRequest { FileTreeCopyCommand command = 1; RequestContext context = 2; }
+message FileTreeCopyApplyRequest {
+  string operation_id = 1; string owner = 2;
+  FileTreeCopyPlan plan = 3; RequestContext context = 4;
+}
+message FileTreeCopyLookup { string operation_id = 1; string owner = 2; }
+message FileTreeCopyReceipt {
+  string operation_id = 1; string state = 2; string fingerprint = 3;
+  uint32 entry_count = 4; int64 total_bytes = 5;
+  string version = 6; bool partial_retained = 7;
+}
+service FileTreeCopyService {
+  rpc Plan(FileTreeCopyPlanRequest) returns (FileTreeCopyPlan);
+  rpc Apply(FileTreeCopyApplyRequest) returns (FileTreeCopyReceipt);
+  rpc Inspect(FileTreeCopyLookup) returns (FileTreeCopyReceipt);
+  rpc Discard(FileTreeCopyApplyRequest) returns (FileTreeCopyReceipt);
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Internal durable directory-copy engine, not yet installed or exposed by RPC.
+"""Durable registered-directory copy, invoked only by the fixed file driver.
 
 No directory source removal, overwrite, arbitrary paths, automatic retry of
 publication or recursive cleanup. Partial private trees remain explicit evidence
@@ -64,7 +64,7 @@ class FileTreeCopies:
 
     def policies(self, command):
         roots = self.f.roots(); source = roots.get(command['source']['rootId']); target = roots.get(command['target']['rootId'])
-        if source is None or target is None or not {'files-list', 'files-download'} <= set(source['allowedActions']) or not {'files-mutate', 'files-upload'} <= set(target['allowedActions']):
+        if source is None or target is None or not {'files-list', 'files-download', 'files-tree-copy'} <= set(source['allowedActions']) or not {'files-mutate', 'files-upload', 'files-tree-copy'} <= set(target['allowedActions']):
             self.reject('FILES_ROOT_FORBIDDEN')
         # Registered roots can overlap. Check their absolute normalized relation,
         # not just root IDs, and still use openat2 for every actual filesystem I/O.

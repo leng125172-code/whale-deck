@@ -27,7 +27,7 @@ def read(path):
 
 
 def upgrade(path, baseline, desired, backup_suffix='.pre-mutations.json'):
-    if backup_suffix not in ('.pre-mutations.json', '.pre-archives.json'): raise ValueError('FILES_REGISTRY_BACKUP_INVALID')
+    if backup_suffix not in ('.pre-mutations.json', '.pre-archives.json', '.pre-tree-copy.json'): raise ValueError('FILES_REGISTRY_BACKUP_INVALID')
     payload, current, info = read(path)
     if current == desired: return 'unchanged'
     if current != baseline: return 'custom-preserved'
@@ -65,7 +65,12 @@ if __name__ == '__main__':
         desired = json.loads((folder / 'file-roots.json').read_text(), object_pairs_hook=unique)
         path = Path('/etc/whaledeck/file-roots.json')
         previous = json.loads((folder / 'file-roots.v1.25.json').read_text(), object_pairs_hook=unique)
-        print(json.dumps({'fileRootsUpgrade': upgrade(path, previous, desired, '.pre-archives.json') if read(path)[1] == previous else upgrade(path, baseline, desired)}))
+        archives = json.loads((folder / 'file-roots.v1.26.json').read_text(), object_pairs_hook=unique)
+        current = read(path)[1]
+        if current == archives: result = upgrade(path, archives, desired, '.pre-tree-copy.json')
+        elif current == previous: result = upgrade(path, previous, desired, '.pre-archives.json')
+        else: result = upgrade(path, baseline, desired)
+        print(json.dumps({'fileRootsUpgrade': result}))
     except Exception:
         print(json.dumps({'fileRootsUpgrade': 'rejected'}))
         raise SystemExit(1) from None

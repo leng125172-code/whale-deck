@@ -71,4 +71,5 @@ app.MapGrpcService<ContainerTerminalGrpcService>();
 app.MapGrpcService<FileTransferGrpcService>();
 app.MapGrpcService<FileOperationGrpcService>();
 app.MapGrpcService<FileArchiveGrpcService>();
+app.MapGrpcService<FileTreeCopyGrpcService>();
 await app.RunAsync();

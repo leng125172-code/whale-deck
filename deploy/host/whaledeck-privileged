@@ -25,7 +25,17 @@ run_transient() {
 
 case "$action" in
   file-transport)
-    [[ $# -eq 3 && "$2" =~ ^(roots|list|directories|search|stat|download|upload|stage|publish|discard|status|operation-plan|operation-apply|operation-status|operation-discard|archive-list|archive-plan|archive-apply|archive-status|archive-discard)$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    [[ $# -eq 3 && "$2" =~ ^(roots|list|directories|search|stat|download|upload|stage|publish|discard|status|operation-plan|operation-apply|operation-status|operation-discard|archive-list|archive-plan|archive-apply|archive-status|archive-discard|tree-copy-plan|tree-copy-apply|tree-copy-status|tree-copy-discard)$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    file_size_limit=1073741824
+    file_memory_limit=128M
+    file_cpu_quota=50%
+    file_descriptor_limit=64
+    if [[ "$2" == tree-copy-* ]]; then
+      file_size_limit=17179869184
+      file_memory_limit=384M
+      file_cpu_quota=100%
+      file_descriptor_limit=128
+    fi
     # RestrictSUIDSGID seccomp blocks openat2 entirely, including read-only
     # resolution. Only this fixed, non-executing Python driver opts out: it
     # creates 0600 files and strips both special bits on every permission copy.
@@ -38,8 +48,8 @@ case "$action" in
       --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
       --property=RestrictNamespaces=yes --property=RestrictAddressFamilies=AF_UNIX \
       --property=RuntimeMaxSec=620 --property=TimeoutStopSec=5 --property=KillMode=control-group \
-      --property=Restart=no --property=TasksMax=8 --property=MemoryMax=128M --property=CPUQuota=50% \
-      --property=LimitCORE=0 --property=LimitNOFILE=64 --property=LimitFSIZE=1073741824 \
+      --property=Restart=no --property=TasksMax=8 --property="MemoryMax=$file_memory_limit" --property="CPUQuota=$file_cpu_quota" \
+      --property=LimitCORE=0 --property="LimitNOFILE=$file_descriptor_limit" --property="LimitFSIZE=$file_size_limit" \
       --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
       --property="CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_CHOWN" \
       --property="ReadWritePaths=/var/lib/whaledeck-files /data/WhaleDeck /data/DockerData/whaledeck/file-backups" \

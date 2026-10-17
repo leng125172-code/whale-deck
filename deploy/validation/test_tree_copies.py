@@ -5,8 +5,10 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import stat
 import subprocess
+import sys
 import unittest
 import uuid
 import test_file_transport as common
@@ -22,7 +24,7 @@ class FileTreeCopyTests(unittest.TestCase):
     def setUp(self):
         self.fixture = common.FileTransportTests(); self.fixture.setUp()
         self.root, self.base, self.registry = self.fixture.root, self.fixture.base, self.fixture.registry
-        policy = json.loads(self.registry.read_bytes()); policy[0]['allowedActions'] += ['files-mutate']; self.registry.write_text(json.dumps(policy))
+        policy = json.loads(self.registry.read_bytes()); policy[0]['allowedActions'] += ['files-mutate', 'files-tree-copy']; self.registry.write_text(json.dumps(policy))
         self.source = self.root / 'source'; self.source.mkdir(); (self.source / '空目录').mkdir()
         nested = self.source / '代码'; nested.mkdir(); self.content = bytes(range(256)) * 257 + b'\x00\xff'
         (nested / 'run.bin').write_bytes(self.content); (nested / 'run.bin').chmod(0o751)
@@ -285,6 +287,39 @@ class FileTreeCopyTests(unittest.TestCase):
             os.write(release_write, b'R'); os.close(release_write); os.close(ready_read); _, status = os.waitpid(pid, 0)
         self.assertTrue(os.WIFEXITED(status)); self.assertEqual(os.WEXITSTATUS(status), 0)
         self.assertEqual(self.engine.lookup({key: request[key] for key in ('operationId', 'owner')})['state'], 'Completed')
+
+    def test_regular_file_permissions_do_not_implicitly_allow_directory_copy(self):
+        policy = json.loads(self.registry.read_bytes()); policy[0]['allowedActions'].remove('files-tree-copy'); self.registry.write_text(json.dumps(policy))
+        with self.assertRaisesRegex(driver.Rejected, '^FILES_ROOT_FORBIDDEN$'): self.request()
+        self.assertFalse((self.root / driver.STAGING).exists())
+
+    def test_fixed_driver_loader_uses_the_same_registered_root_policy(self):
+        from unittest.mock import patch
+        modules = self.base / 'installed-modules'; modules.mkdir(mode=0o700)
+        for name in ('whaledeck-file-tree.py', 'whaledeck-tree-copies.py'):
+            target = modules / name; shutil.copyfile(Path(driver.__file__).with_name(name), target); target.chmod(0o640)
+        with patch.dict(sys.modules, {driver.__name__: driver}), patch.object(driver, '__file__', str(modules / 'whaledeck-files.py')):
+            loaded = driver.tree_copy_engine(); request = self.request()
+            self.assertEqual(loaded.plan(request['plan']['command']), request['plan'])
+            self.assertEqual(loaded.copy(request)['state'], 'Completed')
+        self.assertEqual((self.root / 'target' / '代码' / 'run.bin').read_bytes(), self.content)
+
+    def test_loader_rejects_real_writable_linked_or_foreign_owned_modules(self):
+        from unittest.mock import patch
+        modules = self.base / 'installed-modules'; modules.mkdir(mode=0o700)
+        for name in ('whaledeck-file-tree.py', 'whaledeck-tree-copies.py'):
+            target = modules / name; shutil.copyfile(Path(driver.__file__).with_name(name), target); target.chmod(0o640)
+        target = modules / 'whaledeck-file-tree.py'
+        with patch.dict(sys.modules, {driver.__name__: driver}), patch.object(driver, '__file__', str(modules / 'whaledeck-files.py')):
+            target.chmod(0o660)
+            with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_copy_engine()
+            target.chmod(0o640); alias = modules / 'hardlinked'; os.link(target, alias)
+            with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_copy_engine()
+            alias.unlink()
+            os.chown(target, 12345, 0)
+            with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_copy_engine()
+            os.chown(target, 0, 0); retained = modules / 'retained.py'; target.rename(retained); target.symlink_to(retained)
+            with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_copy_engine()
 
 
 if __name__ == '__main__': unittest.main()

@@ -84,4 +84,25 @@ class FileRootUpgradeTests(unittest.TestCase):
         self.assertEqual(self.current.read_bytes(), original)
 
 
+    def test_archive_defaults_gain_only_explicit_tree_permission_with_a_separate_backup(self):
+        previous = json.loads((Path(__file__).resolve().parents[1] / 'host/file-roots.v1.26.json').read_text())
+        self.current.write_text(json.dumps(previous)); original = self.current.read_bytes()
+        prior = self.folder / 'file-roots.json.pre-archives.json'; prior.write_text('[]'); prior.chmod(0o600)
+        self.assertEqual(upgrade.upgrade(self.current, previous, self.desired, '.pre-tree-copy.json'), 'upgraded-defaults')
+        self.assertEqual((self.folder / 'file-roots.json.pre-tree-copy.json').read_bytes(), original)
+        self.assertEqual(prior.read_text(), '[]')
+        for before, after in zip(previous, json.loads(self.current.read_bytes())):
+            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-copy'})
+            self.assertEqual({key:value for key,value in before.items() if key != 'allowedActions'}, {key:value for key,value in after.items() if key != 'allowedActions'})
+        self.assertEqual(upgrade.upgrade(self.current, previous, self.desired, '.pre-tree-copy.json'), 'unchanged')
+
+    def test_custom_archive_root_is_not_silently_granted_bulk_copy(self):
+        previous = json.loads((Path(__file__).resolve().parents[1] / 'host/file-roots.v1.26.json').read_text())
+        custom = json.loads(json.dumps(previous)); custom[0]['allowedActions'].remove('files-upload')
+        self.current.write_text(json.dumps(custom)); original = self.current.read_bytes()
+        self.assertEqual(upgrade.upgrade(self.current, previous, self.desired, '.pre-tree-copy.json'), 'custom-preserved')
+        self.assertEqual(self.current.read_bytes(), original)
+        self.assertFalse((self.folder / 'file-roots.json.pre-tree-copy.json').exists())
+
+
 if __name__ == '__main__': unittest.main()

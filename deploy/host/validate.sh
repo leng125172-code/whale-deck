@@ -37,6 +37,10 @@ assert_metadata /usr/local/libexec/whaledeck-files.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-operations.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-backups.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-archives.py '750:root:root'
+for module in /usr/local/libexec/whaledeck-file-tree.py /usr/local/libexec/whaledeck-tree-copies.py; do
+  assert_metadata "$module" '750:root:root'
+  [[ ! -L $module && $(stat -c %h "$module") == 1 ]]
+done
 [[ ! -L /etc/whaledeck/file-backups.json && $(stat -c %u /etc/whaledeck/file-backups.json) == 0 && $(stat -c %h /etc/whaledeck/file-backups.json) == 1 ]]
 [[ $(stat -c %a /etc/whaledeck/file-backups.json) =~ ^(600|640|644)$ ]]
 assert_metadata /data/DockerData/whaledeck/file-backups '700:root:root'
