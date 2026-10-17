@@ -1,6 +1,6 @@
 # 文件列表帧预算与顶栏内容区域
 
-2026-10-17，开发中；不得作为完整 P0–P5 或文件管理签收。
+2026-10-17，边界修复已在 036dfcb 签收；完整 P0–P5 与文件管理仍在推进，下方保留发布前记录。
 
 ## 验收清单
 
@@ -16,7 +16,7 @@
 
 GLM / glm-5.3-flash 只读定位样式和测试：1 次成功、0 重试，input 57636 / cached 40448 / output 2182 Tokens，82801ms，费用未返回。GPT 复核定位并独立实测；其认为 scrollWidth 必然能捕获裁切的建议与实测矛盾，不采纳。权限与备份设计不委派。
 
-## 实现与本地证据（尚未部署）
+## 发布前实现与本地证据（当时尚未部署）
 
 - 普通列表和目录树共用按实际 UTF-8 JSON 编码计算的 48KiB 行预算，保留 64KiB 传输帧上限及扫描、条数与版本检查。提前结束的游标是最后返回的名称，不是原请求的第 take 项；不拒绝合法引号名称。
 - 角标改为常规半宽定位，沿用 12px 安全间距，去掉手机端为旧定位补出的 20px 间距。经典滚动条下主题开关右界 297.203125 < clientWidth 305，角标间隔仍大于 4px；没有隐藏任务/通知/搜索等入口。
@@ -25,3 +25,18 @@ GLM / glm-5.3-flash 只读定位样式和测试：1 次成功、0 重试，input
 - Release 零警告错误，771 Unit / 115 Integration；Windows 六个原生依赖用例明确跳过，不能算通过。204 前端单元、lint/格式/类型与生产构建通过。
 - 持久 headed Chrome 对生产构建单独目测 320px 亮色初始、暗色滚动后及 1440px；搜索长词空结果、键盘 Enter/Escape、导航往返、任务/通知抽屉、明暗往返及 1045/1046 断点交互通过。通知 fixture 的不可用状态没有冒称真实服务成功。最初截屏早于组件渲染出现空白，已丢弃并等待顶栏/角标可见后重截；一次宽泛 header locator 多匹配错误已改为专用 data-test，未重做写操作。
 - 截图位于忽略目录 deploy/artifacts/header-boundaries。未发现本次顶栏控制区域裁切、角标互盖或页面横向溢出；不据此签收整站 UI 或尚未实现的编辑/HDD备份。
+
+## 最终运行时签收：036dfcb / Agent 1.24
+
+- 源码及已安装程序集：036dfcb4c64c1b2c97e1191adaac2598553c9cf8。[CI 38986541530](https://github.com/leng125172-code/whale-deck/actions/runs/38986541530) 的 installer/backend/frontend/native-postgres 四作业全部成功，联合浏览器实际 100 项通过（7.2 分钟）。新增顶栏 25 项在生产 preview 上运行；其他 fixture 与真实身份验证不混为一谈。本地文件/变更/搜索/顶栏联合 63 项通过（5.3 分钟）。
+- 工作站冻结该提交的原生 PostgreSQL：dispatch-47ba7c8e388b4e16b281350ba8264edb.json，00:34:23–00:36:13 UTC，state=Passed，executedTests=passedTests=1，cleanupConfirmed=true。SDK image sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa。六个 Windows 跳过项没有记成通过。
+- 发布前活跃上传、变更、路径锁、终端均为 0。Job 5f5fa051-2964-47b7-8640-ccc450f7f98c 仅证明调度；实际宿主 update unit 于 08:40:19 CST 成功结束（1min1.464s，inactive/dead、MainPID=0、Result=success、ExecMainStatus=0），程序集 SHA 与提交一致。只重建 WD 三容器，数据库核心未重启；没有自动回滚。
+- 安装态宿主 systemd、权限、UDS、固定 helper、动态入口与 Agent/Maintenance .NET/ASP.NET/PKCS 10.0.13 验证通过。11 核心容器 healthy，开发 sudo 保留。
+- 真实 OIDC→稳定入口→API→UDS→已安装 root helper：各 214 项合法长名称的普通文件与目录完整分页，首批小于 100、游标逐页对齐、版本一致且无丢失重复；原递归搜索/大小写/类型/保护/CSRF/Origin/游标版本验证通过。所有自有文件/FIFO/链接和目录精确清理。
+- 原文件变更真实 OIDC/SQL/Worker/UDS 回归通过：65543 字节完整复制、移动、权限、新建目录、永久幂等、登录隔离、CSRF/Origin/旧版本保护与人类审计；fixture 清理，审计和回执保留。生产 Unknown 故障没有人为注入，不把本回归签成更广故障覆盖。
+- 真实新管理员浏览器登录后 /files：320px、clientWidth=scrollWidth=305，主题右界 297.203125；搜索打开/关闭、主题往返与滚动后目测通过。本次实际未读为 8、任务无角标，不冒称实机为 99+；高计数由独立生产构建门禁覆盖。浏览器关闭、临时身份渠道 EOF 后删除账号另行确认；截图只取顶栏，不含身份/文件内容。
+- 8 项 HTTP 资产与 active Gateway 逐字节一致；活动 index-B6tNjrj7.css 与本地已测生产构建的 SHA256 均为 e2e49547714426ca7bd9342622cd70c6bbd8959cd9620276231c4cd51f7d016c。实际修复样式已部署，不仅是源码或本地预览。
+
+收尾独立确认：真实网页临时账号已删除、渠道退出码0、凭据引用清空、浏览器关闭；自有 Linux 代码测试目录在 realpath/挂载范围核对后精确清除，代码可从 Git 恢复。没有删除用户数据或审计/永久回执。
+
+本次只关闭两处边界缺陷，不签完整文件管理、P0-08 或全部 76 项。下一步 UTF-8 编辑与覆盖上传共用 HDD 前置完整备份/校验/历史：先核实挂载身份和空间，失败不覆盖；再继续回收站/归档、容器文件、租户隔离及长期清理。
