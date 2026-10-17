@@ -115,6 +115,10 @@ def main():
             input=sql.encode(), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20, check=True)
         audits = json.loads(process.stdout)
         hashes = {digest((ROOT + ':' + relative(name)).encode()) for name in files}
+        # The protected read is correctly denied by the Agent AFTER the BFF
+        # writes Started/Incomplete metadata. Its exact attempted target hash
+        # is expected too; never treat an absent audit field as proof of safety.
+        hashes.add(digest((ROOT + ':.env').encode()))
         assert any(item['result'] == 'Validated' for item in audits) and any(item['result'] == 'Incomplete' for item in audits)
         assert all(set(item['detail']) == {'targetHash'} and item['detail']['targetHash'] in hashes for item in audits)
         print(json.dumps(dict(realFileTextBff='passed', oidcApiSqlWorkerUdsInstalledHelper='passed', utf8BomCrLfEmptyLimitAndBinaryRejection='passed',

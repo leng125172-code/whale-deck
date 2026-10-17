@@ -1,6 +1,6 @@
 # UTF-8 编辑与共用 HDD 前置备份
 
-2026-10-17，开发中；尚未部署。现有生产运行时仍为036dfcb/Agent1.24。本轮目标是完整预览/编辑/版本冻结保存与覆盖上传共用HDD策略，不把独立执行模块或模拟UI签成完整功能，P0–P5的76项不缩减。
+2026-10-17，最新运行时931a24c/Agent1.25已部署并验收本子范围，最终记录见文末；下方开发中/未部署及036dfcb为历史。范围是完整预览/编辑/版本冻结保存与覆盖上传共用HDD策略，不把独立执行模块或模拟UI签成完整功能，P0–P5的76项不缩减。
 
 ## 契约与边界
 
@@ -48,3 +48,18 @@
 - 原因：挂载点/data为user所有755、DockerData为user所有775，而WhaleDeck私有namespace已root所有700。安装新检查误要求每层祖先均root所有。未替换Agent/API/Worker二进制，11核心仍healthy、宿主服务active；首次钉住的0600策略保留。没有改数据盘所有权、回滚或重复执行调度。
 - 修正只允许既有用户所有的真实挂载/存储祖先经no-symlink/no-cross-mount FD遍历，仍拒绝world-write；紧邻备份目录的namespace必须root控制、不可组/他人写，最终目录root700，既有不安全namespace拒绝且不接管。新增三项真实Linux用例覆盖既有/新建私有namespace下用户所有mount/storage与不接管不安全目录。待重跑、提交与覆盖。
 - 生产预览原生暗色编辑、保留/放弃草稿及390px触摸编辑/确认/已发布正常（只发送一次正文、原版本绑定、无横向溢出）；本地浏览器已正常关闭。这些明确是UI fixture，不冒充真实工作站文件写入。
+
+## 最终运行时签收931a24c / Agent1.25
+
+- 修正源码931a24cc3d7ec363b12b1f0b4479129e835ebc76；CI38998917321四作业成功，807 Unit/115 Integration、215前端单元、118 CI联合浏览器通过（8.7min），Windows六原生明确跳过。独立已测生产构建81联合浏览器通过（7.2min），两处隐藏input/Select测试错误已保留并修正为可见控制操作，无force click或放宽断言。
+- 工作站同源码冻结PG dispatch-88b3e63545104d88b6e69725f6d0f5c9：03:30:10–03:31:54 UTC，实际1执行/1通过/cleanupConfirmed=true。100 Linux文件测试及2097159字节真实不同设备→HDD复制/完整摘要/私有权限/错UUID拒绝/重放通过，全部探针临时副本清理。明确区分合成盘输入的Linux故障测试与物理HDD证明。
+- 安装实机预检先完成且保留现有0600策略；数据mount和DockerData所有权/权限保持user755/user775，平台namespace root700、备份root700。修正调度Job e4ae921d-e091-4440-9361-ead2f1ec0fe7仅表示调度；实际更新unit11:43:20开始、11:45:22 CST成功结束，journal Deactivated successfully，inactive/dead/MainPID0/Resultsuccess/ExecMain0且安装程序集SHA为931a24c。没有执行回滚、改数据盘所有权或重建依赖库。
+- 安装态host validate通过systemd/UDS/固定helper/权限/动态入口、HDD策略核验；Agent/MaintenanceHost实际共享运行库和PKCS均10.0.13。11核心healthy，user sudo未改变。
+- 真实临时OIDC管理员经稳定入口/Gateway/API/SQL/Worker/UDS/安装态helper的UTF-8/BOM/CRLF/空文件/1MiB上限/NUL与无效编码、版本冲突/匿名/保护/路径拒绝通过；完整保存后HDD旧字节/0600回执/存储与操作、源版本、完整SHA独立复核，SQL text-preview详情仅目标哈希。QA检查修正为精确纳入已主动请求但被保护拒绝的.env哈希，不删审计也不把缺字段当无泄漏。实际共享源与备份同设备，明确仅版本留存，不虚称异盘容灾。
+- 原33MiB+7（34603015字节）代理上传、7秒暂停、完整下载SHA、覆盖/幂等/登录隔离、取消tombstone/坏摘要/旧计划和审计回归通过；65543字节目录/复制移动/权限/保护/人类审计与长名称文件/目录JSON预算/目录树递归名称搜索/游标版本回归通过。验证脚本按自身确切终态UUID、目标、全SHA和root元数据清理新增HDD测试副本，不执行生产历史清理。
+- 真正浏览器（非route fixture）全新临时管理员经Authentik用户名/密码/继续进入files；1440暗色预览、320暗色编辑/确认、真实Job2a4c26eb-549b-5296-d99a-3ed5a000e167已发布、正文请求仅1次，独立浏览器下载全42字节（UTF-8 BOM/CRLF/中文）与预期完全一致；320明色重开正文相同且未修改状态、取消关闭正常，正文不在localStorage/sessionStorage。独立root观察核对SQL终态、不可变成功审计、原32字节私有保留与HDD完整旧版本、owner/原版本绑定和0600权限，再精确清理这次UI源/保留/HDD测试副本。
+- 全新普通用户实际isAdministrator=false；直达/刷新没有文件界面、textarea或文件API请求，文本GET403。两个真实浏览器账号渠道exit0且removedVerified=true、私有值清空；浏览器上下文正常关闭。前端预览fixture手机触摸/原生窗口等证据与此实际身份链路分列，不混用。
+- FilesView-D0AvlaYo.js SHA256 c09a86ef1ca895cee0e0f18824ec7b8299c7ca3bbaba65dc8a0d7b508337229c；FilesView-y8KnlvJj.css 928e249003a99ccdbcf45230fcb12dbeffa3fbf9dc6a9fbfcba8342386c9776b，实际HTTP/Gateway字节与本地已测生产构建三方一致；原通知8资产检查通过，但它不代替FilesView/CSS专项检查。
+- 最终活跃上传0、变更0、路径锁0、终端0，HDD备份目录无残留测试文件，11核心healthy、宿主服务active。真实/模拟浏览器、本地QA5174/5175进程及确切拥有的Linux源码测试副本已清理；源码可由Git恢复，长期Job/审计/root回执不删。后续只提交QA/说明，不重新发布相同业务代码。
+
+未签收：历史列表/恢复/回收站、目录复制移动/压缩解压、容器文件、完整租户隔离和长期保留清理；没有在生产盘做缺盘/满盘/强制断电或在真实BFF长复制时强杀的故障注入，不用独立Linux/物理探针假充这些完整链路。P2-04仅部分实现，完整76项继续。

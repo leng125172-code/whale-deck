@@ -150,6 +150,22 @@ def main():
                 post('files/uploads/' + identifier + '/cancel', {}, 202, identifier)
                 wait(identifier, 'Canceled')
         allowed = set().union(*owned.values()) if owned else set()
+        # 1.25 creates a separate HDD old-byte copy. Remove only copies from
+        # this probe's exact terminal operation IDs and independently verify
+        # owner, binding and full bytes first; never prune production history.
+        for identifier in operations:
+            operation = uuid.UUID(identifier).hex
+            parent = Path('/data/DockerData/whaledeck/file-backups')
+            data = parent / (operation + '.data'); metadata = parent / (operation + '.json')
+            if data.exists() or metadata.exists():
+                assert not data.is_symlink() and not metadata.is_symlink()
+                data_info = data.stat(); metadata_info = metadata.stat()
+                assert data_info.st_uid == metadata_info.st_uid == 0 and data_info.st_nlink == metadata_info.st_nlink == 1
+                value = json.loads(metadata.read_bytes()); checksum = digest(data.read_bytes())
+                assert value['state'] == 'Verified' and value['operationId'] == operation and value['rootId'] == ROOT
+                assert value['path'] in owned and value['sha256'] == checksum and checksum in owned[value['path']]
+                assert value['sizeBytes'] == data_info.st_size
+                data.unlink(); metadata.unlink()
         for filename, checksums in owned.items():
             target = DIRECTORY / filename
             if target.exists():

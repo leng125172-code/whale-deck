@@ -8,7 +8,7 @@
 
 ## 1. 传输与版本
 
-2026-10-17实际运行时d3e49c1/Agent1.24已经完成文件变更及有界目录树/名称搜索的真实OIDC/BFF/UDS/root和管理员/普通用户网页子范围签收，下面的未部署说明为历史；见[目录树/搜索运行时证据](qa/FILE_BROWSER.md#最终覆盖d3e49c1--agent124)及[文件变更签收](qa/FILE_MUTATION_WORKFLOW.md#最终运行时签收1e72ac4)。1.24能力为`files.bounded-browser`与FileTransferService.Directories/Search，依赖原files-list授权，不扩大到任意路径或正文搜索；签名续页/祖先版本及预算和不完整状态显式。开发空间、目录复制移动、HDD编辑备份及完整文件管理仍待继续。
+2026-10-17实际运行时931a24c/Agent1.25已经签收UTF-8预览编辑、版本冻结确认保存及覆盖统一完整HDD前置备份，见[最终证据](qa/FILE_TEXT_HDD.md#最终运行时签收931a24c--agent125)。原文件变更及1.24有界目录树/名称搜索保持，下面旧未部署说明为历史；目录树/搜索仍依赖files-list授权，不扩大到任意路径或正文搜索。历史管理/恢复、开发空间、目录复制移动及完整文件管理仍待继续。
 
 - 协议：gRPC，包名 `whaledeck.agent.v1`。
 - 传输：Unix Domain Socket `/run/whaledeck/agent.sock`，不监听 TCP。
