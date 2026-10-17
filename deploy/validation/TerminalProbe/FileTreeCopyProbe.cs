@@ -63,8 +63,10 @@ internal static class FileTreeCopyProbe
             var lookup = await trees.InspectAsync(new() { OperationId = request.OperationId, Owner = owner }, Headers(treeService + "Inspect"));
             Check(lookup.Equals(receipt));
             var replay = await trees.ApplyAsync(request, Headers(treeService + "Apply")); Check(replay.Equals(receipt));
+            Phase = "tree-owner-and-existing-target-rejection";
             await Denied(async () => _ = await trees.InspectAsync(new() { OperationId = request.OperationId, Owner = new('A', 64) }, Headers(treeService + "Inspect")), StatusCode.NotFound);
             await Denied(async () => _ = await trees.PlanAsync(new() { Command = command, Context = context }, Headers(treeService + "Plan")), StatusCode.Aborted);
+            Phase = "tree-independent-download-checksum";
             Check(await Download("source/代码/原始.bin") == await Download("copied/代码/原始.bin"));
 
             Phase = "tree-cancel-fence";
@@ -114,7 +116,10 @@ internal static class FileTreeCopyProbe
         }
         async Task<string> Download(string path)
         {
-            using var download = files.Download(new() { Location = new() { RootId = root, Path = prefix + "/" + path } }, Headers(fileService + "Download"), deadline: DateTime.UtcNow.AddMinutes(1));
+            var location = new FileLocation { RootId = root, Path = prefix + "/" + path };
+            var entry = await files.InspectAsync(location, Headers(fileService + "Inspect"));
+            Check(entry.Kind == "File" && entry.SizeBytes == 2 * 1024 * 1024 + 7 && !entry.IsProtected);
+            using var download = files.Download(new() { Location = location, ExpectedVersion = entry.Version }, Headers(fileService + "Download"), deadline: DateTime.UtcNow.AddMinutes(1));
             using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256); long bytes = 0; string? reported = null;
             while (await download.ResponseStream.MoveNext(default))
             {
