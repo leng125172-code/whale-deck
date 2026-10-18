@@ -1,5 +1,29 @@
 # 可核对的构建来源
 
+## Linux 安装态签收：b118454
+
+固定源码 `b118454c7867ba3bf797541798e3508ffb6a6738` 已覆盖部署，以下“尚未部署”为历史记录。本阶段仅签收构建来源闭环，不代表完整 P0/P5 或 76 项完成。
+
+- [CI39083441049](https://github.com/leng125172-code/whale-deck/actions/runs/39083441049) 四作业全部成功：1070 Unit/126 Integration、250 前端单元/203 浏览器，完整直接/间接依赖审计、五个真实程序离线 CLI 均通过。Linux 上 11 项真实 Git/archive/冻结构建流程与明确进程 double 边界测试通过；后者不是实际 Docker 证明。
+- 工作站同源码冻结实际 PostgreSQL 报告 `dispatch-695b2d3414ab425abccf49f240cfc0bf.json`：00:40:24.768951–00:42:21.322786 UTC，执行 1 / 通过 1、清理确认，SDK 实际 ID `sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa`。无外部投递，SQL 层 Root stub 的证据边界仍保持。
+- 正式更新前四个实际镜像从 git archive 构建；逐个无网络/只读隔离运行内部 CLI 或读取 Gateway JSON，与各自镜像标签完整提交号一致。没有先替换线上容器。完整 CI 成功后，只调度一次覆盖更新。
+- 更新服务实际 08:57:05–08:57:56 CST 成功终态，wall 50.639 秒、`Deactivated successfully`。不是仅 timer/Job 调度成功；数据库依赖实例未重建。首次跨版本启动前仅安装新的固定 maintenance helper，避免正在运行的旧脚本被不同长度内容覆盖；仍由既有固定调度入口执行，不改变 sudo 策略。
+- 运行中 API/Worker/Gateway 按实际不可变 image ID 核对 OCI revision 和内部版本；Agent/MaintenanceHost 实际二进制离线 CLI、隔离 Migrator CLI、实际回环 API/Gateway HTTP 均返回完整 b118454、版本 0.1.0。Migrator 镜像 OCI revision 另独立查询一致。Agent RPC 协议版本仍 1.28，与产品构建版本是不同概念。
+
+| 实际运行镜像 | 接收验收时 image ID |
+| --- | --- |
+| API | `sha256:3729fc0a3a8d116c7d58a5db81cf85f33047f8c8fc244b543ba34064746ac4f4` |
+| Worker | `sha256:27fc0737781ebb95de9afcb6b9a6c0ba423406db792de0addda598c5f45d844a` |
+| Gateway | `sha256:9ecc600700433efa278037f2986bf9e6edd626d9324f86d22f80217999366fc2` |
+
+重复构建的 OCI manifest/attestation ID 可以不同；本阶段证明同一冻结源码绑定和运行内容，不声称位级可复现构建或密码学供应链证明。
+
+- 实际 Authentik 新临时管理员→BFF→生产网页通过：320/1440、明暗主题、两个完整 SHA tooltip 与实际二进制/HTTP一致、无脚本错误/水平溢出、管理写请求 0。真实截图已目测320暗；没有用 Playwright route mock 冒充此验收。临时 Cookie 只经隐藏 SSH/进程内存/stdin，未写日志/文件/argv。
+- 实际 OIDC 完整登录、Origin/CSRF、面板与 Authentik 同时退出、跳回登录页再回归通过；既有公共/通知 HTTP JS 与活动 Gateway 字节核对通过。四种验证身份前缀最终独立查询全部 0。
+- 安装态 host validate 通过 systemd/权限/UDS/受限 helper/动态入口/HDD 策略；宿主 .NET/ASP.NET 与 PKCS 保持 10.0.13。11 核心容器 healthy。六类未结束文件工作流、路径锁和打开终端在维护前均 0；不触碰业务文件、网络/KDE/sudo 配置。
+- 实际验收脚本 SHA256：`validate_build_provenance.py` `3e023614324a2b1212dc76eb2fe4da2013b0102e988b82e1e852617dfcec6692`；构建器 `e0622ac1ebe7bfcada6a361e87ffb03294b86cb8f1b01e4913a48bd1c9d79b35`。ignored 私有 QA channel.py `27bbaf63b09e195a3e66ba543d2c658cd80c28fd25ab5bcb6bebc66a8c4e3e82`，browser.mjs `2ceed780da73c5d31730107cd65794c2c2024344f72e4ff742e12cd845e3a860`，bridge.ps1 `38a009a588136af3c6b241c3e580a7f105dbb5b78dfba398e7214ab89ff28586`。不把这些后续 QA 脚本说成 b118454 的源码 CI 已包含。
+- Windows PowerShell 备用宿主发布路径仅完成语法检查，未执行另一轮 Windows→Linux 自包含发布；本阶段实际安装证明来自 Linux 固定发布路径。故障/篡改防护与完整新机/离线安装继续按 P0/P5 验收，不由版本卡片替代。
+
 ## 新增源码，尚未部署
 
 先前宿主发布会传 `SourceRevisionId`，但 API/Worker/Migrator 的 Docker 上下文排除了 `.git`，没有显式传提交号；不能拿宿主 SHA 当作容器程序集来源。此缺口独立于已修复的 PKCS 10.0.13。
