@@ -14,6 +14,7 @@ import hashlib
 import heapq
 import hmac
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -32,6 +33,8 @@ STATE = '/var/lib/whaledeck-files'
 CHUNK = 32768
 MAX_BYTES = 1024 * 1024 * 1024
 SEARCH_VISITS = 10000
+CONTENT_FILE_BYTES = 16 * 1024 * 1024
+CONTENT_PAGE_BYTES = 64 * 1024 * 1024
 LIST_ENTRIES_BYTES = 48 * 1024
 STAGING = '.whaledeck-files'
 PRIVATE = {'.git', '.ssh', '.gnupg', 'secrets', 'manifest.json', 'compose.yml', 'compose.yaml',
@@ -215,7 +218,8 @@ def roots():
 def directory(request, action, allow_empty=False):
     root_id = request.get('rootId')
     registered = roots().get(root_id) if isinstance(root_id, str) else None
-    if registered is None or 'files-' + action not in registered['allowedActions']:
+    required_actions = (action,) if isinstance(action, str) else action
+    if registered is None or not all('files-' + required in registered['allowedActions'] for required in required_actions):
         raise Rejected('FILES_ROOT_FORBIDDEN')
     path = relative(request.get('path'), empty=allow_empty)
     if protected(path):
@@ -229,6 +233,8 @@ def directory(request, action, allow_empty=False):
         parent_path, _, leaf = path.rpartition('/')
         parent = open_at(root, parent_path or '.', os.O_RDONLY | os.O_DIRECTORY)
         yield root, parent, leaf
+        if not isinstance(action, str) and roots().get(root_id) != registered:
+            raise Rejected('FILES_ROOT_POLICY_CHANGED')
     finally:
         if parent is not None: os.close(parent)
         if root is not None: os.close(root)
@@ -407,18 +413,78 @@ def encode_search_cursor(value):
     return token
 
 
-def search_files(request):
-    if set(request) != {'rootId', 'path', 'query', 'kind', 'matchCase', 'cursor', 'take'}:
+def content_match(descriptor, before, query, match_case, stats, deadline):
+    """One complete, version-checked UTF-8 file; no regex or partial-prefix matches."""
+    stats['scannedFiles'] += 1
+    raw = bytearray()
+    while len(raw) <= before.st_size:
+        if time.monotonic() > deadline: return 'FileReadTimeLimit'
+        chunk = os.read(descriptor, min(65536, before.st_size + 1 - len(raw)))
+        if not chunk: break
+        raw.extend(chunk); stats['readBytes'] += len(chunk)
+    if version(before) != version(os.fstat(descriptor)) or len(raw) != before.st_size:
+        raise Rejected('FILES_VERSION_CONFLICT')
+    # Do not emit arbitrary binary/control payloads or decode with replacement.
+    if any(byte in raw for byte in range(32) if byte not in (9, 10, 13)) or 127 in raw:
+        stats['skippedNonTextFiles'] += 1; return None
+    try: text = raw.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        stats['skippedNonTextFiles'] += 1; return None
+    needle = query if match_case else query.casefold()
+    with io.StringIO(text, newline=None) as lines:
+        for number, line in enumerate(lines, 1):
+            if time.monotonic() > deadline: return 'FileReadTimeLimit'
+            candidate = line if match_case else line.casefold()
+            position = candidate.find(needle)
+            if position < 0: continue
+            # Full Unicode case folding can expand characters (e.g. ß -> ss).
+            # Map only a matched expanded line, without an unbounded per-char map.
+            if not match_case and len(candidate) != len(line):
+                low, high = 0, min(len(line), position + 1)
+                while low < high:
+                    if time.monotonic() > deadline: return 'FileReadTimeLimit'
+                    middle = (low + high) // 2
+                    if len(line[:middle].casefold()) > position: high = middle
+                    else: low = middle + 1
+                position = max(0, low - 1)
+            line = line.rstrip('\n')
+            start = max(0, position - 60)
+            end = min(len(line), max(start + 240, position + len(query)))
+            # At most 256-codepoint query + context, safely escaped by JSON/UI.
+            end = min(end, start + 320)
+            excerpt = ''.join(' ' if ord(character) < 32 or 127 <= ord(character) < 160 else character for character in line[start:end])
+            if version(before) != version(os.fstat(descriptor)): raise Rejected('FILES_VERSION_CONFLICT')
+            return {'lineNumber': number, 'excerpt': excerpt, 'excerptTruncated': start > 0 or end < len(line)}
+    if version(before) != version(os.fstat(descriptor)): raise Rejected('FILES_VERSION_CONFLICT')
+    return None
+
+
+def search_content(request):
+    if set(request) != {'rootId', 'path', 'query', 'matchCase', 'cursor', 'take', 'maxFileBytes'}:
+        raise Rejected('FILES_SEARCH_INVALID')
+    return search_files({**request, 'kind': 'File'}, content=True)
+
+
+def search_files(request, content=False):
+    allowed = {'rootId', 'path', 'query', 'kind', 'matchCase', 'cursor', 'take'}
+    if content: allowed.add('maxFileBytes')
+    if set(request) != allowed:
         raise Rejected('FILES_SEARCH_INVALID')
     query = request['query']
-    if not isinstance(query, str) or not query.strip() or len(query.encode('utf-8')) > 256 or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in query) or '/' in query or '\\' in query or request['kind'] not in ('All', 'File', 'Directory') or type(request['matchCase']) is not bool or type(request['take']) is not int or not 1 <= request['take'] <= 100:
+    if isinstance(query, str) and any(0xD800 <= ord(character) <= 0xDFFF for character in query):
+        raise Rejected('FILES_SEARCH_INVALID')
+    if not isinstance(query, str) or not query.strip() or len(query.encode('utf-8')) > 256 or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in query) or (not content and ('/' in query or '\\' in query)) or request['kind'] not in ('All', 'File', 'Directory') or type(request['matchCase']) is not bool or type(request['take']) is not int or not 1 <= request['take'] <= 100:
+        raise Rejected('FILES_SEARCH_INVALID')
+    if content and (type(request['maxFileBytes']) is not int or not 1 <= request['maxFileBytes'] <= CONTENT_FILE_BYTES):
         raise Rejected('FILES_SEARCH_INVALID')
     scope = [request['rootId'], relative(request['path'], empty=True), query, request['kind'], request['matchCase']]
+    if content: scope[3] = 'ContentUtf8V1'; scope.append(request['maxFileBytes'])
     state = search_cursor(request['cursor'], scope)
     rows = []; scanned = excluded = output_bytes = 0; reason = ''; hard_limit = False
     needle = query if request['matchCase'] else query.casefold()
+    stats = {'scannedFiles': 0, 'readBytes': 0, 'skippedNonTextFiles': 0, 'skippedOversizedFiles': 0}
     deadline = time.monotonic() + 5
-    with directory(request, 'list', allow_empty=True) as (_, parent, leaf):
+    with directory(request, ('list', 'download') if content else 'list', allow_empty=True) as (_, parent, leaf):
         start = open_at(parent, leaf or '.', os.O_RDONLY | os.O_DIRECTORY)
         try:
             # Retained ancestors must still match, not only the deepest frame.
@@ -451,21 +517,29 @@ def search_files(request):
                         try: relative(path)
                         except Rejected:
                             excluded += 1; frame['after'] = name; scanned += 1; continue
-                        child = None
+                        child = None; match = None
                         if entry['kind'] == 'Directory':
                             try: child = open_at(folder, name, os.O_RDONLY | os.O_DIRECTORY)
                             except OSError: pass
                         elif entry['kind'] == 'File' and not entry['isProtected']:
+                            if content and info.st_size <= request['maxFileBytes'] and stats['readBytes'] + info.st_size + 1 > CONTENT_PAGE_BYTES:
+                                reason = 'ContentByteBudget'; break
                             # NO_XDEV rejects file bind mounts too; no content is read.
                             try: descriptor = open_at(folder, name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
                             except OSError: entry['isProtected'] = True
                             else:
                                 try:
                                     if version(os.fstat(descriptor)) != entry['version']: raise Rejected('FILES_VERSION_CONFLICT')
+                                    if content:
+                                        if info.st_size > request['maxFileBytes']: stats['skippedOversizedFiles'] += 1
+                                        else: match = content_match(descriptor, info, query, request['matchCase'], stats, deadline)
                                 finally: os.close(descriptor)
+                            if match == 'FileReadTimeLimit':
+                                reason = 'FileReadTimeLimit'; hard_limit = True; break
                         eligible = not entry['isProtected'] and (entry['kind'] == 'File' or child is not None)
-                        hit = eligible and (request['kind'] == 'All' or request['kind'] == entry['kind']) and needle in (name if request['matchCase'] else name.casefold())
+                        hit = eligible and bool(match) if content else eligible and (request['kind'] == 'All' or request['kind'] == entry['kind']) and needle in (name if request['matchCase'] else name.casefold())
                         row = {'path': path, 'entry': entry}
+                        if content and hit: row.update(match)
                         size = len(json.dumps(row, ensure_ascii=False).encode())
                         if hit and output_bytes + size > 20000:
                             if child is not None: os.close(child)
@@ -489,8 +563,10 @@ def search_files(request):
         finally: os.close(start)
     cursor = encode_search_cursor(state) if state['stack'] and not hard_limit else ''
     if not cursor and not reason and state['depthLimited']: reason = 'DepthLimit'
-    return {'entries': rows, 'nextCursor': cursor, 'scannedEntries': scanned, 'excludedEntries': excluded,
+    response = {'entries': rows, 'nextCursor': cursor, 'scannedEntries': scanned, 'excludedEntries': excluded,
             'complete': not state['stack'] and not state['depthLimited'], 'stopReason': reason, 'depthLimited': state['depthLimited']}
+    if content: response.update(stats)
+    return response
 
 
 def inspect(request):
@@ -948,7 +1024,7 @@ def tree_move_engine():
 
 
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard', 'archive-list', 'archive-plan', 'archive-apply', 'archive-status', 'archive-discard', 'tree-copy-plan', 'tree-copy-apply', 'tree-copy-status', 'tree-copy-discard', 'tree-move-plan', 'tree-move-apply', 'tree-move-status', 'tree-move-discard'):
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'content-search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard', 'archive-list', 'archive-plan', 'archive-apply', 'archive-status', 'archive-discard', 'tree-copy-plan', 'tree-copy-apply', 'tree-copy-status', 'tree-copy-discard', 'tree-move-plan', 'tree-move-apply', 'tree-move-status', 'tree-move-discard'):
         raise Rejected('FILES_ACTION_INVALID')
     invocation = identity(os.environ.get('INVOCATION_ID'))
     emit({'type': 'driver', 'invocationId': invocation})
@@ -961,6 +1037,7 @@ def main():
     elif action == 'list': emit(list_directory(request))
     elif action == 'directories': emit(list_directories(request))
     elif action == 'search': emit(search_files(request))
+    elif action == 'content-search': emit(search_content(request))
     elif action == 'stat': emit(inspect(request))
     elif action == 'download': download(request)
     elif action == 'upload': emit(upload(request, source))

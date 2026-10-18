@@ -18,4 +18,9 @@ public sealed class FileBrowserController(FileBrowserService browser, TerminalCo
     [HttpPost("search"), RequestSizeLimit(65536)]
     public async Task<ActionResult<FileSearchPage>> Search(FileSearchCommand command, CancellationToken cancellationToken) =>
         Ok(await browser.SearchAsync((await identity.ReadAsync(HttpContext)).Actor, command, cancellationToken));
+
+    /// <summary>Literal UTF-8 text-content search within registered list+download roots. No regex or glob. One first matching line per file, bounded escaped excerpt, per-file limit up to 16 MiB, at most 64 MiB and five seconds per page. Binary/oversized/unsafe entries and incomplete scans are explicit. A ten-minute content/query/size/root/version-bound cursor cannot be used for filename searches. POST requires current administrator Cookie, CSRF and same Origin; no Job or transcript is written.</summary>
+    [HttpPost("content-search"), RequestSizeLimit(65536)]
+    public async Task<ActionResult<FileContentSearchPage>> ContentSearch(FileContentSearchCommand command, CancellationToken cancellationToken) =>
+        Ok(await browser.SearchContentAsync((await identity.ReadAsync(HttpContext)).Actor, command, cancellationToken));
 }

@@ -53,5 +53,7 @@ public sealed class FileBrowserServiceTests
         { Calls++; return Task.FromResult(new FilePageDto([], "", new('A', 64))); }
         public Task<FileSearchPage> SearchAsync(FileSearchCommand command, CancellationToken cancellationToken)
         { Calls++; Command = command; Cancellation = cancellationToken; return Task.FromResult(Page); }
+        public Task<FileContentSearchPage> SearchContentAsync(FileContentSearchCommand command, CancellationToken cancellationToken)
+        { Calls++; return Task.FromResult(new FileContentSearchPage([], "", 0, 0, true, "", false, 0, 0, 0, 0)); }
     }
 }

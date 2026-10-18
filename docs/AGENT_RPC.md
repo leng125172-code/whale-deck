@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+新增1.29候选（尚未部署）：`FileTransferService.SearchContent`、能力`files.utf8-content-search`，与文件名Search分离。独立请求包含登记根/目录、字面UTF-8关键词、大小写、游标、take及1–16MiB单文件上限；结果为每文件首个匹配行/有界片段、原文件版本、实际读取字节/文件及跳过计数。最多10000项/64MiB/5秒一页、32层、100条、64KiB私有帧；helper另有20秒systemd上限/384MiB内存/单核CPU，不提供任意路径或命令。游标MAC绑定ContentUtf8V1域、根/目录/关键词/大小写/文件上限/祖先版本与10分钟期限。必须同时具备同一登记快照的files-list和files-download；排除保护配置、链接、多硬链接、特殊文件及嵌套挂载，严格UTF-8和全文件版本验证，不把前缀或跳过项当作已查全文。API读前读后复核当前管理员；片段/关键词不写Job、审计正文、日志或URL。完整证据及未验收边界见[正文搜索](qa/FILE_CONTENT_SEARCH.md)。
+
 范围修订：2026-10-13 [P0–P5 基线](GOAL_P0_P5.md) 增加受控终端会话/文件/恢复/网络/网站/邮件/DNS/多节点适配。源码1.17通知私有配置、1.18宿主PTY基础，保留本地UDS限制，不得直接放宽成任意路径/可执行程序RPC；新增能力须独立设计、能力协商和安全测试。P5远程Agent采用专用mTLS通道，本地UDS不暴露TCP；远程写入须同时验证节点/资源/主体/短时capability。
 
 本文定义 `WhaleDeck.Api/Worker` 与宿主机 `WhaleDeck.Agent` 的内部契约。Agent 是唯一可以访问 Docker Engine、systemd、journald 和批准宿主机资源的组件。

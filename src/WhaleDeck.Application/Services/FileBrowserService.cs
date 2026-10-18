@@ -26,4 +26,26 @@ public sealed class FileBrowserService(FileManagementService files, IFileBrowser
             command.Take is < 1 or > 100 || command.Cursor.Length > 32768 || command.Cursor.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.')))
             throw new ArgumentException("FILES_SEARCH_INVALID");
     }
+
+    public async Task<FileContentSearchPage> SearchContentAsync(TerminalActor actor, FileContentSearchCommand command, CancellationToken cancellationToken)
+    {
+        await files.AuthorizeAsync(actor, cancellationToken);
+        ValidateContent(command);
+        cancellationToken.ThrowIfCancellationRequested();
+        var result = await gateway.SearchContentAsync(command, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        // Content snippets are private reads too: do not return a completed
+        // scan after the caller's current administrator authority has expired.
+        await files.AuthorizeAsync(actor, cancellationToken);
+        return result;
+    }
+
+    public static void ValidateContent(FileContentSearchCommand command)
+    {
+        FileManagementService.Location(new(command.RootId, command.Path), true);
+        if (string.IsNullOrWhiteSpace(command.Query) || new UTF8Encoding(false, true).GetByteCount(command.Query) > 256 || command.Query.Any(char.IsControl) ||
+            command.Take is < 1 or > 100 || command.MaxFileBytes is < 1 or > 16 * 1024 * 1024 ||
+            command.Cursor.Length > 32768 || command.Cursor.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.')))
+            throw new ArgumentException("FILES_SEARCH_INVALID");
+    }
 }

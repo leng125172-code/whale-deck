@@ -9,7 +9,7 @@ using WhaleDeck.Contracts.Agent.V1;
 namespace WhaleDeck.Agent.Services;
 
 /// <summary>Dedicated, method-capability checked file transport; not arbitrary host paths or commands.</summary>
-public sealed class FileTransferGrpcService(FileTransferRunner runner) : FileTransferService.FileTransferServiceBase
+public sealed partial class FileTransferGrpcService(FileTransferRunner runner) : FileTransferService.FileTransferServiceBase
 {
     public override async Task<FileRoots> ListRoots(Empty request, ServerCallContext context)
     {
@@ -101,7 +101,7 @@ public sealed class FileTransferGrpcService(FileTransferRunner runner) : FileTra
     }
 }
 
-internal static class FileTransferPolicy
+internal static partial class FileTransferPolicy
 {
     public const long MaximumBytes = 1024L * 1024 * 1024;
     public static void Search(FileSearchRequest request)

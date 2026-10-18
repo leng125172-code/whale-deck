@@ -28,4 +28,18 @@ public sealed partial class AgentGateway : IFileBrowserGateway
         return new(result.Entries.Select(item => new Application.Models.FileSearchHit(item.Path, MapFile(item.Entry))).ToArray(), result.NextCursor,
             checked((int)result.ScannedEntries), checked((int)result.ExcludedEntries), result.Complete, result.StopReason, result.DepthLimited);
     }
+
+    public async Task<FileContentSearchPage> SearchContentAsync(FileContentSearchCommand command, CancellationToken cancellationToken)
+    {
+        var client = await Browser(cancellationToken);
+        var capabilities = await GetCapabilitiesAsync(cancellationToken);
+        if (!capabilities.Capabilities.Contains("files.utf8-content-search")) throw new RpcException(new(StatusCode.Unimplemented, "FILES_CONTENT_CAPABILITY_UNAVAILABLE"));
+        var result = await client.SearchContentAsync(new() { Location = new() { RootId = command.RootId, Path = command.Path },
+            Query = command.Query, MatchCase = command.MatchCase, Cursor = command.Cursor, Take = checked((uint)command.Take), MaxFileBytes = checked((uint)command.MaxFileBytes) },
+            Headers(FilesMethod + "SearchContent"), deadline: DateTime.UtcNow.AddSeconds(15), cancellationToken: cancellationToken);
+        return new(result.Entries.Select(item => new Application.Models.FileContentSearchHit(item.Path, MapFile(item.Entry),
+            checked((int)item.LineNumber), item.Excerpt, item.ExcerptTruncated)).ToArray(), result.NextCursor,
+            checked((int)result.ScannedEntries), checked((int)result.ExcludedEntries), result.Complete, result.StopReason, result.DepthLimited,
+            checked((int)result.ScannedFiles), result.ReadBytes, checked((int)result.SkippedNonTextFiles), checked((int)result.SkippedOversizedFiles));
+    }
 }

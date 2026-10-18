@@ -20,6 +20,7 @@ import type { FileEntry, FileIntent, FilePage, FilePlan, FileRoot } from '@/serv
 import FileMutationPanel from '@/components/files/FileMutationPanel.vue'
 import FileDirectoryTree from '@/components/files/FileDirectoryTree.vue'
 import FileSearchPanel from '@/components/files/FileSearchPanel.vue'
+import FileContentSearchPanel from '@/components/files/FileContentSearchPanel.vue'
 import FileTextEditor from '@/components/files/FileTextEditor.vue'
 import FileArchivePanel from '@/components/files/FileArchivePanel.vue'
 import FileTreeCopyPanel from '@/components/files/FileTreeCopyPanel.vue'
@@ -64,6 +65,12 @@ function canTreeMove(entry: FileEntry) {
 }
 const canHistory = computed(() =>
   ['files-list', 'files-download', 'files-history'].every((action) =>
+    roots.value.find((root) => root.id === rootId.value)?.actions.includes(action),
+  ),
+)
+const fileSearchTab = ref('names')
+const canSearchContent = computed(() =>
+  ['files-list', 'files-download'].every((action) =>
     roots.value.find((root) => root.id === rootId.value)?.actions.includes(action),
   ),
 )
@@ -481,6 +488,9 @@ async function download(entry: FileEntry) {
     if (token === generation) busy.value = false
   }
 }
+watch(canSearchContent, (value) => {
+  if (!value) fileSearchTab.value = 'names'
+})
 watch(authorized, (value) => {
   if (!value) {
     revokeDrafts()
@@ -734,13 +744,26 @@ onBeforeUnmount(() => {
           @navigate="navigate"
           @failure="browserFailure"
         />
-        <FileSearchPanel
-          :root-id="rootId"
-          :path="path"
-          :disabled="busy || !!frozen || mutationLocked"
-          @navigate="navigate"
-          @failure="browserFailure"
-        />
+        <el-tabs v-model="fileSearchTab" class="file-search-tabs">
+          <el-tab-pane label="文件名搜索" name="names">
+            <FileSearchPanel
+              :root-id="rootId"
+              :path="path"
+              :disabled="busy || !!frozen || mutationLocked || fileSearchTab !== 'names'"
+              @navigate="navigate"
+              @failure="browserFailure"
+            />
+          </el-tab-pane>
+          <el-tab-pane v-if="canSearchContent" label="正文搜索" name="content" lazy>
+            <FileContentSearchPanel
+              :root-id="rootId"
+              :path="path"
+              :disabled="busy || !!frozen || mutationLocked || fileSearchTab !== 'content'"
+              @navigate="navigate"
+              @failure="browserFailure"
+            />
+          </el-tab-pane>
+        </el-tabs>
       </div>
       <div v-if="chosen" class="file-picked" :title="chosen.name">
         {{ chosen.name }} · {{ formatBytes(chosen.size) }}
@@ -901,6 +924,9 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: grid;
   gap: 16px;
+}
+.file-search-tabs {
+  min-width: 0;
 }
 .file-browser-tools {
   display: grid;

@@ -585,6 +585,19 @@ message FileSearchResponse {
   repeated FileSearchHit entries = 1; string next_cursor = 2; uint32 scanned_entries = 3;
   uint32 excluded_entries = 4; bool complete = 5; string stop_reason = 6; bool depth_limited = 7;
 }
+message FileContentSearchRequest {
+  FileLocation location = 1; string query = 2; bool match_case = 3;
+  string cursor = 4; uint32 take = 5; uint32 max_file_bytes = 6;
+}
+message FileContentSearchHit {
+  string path = 1; FileEntry entry = 2; uint32 line_number = 3;
+  string excerpt = 4; bool excerpt_truncated = 5;
+}
+message FileContentSearchResponse {
+  repeated FileContentSearchHit entries = 1; string next_cursor = 2; uint32 scanned_entries = 3;
+  uint32 excluded_entries = 4; bool complete = 5; string stop_reason = 6; bool depth_limited = 7;
+  uint32 scanned_files = 8; int64 read_bytes = 9; uint32 skipped_non_text_files = 10; uint32 skipped_oversized_files = 11;
+}
 message FileDownloadRequest { FileLocation location = 1; string expected_version = 2; }
 message FileDownloadFrame { string kind = 1; FileEntry metadata = 2; bytes data = 3; int64 offset = 4; string sha256 = 5; string version = 6; int64 size_bytes = 7; }
 message FileUploadHeader {
@@ -608,6 +621,7 @@ service FileTransferService {
   rpc List(FileListRequest) returns (FileListResponse);
   rpc Directories(FileListRequest) returns (FileListResponse);
   rpc Search(FileSearchRequest) returns (FileSearchResponse);
+  rpc SearchContent(FileContentSearchRequest) returns (FileContentSearchResponse);
   rpc Inspect(FileLocation) returns (FileEntry);
   rpc Download(FileDownloadRequest) returns (stream FileDownloadFrame);
   rpc Upload(stream FileUploadFrame) returns (FileUploadReceipt);
