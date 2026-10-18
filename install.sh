@@ -350,12 +350,13 @@ if [[ ! -r $source_dir/.env ]]; then
     [[ -n ${!key:-} ]] || fail "$key is required for the final stage. Use --dependencies-only to stop before Whale Deck deployment."
   done
 fi
+export WHALEDECK_BUILD_REVISION=$(git -c "safe.directory=$source_dir" -C "$source_dir" rev-parse HEAD)
 "$source_dir/deploy/host/publish-and-install.sh"
 write_runtime_environment "$source_dir" "$database_dir"
 rm -f -- "${provisioned_environment:-}"
 compose=(docker compose --project-directory "$source_dir" --env-file "$source_dir/.env" --env-file "$source_dir/.images.env" -f "$source_dir/compose.yml")
 "${compose[@]}" --profile tools config --quiet
-"${compose[@]}" --profile tools build --pull
+bash "$source_dir/deploy/build-images.sh"
 "${compose[@]}" --profile tools run --rm --no-deps migrator
 "${compose[@]}" up -d --wait --wait-timeout 180
 log 'Whale Deck deployment completed. Host access remains HTTP/IP-only through the MaintenanceHost entry points.'

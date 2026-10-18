@@ -4,6 +4,8 @@ using Serilog;
 using Serilog.Formatting.Json;
 using WhaleDeck.MaintenanceHost;
 
+if (WhaleDeck.Contracts.BuildIdentity.TryPrint(args, typeof(Program).Assembly)) return;
+
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestHeadersTotalSize = 64 * 1024);
 builder.WebHost.UseUrls(builder.Configuration["Maintenance:Urls"]

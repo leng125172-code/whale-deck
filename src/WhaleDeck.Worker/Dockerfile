@@ -3,6 +3,8 @@ ARG DOTNET_RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime:10.0.13@sha256:9395557
 
 FROM ${DOTNET_SDK_IMAGE} AS build
 WORKDIR /src
+ARG WHALEDECK_BUILD_REVISION
+RUN test "${#WHALEDECK_BUILD_REVISION}" -eq 40 && ! printf '%s' "$WHALEDECK_BUILD_REVISION" | grep -q '[^a-f0-9]'
 
 COPY ["Directory.Build.props", "."]
 COPY ["global.json", "."]
@@ -19,10 +21,15 @@ RUN dotnet publish "src/WhaleDeck.Worker/WhaleDeck.Worker.csproj" \
     --configuration Release \
     --no-restore \
     --output /app/publish \
-    /p:UseAppHost=false
+    /p:UseAppHost=false \
+    -p:SourceRevisionId="$WHALEDECK_BUILD_REVISION"
 
 FROM ${DOTNET_RUNTIME_IMAGE} AS final
 WORKDIR /app
+ARG WHALEDECK_BUILD_REVISION
+LABEL org.opencontainers.image.revision="$WHALEDECK_BUILD_REVISION" \
+      org.opencontainers.image.source="https://github.com/leng125172-code/whale-deck" \
+      org.opencontainers.image.version="0.1.0"
 ENV DOTNET_EnableDiagnostics=0
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgssapi-krb5-2 \

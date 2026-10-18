@@ -21,6 +21,8 @@ jobs:
           bash -n deploy/host/install.sh
           bash tests/installer-cli.sh
           python3 -m unittest discover -s tests -p test_host_runtime.py
+          bash -n deploy/build-images.sh
+          python3 -m unittest discover -s tests -p 'test_build_*.py'
           bash -n deploy/host/whaledeck-privileged
           python3 -m unittest discover -s deploy/validation -p test_container_terminal.py
           python3 -m unittest discover -s deploy/validation -p test_tree_rpc_diagnostics.py
@@ -45,6 +47,18 @@ jobs:
       - run: dotnet build --configuration Release --no-restore
       - run: dotnet test --configuration Release --no-build --logger trx
       - run: dotnet list package --vulnerable --include-transitive
+      - name: Inspect actual application binaries without dependency configuration
+        run: |
+          for component in Api Worker Agent MaintenanceHost Migrator; do
+            dotnet "src/WhaleDeck.$component/bin/Release/net10.0/WhaleDeck.$component.dll" --build-info > "/tmp/wd-build-$component.json"
+          done
+          python3 - <<'PY'
+          import json, os
+          for component in ['Api', 'Worker', 'Agent', 'MaintenanceHost', 'Migrator']:
+              with open('/tmp/wd-build-' + component + '.json') as file:
+                  value = json.load(file)
+              assert value == {'component': 'WhaleDeck.' + component, 'version': '0.1.0', 'sourceRevision': os.environ['GITHUB_SHA']}, value
+          PY
 
   native-postgres:
     runs-on: ubuntu-latest
@@ -117,4 +131,4 @@ jobs:
       - name: Check production authorization, file transfers and host/container terminal UI
         env:
           WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
-        run: corepack pnpm exec playwright test e2e/auth-deep-link.production.spec.ts e2e/host-terminal.spec.ts e2e/container-terminal.spec.ts e2e/files.spec.ts e2e/file-mutations.spec.ts e2e/file-browser.spec.ts e2e/file-text.spec.ts e2e/file-archives.spec.ts e2e/tree-copies.spec.ts e2e/tree-moves.spec.ts e2e/file-recovery.spec.ts e2e/topbar-badges.spec.ts --reporter=line
+        run: corepack pnpm exec playwright test e2e/auth-deep-link.production.spec.ts e2e/host-terminal.spec.ts e2e/container-terminal.spec.ts e2e/files.spec.ts e2e/file-mutations.spec.ts e2e/file-browser.spec.ts e2e/file-text.spec.ts e2e/file-archives.spec.ts e2e/tree-copies.spec.ts e2e/tree-moves.spec.ts e2e/file-recovery.spec.ts e2e/topbar-badges.spec.ts e2e/platform-build.spec.ts --reporter=line

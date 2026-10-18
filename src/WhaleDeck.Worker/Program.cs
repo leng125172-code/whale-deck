@@ -4,6 +4,8 @@ using Serilog.Formatting.Json;
 using WhaleDeck.Infrastructure;
 using WhaleDeck.Worker;
 
+if (WhaleDeck.Contracts.BuildIdentity.TryPrint(args, typeof(Program).Assembly)) return 0;
+
 if (args.Contains("--health-check", StringComparer.Ordinal))
 {
     return WorkerHeartbeat.IsFresh(TimeSpan.FromSeconds(45)) ? 0 : 1;

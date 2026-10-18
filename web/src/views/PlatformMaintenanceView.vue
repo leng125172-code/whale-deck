@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { enqueueOperation, planOperation } from '@/services/operations'
+import PlatformBuildCard from '@/components/PlatformBuildCard.vue'
 const running = ref('')
 async function simple(action: string) {
   running.value = action
@@ -44,6 +45,7 @@ async function critical(action: 'apply-update' | 'rollback') {
       </div>
     </header>
     <section class="maintenance-grid">
+      <PlatformBuildCard />
       <article class="panel maintenance-card">
         <h2>平台自检</h2>
         <p>检查 Agent、database-platform、容器健康与基础配置。</p>

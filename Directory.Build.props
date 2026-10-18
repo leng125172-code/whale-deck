@@ -8,5 +8,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
+    <Version Condition="'$(Version)' == ''">0.1.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 </Project>

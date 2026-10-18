@@ -3,6 +3,8 @@ using Serilog;
 using Serilog.Formatting.Json;
 using WhaleDeck.Agent.Services;
 
+if (WhaleDeck.Contracts.BuildIdentity.TryPrint(args, typeof(Program).Assembly)) return;
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)

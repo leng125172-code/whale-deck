@@ -61,9 +61,21 @@ compose_for() {
 
 deploy_revision() {
   local project_root=$1 migrate=$2
+  export WHALEDECK_BUILD_REVISION
+  WHALEDECK_BUILD_REVISION=$(/usr/bin/git -c "safe.directory=$project_root" -C "$project_root" rev-parse HEAD)
+  [[ $WHALEDECK_BUILD_REVISION =~ ^[a-f0-9]{40}$ ]] || return 2
   "$project_root/deploy/host/publish-and-install.sh"
   compose_for "$project_root" --profile tools config --quiet
-  compose_for "$project_root" --profile tools build --pull
+  if [[ -f $project_root/deploy/build-images.sh ]]; then
+    bash "$project_root/deploy/build-images.sh"
+  elif [[ $migrate == false ]]; then
+    # Explicit manual rollback may target a pre-provenance commit. Its legacy
+    # binaries are not claimed to pass the new provenance verifier.
+    compose_for "$project_root" --profile tools build --pull
+  else
+    echo 'The update revision has no frozen image builder.' >&2
+    return 2
+  fi
   if [[ $migrate == true ]]; then
     compose_for "$project_root" --profile tools run --rm --no-deps migrator
   fi

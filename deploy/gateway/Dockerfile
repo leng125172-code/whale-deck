@@ -10,6 +10,12 @@ COPY web/ .
 RUN pnpm build
 
 FROM ${NGINX_IMAGE} AS final
+ARG WHALEDECK_BUILD_REVISION
+RUN test "${#WHALEDECK_BUILD_REVISION}" -eq 40 && ! printf '%s' "$WHALEDECK_BUILD_REVISION" | grep -q '[^a-f0-9]' \
+    && printf '{"component":"WhaleDeck.Gateway","version":"0.1.0","sourceRevision":"%s"}\n' "$WHALEDECK_BUILD_REVISION" > /usr/share/nginx/build-info.json
+LABEL org.opencontainers.image.revision="$WHALEDECK_BUILD_REVISION" \
+      org.opencontainers.image.source="https://github.com/leng125172-code/whale-deck" \
+      org.opencontainers.image.version="0.1.0"
 COPY deploy/gateway/nginx.conf /etc/nginx/nginx.conf
 COPY deploy/gateway/runtime-config.template.js /usr/share/nginx/runtime-config.template.js
 COPY --chmod=755 deploy/gateway/start.sh /usr/local/bin/whaledeck-gateway-start

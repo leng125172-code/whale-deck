@@ -16,6 +16,8 @@ using WhaleDeck.Api.Options;
 using WhaleDeck.Api.Security;
 using WhaleDeck.Infrastructure;
 
+if (WhaleDeck.Contracts.BuildIdentity.TryPrint(args, typeof(Program).Assembly)) return;
+
 Log.Logger = new LoggerConfiguration().Enrich.FromLogContext().WriteTo.Console(new JsonFormatter()).CreateBootstrapLogger();
 
 try
