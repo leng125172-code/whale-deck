@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-19）",
-  "nextStep": "b666042/RPC1.29系统日志名称/PID两行修复已部署并经真实管理员网页签收，四CI/219浏览器及同源码实际PG通过；正文搜索等既有能力保持。继续目录回收与压缩解压、容器文件、隔离和长期清理，以及全部76项P0–P5目标。"
+  "nextStep": "目录归档/HDD留存及新目标压缩发布内部源码已实现，56项新增真实Linux测试、SIGKILL和实际登记文件系统/HDD探针通过；尚未接RPC/API/Worker/UI。线上为独立UI修复2a60668/RPC1.29。继续独立压缩RPC和业务任务/页面、目录回收恢复及全部76项。"
 }
