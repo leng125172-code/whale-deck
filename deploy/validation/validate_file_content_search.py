@@ -26,6 +26,14 @@ BASE = Path('/data/WhaleDeck/files')
 PHASE = 'startup'
 
 
+class ResponseStatusMismatch(AssertionError):
+    """Expose only numeric status diagnostics, never response/cookie contents."""
+    def __init__(self, expected, actual):
+        super().__init__('content-response-status')
+        self.expected = expected
+        self.actual = actual
+
+
 def login(base, name, password):
     with io.StringIO() as hidden, contextlib.redirect_stdout(hidden):
         return authenticate(base, name, password)[0]
@@ -72,7 +80,8 @@ def main():
                 'rootId': ROOT, 'path': fixture.name, 'query': query, 'matchCase': False,
                 'cursor': '', 'take': 50, 'maxFileBytes': 16777216, **extra},
                 headers=api.headers if headers is None else headers, timeout=30)
-            assert response.status_code == expected, 'content-response-status'
+            if response.status_code != expected:
+                raise ResponseStatusMismatch(expected, response.status_code)
             return response.json()
         PHASE = 'actual-current-admin-api-workerless-uds-root'
         cursor = ''; hits = []; pages = []
@@ -95,10 +104,26 @@ def main():
         assert search(query='.*')['entries'] == []
         smaller = search(maxFileBytes=1048576)
         assert len(smaller['entries']) == 1 and smaller['skippedOversizedFiles'] == 2
-        search(400, cursor='invalid.cursor'); search(400, maxFileBytes=16777217)
+        PHASE = 'cursor-shape-binding-and-file-limit-denials'
+        search(400, cursor='invalid/cursor')
+        # Valid cursor alphabet but invalid MAC/binding is the existing Agent
+        # failed-precondition contract (409), unlike malformed input (400).
+        search(409, cursor='invalid.cursor')
+        search(400, maxFileBytes=16777217)
         search(403, path=fixture.name + '/.env')
-        search(400, headers={})
+        PHASE = 'independent-csrf-origin-and-anonymous-denials'
+        # Retain same Origin so this isolates CSRF rather than failing the
+        # earlier same-origin middleware with 403.
+        search(400, headers={'Origin': base, 'Accept': 'application/json'})
         search(403, headers={**api.headers, 'Origin': 'http://foreign.invalid'})
+        with requests.Session() as anonymous:
+            anonymous.trust_env = False
+            response = anonymous.post(base + '/api/v1/files/content-search', json={
+                'rootId': ROOT, 'path': fixture.name, 'query': query},
+                headers={'Origin': base, 'Accept': 'application/json'},
+                allow_redirects=False, timeout=20)
+            if response.status_code != 401:
+                raise ResponseStatusMismatch(401, response.status_code)
         PHASE = 'real-ordinary-cookie-csrf-denial'
         ordinary_process = subprocess.Popen([sys.executable, '-u', str(Path(__file__).with_name('ephemeral_browser_user.py'))],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -156,5 +181,8 @@ def main():
 if __name__ == '__main__':
     try: main()
     except BaseException as error:
-        print(json.dumps({'realFileContentSearch': 'failed', 'phase': PHASE, 'failureType': type(error).__name__, 'privateDetailsWithheld': True}), file=sys.stderr)
+        failure = {'realFileContentSearch': 'failed', 'phase': PHASE, 'failureType': type(error).__name__, 'privateDetailsWithheld': True}
+        if isinstance(error, ResponseStatusMismatch):
+            failure.update(expectedStatus=error.expected, actualStatus=error.actual)
+        print(json.dumps(failure), file=sys.stderr)
         raise SystemExit(1) from None
