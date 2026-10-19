@@ -93,6 +93,16 @@ class TreeUnpackingTests(unittest.TestCase):
         for target in (self.root / 'target', self.root / 'target/空目录', self.root / 'target/代码/中文.bin'):
             self.assertEqual((target.stat().st_uid, target.stat().st_gid), (1000, 1001))
 
+    def test_listing_keeps_large_file_version_without_expanding_general_transfer(self):
+        with self.input.open('r+b') as stream: stream.truncate(driver.MAX_BYTES + 7)
+        result = driver.list_directory({'rootId': 'test.shared', 'path': '', 'after': '', 'take': 100})
+        entry = next(value for value in result['entries'] if value['name'] == self.input.name)
+        self.assertEqual(entry['sizeBytes'], driver.MAX_BYTES + 7)
+        self.assertEqual(entry['version'], driver.version(self.input.stat())); self.assertFalse(entry['isProtected'])
+        location = {'rootId': 'test.shared', 'path': self.input.name}
+        with self.assertRaisesRegex(driver.Rejected, '^FILES_SIZE_LIMIT$'): driver.inspect(location)
+        with self.assertRaisesRegex(driver.Rejected, '^FILES_SIZE_LIMIT$'): driver.download({**location, 'expectedVersion': entry['version']})
+
     def test_fixed_loader_rejects_untrusted_owner_mode_links_and_symlinks(self):
         modules = self.fixture.base / 'installed-unpacking'; modules.mkdir(mode=0o700)
         names = ('whaledeck-file-tree.py', 'whaledeck-tree-archive.py', 'whaledeck-tree-unpacking.py')

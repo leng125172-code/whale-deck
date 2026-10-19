@@ -8,7 +8,7 @@ using Grpc.Core;
 using Grpc.Net.Client;
 using WhaleDeck.Contracts.Agent.V1;
 
-/// <summary>Real installed UDS/helper probe; no direct data/Docker access or human BFF claim.</summary>
+/// <summary>Real installed UDS/helper probe; does not read payload files/Docker or claim human BFF acceptance.</summary>
 internal static class FileTreeUnpackingProbe
 {
     public static string Phase { get; private set; } = "unpacking-startup";
@@ -74,6 +74,7 @@ internal static class FileTreeUnpackingProbe
             await Denied(async () => _ = await unpacking.PlanAsync(new() { Command = await Command("protected.tar", "forbidden", "tar"), Context = actor }, Headers(method + "Plan")), StatusCode.PermissionDenied);
             await Denied(async () => _ = await unpacking.PlanAsync(new() { Command = await Command("traversal.tar", "traversal", "tar"), Context = actor }, Headers(method + "Plan")), StatusCode.FailedPrecondition);
             Phase = "unpacking-large-archive-and-full-materialization";
+            await Denied(async () => _ = await files.InspectAsync(new() { RootId = root, Path = prefix + "/large.tar" }, Headers(fileMethod + "Inspect")), StatusCode.FailedPrecondition);
             var largePlan = await unpacking.PlanAsync(new() { Command = await Command("large.tar", "large-output", "tar"), Context = actor }, Headers(method + "Plan"), deadline: DateTime.UtcNow.AddMinutes(5));
             Check(largePlan.TotalBytes == 1024L * 1024 * 1024 + 7 && largePlan.ArchiveBytes > 1024L * 1024 * 1024 && largePlan.EntryCount == 3);
             var largeReceipt = await unpacking.ApplyAsync(new() { OperationId = Guid.NewGuid().ToString("N"), Owner = owner, Plan = largePlan, Context = actor }, Headers(method + "Apply"), deadline: DateTime.UtcNow.AddMinutes(8));
@@ -85,6 +86,7 @@ internal static class FileTreeUnpackingProbe
             Console.WriteLine(JsonSerializer.Serialize(new { installedTreeUnpackingRpc = "passed", bothFormatsAndPaxGnu = true, smallBytes = 2 * 1024 * 1024 + 7,
                 largeBytes = largePlan.TotalBytes, methodNonceOwnerVersionPlanAndCancelFences = true, inputProofRetainedInAllStates = true,
                 protectedTraversalAndExistingTargetsRejected = true, completedOperationIds = completed, canceledOperationIds = canceled,
+                sourceVersionFromBoundedDirectoryListing = true, ordinaryInspectLimitUnchanged = true,
                 independentDiskVerification = "required-by-observer", bffWorkerHumanAuditAndUi = "not-covered" }));
         }
         finally { CryptographicOperations.ZeroMemory(key); }
@@ -96,7 +98,12 @@ internal static class FileTreeUnpackingProbe
         async Task<FileTreeUnpackingCommand> Command(string source, string target, string format)
         {
             var location = new FileLocation { RootId = root, Path = prefix + "/" + source };
-            var entry = await files.InspectAsync(location, Headers(fileMethod + "Inspect")); Check(entry.Kind == "File" && entry.Version.Length == 64);
+            // Listing carries the actual version even above the ordinary
+            // transfer ceiling, just like a selected file-browser row. Do not
+            // raise general Inspect/Download budgets to bootstrap unpacking.
+            var listing = await files.ListAsync(new() { Location = new() { RootId = root, Path = prefix }, Take = 100 }, Headers(fileMethod + "List"));
+            var entry = listing.Entries.Single(item => item.Name == source);
+            Check(entry.Kind == "File" && !entry.IsProtected && entry.Version.Length == 64);
             return new() { Tree = new() { Source = location, ExpectedVersion = entry.Version, Target = new() { RootId = root, Path = prefix + "/" + target } }, Format = format };
         }
     }

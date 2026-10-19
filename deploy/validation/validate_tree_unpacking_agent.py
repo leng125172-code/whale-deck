@@ -30,22 +30,33 @@ def run(arguments):
     return subprocess.check_output(arguments, text=True, stderr=subprocess.PIPE, timeout=30).strip()
 
 
+def validation_only_changes(git, runtime_revision, client_revision):
+    # Disable rename detection: src/x -> docs/x must include the src deletion.
+    changes = run(git + ['diff', '--no-renames', '--name-only', runtime_revision, client_revision, '--']).splitlines()
+    return all(path.startswith(('deploy/validation/', 'docs/')) or path == '.project-atlas.json' for path in changes)
+
+
 def main():
     global PHASE
-    assert os.geteuid() == 0 and len(sys.argv) == 3
-    binary, revision = Path(sys.argv[1]), sys.argv[2]
-    assert re.fullmatch('[a-f0-9]{40}', revision)
+    assert os.geteuid() == 0 and len(sys.argv) in (3, 4)
+    binary, client_revision = Path(sys.argv[1]), sys.argv[2]
+    revision = sys.argv[3] if len(sys.argv) == 4 else client_revision
+    assert all(re.fullmatch('[a-f0-9]{40}', value) for value in (client_revision, revision))
     assert binary.parent.parent == REPOSITORY / 'deploy/artifacts' and re.fullmatch(r'terminal-probe\.[a-zA-Z0-9]+', binary.parent.name) and binary.name == 'TerminalProbe'
     assert binary.resolve() == binary and stat.S_ISREG(binary.lstat().st_mode)
     git = ['git', '-c', 'safe.directory=' + str(REPOSITORY), '-C', str(REPOSITORY)]
-    assert run(git + ['rev-parse', 'HEAD']) == revision and not run(git + ['status', '--porcelain'])
+    assert run(git + ['rev-parse', 'HEAD']) == client_revision and not run(git + ['status', '--porcelain'])
+    # A validation-only correction need not rebuild unchanged product images.
+    # Check the ENTIRE diff with an allowlist, not a partial product path list.
+    # Distinct client/runtime revisions stay explicit in the final evidence.
+    assert validation_only_changes(git, revision, client_revision)
     assert json.loads(run(['/opt/whaledeck-agent/WhaleDeck.Agent', '--build-info']))['sourceRevision'] == revision
     for name in ('whaledeck-files.py', 'whaledeck-file-tree.py', 'whaledeck-tree-archive.py', 'whaledeck-tree-unpacking.py', 'whaledeck-privileged'):
         installed = Path('/usr/local/libexec') / name; info = installed.lstat()
         assert stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1 and not info.st_mode & 0o022
         assert hashlib.sha256(installed.read_bytes()).digest() == hashlib.sha256((REPOSITORY / 'deploy/host' / name).read_bytes()).digest()
     root = next(item for item in json.loads(Path('/etc/whaledeck/file-roots.json').read_bytes()) if item['id'] == ROOT)
-    assert root['path'] == str(DIRECTORY) and 'files-tree-unpack' in root['allowedActions']
+    assert root['path'] == str(DIRECTORY) and {'files-list', 'files-stat', 'files-download', 'files-upload', 'files-mutate', 'files-archive', 'files-tree-unpack'} <= set(root['allowedActions'])
     assert DIRECTORY.resolve() == DIRECTORY and DIRECTORY.is_dir()
     capacity = shutil.disk_usage(DIRECTORY)
     assert capacity.free >= max(6 * 1024**3, capacity.total // 20 + 4 * 1024**3)
@@ -145,7 +156,8 @@ def main():
     for name in originals: (fixture / name).unlink()
     for path in receipts: path.unlink()
     private.rmdir(); fixture.rmdir()
-    print(json.dumps({'installedTreeUnpackingAcceptance': 'passed', 'sourceRevision': revision, 'smallWholeBytes': len(data), 'largeWholeBytes': 1024**3 + 7,
+    print(json.dumps({'installedTreeUnpackingAcceptance': 'passed', 'sourceRevision': revision, 'clientSourceRevision': client_revision,
+        'productDiffEmpty': True, 'smallWholeBytes': len(data), 'largeWholeBytes': 1024**3 + 7,
         'bothFormatsAndPaxGnu': True, 'independentArchiveSourceAndFullOutputProofs': True, 'signedUdsAndRealHelper': True,
         'exactOwnedFixtureAndReceiptsRemoved': True, 'bffWorkerHumanAuditAndUi': 'not-covered'}), flush=True)
 
