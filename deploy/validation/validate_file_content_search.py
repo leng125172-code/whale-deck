@@ -34,9 +34,9 @@ class ResponseStatusMismatch(AssertionError):
         self.actual = actual
 
 
-def login(base, name, password):
+def login(base, name, password, *, administrator=True):
     with io.StringIO() as hidden, contextlib.redirect_stdout(hidden):
-        return authenticate(base, name, password)[0]
+        return authenticate(base, name, password, require_administrator=administrator)[0]
 
 
 def snapshot(path):
@@ -130,7 +130,9 @@ def main():
         name = 'wd-browser-' + secrets.token_hex(16); password = 'Wd!' + secrets.token_hex(40)
         ordinary_process.stdin.write(json.dumps({'username': name, 'password': password, 'administrator': False}) + '\n'); ordinary_process.stdin.flush()
         assert json.loads(ordinary_process.stdout.readline())['ready'] is True
-        ordinary = login(base, name, password); password = None; ordinary_api = Api(base, ordinary)
+        ordinary = login(base, name, password, administrator=False); password = None
+        assert ordinary.get(base + '/api/v1/auth/me', timeout=20).json()['isAdministrator'] is False
+        ordinary_api = Api(base, ordinary)
         search(403, session=ordinary, headers=ordinary_api.headers)
         if os.environ.get('WHALEDECK_VALIDATION_PRIVATE_PIPE') == '1':
             assert not sys.stdout.isatty()
