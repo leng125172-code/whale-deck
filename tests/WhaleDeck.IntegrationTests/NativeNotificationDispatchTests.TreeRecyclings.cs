@@ -99,6 +99,11 @@ public sealed partial class NativeNotificationDispatchTests
             finally { await db.Database.ExecuteSqlRawAsync("ALTER TABLE audit_events DROP CONSTRAINT native_recycling_result_audit_failure"); }
             Assert.False(await db.FileTreeCaptures.AnyAsync(item => item.Id == resultRollback.ExecutionJobId));
             Assert.Equal(1, await db.FilePathLocks.CountAsync(item => item.OperationId == resultRollback.ExecutionJobId));
+            // Both result commit and deferral deliberately failed with audit.
+            // The original 90-second lease still owns this intent: a new
+            // worker must not claim it until that actual lease expires.
+            Assert.False(await worker.TickAsync(default));
+            clock.Now = clock.Now.AddSeconds(91);
             await Due(resultRollback.Id); Assert.True(await worker.TickAsync(default));
             Assert.Equal(appliesBefore + 1, gateway.Applies); Assert.Equal("Succeeded", (await service.GetAsync(actor, resultRollback.Id, default)).State);
             Assert.Single((await service.CapturesAsync(actor, Command("result-audit-rollback").Source, null, 25, default)).Items);
