@@ -18,7 +18,7 @@ public sealed class FileTreeRecyclingService(FileManagementService authorization
         GetAsync(actor, FileTreeRecyclingValidation.IntentId(actor, key), cancellationToken);
     public async Task<FileTreeCapturePage> CapturesAsync(TerminalActor actor, FileLocationDto location, Guid? after, int take, CancellationToken cancellationToken)
     {
-        await authorization.AuthorizeAsync(actor, cancellationToken); FileManagementService.Location(location);
+        await authorization.AuthorizeAsync(actor, cancellationToken); FileManagementService.Location(location, true);
         if (take is < 1 or > 100 || after == Guid.Empty) throw new ArgumentException("FILES_PAGE_INVALID");
         return await repository.CapturesAsync(location, after, take, cancellationToken);
     }
@@ -59,7 +59,7 @@ public sealed class FileTreeRecyclingService(FileManagementService authorization
         var ready = row.State == "Ready" && row.CancelRequestedAtUtc is null && row.ReadyExpiresAtUtc > clock.GetUtcNow();
         // A lost root response is not evidence that no source effects occurred.
         // Null until a validated receipt or a proven pre-start outcome exists.
-        var known = row.RootStartedAtUtc is null || row.CaptureVerified || row.State is "Succeeded" or "Failed" or "Canceled" or "Acknowledged";
+        var known = row.RootStartedAtUtc is null || row.CaptureVerified || row.State is "Succeeded" or "Failed" or "Canceled";
         var confirmation = ready ? new FileTreeRecyclingConfirmationDto(protector.SignConfirmation(new(row.Id, row.ActorSubject, row.LoginBinding, plan!.Fingerprint, row.ReadyExpiresAtUtc!.Value)),
             row.ReadyExpiresAtUtc.Value, "确认后先生成并完整验证HDD归档，再逐文件保留原件并移除原目录路径；不直接彻底删除。归档核验失败不改源目录。结果未知时保留路径锁和现场，不自动重新执行。") : null;
         return new(row.Id, row.Id, row.ExecutionJobId, row.State == "Ready" && !ready ? "Expired" : row.State, FileTreeRecyclingValidation.ReadCommand(row), plan?.EntryCount,

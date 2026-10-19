@@ -10,9 +10,9 @@ namespace WhaleDeck.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class FileTreeRecyclingsController(FileTreeRecyclingService trees, TerminalCookieIdentity identity) : ControllerBase
 {
-    /// <summary>Administrator-only, stable cursor catalogue for this exact source. Historical verification is not a live disk-integrity claim.</summary>
+    /// <summary>Administrator-only, stable cursor catalogue: whole registered root or one exact source. Historical verification is not a live disk-integrity claim.</summary>
     [HttpGet("captures")]
-    public async Task<ActionResult<FileTreeCapturePage>> Captures([FromQuery] string rootId, [FromQuery] string path, [FromQuery] Guid? after, CancellationToken cancellationToken, [FromQuery] int take = 25) =>
+    public async Task<ActionResult<FileTreeCapturePage>> Captures([FromQuery] string rootId, [FromQuery] Guid? after, CancellationToken cancellationToken, [FromQuery] string path = "", [FromQuery] int take = 25) =>
         Ok(await trees.CapturesAsync((await identity.ReadAsync(HttpContext)).Actor, new(rootId, path), after, take, cancellationToken));
     /// <summary>Queue a login-bound full-tree planning job; does not recycle. The supplied UUID key recovers the same permanent intent after a lost HTTP response.</summary>
     [HttpPost, ProducesResponseType<FileTreeRecyclingIntentDto>(StatusCodes.Status202Accepted)]

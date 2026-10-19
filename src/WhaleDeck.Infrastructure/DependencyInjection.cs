@@ -101,7 +101,8 @@ public static class DependencyInjection
         services.AddScoped<FileTreeUnpackingDispatcher>();
         services.AddSingleton<IFileTreeRecyclingProtector, FilePlanProtector>();
         services.AddSingleton<IFileTreeRecyclingGateway>(provider => provider.GetRequiredService<AgentGateway>());
-        services.AddScoped<IFileTreeRecyclingRepository, FileTreeRecyclingRepository>();
+        services.AddScoped<FileTreeRecyclingRepository>();
+        services.AddScoped<IFileTreeRecyclingRepository>(provider => provider.GetRequiredService<FileTreeRecyclingRepository>());
         services.AddScoped<FileTreeRecyclingService>();
         services.AddScoped<FileTreeRecyclingDispatcher>();
         services.AddSingleton<IFileTreeMoveProtector, FilePlanProtector>();

@@ -87,4 +87,22 @@ public sealed class FileTreeRecyclingBindingTests : IDisposable
         row.CaptureHash = new('0', 64); Assert.False(FileTreeRecyclingValidation.HasValidBinding(row, Protector));
         using var otherKey = new FileTreeRecyclingBindingTests(); Assert.Throws<FileTransferRejectedException>(() => FileTreeRecyclingValidation.Capture(capture, otherKey.Protector));
     }
+    [Theory]
+    [InlineData("Unknown")][InlineData("Aborted")][InlineData("Completed")]
+    public void CurrentAdministratorRecoveryFreezesOriginalMaterialAndValidatesIndependentReceipt(string state)
+    {
+        var row = Operation(); row.State = "Unknown"; row.LeaseToken = null; row.LeaseExpiresAtUtc = null;
+        var material = new FileRecoveryMaterial(Protector, Protector, Protector, Protector, Protector, Protector, Protector, Protector);
+        var snapshot = material.Capture(row); var plan = Plan(); var verified = state != "Aborted";
+        var receipt = new FileTreeRecyclingReceipt(row.ExecutionJobId!.Value, state, plan.Fingerprint, row.ExecutionJobId.Value, plan.ManifestSha256,
+            plan.EntryCount, plan.TotalBytes, verified, verified, verified ? 1234 : 0, verified ? new('F', 64) : "", verified, state == "Completed", state == "Completed");
+        FileRecoveryObservation Observation(FileTreeRecyclingReceipt result) => new(result.State,
+            FileRecoveryValidation.ReceiptHash(FileRecoveryKinds.TreeRecycling, result.OperationId, result.State, JsonSerializer.Serialize(result)), result.State == "Completed") { ReceiptJson = JsonSerializer.Serialize(result) };
+        Assert.Equal(receipt, material.ValidateObservation(snapshot, Observation(receipt)));
+        Assert.Throws<FileTransferRejectedException>(() => material.ValidateObservation(snapshot, Observation(receipt with { CaptureId = Guid.NewGuid() })));
+        Assert.Throws<FileTransferRejectedException>(() => material.ValidateObservation(snapshot, Observation(receipt with { ArchiveBytes = verified ? 0 : 1 })));
+        Assert.Throws<InvalidOperationException>(() => material.Read<FileTreeMoveOperation>(snapshot));
+        Assert.Equal(7, FileRecoveryValidation.Rank(FileRecoveryKinds.TreeRecycling));
+        Assert.Equal(FileTreeRecyclingValidation.ExecutionId(row.Id), snapshot.Binding.ExecutionJobId);
+    }
 }

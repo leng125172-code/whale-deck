@@ -20,7 +20,7 @@ public sealed partial class NativeNotificationDispatchTests
         var keyPath = Path.Combine(Path.GetTempPath(), "wd-native-recycling-" + Guid.NewGuid().ToString("N")); await File.WriteAllBytesAsync(keyPath, RandomNumberGenerator.GetBytes(32));
         try
         {
-            IFileTreeRecyclingProtector protector = new FilePlanProtector(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = keyPath }).Build());
+            var protector = new FilePlanProtector(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = keyPath }).Build());
             var clock = new NativeRecyclingClock(); var identity = new NativeRecyclingIdentity(); var gateway = new NativeRecyclingGateway();
             var repository = new FileTreeRecyclingRepository(db, protector, clock);
             var authorization = new FileManagementService(null!, null!, null!, identity, clock);
@@ -172,6 +172,31 @@ public sealed partial class NativeNotificationDispatchTests
             var acknowledged = await service.GetAsync(actor, unknown.Id, default);
             Assert.Equal("Acknowledged", acknowledged.State); Assert.Equal(1073756160, acknowledged.ArchiveBytes); Assert.Equal(new string('9', 64), acknowledged.ArchiveSha256);
             Assert.Empty(await db.FilePathLocks.Where(item => item.OperationId == unknownRow.ExecutionJobId).ToArrayAsync());
+            foreach (var completedRecovery in new[] { false, true })
+            {
+                var adopted = await Confirm(await Ready(completedRecovery ? "current-admin-completed" : "current-admin-unknown"));
+                gateway.Unknown = !completedRecovery; gateway.LoseResponse = completedRecovery;
+                Assert.True(await worker.TickAsync(default)); gateway.Unknown = false;
+                var original = await service.GetAsync(actor, adopted.Id, default);
+                Assert.Equal("Unknown", original.State);
+                var currentInventory = new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector, protector, protector);
+                var candidate = await currentInventory.GetAsync(FileRecoveryKinds.TreeRecycling, adopted.Id, default);
+                Assert.NotNull(candidate); Assert.Equal("Verified", candidate.Integrity); Assert.Null(candidate.Target);
+                Assert.Contains((await currentInventory.ListAsync(null, 25, default)).Entries, item => item.Kind == FileRecoveryKinds.TreeRecycling && item.IntentId == adopted.Id);
+                await FileRecoveryWorkflowBoundaries(options, (FilePlanProtector)protector, FileRecoveryKinds.TreeRecycling, adopted.Id);
+                await FileRecoveryWorkflowBoundaries(options, (FilePlanProtector)protector, FileRecoveryKinds.TreeRecycling, adopted.Id, true, false, completedRecovery);
+                var disposed = await service.GetAsync(actor, adopted.Id, default);
+                Assert.Equal(completedRecovery ? "Succeeded" : "Acknowledged", disposed.State);
+                Assert.True(disposed.CaptureVerified);
+                Assert.Single((await service.CapturesAsync(actor, disposed.Command.Source, null, 25, default)).Items);
+                Assert.Empty(await db.FilePathLocks.Where(item => item.OperationId == disposed.ExecutionJobId).ToArrayAsync());
+            }
+            var rootPage = await service.CapturesAsync(actor, new("test.treeflow", ""), null, 1, default);
+            Assert.Single(rootPage.Items); Assert.NotNull(rootPage.Next);
+            var rootSecond = await service.CapturesAsync(actor, new("test.treeflow", ""), rootPage.Next, 1, default);
+            Assert.Single(rootSecond.Items); Assert.NotEqual(rootPage.Items[0].Id, rootSecond.Items[0].Id);
+            Assert.Empty((await service.CapturesAsync(actor, new("test.other-root", ""), null, 25, default)).Items);
+            await Assert.ThrowsAsync<ArgumentException>(() => service.CapturesAsync(actor, new("test.other-root", ""), rootPage.Next, 1, default));
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE audit_events ADD CONSTRAINT native_recycling_audit_failure CHECK (action NOT LIKE 'files.tree-trash.%') NOT VALID");
             var rollbackKey = Guid.NewGuid().ToString("D"); var rollbackId = FileTreeRecyclingValidation.IntentId(actor, rollbackKey);
             try { await Assert.ThrowsAsync<DbUpdateException>(() => service.QueueAsync(actor, Command("audit-rollback"), rollbackKey, default)); }

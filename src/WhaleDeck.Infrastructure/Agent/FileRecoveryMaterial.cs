@@ -10,7 +10,8 @@ namespace WhaleDeck.Infrastructure.Agent;
 
 /// <summary>Validates the real old intent MAC and freezes exact material, not an old human's authority.</summary>
 public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutationProtector mutations,
-    IFileArchiveProtector archives, IFileTreeCopyProtector copies, IFileTreeMoveProtector moves, IFileTreePackingProtector packings, IFileTreeUnpackingProtector unpackings)
+    IFileArchiveProtector archives, IFileTreeCopyProtector copies, IFileTreeMoveProtector moves, IFileTreePackingProtector packings, IFileTreeUnpackingProtector unpackings,
+    IFileTreeRecyclingProtector? recyclings = null)
 {
     public const int MaximumBytes = 262144;
     public object? ValidateObservation(FileRecoverySnapshot original, FileRecoveryObservation observation)
@@ -59,6 +60,10 @@ public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutati
                 var unpacking = Read<FileTreeUnpackingOperation>(original); var unpacked = Decode<FileTreeUnpackingReceipt>();
                 FileTreeUnpackingValidation.Receipt(unpacking.ExecutionJobId!.Value, FileTreeUnpackingValidation.ReadPlan(unpacking), unpacked);
                 value = unpacked; state = unpacked.State; current = unpacked.State == "Completed"; break;
+            case FileRecoveryKinds.TreeRecycling:
+                var recycling = Read<FileTreeRecyclingOperation>(original); var recycled = Decode<FileTreeRecyclingReceipt>();
+                FileTreeRecyclingValidation.Receipt(recycling.ExecutionJobId!.Value, FileTreeRecyclingValidation.ReadPlan(recycling), recycled);
+                value = recycled; state = recycled.State; current = recycled.State == "Completed"; break;
             default: throw new ArgumentException("FILES_RECOVERY_KIND_INVALID");
         }
         var canonical = JsonSerializer.Serialize(value, value.GetType());
@@ -81,6 +86,8 @@ public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutati
         FileTreePackingValidation.HasValidBinding(row, packings), row.State, row.CompletedAtUtc, row);
     public FileRecoverySnapshot Capture(FileTreeUnpackingOperation row) => Freeze(FileRecoveryKinds.TreeUnpacking, row.Id, row.ExecutionJobId ?? Guid.Empty, row.Version,
         FileTreeUnpackingValidation.HasValidBinding(row, unpackings), row.State, row.CompletedAtUtc, row);
+    public FileRecoverySnapshot Capture(FileTreeRecyclingOperation row) => Freeze(FileRecoveryKinds.TreeRecycling, row.Id, row.ExecutionJobId ?? Guid.Empty, row.Version,
+        recyclings is not null && FileTreeRecyclingValidation.HasValidBinding(row, recyclings), row.State, row.CompletedAtUtc, row);
     public T Read<T>(FileRecoverySnapshot snapshot) where T : class
     {
         FileRecoveryValidation.Target(snapshot.Binding);
@@ -96,6 +103,7 @@ public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutati
             case FileRecoveryKinds.TreeMove: var move = Decode<FileTreeMoveOperation>(); row = move; verified = Capture(move); break;
             case FileRecoveryKinds.TreePacking: var packing = Decode<FileTreePackingOperation>(); row = packing; verified = Capture(packing); break;
             case FileRecoveryKinds.TreeUnpacking: var unpacking = Decode<FileTreeUnpackingOperation>(); row = unpacking; verified = Capture(unpacking); break;
+            case FileRecoveryKinds.TreeRecycling: var recycling = Decode<FileTreeRecyclingOperation>(); row = recycling; verified = Capture(recycling); break;
             default: throw new ArgumentException("FILES_RECOVERY_KIND_INVALID");
         }
         if (verified.Binding != snapshot.Binding || row is not T expected) throw new InvalidOperationException("FILES_RECOVERY_SNAPSHOT_CHANGED");

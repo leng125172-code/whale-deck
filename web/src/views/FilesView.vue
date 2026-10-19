@@ -32,6 +32,9 @@ import FileTreeCopyPanel from '@/components/files/FileTreeCopyPanel.vue'
 import FileTreeMovePanel from '@/components/files/FileTreeMovePanel.vue'
 import FileTreePackingPanel from '@/components/files/FileTreePackingPanel.vue'
 import FileTreeUnpackingPanel from '@/components/files/FileTreeUnpackingPanel.vue'
+import FileTreeRecyclingPanel from '@/components/files/FileTreeRecyclingPanel.vue'
+import FileTreeCapturePanel from '@/components/files/FileTreeCapturePanel.vue'
+import { canRecycleDirectory } from '@/services/fileTreeRecyclings'
 import FileRecoveryPanel from '@/components/files/FileRecoveryPanel.vue'
 import { canCopyDirectory } from '@/services/fileTreeCopies'
 import { canMoveDirectory } from '@/services/fileTreeMoves'
@@ -50,12 +53,20 @@ const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
   treeCopyLocked = ref(false),
   treeMoveLocked = ref(false),
   treePackingLocked = ref(false),
-  treeUnpackingLocked = ref(false)
+  treeUnpackingLocked = ref(false),
+  treeRecyclingLocked = ref(false)
 const archivePanel = ref<InstanceType<typeof FileArchivePanel> | null>(null)
 const treeCopyPanel = ref<InstanceType<typeof FileTreeCopyPanel> | null>(null)
 const treeMovePanel = ref<InstanceType<typeof FileTreeMovePanel> | null>(null)
 const treePackingPanel = ref<InstanceType<typeof FileTreePackingPanel> | null>(null)
 const treeUnpackingPanel = ref<InstanceType<typeof FileTreeUnpackingPanel> | null>(null)
+const treeRecyclingPanel = ref<InstanceType<typeof FileTreeRecyclingPanel> | null>(null)
+function canTreeRecycle(entry: FileEntry) {
+  return canRecycleDirectory(
+    roots.value.find((root) => root.id === rootId.value),
+    entry,
+  )
+}
 const mutationLocked = computed(
   () =>
     mutationOperationLocked.value ||
@@ -64,7 +75,8 @@ const mutationLocked = computed(
     treeCopyLocked.value ||
     treeMoveLocked.value ||
     treePackingLocked.value ||
-    treeUnpackingLocked.value,
+    treeUnpackingLocked.value ||
+    treeRecyclingLocked.value,
 )
 function canTreeCopy(entry: FileEntry) {
   return canCopyDirectory(
@@ -622,6 +634,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="page-heading__actions">
         <FileRecoveryPanel @changed="afterMutation" @failure="message" />
+        <FileTreeCapturePanel :roots="roots" :root-id="rootId" @failure="message" />
         <el-button :loading="loading" @click="refresh"
           ><el-icon><RefreshRight /></el-icon>刷新</el-button
         >
@@ -705,7 +718,8 @@ onBeforeUnmount(() => {
           treeCopyLocked ||
           treeMoveLocked ||
           treePackingLocked ||
-          treeUnpackingLocked
+          treeUnpackingLocked ||
+          treeRecyclingLocked
         "
         @locked="mutationOperationLocked = $event"
         @changed="afterMutation"
@@ -724,7 +738,8 @@ onBeforeUnmount(() => {
           treeCopyLocked ||
           treeMoveLocked ||
           treePackingLocked ||
-          treeUnpackingLocked
+          treeUnpackingLocked ||
+          treeRecyclingLocked
         "
         @locked="editorLocked = $event"
         @prepared="acceptText"
@@ -744,7 +759,8 @@ onBeforeUnmount(() => {
           treeCopyLocked ||
           treeMoveLocked ||
           treePackingLocked ||
-          treeUnpackingLocked
+          treeUnpackingLocked ||
+          treeRecyclingLocked
         "
         @locked="archiveOperationLocked = $event"
         @changed="afterMutation"
@@ -764,7 +780,8 @@ onBeforeUnmount(() => {
           archiveOperationLocked ||
           treeMoveLocked ||
           treePackingLocked ||
-          treeUnpackingLocked
+          treeUnpackingLocked ||
+          treeRecyclingLocked
         "
         @locked="treeCopyLocked = $event"
         @changed="afterMutation"
@@ -784,7 +801,8 @@ onBeforeUnmount(() => {
           archiveOperationLocked ||
           treeCopyLocked ||
           treePackingLocked ||
-          treeUnpackingLocked
+          treeUnpackingLocked ||
+          treeRecyclingLocked
         "
         @locked="treeMoveLocked = $event"
         @changed="afterMutation"
@@ -804,7 +822,8 @@ onBeforeUnmount(() => {
           archiveOperationLocked ||
           treeCopyLocked ||
           treeMoveLocked ||
-          treeUnpackingLocked
+          treeUnpackingLocked ||
+          treeRecyclingLocked
         "
         @locked="treePackingLocked = $event"
         @changed="afterMutation"
@@ -824,9 +843,31 @@ onBeforeUnmount(() => {
           archiveOperationLocked ||
           treeCopyLocked ||
           treeMoveLocked ||
-          treePackingLocked
+          treePackingLocked ||
+          treeRecyclingLocked
         "
         @locked="treeUnpackingLocked = $event"
+        @changed="afterMutation"
+        @failure="message"
+      />
+      <FileTreeRecyclingPanel
+        ref="treeRecyclingPanel"
+        :roots="roots"
+        :root-id="rootId"
+        :path="path"
+        :disabled="
+          busy ||
+          activeIntent ||
+          !!frozen ||
+          mutationOperationLocked ||
+          editorLocked ||
+          archiveOperationLocked ||
+          treeCopyLocked ||
+          treeMoveLocked ||
+          treePackingLocked ||
+          treeUnpackingLocked
+        "
+        @locked="treeRecyclingLocked = $event"
         @changed="afterMutation"
         @failure="message"
       />
@@ -995,7 +1036,9 @@ onBeforeUnmount(() => {
                 </el-dropdown>
               </div>
               <div
-                v-else-if="canTreeCopy(row) || canTreeMove(row) || canTreePack(row)"
+                v-else-if="
+                  canTreeCopy(row) || canTreeMove(row) || canTreePack(row) || canTreeRecycle(row)
+                "
                 class="file-directory-actions"
               >
                 <el-button
@@ -1021,6 +1064,14 @@ onBeforeUnmount(() => {
                   :disabled="busy || activeIntent || !!frozen || mutationLocked"
                   @click="treePackingPanel?.open(row)"
                   >压缩目录</el-button
+                >
+                <el-button
+                  v-if="canTreeRecycle(row)"
+                  link
+                  type="danger"
+                  :disabled="busy || activeIntent || !!frozen || mutationLocked"
+                  @click="treeRecyclingPanel?.open(row)"
+                  >回收目录</el-button
                 >
               </div>
               <span v-else>目录</span></template

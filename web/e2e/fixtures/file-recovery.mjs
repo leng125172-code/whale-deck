@@ -10,7 +10,7 @@ export async function installFileRecoveryFixture(page, options = {}) {
     createdAtUtc: new Date().toISOString(), leaseExpiresAtUtc: null, rootStartRecorded: true,
     integrity: options.invalidBinding ? 'InvalidBinding' : 'Verified',
     source: options.invalidBinding ? null : { rootId: 'files.shared', path: options.sourcePath || '很长的中文目录/abcdefghijklmnopqrstuvwxyz-0123456789/source' },
-    target: options.invalidBinding ? null : { rootId: 'files.shared', path: '资料/target' }, hasRetainedObjects: null }
+    target: options.invalidBinding || options.kind === 'tree-trash' ? null : { rootId: 'files.shared', path: '资料/target' }, hasRetainedObjects: null }
   const row = { id, planningJobId: id, executionJobId: null, kind: candidate.kind, originalIntentId: originalId, originalExecutionJobId: originalExecution, originalVersion: 17,
     state: 'Queued', disposition: 'AcknowledgeUnknown', reasonCode: 'OriginalSessionLost', rootState: null, readyExpiresAtUtc: null, version: 0,
     resultCode: null, originalResolution: null, confirmation: null }

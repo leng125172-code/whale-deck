@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- 新目录回收源码补齐当前管理员第八类事务对账、根范围捕获目录查询与索引、源专用确认/取消/Unknown及捕获记录WebUI。1297 Unit/141 Integration（6原生跳过）、316前端单元及类型/lint/格式/生产构建通过；首轮22浏览器通过，最终304联合、冻结实际PG和新CI待验证。未安装，实际adc6cae/1.31不变；[边界](qa/FILE_TREE_RECYCLING_UI.md)，全部76项继续，不签完P2文件模块。
+
 - 目录回收新增业务源码接通双任务/确认、层级锁/Worker/审计/API和独立签名HDD捕获目录；1294 Unit/141 Integration通过（6原生本机跳过）。新源码实际PG/CI/安装及新第八类当前管理员处置、WebUI仍待完成，实际adc6cae/1.31不变；[证据边界](qa/FILE_TREE_RECYCLING_BFF.md)，全部76项继续。1722242四CI全绿不替代本批验证。
 
 - 新目录回收Agent1.32源码候选已接独立RPC/固定helper/可信模块与精确默认授权升级，1265 Unit、139 Integration（6原生本机跳过）和40实际Linux通过；引擎cf7a6a3同一冻结源码214项分批通过，首次模块选择错误明确保留。尚未安装、永久业务任务/Worker/API/UI及真实身份仍缺；实际adc6cae/1.31和76项保持，见[边界](qa/FILE_TREE_RECYCLING_AGENT.md)。

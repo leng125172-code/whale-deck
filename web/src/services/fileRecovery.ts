@@ -9,6 +9,7 @@ export const recoveryKinds = [
   'tree-move',
   'tree-pack',
   'tree-unpack',
+  'tree-trash',
 ] as const
 export type RecoveryKind = (typeof recoveryKinds)[number]
 export type RecoveryDisposition = 'AcknowledgeUnknown' | 'ReconcileCompleted'
@@ -67,6 +68,7 @@ export function recoveryKind(kind: RecoveryKind) {
     'tree-move': '目录移动',
     'tree-pack': '目录压缩',
     'tree-unpack': '归档解压',
+    'tree-trash': '目录回收',
   }[kind]
 }
 export function recoveryState(state: string) {

@@ -8,6 +8,12 @@ namespace WhaleDeck.Infrastructure.Persistence;
 
 public sealed partial class FileTreeRecyclingRepository
 {
+    internal Task CaptureRecoveryAsync(FileTreeRecyclingOperation row, FileTreeRecyclingReceipt receipt, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("FILES_RECOVERY_TRANSACTION_REQUIRED");
+        if (row.State != "Unknown" || !FileTreeRecyclingValidation.HasValidBinding(row, protector)) throw new InvalidOperationException("FILES_INTENT_BINDING_CHANGED");
+        return StoreReceipt(row, receipt, FileTreeRecyclingValidation.Timestamp(now), cancellationToken);
+    }
     private async Task StoreReceipt(FileTreeRecyclingOperation row, FileTreeRecyclingReceipt receipt, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var plan = FileTreeRecyclingValidation.ReadPlan(row);
@@ -44,19 +50,24 @@ public sealed partial class FileTreeRecyclingRepository
 
     public async Task<FileTreeCapturePage> CapturesAsync(FileLocationDto location, Guid? after, int take, CancellationToken cancellationToken)
     {
-        FileManagementService.Location(location);
+        FileManagementService.Location(location, true);
         if (take is < 1 or > 100 || after == Guid.Empty) throw new ArgumentException("FILES_PAGE_INVALID");
         var scope = new FilePathScope(location);
+        var wholeRoot = location.Path.Length == 0;
         FileTreeCapture[] rows;
         if (after is { } id)
         {
-            var cursor = await db.FileTreeCaptures.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id && item.SourceHash == scope.Hash, cancellationToken)
+            var cursor = await db.FileTreeCaptures.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken)
                 ?? throw new ArgumentException("FILES_CURSOR_INVALID");
             FileTreeRecyclingValidation.Capture(cursor, protector);
-            rows = await db.FileTreeCaptures.FromSqlInterpolated($"SELECT * FROM file_tree_captures WHERE source_hash={scope.Hash} AND (created_at_utc,id)>({cursor.CreatedAtUtc},{cursor.Id}) ORDER BY created_at_utc,id LIMIT {take + 1}")
-                .AsNoTracking().ToArrayAsync(cancellationToken);
+            if (wholeRoot ? FileTreeRecyclingValidation.CaptureBinding(cursor).Command.Source.RootId != location.RootId : cursor.SourceHash != scope.Hash) throw new ArgumentException("FILES_CURSOR_INVALID");
+            rows = wholeRoot
+                ? await db.FileTreeCaptures.FromSqlInterpolated($"SELECT * FROM file_tree_captures WHERE source_json->'Source'->>'RootId'={location.RootId} AND (created_at_utc,id)>({cursor.CreatedAtUtc},{cursor.Id}) ORDER BY created_at_utc,id LIMIT {take + 1}").AsNoTracking().ToArrayAsync(cancellationToken)
+                : await db.FileTreeCaptures.FromSqlInterpolated($"SELECT * FROM file_tree_captures WHERE source_hash={scope.Hash} AND (created_at_utc,id)>({cursor.CreatedAtUtc},{cursor.Id}) ORDER BY created_at_utc,id LIMIT {take + 1}").AsNoTracking().ToArrayAsync(cancellationToken);
         }
-        else rows = await db.FileTreeCaptures.Where(item => item.SourceHash == scope.Hash).OrderBy(item => item.CreatedAtUtc).ThenBy(item => item.Id).Take(take + 1).AsNoTracking().ToArrayAsync(cancellationToken);
+        else rows = wholeRoot
+            ? await db.FileTreeCaptures.FromSqlInterpolated($"SELECT * FROM file_tree_captures WHERE source_json->'Source'->>'RootId'={location.RootId} ORDER BY created_at_utc,id LIMIT {take + 1}").AsNoTracking().ToArrayAsync(cancellationToken)
+            : await db.FileTreeCaptures.Where(item => item.SourceHash == scope.Hash).OrderBy(item => item.CreatedAtUtc).ThenBy(item => item.Id).Take(take + 1).AsNoTracking().ToArrayAsync(cancellationToken);
         var items = rows.Take(take).Select(item =>
         {
             FileTreeRecyclingValidation.Capture(item, protector); var binding = FileTreeRecyclingValidation.CaptureBinding(item);
