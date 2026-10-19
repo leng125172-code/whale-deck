@@ -114,11 +114,15 @@ onMounted(load)
           >
         </el-table-column>
         <el-table-column prop="unit" label="来源" min-width="190" show-overflow-tooltip />
-        <el-table-column label="进程" min-width="130">
-          <template #default="scope"
-            >{{ scope.row.process
-            }}<span v-if="scope.row.processId">[{{ scope.row.processId }}]</span></template
-          >
+        <el-table-column label="进程" min-width="170">
+          <template #default="scope">
+            <div class="journal-process">
+              <span class="journal-process__name" :title="scope.row.process || '—'">{{
+                scope.row.process || '—'
+              }}</span>
+              <span class="journal-process__pid">PID {{ scope.row.processId || '—' }}</span>
+            </div>
+          </template>
         </el-table-column>
         <el-table-column prop="message" label="消息" min-width="420" show-overflow-tooltip />
       </el-table>
@@ -140,6 +144,22 @@ onMounted(load)
 .logs-panel {
   padding: 14px;
   min-height: 360px;
+}
+.journal-process {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  line-height: 1.5;
+}
+.journal-process__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.journal-process__pid {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  white-space: nowrap;
 }
 @container page (max-width: 860px) {
   .filter-panel {
