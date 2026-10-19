@@ -72,6 +72,9 @@ test('lost registration response survives reload by original key lookup, never a
   await page.getByRole('button', { name: '核对该任务', exact: true }).click()
   await page.getByRole('button', { name: '生成接管计划', exact: true }).click()
   await expect(page).toHaveURL(/fileRecoveryKey=/)
+  // The URL is deliberately persisted before POST. Prove the fixture accepted
+  // the request and lost its response before reload; URL alone does not prove it.
+  await expect.poll(() => control.state.lostCreate).toBe(true)
   await page.reload()
   await expect(
     page.getByRole('dialog').getByRole('button', { name: '接受未知结果', exact: true }),
@@ -79,6 +82,24 @@ test('lost registration response survives reload by original key lookup, never a
   expect(creates(control)).toHaveLength(1)
   expect(confirms(control)).toHaveLength(0)
   expect(control.state.reads.some((path) => path.startsWith('/operations/by-key/'))).toBe(true)
+})
+
+test('directory packing is a distinct current-administrator recovery kind', async ({ page }) => {
+  const control = await installFileRecoveryFixture(page, { kind: 'tree-pack' })
+  await page.goto('/files')
+  const dialog = await plan(page)
+  await expect(dialog.getByText('目录压缩', { exact: true })).toBeVisible()
+  expect(creates(control)[0].body.kind).toBe('tree-pack')
+  await page.reload()
+  await expect(dialog.getByRole('button', { name: '接受未知结果', exact: true })).toBeEnabled()
+  expect(control.state.reads).toContain('/tree-pack/' + control.candidate.intentId)
+  expect(confirms(control)).toHaveLength(0)
+  await dialog.getByRole('button', { name: '接受未知结果', exact: true }).click()
+  await page.getByRole('button', { name: '确认处置', exact: true }).click()
+  await dialog.getByRole('button', { name: '查询原接管任务', exact: true }).click()
+  await expect(dialog.getByText('处置已记录，不等于原文件操作成功', { exact: true })).toBeVisible()
+  expect(creates(control)).toHaveLength(1)
+  expect(confirms(control)).toHaveLength(1)
 })
 test('lost confirmation reply disables another confirmation until read-only reconciliation', async ({
   page,

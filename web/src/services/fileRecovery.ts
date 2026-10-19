@@ -1,7 +1,14 @@
 import { treeUuid, validTreeLocation } from '@/services/fileTreeCopies'
 import type { TreeLocation } from '@/services/fileTreeCopies'
 
-export const recoveryKinds = ['upload', 'mutation', 'archive', 'tree-copy', 'tree-move', 'tree-pack'] as const
+export const recoveryKinds = [
+  'upload',
+  'mutation',
+  'archive',
+  'tree-copy',
+  'tree-move',
+  'tree-pack',
+] as const
 export type RecoveryKind = (typeof recoveryKinds)[number]
 export type RecoveryDisposition = 'AcknowledgeUnknown' | 'ReconcileCompleted'
 export type RecoveryReason = 'OriginalSessionLost' | 'OperatorHandover' | 'IncidentReview'

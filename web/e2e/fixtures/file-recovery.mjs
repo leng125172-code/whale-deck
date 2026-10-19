@@ -6,7 +6,7 @@ export async function installFileRecoveryFixture(page, options = {}) {
   const state = { reads: [], writes: [], missing: false, status: 200, key: '', lostCreate: false, lostConfirm: false }
   const originalId = 'f28bc837-77ef-43c9-a0c9-617f790df336', originalExecution = '3c9c0737-999c-468d-817b-c4f9b6288210'
   const id = 'c47ae017-288b-445f-bae1-ef0ce9baa4dd', execution = '11c8ecb3-112e-4d6b-b26c-d63982ca941e'
-  const candidate = { kind: 'tree-move', intentId: originalId, executionJobId: originalExecution, version: 17,
+  const candidate = { kind: options.kind || 'tree-move', intentId: originalId, executionJobId: originalExecution, version: 17,
     createdAtUtc: new Date().toISOString(), leaseExpiresAtUtc: null, rootStartRecorded: true,
     integrity: options.invalidBinding ? 'InvalidBinding' : 'Verified',
     source: options.invalidBinding ? null : { rootId: 'files.shared', path: options.sourcePath || '很长的中文目录/abcdefghijklmnopqrstuvwxyz-0123456789/source' },
@@ -22,7 +22,7 @@ export async function installFileRecoveryFixture(page, options = {}) {
     if (state.status !== 200) return reply({ status: state.status }, state.status)
     if (request.method() === 'GET' && state.missing) return reply({ status: 404 }, 404)
     if (request.method() === 'GET' && path === '') return reply({ entries: options.empty ? [] : [candidate], nextCursor: null })
-    if (request.method() === 'GET' && path === '/tree-move/' + originalId) return reply(candidate)
+    if (request.method() === 'GET' && path === '/' + candidate.kind + '/' + originalId) return reply(candidate)
     if (path === '/operations' && request.method() === 'POST') {
       state.key = request.headers()['idempotency-key']; const command = request.postDataJSON()
       row.disposition = command.disposition; row.reasonCode = command.reasonCode
