@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-19）",
-  "nextStep": "已安装9675bbf/1.30，但真实压缩API在任务创建前发现新控制器与复制路由冲突。源码已修复并补全局冲突/负控制，下一步修复覆盖及真实身份/Agent/HTTP重验，再推进压缩WebUI和完整76项。"
+  "nextStep": "0661051/1.30已修复路由并完成目录压缩后端实机签收：两格式及超过1GiB完整HTTP/独立全SHA、四CI/冻结实际PG和六类旧文件回归通过。下一步接入压缩WebUI并实机验收，再推进解压、目录回收恢复及完整76项；同设备HDD留存不称物理异盘容灾。"
 }

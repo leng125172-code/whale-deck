@@ -1,6 +1,24 @@
-# 目录压缩业务后端：候选源码
+# 目录压缩业务后端：安装态验收
 
-本阶段接入已安装的 Agent RPC 1.30。`9675bbf` 已覆盖部署，但首轮真实验收抓到控制器误沿用复制路径，尚未签收。本文下面“未部署”候选描述是历史；没有新增目录压缩操作页面，不把源码或替身测试当作完整 P2-03 / P2-04 验收。
+本阶段接入已安装的 Agent RPC 1.30。当前实际运行时为 `0661051009fcdbd713ec4bdf2c4635d8e88c18de`，修复首轮路由缺陷后，目录压缩业务后端已通过真实身份、持久任务、Worker、已安装 Agent 与完整 HTTP 下载验收。压缩操作 WebUI 尚未实现；不把后端签收当作完整 P2-03 / P2-04 或全部 76 项完成。下方首轮失败与候选记录保留为历史。
+
+## 最终修复与实机证据（0661051，2026-10-19）
+
+- 固定源码 CI [39222897941](https://github.com/leng125172-code/whale-deck/actions/runs/39222897941) 的 backend/native-postgres/installer/frontend 四作业全部成功；Release 1169 Unit / 137 Integration 通过，6 原生测试在 Windows 本机明确跳过，原生门禁另行执行。前端 265 Unit、22 布局与 220 生产预览浏览器通过；这些浏览器用例不等于压缩操作页面验收。
+- 同源码工作站冻结 PostgreSQL 门禁 `dispatch-6d2cbdad377a48c58749589d26cb9ebd.json` 实际执行 1 / 通过 1 / 清理完成；UTC 08:28:26.940569–08:30:40.286296，SDK 镜像 `sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa`。
+- 只提交一次修复更新 Job `c22c6c97-2cdc-49dc-be5e-ca173d418858`。实际 systemd Invocation `f38d299999334b54b59515ae06877365` 于 16:33:09–16:36:14 CST 成功结束，wall 3min4.578s；没有自动回滚。修复未改变前端源码，先通过后端、安装和两处原生门禁覆盖已知路由缺陷，完整前端 CI 随后亦成功。
+- 六组件构建来源与 API/Gateway HTTP 均为 0661051。实际 API 镜像 `sha256:b8fdee81350e8e69e75f42e180621bfc4fc66a19f7d91baee488fd8ff48245ad`，Worker `sha256:72249fea9d9d0d6fecb6e15b11de860cda40098a14704a2b6443ade4cbec032c`，Gateway `sha256:848dc7d7056d8ea776cb6b47c28d555ca5f90a64f22e0aa9a4d4946e9feba4f6`；Agent 协议仍 1.30，.NET/ASP.NET/PKCS 均为 10.0.13。构建来源与宿主验证通过。
+- `validate_file_tree_packing_bff.py` 在真实临时 Authentik 身份监督器下成功退出：TAR 与 TAR.GZ 均验证 2,097,159 字节源文件、实际双 Job/SQL/Worker/UDS/helper、人类审计、完整 HTTP/独立磁盘及 TAR 成员全 SHA；原登录确认、新登录查询拒绝但下载允许、另一真实管理员下载并以当前身份审计、普通用户有效 CSRF 下拒绝、匿名/Origin/CSRF 拒绝，以及取消、受保护后代与计划后变更不重放均通过。验证目录 `wdv-packing-bff-92fd3b57fd444e33` 已精确清理，永久任务/审计/Root 回执保留。
+- 新增独立大归档探针 `validate_file_tree_packing_large_bff.py`，要求显式匹配运行时完整 SHA。该 QA 工具作为隔离验证文件运行，不据此宣称它已包含在产品 0661051 中。真实源 **1,073,741,831 字节**、TAR **1,073,756,160 字节**；完整 HTTP 计数/全 SHA、独立磁盘全 SHA、源和 TAR 成员全 SHA 全部通过，普通文件旧 1 GiB 下载限制仍拒绝。验证使用有界缓冲，不是前缀或稀疏文件探针。意图 `49daa14b-ea9a-da11-09c4-329016103057`、执行 Job `cd5cdfad-7f64-2b30-be1d-a3a7679406f0`；自有目录 `wdv-packing-large-bff-d582aa9919a24dc7` 已精确清理，永久记录保留。
+- 原六类真实 BFF 回归 `validate_file_tree_bff.py`、`validate_file_tree_move_bff.py`、`validate_files.py`、`validate_file_mutations.py`、`validate_file_text.py`、`validate_file_archives.py` 均通过并清理自有夹具。分别覆盖目录复制/移动完整字节、34,603,015 字节上传下载、单文件变更、UTF-8/HDD 前置留存和回收恢复。移动探针的 `currentAdministratorDispositionImplemented:false` 是旧范围标记；本次只验其只读清单，不把它当当前接管写流程的验收或缺失结论。HDD 探针 `differentSourceDevice:false`，仅证明版本留存，不能证明物理异盘容灾。
+- OIDC 完整退出、登录页重定向与 Origin/CSRF 回归通过；8 个实际 HTTP/Gateway 资产全字节对应通过，不称真实身份浏览器压缩验收。最终 SQL 活跃文件操作 0、路径锁 0、开放终端 0，压缩成功记录 3；11 核心容器 healthy，Agent 与 Maintenance active。状态复查仍为同源码与 11 healthy。
+- 首轮未提交夹具 `wdv-packing-bff-81d8d727f5064e03` 在确认七类工作流引用为 0、精确成员/绝对路径/挂载/设备/inode/归属后移除；只清理测试数据，没有删除用户数据、永久 SQL 任务/审计或 Root 回执。
+
+### 剩余验收边界
+
+压缩表单、计划确认/取消/刷新恢复和大归档下载 WebUI 尚未接入，也没有真实浏览器压缩链路证据。新类型生产 Unknown 故障注入/跨管理员写处置、解压、目录回收恢复、物理 NVMe/HDD 分离及其他 P0–P5 目标继续；P2-03/P2-04 仍为部分实现。下面“待执行/候选”仅描述当时阶段，不覆盖本节。
+
+本次收尾 GLM `glm-5.3-flash` 仅只读盘点任务状态与前端接入位置，1 次成功/176691ms，输入343873（缓存279040）/输出4746 Tokens，费用未返回。GPT 独立核对76行状态分类、实际源码/CI/宿主状态并负责文档与验收结论；41项部分实现不等于41项完成。
 
 ## 首轮安装与真实验收发现
 

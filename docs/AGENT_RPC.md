@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+当前安装态 **0661051 / RPC1.30**：压缩业务层持久双 Job、共享锁、Worker、人类审计与回执专用 HTTP 已接通，并通过真实身份/已安装UDS/helper、两格式和超过1GiB完整流/独立全SHA验收；四CI与冻结实际PG、六类旧文件/OIDC回归通过。协议不变，普通文件下载仍限1GiB。压缩操作WebUI、解压和目录回收恢复仍缺，完整76项保持active；见[业务后端最终证据](qa/FILE_TREE_PACKING_BFF.md)。下方“BFF/HTTP仍缺/未安装”是历史，不代表当前状态。
+
 最新安装态 **8aa73c0 / RPC1.30**：独立目录压缩与回执绑定大归档下载已通过真实签名UDS/固定helper、两格式2MiB+7及原生TAR超过1GiB完整流/独立磁盘验证，四CI与冻结实际PG、原六类文件BFF/OIDC回归及11核心健康通过。BFF/持久任务/Worker/人类审计/HTTP/压缩WebUI仍缺，不据此签完整目录压缩或76项；见[最终验收](qa/FILE_TREE_PACKING_AGENT.md)。下方“候选/尚未安装”为历史。
 
 新增 **1.30候选，尚未安装**：独立`FileTreePackingService`的Plan/Apply/Inspect/Discard及回执绑定Download，能力`files.tree-pack-intents`/`files.tree-pack-download`。TAR/TAR.GZ格式、源版本/全manifest摘要、双方策略、目标父inode和计划指纹绑定；完整manifest不跨64KiB私有帧。来源要求list/download/archive/tree-pack，目标mutate/upload/archive/tree-pack；只新建目标，不覆盖、不删源。下载仅已完成操作/原owner，重核当前目标策略、原inode/版本/整包摘要，32KiB块、17GiB总上限、600秒/取消和最终完整性核对；不扩大旧1GiB普通下载。下载不占全局写门，只持本操作锁，目标并发变化失败关闭。独立方法capability保持60秒、一次nonce及UDS peer guard，无TCP Agent端口；BFF/Worker的人类权限、持久任务、共享层级锁/审计/API/UI仍待接通。默认根新增files-tree-pack，只精确升级未修改1.29默认并保留`.pre-tree-pack.json`，自定义不扩权。见[候选证据](qa/FILE_TREE_PACKING_AGENT.md)。当前实机仍2a60668/RPC1.29，下方为历史。
