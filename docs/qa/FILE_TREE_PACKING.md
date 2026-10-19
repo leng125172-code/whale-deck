@@ -1,5 +1,11 @@
 # 目录压缩发布内部引擎
 
+## 固定源码复验：3ff90e1
+
+完整提交 `3ff90e1fe0b4b326a65ccc19fa60e753fb7697e3` 已推送dev并快进工作站源码；未安装这些模块、未构建/重启产品运行时。直接由该提交git archive导出的干净公开源码副本执行9组真实Linux测试，56新增+154既有=210项全部通过，随后真实HDD捕获/私有解包及登记根两格式发布探针均通过，精确夹具清理后3类测试目录剩余0。HDD探针differentSourceDevice=false，仅版本留存，不能称异盘容灾。
+
+固定源码[CI39194139091](https://github.com/leng125172-code/whale-deck/actions/runs/39194139091)的backend/native-postgres/installer已成功，frontend仍执行；后续终态单独跟踪，不冒称全绿。线上仍为2a60668/RPC1.29，11核心healthy和两宿主服务active。
+
 本轮 `FileTreePacking` 把登记目录生成新的TAR/TAR.GZ，独立域指纹、32KiB回执、私有临时文件、完整归档及源manifest验证、NO_REPLACE发布和只观察恢复。没有复用旧复制/文件回收签名计划或解释旧回执。
 
 ## 真实边界
