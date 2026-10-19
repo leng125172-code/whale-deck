@@ -25,9 +25,11 @@ import FileTextEditor from '@/components/files/FileTextEditor.vue'
 import FileArchivePanel from '@/components/files/FileArchivePanel.vue'
 import FileTreeCopyPanel from '@/components/files/FileTreeCopyPanel.vue'
 import FileTreeMovePanel from '@/components/files/FileTreeMovePanel.vue'
+import FileTreePackingPanel from '@/components/files/FileTreePackingPanel.vue'
 import FileRecoveryPanel from '@/components/files/FileRecoveryPanel.vue'
 import { canCopyDirectory } from '@/services/fileTreeCopies'
 import { canMoveDirectory } from '@/services/fileTreeMoves'
+import { canPackDirectory } from '@/services/fileTreePackings'
 import { archiveEligible } from '@/services/fileArchives'
 import { textEligible } from '@/services/fileText'
 import type { PreparedFileText } from '@/services/fileText'
@@ -39,17 +41,20 @@ const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
   editorLocked = ref(false),
   archiveOperationLocked = ref(false),
   treeCopyLocked = ref(false),
-  treeMoveLocked = ref(false)
+  treeMoveLocked = ref(false),
+  treePackingLocked = ref(false)
 const archivePanel = ref<InstanceType<typeof FileArchivePanel> | null>(null)
 const treeCopyPanel = ref<InstanceType<typeof FileTreeCopyPanel> | null>(null)
 const treeMovePanel = ref<InstanceType<typeof FileTreeMovePanel> | null>(null)
+const treePackingPanel = ref<InstanceType<typeof FileTreePackingPanel> | null>(null)
 const mutationLocked = computed(
   () =>
     mutationOperationLocked.value ||
     editorLocked.value ||
     archiveOperationLocked.value ||
     treeCopyLocked.value ||
-    treeMoveLocked.value,
+    treeMoveLocked.value ||
+    treePackingLocked.value,
 )
 function canTreeCopy(entry: FileEntry) {
   return canCopyDirectory(
@@ -59,6 +64,12 @@ function canTreeCopy(entry: FileEntry) {
 }
 function canTreeMove(entry: FileEntry) {
   return canMoveDirectory(
+    roots.value.find((root) => root.id === rootId.value),
+    entry,
+  )
+}
+function canTreePack(entry: FileEntry) {
+  return canPackDirectory(
     roots.value.find((root) => root.id === rootId.value),
     entry,
   )
@@ -638,7 +649,8 @@ onBeforeUnmount(() => {
           editorLocked ||
           archiveOperationLocked ||
           treeCopyLocked ||
-          treeMoveLocked
+          treeMoveLocked ||
+          treePackingLocked
         "
         @locked="mutationOperationLocked = $event"
         @changed="afterMutation"
@@ -655,7 +667,8 @@ onBeforeUnmount(() => {
           mutationOperationLocked ||
           archiveOperationLocked ||
           treeCopyLocked ||
-          treeMoveLocked
+          treeMoveLocked ||
+          treePackingLocked
         "
         @locked="editorLocked = $event"
         @prepared="acceptText"
@@ -673,7 +686,8 @@ onBeforeUnmount(() => {
           mutationOperationLocked ||
           editorLocked ||
           treeCopyLocked ||
-          treeMoveLocked
+          treeMoveLocked ||
+          treePackingLocked
         "
         @locked="archiveOperationLocked = $event"
         @changed="afterMutation"
@@ -691,7 +705,8 @@ onBeforeUnmount(() => {
           mutationOperationLocked ||
           editorLocked ||
           archiveOperationLocked ||
-          treeMoveLocked
+          treeMoveLocked ||
+          treePackingLocked
         "
         @locked="treeCopyLocked = $event"
         @changed="afterMutation"
@@ -709,9 +724,29 @@ onBeforeUnmount(() => {
           mutationOperationLocked ||
           editorLocked ||
           archiveOperationLocked ||
-          treeCopyLocked
+          treeCopyLocked ||
+          treePackingLocked
         "
         @locked="treeMoveLocked = $event"
+        @changed="afterMutation"
+        @failure="message"
+      />
+      <FileTreePackingPanel
+        ref="treePackingPanel"
+        :roots="roots"
+        :root-id="rootId"
+        :path="path"
+        :disabled="
+          busy ||
+          activeIntent ||
+          !!frozen ||
+          mutationOperationLocked ||
+          editorLocked ||
+          archiveOperationLocked ||
+          treeCopyLocked ||
+          treeMoveLocked
+        "
+        @locked="treePackingLocked = $event"
         @changed="afterMutation"
         @failure="message"
       />
@@ -875,7 +910,10 @@ onBeforeUnmount(() => {
                   >
                 </el-dropdown>
               </div>
-              <div v-else-if="canTreeCopy(row) || canTreeMove(row)" class="file-directory-actions">
+              <div
+                v-else-if="canTreeCopy(row) || canTreeMove(row) || canTreePack(row)"
+                class="file-directory-actions"
+              >
                 <el-button
                   v-if="canTreeCopy(row)"
                   link
@@ -891,6 +929,14 @@ onBeforeUnmount(() => {
                   :disabled="busy || activeIntent || !!frozen || mutationLocked"
                   @click="treeMovePanel?.open(row)"
                   >移动目录</el-button
+                >
+                <el-button
+                  v-if="canTreePack(row)"
+                  link
+                  type="primary"
+                  :disabled="busy || activeIntent || !!frozen || mutationLocked"
+                  @click="treePackingPanel?.open(row)"
+                  >压缩目录</el-button
                 >
               </div>
               <span v-else>目录</span></template
