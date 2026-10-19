@@ -1,5 +1,13 @@
 # 解压 Agent 1.31：源码候选，尚未安装
 
+## 安装态探针已准备，尚未执行
+
+新增 `TerminalProbe tree-unpack` 和 `validate_tree_unpacking_agent.py`：真实方法签名/nonce/owner/版本/计划/取消、PAX/GNU与TAR/TAR.GZ、恶意成员/已有目标和1GiB+7实际新目录发布；独立Root观察者逐成员完整哈希、登记归属/模式/纳秒mtime、源完整身份及回执核对，未知结果保留现场。成功才按确切成员/设备/inode验证清理自有夹具和6个测试回执，不触碰生产任务/审计。客户端Release编译0警告0错误、Python AST通过；这不是探针已经执行或RPC已签收的证据。
+
+探针准备轮GLM/glm-5.3-flash仅读取3个公开发布/探针文件，1次成功/0重试、48267ms、62176输入/31808缓存/1318输出，费用未返回；GPT复核定位并承担实际发布、权限、清理与测试结论。
+
+前序b12b8da的干净Git归档已真实复验：153文件树/147.248秒、173旧文件/1.546秒，共326项零跳过通过。0a53150的CI39252861305四作业已成功；本批最终安装态、同源码真实依赖及CI终态仍须另行记录。下面候选段保留当时的证据范围。
+
 ## 已实现的接点
 
 - `FileTreeUnpackingService.Plan/Apply/Inspect/Discard` 为独立 RPC；能力 `files.tree-unpack-intents`，协议次版本1.31。既有复制/移动/压缩/文件回收协议、签名和回执不变，没有新增 TCP Agent 端口。
