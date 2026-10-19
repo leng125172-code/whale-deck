@@ -43,6 +43,20 @@ public sealed class FileTreeRecyclingBindingTests : IDisposable
         Assert.NotEqual(FileTreeUnpackingValidation.IntentId(actor, row.IdempotencyKey), row.Id);
         Assert.NotEqual(FileTreeMoveValidation.ExecutionId(row.Id), row.ExecutionJobId);
     }
+    [Fact]
+    public void WholeRootCatalogueNeverConstructsOrWeakensAMutatingPathScope()
+    {
+        var root = new FileLocationDto("test.tree", "");
+        Assert.Null(FileTreeRecyclingValidation.CaptureSourceHash(root));
+        Assert.Throws<ArgumentException>(() => new FilePathScope(root));
+        Assert.Throws<ArgumentException>(() => FileTreeRecyclingValidation.Command(Plan().Command with { Source = root }));
+        var source = Plan().Command.Source;
+        Assert.Equal(new FilePathScope(source).Hash, FileTreeRecyclingValidation.CaptureSourceHash(source));
+    }
+    [Theory]
+    [InlineData("../escape")][InlineData("/absolute")][InlineData("a//b")][InlineData("a\\b")]
+    public void CatalogueStillRejectsInvalidPaths(string path) =>
+        Assert.Throws<ArgumentException>(() => FileTreeRecyclingValidation.CaptureSourceHash(new("test.tree", path)));
     [Theory]
     [InlineData("")][InlineData("/etc")][InlineData("a/../b")][InlineData("a\\b")][InlineData("a//b")]
     public void InvalidPathsDoNotBecomeRootRequests(string path) => Assert.Throws<ArgumentException>(() => FileTreeRecyclingValidation.Command(Plan().Command with { Source = new("test.tree", path) }));

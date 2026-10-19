@@ -15,6 +15,12 @@ public static class FileTreeRecyclingValidation
     public const int MaximumEntries = 10000;
     public static readonly JsonSerializerOptions JsonOptions = new() { MaxDepth = 12, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
     public static DateTimeOffset Timestamp(DateTimeOffset value) => value.AddTicks(-(value.Ticks % 10));
+    /// <summary>A null hash means a read-only catalogue query for an entire registered root, never a mutation scope.</summary>
+    public static string? CaptureSourceHash(FileLocationDto location)
+    {
+        FileManagementService.Location(location, true);
+        return location.Path.Length == 0 ? null : new FilePathScope(location).Hash;
+    }
     public static void Command(FileTreeRecyclingCommand command)
     {
         if (command is null) throw new ArgumentException("FILES_TREE_COMMAND_REQUIRED");
