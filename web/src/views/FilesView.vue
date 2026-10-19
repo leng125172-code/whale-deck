@@ -4,6 +4,11 @@ import { Download, FolderOpened, RefreshRight, Upload } from '@element-plus/icon
 import { ElBreadcrumb, ElBreadcrumbItem, ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError, apiRequest, createIdempotencyKey } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
+import {
+  clearFileBrowserLocation,
+  rememberFileBrowserLocation,
+  restoreFileBrowserLocation,
+} from '@/services/fileBrowserLocation'
 import { formatBytes } from '@/services/displayUnits'
 import {
   downloadFile,
@@ -204,6 +209,7 @@ function message(reason: unknown) {
     (reason.status === 401 ||
       (reason.status === 403 && reason.problem.code !== 'AGENT_OPERATION_FORBIDDEN'))
   ) {
+    clearFileBrowserLocation()
     entries.value = []
     roots.value = []
     rootId.value = ''
@@ -232,11 +238,14 @@ function stop() {
   generation++
   busy.value = false
 }
-async function load(reset = false) {
+async function load(reset = false, restored = false) {
   if (!authorized.value || !rootId.value) return
   listing?.abort()
   listing = new AbortController()
   const request = listing
+  const subject = authSession.user.value?.subject,
+    requestedRoot = rootId.value,
+    requestedPath = path.value
   if (reset) {
     page.value = 0
     cursors.value = ['']
@@ -251,7 +260,13 @@ async function load(reset = false) {
       `files/entries?${fileQuery(rootId.value, path.value, { after: cursors.value[page.value] || '', take: '100' })}`,
       { signal: request.signal },
     )
-    if (request !== listing || request.signal.aborted) return
+    if (
+      request !== listing ||
+      request.signal.aborted ||
+      !authorized.value ||
+      authSession.user.value?.subject !== subject
+    )
+      return
     if (page.value > 0 && folderVersion.value !== result.version) {
       nextCursor.value = ''
       throw new Error('目录内容已变化，请刷新后重新分页')
@@ -259,8 +274,18 @@ async function load(reset = false) {
     entries.value = result.entries
     nextCursor.value = result.nextCursor
     folderVersion.value = result.version
+    rememberFileBrowserLocation(subject, { rootId: requestedRoot, path: requestedPath })
   } catch (reason) {
-    if (!request.signal.aborted && request === listing) message(reason)
+    if (!request.signal.aborted && request === listing) {
+      if (restored && reason instanceof ApiError && [401, 403, 404].includes(reason.status))
+        clearFileBrowserLocation()
+      if (restored && reason instanceof ApiError && reason.status === 404 && requestedPath) {
+        clearFileBrowserLocation()
+        path.value = ''
+        ElMessage.warning('上次浏览的目录已不存在，已返回该根目录')
+        await load(true)
+      } else message(reason)
+    }
   } finally {
     if (request === listing) loading.value = false
   }
@@ -519,30 +544,42 @@ async function download(entry: FileEntry) {
 watch(canSearchContent, (value) => {
   if (!value) fileSearchTab.value = 'names'
 })
-watch(authorized, (value) => {
-  if (!value) {
+watch([authorized, () => authSession.user.value?.subject], ([value, subject], [, previous]) => {
+  if (!value || subject !== previous) {
+    clearFileBrowserLocation()
     revokeDrafts()
     stop()
     entries.value = []
     roots.value = []
     rootId.value = ''
+    path.value = ''
     chosen.value = null
     editorSource.value = null
     frozen.value = null
     intent.value = null
+    if (value) void loadRoots()
   }
 })
 async function loadRoots() {
   if (!authorized.value) return
   loading.value = true
+  listing?.abort()
   listing = new AbortController()
   const request = listing
+  const subject = authSession.user.value?.subject
   try {
     const result = await apiRequest<FileRoot[]>('files/roots', { signal: request.signal })
-    if (!request.signal.aborted) {
+    if (
+      !request.signal.aborted &&
+      authorized.value &&
+      authSession.user.value?.subject === subject
+    ) {
       roots.value = result
-      rootId.value = result[0]?.id || ''
-      if (rootId.value) await load(true)
+      const restored = restoreFileBrowserLocation(subject || '', result)
+      rootId.value =
+        restored?.rootId || result.find((root) => root.actions.includes('files-list'))?.id || ''
+      path.value = restored?.path || ''
+      if (rootId.value) await load(true, !!restored)
       else loading.value = false
     }
   } catch (reason) {

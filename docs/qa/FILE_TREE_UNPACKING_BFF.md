@@ -1,4 +1,16 @@
-# 目录解压业务工作流：源码候选，尚未部署
+# 目录解压业务工作流：已部署常规链路，完整阶段继续
+
+## 2026-10-20 安装态验收：49c7495
+
+49c74951ccb00872e24e1c3e2c7f4cb911621b8c 的四项 CI39284738314 全部成功；同源码工作站隔离 PostgreSQL 门禁 `dispatch-046cc91e406943f2842c33d9f89ee3bd.json` 实际执行1/通过1、清理确认，UTC16:22:12.663943–16:24:23.508742，外部发送0。该实库测试使用传输替身，不冒充安装态 Agent。
+
+开发更新实际 Invocation `eea2d5c158664bcfa8d68f8b8ffccabf` 于2026-10-20 00:51:12–00:53:19 CST成功结束；调度Job `f57f04a8-5f36-48a1-825e-49d76863e9e2` 本身只证明调度。Agent/API/Worker/Gateway/Maintenance/Migrator实际来源及API/Gateway HTTP对应完整49提交，Agent RPC1.31；宿主.NET/ASP.NET/PKCS10.0.13，11核心healthy。没有自动回滚、KDE或网卡修改；不将当前可达性冒充重新插拔USB或双网卡验收。
+
+`validate_file_tree_unpacking_bff.py` 经临时管理员真实Cookie/API/SQL/Worker/已安装UDS/helper通过：TAR/TAR.GZ、2MiB+7全内容、完整输入SHA/字节与原始归档不变、输出owner/mode/nsmtime和Root发布回执、双Job/确认幂等/取消/保护/输入变化、人类审计与锁释放。新登录读原意图404、确认403，普通Cookie+有效CSRF403，匿名401。自有夹具 `wdv-unpacking-bff-bceac9a6c12f4f0c` 已精确清理，永久意图/Job/审计/Root回执保留。
+
+随后七类既有文件探针（树复制/移动/压缩、普通文件上传下载/变更/编辑/回收恢复）、OIDC完整退出、Host、8份HTTP前端资产与活动Gateway字节一致均通过。普通文件回归34,603,015字节，目录三类2MiB+7；HDD与源同设备的探针仅证明版本留存，不证明异盘容灾。网页与独立落盘证明见 [UI验收](FILE_TREE_UNPACKING_UI.md)。新解压跨管理员真实故障处置和完整故障组合尚未实机签收，不签完P2-03/P2-04或76项。
+
+下方源码候选和“尚未执行/未部署”为历史，不代表当前运行时。
 
 ## e365f4c 冻结实库证据
 

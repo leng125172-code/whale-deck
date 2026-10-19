@@ -3,6 +3,10 @@ import { runtimeConfig } from '@/config/runtime'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import { navigateToLogout } from '@/services/logoutNavigation'
 import type { CurrentUser } from '@/services/contracts'
+import {
+  clearFileBrowserLocation,
+  reconcileFileBrowserLocation,
+} from '@/services/fileBrowserLocation'
 
 const previewStorageKey = 'whaledeck-preview-authenticated'
 const authenticated = ref(false)
@@ -47,6 +51,7 @@ async function loadAuthSession() {
     user.value = null
     unavailable.value = !(reason instanceof ApiError && reason.status === 401)
   } finally {
+    reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
     window.clearTimeout(timeout)
     initialized.value = true
   }
@@ -81,6 +86,7 @@ function redirectToAuthentik(returnUrl = '/') {
 }
 
 async function logout() {
+  clearFileBrowserLocation()
   if (import.meta.env.DEV) {
     sessionStorage.removeItem(previewStorageKey)
     authenticated.value = false
@@ -99,8 +105,10 @@ async function refresh() {
     user.value = await apiRequest<CurrentUser>('auth/me')
     authenticated.value = true
     unavailable.value = false
+    reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
   } catch (reason) {
     if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
+      clearFileBrowserLocation()
       user.value = null
       authenticated.value = false
     }

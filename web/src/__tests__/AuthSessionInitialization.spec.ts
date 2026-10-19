@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { fileBrowserLocationKey, rememberFileBrowserLocation } from '@/services/fileBrowserLocation'
 
 const { request } = vi.hoisted(() => ({ request: vi.fn<() => Promise<unknown>>() }))
 vi.mock('@/services/apiClient', async (original) => ({
   ...(await original<typeof import('@/services/apiClient')>()),
   apiRequest: request,
 }))
+vi.mock('@/services/logoutNavigation', () => ({ navigateToLogout: vi.fn<() => Promise<void>>() }))
 beforeEach(() => {
+  sessionStorage.clear()
   vi.resetModules()
   vi.stubEnv('DEV', false)
   request.mockReset()
@@ -48,4 +51,34 @@ it('settles initialization without identity or privileges after an unavailable b
   expect(authSession.authenticated.value).toBe(false)
   expect(authSession.user.value).toBeNull()
   expect(authSession.unavailable.value).toBe(true)
+})
+
+it.each(['ordinary', 'another-admin'])(
+  'clears another or downgraded directory hint after production login: %s',
+  async (subject) => {
+    rememberFileBrowserLocation('admin', { rootId: 'whaledeck.files.shared', path: '资料' })
+    request.mockResolvedValueOnce({ subject, isAdministrator: subject === 'another-admin' })
+    const { authSession } = await import('@/services/authSession')
+    await authSession.initialize()
+    expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
+  },
+)
+it('keeps same-admin hint on refresh, clears on downgrade and logout without a FilesView', async () => {
+  const admin = { subject: 'admin', isAdministrator: true }
+  request
+    .mockResolvedValueOnce(admin)
+    .mockResolvedValueOnce(admin)
+    .mockResolvedValueOnce({ ...admin, isAdministrator: false })
+  const { authSession } = await import('@/services/authSession')
+  rememberFileBrowserLocation('admin', { rootId: 'whaledeck.files.shared', path: '资料' })
+  await authSession.initialize()
+  await authSession.refresh()
+  expect(sessionStorage.getItem(fileBrowserLocationKey)).not.toBeNull()
+  await authSession.refresh()
+  expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
+  rememberFileBrowserLocation('admin', { rootId: 'whaledeck.files.shared', path: '资料' })
+  await authSession.logout()
+  expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
+  const { navigateToLogout } = await import('@/services/logoutNavigation')
+  expect(navigateToLogout).toHaveBeenCalledOnce()
 })
