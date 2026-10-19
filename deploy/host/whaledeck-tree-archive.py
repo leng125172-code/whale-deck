@@ -256,13 +256,24 @@ class TreeArchive:
                     if headers > self.max_entries * 2 + 8: self.reject('FILES_TREE_ENTRY_LIMIT')
                     try: info = tarfile.TarInfo.frombuf(block, encoding='utf-8', errors='strict')
                     except (tarfile.HeaderError, UnicodeError, ValueError): self.reject('FILES_ARCHIVE_CORRUPT')
-                    if info.type == tarfile.XHDTYPE:
+                    if info.type in (tarfile.XHDTYPE, tarfile.GNUTYPE_LONGNAME):
                         if pending or not 0 < info.size <= self.MEMBER_METADATA: self.reject('FILES_ARCHIVE_METADATA_LIMIT')
                         payload = exact(stream, (info.size + 511) // 512 * 512)
                         if any(payload[info.size:]): self.reject('FILES_ARCHIVE_CORRUPT')
                         metadata_bytes += info.size
                         if metadata_bytes > self.MAX_METADATA: self.reject('FILES_ARCHIVE_METADATA_LIMIT')
-                        pending = self.pax(payload[:info.size]); continue
+                        if info.type == tarfile.XHDTYPE:
+                            pending = self.pax(payload[:info.size])
+                        else:
+                            # GNU long names are one bounded UTF-8 string, not
+                            # permission to process long links/sparse/global
+                            # extensions. The next ordinary member still goes
+                            # through path, depth, protected and duplicate checks.
+                            name = payload[:info.size]
+                            if not name.endswith(b'\0') or b'\0' in name[:-1]: self.reject('FILES_ARCHIVE_METADATA_INVALID')
+                            try: pending = {'path': name[:-1].decode('utf-8', 'strict')}
+                            except UnicodeError: self.reject('FILES_ARCHIVE_METADATA_INVALID')
+                        continue
                     # Do not call TarInfo._proc_member: that would process sparse
                     # or unbounded extension bodies before our budgets run.
                     if info.type not in (tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE): self.reject('FILES_ARCHIVE_SPECIAL_OBJECT')

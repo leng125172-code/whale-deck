@@ -91,6 +91,45 @@ class TreeArchiveCodecTests(unittest.TestCase):
             self.assertNotIn(str(self.fixture.base),json.dumps(one))
             self.assertNotIn('data',one['entries'][1])
 
+    def test_gnu_long_name_metadata_is_bounded_and_uses_all_ordinary_path_checks(self):
+        def extension(payload, kind=tarfile.GNUTYPE_LONGNAME):
+            header = tarfile.TarInfo('././@LongLink'); header.type = kind; header.size = len(payload)
+            return header.tobuf(format=tarfile.USTAR_FORMAT) + payload + bytes(-len(payload) % 512)
+        info = tarfile.TarInfo('placeholder'); info.size = 1; info.mode = 0o644
+        member = info.tobuf(format=tarfile.USTAR_FORMAT) + b'x' + bytes(511)
+        valid = extension(('代码/' + '中文' * 35 + '.bin').encode() + b'\0')
+        malformed = [extension(name) for name in (
+            b'', b'not-terminated', b'a\0hidden\0', b'\xff\0', b'../outside\0',
+            b'/absolute\0', b'nested/.env\0', b'a/' * 33 + b'file\0',
+            b'x' * self.engine.MEMBER_METADATA + b'\0')]
+        malformed += [valid + valid, extension(b'target\0', tarfile.GNUTYPE_LONGLINK)]
+        path = self.state / 'gnu-malformed'
+        for number, prefix in enumerate(malformed):
+            path.write_bytes(prefix + member + bytes(1024))
+            descriptor = os.open(path, os.O_RDONLY)
+            try:
+                with self.subTest(case=number), self.assertRaises(driver.Rejected): self.engine.inspect(descriptor, 'tar')
+            finally: os.close(descriptor)
+
+    def test_gnu_long_name_cannot_hide_a_special_member_or_duplicate_path(self):
+        payload = ('长文件名' * 12 + '.bin').encode() + b'\0'
+        header = tarfile.TarInfo('././@LongLink'); header.type = tarfile.GNUTYPE_LONGNAME; header.size = len(payload)
+        prefix = header.tobuf(format=tarfile.USTAR_FORMAT) + payload + bytes(-len(payload) % 512)
+        path = self.state / 'gnu-special'
+        for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.FIFOTYPE, tarfile.CHRTYPE):
+            info = tarfile.TarInfo('short'); info.type = kind; info.linkname = 'outside'
+            path.write_bytes(prefix + info.tobuf(format=tarfile.USTAR_FORMAT) + bytes(1024))
+            descriptor = os.open(path, os.O_RDONLY)
+            try:
+                with self.subTest(kind=kind), self.assertRaises(driver.Rejected): self.engine.inspect(descriptor, 'tar')
+            finally: os.close(descriptor)
+        info = tarfile.TarInfo('short'); info.size = 1
+        member = prefix + info.tobuf(format=tarfile.USTAR_FORMAT) + b'x' + bytes(511)
+        path.write_bytes(member + member + bytes(1024)); descriptor = os.open(path, os.O_RDONLY)
+        try:
+            with self.assertRaisesRegex(driver.Rejected, '^FILES_ARCHIVE_DUPLICATE$'): self.engine.inspect(descriptor, 'tar')
+        finally: os.close(descriptor)
+
     def test_changed_manifest_and_protected_descendant_fail_before_output(self):
         manifest = tree_module.FileTreeManifest(driver).scan(self.command()); command = self.command()
         self.file.write_bytes(b'changed')

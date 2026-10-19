@@ -37,6 +37,7 @@ jobs:
           sudo python3 -m unittest discover -s deploy/validation -p test_tree_archive_codec.py
           sudo python3 -m unittest discover -s deploy/validation -p test_tree_backups.py
           sudo python3 -m unittest discover -s deploy/validation -p test_tree_packing.py
+          sudo python3 -m unittest discover -s deploy/validation -p test_tree_unpacking.py
           sudo python3 -m unittest discover -s deploy/validation -p test_tree_copies.py
           sudo python3 -m unittest discover -s deploy/validation -p test_tree_moves.py
 
