@@ -206,7 +206,7 @@ def roots():
         if not isinstance(path, str) or not path.startswith(BASE + '/') or relative(path[len(BASE) + 1:]) != path[len(BASE) + 1:] or protected(path):
             raise Rejected('FILES_REGISTRY_INVALID')
         actions = item.get('allowedActions', [])
-        if not isinstance(actions, list) or not actions or any(action not in ('files-list', 'files-stat', 'files-download', 'files-upload', 'files-mutate', 'files-history', 'files-archive', 'files-tree-copy', 'files-tree-move', 'files-tree-pack', 'files-tree-unpack') for action in actions):
+        if not isinstance(actions, list) or not actions or any(action not in ('files-list', 'files-stat', 'files-download', 'files-upload', 'files-mutate', 'files-history', 'files-archive', 'files-tree-copy', 'files-tree-move', 'files-tree-pack', 'files-tree-unpack', 'files-tree-restore') for action in actions):
             raise Rejected('FILES_REGISTRY_INVALID')
         if any(type(item.get(field, 0)) is not int or not 0 <= item.get(field, 0) < 2 ** 31 for field in ('ownerUid', 'ownerGid')):
             raise Rejected('FILES_REGISTRY_INVALID')

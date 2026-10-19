@@ -20,6 +20,7 @@ import time
 class FileTreeUnpacking:
     DOMAIN = b'whaledeck-tree-unpacking-v1\n'
     FOLDER = 'tree-unpacking'
+    TEMPORARY_SUFFIX = '.tree-unpack'
     TERMINAL = ('Completed', 'Aborted', 'Unknown')
     TRANSIENT = ('Preparing', 'Staging', 'Ready', 'Publishing')
     PLAN_FIELDS = {'command', 'archiveSha256', 'archiveBytes', 'contentSha256',
@@ -257,7 +258,7 @@ class FileTreeUnpacking:
             if capacity.f_bavail * capacity.f_frsize < plan['totalBytes'] + reserve or capacity.f_files > 0 and capacity.f_favail < plan['entryCount'] + 4:
                 self.reject('FILES_CAPACITY_REQUIRED')
             private = self.f.staging(parent)
-            target = None; temporary = record['operationId'] + '.tree-unpack'
+            target = None; temporary = record['operationId'] + self.TEMPORARY_SUFFIX
             try:
                 record.update(state='Staging', mayHaveStaged=True)
                 self.save(folder, record); self.checkpoint('StagingIntent'); check()
@@ -314,7 +315,7 @@ class FileTreeUnpacking:
                 else:
                     private = self.f.staging(parent)
                     try:
-                        try: staged = self.f.open_at(private, record['operationId'] + '.tree-unpack', os.O_RDONLY | os.O_DIRECTORY)
+                        try: staged = self.f.open_at(private, record['operationId'] + self.TEMPORARY_SUFFIX, os.O_RDONLY | os.O_DIRECTORY)
                         except FileNotFoundError: staged = None
                         if staged is not None:
                             try:

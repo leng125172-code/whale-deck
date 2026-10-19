@@ -47,25 +47,31 @@ class TreeBackups:
         return policy
 
     @contextlib.contextmanager
-    def storage(self, request):
+    def storage(self, request, *, existing=False):
+        require_existing = existing
         with self.b.target() as (configuration, base):
-            try: os.mkdir(self.FOLDER,0o700,dir_fd=base); os.fsync(base)
-            except FileExistsError: pass
-            folder = self.f.open_at(base,self.FOLDER,os.O_RDONLY | os.O_DIRECTORY); lock = None
+            if not existing:
+                try: os.mkdir(self.FOLDER,0o700,dir_fd=base); os.fsync(base)
+                except FileExistsError: pass
+            try: folder = self.f.open_at(base,self.FOLDER,os.O_RDONLY | os.O_DIRECTORY)
+            except FileNotFoundError: self.reject('FILES_TREE_BACKUP_NOT_FOUND')
+            lock = None
             try:
                 info = os.fstat(folder)
                 if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700: self.reject('FILES_TREE_BACKUP_STORE_UNSAFE')
                 # Reserve a bounded number of directory entries even when a
                 # failed capture left only a lock or partial object.
                 try: os.stat(request['operationId']+'.json',dir_fd=folder,follow_symlinks=False); existing = True
-                except FileNotFoundError: existing = False
+                except FileNotFoundError:
+                    if existing: self.reject('FILES_TREE_BACKUP_NOT_FOUND')
+                    existing = False
                 if not existing:
                     count = 0
                     with os.scandir(folder) as children:
                         for _ in children:
                             count += 1
                             if count >= configuration['maxVersions'] * 5: self.reject('FILES_BACKUP_HISTORY_LIMIT')
-                lock = os.open(request['operationId']+'.lock',os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW,0o600,dir_fd=folder)
+                lock = os.open(request['operationId']+'.lock',os.O_WRONLY | (0 if require_existing else os.O_CREAT) | os.O_NOFOLLOW,0o600,dir_fd=folder)
                 info = os.fstat(lock)
                 if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600: self.reject('FILES_TREE_BACKUP_STORE_UNSAFE')
                 try: fcntl.flock(lock,fcntl.LOCK_EX | fcntl.LOCK_NB)
