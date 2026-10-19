@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-19）",
-  "nextStep": "线上8aa73c0/RPC1.30压缩Agent和专用大归档下载已实测，四CI/冻结实际PG与两格式2MiB+7/1GiB+7源完整流和独立磁盘通过；BFF持久计划/任务、Worker、审计、HTTP和压缩WebUI仍缺。下一步接完整业务链路及其余76项。"
+  "nextStep": "线上8aa73c0/RPC1.30保持；目录压缩BFF持久双任务/共享锁/Worker/当前管理员恢复/回执专用HTTP和EF迁移已实现候选，尚未发布。下一步冻结PG和实际Cookie/Agent/HTTP验收、压缩WebUI及其余76项。"
 }

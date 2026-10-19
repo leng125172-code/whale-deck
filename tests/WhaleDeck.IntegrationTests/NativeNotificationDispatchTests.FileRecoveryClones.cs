@@ -19,12 +19,12 @@ public sealed partial class NativeNotificationDispatchTests
     {
         await using var db = new PlatformDbContext(options); await using var transaction = await db.Database.BeginTransactionAsync();
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(41307341);");
-        var material = new FileRecoveryMaterial(protector, protector, protector, protector, protector);
+        var material = new FileRecoveryMaterial(protector, protector, protector, protector, protector, protector);
         var snapshot = await new FileRecoverySources(db, material, TimeProvider.System).LockAsync(kind, original, default);
         var node = JsonNode.Parse(snapshot.OriginalJson)!;
         var slug = "native-recovery-clone-" + Guid.NewGuid().ToString("N"); var actor = new TerminalActor("lost-" + slug, null, [], new('A', 64), "native-clone", null);
         var key = Guid.NewGuid().ToString("D"); var now = FileTreeCopyValidation.Timestamp(DateTimeOffset.UtcNow); var expiry = now.AddMinutes(15);
-        var id = kind switch { FileRecoveryKinds.TreeCopy => FileTreeCopyValidation.IntentId(actor, key), FileRecoveryKinds.TreeMove => FileTreeMoveValidation.IntentId(actor, key), _ => Guid.NewGuid() };
+        var id = kind switch { FileRecoveryKinds.TreeCopy => FileTreeCopyValidation.IntentId(actor, key), FileRecoveryKinds.TreeMove => FileTreeMoveValidation.IntentId(actor, key), FileRecoveryKinds.TreePacking => FileTreePackingValidation.IntentId(actor, key), _ => Guid.NewGuid() };
         node["Id"] = id; node["ActorSubject"] = actor.Subject; node["LoginBinding"] = actor.LoginBinding;
         node["OwnerHash"] = FileManagementService.Hash("file-owner-v1:" + actor.Subject + ":" + actor.LoginBinding);
         node["CreatedAtUtc"] = now; node["RootStartedAtUtc"] = now; node["NextAttemptAtUtc"] = now; node["Version"] = 0;
@@ -52,6 +52,20 @@ public sealed partial class NativeNotificationDispatchTests
                 node["RequestHash"] = ((IFileArchiveProtector)protector).Fingerprint(new FileArchiveBinding(id, actor.Subject, actor.LoginBinding, archive, expiry));
                 var archived = node.Deserialize<FileArchiveOperation>()!; material.Capture(archived); db.FileArchiveOperations.Add(archived);
                 db.FileArchiveRegistrations.Add(new() { Id = id, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding, IdempotencyKey = key, RequestHash = archived.RequestHash, PlanJson = archived.PlanJson, CreatedAtUtc = now, ExpiresAtUtc = expiry }); break;
+            case FileRecoveryKinds.TreePacking:
+                var packingCommand = new FileTreePackingCommand(Location("source"), new('B', 64), Location("target.tar"), "tar");
+                locations.Add(packingCommand.Source); locations.Add(packingCommand.Target);
+                var packingPlan = FileTreePackingValidation.ReadPlan(material.Read<FileTreePackingOperation>(snapshot)) with { Command = packingCommand };
+                execution = FileTreePackingValidation.ExecutionId(id);
+                node["IdempotencyKey"] = key; node["CommandJson"] = JsonSerializer.Serialize(packingCommand);
+                node["SourceHash"] = new FilePathScope(packingCommand.Source).Hash; node["TargetHash"] = new FilePathScope(packingCommand.Target).Hash;
+                node["PlanningExpiresAtUtc"] = expiry; node["ExecutionExpiresAtUtc"] = expiry; node["ReadyExpiresAtUtc"] = now.AddMinutes(5);
+                node["ExecutionJobId"] = execution; node["PlanJson"] = JsonSerializer.Serialize(packingPlan);
+                var packing = node.Deserialize<FileTreePackingOperation>()!;
+                node["RequestHash"] = protector.FingerprintRequest(FileTreePackingValidation.RequestBinding(packing));
+                node["PlanHash"] = protector.FingerprintPlan(FileTreePackingValidation.PlanBinding(packing));
+                packing = node.Deserialize<FileTreePackingOperation>()!; material.Capture(packing); db.FileTreePackingOperations.Add(packing);
+                db.OperationJobs.Add(new() { Id = id, ActorSubject = actor.Subject, IdempotencyKey = key, JobType = "files.tree-pack-plan", State = "Succeeded", CompletedAtUtc = now }); break;
             default:
                 var command = new FileTreeCopyCommand(Location("source"), new('B', 64), Location("target")); locations.Add(command.Source); locations.Add(command.Target);
                 node["IdempotencyKey"] = key; node["CommandJson"] = JsonSerializer.Serialize(command); node["SourceHash"] = new FilePathScope(command.Source).Hash; node["TargetHash"] = new FilePathScope(command.Target).Hash;
@@ -73,7 +87,7 @@ public sealed partial class NativeNotificationDispatchTests
                 db.OperationJobs.Add(new() { Id = id, ActorSubject = actor.Subject, IdempotencyKey = key, JobType = kind == FileRecoveryKinds.TreeCopy ? "files.tree-copy-plan" : "files.tree-move-plan", State = "Succeeded", CompletedAtUtc = now }); break;
         }
         var jobType = kind == FileRecoveryKinds.Upload ? "files.upload" : kind == FileRecoveryKinds.Mutation ? "files.mutation" :
-            kind == FileRecoveryKinds.Archive ? "files.archive" : kind == FileRecoveryKinds.TreeCopy ? "files.tree-copy" : "files.tree-move";
+            kind == FileRecoveryKinds.Archive ? "files.archive" : kind == FileRecoveryKinds.TreeCopy ? "files.tree-copy" : kind == FileRecoveryKinds.TreePacking ? "files.tree-pack" : "files.tree-move";
         db.OperationJobs.Add(new() { Id = execution, ActorSubject = actor.Subject, IdempotencyKey = execution.ToString("D"), JobType = jobType, State = "Running" });
         foreach (var location in locations)
             db.FilePathLocks.Add(new() { PathHash = new FilePathScope(location).Hash, ScopeKind = "Path", RootId = location.RootId, RelativePath = location.Path, OperationId = execution });

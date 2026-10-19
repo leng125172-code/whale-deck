@@ -27,14 +27,15 @@ public sealed class FileRecoveryTests : IDisposable
     {
         var id = Guid.Parse("01234567-1234-4234-8234-0123456789ab");
         var execution = kind switch { FileRecoveryKinds.TreeMove => FileTreeMoveValidation.ExecutionId(id),
-            FileRecoveryKinds.TreeCopy => FileTreeCopyValidation.ExecutionId(id), _ => id };
+            FileRecoveryKinds.TreeCopy => FileTreeCopyValidation.ExecutionId(id), FileRecoveryKinds.TreePacking => FileTreePackingValidation.ExecutionId(id), _ => id };
         return new(Guid.Parse("98765432-4321-4321-8321-9876543210ab"), Actor.Subject, Actor.LoginBinding,
             new(kind, id, execution, 17, new('D', 64)), new('E', 64), "Unknown", "AcknowledgeUnknown", "OriginalSessionLost", Now, Now.AddMinutes(5));
     }
     [Theory]
     [InlineData(FileRecoveryKinds.Upload)][InlineData(FileRecoveryKinds.Mutation)][InlineData(FileRecoveryKinds.Archive)]
     [InlineData(FileRecoveryKinds.TreeCopy)][InlineData(FileRecoveryKinds.TreeMove)]
-    public void AllFiveKindsHaveIndependentCurrentAdminClaimsAndExactOriginalExecution(string kind)
+    [InlineData(FileRecoveryKinds.TreePacking)]
+    public void AllKindsHaveIndependentCurrentAdminClaimsAndExactOriginalExecution(string kind)
     {
         var claims = Claims(kind); var token = _protector.SignRecovery(claims);
         Assert.Equal(claims, _protector.VerifyRecovery(token)); FileRecoveryValidation.RequireCurrentActor(claims, Actor, Now);
@@ -125,6 +126,7 @@ public sealed class FileRecoveryTests : IDisposable
     [Theory]
     [InlineData(FileRecoveryKinds.Upload)][InlineData(FileRecoveryKinds.Mutation)][InlineData(FileRecoveryKinds.Archive)]
     [InlineData(FileRecoveryKinds.TreeCopy)][InlineData(FileRecoveryKinds.TreeMove)]
+    [InlineData(FileRecoveryKinds.TreePacking)]
     public void CursorPreservesAllTimestampTicksAndSameTimestampKindAndGuid(string kind)
     {
         var cursor = new FileRecoveryCursor(Now.AddTicks(1234567), kind, Guid.NewGuid()); var encoded = FileRecoveryValidation.EncodeCursor(cursor);

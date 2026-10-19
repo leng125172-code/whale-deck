@@ -29,6 +29,7 @@ builder.Services.AddHostedService<FileUploadWorker>();
 builder.Services.AddHostedService<FileMutationWorker>();
 builder.Services.AddHostedService<FileArchiveWorker>();
 builder.Services.AddHostedService<FileTreeCopyWorker>();
+builder.Services.AddHostedService<FileTreePackingWorker>();
 builder.Services.AddHostedService<FileTreeMoveWorker>();
 builder.Services.AddHostedService<FileRecoveryWorker>();
 

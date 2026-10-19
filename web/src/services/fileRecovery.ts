@@ -1,7 +1,7 @@
 import { treeUuid, validTreeLocation } from '@/services/fileTreeCopies'
 import type { TreeLocation } from '@/services/fileTreeCopies'
 
-export const recoveryKinds = ['upload', 'mutation', 'archive', 'tree-copy', 'tree-move'] as const
+export const recoveryKinds = ['upload', 'mutation', 'archive', 'tree-copy', 'tree-move', 'tree-pack'] as const
 export type RecoveryKind = (typeof recoveryKinds)[number]
 export type RecoveryDisposition = 'AcknowledgeUnknown' | 'ReconcileCompleted'
 export type RecoveryReason = 'OriginalSessionLost' | 'OperatorHandover' | 'IncidentReview'
@@ -57,6 +57,7 @@ export function recoveryKind(kind: RecoveryKind) {
     archive: '历史与回收恢复',
     'tree-copy': '目录复制',
     'tree-move': '目录移动',
+    'tree-pack': '目录压缩',
   }[kind]
 }
 export function recoveryState(state: string) {

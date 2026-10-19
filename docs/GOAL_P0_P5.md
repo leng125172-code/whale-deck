@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- 目录压缩业务后端新增候选：持久双任务/共享锁/Worker/当前管理员恢复/回执专用HTTP及EF迁移已实现，1169 Unit/135 Integration通过；尚未发布、冻结PG/真实HTTP及压缩WebUI仍待完成，见[证据边界](qa/FILE_TREE_PACKING_BFF.md)。不签完整P2-03/P2-04或76项。
+
 - 最新实际8aa73c0/RPC1.30已签收压缩Agent与专用大归档下载：四CI/冻结实际PG、真实UDS/helper两格式及1GiB+7源/完整流和独立磁盘、六旧文件BFF与OIDC回归通过，11核心健康。压缩BFF/持久任务/Worker/人类审计/HTTP/UI仍缺；不把Agent等同完整P2，见[边界与证据](qa/FILE_TREE_PACKING_AGENT.md)。完整76项不缩减。
 
 - 新增独立压缩Agent1.30源码（未安装）：RPC/受限helper/显式根授权/已知默认升级/可信模块与回执绑定大归档流已实现，1119 Unit/127 Integration和Release通过；真实安装态与人类权限/BFF任务/页面仍缺，线上2a60668/RPC1.29。见[Agent证据边界](qa/FILE_TREE_PACKING_AGENT.md)，完整76项继续。

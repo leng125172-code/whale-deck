@@ -86,6 +86,22 @@ public sealed class FileTransportTests
             Assert.True(output.Length < 3);
         }
     }
+    [Theory]
+    [InlineData("valid")][InlineData("digest")][InlineData("missing-end")][InlineData("rpc-after-end")][InlineData("version")][InlineData("duplicate-end")]
+    public async Task ReceiptArchiveTransportAlsoWithholdsTailUntilFinalAudit(string variant)
+    {
+        var context = new DefaultHttpContext(); using var output = new MemoryStream(); context.Response.Body = output;
+        if (variant == "valid")
+        {
+            await FileHttpTransport.CopyArchiveVerifiedAsync(Parts(variant), context.Response, new('A', 64), default);
+            Assert.Equal(new byte[] { 1, 2, 3 }, output.ToArray());
+        }
+        else
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => FileHttpTransport.CopyArchiveVerifiedAsync(Parts(variant), context.Response, new('A', 64), default));
+            Assert.True(output.Length < 3);
+        }
+    }
     [Fact]
     public async Task EmptyFileRequiresSuccessfulEndNotMerelyZeroContentLength()
     {

@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 新增目录压缩业务后端候选（未部署）：独立双 Job/持久计划、共享层级锁与预算、Worker、原登录确认/取消和当前管理员第六类恢复、回执专用 17GiB HTTP 下载/普通文件仍 1GiB、当前下载者权限与最终审计、不可变 EF 迁移已实现。1169 Unit/135 Integration、恢复页 13 定向单元与类型检查通过；6 原生本机跳过。冻结实盘 PG、实际 Cookie/BFF/Agent/完整下载与新压缩页面仍待验收，安装态保持8aa73c0/1.30；见[业务后端证据](qa/FILE_TREE_PACKING_BFF.md)。完整76项继续，下方“BFF仍缺”为旧安装态边界。
+
 - 最新实际运行时8aa73c0 / Agent RPC1.30：独立压缩/回执绑定下载已安装及真实签名UDS/helper、两格式2MiB+7/超过1GiB原生TAR整流和独立磁盘校验通过，原源不变与自有夹具清理。1119 Unit/127 Integration、291 Linux、四CI39198233873和冻结实际PG1执行/通过/清理、六类既有文件BFF/OIDC/8资产回归通过；12:22:48 CST更新成功，六组件来源一致、11核心健康/活跃文件任务锁终端及临时身份0。新压缩BFF/任务/Worker/审计/HTTP/UI仍缺，完整76项继续；见[最终Agent签收](qa/FILE_TREE_PACKING_AGENT.md)。下方候选/未安装为历史。
 
 - 新增压缩Agent1.30源码候选（尚未部署）：独立RPC/固定helper/显式根授权与默认精确升级、回执绑定17GiB下载/旧1GiB不变、可信加载和安装态验证脚本已实现。Release1119 Unit/127 Integration通过，6原生PG本机跳过；真实安装态UDS/大归档探针尚未执行，线上仍2a60668/RPC1.29，见[Agent候选证据](qa/FILE_TREE_PACKING_AGENT.md)。BFF/任务/Worker/审计/UI和完整76项继续。

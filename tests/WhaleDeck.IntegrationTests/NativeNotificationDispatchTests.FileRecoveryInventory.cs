@@ -15,7 +15,7 @@ public sealed partial class NativeNotificationDispatchTests
         FilePlanProtector protector, string kind, Guid id)
     {
         await using var db = new PlatformDbContext(options);
-        var inventory = new FileRecoveryInventory(db, protector, protector, protector, protector, protector);
+        var inventory = new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector);
         var authorization = new FileManagementService(null!, null!, null!, new NativeMoveTreeIdentity(), TimeProvider.System);
         var service = new FileRecoveryInventoryService(authorization, inventory);
         var currentActor = new TerminalActor("new-current-recovery-admin", null, [], new('F', 64), "native-recovery-inventory", null);
@@ -53,7 +53,7 @@ public sealed partial class NativeNotificationDispatchTests
         try
         {
             var wrong = new FilePlanProtector(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = key }).Build());
-            var invalid = await new FileRecoveryInventory(db, wrong, wrong, wrong, wrong, wrong).GetAsync(kind, id, default);
+            var invalid = await new FileRecoveryInventory(db, wrong, wrong, wrong, wrong, wrong, wrong).GetAsync(kind, id, default);
             Assert.NotNull(invalid); Assert.Equal("InvalidBinding", invalid.Integrity);
             Assert.Null(invalid.Source); Assert.Null(invalid.Target); Assert.Null(invalid.HasRetainedObjects);
         }

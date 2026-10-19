@@ -40,6 +40,12 @@ public sealed class FileHttpTransport(FileManagementService files, TerminalCooki
         }
     }
     internal static async Task CopyVerifiedAsync(IAsyncEnumerable<FileDownloadPart> parts, HttpResponse response, string version, CancellationToken cancellationToken)
+        => await CopyCoreAsync(parts, response, version, FileManagementService.MaximumBytes, cancellationToken);
+
+    internal static async Task CopyArchiveVerifiedAsync(IAsyncEnumerable<FileDownloadPart> parts, HttpResponse response, string version, CancellationToken cancellationToken)
+        => await CopyCoreAsync(parts, response, version, FileTreePackingValidation.MaximumArchiveBytes, cancellationToken);
+
+    private static async Task CopyCoreAsync(IAsyncEnumerable<FileDownloadPart> parts, HttpResponse response, string version, long maximumBytes, CancellationToken cancellationToken)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         FileEntryDto? metadata = null; byte[]? pending = null; long count = 0; var ended = false;
@@ -48,7 +54,7 @@ public sealed class FileHttpTransport(FileManagementService files, TerminalCooki
             if (part.Kind == "metadata" && metadata is null && count == 0 && !ended)
             {
                 metadata = part.Metadata;
-                if (metadata is null || metadata.Kind != "File" || metadata.IsProtected || metadata.SizeBytes is < 0 or > FileManagementService.MaximumBytes || metadata.Version != version)
+                if (metadata is null || metadata.Kind != "File" || metadata.IsProtected || metadata.SizeBytes < 0 || metadata.SizeBytes > maximumBytes || metadata.Version != version)
                     throw new InvalidOperationException("FILES_DOWNLOAD_METADATA_INVALID");
                 response.ContentType = "application/octet-stream"; response.ContentLength = metadata.SizeBytes;
                 response.Headers.CacheControl = "no-store"; response.Headers.XContentTypeOptions = "nosniff";
