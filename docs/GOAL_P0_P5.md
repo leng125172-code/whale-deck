@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- 9675bbf/1.30已安装且四CI/冻结PG通过，但真实压缩API在创建任务前发现新旧复制路由冲突，未签收；源码已修复并补全局精确路由重复检查/负控制，待覆盖及真实完整链路重验。见[真实故障与证据](qa/FILE_TREE_PACKING_BFF.md)，不缩减76项或把全绿测试替代实机验收。下方旧安装态/候选状态为历史。
+
 - 目录压缩业务后端新增候选：持久双任务/共享锁/Worker/当前管理员恢复/回执专用HTTP及EF迁移已实现，1169 Unit/135 Integration通过；尚未发布、冻结PG/真实HTTP及压缩WebUI仍待完成，见[证据边界](qa/FILE_TREE_PACKING_BFF.md)。不签完整P2-03/P2-04或76项。
 
 - 最新实际8aa73c0/RPC1.30已签收压缩Agent与专用大归档下载：四CI/冻结实际PG、真实UDS/helper两格式及1GiB+7源/完整流和独立磁盘、六旧文件BFF与OIDC回归通过，11核心健康。压缩BFF/持久任务/Worker/人类审计/HTTP/UI仍缺；不把Agent等同完整P2，见[边界与证据](qa/FILE_TREE_PACKING_AGENT.md)。完整76项不缩减。

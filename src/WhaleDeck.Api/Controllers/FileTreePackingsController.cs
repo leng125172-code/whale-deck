@@ -7,7 +7,7 @@ using WhaleDeck.Application.Services;
 
 namespace WhaleDeck.Api.Controllers;
 
-[ApiController, Authorize(Policy = "Administrator"), Route("api/v1/files/tree-copies")]
+[ApiController, Authorize(Policy = "Administrator"), Route("api/v1/files/tree-packings")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class FileTreePackingsController(FileTreePackingService trees, TerminalCookieIdentity identity, FilePackingHttpTransport transport) : ControllerBase
 {
@@ -15,15 +15,15 @@ public sealed class FileTreePackingsController(FileTreePackingService trees, Ter
     [HttpGet("{id:guid}/download"), Produces("application/octet-stream")]
     public async Task Download(Guid id, [FromQuery] string expectedVersion) =>
         await transport.DownloadAsync(HttpContext, await identity.ReadAsync(HttpContext), id, expectedVersion);
-    /// <summary>Queue a login-bound full-tree planning job; does not copy. The supplied UUID key recovers the same permanent intent after a lost HTTP response.</summary>
+    /// <summary>Queue a login-bound full-tree planning job; does not pack. The supplied UUID key recovers the same permanent intent after a lost HTTP response.</summary>
     [HttpPost, ProducesResponseType<FileTreePackingIntentDto>(StatusCodes.Status202Accepted)]
     public async Task<ActionResult<FileTreePackingIntentDto>> Queue(FileTreePackingCommand command, CancellationToken cancellationToken)
     {
         var key = Request.Headers["Idempotency-Key"].ToString(); if (!Key(key)) return BadRequest();
         var row = await trees.QueueAsync((await identity.ReadAsync(HttpContext)).Actor, command, key, cancellationToken);
-        return Accepted($"/api/v1/files/tree-copies/{row.Id:D}", row);
+        return Accepted($"/api/v1/files/tree-packings/{row.Id:D}", row);
     }
-    /// <summary>Recover original planning/execution and five-minute confirmation from this login. Planning completion is not copy completion.</summary>
+    /// <summary>Recover original planning/execution and five-minute confirmation from this login. Planning completion is not packing completion.</summary>
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<FileTreePackingIntentDto>> Status(Guid id, CancellationToken cancellationToken) =>
         Ok(await trees.GetAsync((await identity.ReadAsync(HttpContext)).Actor, id, cancellationToken));
@@ -37,7 +37,7 @@ public sealed class FileTreePackingsController(FileTreePackingService trees, Ter
     {
         if (!Key(id.ToString("D"))) return BadRequest();
         var row = await trees.ConfirmAsync((await identity.ReadAsync(HttpContext)).Actor, id, command, cancellationToken);
-        return Accepted($"/api/v1/files/tree-copies/{row.Id:D}", row);
+        return Accepted($"/api/v1/files/tree-packings/{row.Id:D}", row);
     }
     /// <summary>Fence an unconfirmed plan immediately, or request execution cancellation until its permanent root receipt is reconciled.</summary>
     [HttpPost("{id:guid}/cancel"), ProducesResponseType<FileTreePackingIntentDto>(StatusCodes.Status202Accepted)]

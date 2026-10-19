@@ -56,7 +56,8 @@ def main():
         return {'source': {'rootId': ROOT, 'path': location}, 'expectedVersion': entry['version'], 'target': {'rootId': ROOT, 'path': marker + '/' + target}, 'format': 'tar.gz' if target.endswith('.tar.gz') else 'tar'}
 
     def queue(value):
-        key = str(uuid.uuid4()); row = post('files/tree-packings', value, key=key).json(); ids.append(row['id'])
+        key = str(uuid.uuid4()); response = post('files/tree-packings', value, key=key); row = response.json(); ids.append(row['id'])
+        assert response.headers.get('Location') == '/api/v1/files/tree-packings/' + row['id']
         assert row['planningJobId'] == row['id'] and row['executionJobId'] is None
         assert get('files/tree-packings/by-key/' + key).json()['id'] == row['id']
         assert post('files/tree-packings', value, key=key).json()['id'] == row['id']
@@ -73,7 +74,8 @@ def main():
 
     def confirm(ready):
         body = {'planHash': ready['confirmation']['planHash'], 'confirmed': True, 'version': ready['version']}
-        row = post('files/tree-packings/' + ready['id'] + '/confirm', body, key=ready['id']).json()
+        response = post('files/tree-packings/' + ready['id'] + '/confirm', body, key=ready['id']); row = response.json()
+        assert response.headers.get('Location') == '/api/v1/files/tree-packings/' + row['id']
         assert row['executionJobId'] and row['executionJobId'] != row['planningJobId']; execution_ids.append(row['executionJobId'])
         assert post('files/tree-packings/' + ready['id'] + '/confirm', body, key=ready['id']).json()['executionJobId'] == row['executionJobId']
         return row, body

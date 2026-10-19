@@ -32,6 +32,8 @@ public sealed class FileTreePackingModelTests
     [Fact]
     public async Task DirectoryRoutesAreAdministratorOnlyAndRequireOneExactUuidWriteKey()
     {
+        Assert.Equal("api/v1/files/tree-packings", Assert.Single(typeof(FileTreePackingsController).GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.RouteAttribute), true)
+            .Cast<Microsoft.AspNetCore.Mvc.RouteAttribute>()).Template);
         Assert.Contains(typeof(FileTreePackingsController).GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), true),
             item => ((Microsoft.AspNetCore.Authorization.AuthorizeAttribute)item).Policy == "Administrator");
         var controller = new FileTreePackingsController(null!, null!, null!) { ControllerContext = new() { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() } };

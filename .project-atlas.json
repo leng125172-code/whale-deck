@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-19）",
-  "nextStep": "线上8aa73c0/RPC1.30保持；目录压缩BFF持久双任务/共享锁/Worker/当前管理员恢复/回执专用HTTP和EF迁移已实现候选，尚未发布。下一步冻结PG和实际Cookie/Agent/HTTP验收、压缩WebUI及其余76项。"
+  "nextStep": "已安装9675bbf/1.30，但真实压缩API在任务创建前发现新控制器与复制路由冲突。源码已修复并补全局冲突/负控制，下一步修复覆盖及真实身份/Agent/HTTP重验，再推进压缩WebUI和完整76项。"
 }
