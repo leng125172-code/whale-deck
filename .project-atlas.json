@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-19）",
-  "nextStep": "独立压缩Agent1.30 RPC/固定helper/显式根授权/回执绑定大归档流源码已实现，Release1119 Unit/127 Integration通过；尚未安装/真实UDS验收，线上2a60668/RPC1.29。继续冻结源码与真实安装态验收，再接BFF持久任务/Worker/审计/API/WebUI及全部76项。"
+  "nextStep": "线上8aa73c0/RPC1.30压缩Agent和专用大归档下载已实测，四CI/冻结实际PG与两格式2MiB+7/1GiB+7源完整流和独立磁盘通过；BFF持久计划/任务、Worker、审计、HTTP和压缩WebUI仍缺。下一步接完整业务链路及其余76项。"
 }

@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- 最新实际8aa73c0/RPC1.30已签收压缩Agent与专用大归档下载：四CI/冻结实际PG、真实UDS/helper两格式及1GiB+7源/完整流和独立磁盘、六旧文件BFF与OIDC回归通过，11核心健康。压缩BFF/持久任务/Worker/人类审计/HTTP/UI仍缺；不把Agent等同完整P2，见[边界与证据](qa/FILE_TREE_PACKING_AGENT.md)。完整76项不缩减。
+
 - 新增独立压缩Agent1.30源码（未安装）：RPC/受限helper/显式根授权/已知默认升级/可信模块与回执绑定大归档流已实现，1119 Unit/127 Integration和Release通过；真实安装态与人类权限/BFF任务/页面仍缺，线上2a60668/RPC1.29。见[Agent证据边界](qa/FILE_TREE_PACKING_AGENT.md)，完整76项继续。
 
 - 2026-10-19新增压缩发布内部引擎，20真实Linux（1GiB+7全量/7栅栏SIGKILL）及实机登记根两格式探针通过；与codec/HDD捕获共56项新测试。没有新增RPC/业务任务/页面或部署，完整目录压缩/回收/恢复及76项继续，见[压缩发布边界](qa/FILE_TREE_PACKING.md)。线上为独立容器详情修复2a60668/RPC1.29，CI39191684883四作业已成功。
