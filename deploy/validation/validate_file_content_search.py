@@ -82,7 +82,9 @@ def main():
                 headers=api.headers if headers is None else headers, timeout=30)
             if response.status_code != expected:
                 raise ResponseStatusMismatch(expected, response.status_code)
-            return response.json()
+            # Authorization middleware may return an empty 401/403. Only a
+            # successful search has the JSON page contract consumed here.
+            return response.json() if expected == 200 else None
         PHASE = 'actual-current-admin-api-workerless-uds-root'
         cursor = ''; hits = []; pages = []
         for _ in range(10):
