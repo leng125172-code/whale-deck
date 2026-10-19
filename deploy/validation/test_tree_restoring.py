@@ -139,6 +139,21 @@ class TreeRestoringTests(unittest.TestCase):
                 self.assertEqual(self.capture_proof(), before)
         self.registry.write_bytes(current)
 
+    def test_older_capture_accepts_only_exact_new_recycle_or_both_grants_and_preserves_all_metadata(self):
+        current = json.loads(self.registry.read_bytes()); current[0]['allowedActions'].append('files-tree-trash')
+        for index, added in enumerate((('files-tree-trash',), ('files-tree-trash', 'files-tree-restore'))):
+            with self.subTest(added=added):
+                previous = json.loads(json.dumps(current))
+                previous[0]['allowedActions'] = [action for action in previous[0]['allowedActions'] if action not in added]
+                self.registry.write_text(json.dumps(previous))
+                manifest = tree_module.FileTreeManifest(driver).scan(self.capture['source'])
+                self.capture = {**self.capture, 'operationId': uuid.uuid4().hex, 'manifestSha256': manifest['manifestSha256']}
+                self.captures.ensure(self.capture); before = self.capture_proof()
+                self.registry.write_text(json.dumps(current))
+                request = self.request('legacy-new-grants-' + str(index)); self.engine.restore(request)
+                self.assert_tree(self.root / ('legacy-new-grants-' + str(index)))
+                self.assertEqual(self.capture_proof(), before)
+
     def test_nonexistent_capture_does_not_allocate_hdd_entries_or_restore_anything(self):
         before = self.capture_proof(); command = {**self.command(), 'captureId': uuid.uuid4().hex}
         with self.assertRaisesRegex(driver.Rejected, '^FILES_TREE_BACKUP_NOT_FOUND$'): self.engine.plan(command)

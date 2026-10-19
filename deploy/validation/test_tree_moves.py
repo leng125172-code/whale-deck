@@ -44,6 +44,32 @@ class FileTreeMoveTests(unittest.TestCase):
 
     def lookup(self, request): return self.engine.lookup({key: request[key] for key in ('operationId', 'owner')})
 
+    def test_renamed_private_base_during_retention_is_unknown_and_preserves_published_and_original_bytes(self):
+        request = self.request(); moved = self.root / 'private-relocated'; fired = False
+        def rename(phase):
+            nonlocal fired
+            if phase == 'SourceRetained' and not fired:
+                fired = True; self.retained(request).parent.rename(moved)
+        self.engine.checkpoint = rename
+        with self.assertRaises(OSError): self.engine.move(request)
+        self.assertEqual(self.lookup(request)['state'], 'Unknown'); self.assertTrue(self.source.exists())
+        self.assertEqual((self.root / 'target/代码/run.bin').read_bytes(), self.content)
+        self.assertEqual((moved / (request['operationId'] + '.tree-move') / '代码/run.bin').read_bytes(), self.content)
+
+    def test_source_parent_replaced_after_validation_does_not_modify_detached_original(self):
+        parent = self.root / 'parent'; parent.mkdir(); self.source.rename(parent / 'source')
+        self.source = parent / 'source'; self.file = self.source / '代码/run.bin'
+        self.command = lambda target='target': {'source': {'rootId': 'test.shared', 'path': 'parent/source', 'expectedVersion': driver.version(self.source.stat())}, 'target': {'rootId': 'test.shared', 'path': target}}
+        request = self.request(); original = driver.publication_identity(self.file.stat())
+        def replace(phase):
+            if phase == 'SourceValidated': parent.rename(self.root / 'parent-relocated'); parent.mkdir()
+        self.engine.checkpoint = replace
+        with self.assertRaises(driver.Rejected): self.engine.move(request)
+        self.assertEqual(self.lookup(request)['state'], 'Unknown')
+        preserved = self.root / 'parent-relocated/source/代码/run.bin'
+        self.assertEqual((preserved.read_bytes(), driver.publication_identity(preserved.stat())), (self.content, original))
+        self.assertEqual((self.root / 'target/代码/run.bin').read_bytes(), self.content)
+
     def test_complete_retains_original_inodes_and_publishes_independent_full_tree(self):
         before = self.file.stat(); request = self.request(); result = self.engine.move(request)
         self.assertEqual(result['state'], 'Completed'); self.assertTrue(result['sourceRemoved']); self.assertTrue(result['sourceRetained']); self.assertTrue(result['destinationPublished'])

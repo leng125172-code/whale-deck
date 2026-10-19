@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
-  "nextStep": "实际adc6cae已签收目录位置恢复、四CI/冻结PG/真实管理员桌面与手机暗色、退出清理及覆盖发布。新增HDD目录恢复内部引擎15真实Linux含1GiB+7、精确旧策略兼容和176旧回归通过，尚无RPC/API/Worker/UI或安装；继续冻结门禁、目录回收/覆盖恢复/清理与完整业务链路、容器文件及全部76项。"
+  "nextStep": "实际adc6cae/RPC1.31保持；cfbf64b四CI成功。目录回收20项、恢复16项和目录移动安全增强34项Linux测试通过，含1GiB+7全字节回收还原、7强杀、原件inode隔离与父路径/私有路径换名拒绝；本批未安装或开放RPC/API/UI。继续固定源码门禁和Agent/业务/页面完整接入、目录覆盖恢复/清理、容器文件及全部76项。"
 }

@@ -65,11 +65,18 @@ def restoration_type(unpacking_type):
                 except self.f.Rejected as error:
                     if str(error) != 'FILES_TREE_BACKUP_IDEMPOTENCY_CONFLICT': raise
                     # Existing captures predate this independent grant. Accept
-                    # exactly its addition, not a changed path/owner/action or
-                    # any other policy relaxation. Never rewrite old metadata.
-                    previous = {**policy, 'allowedActions': [action for action in policy['allowedActions'] if action != 'files-tree-restore']}
-                    legacy = self.captures.seed(request, previous, configuration, folder)
-                    record = self.captures.read(folder, request['operationId'], legacy)
+                    # exactly the new restore/recycle grants, not a changed
+                    # path/owner or any other policy relaxation. Never rewrite
+                    # old metadata or accept arbitrary removed action sets.
+                    for added in (('files-tree-restore',), ('files-tree-trash',), ('files-tree-restore', 'files-tree-trash')):
+                        previous = {**policy, 'allowedActions': [action for action in policy['allowedActions'] if action not in added]}
+                        legacy = self.captures.seed(request, previous, configuration, folder)
+                        try:
+                            record = self.captures.read(folder, request['operationId'], legacy)
+                            break
+                        except self.f.Rejected as mismatch:
+                            if str(mismatch) != 'FILES_TREE_BACKUP_IDEMPOTENCY_CONFLICT': raise
+                    else: raise error
                 if record is None: self.reject('FILES_TREE_BACKUP_NOT_FOUND')
                 if record['state'] != 'Verified': self.reject('FILES_TREE_BACKUP_INCOMPLETE')
                 self.captures.verify(folder, record, codec)

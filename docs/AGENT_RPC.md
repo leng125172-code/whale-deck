@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+新增目录回收/HDD恢复仍仅内部源码：独立tree-recycling/restore计划和回执、HDD先验收后逐文件隔离及只观察恢复已通过Linux验证；`files-tree-trash`与`files-tree-restore`只允许被注册表识别，不自动升级默认根或开放CLI/Agent/HTTP。已有目录移动新增父路径/私有目录inode复核候选尚未安装；后续应完成固定源码CI和实际移动链路回归。当前仍adc6cae/RPC1.31，全部76项继续。
+
 2026-10-20实际adc6cae仍为RPC1.31：目录位置恢复已完成覆盖发布/真实身份签收，完整解压的已安装证据见[业务](qa/FILE_TREE_UNPACKING_BFF.md)和[页面](qa/FILE_TREE_UNPACKING_UI.md)。新增HDD目录恢复仅内部引擎源码与隔离Linux验证；`files-tree-restore`仅由内部注册表识别，默认根未升级，没有新protobuf/固定helper/Agent方法/公开HTTP入口。不能把已安装的普通解压RPC冒充目录历史恢复；后续需独立资源授权、任务/审计与新协议签收，全部76项继续。下方未安装记录为前序历史。
 
 新增解压BFF业务源码 e365f4c 尚未安装：持久双任务/共享锁/Worker/当前管理员恢复/API及不可变输入证明已实现，并通过同源码实际隔离PG。独立解压WebUI的281前端单元/127联合浏览器及另1解压接管专项、交互/视觉已验证；真实身份BFF/安装态页面尚未签收。Agent协议仍1.31，不改变下列73513a4安装态证据。详见[业务边界](qa/FILE_TREE_UNPACKING_BFF.md)及[页面](qa/FILE_TREE_UNPACKING_UI.md)。全部76项继续。

@@ -170,7 +170,10 @@ class FileTreeMoves:
         return source, target
 
     def check_source(self, record, parent, root):
-        command = record['plan']['copyPlan']['command']; current = os.stat(command['source']['path'].rsplit('/', 1)[-1], dir_fd=parent, follow_symlinks=False)
+        command = record['plan']['copyPlan']['command']
+        with self.f.directory(command['source'], 'mutate') as (_, resolved, _):
+            if self.copy.parent_identity(resolved) != record['plan']['sourceParent']: self.reject('FILES_PARENT_CHANGED')
+        current = os.stat(command['source']['path'].rsplit('/', 1)[-1], dir_fd=parent, follow_symlinks=False)
         if self.copy.parent_identity(parent) != record['plan']['sourceParent'] or [current.st_dev, current.st_ino] != self.copy.parent_identity(root) or not stat.S_ISDIR(current.st_mode): self.reject('FILES_TREE_CHANGED')
 
     def check_ancestors(self, root, path, directories):
@@ -181,6 +184,16 @@ class FileTreeMoves:
             try:
                 if self.f.publication_identity(os.fstat(descriptor))[:5] != directories[relative]['sourceIdentity'][:5]: self.reject('FILES_TREE_CHANGED')
             finally: os.close(descriptor)
+
+    def check_retention_path(self, parent, private, retained, record, suffix='.tree-move'):
+        """A pinned FD alone does not prove its private name still resolves."""
+        current = self.f.open_at(parent, self.f.STAGING, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            info, original, saved = os.fstat(current), os.fstat(private), os.fstat(retained)
+            child = os.stat(record['operationId'] + suffix, dir_fd=current, follow_symlinks=False)
+            if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700 or (info.st_dev, info.st_ino) != (original.st_dev, original.st_ino) or not stat.S_ISDIR(child.st_mode) or [child.st_dev, child.st_ino] != record.get('retainedIdentity') or (child.st_dev, child.st_ino) != (saved.st_dev, saved.st_ino):
+                self.reject('FILES_RECEIPT_UNSAFE')
+        finally: os.close(current)
 
     def destination(self, record, copied, check):
         plan = record['plan']['copyPlan']; command = plan['command']; _, target = self.check_policies(record)
@@ -227,12 +240,14 @@ class FileTreeMoves:
             root = self.f.open_at(parent, leaf, os.O_RDONLY | os.O_DIRECTORY); private = retained = None
             try:
                 self.check_source(record, parent, root); self.checkpoint('SourceValidated'); check()
+                self.check_source(record, parent, root)
                 private = self.f.staging(parent); capacity = os.fstatvfs(private)
                 if capacity.f_bavail * capacity.f_frsize < max(64 * 1024**2, manifest['entryCount'] * 16384): self.reject('FILES_CAPACITY_REQUIRED')
                 record.update(state='SourcePreparing', sourceMutationStarted=True); self.save(folder, record)
                 name = record['operationId'] + '.tree-move'; os.mkdir(name, 0o700, dir_fd=private); os.fsync(private)
                 retained = self.f.open_at(private, name, os.O_RDONLY | os.O_DIRECTORY)
                 record['retainedIdentity'] = self.copy.parent_identity(retained); self.save(folder, record); self.checkpoint('SourcePrepared')
+                self.check_retention_path(parent, private, retained, record)
                 directories = {entry['path']: entry for entry in manifest['entries'] if entry['kind'] == 'Directory'}
                 for entry in manifest['entries']:
                     check()
@@ -252,9 +267,11 @@ class FileTreeMoves:
                         if self.f.version(os.stat(name, dir_fd=origin, follow_symlinks=False)) != entry['sourceVersion'] or self.file_hash(origin, name, entry['sourceIdentity'], check) != entry['sha256']: self.reject('FILES_TREE_CHANGED')
                         record.update(state='SourceRetaining', currentPath=entry['path']); self.save(folder, record); self.checkpoint('SourceRetaining')
                         self.check_source(record, parent, root); self.check_ancestors(root, path, directories)
+                        self.check_retention_path(parent, private, retained, record)
                         self.f.exchange(origin, name, target, name, 1); os.fsync(origin); os.fsync(target)
                         if self.file_hash(target, name, entry['sourceIdentity'], check) != entry['sha256']: self.reject('FILES_TREE_CHANGED')
                         self.check_source(record, parent, root); self.check_ancestors(root, path, directories)
+                        self.check_retention_path(parent, private, retained, record)
                         self.checkpoint('SourceRetained')
                     finally:
                         os.close(origin)
@@ -271,11 +288,13 @@ class FileTreeMoves:
                         if self.f.publication_identity(current)[:5] != entry['sourceIdentity'][:5] or not stat.S_ISDIR(current.st_mode): self.reject('FILES_TREE_CHANGED')
                         record.update(state='SourceRemoving', currentPath=entry['path']); self.save(folder, record); self.checkpoint('SourceRemoving')
                         self.check_source(record, parent, root)
+                        self.check_retention_path(parent, private, retained, record)
                         if self.f.publication_identity(os.stat(name, dir_fd=origin, follow_symlinks=False))[:5] != entry['sourceIdentity'][:5]: self.reject('FILES_TREE_CHANGED')
                         os.rmdir(name, dir_fd=origin); os.fsync(origin); self.checkpoint('SourceRemoved')
                     finally: os.close(origin)
                 self.verify_retained(record, manifest, retained, check)
                 record['version'] = self.destination(record, copied, check)
+                self.check_retention_path(parent, private, retained, record)
                 try: os.stat(leaf, dir_fd=parent, follow_symlinks=False)
                 except FileNotFoundError: pass
                 else: self.reject('FILES_TREE_CHANGED')
