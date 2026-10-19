@@ -26,6 +26,7 @@ jobs:
           bash -n deploy/host/whaledeck-privileged
           python3 -m unittest discover -s deploy/validation -p test_container_terminal.py
           python3 -m unittest discover -s deploy/validation -p test_tree_rpc_diagnostics.py
+          python3 -m unittest discover -s deploy/validation -p test_unpacking_probe_scope.py
           sudo python3 -m unittest discover -s deploy/validation -p test_file_transport.py
           sudo python3 -m unittest discover -s deploy/validation -p test_file_operations.py
           sudo python3 -m unittest discover -s deploy/validation -p test_file_roots_upgrade.py

@@ -27,7 +27,9 @@ PHASE = 'startup'
 
 
 def run(arguments):
-    return subprocess.check_output(arguments, text=True, stderr=subprocess.PIPE, timeout=30).strip()
+    # Read-only attestation must not refresh a user-owned Git index as root.
+    return subprocess.check_output(arguments, text=True, stderr=subprocess.PIPE, timeout=30,
+        env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'}).strip()
 
 
 def validation_only_changes(git, runtime_revision, client_revision):

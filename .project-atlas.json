@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-19）",
-  "nextStep": "目录解压内部引擎和Agent1.31源码已实现，真实Linux及Release/后端测试通过；尚未安装，线上保持abef670/1.30。继续固定源码门禁、签名UDS验收、解压持久任务/Worker/API/UI及目录回收恢复/容器文件/隔离与长期清理；全部76项不缩减。"
+  "nextStep": "73513a4/1.31解压Agent已安装并签收真实UDS/helper、两格式/PAX/GNU及超过1GiB完整输出/独立磁盘；7类旧文件/OIDC/资产/宿主回归通过。业务绑定/接口/网关材料已实现但未部署，继续EF/持久双任务/共享锁/Worker/审计/API/UI、目录回收恢复、容器文件及全部76项。"
 }

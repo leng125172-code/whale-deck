@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 当前实际 **73513a4 / Agent1.31**：解压Agent已安装并签收真实签名UDS/helper、PAX/GNU与TAR/TAR.GZ、2MiB+7和1GiB+7完整新目录/独立磁盘及精确清理。四CI39258251245、同源码工作站PG实际1通过/清理，21:43:28 CST更新成功终态；客户端bc8037d仅验证修正、不改变产品。7类旧文件/OIDC/8资产/宿主通过，活跃文件/锁/终端0、11核心健康、PKCS10.0.13，见[最终账本与首次失败](qa/FILE_TREE_UNPACKING_AGENT.md)。新的业务绑定/接口/网关材料及19测试已实现，全量1215 Unit/137 Integration通过、6本机PG跳过；未部署，也未接持久仓库/Worker/API/UI。全部76项继续，不能把Agent等同完整解压；下方为历史。
+
 - 解压Agent1.31源码候选：独立RPC/小计划与输入证明回执、固定helper/可信模块、精确默认根升级已接通，1196 Unit/137 Integration、153原生树与15根升级通过，Release 0警告0错误。6本机PG跳过；尚未安装或验收签名UDS，也未接BFF/Worker任务/API/UI，实际运行时仍abef670/1.30。见[候选及下一步](qa/FILE_TREE_UNPACKING_AGENT.md)，完整76项继续；下条“无CLI/RPC”为前序内部引擎历史。
 
 - 目录解压内部引擎新增源码（未安装）：独立计划/回执域、TAR/TAR.GZ及有界GNU长名称、私有全量解包与NO_REPLACE新目录发布、只观察恢复已实现。152项真实Linux回归通过，含22解压、超过1GiB完整落盘/全SHA和七SIGKILL栅栏；首轮安全拒绝异常断言失败保留。尚无新CLI/RPC/BFF任务/Worker/WebUI，线上仍abef670/1.30；见[证据与后续](qa/FILE_TREE_UNPACKING.md)。完整76项继续，不把本批算成完整P2。

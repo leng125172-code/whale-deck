@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- 最新实际 **73513a4/1.31** 解压Agent子范围已签收：四CI/同源码工作站PG、真实签名UDS/helper、PAX/GNU两格式与1GiB+7全量新目录/独立磁盘、权限/取消/重放及精确清理通过。客户端bc8037d仅验证端修正，不改变产品；7类旧文件/OIDC/资产/宿主与11核心健康、文件任务/锁/终端0。见[最终证据及首次失败](qa/FILE_TREE_UNPACKING_AGENT.md)。解压BFF/持久任务/Worker/API/WebUI、目录回收/容器文件及全部76项仍继续；新业务绑定材料尚未部署。P2-03/P2-04仍部分实现，下方旧状态为历史。
+
 - 解压Agent1.31候选已新增独立RPC/固定helper/可信加载与精确默认升级；1196 Unit/137 Integration、153原生树/15根升级和Release通过。本机6PG跳过、未安装/未实测新UDS、业务任务/Worker/API/UI仍缺；[证据边界](qa/FILE_TREE_UNPACKING_AGENT.md)。实际运行时保持abef670/1.30，全部76项继续；下面无RPC记录为前序历史。
 
 - 目录解压新增内部源码：独立域计划/回执、两格式私有解包/完整核验/新目录发布与只观察恢复；152真实Linux通过，含22解压、1GiB+7全量及七强杀栅栏。未安装，CLI/RPC/BFF/Worker/UI仍待接通，实际运行时仍abef670/1.30；见[边界](qa/FILE_TREE_UNPACKING.md)。全部76项不缩减、P2-03/P2-04仍部分实现。

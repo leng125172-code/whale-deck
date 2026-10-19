@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+最新实际 **73513a4 / RPC1.31** 已签收独立解压Agent子范围：四CI/同源码工作站原生PG及实际签名UDS/helper，PAX/GNU两格式四组合与1GiB+7全量新目录/独立磁盘、nonce/版本/计划/取消及精确清理通过。客户端bc8037d仅validation/docs修正，与产品差异0；不借客户端SHA冒称重建运行时。7类旧文件、OIDC/资产/宿主及11核心健康通过，见[最终账本和首次失败](qa/FILE_TREE_UNPACKING_AGENT.md)。解压业务任务/Worker/API/WebUI仍缺，绑定材料源码已新增但未部署；完整76项继续。下方候选/未安装为历史。
+
 新增 **1.31源码候选，尚未安装**：独立 `FileTreeUnpackingService` 的 Plan/Apply/Inspect/Discard 与 `files.tree-unpack-intents`；完整输入归档/内容证明、格式/登记根/源版本/目标父inode及策略绑定，回执中输入SHA/长度在所有终态保留。固定helper动作与可信模块、只对精确旧默认升级的显式根授权已接通。1196 Unit/137 Integration、153原生树/15根升级通过；6本机PG跳过，真实安装态UDS/BFF/Worker/UI仍缺，不能当作用户已可解压；见[候选边界](qa/FILE_TREE_UNPACKING_AGENT.md)。线上仍abef670/1.30，全部76项继续。下方为对应历史。
 
 最新实际运行时 **abef670 / RPC1.30**：目录压缩WebUI已覆盖并通过真实身份、两格式2MiB+7源/完整原生下载及独立Root/磁盘/成员校验；四CI、工作站冻结PG、六类旧文件与宿主回归通过。协议不变；新的解压RPC/任务/页面仍缺，不把内部codec当作产品入口，见[网页签收及边界](qa/FILE_TREE_PACKING_UI.md)。完整76项继续，下方旧安装态均为对应阶段历史。
