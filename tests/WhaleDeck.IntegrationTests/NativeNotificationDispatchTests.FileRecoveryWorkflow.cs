@@ -18,7 +18,7 @@ public sealed partial class NativeNotificationDispatchTests
         FilePlanProtector protector, string kind, Guid originalId, bool dispose = false, bool exclusiveMove = false)
     {
         await using var db = new PlatformDbContext(options);
-        var material = new FileRecoveryMaterial(protector, protector, protector, protector, protector, protector);
+        var material = new FileRecoveryMaterial(protector, protector, protector, protector, protector, protector, protector);
         var clock = new NativeRecoveryClock();
         FileRecoveryRepository Repository(PlatformDbContext context) => new(context, new(context, material, clock), material, new(context, protector), protector, clock);
         var repository = Repository(db); var identity = new NativeRecoveryIdentity();
@@ -26,7 +26,7 @@ public sealed partial class NativeNotificationDispatchTests
         var service = new FileRecoveryService(authorization, repository, protector, clock);
         var gateway = new NativeRecoveryGateway(material); var worker = new FileRecoveryDispatcher(repository, gateway, identity, protector, clock);
         var actor = new TerminalActor(NativeRecoveryIdentity.CurrentSubject, null, [], new('F', 64), "native-current-recovery", null);
-        var before = (await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default))!;
+        var before = (await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default))!;
         var originalExecution = before.ExecutionJobId!.Value;
         var lockCount = await db.FilePathLocks.CountAsync(row => row.OperationId == originalExecution);
         var key = Guid.NewGuid().ToString("D"); var command = new QueueFileRecoveryCommand(kind, originalId, before.Version, "AcknowledgeUnknown", "OriginalSessionLost");
@@ -39,7 +39,7 @@ public sealed partial class NativeNotificationDispatchTests
         var stored = (await repository.OwnedAsync(actor, queued.Id, default))!;
         Assert.True(FileRecoveryValidation.Bound(stored, protector));
         Assert.NotEqual(actor.Subject, JsonDocument.Parse(stored.OriginalJson).RootElement.GetProperty("ActorSubject").GetString());
-        Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
+        Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
         Assert.Equal(lockCount, await db.FilePathLocks.CountAsync(row => row.OperationId == originalExecution));
         if (exclusiveMove)
         {
@@ -48,6 +48,8 @@ public sealed partial class NativeNotificationDispatchTests
         }
         if (kind == FileRecoveryKinds.TreePacking)
             Assert.Null(await new FileTreePackingRepository(db, protector, clock).ClaimAsync(clock.GetUtcNow(), default));
+        if (kind == FileRecoveryKinds.TreeUnpacking)
+            Assert.Null(await new FileTreeUnpackingRepository(db, protector, clock).ClaimAsync(clock.GetUtcNow(), default));
         Assert.True(await worker.TickAsync(default)); var ready = await service.GetAsync(actor, queued.Id, default);
         Assert.Equal("Ready", ready.State); Assert.NotNull(ready.Confirmation); Assert.Equal(0, gateway.Fences);
         await using (var reloaded = new PlatformDbContext(options))
@@ -55,12 +57,12 @@ public sealed partial class NativeNotificationDispatchTests
             var reloadedService = new FileRecoveryService(authorization, Repository(reloaded), protector, clock);
             Assert.Equal(ready.Confirmation.PlanHash, (await reloadedService.GetAsync(actor, ready.Id, default)).Confirmation!.PlanHash);
         }
-        Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
+        Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
         if (!dispose)
         {
             await service.CancelAsync(actor, queued.Id, default);
             Assert.Equal("Canceled", (await service.GetAsync(actor, queued.Id, default)).State);
-            Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
+            Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
             Assert.Equal(lockCount, await db.FilePathLocks.CountAsync(row => row.OperationId == originalExecution));
             Assert.Equal("Succeeded", (await db.OperationJobs.AsNoTracking().SingleAsync(row => row.Id == ready.PlanningJobId)).State);
         }
@@ -82,7 +84,7 @@ public sealed partial class NativeNotificationDispatchTests
             // result, its events, and its lock release in the same transaction.
             Assert.Equal(1, gateway.Fences);
             Assert.Equal("Unknown", (await service.GetAsync(actor, ready.Id, default)).State);
-            Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
+            Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
             Assert.Equal(lockCount, await db.FilePathLocks.CountAsync(row => row.OperationId == originalExecution));
             await db.FileRecoveryOperations.Where(row => row.Id == ready.Id).ExecuteUpdateAsync(setters => setters.SetProperty(row => row.NextAttemptAtUtc, clock.GetUtcNow()));
             if (exclusiveMove)
@@ -107,7 +109,7 @@ public sealed partial class NativeNotificationDispatchTests
             }
             // Even after the source result and path release were staged, the
             // post-wait lease check must roll back all original changes.
-            Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
+            Assert.Equal(before, await new FileRecoveryInventory(db, protector, protector, protector, protector, protector, protector, protector).GetAsync(kind, originalId, default));
             Assert.Equal(lockCount, await db.FilePathLocks.CountAsync(row => row.OperationId == originalExecution));
             Assert.True(await worker.TickAsync(default)); var disposed = await service.GetAsync(actor, ready.Id, default);
             var resolution = kind == FileRecoveryKinds.Upload ? "Failed" : "Acknowledged";
@@ -119,6 +121,7 @@ public sealed partial class NativeNotificationDispatchTests
                 FileRecoveryKinds.Archive => await db.FileArchiveOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),
                 FileRecoveryKinds.TreeCopy => await db.FileTreeCopyOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),
                 FileRecoveryKinds.TreePacking => await db.FileTreePackingOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),
+                FileRecoveryKinds.TreeUnpacking => await db.FileTreeUnpackingOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),
                 _ => await db.FileTreeMoveOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync()
             };
             Assert.Equal(resolution, original.State); Assert.NotEqual(actor.Subject, original.ActorSubject);
@@ -175,6 +178,9 @@ public sealed partial class NativeNotificationDispatchTests
                 case FileRecoveryKinds.TreePacking:
                     var packing = FileTreePackingValidation.ReadPlan(material.Read<FileTreePackingOperation>(original));
                     receipt = new FileTreePackingReceipt(original.Binding.ExecutionJobId, "Unknown", packing.Fingerprint, packing.Command.Format, packing.EntryCount, packing.TotalBytes, 0, "", "", true); break;
+                case FileRecoveryKinds.TreeUnpacking:
+                    var unpacking = FileTreeUnpackingValidation.ReadPlan(material.Read<FileTreeUnpackingOperation>(original));
+                    receipt = new FileTreeUnpackingReceipt(original.Binding.ExecutionJobId, "Unknown", unpacking.Fingerprint, unpacking.Command.Format, unpacking.EntryCount, unpacking.TotalBytes, unpacking.ArchiveBytes, unpacking.ArchiveSha256, "", true); break;
                 default:
                     var move = FileTreeMoveValidation.ReadPlan(material.Read<FileTreeMoveOperation>(original));
                     receipt = new FileTreeMoveReceipt(original.Binding.ExecutionJobId, "Unknown", move.Fingerprint, move.EntryCount, move.TotalBytes, "", true, false, false, true); break;

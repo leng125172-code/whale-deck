@@ -13,15 +13,16 @@ public sealed class FileTreeUnpackingBindingTests : IDisposable
 {
     private readonly string _key = Path.Combine(Path.GetTempPath(), "wd-unpack-seal-" + Guid.NewGuid().ToString("N"));
     private readonly FilePlanProtector _protector;
+    public FilePlanProtector Protector => _protector;
     public FileTreeUnpackingBindingTests()
     {
         File.WriteAllBytes(_key, RandomNumberGenerator.GetBytes(32));
         _protector = new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = _key }).Build());
     }
     public void Dispose() => File.Delete(_key);
-    private static FileTreeUnpackingPlan Plan() => new(new(new("test.tree", "input.archive"), new('A', 64), new("test.tree", "new-directory"), "tar"),
+    public static FileTreeUnpackingPlan Plan() => new(new(new("test.tree", "input.archive"), new('A', 64), new("test.tree", "new-directory"), "tar"),
         new('F', 64), 1073756160, new('B', 64), 4, 1073741831, new(ulong.MaxValue, 9007199254740993UL), new('C', 64), new('D', 64), new('E', 64));
-    private FileTreeUnpackingOperation Operation()
+    public FileTreeUnpackingOperation Operation(bool execution = true)
     {
         var actor = new TerminalActor("unpack-admin", null, [], new('A', 64), "unpack-unit", null); var key = Guid.NewGuid().ToString("D");
         var id = FileTreeUnpackingValidation.IntentId(actor, key); var plan = Plan(); var now = FileTreeUnpackingValidation.Timestamp(DateTimeOffset.UtcNow);
@@ -32,7 +33,9 @@ public sealed class FileTreeUnpackingBindingTests : IDisposable
             SourceHash = new FilePathScope(plan.Command.Source).Hash, TargetHash = new FilePathScope(plan.Command.Target).Hash,
             CommandJson = JsonSerializer.Serialize(plan.Command), CreatedAtUtc = now, PlanningExpiresAtUtc = expiry,
             PlanJson = JsonSerializer.Serialize(plan), PlanHash = _protector.FingerprintPlan(new FileTreeUnpackingPlanBinding(id, actor.Subject, actor.LoginBinding, plan, ready)),
-            ReadyExpiresAtUtc = ready, ExecutionJobId = FileTreeUnpackingValidation.ExecutionId(id), ExecutionExpiresAtUtc = expiry };
+            ReadyExpiresAtUtc = ready, ExecutionJobId = execution ? FileTreeUnpackingValidation.ExecutionId(id) : null, ExecutionExpiresAtUtc = execution ? expiry : null,
+            ArchiveBytes = plan.ArchiveBytes, ArchiveSha256 = plan.ArchiveSha256, State = execution ? "UnpackingQueued" : "Ready",
+            LeaseToken = Guid.NewGuid(), LeaseExpiresAtUtc = now.AddSeconds(90) };
     }
     [Fact]
     public void FullInputAndContentProofRoundtripPreservesUInt64AndIndependentIds()
@@ -105,5 +108,34 @@ public sealed class FileTreeUnpackingBindingTests : IDisposable
         foreach (var changed in new[] { plan with { ArchiveBytes = FileTreeUnpackingValidation.MaximumArchiveBytes + 1 }, plan with { TotalBytes = FileTreeUnpackingValidation.MaximumBytes + 1 },
             plan with { EntryCount = 10001 }, plan with { EntryCount = 0 }, plan with { ArchiveSha256 = "bad" }, plan with { ContentSha256 = "" }, plan with { TargetParent = new(0, 0) } })
             Assert.Throws<ArgumentException>(() => FileTreeUnpackingValidation.Plan(changed));
+    }
+    [Theory]
+    [InlineData("Unknown")][InlineData("Aborted")][InlineData("Completed")]
+    public void RecoveryMaterialRequiresTheOriginalArchiveProofInEveryReceipt(string state)
+    {
+        var row = Operation(); row.State = "Unknown"; row.LeaseToken = null; row.LeaseExpiresAtUtc = null;
+        var material = new FileRecoveryMaterial(_protector, _protector, _protector, _protector, _protector, _protector, _protector);
+        var snapshot = material.Capture(row); var plan = Plan();
+        var receipt = new FileTreeUnpackingReceipt(row.ExecutionJobId!.Value, state, plan.Fingerprint, plan.Command.Format, plan.EntryCount,
+            plan.TotalBytes, plan.ArchiveBytes, plan.ArchiveSha256, state == "Completed" ? new('F', 64) : "", state == "Unknown");
+        FileRecoveryObservation Observe(FileTreeUnpackingReceipt result)
+        {
+            var json = JsonSerializer.Serialize(result);
+            return new(state, FileRecoveryValidation.ReceiptHash(FileRecoveryKinds.TreeUnpacking, result.OperationId, state, json), state == "Completed") { ReceiptJson = json };
+        }
+        Assert.Equal(receipt, material.ValidateObservation(snapshot, Observe(receipt)));
+        Assert.Throws<FileTransferRejectedException>(() => material.ValidateObservation(snapshot, Observe(receipt with { ArchiveBytes = 0 })));
+        Assert.Throws<FileTransferRejectedException>(() => material.ValidateObservation(snapshot, Observe(receipt with { ArchiveSha256 = new('0', 64) })));
+        Assert.Throws<InvalidOperationException>(() => material.Read<FileTreePackingOperation>(snapshot));
+    }
+    [Fact]
+    public void PersistedInputProofCannotDivergeFromItsSealedPlan()
+    {
+        var row = Operation(); row.ArchiveBytes++;
+        Assert.False(FileTreeUnpackingValidation.HasValidBinding(row, _protector));
+        row.ArchiveBytes = Plan().ArchiveBytes; row.ArchiveSha256 = new('0', 64);
+        Assert.False(FileTreeUnpackingValidation.HasValidBinding(row, _protector));
+        row.ArchiveSha256 = Plan().ArchiveSha256;
+        Assert.True(FileTreeUnpackingValidation.HasValidBinding(row, _protector));
     }
 }

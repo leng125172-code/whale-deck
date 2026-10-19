@@ -8,7 +8,7 @@ namespace WhaleDeck.Infrastructure.Persistence;
 /// <summary>Bounded cross-workflow discovery. Never changes an original owner, lease, receipt or path lock.</summary>
 public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtector uploads,
     IFileMutationProtector mutations, IFileArchiveProtector archives,
-    IFileTreeCopyProtector copies, IFileTreeMoveProtector moves, IFileTreePackingProtector packings) : IFileRecoveryInventory
+    IFileTreeCopyProtector copies, IFileTreeMoveProtector moves, IFileTreePackingProtector packings, IFileTreeUnpackingProtector unpackings) : IFileRecoveryInventory
 {
     private sealed class Header
     {
@@ -36,6 +36,8 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
             .Select(row => new Header { Kind = FileRecoveryKinds.Upload, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.Upload);
         await Add(db.FileTreePackingOperations.AsNoTracking().Where(row => row.State == "Unknown" && row.CompletedAtUtc == null)
             .Select(row => new Header { Kind = FileRecoveryKinds.TreePacking, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.TreePacking);
+        await Add(db.FileTreeUnpackingOperations.AsNoTracking().Where(row => row.State == "Unknown" && row.CompletedAtUtc == null)
+            .Select(row => new Header { Kind = FileRecoveryKinds.TreeUnpacking, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.TreeUnpacking);
         var ordered = headers.OrderBy(row => row.CreatedAtUtc).ThenBy(row => FileRecoveryValidation.Rank(row.Kind)).ThenBy(row => row.Id).Take(take + 1).ToArray();
         List<FileRecoveryCandidateDto> entries = [];
         foreach (var header in ordered.Take(take))
@@ -103,6 +105,15 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
                 if (row is null) return null;
                 var valid = FileTreePackingValidation.HasValidBinding(row, packings) && row.ExecutionJobId is not null;
                 var command = valid ? FileTreePackingValidation.ReadCommand(row) : null;
+                return Candidate(row.Id, row.ExecutionJobId, row.Version, row.CreatedAtUtc, row.LeaseExpiresAtUtc, row.RootStartedAtUtc, valid,
+                    command?.Source, command?.Target, row.PartialRetained);
+            }
+            case FileRecoveryKinds.TreeUnpacking:
+            {
+                var row = await db.FileTreeUnpackingOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.State == "Unknown" && x.CompletedAtUtc == null, cancellationToken);
+                if (row is null) return null;
+                var valid = FileTreeUnpackingValidation.HasValidBinding(row, unpackings) && row.ExecutionJobId is not null;
+                var command = valid ? FileTreeUnpackingValidation.ReadCommand(row) : null;
                 return Candidate(row.Id, row.ExecutionJobId, row.Version, row.CreatedAtUtc, row.LeaseExpiresAtUtc, row.RootStartedAtUtc, valid,
                     command?.Source, command?.Target, row.PartialRetained);
             }

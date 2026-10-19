@@ -31,6 +31,9 @@ public sealed partial class FileRecoverySources(PlatformDbContext db, FileRecove
             case FileRecoveryKinds.TreePacking:
                 var packing = await db.FileTreePackingOperations.FromSqlInterpolated($"SELECT * FROM file_tree_packing_operations WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw Missing();
                 snapshot = material.Capture(packing); lease = packing.LeaseExpiresAtUtc; originalActor = packing.ActorSubject; break;
+            case FileRecoveryKinds.TreeUnpacking:
+                var unpacking = await db.FileTreeUnpackingOperations.FromSqlInterpolated($"SELECT * FROM file_tree_unpacking_operations WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw Missing();
+                snapshot = material.Capture(unpacking); lease = unpacking.LeaseExpiresAtUtc; originalActor = unpacking.ActorSubject; break;
             default:
                 var move = await db.FileTreeMoveOperations.FromSqlInterpolated($"SELECT * FROM file_tree_move_operations WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw Missing();
                 snapshot = material.Capture(move); lease = move.LeaseExpiresAtUtc; originalActor = move.ActorSubject; break;
@@ -38,7 +41,7 @@ public sealed partial class FileRecoverySources(PlatformDbContext db, FileRecove
         if (lease > clock.GetUtcNow()) throw new InvalidOperationException("FILES_RECOVERY_ORIGINAL_BUSY");
         var job = await db.OperationJobs.AsNoTracking().SingleOrDefaultAsync(row => row.Id == snapshot.Binding.ExecutionJobId, cancellationToken);
         var expectedType = kind == FileRecoveryKinds.Upload ? "files.upload" : kind == FileRecoveryKinds.Mutation ? "files.mutation" :
-            kind == FileRecoveryKinds.Archive ? "files.archive" : kind == FileRecoveryKinds.TreeCopy ? "files.tree-copy" : kind == FileRecoveryKinds.TreePacking ? "files.tree-pack" : "files.tree-move";
+            kind == FileRecoveryKinds.Archive ? "files.archive" : kind == FileRecoveryKinds.TreeCopy ? "files.tree-copy" : kind == FileRecoveryKinds.TreePacking ? "files.tree-pack" : kind == FileRecoveryKinds.TreeUnpacking ? "files.tree-unpack" : "files.tree-move";
         if (job is null || job.ActorSubject != originalActor || job.JobType != expectedType || job.CompletedAtUtc is not null)
             throw new InvalidOperationException("FILES_RECOVERY_ORIGINAL_CHANGED");
         return snapshot;

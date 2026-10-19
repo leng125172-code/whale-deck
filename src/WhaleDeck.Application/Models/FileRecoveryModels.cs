@@ -8,8 +8,9 @@ public static class FileRecoveryKinds
     public const string TreeCopy = "tree-copy";
     public const string TreeMove = "tree-move";
     public const string TreePacking = "tree-pack";
+    public const string TreeUnpacking = "tree-unpack";
     public const string Upload = "upload";
-    public static IReadOnlyList<string> All { get; } = Array.AsReadOnly(new[] { Archive, Mutation, TreeCopy, TreeMove, Upload, TreePacking });
+    public static IReadOnlyList<string> All { get; } = Array.AsReadOnly(new[] { Archive, Mutation, TreeCopy, TreeMove, Upload, TreePacking, TreeUnpacking });
 }
 
 /// <summary>Safe inventory only: no original login, owner key, signed plan or private receipt.</summary>

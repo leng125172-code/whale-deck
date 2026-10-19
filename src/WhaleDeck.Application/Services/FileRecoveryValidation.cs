@@ -49,7 +49,7 @@ public static class FileRecoveryValidation
     public static int Rank(string kind) => kind switch
     {
         FileRecoveryKinds.Archive => 0, FileRecoveryKinds.Mutation => 1, FileRecoveryKinds.TreeCopy => 2,
-        FileRecoveryKinds.TreeMove => 3, FileRecoveryKinds.Upload => 4, FileRecoveryKinds.TreePacking => 5, _ => throw new ArgumentException("FILES_RECOVERY_KIND_INVALID")
+        FileRecoveryKinds.TreeMove => 3, FileRecoveryKinds.Upload => 4, FileRecoveryKinds.TreePacking => 5, FileRecoveryKinds.TreeUnpacking => 6, _ => throw new ArgumentException("FILES_RECOVERY_KIND_INVALID")
     };
     public static void Target(FileRecoveryTargetBinding target)
     {
@@ -60,6 +60,7 @@ public static class FileRecoveryValidation
             FileRecoveryKinds.TreeCopy => FileTreeCopyValidation.ExecutionId(target.IntentId),
             FileRecoveryKinds.TreeMove => FileTreeMoveValidation.ExecutionId(target.IntentId),
             FileRecoveryKinds.TreePacking => FileTreePackingValidation.ExecutionId(target.IntentId),
+            FileRecoveryKinds.TreeUnpacking => FileTreeUnpackingValidation.ExecutionId(target.IntentId),
             _ => target.IntentId
         };
         if (target.IntentId == Guid.Empty || target.ExecutionJobId != execution || target.OriginalVersion < 0 ||

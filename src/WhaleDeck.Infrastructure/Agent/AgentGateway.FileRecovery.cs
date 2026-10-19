@@ -64,6 +64,12 @@ public sealed partial class AgentGateway : IFileRecoveryGateway
                 var receipt = fence ? await PackingAction(row, true, cancellationToken, currentActor) : await InspectTreePackingAsync(row, cancellationToken);
                 return RecoveryObservation(original, receipt?.State, receipt, receipt?.State == "Completed");
             }
+            case FileRecoveryKinds.TreeUnpacking:
+            {
+                var row = _recoveryMaterial.Read<FileTreeUnpackingOperation>(original);
+                var receipt = fence ? await UnpackingAction(row, true, cancellationToken, currentActor) : await InspectTreeUnpackingAsync(row, cancellationToken);
+                return RecoveryObservation(original, receipt?.State, receipt, receipt?.State == "Completed");
+            }
             default: throw new ArgumentException("FILES_RECOVERY_KIND_INVALID");
         }
     }

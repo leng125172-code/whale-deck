@@ -57,9 +57,10 @@ public static class FileTreeUnpackingValidation
             if (row.Id != IntentId(new(row.ActorSubject, null, [], row.LoginBinding, "", null), row.IdempotencyKey) || !FileManagementService.Hex(row.LoginBinding) ||
                 row.OwnerHash != FileManagementService.Hash("file-owner-v1:" + row.ActorSubject + ":" + row.LoginBinding) || row.SourceHash != new FilePathScope(command.Source).Hash ||
                 row.TargetHash != new FilePathScope(command.Target).Hash || !Equal(row.RequestHash, protector.FingerprintRequest(RequestBinding(row)))) return false;
-            if (row.PlanJson is null) return row.PlanHash is null && row.ReadyExpiresAtUtc is null && row.ExecutionJobId is null;
+            if (row.PlanJson is null) return row.PlanHash is null && row.ReadyExpiresAtUtc is null && row.ExecutionJobId is null && row.ArchiveBytes is null && row.ArchiveSha256 is null;
             var plan = ReadPlan(row); Plan(plan);
-            return plan.Command == command && row.ReadyExpiresAtUtc is not null && Equal(row.PlanHash, protector.FingerprintPlan(PlanBinding(row))) &&
+            return plan.Command == command && row.ArchiveBytes == plan.ArchiveBytes && row.ArchiveSha256 == plan.ArchiveSha256 &&
+                row.ReadyExpiresAtUtc is not null && Equal(row.PlanHash, protector.FingerprintPlan(PlanBinding(row))) &&
                 (row.ExecutionJobId is null && row.ExecutionExpiresAtUtc is null || row.ExecutionJobId == ExecutionId(row.Id) && row.ExecutionExpiresAtUtc is not null);
         }
         catch (Exception error) when (error is ArgumentException or JsonException or InvalidOperationException) { return false; }

@@ -12,7 +12,7 @@ public sealed class FileRecoveryWorkflowTests : IDisposable
 {
     private readonly FileTreeMoveTests _move = new();
     private FilePlanProtector Protector => (FilePlanProtector)_move.Protector;
-    private FileRecoveryMaterial Material => new(Protector, Protector, Protector, Protector, Protector, Protector);
+    private FileRecoveryMaterial Material => new(Protector, Protector, Protector, Protector, Protector, Protector, Protector);
     private static TerminalActor Actor => new("replacement-admin", null, [], new('C', 64), "recovery-workflow", null);
     public void Dispose() => _move.Dispose();
     private FileRecoveryOperation Row(bool execution = true, string rootState = "Unknown")

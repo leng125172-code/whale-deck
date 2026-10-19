@@ -48,11 +48,11 @@ public sealed partial class AgentGateway : IFileTreeUnpackingGateway
     }
     public Task<App.FileTreeUnpackingReceipt> ApplyTreeUnpackingAsync(FileTreeUnpackingOperation operation, CancellationToken cancellationToken) => UnpackingAction(operation, false, cancellationToken);
     public Task<App.FileTreeUnpackingReceipt> DiscardTreeUnpackingAsync(FileTreeUnpackingOperation operation, CancellationToken cancellationToken) => UnpackingAction(operation, true, cancellationToken);
-    private async Task<App.FileTreeUnpackingReceipt> UnpackingAction(FileTreeUnpackingOperation operation, bool discard, CancellationToken cancellationToken)
+    private async Task<App.FileTreeUnpackingReceipt> UnpackingAction(FileTreeUnpackingOperation operation, bool discard, CancellationToken cancellationToken, App.TerminalActor? recoveryActor = null)
     {
         var client = await UnpackingClient(cancellationToken); var plan = FileTreeUnpackingValidation.ReadPlan(operation); FileTreeUnpackingValidation.Plan(plan);
         var request = new FileTreeUnpackingApplyRequest { OperationId = UnpackingExecution(operation).ToString("N"), Owner = operation.OwnerHash,
-            Context = new() { ActorSubject = operation.ActorSubject, TraceId = operation.Id.ToString("D") }, Plan = new() {
+            Context = new() { ActorSubject = recoveryActor?.Subject ?? operation.ActorSubject, TraceId = recoveryActor?.TraceId ?? operation.Id.ToString("D") }, Plan = new() {
                 Command = UnpackingCommand(plan.Command), ArchiveSha256 = plan.ArchiveSha256, ArchiveBytes = plan.ArchiveBytes, ContentSha256 = plan.ContentSha256,
                 EntryCount = (uint)plan.EntryCount, TotalBytes = plan.TotalBytes, TargetParent = new() { Device = plan.TargetParent.Device, Inode = plan.TargetParent.Inode },
                 SourcePolicyHash = plan.SourcePolicyHash, TargetPolicyHash = plan.TargetPolicyHash, Fingerprint = plan.Fingerprint } };

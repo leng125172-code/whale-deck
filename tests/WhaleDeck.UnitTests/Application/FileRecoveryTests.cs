@@ -27,7 +27,7 @@ public sealed class FileRecoveryTests : IDisposable
     {
         var id = Guid.Parse("01234567-1234-4234-8234-0123456789ab");
         var execution = kind switch { FileRecoveryKinds.TreeMove => FileTreeMoveValidation.ExecutionId(id),
-            FileRecoveryKinds.TreeCopy => FileTreeCopyValidation.ExecutionId(id), FileRecoveryKinds.TreePacking => FileTreePackingValidation.ExecutionId(id), _ => id };
+            FileRecoveryKinds.TreeCopy => FileTreeCopyValidation.ExecutionId(id), FileRecoveryKinds.TreePacking => FileTreePackingValidation.ExecutionId(id), FileRecoveryKinds.TreeUnpacking => FileTreeUnpackingValidation.ExecutionId(id), _ => id };
         return new(Guid.Parse("98765432-4321-4321-8321-9876543210ab"), Actor.Subject, Actor.LoginBinding,
             new(kind, id, execution, 17, new('D', 64)), new('E', 64), "Unknown", "AcknowledgeUnknown", "OriginalSessionLost", Now, Now.AddMinutes(5));
     }
@@ -35,6 +35,7 @@ public sealed class FileRecoveryTests : IDisposable
     [InlineData(FileRecoveryKinds.Upload)][InlineData(FileRecoveryKinds.Mutation)][InlineData(FileRecoveryKinds.Archive)]
     [InlineData(FileRecoveryKinds.TreeCopy)][InlineData(FileRecoveryKinds.TreeMove)]
     [InlineData(FileRecoveryKinds.TreePacking)]
+    [InlineData(FileRecoveryKinds.TreeUnpacking)]
     public void AllKindsHaveIndependentCurrentAdminClaimsAndExactOriginalExecution(string kind)
     {
         var claims = Claims(kind); var token = _protector.SignRecovery(claims);
@@ -127,6 +128,7 @@ public sealed class FileRecoveryTests : IDisposable
     [InlineData(FileRecoveryKinds.Upload)][InlineData(FileRecoveryKinds.Mutation)][InlineData(FileRecoveryKinds.Archive)]
     [InlineData(FileRecoveryKinds.TreeCopy)][InlineData(FileRecoveryKinds.TreeMove)]
     [InlineData(FileRecoveryKinds.TreePacking)]
+    [InlineData(FileRecoveryKinds.TreeUnpacking)]
     public void CursorPreservesAllTimestampTicksAndSameTimestampKindAndGuid(string kind)
     {
         var cursor = new FileRecoveryCursor(Now.AddTicks(1234567), kind, Guid.NewGuid()); var encoded = FileRecoveryValidation.EncodeCursor(cursor);
