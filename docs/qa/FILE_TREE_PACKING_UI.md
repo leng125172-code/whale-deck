@@ -1,6 +1,29 @@
-# 目录压缩 WebUI：源码候选与验收边界
+# 目录压缩 WebUI：安装态验收与剩余边界
 
-2026-10-19。后端实际运行时仍为 **0661051 / Agent RPC1.30**，其真实两格式/超过1GiB完整HTTP证据见 [后端验收](FILE_TREE_PACKING_BFF.md)。本文的新页面尚未覆盖部署，不能把本地协议夹具或既有后端探针当作新页面的生产身份验收。P2-03/P2-04 与完整76项继续。
+2026-10-19。当前实际运行时为 **abef6704299633c80cc0d96c0bb6f274a1ff362f / Agent RPC1.30**。目录压缩的常规两格式网页链路已覆盖发布并通过真实身份验收；超过1GiB的完整HTTP是0661051的独立后端证据，不冒称本次网页再次执行。P2-03/P2-04 与完整76项继续；下方源码候选描述保留为阶段历史。
+
+## abef670 实际覆盖与真实网页签收
+
+- 同一 CI [39238574798](https://github.com/leng125172-code/whale-deck/actions/runs/39238574798) 四作业全部成功。前端35文件/269 Unit、22布局和**245项生产预览浏览器（21.1min）**通过。监视客户端曾遇到unexpected EOF，随后查询同一个CI至成功终态，没有重新触发CI或把观察失败当作作业失败。
+- 工作站同源码冻结实际PostgreSQL门禁 `dispatch-5da3ea4764494aa6b476521900aa312e.json`，UTC10:40:14.804765–10:42:25.723325，执行1/通过1/临时库与容器清理确认；SDK镜像仍为 `sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa`。
+- 仅提交一次更新Job `87d38acc-41fe-4659-b571-572725dd8139`。实际systemd Invocation `f97e3f3bd6874ae2834e7e6ff2f51a84` 于19:03:20–19:06:59 CST成功结束，wall3min39.084s；不是只看调度Job成功，也没有回滚。六组件实际来源及API/Gateway HTTP均为abef670；宿主验证、UDS权限/受限helper和动态当前入口通过，.NET/ASP.NET/PKCS均为10.0.13。
+- 实际API镜像 `sha256:660bdd14bb5a9cdd07f39097501df4b8a68630d7698fca860271cc36fc6f965f`，Worker `sha256:4c6e8e1ffd8b6f110cae9cfd750839310346c13e619e4c98c31315352b5f1b52`，Gateway `sha256:3fdc7b19b4706a654bff9ec3eed048ecb1ab06e9d6be292e425e44dce94da5bc`。
+- 真实Authentik临时管理员通过正常用户名/密码/应用授权登录；没有route替身、注入登录态或强制点击。桌面1440×1000浅色通过正常搜索进入自有目录，生成TAR计划后刷新恢复：登记1/确认0，刷新之后只有GET。明确确认产生不同执行Job，完成后浏览器原生下载全部字节并核对完整SHA。
+- 同一真实登录在320×800系统暗色操作第二个TAR.GZ目录。总共恰好2个登记和2个确认；收起重开、只读查询及明暗切换没有新增压缩写入。每个源文件均为2,097,159字节；原生下载文件名分别为 `packed-light.tar` 与 `packed-dark.tar.gz`，完整大小及SHA与API、独立磁盘和Root回执一致。
+- TAR意图 `1aa3a7ce-9b76-364e-a9fd-747ef86522fa`，执行 `03af4097-16c0-2d46-e621-62305c49629c`；归档2,109,440字节，SHA `D768A61E5EE56BFF346E6703F33D698EC47B932D2AB4D8079F15B857A7246D60`。
+- TAR.GZ意图 `aca941e5-2c80-8eba-2b35-f54cb916817f`，执行 `decfc536-420d-143c-55eb-b4cb6e9afeab`；归档5,590字节，SHA `3421B3B9D91FA789B5BE352BF295A21CE4CE70B05A38A22F21F44AAA03B48DD8`。这些ID是历史证据引用，不是当前授权或重放许可。
+- 独立Root观察器验证原文件完整字节、inode/UID/GID/mode/mtimeNs、归档独立全SHA、Root发布inode、完整TAR成员与权限，再核对精确成员和挂载/设备边界后删除唯一自有目录 `wd-browser-packing-684b9a6d385840899568f7bc45278087`。测试源和归档已清理，可重新生成；没有删除业务文件、永久SQL任务/审计或Root回执。校验请求保留原始JSON的纳秒整数，不经JS浮点重新序列化。
+- 另一真实普通用户首次文件深链及刷新均到 `/forbidden`，页面文件API请求0。独立有效Cookie/同Origin/CSRF的查询、POST及下载均为403；UI隐藏不是后端授权证明。加载页结束后另拍实际“没有管理权限”页面，不用加载画面替代拒绝页。
+- 按技能独立复核桌面Ready/Completed、320暗色Ready/Completed/说明末尾及浅色Completed。暗色Ready y41.61/h716.78，确认按钮底742.39；Completed y20/h760，下载按钮底764，页面宽320。完整摘要可见，长回执正文600高/671内容采用预期内部滚动，真实鼠标滚轮到scrollTop71后可读完整末尾说明，固定底部动作位置不变；不拿页面宽度指标掩盖正文裁剪。忽略目录截图 `packing-real-{desktop-ready,desktop-complete,mobile-dark-ready,mobile-dark-complete,mobile-dark-body-end,mobile-light-complete,ordinary-denied}.jpg`。
+- FilesView JS `5f9bc6f23e68acf45cca17014f92048d1579568cf7bba4fa2c06f5b8f340464d`、CSS `6c2d37d94e4bf8e8f4428cd963bf8e2d9078a598f854b9383ddf6b43a1a39806`：本地已测产物、实际HTTP与运行Gateway全字节对应；8项既有通知/共享资产回归也通过。真实管理员和普通用户均通过页面退出，返回登录页，BFF401、Authentik403；两个精确临时账号删除后再次GET确认不存在，浏览器关闭，内存凭据与私钥绑定丢弃。
+- 六类原有真实BFF回归（目录复制、目录移动、34,603,015字节上传下载、普通单文件变更、UTF-8/HDD前置留存、普通文件回收恢复）全部在abef670通过并清理自有数据。旧移动探针输出 `currentAdministratorDispositionImplemented:false` 是历史范围标签，不证明当前功能未实现；本次只验只读清单，收尾将QA标签改为 `currentAdministratorDispositionWriteTested:false`，不改写旧结果，也不冒称新管理员写处置已复验。两类HDD探针仍为 `differentSourceDevice:false`，只证明版本留存，不证明物理异盘容灾。
+- 最终SQL：活跃文件操作0、路径锁0、开放终端0；本次两条压缩Succeeded与两条Validated下载审计保留。11核心容器healthy，Agent/Maintenance active。开发sudo保留未改；没有修改桌面、网卡、路由或用户业务数据。这是时点证据，不是全部P0–P5压力/故障/长期运行验收。
+
+### 本批工具边界与后续
+
+原生Node SSH子进程返回255，但正常SSH和服务一直可达；改用已有RSA-OAEP临时身份桥，私钥只在浏览器QA内存，未把该问题误报为工作站离线。GLM `glm-5.3-flash` 本次只读定位现有解包函数与RPC文件1次成功/130070ms，输入113153（缓存82048）/输出1994 Tokens，费用未返回；GPT独立核对代码并负责所有身份/权限/部署/验收。
+
+超过1GiB真实浏览器下载、压缩Unknown实盘故障和跨管理员写处置仍须后续补充；解压、目录回收恢复、容器文件/租户隔离/长期清理与完整76项继续。内部解包codec不是已开放的解压RPC或页面。本次不签完整文件管理。
 
 ## 用户可见功能与验收清单
 
@@ -31,4 +54,4 @@
 
 ## 继续点
 
-最终源码CI和同源码工作站冻结PG门禁、覆盖发布、真实Authentik管理员与普通用户网页、两格式原生下载/独立磁盘与Root核验、资产SHA/宿主健康及自有夹具清理。随后推进解压、目录回收恢复、容器文件/隔离/长期清理与其余完整目标。同设备HDD留存不是物理异盘容灾。
+上方abef670证据已覆盖先前待做的门禁、发布、常规两格式网页和精确清理；本节旧候选记录不再代表安装态。接下来完成解压、目录回收恢复、容器文件/隔离/长期清理及所列未验故障/大浏览器边界与其余完整目标。同设备HDD留存不是物理异盘容灾。

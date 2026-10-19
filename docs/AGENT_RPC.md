@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+最新实际运行时 **abef670 / RPC1.30**：目录压缩WebUI已覆盖并通过真实身份、两格式2MiB+7源/完整原生下载及独立Root/磁盘/成员校验；四CI、工作站冻结PG、六类旧文件与宿主回归通过。协议不变；新的解压RPC/任务/页面仍缺，不把内部codec当作产品入口，见[网页签收及边界](qa/FILE_TREE_PACKING_UI.md)。完整76项继续，下方旧安装态均为对应阶段历史。
+
 当前安装态 **0661051 / RPC1.30**：压缩业务层持久双 Job、共享锁、Worker、人类审计与回执专用 HTTP 已接通，并通过真实身份/已安装UDS/helper、两格式和超过1GiB完整流/独立全SHA验收；四CI与冻结实际PG、六类旧文件/OIDC回归通过。协议不变，普通文件下载仍限1GiB。压缩操作WebUI、解压和目录回收恢复仍缺，完整76项保持active；见[业务后端最终证据](qa/FILE_TREE_PACKING_BFF.md)。下方“BFF/HTTP仍缺/未安装”是历史，不代表当前状态。
 
 最新安装态 **8aa73c0 / RPC1.30**：独立目录压缩与回执绑定大归档下载已通过真实签名UDS/固定helper、两格式2MiB+7及原生TAR超过1GiB完整流/独立磁盘验证，四CI与冻结实际PG、原六类文件BFF/OIDC回归及11核心健康通过。BFF/持久任务/Worker/人类审计/HTTP/压缩WebUI仍缺，不据此签完整目录压缩或76项；见[最终验收](qa/FILE_TREE_PACKING_AGENT.md)。下方“候选/尚未安装”为历史。

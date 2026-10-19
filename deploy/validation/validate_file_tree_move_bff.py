@@ -249,7 +249,7 @@ def main():
             'realOrdinaryCookieCsrfGetAndPostDenied': 'passed',
             'newAdministratorReadonlyRecoveryMetadataAndOrdinaryDenial': 'passed',
             'inventoryNeverReleasedLocksOrRewroteRootReceipt': 'passed',
-            'currentAdministratorDispositionImplemented': False,
+            'currentAdministratorDispositionWriteTested': False,
             'cancelProtectedAndChangedDescendantNoReplay': 'passed',
             'changedSourceOutcome': stale_result['state'],
             'exactOwnedFixtureRemoved': True, 'immutableJobsAuditIntentsAndRootReceiptsRetained': True, 'realBrowserAndProductionFaultInjection': 'separate-evidence'}
