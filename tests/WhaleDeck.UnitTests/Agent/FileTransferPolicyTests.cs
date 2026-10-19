@@ -86,6 +86,8 @@ public sealed class FileTransferPolicyTests
     [InlineData("tree-move-status", false)][InlineData("tree-move-discard", false)]
     [InlineData("tree-pack-plan", false)][InlineData("tree-pack-apply", false)]
     [InlineData("tree-pack-status", false)][InlineData("tree-pack-discard", false)][InlineData("tree-pack-download", false)]
+    [InlineData("tree-unpack-plan", false)][InlineData("tree-unpack-apply", false)]
+    [InlineData("tree-unpack-status", false)][InlineData("tree-unpack-discard", false)]
     public void ReceiveModesKeepBodyPipeOpenAfterReadyButUnaryActionsSendEof(string action, bool streaming)
     {
         using var pipe = new MemoryStream();

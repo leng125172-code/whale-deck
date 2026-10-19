@@ -25,7 +25,7 @@ run_transient() {
 
 case "$action" in
   file-transport)
-    [[ $# -eq 3 && "$2" =~ ^(roots|list|directories|search|content-search|stat|download|upload|stage|publish|discard|status|operation-plan|operation-apply|operation-status|operation-discard|archive-list|archive-plan|archive-apply|archive-status|archive-discard|tree-copy-plan|tree-copy-apply|tree-copy-status|tree-copy-discard|tree-move-plan|tree-move-apply|tree-move-status|tree-move-discard|tree-pack-plan|tree-pack-apply|tree-pack-status|tree-pack-discard|tree-pack-download)$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    [[ $# -eq 3 && "$2" =~ ^(roots|list|directories|search|content-search|stat|download|upload|stage|publish|discard|status|operation-plan|operation-apply|operation-status|operation-discard|archive-list|archive-plan|archive-apply|archive-status|archive-discard|tree-copy-plan|tree-copy-apply|tree-copy-status|tree-copy-discard|tree-move-plan|tree-move-apply|tree-move-status|tree-move-discard|tree-pack-plan|tree-pack-apply|tree-pack-status|tree-pack-discard|tree-pack-download|tree-unpack-plan|tree-unpack-apply|tree-unpack-status|tree-unpack-discard)$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
     file_size_limit=1073741824
     file_memory_limit=128M
     file_cpu_quota=50%
@@ -36,7 +36,7 @@ case "$action" in
       file_cpu_quota=100%
       file_runtime_limit=20
     fi
-    if [[ "$2" == tree-copy-* || "$2" == tree-move-* || "$2" == tree-pack-* ]]; then
+    if [[ "$2" == tree-copy-* || "$2" == tree-move-* || "$2" == tree-pack-* || "$2" == tree-unpack-* ]]; then
       file_size_limit=17179869184
       file_memory_limit=384M
       file_cpu_quota=100%

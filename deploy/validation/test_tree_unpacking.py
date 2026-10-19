@@ -9,6 +9,7 @@ from pathlib import Path
 import signal
 import shutil
 import stat
+import sys
 import tarfile
 import unittest
 from unittest.mock import patch
@@ -91,6 +92,24 @@ class TreeUnpackingTests(unittest.TestCase):
         request = self.request(); self.engine.unpack(request)
         for target in (self.root / 'target', self.root / 'target/空目录', self.root / 'target/代码/中文.bin'):
             self.assertEqual((target.stat().st_uid, target.stat().st_gid), (1000, 1001))
+
+    def test_fixed_loader_rejects_untrusted_owner_mode_links_and_symlinks(self):
+        modules = self.fixture.base / 'installed-unpacking'; modules.mkdir(mode=0o700)
+        names = ('whaledeck-file-tree.py', 'whaledeck-tree-archive.py', 'whaledeck-tree-unpacking.py')
+        for name in names:
+            target = modules / name; shutil.copyfile(Path(driver.__file__).with_name(name), target); target.chmod(0o640)
+        with patch.dict(sys.modules, {driver.__name__: driver}), patch.object(driver, '__file__', str(modules / 'whaledeck-files.py')):
+            loaded = driver.tree_unpacking_engine(); request = self.request()
+            self.assertEqual(loaded.plan(request['plan']['command']), request['plan'])
+            self.assertEqual(loaded.unpack(request)['state'], 'Completed')
+            target = modules / names[-1]; target.chmod(0o660)
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_unpacking_engine()
+            target.chmod(0o640); linked = modules / 'linked'; os.link(target, linked)
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_unpacking_engine()
+            linked.unlink(); os.chown(target, 12345, 0)
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_unpacking_engine()
+            os.chown(target, 0, 0); original = modules / 'original.py'; target.rename(original); target.symlink_to(original)
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_unpacking_engine()
 
     def test_external_gnu_long_utf8_names_publish_complete_bytes_in_both_formats(self):
         name = '代码/' + '中文' * 35 + '.bin'

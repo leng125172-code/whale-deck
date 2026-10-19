@@ -159,6 +159,22 @@ public sealed class CapabilityValidatorTests : IDisposable
         Assert.Equal(StatusCode.PermissionDenied, replay.StatusCode); Assert.False(invoked);
     }
 
+    [Theory]
+    [InlineData("Plan")][InlineData("Apply")][InlineData("Inspect")][InlineData("Discard")]
+    public async Task UnpackingCannotReusePackingCapabilityOrReplayItsOwn(string action)
+    {
+        var method = "/whaledeck.agent.v1.FileTreeUnpackingService/" + action;
+        var interceptor = new CapabilityInterceptor(_validator); var invoked = false;
+        Task<string> Continue(string _, ServerCallContext __) { invoked = true; return Task.FromResult("ok"); }
+        var missing = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, null), Continue));
+        Assert.Equal(StatusCode.PermissionDenied, missing.StatusCode); Assert.False(invoked);
+        var wrong = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "unpack-wrong-method-nonce", "/whaledeck.agent.v1.FileTreePackingService/" + action);
+        await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, wrong), Continue)); Assert.False(invoked);
+        var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "unpack-correct-method-nonce", method);
+        Assert.Equal("ok", await interceptor.UnaryServerHandler("", new Context(method, token), Continue)); Assert.True(invoked); invoked = false;
+        await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, token), Continue)); Assert.False(invoked);
+    }
+
     private sealed class Context(string method, string? token) : ServerCallContext
     {
         protected override string MethodCore => method;

@@ -1,0 +1,25 @@
+# 解压 Agent 1.31：源码候选，尚未安装
+
+## 已实现的接点
+
+- `FileTreeUnpackingService.Plan/Apply/Inspect/Discard` 为独立 RPC；能力 `files.tree-unpack-intents`，协议次版本1.31。既有复制/移动/压缩/文件回收协议、签名和回执不变，没有新增 TCP Agent 端口。
+- 根内归档来源及新目录目标、显式格式、源版本、完整归档 SHA/字节、内容 SHA/条目/展开字节、双方策略、目标父设备/inode与计划指纹绑定。UInt64完整保留；完整成员清单不跨私有 JSON 帧。回执的归档 SHA/长度表示输入归档，因此 Aborted/Unknown 也保留输入证明，不误用压缩回执“只有成功才有输出归档”的语义。
+- 每方法使用现有 UDS peer guard、最长60秒及一次 nonce capability；压缩/复制的 capability 不可用于解压。ActorSubject 不是人类登录授权证明，BFF/Worker 仍必须实现当前管理员、原登录确认、共享层级锁与审计。
+- `tree-unpack-plan/apply/status/discard` 是固定 helper 白名单动作；固定 root-owned、单链接、非组/全局可写模块加载，安装及校验清单纳入新模块。helper 内存384MiB、CPU单核、128FD、600秒内部/620秒宿主上限、输出单文件16GiB，与既有普通传输1GiB预算分离；没有 shell、任意路径或 UID/GID 入参。
+- 默认根显式新增 `files-tree-unpack`；只精确匹配已知历史默认时升级。新增1.30基线及 `.pre-tree-unpack.json` 原字节备份，属主/权限保持、自定义或收紧策略不扩张、冲突备份失败关闭，重复执行不换 inode。这里只修改仓库安装配置，工作站登记根未改。
+
+## 本批实际测试
+
+- 定向C#：98项通过，无跳过；包括新计划/回执/输入校验、错误方法和 nonce重放、普通管道EOF边界及既有相关回归。
+- 全后端：Release构建0警告0错误，1196 Unit /137 Integration通过；6项本机原生PostgreSQL跳过，不能据此称真实PG门禁通过。无 schema 变更。
+- 独立公开源码工作副本中，153项文件树原生Linux测试、147.767秒、零跳过通过，含23解压测试和可信加载器的owner/模式/硬链接/符号链接拒绝。另15项登记根升级测试通过；三份宿主shell语法通过。`ResourceWarning` 按错误处理。
+- 扩展旧文件侧回归 `test_file_*.py`：173项、1.570秒、零跳过通过，包括前述15根升级（不能重复加总为额外15项）、普通传输/变更/浏览/正文搜索/历史备份等。与153文件树套件合计326项。
+- 上一提交0a5315098334e9eebda7cb3f12a14f2229027275的干净Git归档另跑152项、146.517秒通过；这是前序内部引擎证据，不冒称本批Agent安装态。前序CI39252861305的backend/native-postgres/installer已成功，frontend仍执行，尚不称四作业全绿。
+
+## 尚未验收与后续
+
+**没有安装1.31，没有已安装UDS/helper实测，没有新的API/Worker持久任务或WebUI。** 线上保持abef670/RPC1.30。固定本批提交的原生门禁/CI、真实安装态签名探针仍须完成，不能用直接Python或C#策略测试替代完整RPC。
+
+接下来按独立数据模型/EF迁移、持久计划及双任务、共享锁/取消/Unknown当前管理员恢复、Worker/人类审计、API与页面继续。安装态真实身份/磁盘和失败证据完成后才签解压子范围；目录回收恢复、ZIP等格式、容器文件、隔离/长期清理及全部76项仍在目标内。
+
+GLM仅只读定位既有压缩接点，实际路由用量见[内部引擎账本](FILE_TREE_UNPACKING.md)。GPT完成全部修改、权限/安全边界复核和上述真实测试。

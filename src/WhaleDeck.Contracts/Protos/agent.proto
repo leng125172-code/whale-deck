@@ -828,3 +828,34 @@ service FileTreePackingService {
   // Does not enlarge the old general-file 1 GiB download capability.
   rpc Download(FileTreePackingDownloadRequest) returns (stream FileDownloadFrame);
 }
+
+// Distinct archive -> new-directory publication. No overwrite, source deletion,
+// user-supplied executable, UID/GID, or complete member list crosses this RPC.
+message FileTreeUnpackingCommand { FileTreeCopyCommand tree = 1; string format = 2; }
+message FileTreeUnpackingPlan {
+  FileTreeUnpackingCommand command = 1; string archive_sha256 = 2;
+  int64 archive_bytes = 3; string content_sha256 = 4;
+  uint32 entry_count = 5; int64 total_bytes = 6;
+  FileDirectoryIdentity target_parent = 7;
+  string source_policy_hash = 8; string target_policy_hash = 9;
+  string fingerprint = 10;
+}
+message FileTreeUnpackingPlanRequest { FileTreeUnpackingCommand command = 1; RequestContext context = 2; }
+message FileTreeUnpackingApplyRequest {
+  string operation_id = 1; string owner = 2;
+  FileTreeUnpackingPlan plan = 3; RequestContext context = 4;
+}
+message FileTreeUnpackingLookup { string operation_id = 1; string owner = 2; }
+message FileTreeUnpackingReceipt {
+  string operation_id = 1; string state = 2; string fingerprint = 3;
+  string format = 4; uint32 entry_count = 5; int64 total_bytes = 6;
+  // These describe the unchanged input archive even on Aborted/Unknown.
+  int64 archive_bytes = 7; string archive_sha256 = 8;
+  string version = 9; bool partial_retained = 10;
+}
+service FileTreeUnpackingService {
+  rpc Plan(FileTreeUnpackingPlanRequest) returns (FileTreeUnpackingPlan);
+  rpc Apply(FileTreeUnpackingApplyRequest) returns (FileTreeUnpackingReceipt);
+  rpc Inspect(FileTreeUnpackingLookup) returns (FileTreeUnpackingReceipt);
+  rpc Discard(FileTreeUnpackingApplyRequest) returns (FileTreeUnpackingReceipt);
+}

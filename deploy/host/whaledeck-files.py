@@ -1023,18 +1023,25 @@ def tree_move_engine():
     return modules[2].FileTreeMoves(sys.modules[__name__], modules[0].FileTreeManifest, modules[1].FileTreeCopies)
 
 
-def tree_packing_engine():
+def tree_archive_publication_engine(unpacking=False):
     modules = []
-    for filename in ('whaledeck-file-tree.py','whaledeck-tree-archive.py','whaledeck-tree-packing.py'):
+    for filename in ('whaledeck-file-tree.py','whaledeck-tree-archive.py', 'whaledeck-tree-unpacking.py' if unpacking else 'whaledeck-tree-packing.py'):
         path=Path(__file__).with_name(filename); info=os.stat(path,follow_symlinks=False)
         if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or info.st_mode & 0o022 or info.st_size > 131072: raise Rejected('FILES_MODULE_UNSAFE')
         specification=importlib.util.spec_from_file_location(filename.replace('-','_'),path)
         module=importlib.util.module_from_spec(specification); specification.loader.exec_module(module); modules.append(module)
-    return modules[2].FileTreePacking(sys.modules[__name__],modules[0].FileTreeManifest,modules[1].TreeArchive)
+    engine = modules[2].FileTreeUnpacking if unpacking else modules[2].FileTreePacking
+    return engine(sys.modules[__name__],modules[0].FileTreeManifest,modules[1].TreeArchive)
+
+
+def tree_packing_engine(): return tree_archive_publication_engine()
+
+
+def tree_unpacking_engine(): return tree_archive_publication_engine(True)
 
 
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'content-search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard', 'archive-list', 'archive-plan', 'archive-apply', 'archive-status', 'archive-discard', 'tree-copy-plan', 'tree-copy-apply', 'tree-copy-status', 'tree-copy-discard', 'tree-move-plan', 'tree-move-apply', 'tree-move-status', 'tree-move-discard', 'tree-pack-plan', 'tree-pack-apply', 'tree-pack-status', 'tree-pack-discard', 'tree-pack-download'):
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'content-search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard', 'archive-list', 'archive-plan', 'archive-apply', 'archive-status', 'archive-discard', 'tree-copy-plan', 'tree-copy-apply', 'tree-copy-status', 'tree-copy-discard', 'tree-move-plan', 'tree-move-apply', 'tree-move-status', 'tree-move-discard', 'tree-pack-plan', 'tree-pack-apply', 'tree-pack-status', 'tree-pack-discard', 'tree-pack-download', 'tree-unpack-plan', 'tree-unpack-apply', 'tree-unpack-status', 'tree-unpack-discard'):
         raise Rejected('FILES_ACTION_INVALID')
     invocation = identity(os.environ.get('INVOCATION_ID'))
     emit({'type': 'driver', 'invocationId': invocation})
@@ -1060,6 +1067,9 @@ def main():
         source.finish(); engine=tree_packing_engine()
         if action == 'tree-pack-download': engine.download(request)
         else: emit(engine.plan(request) if action == 'tree-pack-plan' else engine.pack(request) if action == 'tree-pack-apply' else engine.discard(request) if action == 'tree-pack-discard' else engine.lookup(request))
+    elif action.startswith('tree-unpack-'):
+        source.finish(); engine = tree_unpacking_engine()
+        emit(engine.plan(request) if action == 'tree-unpack-plan' else engine.unpack(request) if action == 'tree-unpack-apply' else engine.discard(request) if action == 'tree-unpack-discard' else engine.lookup(request))
     elif action.startswith('tree-copy-'):
         source.finish(); engine = tree_copy_engine()
         emit(engine.plan(request) if action == 'tree-copy-plan' else engine.copy(request) if action == 'tree-copy-apply' else engine.discard(request) if action == 'tree-copy-discard' else engine.lookup(request))

@@ -92,7 +92,7 @@ class FileRootUpgradeTests(unittest.TestCase):
         self.assertEqual((self.folder / 'file-roots.json.pre-tree-copy.json').read_bytes(), original)
         self.assertEqual(prior.read_text(), '[]')
         for before, after in zip(previous, json.loads(self.current.read_bytes())):
-            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-copy', 'files-tree-move', 'files-tree-pack'})
+            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-copy', 'files-tree-move', 'files-tree-pack', 'files-tree-unpack'})
             self.assertEqual({key:value for key,value in before.items() if key != 'allowedActions'}, {key:value for key,value in after.items() if key != 'allowedActions'})
         self.assertEqual(upgrade.upgrade(self.current, previous, self.desired, '.pre-tree-copy.json'), 'unchanged')
 
@@ -112,7 +112,7 @@ class FileRootUpgradeTests(unittest.TestCase):
         self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'upgraded-defaults')
         self.assertEqual((self.folder / 'file-roots.json.pre-tree-move.json').read_bytes(), original); self.assertEqual(old.read_bytes(), b'[]')
         for before, after in zip(previous, json.loads(self.current.read_bytes())):
-            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-move','files-tree-pack'})
+            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-move','files-tree-pack','files-tree-unpack'})
             self.assertEqual({key:value for key,value in before.items() if key != 'allowedActions'}, {key:value for key,value in after.items() if key != 'allowedActions'})
         inode = self.current.stat().st_ino
         self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'unchanged'); self.assertEqual(self.current.stat().st_ino, inode)
@@ -135,7 +135,7 @@ class FileRootUpgradeTests(unittest.TestCase):
         self.assertEqual(upgrade.upgrade_defaults(self.current,source),'upgraded-defaults')
         backup=self.folder/'file-roots.json.pre-tree-pack.json'; self.assertEqual(backup.read_bytes(),original)
         for before,after in zip(previous,json.loads(self.current.read_bytes())):
-            self.assertEqual(set(after['allowedActions'])-set(before['allowedActions']),{'files-tree-pack'})
+            self.assertEqual(set(after['allowedActions'])-set(before['allowedActions']),{'files-tree-pack','files-tree-unpack'})
             self.assertEqual({key:item for key,item in before.items() if key!='allowedActions'},{key:item for key,item in after.items() if key!='allowedActions'})
         inode=self.current.stat().st_ino; self.assertEqual(upgrade.upgrade_defaults(self.current,source),'unchanged'); self.assertEqual(self.current.stat().st_ino,inode)
 
@@ -148,5 +148,29 @@ class FileRootUpgradeTests(unittest.TestCase):
         backup=self.folder/'file-roots.json.pre-tree-pack.json'; backup.write_text('[]'); backup.chmod(0o600)
         with self.assertRaisesRegex(ValueError,'FILES_REGISTRY_BACKUP_CONFLICT'): upgrade.upgrade_defaults(self.current,source)
         self.assertEqual(self.current.read_bytes(),original); self.assertEqual(backup.read_bytes(),b'[]')
+
+    def test_known_packing_defaults_add_only_unpack_once_and_preserve_original(self):
+        source = Path(__file__).resolve().parents[1] / 'host'
+        previous = json.loads((source / 'file-roots.v1.30.json').read_text())
+        self.current.write_text(json.dumps(previous)); original = self.current.read_bytes()
+        self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'upgraded-defaults')
+        self.assertEqual((self.folder / 'file-roots.json.pre-tree-unpack.json').read_bytes(), original)
+        for before, after in zip(previous, json.loads(self.current.read_bytes())):
+            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-unpack'})
+            self.assertEqual({key: item for key, item in before.items() if key != 'allowedActions'}, {key: item for key, item in after.items() if key != 'allowedActions'})
+        inode = self.current.stat().st_ino
+        self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'unchanged'); self.assertEqual(self.current.stat().st_ino, inode)
+
+    def test_custom_packing_defaults_and_conflicting_unpack_backup_are_preserved(self):
+        source = Path(__file__).resolve().parents[1] / 'host'
+        previous = json.loads((source / 'file-roots.v1.30.json').read_text())
+        for field, value in (('ownerUid', 12345), ('path', '/data/WhaleDeck/custom'), ('allowedActions', ['files-list'])):
+            custom = json.loads(json.dumps(previous)); custom[0][field] = value
+            self.current.write_text(json.dumps(custom)); original = self.current.read_bytes()
+            self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'custom-preserved'); self.assertEqual(self.current.read_bytes(), original)
+        self.current.write_text(json.dumps(previous)); original = self.current.read_bytes()
+        backup = self.folder / 'file-roots.json.pre-tree-unpack.json'; backup.write_text('[]'); backup.chmod(0o600)
+        with self.assertRaisesRegex(ValueError, 'FILES_REGISTRY_BACKUP_CONFLICT'): upgrade.upgrade_defaults(self.current, source)
+        self.assertEqual(self.current.read_bytes(), original); self.assertEqual(backup.read_bytes(), b'[]')
 
 if __name__ == '__main__': unittest.main()

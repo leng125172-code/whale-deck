@@ -12,7 +12,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = 30,
+            ProtocolMinor = 31,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
@@ -28,6 +28,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
             "files.tree-move-intents",
             "files.tree-pack-intents",
             "files.tree-pack-download",
+            "files.tree-unpack-intents",
             "host.terminal.pty",
             "docker.terminal.exec",
             "notifications.private-configuration",
