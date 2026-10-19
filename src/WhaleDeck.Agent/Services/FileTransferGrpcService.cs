@@ -146,6 +146,13 @@ internal static partial class FileTransferPolicy
     public static FileEntry Entry(JsonElement item) => new() { Name = item.GetProperty("name").GetString(), Kind = item.GetProperty("kind").GetString(),
         SizeBytes = item.GetProperty("sizeBytes").GetInt64(), ModifiedAtUnixMs = item.GetProperty("modifiedAtUnixMs").GetInt64(), Version = item.GetProperty("version").GetString(),
         Mode = item.GetProperty("mode").GetString(), IsProtected = item.GetProperty("isProtected").GetBoolean() };
+    public static FileEntry DownloadEntry(JsonElement item, long maximumBytes)
+    {
+        var entry = Entry(item);
+        if (maximumBytes is not (MaximumBytes or FileTreePackingPolicy.MaximumArchiveBytes) || entry.SizeBytes < 0 || entry.SizeBytes > maximumBytes || entry.Kind != "File" || entry.IsProtected)
+            throw new InvalidOperationException("FILES_METADATA_INVALID");
+        Hash(entry.Version); return entry;
+    }
     public static FileUploadReceipt Receipt(JsonElement item)
     {
         string Value(string name) => item.TryGetProperty(name, out var value) ? value.GetString() ?? string.Empty : string.Empty;
@@ -182,9 +189,13 @@ public sealed class FileTransferRunner
         await FinishAsync(result, cancellationToken);
         return response;
     }
-    public async Task DownloadAsync(string input, IServerStreamWriter<FileDownloadFrame> output, CancellationToken cancellationToken)
+    public Task DownloadAsync(string input, IServerStreamWriter<FileDownloadFrame> output, CancellationToken cancellationToken) =>
+        DownloadCoreAsync("download", FileTransferPolicy.MaximumBytes, input, output, cancellationToken);
+    public Task TreePackingDownloadAsync(string input, IServerStreamWriter<FileDownloadFrame> output, CancellationToken cancellationToken) =>
+        DownloadCoreAsync("tree-pack-download", FileTreePackingPolicy.MaximumArchiveBytes, input, output, cancellationToken);
+    private static async Task DownloadCoreAsync(string action, long maximumBytes, string input, IServerStreamWriter<FileDownloadFrame> output, CancellationToken cancellationToken)
     {
-        using var result = await StartAsync("download", input, cancellationToken);
+        using var result = await StartAsync(action, input, cancellationToken);
         long offset = 0; long size = -1; var complete = false;
         while (!complete)
         {
@@ -193,8 +204,7 @@ public sealed class FileTransferRunner
             FileDownloadFrame frame;
             if (kind == "metadata" && size == -1)
             {
-                var entry = FileTransferPolicy.Entry(value); size = entry.SizeBytes;
-                if (size is < 0 or > FileTransferPolicy.MaximumBytes || entry.Kind != "File" || entry.IsProtected) throw new InvalidOperationException("FILES_METADATA_INVALID");
+                var entry = FileTransferPolicy.DownloadEntry(value, maximumBytes); size = entry.SizeBytes;
                 frame = new() { Kind = "metadata", Metadata = entry };
             }
             else if (kind == "chunk" && size >= 0 && value.GetProperty("offset").GetInt64() == offset)

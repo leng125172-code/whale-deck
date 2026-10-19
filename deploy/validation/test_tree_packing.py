@@ -1,16 +1,20 @@
 """Disposable actual Linux publication/crash tests, not installed RPC/UI proof."""
 import contextlib
+import base64
 import hashlib
 import importlib.util
 import json
+import io
 import os
 from pathlib import Path
 import signal
+import shutil
 import stat
 import tarfile
 import unittest
 from unittest.mock import patch
 import uuid
+import sys
 import test_file_transport as common
 from test_file_tree_manifest import tree_module
 from test_tree_archive_codec import codec
@@ -25,7 +29,7 @@ class TreePackingTests(unittest.TestCase):
     def setUp(self):
         self.fixture = common.FileTransportTests(); self.fixture.setUp()
         self.root,self.registry,self.state = self.fixture.root,self.fixture.registry,self.fixture.state
-        policy = json.loads(self.registry.read_bytes()); policy[0]['allowedActions'] += ['files-mutate','files-archive']; self.registry.write_text(json.dumps(policy))
+        policy = json.loads(self.registry.read_bytes()); policy[0]['allowedActions'] += ['files-mutate','files-archive','files-tree-pack']; self.registry.write_text(json.dumps(policy))
         self.source = self.root/'source'; self.source.mkdir(); (self.source/'空目录').mkdir()
         self.data = bytes(range(256))*8192+b'\x00tail\xff\n'; self.file = self.source/'中文.bin'; self.file.write_bytes(self.data); self.file.chmod(0o751)
         self.engine = packing.FileTreePacking(driver,tree_module.FileTreeManifest,codec.TreeArchive)
@@ -96,7 +100,7 @@ class TreePackingTests(unittest.TestCase):
 
     def test_explicit_source_and_target_permissions_and_policy_binding(self):
         original = self.registry.read_bytes()
-        for permission in ('files-download','files-list','files-archive','files-upload','files-mutate'):
+        for permission in ('files-download','files-list','files-archive','files-upload','files-mutate','files-tree-pack'):
             with self.subTest(permission=permission):
                 request = self.request(); policy = json.loads(original); policy[0]['allowedActions'].remove(permission); self.registry.write_text(json.dumps(policy))
                 with self.assertRaises(driver.Rejected): self.engine.pack(request)
@@ -245,3 +249,77 @@ class TreePackingTests(unittest.TestCase):
         with tarfile.open(self.root/'target.tar.gz') as archive:
             with archive.extractfile('中文.bin') as stream: actual=hashlib.file_digest(stream,'sha256').hexdigest()
         self.assertEqual(actual,expected); self.assertEqual(self.source_identity(),before)
+
+    def test_download_exact_completed_archive_with_chunks_hash_and_version(self):
+        request=self.request(); completed=self.engine.pack(request); output=io.BytesIO()
+        self.engine.download({key:request[key] for key in ('operationId','owner')},output)
+        rows=[json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(rows[0]['type'],'metadata'); self.assertEqual(rows[0]['sizeBytes'],completed['archiveBytes'])
+        self.assertEqual(rows[-1],{'type':'end','sizeBytes':completed['archiveBytes'],'sha256':completed['archiveSha256'],'version':completed['version']})
+        payload=bytearray()
+        for row in rows[1:-1]:
+            self.assertEqual(row['offset'],len(payload)); block=base64.b64decode(row['data'],validate=True); self.assertLessEqual(len(block),32768); payload.extend(block)
+        self.assertEqual(bytes(payload),(self.root/'target.tar.gz').read_bytes())
+        self.assertEqual(hashlib.sha256(payload).hexdigest().upper(),completed['archiveSha256'])
+
+    def test_download_rejects_other_owner_incomplete_tamper_and_revoked_target_permissions(self):
+        request=self.request(); self.engine.discard(request)
+        with self.assertRaisesRegex(driver.Rejected,'FILES_PACK_NOT_COMPLETED'): self.engine.download({key:request[key] for key in ('operationId','owner')},io.BytesIO())
+        request=self.request(); self.engine.pack(request); lookup={key:request[key] for key in ('operationId','owner')}
+        with self.assertRaisesRegex(driver.Rejected,'FILES_OPERATION_NOT_FOUND'): self.engine.download({**lookup,'owner':'B'*64},io.BytesIO())
+        original=self.registry.read_bytes()
+        for permission in ('files-download','files-archive','files-tree-pack'):
+            policy=json.loads(original); policy[0]['allowedActions'].remove(permission); self.registry.write_text(json.dumps(policy)); output=io.BytesIO()
+            with self.assertRaises(driver.Rejected): self.engine.download(lookup,output)
+            self.assertEqual(output.getvalue(),b''); self.registry.write_bytes(original)
+        (self.root/'target.tar.gz').write_bytes(b'changed'); output=io.BytesIO()
+        with self.assertRaises(driver.Rejected): self.engine.download(lookup,output)
+        self.assertEqual(output.getvalue(),b'')
+
+    def test_download_does_not_need_original_source_or_origin_policy_but_binds_target(self):
+        policy=json.loads(self.registry.read_bytes()); policy.append({**policy[0],'id':'test.origin'}); self.registry.write_text(json.dumps(policy))
+        command=self.command(); command['source']['rootId']='test.origin'
+        request={'operationId':uuid.uuid4().hex,'owner':'A'*64,'plan':self.engine.plan(command)}; self.engine.pack(request)
+        self.file.unlink(); (self.source/'空目录').rmdir(); self.source.rmdir()
+        self.registry.write_text(json.dumps(policy[:1])); output=io.BytesIO()
+        self.engine.download({key:request[key] for key in ('operationId','owner')},output)
+        self.assertEqual(json.loads(output.getvalue().splitlines()[-1])['type'],'end')
+
+    def test_download_aborts_on_midstream_root_revocation_and_never_emits_end(self):
+        request=self.request(archive_format='tar'); self.engine.pack(request); rows=[]
+        def revoke(value,output=None):
+            rows.append(value)
+            if value['type']=='chunk' and len(rows)==2:
+                policy=json.loads(self.registry.read_bytes()); policy[0]['allowedActions'].remove('files-tree-pack'); self.registry.write_text(json.dumps(policy))
+        with patch.object(driver,'emit',revoke),self.assertRaises(driver.Rejected): self.engine.download({key:request[key] for key in ('operationId','owner')})
+        self.assertFalse(any(row['type']=='end' for row in rows))
+
+    def test_fixed_loader_and_unsafe_modules_are_rejected_before_invocation(self):
+        modules=self.fixture.base/'installed-packing'; modules.mkdir(mode=0o700)
+        names=('whaledeck-file-tree.py','whaledeck-tree-archive.py','whaledeck-tree-packing.py')
+        for name in names:
+            target=modules/name; shutil.copyfile(Path(driver.__file__).with_name(name),target); target.chmod(0o640)
+        with patch.dict(sys.modules,{driver.__name__:driver}),patch.object(driver,'__file__',str(modules/'whaledeck-files.py')):
+            loaded=driver.tree_packing_engine(); request=self.request(); self.assertEqual(loaded.plan(request['plan']['command']),request['plan'])
+            self.assertEqual(loaded.pack(request)['state'],'Completed')
+            target=modules/names[-1]
+            target.chmod(0o660)
+            with self.assertRaisesRegex(driver.Rejected,'FILES_MODULE_UNSAFE'): driver.tree_packing_engine()
+            target.chmod(0o640); linked=modules/'linked'; os.link(target,linked)
+            with self.assertRaisesRegex(driver.Rejected,'FILES_MODULE_UNSAFE'): driver.tree_packing_engine()
+            linked.unlink(); os.chown(target,12345,0)
+            with self.assertRaisesRegex(driver.Rejected,'FILES_MODULE_UNSAFE'): driver.tree_packing_engine()
+            os.chown(target,0,0); original=modules/'original.py'; target.rename(original); target.symlink_to(original)
+            with self.assertRaisesRegex(driver.Rejected,'FILES_MODULE_UNSAFE'): driver.tree_packing_engine()
+
+    def test_completed_download_does_not_hold_global_write_gate_and_disconnect_preserves_receipt(self):
+        request=self.request(); result=self.engine.pack(request); lookup={key:request[key] for key in ('operationId','owner')}
+        output=io.BytesIO()
+        with patch.object(driver,'namespace_lock',side_effect=AssertionError('read-only download must not acquire write gate')):
+            self.engine.download(lookup,output)
+        before=len(os.listdir('/proc/self/fd')); rows=[]
+        def disconnect(value,output=None):
+            rows.append(value['type'])
+            if value['type']=='chunk': raise BrokenPipeError('synthetic disconnected private client')
+        with patch.object(driver,'emit',disconnect),self.assertRaises(BrokenPipeError): self.engine.download(lookup)
+        self.assertEqual(len(os.listdir('/proc/self/fd')),before); self.assertNotIn('end',rows); self.assertEqual(self.lookup(request),result)

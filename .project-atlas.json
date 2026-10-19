@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-19）",
-  "nextStep": "目录归档/HDD留存及新目标压缩发布内部源码已实现，56项新增真实Linux测试、SIGKILL和实际登记文件系统/HDD探针通过；尚未接RPC/API/Worker/UI。线上为独立UI修复2a60668/RPC1.29。继续独立压缩RPC和业务任务/页面、目录回收恢复及全部76项。"
+  "nextStep": "独立压缩Agent1.30 RPC/固定helper/显式根授权/回执绑定大归档流源码已实现，Release1119 Unit/127 Integration通过；尚未安装/真实UDS验收，线上2a60668/RPC1.29。继续冻结源码与真实安装态验收，再接BFF持久任务/Worker/审计/API/WebUI及全部76项。"
 }

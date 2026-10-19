@@ -27,7 +27,7 @@ def read(path):
 
 
 def upgrade(path, baseline, desired, backup_suffix='.pre-mutations.json'):
-    if backup_suffix not in ('.pre-mutations.json', '.pre-archives.json', '.pre-tree-copy.json', '.pre-tree-move.json'): raise ValueError('FILES_REGISTRY_BACKUP_INVALID')
+    if backup_suffix not in ('.pre-mutations.json', '.pre-archives.json', '.pre-tree-copy.json', '.pre-tree-move.json', '.pre-tree-pack.json'): raise ValueError('FILES_REGISTRY_BACKUP_INVALID')
     payload, current, info = read(path)
     if current == desired: return 'unchanged'
     if current != baseline: return 'custom-preserved'
@@ -63,7 +63,9 @@ def upgrade_defaults(path, folder):
     previous = json.loads((folder / 'file-roots.v1.25.json').read_text(), object_pairs_hook=unique)
     archives = json.loads((folder / 'file-roots.v1.26.json').read_text(), object_pairs_hook=unique)
     copies = json.loads((folder / 'file-roots.v1.27.json').read_text(), object_pairs_hook=unique)
+    moves = json.loads((folder / 'file-roots.v1.29.json').read_text(), object_pairs_hook=unique)
     current = read(path)[1]
+    if current == moves: return upgrade(path, moves, desired, '.pre-tree-pack.json')
     if current == copies: return upgrade(path, copies, desired, '.pre-tree-move.json')
     if current == archives: return upgrade(path, archives, desired, '.pre-tree-copy.json')
     if current == previous: return upgrade(path, previous, desired, '.pre-archives.json')

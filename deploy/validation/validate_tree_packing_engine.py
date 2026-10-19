@@ -27,7 +27,7 @@ def main():
     archive=load('packing_probe_codec','whaledeck-tree-archive.py')
     packing=load('packing_probe_engine','whaledeck-tree-packing.py')
     policy=files.roots()[ROOT]
-    assert policy['path']==str(DIRECTORY) and {'files-list','files-download','files-upload','files-mutate','files-archive'}<=set(policy['allowedActions'])
+    assert policy['path']==str(DIRECTORY) and {'files-list','files-download','files-upload','files-mutate','files-archive','files-tree-pack'}<=set(policy['allowedActions'])
     fixture=Path(tempfile.mkdtemp(prefix='wdv-tree-pack-',dir=DIRECTORY)); fixture_identity=proof(fixture)[:2]
     print(json.dumps({'ownedTreePackingFixture':fixture.name}),flush=True)
     PHASE='owned-source-and-isolated-receipts'

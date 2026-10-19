@@ -6,6 +6,7 @@ plans, shared hierarchy locks, RPC/Worker and audit must surround this engine
 before exposure. A failed attempt is observed, never re-compressed/promoted.
 """
 import contextlib
+import base64
 import fcntl
 import hashlib
 import hmac
@@ -52,7 +53,7 @@ class FileTreePacking:
 
     def policies(self, command):
         roots = self.f.roots(); source = roots.get(command['source']['rootId']); target = roots.get(command['target']['rootId'])
-        if source is None or target is None or not {'files-list','files-download','files-archive'} <= set(source['allowedActions']) or not {'files-mutate','files-upload','files-archive'} <= set(target['allowedActions']):
+        if source is None or target is None or not {'files-list','files-download','files-archive','files-tree-pack'} <= set(source['allowedActions']) or not {'files-mutate','files-upload','files-archive','files-tree-pack'} <= set(target['allowedActions']):
             self.reject('FILES_ROOT_FORBIDDEN')
         origin = source['path'].rstrip('/')+'/'+command['source']['path']
         destination = target['path'].rstrip('/')+'/'+command['target']['path']
@@ -113,7 +114,7 @@ class FileTreePacking:
         finally: os.close(descriptor)
 
     @contextlib.contextmanager
-    def state(self, operation, owner, create=False):
+    def state(self, operation, owner, create=False, namespace=True):
         self.f.identity(operation)
         if type(owner) is not str or not re.fullmatch('[A-F0-9]{64}',owner): self.reject('FILES_OPERATION_INVALID')
         base = self.f.trusted_directory(self.f.STATE); folder = lock = None
@@ -132,7 +133,7 @@ class FileTreePacking:
             if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600: self.reject('FILES_RECEIPT_UNSAFE')
             try: fcntl.flock(lock,fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError: self.reject('FILES_OPERATION_BUSY')
-            with self.f.namespace_lock():
+            with (self.f.namespace_lock() if namespace else contextlib.nullcontext()):
                 existing = self.read(folder,operation)
                 if existing is not None and existing['owner'] != owner: self.reject('FILES_OPERATION_NOT_FOUND')
                 yield folder,existing
@@ -261,3 +262,42 @@ class FileTreePacking:
             'entryCount':record['plan']['entryCount'],'totalBytes':record['plan']['totalBytes'],'archiveBytes':record.get('archiveBytes',0) if completed else 0,
             'archiveSha256':record.get('archiveSha256','') if completed else '', 'version':record.get('version','') if completed else '',
             'partialRetained':not completed and bool(record.get('mayHaveStaged'))}
+
+    def download(self, request, output=None):
+        if not isinstance(request,dict) or set(request) != {'operationId','owner'}: self.reject('FILES_STATUS_INVALID')
+        codec = self.codec_type(self.f,self.manifest_type,cancelled=self.cancelled); guard=codec.guard(); policy_checked=0
+        # Read-only completed downloads hold their own operation lock, not the
+        # global write gate. Concurrent target edits fail version/digest checks;
+        # unrelated file writes must not queue behind a large archive stream.
+        with self.state(request['operationId'],request['owner'],namespace=False) as (_,record):
+            if record['state'] != 'Completed': self.reject('FILES_PACK_NOT_COMPLETED')
+            plan=record['plan']; target=plan['command']['target']
+            def check_policy():
+                policy=self.f.roots().get(target['rootId'])
+                if policy is None or not {'files-download','files-archive','files-tree-pack'} <= set(policy['allowedActions']): self.reject('FILES_ROOT_FORBIDDEN')
+                if self.digest(policy) != plan['targetPolicyHash']: self.reject('FILES_ROOT_CHANGED')
+            def check():
+                nonlocal policy_checked
+                guard(); now=time.monotonic()
+                if now-policy_checked>=1: check_policy(); policy_checked=now
+            check_policy(); check()
+            with self.f.directory(target,('download','archive','tree-pack')) as (_,parent,leaf):
+                if self.identity(parent) != plan['targetParent']: self.reject('FILES_PARENT_CHANGED')
+                descriptor=self.f.open_at(parent,leaf,os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+                try:
+                    before=codec.regular(descriptor)
+                    if self.f.version(before) != record['version']: self.reject('FILES_ARCHIVE_CHANGED')
+                    self.verify(descriptor,record,codec); check_policy(); check()
+                    self.f.emit({'type':'metadata',**self.f.metadata(leaf,before)},output)
+                    position=0; checksum=hashlib.sha256()
+                    while position<before.st_size:
+                        check(); block=os.pread(descriptor,min(self.f.CHUNK,before.st_size-position),position)
+                        if not block: self.reject('FILES_ARCHIVE_CHANGED')
+                        checksum.update(block); self.f.emit({'type':'chunk','offset':position,'data':base64.b64encode(block).decode('ascii')},output); position+=len(block)
+                    check_policy(); check()
+                    if os.pread(descriptor,1,position) or self.f.version(os.fstat(descriptor)) != record['version'] or self.f.version(os.stat(leaf,dir_fd=parent,follow_symlinks=False)) != record['version'] or checksum.hexdigest().upper() != record['archiveSha256']:
+                        self.reject('FILES_ARCHIVE_CHANGED')
+                    with self.f.directory(target,('download','archive','tree-pack')) as (_,current,_):
+                        if self.identity(current) != plan['targetParent']: self.reject('FILES_PARENT_CHANGED')
+                    self.f.emit({'type':'end','sizeBytes':position,'sha256':record['archiveSha256'],'version':record['version']},output)
+                finally: os.close(descriptor)

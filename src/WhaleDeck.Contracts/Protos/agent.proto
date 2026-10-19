@@ -793,3 +793,38 @@ service FileTreeMoveService {
   rpc Inspect(FileTreeMoveLookup) returns (FileTreeMoveReceipt);
   rpc Discard(FileTreeMoveApplyRequest) returns (FileTreeMoveReceipt);
 }
+
+// Independent compression intent. Only registered source/target locations;
+// manifests stay at the Agent. Old file/copy/move contracts are unchanged.
+message FileTreePackingCommand { FileTreeCopyCommand tree = 1; string format = 2; }
+message FileTreePackingPlan {
+  FileTreePackingCommand command = 1; string manifest_sha256 = 2;
+  uint32 entry_count = 3; int64 total_bytes = 4;
+  FileDirectoryIdentity target_parent = 5;
+  string source_policy_hash = 6; string target_policy_hash = 7;
+  string fingerprint = 8;
+}
+message FileTreePackingPlanRequest { FileTreePackingCommand command = 1; RequestContext context = 2; }
+message FileTreePackingApplyRequest {
+  string operation_id = 1; string owner = 2;
+  FileTreePackingPlan plan = 3; RequestContext context = 4;
+}
+message FileTreePackingLookup { string operation_id = 1; string owner = 2; }
+message FileTreePackingDownloadRequest {
+  string operation_id = 1; string owner = 2; RequestContext context = 3;
+}
+message FileTreePackingReceipt {
+  string operation_id = 1; string state = 2; string fingerprint = 3;
+  string format = 4; uint32 entry_count = 5; int64 total_bytes = 6;
+  int64 archive_bytes = 7; string archive_sha256 = 8;
+  string version = 9; bool partial_retained = 10;
+}
+service FileTreePackingService {
+  rpc Plan(FileTreePackingPlanRequest) returns (FileTreePackingPlan);
+  rpc Apply(FileTreePackingApplyRequest) returns (FileTreePackingReceipt);
+  rpc Inspect(FileTreePackingLookup) returns (FileTreePackingReceipt);
+  rpc Discard(FileTreePackingApplyRequest) returns (FileTreePackingReceipt);
+  // At most 17 GiB and 32 KiB/chunk, bound to a completed exact receipt.
+  // Does not enlarge the old general-file 1 GiB download capability.
+  rpc Download(FileTreePackingDownloadRequest) returns (stream FileDownloadFrame);
+}

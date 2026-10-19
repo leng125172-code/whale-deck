@@ -52,6 +52,18 @@ public sealed class CapabilityValidatorTests : IDisposable
         Assert.False(_validator.Validate(wrongMethod, "/whaledeck.agent.v1.DockerService/ListContainers"));
     }
 
+    [Theory]
+    [InlineData("Plan")][InlineData("Apply")][InlineData("Inspect")][InlineData("Discard")][InlineData("Download")]
+    public void PackingMethodsAreDistinctSingleUseCapabilities(string action)
+    {
+        var method = "/whaledeck.agent.v1.FileTreePackingService/" + action;
+        Assert.False(_validator.Validate(null, method));
+        var wrong = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "wrong-packing-nonce", "/whaledeck.agent.v1.FileTreeCopyService/" + action);
+        Assert.False(_validator.Validate(wrong, method));
+        var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "packing-method-nonce", method);
+        Assert.True(_validator.Validate(token, method)); Assert.False(_validator.Validate(token, method));
+    }
+
     private string Sign(DateTimeOffset expiresAt, string nonce, string method)
     {
         var expires = expiresAt.ToUnixTimeSeconds();

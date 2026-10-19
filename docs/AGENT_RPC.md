@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+新增 **1.30候选，尚未安装**：独立`FileTreePackingService`的Plan/Apply/Inspect/Discard及回执绑定Download，能力`files.tree-pack-intents`/`files.tree-pack-download`。TAR/TAR.GZ格式、源版本/全manifest摘要、双方策略、目标父inode和计划指纹绑定；完整manifest不跨64KiB私有帧。来源要求list/download/archive/tree-pack，目标mutate/upload/archive/tree-pack；只新建目标，不覆盖、不删源。下载仅已完成操作/原owner，重核当前目标策略、原inode/版本/整包摘要，32KiB块、17GiB总上限、600秒/取消和最终完整性核对；不扩大旧1GiB普通下载。下载不占全局写门，只持本操作锁，目标并发变化失败关闭。独立方法capability保持60秒、一次nonce及UDS peer guard，无TCP Agent端口；BFF/Worker的人类权限、持久任务、共享层级锁/审计/API/UI仍待接通。默认根新增files-tree-pack，只精确升级未修改1.29默认并保留`.pre-tree-pack.json`，自定义不扩权。见[候选证据](qa/FILE_TREE_PACKING_AGENT.md)。当前实机仍2a60668/RPC1.29，下方为历史。
+
 最新已安装协议 **1.29 / 5e131e9**：正文搜索已通过同源码CI/实际PG、真实身份API→安装态UDS/helper与管理员网页签收，六组件实际来源和HTTP对应。独立普通用户403、匿名401、CSRF/Origin、完整2MiB+7/原inode及元数据证明、精确清理见[最终证据](qa/FILE_CONTENT_SEARCH.md)。本批仅增加只读正文搜索，不开放任意宿主路径/命令，不签完整文件管理或76项；下方候选/未安装文字为历史。
 
 新增1.29候选（尚未部署）：`FileTransferService.SearchContent`、能力`files.utf8-content-search`，与文件名Search分离。独立请求包含登记根/目录、字面UTF-8关键词、大小写、游标、take及1–16MiB单文件上限；结果为每文件首个匹配行/有界片段、原文件版本、实际读取字节/文件及跳过计数。最多10000项/64MiB/5秒一页、32层、100条、64KiB私有帧；helper另有20秒systemd上限/384MiB内存/单核CPU，不提供任意路径或命令。游标MAC绑定ContentUtf8V1域、根/目录/关键词/大小写/文件上限/祖先版本与10分钟期限。必须同时具备同一登记快照的files-list和files-download；排除保护配置、链接、多硬链接、特殊文件及嵌套挂载，严格UTF-8和全文件版本验证，不把前缀或跳过项当作已查全文。API读前读后复核当前管理员；片段/关键词不写Job、审计正文、日志或URL。完整证据及未验收边界见[正文搜索](qa/FILE_CONTENT_SEARCH.md)。
