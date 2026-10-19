@@ -976,10 +976,16 @@ onMounted(() => {
             >复制配置创建</el-button
           >
         </div>
-        <el-descriptions v-if="selected" :column="wideTable ? 2 : 1" border>
-          <el-descriptions-item label="镜像" :span="wideTable ? 2 : 1">{{
-            selected.image
-          }}</el-descriptions-item>
+        <el-descriptions v-if="selected" :column="1" border>
+          <el-descriptions-item label="镜像">{{ selected.image }}</el-descriptions-item>
+        </el-descriptions>
+        <el-descriptions
+          v-if="selected"
+          class="container-detail__summary"
+          :class="{ 'container-detail__summary--paired': wideTable }"
+          :column="wideTable ? 2 : 1"
+          border
+        >
           <el-descriptions-item label="状态">{{ selected.status }}</el-descriptions-item>
           <el-descriptions-item label="保护级别">{{
             selected.protectionLevel
@@ -995,43 +1001,36 @@ onMounted(() => {
             <el-descriptions-item label="重启策略">{{
               inspect.restartPolicy
             }}</el-descriptions-item>
-            <el-descriptions-item label="资源限制"
-              >{{ inspect.cpus || '默认' }} CPU ·
-              {{
-                inspect.memoryMb > 0 ? formatBytes(inspect.memoryMb * 1024 ** 2) : '默认'
-              }}</el-descriptions-item
-            >
-            <el-descriptions-item
-              v-if="!inspect.relationships"
-              label="端口"
-              :span="wideTable ? 2 : 1"
-              >{{ inspect.ports.join(', ') || '无' }}</el-descriptions-item
-            >
-            <el-descriptions-item
-              v-if="!inspect.relationships"
-              label="网络"
-              :span="wideTable ? 2 : 1"
-              >{{ inspect.networks.join(', ') || '无' }}</el-descriptions-item
-            >
-            <el-descriptions-item
-              v-if="!inspect.relationships"
-              label="挂载"
-              :span="wideTable ? 2 : 1"
-              >{{ inspect.volumes.join(', ') || '无' }}</el-descriptions-item
-            >
-            <el-descriptions-item label="环境变量名" :span="wideTable ? 2 : 1">{{
-              inspect.environmentNames.join(', ') || '无'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="命令" :span="wideTable ? 2 : 1">{{
-              inspect.command.join(' ') || '继承镜像'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="Entrypoint" :span="wideTable ? 2 : 1">{{
-              inspect.entrypoint.join(' ') || '继承镜像'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="健康检查" :span="wideTable ? 2 : 1">{{
-              inspect.healthCommand.join(' ') || '未配置'
-            }}</el-descriptions-item>
           </template>
+        </el-descriptions>
+        <el-descriptions v-if="inspect" :column="1" border>
+          <el-descriptions-item label="资源限制"
+            >{{ inspect.cpus || '默认' }} CPU ·
+            {{
+              inspect.memoryMb > 0 ? formatBytes(inspect.memoryMb * 1024 ** 2) : '默认'
+            }}</el-descriptions-item
+          >
+          <el-descriptions-item v-if="!inspect.relationships" label="端口">{{
+            inspect.ports.join(', ') || '无'
+          }}</el-descriptions-item>
+          <el-descriptions-item v-if="!inspect.relationships" label="网络">{{
+            inspect.networks.join(', ') || '无'
+          }}</el-descriptions-item>
+          <el-descriptions-item v-if="!inspect.relationships" label="挂载">{{
+            inspect.volumes.join(', ') || '无'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="环境变量名">{{
+            inspect.environmentNames.join(', ') || '无'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="命令">{{
+            inspect.command.join(' ') || '继承镜像'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="Entrypoint">{{
+            inspect.entrypoint.join(' ') || '继承镜像'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="健康检查">{{
+            inspect.healthCommand.join(' ') || '未配置'
+          }}</el-descriptions-item>
         </el-descriptions>
         <ContainerRelationships v-if="inspect" :inspect="inspect" />
         <div class="log-heading">
@@ -1280,6 +1279,12 @@ onMounted(() => {
 .container-detail :deep(.el-descriptions__label) {
   width: 96px;
   word-break: keep-all;
+}
+.container-detail :deep(.el-descriptions__table) {
+  table-layout: fixed;
+}
+.container-detail__summary--paired :deep(.el-descriptions__content) {
+  width: calc(50% - 96px);
 }
 .container-detail :deep(.el-descriptions__content) {
   overflow-wrap: anywhere;
