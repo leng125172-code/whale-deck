@@ -157,6 +157,7 @@ public sealed partial class NativeNotificationDispatchTests
         await FileTreeCopyWorkflowBoundaries(options);
         await FileTreePackingWorkflowBoundaries(options);
         await FileTreeUnpackingWorkflowBoundaries(options);
+        await FileTreeRecyclingWorkflowBoundaries(options);
         await FileTreeMoveWorkflowBoundaries(options);
     }
 

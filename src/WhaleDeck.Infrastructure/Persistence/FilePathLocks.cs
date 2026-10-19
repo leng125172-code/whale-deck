@@ -46,6 +46,7 @@ internal static class FilePathLocks
         var moves = await db.FileTreeMoveOperations.AsNoTracking().Where(item => item.ExecutionJobId != null && ids.Contains(item.ExecutionJobId.Value)).ToDictionaryAsync(item => item.ExecutionJobId!.Value, cancellationToken);
         var packings = await db.FileTreePackingOperations.AsNoTracking().Where(item => item.ExecutionJobId != null && ids.Contains(item.ExecutionJobId.Value)).ToDictionaryAsync(item => item.ExecutionJobId!.Value, cancellationToken);
         var unpackings = await db.FileTreeUnpackingOperations.AsNoTracking().Where(item => item.ExecutionJobId != null && ids.Contains(item.ExecutionJobId.Value)).ToDictionaryAsync(item => item.ExecutionJobId!.Value, cancellationToken);
+        var recyclings = await db.FileTreeRecyclingOperations.AsNoTracking().Where(item => item.ExecutionJobId != null && ids.Contains(item.ExecutionJobId.Value)).ToDictionaryAsync(item => item.ExecutionJobId!.Value, cancellationToken);
         var result = new Dictionary<string, FilePathScope?>(StringComparer.Ordinal);
         foreach (var row in held)
         {
@@ -55,6 +56,7 @@ internal static class FilePathLocks
                 var owners = (uploads.ContainsKey(row.OperationId) ? 1 : 0) + (mutations.ContainsKey(row.OperationId) ? 1 : 0) + (archives.ContainsKey(row.OperationId) ? 1 : 0) + (trees.ContainsKey(row.OperationId) ? 1 : 0) + (moves.ContainsKey(row.OperationId) ? 1 : 0);
                 owners += packings.ContainsKey(row.OperationId) ? 1 : 0;
                 owners += unpackings.ContainsKey(row.OperationId) ? 1 : 0;
+                owners += recyclings.ContainsKey(row.OperationId) ? 1 : 0;
                 if (owners != 1) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
                 if (uploads.TryGetValue(row.OperationId, out var upload))
                 {
@@ -116,6 +118,14 @@ internal static class FilePathLocks
                     scope = new[] { source, target }.SingleOrDefault(item => item.Hash == row.PathHash);
                     if (scope is null) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
                 }
+                else if (recyclings.TryGetValue(row.OperationId, out var recycling))
+                {
+                    var command = FileTreeRecyclingValidation.ReadCommand(recycling); FileTreeRecyclingValidation.Command(command);
+                    var plan = FileTreeRecyclingValidation.ReadPlan(recycling); FileTreeRecyclingValidation.Plan(plan);
+                    scope = new(command.Source);
+                    if (plan.Command != command || recycling.SourceHash != scope.Hash || row.PathHash != scope.Hash || recycling.ExecutionJobId != FileTreeRecyclingValidation.ExecutionId(recycling.Id))
+                        throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+                }
                 var kind = token ? "Token" : "Path";
                 if (row.ScopeKind != "Legacy" && (row.ScopeKind != kind || row.RootId != scope?.RootId || row.RelativePath != scope?.Path)) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
                 if (row.ScopeKind == "Legacy") { row.ScopeKind = kind; row.RootId = scope?.RootId; row.RelativePath = scope?.Path; }
@@ -138,12 +148,13 @@ internal static class FilePathLocks
         var moves = db.FileTreeMoveOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         var packings = db.FileTreePackingOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         var unpackings = db.FileTreeUnpackingOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
+        var recyclings = db.FileTreeRecyclingOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         if (await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
-            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) + await trees.CountAsync(cancellationToken) + await moves.CountAsync(cancellationToken) + await packings.CountAsync(cancellationToken) + await unpackings.CountAsync(cancellationToken) >= 64 ||
+            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) + await trees.CountAsync(cancellationToken) + await moves.CountAsync(cancellationToken) + await packings.CountAsync(cancellationToken) + await unpackings.CountAsync(cancellationToken) + await recyclings.CountAsync(cancellationToken) >= 64 ||
             await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
             await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
-            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) + await trees.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await moves.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await packings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await unpackings.CountAsync(item => item.ActorSubject == actor, cancellationToken) >= 4)
+            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) + await trees.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await moves.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await packings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await unpackings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await recyclings.CountAsync(item => item.ActorSubject == actor, cancellationToken) >= 4)
             throw new InvalidOperationException("FILES_OPERATION_BUDGET_EXHAUSTED");
     }
 }

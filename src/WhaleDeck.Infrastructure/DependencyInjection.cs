@@ -99,6 +99,11 @@ public static class DependencyInjection
         services.AddScoped<IFileTreeUnpackingRepository, FileTreeUnpackingRepository>();
         services.AddScoped<FileTreeUnpackingService>();
         services.AddScoped<FileTreeUnpackingDispatcher>();
+        services.AddSingleton<IFileTreeRecyclingProtector, FilePlanProtector>();
+        services.AddSingleton<IFileTreeRecyclingGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddScoped<IFileTreeRecyclingRepository, FileTreeRecyclingRepository>();
+        services.AddScoped<FileTreeRecyclingService>();
+        services.AddScoped<FileTreeRecyclingDispatcher>();
         services.AddSingleton<IFileTreeMoveProtector, FilePlanProtector>();
         services.AddSingleton<IFileTreeMoveGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<IFileTreeMoveRepository, FileTreeMoveRepository>();

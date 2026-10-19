@@ -17,6 +17,8 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
     public DbSet<FileTreeCopyOperation> FileTreeCopyOperations => Set<FileTreeCopyOperation>();
     public DbSet<FileTreePackingOperation> FileTreePackingOperations => Set<FileTreePackingOperation>();
     public DbSet<FileTreeUnpackingOperation> FileTreeUnpackingOperations => Set<FileTreeUnpackingOperation>();
+    public DbSet<FileTreeRecyclingOperation> FileTreeRecyclingOperations => Set<FileTreeRecyclingOperation>();
+    public DbSet<FileTreeCapture> FileTreeCaptures => Set<FileTreeCapture>();
     public DbSet<FileTreeMoveOperation> FileTreeMoveOperations => Set<FileTreeMoveOperation>();
     public DbSet<FileRecoveryOperation> FileRecoveryOperations => Set<FileRecoveryOperation>();
     public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
@@ -96,6 +98,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
         ConfigureTreeCopies(modelBuilder);
         ConfigureTreePackings(modelBuilder);
         ConfigureTreeUnpackings(modelBuilder);
+        ConfigureTreeRecyclings(modelBuilder);
         ConfigureTreeMoves(modelBuilder);
         ConfigureFileRecovery(modelBuilder);
         ConfigureAuditAndSettings(modelBuilder);

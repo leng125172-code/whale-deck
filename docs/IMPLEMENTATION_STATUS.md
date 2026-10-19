@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 新目录回收业务后端候选：永久计划/确认双任务、共享层级锁/预算/Worker/审计/API及独立签名HDD捕获目录、增量迁移与不可变触发器已实现，1294 Unit/141 Integration通过（6本机原生跳过）。新同源码实际PG/CI尚未执行、未安装，当前管理员第八类接管及WebUI仍缺；实际adc6cae/1.31不变，完整76项继续。[边界](qa/FILE_TREE_RECYCLING_BFF.md)。前序1722242四CI已全绿。
+
 - 新目录回收Agent1.32为未安装候选：独立强类型RPC、固定helper/可信模块/精确默认升级，1265 Unit、139 Integration（6本机原生跳过）及40真实Linux通过。cf7a6a3引擎冻结214项分批通过（第一次选择命令ImportError保留）；完整新提交门禁/永久业务任务/Worker/API/UI/真实身份验收仍待继续。实际adc6cae/1.31不变，全部76项active；[证据边界](qa/FILE_TREE_RECYCLING_AGENT.md)。
 
 - 目录回收20项、HDD目录恢复16项和目录移动安全增强34项真实Linux测试通过；本批仍为未安装源码，不是公开RPC/API/UI。下一步固定提交完整门禁与Agent/业务/页面接通。实际adc6cae/RPC1.31和全部76项范围不变；下方19项为历史工作副本。
