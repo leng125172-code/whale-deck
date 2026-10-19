@@ -101,6 +101,24 @@ test('directory packing is a distinct current-administrator recovery kind', asyn
   expect(creates(control)).toHaveLength(1)
   expect(confirms(control)).toHaveLength(1)
 })
+
+test('archive unpacking is a distinct current-administrator recovery kind', async ({ page }) => {
+  const control = await installFileRecoveryFixture(page, { kind: 'tree-unpack' })
+  await page.goto('/files')
+  const dialog = await plan(page)
+  await expect(dialog.getByText('归档解压', { exact: true })).toBeVisible()
+  expect(creates(control)[0].body.kind).toBe('tree-unpack')
+  await page.reload()
+  await expect(dialog.getByRole('button', { name: '接受未知结果', exact: true })).toBeEnabled()
+  expect(control.state.reads).toContain('/tree-unpack/' + control.candidate.intentId)
+  expect(confirms(control)).toHaveLength(0)
+  await dialog.getByRole('button', { name: '接受未知结果', exact: true }).click()
+  await page.getByRole('button', { name: '确认处置', exact: true }).click()
+  await dialog.getByRole('button', { name: '查询原接管任务', exact: true }).click()
+  await expect(dialog.getByText('处置已记录，不等于原文件操作成功', { exact: true })).toBeVisible()
+  expect(creates(control)).toHaveLength(1)
+  expect(confirms(control)).toHaveLength(1)
+})
 test('lost confirmation reply disables another confirmation until read-only reconciliation', async ({
   page,
 }) => {

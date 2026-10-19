@@ -6,6 +6,6 @@
   "summary": "面向 Precision 7920 工作站的容器化控制平面，包含管理界面、主机 Agent 与维护入口。MVP/P1 主体已部署，P0–P5 扩展目标仍在推进。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-19）",
-  "nextStep": "73513a4/1.31解压Agent已安装并签收真实UDS/helper、两格式/PAX/GNU及超过1GiB完整输出/独立磁盘；7类旧文件/OIDC/资产/宿主回归通过。业务绑定/接口/网关材料已实现但未部署，继续EF/持久双任务/共享锁/Worker/审计/API/UI、目录回收恢复、容器文件及全部76项。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
+  "nextStep": "e365f4c解压后端/永久双任务/锁/Worker/当前管理员恢复/API和输入证明迁移通过本地与冻结实际PG，未部署；独立页面281前端单元/127联合浏览器及另1接管专项、视觉通过。冻结页面候选并完成最终CI/实库后覆盖发布，真实身份BFF/安装态与网页验收，再继续目录回收恢复、容器文件及全部76项。"
 }

@@ -26,10 +26,12 @@ import FileArchivePanel from '@/components/files/FileArchivePanel.vue'
 import FileTreeCopyPanel from '@/components/files/FileTreeCopyPanel.vue'
 import FileTreeMovePanel from '@/components/files/FileTreeMovePanel.vue'
 import FileTreePackingPanel from '@/components/files/FileTreePackingPanel.vue'
+import FileTreeUnpackingPanel from '@/components/files/FileTreeUnpackingPanel.vue'
 import FileRecoveryPanel from '@/components/files/FileRecoveryPanel.vue'
 import { canCopyDirectory } from '@/services/fileTreeCopies'
 import { canMoveDirectory } from '@/services/fileTreeMoves'
 import { canPackDirectory } from '@/services/fileTreePackings'
+import { canUnpackArchive } from '@/services/fileTreeUnpackings'
 import { archiveEligible } from '@/services/fileArchives'
 import { textEligible } from '@/services/fileText'
 import type { PreparedFileText } from '@/services/fileText'
@@ -42,11 +44,13 @@ const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
   archiveOperationLocked = ref(false),
   treeCopyLocked = ref(false),
   treeMoveLocked = ref(false),
-  treePackingLocked = ref(false)
+  treePackingLocked = ref(false),
+  treeUnpackingLocked = ref(false)
 const archivePanel = ref<InstanceType<typeof FileArchivePanel> | null>(null)
 const treeCopyPanel = ref<InstanceType<typeof FileTreeCopyPanel> | null>(null)
 const treeMovePanel = ref<InstanceType<typeof FileTreeMovePanel> | null>(null)
 const treePackingPanel = ref<InstanceType<typeof FileTreePackingPanel> | null>(null)
+const treeUnpackingPanel = ref<InstanceType<typeof FileTreeUnpackingPanel> | null>(null)
 const mutationLocked = computed(
   () =>
     mutationOperationLocked.value ||
@@ -54,7 +58,8 @@ const mutationLocked = computed(
     archiveOperationLocked.value ||
     treeCopyLocked.value ||
     treeMoveLocked.value ||
-    treePackingLocked.value,
+    treePackingLocked.value ||
+    treeUnpackingLocked.value,
 )
 function canTreeCopy(entry: FileEntry) {
   return canCopyDirectory(
@@ -70,6 +75,12 @@ function canTreeMove(entry: FileEntry) {
 }
 function canTreePack(entry: FileEntry) {
   return canPackDirectory(
+    roots.value.find((root) => root.id === rootId.value),
+    entry,
+  )
+}
+function canTreeUnpack(entry: FileEntry) {
+  return canUnpackArchive(
     roots.value.find((root) => root.id === rootId.value),
     entry,
   )
@@ -109,6 +120,12 @@ function openMutation(kind: FileMutationKind, entry?: FileEntry) {
   mutationPanel.value?.open(kind, entry)
 }
 function fileAction(command: unknown, entry: FileEntry) {
+  if (!authorized.value || busy.value || activeIntent.value || frozen.value || mutationLocked.value)
+    return
+  if (command === 'unpack' && canTreeUnpack(entry)) {
+    treeUnpackingPanel.value?.open(entry)
+    return
+  }
   if (command === 'history' && canHistory.value) archivePanel.value?.openHistory(entry)
   else if (command === 'trash' && canArchive.value) archivePanel.value?.trash(entry)
   else if (command === 'edit' && canEdit.value) void textEditor.value?.open(entry)
@@ -650,7 +667,8 @@ onBeforeUnmount(() => {
           archiveOperationLocked ||
           treeCopyLocked ||
           treeMoveLocked ||
-          treePackingLocked
+          treePackingLocked ||
+          treeUnpackingLocked
         "
         @locked="mutationOperationLocked = $event"
         @changed="afterMutation"
@@ -668,7 +686,8 @@ onBeforeUnmount(() => {
           archiveOperationLocked ||
           treeCopyLocked ||
           treeMoveLocked ||
-          treePackingLocked
+          treePackingLocked ||
+          treeUnpackingLocked
         "
         @locked="editorLocked = $event"
         @prepared="acceptText"
@@ -687,7 +706,8 @@ onBeforeUnmount(() => {
           editorLocked ||
           treeCopyLocked ||
           treeMoveLocked ||
-          treePackingLocked
+          treePackingLocked ||
+          treeUnpackingLocked
         "
         @locked="archiveOperationLocked = $event"
         @changed="afterMutation"
@@ -706,7 +726,8 @@ onBeforeUnmount(() => {
           editorLocked ||
           archiveOperationLocked ||
           treeMoveLocked ||
-          treePackingLocked
+          treePackingLocked ||
+          treeUnpackingLocked
         "
         @locked="treeCopyLocked = $event"
         @changed="afterMutation"
@@ -725,7 +746,8 @@ onBeforeUnmount(() => {
           editorLocked ||
           archiveOperationLocked ||
           treeCopyLocked ||
-          treePackingLocked
+          treePackingLocked ||
+          treeUnpackingLocked
         "
         @locked="treeMoveLocked = $event"
         @changed="afterMutation"
@@ -744,9 +766,30 @@ onBeforeUnmount(() => {
           editorLocked ||
           archiveOperationLocked ||
           treeCopyLocked ||
-          treeMoveLocked
+          treeMoveLocked ||
+          treeUnpackingLocked
         "
         @locked="treePackingLocked = $event"
+        @changed="afterMutation"
+        @failure="message"
+      />
+      <FileTreeUnpackingPanel
+        ref="treeUnpackingPanel"
+        :roots="roots"
+        :root-id="rootId"
+        :path="path"
+        :disabled="
+          busy ||
+          activeIntent ||
+          !!frozen ||
+          mutationOperationLocked ||
+          editorLocked ||
+          archiveOperationLocked ||
+          treeCopyLocked ||
+          treeMoveLocked ||
+          treePackingLocked
+        "
+        @locked="treeUnpackingLocked = $event"
         @changed="afterMutation"
         @failure="message"
       />
@@ -874,7 +917,9 @@ onBeforeUnmount(() => {
                 >
                 <el-dropdown
                   v-if="
-                    canHistory || ((canMutate || canEdit || canArchive) && mutationEligible(row))
+                    canTreeUnpack(row) ||
+                    canHistory ||
+                    ((canMutate || canEdit || canArchive) && mutationEligible(row))
                   "
                   trigger="click"
                   :disabled="busy || activeIntent || !!frozen || mutationLocked"
@@ -889,6 +934,8 @@ onBeforeUnmount(() => {
                   >
                   <template #dropdown
                     ><el-dropdown-menu
+                      ><el-dropdown-item v-if="canTreeUnpack(row)" command="unpack"
+                        >解压归档</el-dropdown-item
                       ><el-dropdown-item
                         v-if="canEdit"
                         command="edit"
