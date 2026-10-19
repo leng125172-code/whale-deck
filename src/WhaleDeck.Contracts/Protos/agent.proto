@@ -859,3 +859,35 @@ service FileTreeUnpackingService {
   rpc Inspect(FileTreeUnpackingLookup) returns (FileTreeUnpackingReceipt);
   rpc Discard(FileTreeUnpackingApplyRequest) returns (FileTreeUnpackingReceipt);
 }
+
+// Complete HDD capture must be verified before the original directory is
+// retained privately. No caller-selected executable, UID/GID or member list.
+message FileTreeRecyclingCommand { FileLocation source = 1; string expected_version = 2; }
+message FileTreeRecyclingPlan {
+  FileTreeRecyclingCommand command = 1;
+  FileDirectoryIdentity source_parent = 2;
+  string source_policy_hash = 3; string manifest_sha256 = 4;
+  uint32 entry_count = 5; int64 total_bytes = 6; string fingerprint = 7;
+}
+message FileTreeRecyclingPlanRequest { FileTreeRecyclingCommand command = 1; RequestContext context = 2; }
+message FileTreeRecyclingApplyRequest {
+  string operation_id = 1; string owner = 2;
+  FileTreeRecyclingPlan plan = 3; RequestContext context = 4;
+}
+message FileTreeRecyclingLookup { string operation_id = 1; string owner = 2; }
+message FileTreeRecyclingReceipt {
+  string operation_id = 1; string state = 2; string fingerprint = 3;
+  string capture_id = 4; string manifest_sha256 = 5;
+  uint32 entry_count = 6; int64 total_bytes = 7;
+  bool capture_verified = 8; bool capture_may_be_retained = 9;
+  // Zero/empty only when no verified capture proof is available.
+  int64 archive_bytes = 10; string archive_sha256 = 11;
+  bool source_may_have_changed = 12; bool source_removed = 13;
+  bool originals_retained = 14;
+}
+service FileTreeRecyclingService {
+  rpc Plan(FileTreeRecyclingPlanRequest) returns (FileTreeRecyclingPlan);
+  rpc Apply(FileTreeRecyclingApplyRequest) returns (FileTreeRecyclingReceipt);
+  rpc Inspect(FileTreeRecyclingLookup) returns (FileTreeRecyclingReceipt);
+  rpc Discard(FileTreeRecyclingApplyRequest) returns (FileTreeRecyclingReceipt);
+}

@@ -8,7 +8,9 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import stat
+import sys
 import unittest
 from unittest.mock import patch
 import uuid
@@ -284,5 +286,55 @@ class TreeRecyclingTests(unittest.TestCase):
                 elif phase in ('Preparing', 'CaptureVerified'): self.assertEqual(result['state'], 'Aborted'); self.assertEqual(self.file.read_bytes(), self.data)
                 else: self.assertEqual(result['state'], 'Unknown')
 
+
+    def test_fixed_loader_uses_only_trusted_modules_and_the_registered_hdd(self):
+        folder = self.fixture.base / 'installed-recycling'; folder.mkdir(mode=0o700)
+        names = ('whaledeck-file-tree.py', 'whaledeck-tree-archive.py', 'whaledeck-tree-backups.py', 'whaledeck-tree-copies.py', 'whaledeck-tree-moves.py', 'whaledeck-tree-recycling.py')
+        for name in names:
+            target = folder / name; shutil.copyfile(Path(driver.__file__).with_name(name), target); target.chmod(0o640)
+        with patch.dict(sys.modules, {driver.__name__: driver}), patch.object(driver, '__file__', str(folder / 'whaledeck-files.py')), patch.object(driver, 'backup_engine', return_value=self.fixture.backups.engine):
+            loaded = driver.tree_recycling_engine(); request = self.request()
+            self.assertEqual(loaded.plan(request['plan']['source']), request['plan'])
+            self.assertEqual(loaded.recycle(request)['state'], 'Completed'); self.assertFalse(self.source.exists())
+            for name in names:
+                target = folder / name
+                with self.subTest(module=name):
+                    target.chmod(0o660)
+                    with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_recycling_engine()
+                    target.chmod(0o640); linked = folder / 'linked'; os.link(target, linked)
+                    with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_recycling_engine()
+                    linked.unlink(); os.chown(target, 12345, 0)
+                    with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_recycling_engine()
+                    os.chown(target, 0, 0); original = folder / 'original.py'; target.rename(original); target.symlink_to(original)
+                    with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_recycling_engine()
+                    target.unlink(); original.rename(target)
+
+    def invoke_main(self, action, value, trailing=b''):
+        reader, writer = os.pipe()
+        try:
+            os.write(writer, json.dumps(value).encode() + b'\n' + trailing)
+        finally: os.close(writer)
+        output = []
+        with os.fdopen(reader, 'r') as stream, patch.object(sys, 'stdin', stream), patch.object(sys, 'argv', ['whaledeck-files.py', action]), patch.dict(os.environ, {'INVOCATION_ID': uuid.uuid4().hex}), patch.object(driver, 'tree_recycling_engine', return_value=self.engine), patch.object(driver, 'emit', side_effect=output.append):
+            driver.main()
+        self.assertEqual(output[0]['type'], 'driver'); self.assertEqual(len(output), 2)
+        return output[1]
+
+    def test_fixed_driver_dispatches_plan_apply_lookup_and_non_replaying_discard(self):
+        request = self.request()
+        self.assertEqual(self.invoke_main('tree-trash-plan', request['plan']['source']), request['plan'])
+        canceled = {**request, 'operationId': uuid.uuid4().hex}
+        self.assertEqual(self.invoke_main('tree-trash-discard', canceled)['state'], 'Aborted')
+        self.assertTrue(self.source.exists())
+        result = self.invoke_main('tree-trash-apply', request); self.assertEqual(result['state'], 'Completed')
+        self.assertEqual(self.invoke_main('tree-trash-status', {key: request[key] for key in ('operationId', 'owner')}), result)
+        self.assertEqual(self.invoke_main('tree-trash-discard', request), result)
+
+    def test_fixed_driver_rejects_trailing_input_and_unapproved_actions_before_effects(self):
+        request = self.request(); original = self.source_proof()
+        with self.assertRaises(driver.Rejected): self.invoke_main('tree-trash-apply', request, b'{}\n')
+        for action in ('tree-trash-delete', 'tree-trash-shell', 'tree-trash-apply;true'):
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_ACTION_INVALID'): self.invoke_main(action, request)
+        self.assertEqual(self.source_proof(), original); self.assertFalse(self.receipt(request).exists())
 
 if __name__ == '__main__': unittest.main()

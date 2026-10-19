@@ -37,7 +37,7 @@ assert_metadata /usr/local/libexec/whaledeck-files.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-operations.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-backups.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-archives.py '750:root:root'
-for module in /usr/local/libexec/whaledeck-file-tree.py /usr/local/libexec/whaledeck-tree-copies.py /usr/local/libexec/whaledeck-tree-moves.py /usr/local/libexec/whaledeck-tree-archive.py /usr/local/libexec/whaledeck-tree-packing.py /usr/local/libexec/whaledeck-tree-unpacking.py; do
+for module in /usr/local/libexec/whaledeck-file-tree.py /usr/local/libexec/whaledeck-tree-copies.py /usr/local/libexec/whaledeck-tree-moves.py /usr/local/libexec/whaledeck-tree-archive.py /usr/local/libexec/whaledeck-tree-packing.py /usr/local/libexec/whaledeck-tree-unpacking.py /usr/local/libexec/whaledeck-tree-backups.py /usr/local/libexec/whaledeck-tree-recycling.py; do
   assert_metadata "$module" '750:root:root'
   [[ ! -L $module && $(stat -c %h "$module") == 1 ]]
 done

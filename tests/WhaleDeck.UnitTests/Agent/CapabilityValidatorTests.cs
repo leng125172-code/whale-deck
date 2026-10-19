@@ -73,6 +73,18 @@ public sealed class CapabilityValidatorTests : IDisposable
     }
 
     [Theory]
+    [InlineData("Plan")][InlineData("Apply")][InlineData("Inspect")][InlineData("Discard")]
+    public void DirectoryRecycleCannotReuseOtherFileCapabilitiesOrReplayItsOwn(string action)
+    {
+        var method = "/whaledeck.agent.v1.FileTreeRecyclingService/" + action;
+        Assert.False(_validator.Validate(null, method));
+        foreach (var service in new[] { "FileArchiveService", "FileTreeMoveService", "FileTreeUnpackingService" })
+            Assert.False(_validator.Validate(Sign(DateTimeOffset.UtcNow.AddSeconds(45), "recycle-wrong-service", "/whaledeck.agent.v1." + service + "/" + action), method));
+        var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "recycle-correct-method", method);
+        Assert.True(_validator.Validate(token, method)); Assert.False(_validator.Validate(token, method));
+    }
+
+    [Theory]
     [InlineData("Inspect")]
     [InlineData("Apply")]
     public void PrivateConfigurationMethodsRequireTheirOwnSingleUseCapability(string action)
