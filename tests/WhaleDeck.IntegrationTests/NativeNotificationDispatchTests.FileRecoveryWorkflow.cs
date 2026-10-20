@@ -178,7 +178,8 @@ public sealed partial class NativeNotificationDispatchTests
                 Assert.Equal("Overwrite", proof.Kind); Assert.Equal(overwritten.Id, capture.IntentId);
                 Assert.Equal(overwritten.OwnerHash, capture.OwnerHash); Assert.Equal(overwritten.TargetHash, capture.SourceHash);
                 Assert.Equal(new FileTreeRecyclingCommand(plan.Command.Target, plan.Command.TargetExpectedVersion), proof.Source);
-                Assert.Equal(plan.TargetManifestSha256, proof.ManifestSha256); Assert.Equal(plan.TargetTreeSha256, proof.ContentSha256);
+                Assert.Equal(plan.TargetManifestSha256, proof.ManifestSha256); Assert.Equal(plan.TargetContentSha256, proof.ContentSha256);
+                Assert.NotEqual(plan.TargetTreeSha256, proof.ContentSha256);
                 Assert.Equal(plan.TargetEntryCount, proof.EntryCount); Assert.Equal(plan.TargetTotalBytes, proof.TotalBytes);
                 Assert.Equal(overwritten.BackupArchiveBytes, proof.ArchiveBytes); Assert.Equal(overwritten.BackupArchiveSha256, proof.ArchiveSha256);
                 if (overwriteCaptureBefore is not null) Assert.Equal(overwriteCaptureBefore, JsonSerializer.Serialize(capture));

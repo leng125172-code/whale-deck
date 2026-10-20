@@ -17,6 +17,8 @@
 - 最终本地Release构建：0警告、0错误。1758 Unit及146 Integration通过；本机6项原生依赖测试明确跳过，真实冻结PostgreSQL另验。
 - 新BFF验证器公开DTO纯契约15项通过；8项清理隔离测试在Windows明确跳过，等待真实Linux root执行。
 - Linux引擎新增独立内容域计算、错摘要指纹拒绝、实际新捕获用于不存在目标恢复和再次覆盖；另补旧root回执可查但不能重做。仅编译检查，不先宣称Linux执行通过。
+- 冻结c865a75现已在工作站实际Linux root执行：32项覆盖恢复引擎、23项BFF契约/清理隔离（无跳过）、5项观察器全部通过。源码只在隔离测试夹具运行，未安装1.35 helper。
+- 首轮冻结c865a75真实PG实际执行失败，状态`dispatch-33f0bbaed37b44878619d918cb887b22.json`与CI原生PG均记录失败；独立临时资源清理完成。白名单诊断定位共用现任管理员回收测试`NativeNotificationDispatchTests.FileRecoveryWorkflow.cs:181`仍把旧`TargetTreeSha256`作为capture.Content的预期。改为正确`TargetContentSha256`并增加必须不等于tree的断言；不修改产品代码或削弱签名/归档验证，须在新冻结源码完整重验。
 - 新真实BFF脚本仅已实现/编译，尚未执行：通过产品回收生成输入、换登录绑定、计划/取消/陈旧目标拒绝、真实覆盖、两类恢复实际复用、CSRF/Origin/普通用户拒绝、SQL/Outbox/审计/零锁和完整字节/元数据。只在成功且精确路径/inode/全SHA核验后清理自有载荷；保留永久归档、目录、Job、审计和root回执，不在目录背后删除归档。
 
 ## 保留的失败与实际部署边界

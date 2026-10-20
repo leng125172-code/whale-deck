@@ -310,10 +310,12 @@ def main():
         absent_started = post('files/tree-restorings/' + absent['id'] + '/confirm', {'planHash': absent_ready['confirmation']['planHash'], 'confirmed': True, 'version': absent_ready['version']}, key=absent['id']).json(); other_jobs.append(absent_started['executionJobId'])
         assert wait('tree-restorings', absent['id'], TERMINAL + ('Unknown',))['state'] == 'Succeeded'
         restored_old = proof(folder / 'restored-old/中文.bin'); assert restored_old[-1] == originals['target'][1][-1] and restored_old[:2] != originals['target'][1][:2]
+        assert (restored_old[3], restored_old[4], stat.S_IMODE(restored_old[2]), restored_old[7]) == (registry['ownerUid'], registry['ownerGid'], 0o640, originals['target'][1][7])
         reuse_command = {'captureId': overwritten['id'], 'target': target, 'targetExpectedVersion': current_version('target')}
         reuse = wait(KIND, queue(reuse_command)['id'], ('Ready',)); assert reuse['command']['captureKind'] == 'Overwrite'
         second = confirm(reuse)
         final_output = proof(folder / 'target/中文.bin'); assert final_output[-1] == originals['target'][1][-1] and final_output[:2] != originals['target'][1][:2]
+        assert (final_output[3], final_output[4], stat.S_IMODE(final_output[2]), final_output[7]) == (registry['ownerUid'], registry['ownerGid'], 0o640, originals['target'][1][7])
         new_private = folder / '.whaledeck-files' / (uuid.UUID(second['executionJobId']).hex + '.tree-overwrite-restore')
         assert proof(new_private)[:2] == first_tree[:2] and proof(new_private / '中文.bin')[:8] == first_output[:8] and proof(new_private / '中文.bin')[-1] == first_output[-1]
         second_capture = next(item for item in get('files/tree-recyclings/captures', params=target).json()['items'] if item['id'] == second['overwrittenCaptureId'])
