@@ -57,6 +57,11 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal(2, await new NotificationDispatchStore(db).RouteBatchAsync(now, default));
             Assert.Equal(2, await db.NotificationDispatchReceipts.CountAsync(receipt => receipt.Outcome == "Personal" &&
                 db.NotificationEvents.Any(item => item.Id == receipt.NotificationId && (item.SourceId == id || item.SourceId == execution))));
+            // Exercise normal retention for these two synthetic facts as well;
+            // later tests must not inherit their otherwise-valid 14-day receipts.
+            Assert.Equal(2, await NotificationRetention.PruneAsync(db, now.AddDays(15), default));
+            Assert.Empty(await db.NotificationEvents.ToArrayAsync());
+            Assert.Empty(await db.NotificationDispatchReceipts.ToArrayAsync());
             Console.WriteLine("INBOX_PHASE=tree-capture-old-schema-upgrade-preserves-original-signature");
         }
         finally { File.Delete(keyPath); }
