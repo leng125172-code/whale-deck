@@ -136,15 +136,17 @@ public sealed class OperationStoreTests
             var store = new OperationStore(BuildConfiguration(root)); var operation = store.Create("Initial");
             store.Save(operation, "initial");
             using var barrier = new Barrier(2);
-            var writer = Task.Run(() =>
+            // Both parties block at a synchronous barrier. Dedicated threads
+            // test publication, not thread-pool growth under the full suite.
+            var writer = Task.Factory.StartNew(() =>
             {
                 for (var index = 0; index < 100; index++)
                 {
                     Assert.True(barrier.SignalAndWait(TimeSpan.FromSeconds(5)));
                     operation.Phase = "Publication"; store.Save(operation, "publication");
                 }
-            });
-            try
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            var reader = Task.Factory.StartNew(() =>
             {
                 for (var index = 0; index < 100; index++)
                 {
@@ -152,8 +154,8 @@ public sealed class OperationStoreTests
                     var snapshot = store.GetMaintenance(); Assert.Equal(operation.OperationId, snapshot.OperationId);
                     Assert.True(snapshot.Phase is "Initial" or "Publication");
                 }
-            }
-            finally { await writer.WaitAsync(TimeSpan.FromSeconds(10)); }
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            await Task.WhenAll(writer, reader).WaitAsync(TimeSpan.FromSeconds(15));
             Assert.Equal("Publication", store.GetMaintenance().Phase);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }

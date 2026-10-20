@@ -21,7 +21,7 @@ public sealed class FileTreeOverwriteRestoringPolicyTests
         SourcePolicyHash = new('D', 64), TargetPolicyHash = new('E', 64), Fingerprint = new('F', 64),
         ArchiveSha256 = new('1', 64), ContentSha256 = new('2', 64), ArchiveBytes = FileTreeUnpackingPolicy.MaximumArchiveBytes,
         EntryCount = FileTreeCopyPolicy.MaximumEntries, TotalBytes = FileTreeCopyPolicy.MaximumBytes,
-        TargetManifestSha256 = new('4', 64), TargetTreeSha256 = new('5', 64),
+        TargetManifestSha256 = new('4', 64), TargetTreeSha256 = new('5', 64), TargetContentSha256 = new('6', 64),
         TargetEntryCount = FileTreeCopyPolicy.MaximumEntries, TargetTotalBytes = FileTreeCopyPolicy.MaximumBytes };
 
     [Theory]
@@ -46,13 +46,15 @@ public sealed class FileTreeOverwriteRestoringPolicyTests
     public void FlatPlanRoundTripsFullUInt64IdentitiesAndIndependentWholeDirectoryLimits()
     {
         var plan = Plan(); var value = FileTreeOverwriteRestoringPolicy.PlanInput(plan);
-        Assert.Equal(15, value.EnumerateObject().Count());
+        Assert.Equal(16, value.EnumerateObject().Count());
         Assert.Equal(plan, FileTreeOverwriteRestoringPolicy.Plan(value, Command()));
         Assert.Equal(ulong.MaxValue, value.GetProperty("targetParent")[0].GetUInt64());
         Assert.Equal(9007199254740993UL, value.GetProperty("targetParent")[1].GetUInt64());
         Assert.Equal(9007199254740993UL, value.GetProperty("targetIdentity")[0].GetUInt64());
         Assert.Equal(ulong.MaxValue, value.GetProperty("targetIdentity")[1].GetUInt64());
         Assert.Equal(FileTreeCopyPolicy.MaximumBytes, value.GetProperty("targetTotalBytes").GetInt64());
+        Assert.Equal(plan.TargetContentSha256, value.GetProperty("targetContentSha256").GetString());
+        Assert.NotEqual(plan.TargetTreeSha256, plan.TargetContentSha256);
         Assert.False(value.TryGetProperty("entries", out _));
         Assert.False(value.TryGetProperty("plan", out _));
         Assert.Equal(1024L * 1024 * 1024, FileTransferPolicy.MaximumBytes);
@@ -121,11 +123,23 @@ public sealed class FileTreeOverwriteRestoringPolicyTests
 
     [Theory]
     [InlineData("ArchiveSha256")][InlineData("ContentSha256")][InlineData("SourcePolicyHash")]
-    [InlineData("TargetPolicyHash")][InlineData("Fingerprint")][InlineData("TargetManifestSha256")][InlineData("TargetTreeSha256")]
+    [InlineData("TargetPolicyHash")][InlineData("Fingerprint")][InlineData("TargetManifestSha256")][InlineData("TargetTreeSha256")][InlineData("TargetContentSha256")]
     public void PlanRejectsInvalidArchiveAndExistingTargetHashes(string property)
     {
         var plan = Plan(); typeof(FileTreeOverwriteRestoringPlan).GetProperty(property)!.SetValue(plan, "bad");
         Assert.Throws<ArgumentException>(() => FileTreeOverwriteRestoringPolicy.PlanInput(plan));
+    }
+
+    [Theory]
+    [InlineData("")][InlineData("bad")][InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public void TargetContentProofIsRequiredAndValidatedIndependentlyOfRenameStableTreeProof(string invalid)
+    {
+        var original = FileTreeOverwriteRestoringPolicy.PlanInput(Plan());
+        var node = JsonNode.Parse(original.GetRawText())!.AsObject();
+        node["targetContentSha256"] = invalid;
+        Assert.Throws<ArgumentException>(() => FileTreeOverwriteRestoringPolicy.Plan(JsonSerializer.SerializeToElement(node), Command()));
+        node.Remove("targetContentSha256");
+        Assert.Throws<InvalidOperationException>(() => FileTreeOverwriteRestoringPolicy.Plan(JsonSerializer.SerializeToElement(node), Command()));
     }
 
     [Fact]
@@ -297,8 +311,9 @@ public sealed class FileTreeOverwriteRestoringPolicyTests
         var plan = await Assert.ThrowsAsync<RpcException>(() => service.Plan(new() { Context = new() { ActorSubject = "admin" }, Command = invalidTarget }, null!));
         Assert.Equal(StatusCode.InvalidArgument, plan.StatusCode);
         var capabilities = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
-        Assert.Equal(34U, capabilities.ProtocolMinor);
+        Assert.Equal(35U, capabilities.ProtocolMinor);
         Assert.Contains("files.tree-overwrite-restore-intents", capabilities.Capabilities);
+        Assert.Contains("files.tree-overwrite-restore-content-proof", capabilities.Capabilities);
         Assert.Contains("files.tree-restore-intents", capabilities.Capabilities);
         Assert.Equal("whaledeck.agent.v1.FileTreeOverwriteRestoringService", FileTreeOverwriteRestoringService.Descriptor.FullName);
     }

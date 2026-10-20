@@ -135,7 +135,9 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal("Overwrite", oldTargetProof.Kind); Assert.Equal(savedOne.OwnerHash, oldTargetCapture.OwnerHash);
             Assert.NotEqual(historical.OwnerHash, oldTargetCapture.OwnerHash); Assert.Equal(savedOne.TargetHash, oldTargetCapture.SourceHash);
             Assert.Equal(new FileTreeRecyclingCommand(command.Target, command.TargetExpectedVersion), oldTargetProof.Source);
-            Assert.Equal(oldTargetPlan.TargetManifestSha256, oldTargetProof.ManifestSha256); Assert.Equal(oldTargetPlan.TargetTreeSha256, oldTargetProof.ContentSha256);
+            Assert.Equal(oldTargetPlan.TargetManifestSha256, oldTargetProof.ManifestSha256);
+            Assert.Equal(oldTargetPlan.TargetContentSha256, oldTargetProof.ContentSha256);
+            Assert.NotEqual(oldTargetPlan.TargetTreeSha256, oldTargetProof.ContentSha256);
             Assert.Equal(oldTargetPlan.TargetEntryCount, oldTargetProof.EntryCount); Assert.Equal(oldTargetPlan.TargetTotalBytes, oldTargetProof.TotalBytes);
             Assert.Equal(completedOne.BackupArchiveBytes, oldTargetProof.ArchiveBytes); Assert.Equal(completedOne.BackupArchiveSha256, oldTargetProof.ArchiveSha256);
             Assert.Single(await db.AuditEvents.Where(item => item.JobId == confirmedOne.ExecutionJobId && item.Action == "files.tree-overwrite-restore.result").ToArrayAsync());
@@ -149,6 +151,10 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.True(await worker.TickAsync(default)); var againReady = await service.GetAsync(actor, again.Id, default);
             Assert.Equal("Ready", againReady.State); Assert.Equal("Overwrite", againReady.Command.CaptureKind);
             Assert.Equal(command.Target, againReady.Command.Source); Assert.Equal(oldTargetProof.TotalBytes, againReady.TotalBytes);
+            var againRow = Assert.IsType<FileTreeOverwriteRestoringOperation>(await repository.OwnedAsync(actor, againReady.Id, default));
+            var againPlan = FileTreeOverwriteRestoringValidation.ReadPlan(againRow);
+            Assert.Equal(oldTargetPlan.TargetContentSha256, againPlan.ContentSha256);
+            Assert.NotEqual(oldTargetPlan.TargetTreeSha256, againPlan.ContentSha256);
             var againConfirmed = await Confirm(againReady); Assert.True(await worker.TickAsync(default));
             Assert.Equal("Succeeded", (await service.GetAsync(actor, againConfirmed.Id, default)).State);
             var previousKindGateway = new NativeOverwriteCaptureAbsentGateway(oldTargetCapture);
@@ -157,7 +163,12 @@ public sealed partial class NativeNotificationDispatchTests
             var fromOverwrite = await previousKindService.QueueAsync(actor, new(oldTargetCapture.Id, new("test.overwrite", "absent-from-overwrite")), Guid.NewGuid().ToString("D"), default);
             Assert.True(await previousKindWorker.TickAsync(default)); var fromOverwriteReady = await previousKindService.GetAsync(actor, fromOverwrite.Id, default);
             Assert.Equal("Ready", fromOverwriteReady.State); Assert.Equal("Overwrite", fromOverwriteReady.Command.CaptureKind);
-            Assert.Equal(oldTargetProof.ArchiveBytes, fromOverwriteReady.ArchiveBytes); await previousKindService.CancelAsync(actor, fromOverwriteReady.Id, default);
+            Assert.Equal(oldTargetProof.ArchiveBytes, fromOverwriteReady.ArchiveBytes);
+            var fromOverwriteRow = Assert.IsType<FileTreeRestoringOperation>(await absentRepository.OwnedAsync(actor, fromOverwriteReady.Id, default));
+            var fromOverwritePlan = FileTreeRestoringValidation.ReadPlan(fromOverwriteRow);
+            Assert.Equal(oldTargetPlan.TargetContentSha256, fromOverwritePlan.ContentSha256);
+            Assert.NotEqual(oldTargetPlan.TargetTreeSha256, fromOverwritePlan.ContentSha256);
+            await previousKindService.CancelAsync(actor, fromOverwriteReady.Id, default);
 
             var cancelReady = await Ready("cancel-ready"); await service.CancelAsync(actor, cancelReady.Id, default);
             await Assert.ThrowsAsync<InvalidOperationException>(() => Confirm(cancelReady));
@@ -363,7 +374,7 @@ public sealed partial class NativeNotificationDispatchTests
             return Task.FromResult(new FileTreeOverwriteRestoringPlan(command, capture.ArchiveSha256, capture.ArchiveBytes,
                 capture.ContentSha256 ?? new('C', 64), capture.EntryCount, capture.TotalBytes, new(ulong.MaxValue, 9007199254740993UL),
                 new('D', 64), new('E', 64), new('F', 64), new('4', 64), new('5', 64), 5, 2147483655,
-                new(9007199254740993UL, ulong.MaxValue)));
+                new(9007199254740993UL, ulong.MaxValue), new('9', 64)));
         }
         public Task<FileTreeOverwriteRestoringReceipt?> InspectTreeOverwriteRestoringAsync(FileTreeOverwriteRestoringOperation operation, CancellationToken cancellationToken)
         {

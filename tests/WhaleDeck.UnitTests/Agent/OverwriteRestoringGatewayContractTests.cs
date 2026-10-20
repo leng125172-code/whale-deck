@@ -1,5 +1,13 @@
 using System.Reflection;
+using System.Buffers.Binary;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
+using Google.Protobuf;
+using Grpc.Core;
+using Grpc.Net.Client;
+using Microsoft.Extensions.Configuration;
 using WhaleDeck.Application.Services;
 using WhaleDeck.Domain.Entities;
 using WhaleDeck.Infrastructure.Agent;
@@ -22,7 +30,7 @@ public sealed class OverwriteRestoringGatewayContractTests
         FileTreeOverwriteRestoringValidation.MaximumArchiveBytes, new('2', 64), 10_000,
         FileTreeOverwriteRestoringValidation.MaximumBytes, new(ulong.MaxValue, 9_007_199_254_740_993UL),
         new('D', 64), new('E', 64), new('F', 64), new('4', 64), new('5', 64), 10_000,
-        FileTreeOverwriteRestoringValidation.MaximumBytes - 7, new(9_007_199_254_740_993UL, ulong.MaxValue));
+        FileTreeOverwriteRestoringValidation.MaximumBytes - 7, new(9_007_199_254_740_993UL, ulong.MaxValue), new('8', 64));
 
     private static FileTreeOverwriteRestoringOperation Row(App.FileTreeOverwriteRestoringPlan? plan = null) => new()
     {
@@ -55,7 +63,8 @@ public sealed class OverwriteRestoringGatewayContractTests
             SourcePolicyHash = plan.SourcePolicyHash, TargetPolicyHash = plan.TargetPolicyHash, Fingerprint = plan.Fingerprint,
             TargetManifestSha256 = plan.TargetManifestSha256, TargetTreeSha256 = plan.TargetTreeSha256,
             TargetEntryCount = (uint)plan.TargetEntryCount, TargetTotalBytes = plan.TargetTotalBytes,
-            TargetIdentity = new() { Device = plan.TargetIdentity.Device, Inode = plan.TargetIdentity.Inode }
+            TargetIdentity = new() { Device = plan.TargetIdentity.Device, Inode = plan.TargetIdentity.Inode },
+            TargetContentSha256 = plan.TargetContentSha256
         };
     }
 
@@ -83,6 +92,93 @@ public sealed class OverwriteRestoringGatewayContractTests
         Assert.Equal(FileTreeOverwriteRestoringValidation.MaximumArchiveBytes, mapped.ArchiveBytes);
         Assert.NotEqual(mapped.Command.ExpectedVersion, mapped.Command.TargetExpectedVersion);
         Assert.NotEqual(mapped.TargetManifestSha256, mapped.Command.ManifestSha256);
+        Assert.Equal(Plan().TargetContentSha256, mapped.TargetContentSha256);
+        Assert.NotEqual(mapped.TargetTreeSha256, mapped.TargetContentSha256);
+    }
+
+    [Fact]
+    public void ProtobufFieldSixteenPreservesTargetContentRatherThanSubstitutingTargetTreeProof()
+    {
+        var original = RpcPlan();
+        var decoded = Rpc.FileTreeOverwriteRestoringPlan.Parser.ParseFrom(original.ToByteArray());
+        Assert.Equal(original, decoded);
+        Assert.Equal(16, Rpc.FileTreeOverwriteRestoringPlan.Descriptor.FindFieldByName("target_content_sha256").FieldNumber);
+        Assert.Equal(Plan().TargetContentSha256, decoded.TargetContentSha256);
+        Assert.NotEqual(decoded.TargetTreeSha256, decoded.TargetContentSha256);
+        Assert.Equal(Plan(), Invoke<App.FileTreeOverwriteRestoringPlan>("OverwriteRestoringPlan", decoded, Command()));
+    }
+
+    [Theory]
+    [InlineData("")][InlineData("bad")][InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public void MissingOrMalformedTargetContentShaCannotBorrowValidTargetTreeSha(string content)
+    {
+        var rpc = RpcPlan(); rpc.TargetContentSha256 = content;
+        AssertRejected<ArgumentException>("OverwriteRestoringPlan", rpc, Command());
+        AssertRejected<ArgumentException>("OverwriteRestoringReceipt", Row(Plan() with { TargetContentSha256 = content }), Receipt());
+    }
+
+    [Theory]
+    [InlineData(1U, 34U, true, true)]
+    [InlineData(1U, 35U, true, false)]
+    [InlineData(1U, 35U, false, true)]
+    [InlineData(1U, 35U, false, false)]
+    [InlineData(2U, 35U, true, true)]
+    public async Task OverwriteClientRejectsLegacyMinorOrEitherMissingIndependentCapability(uint major, uint minor, bool intents, bool content)
+    {
+        var invoker = new CapabilitiesInvoker(Capabilities(major, minor, intents, content));
+        using var gateway = Gateway(invoker);
+        var error = await Assert.ThrowsAsync<RpcException>(() => Client<Rpc.FileTreeOverwriteRestoringService.FileTreeOverwriteRestoringServiceClient>(gateway, "OverwriteRestoringClient"));
+        Assert.Equal(StatusCode.Unimplemented, error.StatusCode);
+        Assert.Equal("FILES_TREE_CAPABILITY_UNAVAILABLE", error.Status.Detail);
+        Assert.Equal(1, invoker.Calls);
+    }
+
+    [Theory]
+    [InlineData(35U)][InlineData(36U)]
+    public async Task OverwriteClientAcceptsOnlyNewMinorWithBothExplicitCapabilities(uint minor)
+    {
+        var invoker = new CapabilitiesInvoker(Capabilities(1, minor, true, true));
+        using var gateway = Gateway(invoker);
+        Assert.IsType<Rpc.FileTreeOverwriteRestoringService.FileTreeOverwriteRestoringServiceClient>(
+            await Client<Rpc.FileTreeOverwriteRestoringService.FileTreeOverwriteRestoringServiceClient>(gateway, "OverwriteRestoringClient"));
+        Assert.Equal(1, invoker.Calls);
+    }
+
+    [Fact]
+    public async Task AbsentTargetRestoreStillUsesItsOwnOlderThresholdAndDoesNotRequireOverwriteProofCapability()
+    {
+        var capabilities = new Rpc.CapabilitiesResponse { ProtocolMajor = 1, ProtocolMinor = 33 };
+        capabilities.Capabilities.Add("files.tree-restore-intents");
+        using var gateway = Gateway(new CapabilitiesInvoker(capabilities));
+        Assert.IsType<Rpc.FileTreeRestoringService.FileTreeRestoringServiceClient>(
+            await Client<Rpc.FileTreeRestoringService.FileTreeRestoringServiceClient>(gateway, "RestoringClient"));
+    }
+
+    [Fact]
+    public async Task ApplicationApplySendsExactIndependentTargetContentInTheOutboundProtobuf()
+    {
+        var keyFile = Path.Combine(Path.GetTempPath(), "wd-overwrite-gateway-contract-" + Guid.NewGuid().ToString("N"));
+        var key = RandomNumberGenerator.GetBytes(32);
+        File.WriteAllBytes(keyFile, key);
+        try
+        {
+            var invoker = new CapabilitiesInvoker(Capabilities(1, 35, true, true));
+            using var gateway = Gateway(invoker, keyFile);
+            using var handler = new ApplyHandler();
+            var channel = GrpcChannel.ForAddress("http://127.0.0.1", new GrpcChannelOptions { HttpHandler = handler });
+            var field = typeof(AgentGateway).GetField("_channel", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            ((GrpcChannel)field.GetValue(gateway)!).Dispose();
+            field.SetValue(gateway, channel);
+            var result = await gateway.ApplyTreeOverwriteRestoringAsync(Row(), CancellationToken.None);
+            Assert.Equal(Execution, result.OperationId);
+            var sent = Assert.IsType<Rpc.FileTreeOverwriteRestoringApplyRequest>(handler.Request);
+            Assert.Equal(Plan().TargetContentSha256, sent.Plan.TargetContentSha256);
+            Assert.NotEqual(sent.Plan.TargetTreeSha256, sent.Plan.TargetContentSha256);
+            Assert.Equal(RpcPlan(), sent.Plan);
+            Assert.Equal(Execution.ToString("N"), sent.OperationId);
+            Assert.Equal(1, handler.Calls);
+        }
+        finally { CryptographicOperations.ZeroMemory(key); File.Delete(keyFile); }
     }
 
     [Theory]
@@ -140,7 +236,7 @@ public sealed class OverwriteRestoringGatewayContractTests
 
     [Theory]
     [InlineData("parentInode")][InlineData("targetInode")][InlineData("targetManifest")][InlineData("targetTree")]
-    [InlineData("targetEntries")][InlineData("targetBytes")][InlineData("targetVersion")]
+    [InlineData("targetEntries")][InlineData("targetBytes")][InlineData("targetVersion")][InlineData("targetContent")]
     public void RpcPlanInvalidTargetProofCannotCrossTheApplicationBoundary(string field)
     {
         var rpc = RpcPlan();
@@ -153,6 +249,7 @@ public sealed class OverwriteRestoringGatewayContractTests
             case "targetEntries": rpc.TargetEntryCount = 0; break;
             case "targetBytes": rpc.TargetTotalBytes = FileTreeOverwriteRestoringValidation.MaximumBytes + 1; break;
             case "targetVersion": rpc.Command.TargetExpectedVersion = ""; break;
+            case "targetContent": rpc.TargetContentSha256 = ""; break;
         }
         AssertRejected<ArgumentException>("OverwriteRestoringPlan", rpc, Command());
     }
@@ -250,7 +347,7 @@ public sealed class OverwriteRestoringGatewayContractTests
 
     [Theory]
     [InlineData("parent")][InlineData("target")][InlineData("targetManifest")][InlineData("targetTree")]
-    [InlineData("targetEntries")][InlineData("targetBytes")][InlineData("targetVersion")]
+    [InlineData("targetEntries")][InlineData("targetBytes")][InlineData("targetVersion")][InlineData("targetContent")]
     public void RootReceiptIsRejectedWhenPersistedPlanHasLostTargetProof(string field)
     {
         var plan = Plan();
@@ -262,6 +359,7 @@ public sealed class OverwriteRestoringGatewayContractTests
             "targetTree" => plan with { TargetTreeSha256 = "" },
             "targetEntries" => plan with { TargetEntryCount = 0 },
             "targetBytes" => plan with { TargetTotalBytes = FileTreeOverwriteRestoringValidation.MaximumBytes + 1 },
+            "targetContent" => plan with { TargetContentSha256 = "" },
             _ => plan with { Command = plan.Command with { TargetExpectedVersion = "" } }
         };
         AssertRejected<ArgumentException>("OverwriteRestoringReceipt", Row(plan), Receipt());
@@ -293,4 +391,61 @@ public sealed class OverwriteRestoringGatewayContractTests
     }
     private static MethodInfo Method(string name) => typeof(AgentGateway).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)
         ?? throw new InvalidOperationException("Required pure gateway mapping is missing: " + name);
+
+    private static Rpc.CapabilitiesResponse Capabilities(uint major, uint minor, bool intents, bool content)
+    {
+        var result = new Rpc.CapabilitiesResponse { ProtocolMajor = major, ProtocolMinor = minor };
+        if (intents) result.Capabilities.Add("files.tree-overwrite-restore-intents");
+        if (content) result.Capabilities.Add("files.tree-overwrite-restore-content-proof");
+        return result;
+    }
+    private static AgentGateway Gateway(CapabilitiesInvoker invoker, string? keyFile = null)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["Agent:SocketPath"] = Path.Combine(Path.GetTempPath(), "not-a-workstation-agent-" + Guid.NewGuid().ToString("N")),
+            ["Agent:CapabilityKeyFile"] = keyFile ?? Path.Combine(Path.GetTempPath(), "not-a-workstation-key-" + Guid.NewGuid().ToString("N")) }).Build();
+        var gateway = new AgentGateway(configuration);
+        typeof(AgentGateway).GetField("_agent", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(gateway, new Rpc.AgentService.AgentServiceClient(invoker));
+        return gateway;
+    }
+    private static Task<T> Client<T>(AgentGateway gateway, string method) => (Task<T>)(typeof(AgentGateway)
+        .GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!
+        .Invoke(gateway, [CancellationToken.None]) ?? throw new InvalidOperationException("Missing client result"));
+
+    private sealed class CapabilitiesInvoker(Rpc.CapabilitiesResponse response) : CallInvoker
+    {
+        public int Calls { get; private set; }
+        public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request)
+        {
+            Assert.Equal("/whaledeck.agent.v1.AgentService/GetCapabilities", method.FullName);
+            Calls++;
+            return new(Task.FromResult((TResponse)(object)response), Task.FromResult(new Metadata()),
+                () => Status.DefaultSuccess, () => [], () => { });
+        }
+        public override TResponse BlockingUnaryCall<TRequest, TResponse>(Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request) => throw new NotSupportedException();
+        public override AsyncServerStreamingCall<TResponse> AsyncServerStreamingCall<TRequest, TResponse>(Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request) => throw new NotSupportedException();
+        public override AsyncClientStreamingCall<TRequest, TResponse> AsyncClientStreamingCall<TRequest, TResponse>(Method<TRequest, TResponse> method, string? host, CallOptions options) => throw new NotSupportedException();
+        public override AsyncDuplexStreamingCall<TRequest, TResponse> AsyncDuplexStreamingCall<TRequest, TResponse>(Method<TRequest, TResponse> method, string? host, CallOptions options) => throw new NotSupportedException();
+    }
+
+    private sealed class ApplyHandler : HttpMessageHandler
+    {
+        public Rpc.FileTreeOverwriteRestoringApplyRequest? Request { get; private set; }
+        public int Calls { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal("/whaledeck.agent.v1.FileTreeOverwriteRestoringService/Apply", request.RequestUri!.AbsolutePath);
+            Assert.True(request.Headers.Contains("x-whaledeck-capability"));
+            var body = await request.Content!.ReadAsByteArrayAsync(cancellationToken);
+            Assert.Equal(0, body[0]); Assert.Equal(body.Length - 5, BinaryPrimitives.ReadInt32BigEndian(body.AsSpan(1, 4)));
+            Request = Rpc.FileTreeOverwriteRestoringApplyRequest.Parser.ParseFrom(body.AsSpan(5)); Calls++;
+            var payload = Receipt().ToByteArray(); var frame = new byte[payload.Length + 5];
+            BinaryPrimitives.WriteInt32BigEndian(frame.AsSpan(1, 4), payload.Length); payload.CopyTo(frame, 5);
+            var response = new HttpResponseMessage(HttpStatusCode.OK) { Version = HttpVersion.Version20, Content = new ByteArrayContent(frame) };
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/grpc");
+            response.TrailingHeaders.Add("grpc-status", "0");
+            return response;
+        }
+    }
 }

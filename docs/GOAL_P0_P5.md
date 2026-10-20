@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-21覆盖历史内容证明修复候选**：发现目录inode树摘要/归档内容域混用，新增独立TargetContentSha256及Agent1.35专用能力、捕获签名与备份复核，未削弱原证明。1758 Unit/146 Integration、Release通过（6本机原生跳过），新实际Linux/PG/UDS/BFF/页面仍待验。上一1ea9de6已dev覆盖部署并核对来源/健康；完整76项保持active。[边界](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。
+
 - **2026-10-20安装态覆盖恢复子门禁通过**：57877a9验证客户端/观察器对已装6a6f8e2完成签名UDS及2MiB+7、1GiB+7完整原件/被覆盖目录/归档/新输出证明和新夹具精确清理；首轮观察器目录inode误断言已修并以5项真实Linux root回归保护，旧失败现场保留。6e68746四CI全成功，尚无候选API/Worker/WebUI覆盖发布；真实身份BFF/页面与Overwrite捕获复用继续。文件根/备份同HDD已明确，不冒充物理异盘或整个数据库平台问题。[证据](qa/FILE_TREE_OVERWRITE_RESTORING_UI.md)。完整76项仍active，下方为前序历史。
 
 - **2026-10-20覆盖恢复WebUI候选 f35ee05**：独立3字段登记、当前目录版本冻结、计划/执行双任务、by-key与丢确认只查、取消/Unknown二次确认、覆盖前备份事实及第10类接管提示已接通；历史Trash/Overwrite严格类型均可复用。364前端单元、类型/生产构建/lint/格式通过，主代理Chrome生产预览88/88通过（含320/1045/1440明暗、普通拒绝页就绪后0文件请求）。一次DEV演示身份测试环境不匹配已保留、未削弱断言；[证据与未完成边界](qa/FILE_TREE_OVERWRITE_RESTORING_UI.md)。独立观察器3项真实Linux root范围/清理测试通过，Linux客户端已发布，安装态专用签名UDS/完整磁盘核验正在观察原句柄；未部署候选，真实身份BFF/页面与全76项仍active。实际Agent/MaintenanceHost/Gateway6a6f8e2、API/Worker18f38bb保持；以下为前序历史。

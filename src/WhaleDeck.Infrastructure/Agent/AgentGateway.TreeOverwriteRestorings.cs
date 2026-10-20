@@ -15,7 +15,8 @@ public sealed partial class AgentGateway : IFileTreeOverwriteRestoringGateway
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(TimeSpan.FromSeconds(5));
         var capabilities = await GetCapabilitiesAsync(timeout.Token);
-        if (capabilities.ProtocolMajor != 1 || capabilities.ProtocolMinor < 34 || !capabilities.Capabilities.Contains("files.tree-overwrite-restore-intents"))
+        if (capabilities.ProtocolMajor != 1 || capabilities.ProtocolMinor < 35 || !capabilities.Capabilities.Contains("files.tree-overwrite-restore-intents") ||
+            !capabilities.Capabilities.Contains("files.tree-overwrite-restore-content-proof"))
             throw new RpcException(new(StatusCode.Unimplemented, "FILES_TREE_CAPABILITY_UNAVAILABLE"));
         return new(_channel);
     }
@@ -40,7 +41,7 @@ public sealed partial class AgentGateway : IFileTreeOverwriteRestoringGateway
             new(tree.Target.RootId, tree.Target.Path), "tar.gz", capture, tree.CaptureOwner, tree.CaptureKind, tree.ManifestSha256, tree.TargetExpectedVersion), value.ArchiveSha256, value.ArchiveBytes, value.ContentSha256,
             checked((int)value.EntryCount), value.TotalBytes, new(value.TargetParent.Device, value.TargetParent.Inode), value.SourcePolicyHash, value.TargetPolicyHash, value.Fingerprint,
             value.TargetManifestSha256, value.TargetTreeSha256, checked((int)value.TargetEntryCount), value.TargetTotalBytes,
-            new(value.TargetIdentity.Device, value.TargetIdentity.Inode));
+            new(value.TargetIdentity.Device, value.TargetIdentity.Inode), value.TargetContentSha256);
         FileTreeOverwriteRestoringValidation.Plan(plan); if (plan.Command != expected) throw new App.FileTransferRejectedException(); return plan;
     }
     public async Task<App.FileTreeOverwriteRestoringReceipt?> InspectTreeOverwriteRestoringAsync(FileTreeOverwriteRestoringOperation operation, CancellationToken cancellationToken)
@@ -64,7 +65,7 @@ public sealed partial class AgentGateway : IFileTreeOverwriteRestoringGateway
                 Command = OverwriteRestoringCommand(plan.Command), ArchiveSha256 = plan.ArchiveSha256, ArchiveBytes = plan.ArchiveBytes, ContentSha256 = plan.ContentSha256,
                 EntryCount = (uint)plan.EntryCount, TotalBytes = plan.TotalBytes, TargetParent = new() { Device = plan.TargetParent.Device, Inode = plan.TargetParent.Inode },
                 SourcePolicyHash = plan.SourcePolicyHash, TargetPolicyHash = plan.TargetPolicyHash, Fingerprint = plan.Fingerprint,
-                TargetManifestSha256 = plan.TargetManifestSha256, TargetTreeSha256 = plan.TargetTreeSha256, TargetEntryCount = (uint)plan.TargetEntryCount,
+                TargetManifestSha256 = plan.TargetManifestSha256, TargetTreeSha256 = plan.TargetTreeSha256, TargetContentSha256 = plan.TargetContentSha256, TargetEntryCount = (uint)plan.TargetEntryCount,
                 TargetTotalBytes = plan.TargetTotalBytes, TargetIdentity = new() { Device = plan.TargetIdentity.Device, Inode = plan.TargetIdentity.Inode } } };
         var value = discard ? await client.DiscardAsync(request, Headers(OverwriteRestoringMethod + "Discard"), deadline: DateTime.UtcNow.AddMinutes(10), cancellationToken: cancellationToken)
             : await client.ApplyAsync(request, Headers(OverwriteRestoringMethod + "Apply"), deadline: DateTime.UtcNow.AddMinutes(10), cancellationToken: cancellationToken);

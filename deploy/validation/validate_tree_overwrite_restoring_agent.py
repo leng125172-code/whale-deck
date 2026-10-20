@@ -227,6 +227,7 @@ def main():
             assert archive_proof[:2] == tuple(saved['archiveIdentity']) and archive_proof[6] == saved['archiveBytes'] and archive_proof[-1] == saved['archiveSha256']
             if kind == 'target':
                 assert saved['archiveBytes'] == overwrite['backupArchiveBytes'] and saved['archiveSha256'] == overwrite['backupArchiveSha256']
+                assert saved['contentSha256'] == overwrite['plan']['targetContentSha256'] and saved['contentSha256'] != overwrite['plan']['targetTreeSha256']
             else:
                 assert saved['archiveBytes'] == overwrite['plan']['archiveBytes'] and saved['archiveSha256'] == overwrite['plan']['archiveSha256']
             assert saved['differentSourceDevice'] == (original_data[0] != archive_proof[0])

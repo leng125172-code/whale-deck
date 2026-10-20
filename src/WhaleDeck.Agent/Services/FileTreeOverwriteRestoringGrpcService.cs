@@ -52,7 +52,7 @@ internal static class FileTreeOverwriteRestoringPolicy
 {
     private static readonly JsonSerializerOptions InputOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     private static readonly HashSet<string> CommandFields = ["source", "target", "format", "captureId", "captureOwner", "captureKind", "manifestSha256"];
-    private static readonly HashSet<string> PlanFields = ["command", "archiveSha256", "archiveBytes", "contentSha256", "entryCount", "totalBytes", "targetParent", "sourcePolicyHash", "targetPolicyHash", "fingerprint", "targetManifestSha256", "targetTreeSha256", "targetEntryCount", "targetTotalBytes", "targetIdentity"];
+    private static readonly HashSet<string> PlanFields = ["command", "archiveSha256", "archiveBytes", "contentSha256", "entryCount", "totalBytes", "targetParent", "sourcePolicyHash", "targetPolicyHash", "fingerprint", "targetManifestSha256", "targetTreeSha256", "targetEntryCount", "targetTotalBytes", "targetIdentity", "targetContentSha256"];
     private static readonly HashSet<string> ReceiptFields = ["operationId", "state", "fingerprint", "format", "entryCount", "totalBytes", "archiveBytes", "archiveSha256", "version", "partialRetained", "kind", "captureId", "overwrittenCaptureId", "backupMayBeRetained", "backupVerified", "originalsRetained", "targetMayHaveChanged", "backupArchiveBytes", "backupArchiveSha256"];
 
     public static string CommandJson(FileTreeOverwriteRestoringCommand? command)
@@ -77,6 +77,7 @@ internal static class FileTreeOverwriteRestoringPolicy
         var command = JsonSerializer.Deserialize<JsonElement>(CommandJson(plan.Command));
         FileTransferPolicy.Hash(plan.ArchiveSha256); FileTransferPolicy.Hash(plan.ContentSha256);
         FileTransferPolicy.Hash(plan.TargetManifestSha256); FileTransferPolicy.Hash(plan.TargetTreeSha256);
+        FileTransferPolicy.Hash(plan.TargetContentSha256);
         FileTransferPolicy.Hash(plan.SourcePolicyHash); FileTransferPolicy.Hash(plan.TargetPolicyHash); FileTransferPolicy.Hash(plan.Fingerprint);
         if (plan.ArchiveBytes is < 1 or > FileTreeUnpackingPolicy.MaximumArchiveBytes || plan.EntryCount is < 1 or > FileTreeCopyPolicy.MaximumEntries ||
             plan.TotalBytes is < 0 or > FileTreeCopyPolicy.MaximumBytes || plan.TargetParent is not { Inode: > 0 } ||
@@ -87,7 +88,7 @@ internal static class FileTreeOverwriteRestoringPolicy
             contentSha256 = plan.ContentSha256, entryCount = plan.EntryCount, totalBytes = plan.TotalBytes,
             targetParent = new[] { plan.TargetParent.Device, plan.TargetParent.Inode }, sourcePolicyHash = plan.SourcePolicyHash,
             targetPolicyHash = plan.TargetPolicyHash, fingerprint = plan.Fingerprint,
-            targetManifestSha256 = plan.TargetManifestSha256, targetTreeSha256 = plan.TargetTreeSha256,
+            targetManifestSha256 = plan.TargetManifestSha256, targetTreeSha256 = plan.TargetTreeSha256, targetContentSha256 = plan.TargetContentSha256,
             targetEntryCount = plan.TargetEntryCount, targetTotalBytes = plan.TargetTotalBytes,
             targetIdentity = new[] { plan.TargetIdentity.Device, plan.TargetIdentity.Inode } });
     }
@@ -112,7 +113,7 @@ internal static class FileTreeOverwriteRestoringPolicy
             EntryCount = value.GetProperty("entryCount").GetUInt32(), TotalBytes = value.GetProperty("totalBytes").GetInt64(),
             TargetParent = new() { Device = parent[0].GetUInt64(), Inode = parent[1].GetUInt64() },
             SourcePolicyHash = Text(value, "sourcePolicyHash"), TargetPolicyHash = Text(value, "targetPolicyHash"), Fingerprint = Text(value, "fingerprint"),
-            TargetManifestSha256 = Text(value, "targetManifestSha256"), TargetTreeSha256 = Text(value, "targetTreeSha256"),
+            TargetManifestSha256 = Text(value, "targetManifestSha256"), TargetTreeSha256 = Text(value, "targetTreeSha256"), TargetContentSha256 = Text(value, "targetContentSha256"),
             TargetEntryCount = value.GetProperty("targetEntryCount").GetUInt32(), TargetTotalBytes = value.GetProperty("targetTotalBytes").GetInt64(),
             TargetIdentity = new() { Device = targetIdentity[0].GetUInt64(), Inode = targetIdentity[1].GetUInt64() } };
         if (!result.Command.Equals(expected)) throw new InvalidOperationException("FILES_PLAN_TARGET_MISMATCH");

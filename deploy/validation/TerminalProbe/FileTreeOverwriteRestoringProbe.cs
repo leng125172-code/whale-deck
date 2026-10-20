@@ -49,7 +49,8 @@ internal static class FileTreeOverwriteRestoringProbe
 
             Phase = "overwrite-capabilities-and-roots";
             var capabilities = await new AgentService.AgentServiceClient(channel).GetCapabilitiesAsync(new(), deadline: DateTime.UtcNow.AddSeconds(10));
-            Check(capabilities.ProtocolMajor == 1 && capabilities.ProtocolMinor >= 34 && capabilities.Capabilities.Contains("files.tree-overwrite-restore-intents"));
+            Check(capabilities.ProtocolMajor == 1 && capabilities.ProtocolMinor >= 35 && capabilities.Capabilities.Contains("files.tree-overwrite-restore-intents") &&
+                capabilities.Capabilities.Contains("files.tree-overwrite-restore-content-proof"));
             var roots = await files.ListRootsAsync(new(), Headers(filesMethod + "ListRoots"), deadline: DateTime.UtcNow.AddSeconds(10));
             var registered = roots.Roots.Single(item => item.Id == root);
             Check(registered.Actions.Contains("files-tree-overwrite-restore") && registered.Actions.Contains("files-tree-trash"));
@@ -89,7 +90,8 @@ internal static class FileTreeOverwriteRestoringProbe
                     plan.ArchiveBytes == capture.ArchiveBytes && plan.ArchiveSha256 == capture.ArchiveSha256 &&
                     plan.TargetEntryCount == 3 && plan.TargetTotalBytes == expectedBytes &&
                     plan.TargetParent is { Inode: > 0 } && plan.TargetIdentity is { Inode: > 0 } &&
-                    Hash(plan.TargetManifestSha256) && Hash(plan.TargetTreeSha256) && Hash(plan.ContentSha256) &&
+                    Hash(plan.TargetManifestSha256) && Hash(plan.TargetTreeSha256) && Hash(plan.TargetContentSha256) &&
+                    plan.TargetContentSha256 != plan.TargetTreeSha256 && Hash(plan.ContentSha256) &&
                     Hash(plan.SourcePolicyHash) && Hash(plan.TargetPolicyHash) && Hash(plan.Fingerprint));
                 var wrongOwner = command.Clone(); wrongOwner.CaptureOwner = new('0', 64);
                 await Denied(async () => _ = await overwriting.PlanAsync(new() { Context = actor, Command = wrongOwner },

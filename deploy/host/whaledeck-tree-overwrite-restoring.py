@@ -10,6 +10,7 @@ and an independently verified HDD capture precede a successful outcome.
 """
 import contextlib
 import copy
+import hashlib
 import os
 import re
 import stat
@@ -21,7 +22,7 @@ def overwrite_restoration_type(restoring_type):
         FOLDER = 'tree-overwrite-restoring'
         TEMPORARY_SUFFIX = '.tree-overwrite-restore'
         PLAN_FIELDS = restoring_type.PLAN_FIELDS | {'targetManifestSha256', 'targetTreeSha256',
-            'targetEntryCount', 'targetTotalBytes', 'targetIdentity'}
+            'targetEntryCount', 'targetTotalBytes', 'targetIdentity', 'targetContentSha256'}
         RECORD_FIELDS = restoring_type.RECORD_FIELDS | {'backupStarted', 'backupVerified', 'backupArchiveBytes',
             'backupArchiveSha256', 'swapStarted', 'originalsRetained'}
         TARGET_ACTIONS = restoring_type.TARGET_ACTIONS | {'files-list', 'files-download', 'files-history', 'files-tree-overwrite-restore'}
@@ -57,19 +58,32 @@ def overwrite_restoration_type(restoring_type):
                 if self.f.version(os.stat(leaf, dir_fd=parent, follow_symlinks=False)) != self.f.version(before):
                     self.reject('FILES_TREE_CHANGED')
                 return {'targetManifestSha256': inventory['manifestSha256'], 'targetTreeSha256': self.tree_digest(inventory),
+                    'targetContentSha256': hashlib.sha256(b'whaledeck-tree-archive-content-v1\n' + self.encode([self.codec_type.from_manifest(row) for row in inventory['entries']])).hexdigest().upper(),
                     'targetEntryCount': inventory['entryCount'], 'targetTotalBytes': inventory['totalBytes'],
                     'targetIdentity': self.identity(target)}
             finally: os.close(target)
 
         def validate_plan(self, plan):
-            super().validate_plan(plan)
+            # Preserve read-only inspection of root-owned pre-1.35 receipts.
+            # The request boundary below never permits their replay or fencing
+            # via a new Apply/Discard request lacking the new signed fact.
+            legacy = isinstance(plan, dict) and 'targetContentSha256' not in plan
+            if legacy:
+                reader = copy.copy(self); reader.PLAN_FIELDS = self.PLAN_FIELDS - {'targetContentSha256'}
+                super(FileTreeOverwriteRestoring, reader).validate_plan(plan)
+            else: super().validate_plan(plan)
             for key in ('targetManifestSha256', 'targetTreeSha256'):
                 if type(plan[key]) is not str or not re.fullmatch('[A-F0-9]{64}', plan[key]): self.reject('FILES_PLAN_INVALID')
+            if not legacy and (type(plan['targetContentSha256']) is not str or not re.fullmatch('[A-F0-9]{64}', plan['targetContentSha256'])): self.reject('FILES_PLAN_INVALID')
             identity = plan['targetIdentity']
             if not isinstance(identity, list) or len(identity) != 2 or any(type(value) is not int or not 0 <= value < 2**64 for value in identity) or not identity[1]:
                 self.reject('FILES_PLAN_INVALID')
             if type(plan['targetEntryCount']) is not int or not 1 <= plan['targetEntryCount'] <= 10000 or type(plan['targetTotalBytes']) is not int or not 0 <= plan['targetTotalBytes'] <= 16 * 1024**3:
                 self.reject('FILES_PLAN_INVALID')
+
+        def request(self, request):
+            super().request(request)
+            if 'targetContentSha256' not in request['plan']: self.reject('FILES_PLAN_INVALID')
 
         def read(self, folder, operation):
             record = super().read(folder, operation)
@@ -99,6 +113,7 @@ def overwrite_restoration_type(restoring_type):
                 saved = self.captures.read(folder, request['operationId'], self.captures.seed(request, self.captures.request(request), configuration, folder))
                 if saved is None or saved['state'] != 'Verified' or any(saved.get(key) != record.get('backup' + key[0].upper() + key[1:]) for key in ('archiveBytes', 'archiveSha256')):
                     self.reject('FILES_TREE_BACKUP_CONTENT_INVALID')
+                if 'targetContentSha256' in record['plan'] and saved['contentSha256'] != record['plan']['targetContentSha256']: self.reject('FILES_TREE_BACKUP_CONTENT_INVALID')
                 codec = self.codec_type(self.f, self.manifest_type, cancelled=check)
                 self.captures.verify(folder, saved, codec); self.captures.b.attest(configuration, folder); check()
                 yield
@@ -125,6 +140,7 @@ def overwrite_restoration_type(restoring_type):
             writer = copy.copy(self.captures); writer.cancelled = check
             backup = writer.ensure(self.backup_request(record))
             if backup['state'] != 'Verified': self.reject('FILES_TREE_BACKUP_INCOMPLETE')
+            if backup['contentSha256'] != plan['targetContentSha256']: self.reject('FILES_TREE_BACKUP_CONTENT_INVALID')
             record.update(backupVerified=True, backupArchiveBytes=backup['archiveBytes'], backupArchiveSha256=backup['archiveSha256'])
             self.save(folder, record); self.checkpoint('BackupVerified')
             with self.verified_backup(record, check):

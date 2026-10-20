@@ -37,7 +37,7 @@ public static class FileTreeOverwriteRestoringValidation
         if (!FileManagementService.Hex(plan.ContentSha256) || !FileManagementService.Hex(plan.ArchiveSha256) || plan.ArchiveBytes is < 1 or > MaximumArchiveBytes ||
             !FileManagementService.Hex(plan.SourcePolicyHash) || !FileManagementService.Hex(plan.TargetPolicyHash) || !FileManagementService.Hex(plan.Fingerprint) ||
             plan.EntryCount is < 1 or > MaximumEntries || plan.TotalBytes is < 0 or > MaximumBytes || plan.TargetParent is not { Inode: > 0 } ||
-            !FileManagementService.Hex(plan.TargetManifestSha256) || !FileManagementService.Hex(plan.TargetTreeSha256) ||
+            !FileManagementService.Hex(plan.TargetManifestSha256) || !FileManagementService.Hex(plan.TargetTreeSha256) || !FileManagementService.Hex(plan.TargetContentSha256) ||
             plan.TargetEntryCount is < 1 or > MaximumEntries || plan.TargetTotalBytes is < 0 or > MaximumBytes || plan.TargetIdentity is not { Inode: > 0 })
             throw new ArgumentException("FILES_TREE_OVERWRITE_RESTORE_PLAN_INVALID");
     }
@@ -76,7 +76,7 @@ public static class FileTreeOverwriteRestoringValidation
     {
         var plan = ReadPlan(row);
         return new(row.OverwrittenCaptureId ?? throw new ArgumentException("FILES_CAPTURE_PROOF_REQUIRED"), row.Id, row.OwnerHash, row.TargetHash,
-            new(plan.Command.Target, plan.Command.TargetExpectedVersion), plan.TargetManifestSha256, plan.TargetTreeSha256, plan.TargetEntryCount, plan.TargetTotalBytes,
+            new(plan.Command.Target, plan.Command.TargetExpectedVersion), plan.TargetManifestSha256, plan.TargetContentSha256, plan.TargetEntryCount, plan.TargetTotalBytes,
             row.BackupArchiveBytes ?? throw new ArgumentException("FILES_CAPTURE_PROOF_REQUIRED"), row.BackupArchiveSha256 ?? throw new ArgumentException("FILES_CAPTURE_PROOF_REQUIRED"),
             row.BackupCapturedAtUtc ?? throw new ArgumentException("FILES_CAPTURE_PROOF_REQUIRED"));
     }

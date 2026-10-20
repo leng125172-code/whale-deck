@@ -948,6 +948,8 @@ message FileTreeOverwriteRestoringPlan {
   string target_manifest_sha256 = 11; string target_tree_sha256 = 12;
   uint32 target_entry_count = 13; int64 target_total_bytes = 14;
   FileDirectoryIdentity target_identity = 15;
+  // Archive-content domain, distinct from the identity-bearing target tree hash.
+  string target_content_sha256 = 16;
 }
 message FileTreeOverwriteRestoringPlanRequest { FileTreeOverwriteRestoringCommand command = 1; RequestContext context = 2; }
 message FileTreeOverwriteRestoringApplyRequest {

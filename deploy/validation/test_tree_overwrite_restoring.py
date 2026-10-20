@@ -69,6 +69,8 @@ class TreeOverwriteRestoringTests(unittest.TestCase):
         self.assertEqual(receipt['captureKind'], 'Overwrite')
         self.assertEqual(receipt['source'], request['plan']['command']['target'])
         self.assertEqual(receipt['archiveSha256'], hashlib.sha256(capture.read_bytes()).hexdigest().upper())
+        self.assertEqual(receipt['contentSha256'], request['plan']['targetContentSha256'])
+        self.assertNotEqual(receipt['contentSha256'], request['plan']['targetTreeSha256'])
         with tarfile.open(capture, 'r:gz') as archive:
             self.assertEqual({item.name.rstrip('/') for item in archive.getmembers()}, {'.', '保留空目录', self.old_file.name})
             with archive.extractfile(self.old_file.name) as stream: self.assertEqual(stream.read(), self.old_data)
@@ -92,6 +94,113 @@ class TreeOverwriteRestoringTests(unittest.TestCase):
         for name, proof in original_capture.items(): self.assertEqual(self.fixture.capture_proof()[name], proof)
         with patch.object(self.engine.captures, 'ensure', side_effect=AssertionError('no recapture')), patch.object(driver, 'exchange', side_effect=AssertionError('no repeat swap')):
             self.assertEqual(self.engine.restore(request), result); self.assertEqual(self.lookup(request), result)
+
+    def test_plan_binds_archive_content_domain_separately_from_retained_inode_tree(self):
+        before = self.fixture.capture_proof(); request = self.request(); plan = request['plan']
+        manifest = self.engine.manifest_type(driver).scan(plan['command']['target'])
+        rows = [self.engine.codec_type.from_manifest(row) for row in manifest['entries']]
+        encoded = json.dumps(rows, sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode()
+        expected = hashlib.sha256(b'whaledeck-tree-archive-content-v1\n' + encoded).hexdigest().upper()
+        self.assertEqual(plan['targetContentSha256'], expected)
+        self.assertNotEqual(plan['targetContentSha256'], plan['targetTreeSha256'])
+        self.assert_original(self.target); self.assertEqual(self.fixture.capture_proof(), before)
+        self.assertFalse((self.root / driver.STAGING).exists())
+
+    def test_legacy_completed_root_receipt_remains_readable_but_cannot_be_reapplied(self):
+        request = self.request(); self.assertEqual(self.engine.restore(request)['state'], 'Completed')
+        path = self.state / self.engine.FOLDER / (request['operationId'] + '.json')
+        record = json.loads(path.read_bytes()); legacy = dict(record['plan'])
+        del legacy['targetContentSha256']
+        legacy['fingerprint'] = self.engine.digest({key: value for key, value in legacy.items() if key != 'fingerprint'})
+        record['plan'] = legacy
+        path.write_bytes(self.engine.encode(record)); path.chmod(0o600)
+        before = path.read_bytes(); captures = self.fixture.capture_proof()
+        observed = self.lookup(request)
+        self.assertEqual(observed['state'], 'Completed'); self.assertEqual(observed['fingerprint'], legacy['fingerprint'])
+        self.assertEqual(path.read_bytes(), before)
+        with self.assertRaisesRegex(driver.Rejected, '^FILES_PLAN_INVALID$'):
+            self.engine.restore({**request, 'plan': legacy})
+        with self.assertRaisesRegex(driver.Rejected, '^FILES_PLAN_INVALID$'):
+            self.engine.discard({**request, 'plan': legacy})
+        self.assertEqual(path.read_bytes(), before); self.assertEqual(self.fixture.capture_proof(), captures)
+        self.fixture.assert_tree(self.target); self.assert_original(self.retained(request))
+
+    def test_target_content_hash_change_cannot_reuse_the_original_plan_fingerprint(self):
+        before = self.fixture.capture_proof(); request = self.request()
+        changed = {**request['plan'], 'targetContentSha256': '0' * 64}
+        self.assertNotEqual(changed['targetContentSha256'], request['plan']['targetContentSha256'])
+        with self.assertRaisesRegex(driver.Rejected, '^FILES_PLAN_INVALID$'):
+            self.engine.restore({**request, 'plan': changed})
+        self.assert_original(self.target); self.assertEqual(self.fixture.capture_proof(), before)
+        self.assertFalse((self.fixture.store / (request['operationId'] + '.json')).exists())
+
+    def test_real_generated_overwrite_capture_fully_restores_into_an_absent_target(self):
+        first = self.request(); self.assertEqual(self.engine.restore(first)['state'], 'Completed')
+        self.assert_backup(first); self.assert_original(self.retained(first)); self.fixture.assert_tree(self.target)
+        before = self.fixture.capture_proof()
+        target = self.root / '从覆盖备份恢复'
+        command = {'source': first['plan']['command']['target'], 'target': {'rootId': 'test.shared', 'path': target.name},
+            'format': 'tar.gz', 'captureId': first['operationId'], 'captureOwner': first['owner'], 'captureKind': 'Overwrite',
+            'manifestSha256': first['plan']['targetManifestSha256']}
+        plan = self.fixture.engine.plan(command)
+        self.assertEqual(plan['contentSha256'], first['plan']['targetContentSha256'])
+        self.assertNotEqual(plan['contentSha256'], first['plan']['targetTreeSha256'])
+        request = {'operationId': uuid.uuid4().hex, 'owner': 'C' * 64, 'plan': plan}
+        result = self.fixture.engine.restore(request)
+        self.assertEqual(result['state'], 'Completed'); self.assertEqual(result['kind'], 'DirectoryRestore')
+        self.assertEqual((target / self.old_file.name).read_bytes(), self.old_data)
+        info = (target / self.old_file.name).stat()
+        self.assertNotEqual(info.st_ino, self.old_inode)
+        self.assertEqual((stat.S_IMODE(info.st_mode), info.st_uid, info.st_gid, info.st_mtime_ns),
+            (0o640, 0, 0, 1712345678123456789))
+        self.assertTrue((target / '保留空目录').is_dir())
+        self.assertEqual({str(path.relative_to(target)) for path in target.rglob('*')}, {self.old_file.name, '保留空目录'})
+        self.assert_original(self.retained(first)); self.fixture.assert_tree(self.target)
+        self.assertEqual(self.fixture.capture_proof(), before)
+
+    def test_real_generated_overwrite_capture_fully_overwrites_another_existing_directory(self):
+        first = self.request(); self.assertEqual(self.engine.restore(first)['state'], 'Completed')
+        self.assert_backup(first); original_captures = self.fixture.capture_proof()
+        target = self.root / '再次覆盖目标'; target.mkdir(mode=0o750)
+        (target / '另外空目录').mkdir(mode=0o710)
+        leaf = target / '将被替换.bin'; current_data = b'second-current-tree\x00\xff' * 1024 + b'tail\x00\xff!'
+        leaf.write_bytes(current_data); leaf.chmod(0o640)
+        os.utime(leaf, ns=(1712345678123456789, 1712345678123456789)); current = leaf.stat()
+        command = {'source': first['plan']['command']['target'],
+            'target': {'rootId': 'test.shared', 'path': target.name, 'expectedVersion': driver.version(target.stat())},
+            'format': 'tar.gz', 'captureId': first['operationId'], 'captureOwner': first['owner'], 'captureKind': 'Overwrite',
+            'manifestSha256': first['plan']['targetManifestSha256']}
+        plan = self.engine.plan(command)
+        self.assertEqual(plan['contentSha256'], first['plan']['targetContentSha256'])
+        self.assertNotEqual(plan['contentSha256'], first['plan']['targetTreeSha256'])
+        self.assertNotEqual(plan['targetContentSha256'], plan['targetTreeSha256'])
+        request = {'operationId': uuid.uuid4().hex, 'owner': 'D' * 64, 'plan': plan}
+        result = self.engine.restore(request)
+        self.assertEqual(result['state'], 'Completed'); self.assertTrue(result['backupVerified'] and result['originalsRetained'])
+        self.assertEqual(result['captureId'], first['operationId']); self.assertEqual(result['overwrittenCaptureId'], request['operationId'])
+        restored = target / self.old_file.name
+        self.assertEqual(restored.read_bytes(), self.old_data); self.assertNotEqual(restored.stat().st_ino, self.old_inode)
+        self.assertEqual((stat.S_IMODE(restored.stat().st_mode), restored.stat().st_uid, restored.stat().st_gid, restored.stat().st_mtime_ns),
+            (0o640, 0, 0, 1712345678123456789))
+        self.assertEqual({str(path.relative_to(target)) for path in target.rglob('*')}, {self.old_file.name, '保留空目录'})
+        retained = self.retained(request)
+        self.assertEqual((retained / leaf.name).read_bytes(), current_data)
+        actual = (retained / leaf.name).stat()
+        self.assertEqual((actual.st_ino, actual.st_uid, actual.st_gid, stat.S_IMODE(actual.st_mode), actual.st_mtime_ns),
+            (current.st_ino, current.st_uid, current.st_gid, 0o640, current.st_mtime_ns))
+        self.assertTrue((retained / '另外空目录').is_dir())
+        backup = self.fixture.store / (request['operationId'] + '.tar.gz')
+        saved = json.loads((self.fixture.store / (request['operationId'] + '.json')).read_bytes())
+        self.assertEqual(saved['state'], 'Verified'); self.assertEqual(saved['captureKind'], 'Overwrite')
+        self.assertEqual(saved['owner'], request['owner']); self.assertNotEqual(saved['owner'], first['owner'])
+        self.assertEqual(saved['source'], command['target']); self.assertEqual(saved['contentSha256'], plan['targetContentSha256'])
+        self.assertNotEqual(saved['contentSha256'], plan['targetTreeSha256'])
+        self.assertEqual(saved['archiveSha256'], hashlib.sha256(backup.read_bytes()).hexdigest().upper())
+        with tarfile.open(backup, 'r:gz') as archive:
+            self.assertEqual({item.name.rstrip('/') for item in archive.getmembers()}, {'.', '另外空目录', leaf.name})
+            with archive.extractfile(leaf.name) as stream: self.assertEqual(stream.read(), current_data)
+        self.assert_original(self.retained(first)); self.fixture.assert_tree(self.target)
+        for name, proof in original_captures.items(): self.assertEqual(self.fixture.capture_proof()[name], proof)
 
     def test_absent_and_non_directory_targets_are_rejected(self):
         command = self.command()

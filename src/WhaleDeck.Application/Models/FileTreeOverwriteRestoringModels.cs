@@ -10,7 +10,7 @@ public sealed record FileTreeOverwriteRestoringCommand(FileLocationDto Source, s
 public sealed record FileTreeOverwriteRestoringCommandDto(Guid CaptureId, FileLocationDto Source, FileLocationDto Target, string CaptureKind, string TargetExpectedVersion);
 public sealed record FileTreeOverwriteRestoringPlan(FileTreeOverwriteRestoringCommand Command, string ArchiveSha256, long ArchiveBytes, string ContentSha256,
     int EntryCount, long TotalBytes, FileParentIdentity TargetParent, string SourcePolicyHash, string TargetPolicyHash, string Fingerprint,
-    string TargetManifestSha256, string TargetTreeSha256, int TargetEntryCount, long TargetTotalBytes, FileParentIdentity TargetIdentity);
+    string TargetManifestSha256, string TargetTreeSha256, int TargetEntryCount, long TargetTotalBytes, FileParentIdentity TargetIdentity, string TargetContentSha256);
 public sealed record FileTreeOverwriteRestoringReceipt(Guid OperationId, string State, string Fingerprint, string Format, int EntryCount, long TotalBytes,
     long ArchiveBytes, string ArchiveSha256, string Version, bool PartialRetained, string Kind, Guid CaptureId, Guid? OverwrittenCaptureId,
     bool BackupMayBeRetained, bool BackupVerified, bool OriginalsRetained, bool TargetMayHaveChanged, long BackupArchiveBytes, string BackupArchiveSha256);

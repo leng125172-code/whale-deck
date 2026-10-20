@@ -35,7 +35,7 @@ public sealed class FileTreeOverwriteRestoringBindingTests : IDisposable
             Guid.Parse("4eafca88-f96a-4459-93e9-b26763f1161f"), new('6', 64), "Trash", new('7', 64), new('8', 64)),
         new('F', 64), 1073756160, new('B', 64), 4, 1073741831,
         new(ulong.MaxValue, 9007199254740993UL), new('C', 64), new('D', 64), new('E', 64),
-        new('9', 64), new('0', 64), 3, 2097159, new(9007199254740993UL, ulong.MaxValue));
+        new('9', 64), new('0', 64), 3, 2097159, new(9007199254740993UL, ulong.MaxValue), new('1', 64));
 
     public FileTreeOverwriteRestoringOperation Operation(bool execution = true)
     {
@@ -79,6 +79,8 @@ public sealed class FileTreeOverwriteRestoringBindingTests : IDisposable
         Assert.Equal(9007199254740993UL, roundtrip.TargetIdentity.Device);
         Assert.Equal(ulong.MaxValue, roundtrip.TargetIdentity.Inode);
         Assert.NotEqual(plan.Command.ExpectedVersion, plan.Command.TargetExpectedVersion);
+        Assert.NotEqual(plan.TargetTreeSha256, plan.TargetContentSha256);
+        Assert.Equal(plan.TargetContentSha256, roundtrip.TargetContentSha256);
         var row = Operation(); Assert.True(FileTreeOverwriteRestoringValidation.HasValidBinding(row, _protector));
         Assert.Equal(plan, FileTreeOverwriteRestoringValidation.ReadPlan(row));
         Assert.NotEqual(row.Id, row.ExecutionJobId); Assert.NotEqual(row.CaptureId, row.ExecutionJobId);
@@ -106,7 +108,7 @@ public sealed class FileTreeOverwriteRestoringBindingTests : IDisposable
     [Theory]
     [InlineData("ArchiveSha256")][InlineData("ArchiveBytes")][InlineData("ContentSha256")][InlineData("EntryCount")][InlineData("TotalBytes")]
     [InlineData("TargetParent")][InlineData("SourcePolicyHash")][InlineData("TargetPolicyHash")][InlineData("Fingerprint")]
-    [InlineData("TargetManifestSha256")][InlineData("TargetTreeSha256")][InlineData("TargetEntryCount")][InlineData("TargetTotalBytes")][InlineData("TargetIdentity")]
+    [InlineData("TargetManifestSha256")][InlineData("TargetTreeSha256")][InlineData("TargetContentSha256")][InlineData("TargetEntryCount")][InlineData("TargetTotalBytes")][InlineData("TargetIdentity")]
     public void PlanSealBindsEveryOriginalArchiveAndDisplacedTreeProof(string field)
     {
         var row = Operation(); var plan = Plan();
@@ -122,6 +124,7 @@ public sealed class FileTreeOverwriteRestoringBindingTests : IDisposable
             "Fingerprint" => plan with { Fingerprint = new('3', 64) },
             "TargetManifestSha256" => plan with { TargetManifestSha256 = new('3', 64) },
             "TargetTreeSha256" => plan with { TargetTreeSha256 = new('3', 64) },
+            "TargetContentSha256" => plan with { TargetContentSha256 = new('3', 64) },
             "TargetEntryCount" => plan with { TargetEntryCount = plan.TargetEntryCount + 1 },
             "TargetTotalBytes" => plan with { TargetTotalBytes = plan.TargetTotalBytes + 1 },
             _ => plan with { TargetIdentity = new(1, 2) } };
@@ -233,6 +236,8 @@ public sealed class FileTreeOverwriteRestoringBindingTests : IDisposable
         Assert.Equal(row.ExecutionJobId, binding.Id); Assert.Equal(row.Id, binding.IntentId);
         Assert.Equal(Plan().Command.Target, binding.Command.Source);
         Assert.Equal(Plan().Command.TargetExpectedVersion, binding.Command.ExpectedVersion);
+        Assert.Equal(Plan().TargetContentSha256, binding.ContentSha256);
+        Assert.NotEqual(Plan().TargetTreeSha256, binding.ContentSha256);
         var changed = field switch {
             "Id" => binding with { Id = Guid.NewGuid() }, "IntentId" => binding with { IntentId = Guid.NewGuid() },
             "OwnerHash" => binding with { OwnerHash = new('3', 64) }, "SourceHash" => binding with { SourceHash = new('3', 64) },

@@ -49,7 +49,7 @@ public sealed partial class FileTreeOverwriteRestoringRepository
         {
             var capturedAt = row.BackupCapturedAtUtc ?? now;
             var binding = new FileTreeOverwrittenCaptureBinding(receipt.OverwrittenCaptureId!.Value, row.Id, row.OwnerHash, row.TargetHash,
-                new(plan.Command.Target, plan.Command.TargetExpectedVersion), plan.TargetManifestSha256, plan.TargetTreeSha256, plan.TargetEntryCount,
+                new(plan.Command.Target, plan.Command.TargetExpectedVersion), plan.TargetManifestSha256, plan.TargetContentSha256, plan.TargetEntryCount,
                 plan.TargetTotalBytes, receipt.BackupArchiveBytes, receipt.BackupArchiveSha256, capturedAt);
             var proof = protector.FingerprintCapture(binding);
             if (row.BackupVerified && row.BackupProofHash != proof) throw new InvalidOperationException("FILES_CAPTURE_PROOF_CHANGED");

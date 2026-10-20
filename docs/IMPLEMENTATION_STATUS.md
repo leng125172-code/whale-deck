@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-21摘要绑定修复候选，未部署**：实际复用验收准备中发现Overwrite目录把inode树摘要误存为归档ContentSha，后续严格恢复会拒绝。新增独立TargetContentSha256全链绑定及RPC1.35专用能力，保留旧树/文件inode证明、不放宽校验。1758 Unit/146 Integration及Release零警告错误通过（6本机原生跳过）；真实Linux/PG/新UDS/BFF/网页仍待验证。[故障与证据](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。1ea9de6上一候选已正常dev覆盖发布，六组件/HTTP来源一致、11核心healthy；不冒称新修复已装，完整76项继续。
+
 - **2026-10-20安装态覆盖恢复子门禁通过**：验证源码57877a9在已装6a6f8e2上完成专用签名UDS/固定helper、2MiB+7与1GiB+7原件/被覆盖目录/新输出/两组归档manifest完整校验，精确清理后独立确认11核心healthy及两宿主服务active。首轮观察器错误要求回收私有新目录沿用旧inode，已修正并补5项真实Linux root回归；旧失败现场原样保留，原文件inode/元数据/全SHA断言未放宽。6e68746四CI全成功，候选API/Worker/WebUI仍未部署；真实身份BFF/页面、Overwrite捕获复用及全76项继续。文件根与备份实为同一HDD，不能算异盘备份；与数据库NVMe运行目录分开记录，未移动数据。[完整证据与边界](qa/FILE_TREE_OVERWRITE_RESTORING_UI.md)。下列“正在运行”为前序历史。
 
 - **2026-10-20覆盖恢复WebUI候选 f35ee05**：独立3字段登记、当前目录版本冻结、计划/执行双任务、by-key与丢确认只查、取消/Unknown二次确认、覆盖前备份事实及第10类接管提示已接通；历史Trash/Overwrite严格类型均可复用。364前端单元、类型/生产构建/lint/格式通过，主代理Chrome生产预览88/88通过（含320/1045/1440明暗、普通拒绝页就绪后0文件请求）。一次DEV演示身份测试环境不匹配已保留、未削弱断言；[证据与未完成边界](qa/FILE_TREE_OVERWRITE_RESTORING_UI.md)。独立观察器3项真实Linux root范围/清理测试通过，Linux客户端已发布，安装态专用签名UDS/完整磁盘核验正在观察原句柄；未部署候选，真实身份BFF/页面与全76项仍active。实际Agent/MaintenanceHost/Gateway6a6f8e2、API/Worker18f38bb保持；以下为前序历史。
