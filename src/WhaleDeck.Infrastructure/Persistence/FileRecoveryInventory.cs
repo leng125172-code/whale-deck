@@ -9,7 +9,7 @@ namespace WhaleDeck.Infrastructure.Persistence;
 public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtector uploads,
     IFileMutationProtector mutations, IFileArchiveProtector archives,
     IFileTreeCopyProtector copies, IFileTreeMoveProtector moves, IFileTreePackingProtector packings, IFileTreeUnpackingProtector unpackings,
-    IFileTreeRecyclingProtector? recyclings = null) : IFileRecoveryInventory
+    IFileTreeRecyclingProtector? recyclings = null, IFileTreeRestoringProtector? restorings = null) : IFileRecoveryInventory
 {
     private sealed class Header
     {
@@ -41,6 +41,8 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
             .Select(row => new Header { Kind = FileRecoveryKinds.TreeUnpacking, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.TreeUnpacking);
         await Add(db.FileTreeRecyclingOperations.AsNoTracking().Where(row => row.State == "Unknown" && row.CompletedAtUtc == null)
             .Select(row => new Header { Kind = FileRecoveryKinds.TreeRecycling, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.TreeRecycling);
+        await Add(db.FileTreeRestoringOperations.AsNoTracking().Where(row => row.State == "Unknown" && row.CompletedAtUtc == null)
+            .Select(row => new Header { Kind = FileRecoveryKinds.TreeRestoring, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.TreeRestoring);
         var ordered = headers.OrderBy(row => row.CreatedAtUtc).ThenBy(row => FileRecoveryValidation.Rank(row.Kind)).ThenBy(row => row.Id).Take(take + 1).ToArray();
         List<FileRecoveryCandidateDto> entries = [];
         foreach (var header in ordered.Take(take))
@@ -128,6 +130,15 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
                 var command = valid ? FileTreeRecyclingValidation.ReadCommand(row) : null;
                 return Candidate(row.Id, row.ExecutionJobId, row.Version, row.CreatedAtUtc, row.LeaseExpiresAtUtc, row.RootStartedAtUtc, valid,
                     command?.Source, null, row.CaptureMayBeRetained || row.OriginalsRetained);
+            }
+            case FileRecoveryKinds.TreeRestoring:
+            {
+                var row = await db.FileTreeRestoringOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.State == "Unknown" && x.CompletedAtUtc == null, cancellationToken);
+                if (row is null) return null;
+                var valid = restorings is not null && FileTreeRestoringValidation.HasValidBinding(row, restorings) && row.ExecutionJobId is not null;
+                var command = valid ? FileTreeRestoringValidation.ReadCommand(row) : null;
+                return Candidate(row.Id, row.ExecutionJobId, row.Version, row.CreatedAtUtc, row.LeaseExpiresAtUtc, row.RootStartedAtUtc, valid,
+                    command?.Source, command?.Target, row.PartialRetained);
             }
             default:
             {

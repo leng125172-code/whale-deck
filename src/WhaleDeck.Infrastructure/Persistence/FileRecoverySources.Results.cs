@@ -65,6 +65,12 @@ public sealed partial class FileRecoverySources
                 }
                 recycling.State = state; recycling.CompletedAtUtc = now; recycling.ResultCode = code;
                 recycling.LeaseToken = null; recycling.LeaseExpiresAtUtc = null; recycling.Version++; break;
+            case FileRecoveryKinds.TreeRestoring:
+                var restoring = material.Read<FileTreeRestoringOperation>(snapshot); db.Attach(restoring); var restored = receipt as FileTreeRestoringReceipt;
+                restoring.State = state; restoring.CompletedAtUtc = now; restoring.ResultCode = code; restoring.PublishedVersion = complete ? restored!.Version : null;
+                restoring.ArchiveBytes = restored?.ArchiveBytes ?? restoring.ArchiveBytes; restoring.ArchiveSha256 = restored?.ArchiveSha256 ?? restoring.ArchiveSha256;
+                restoring.PartialRetained = !complete && (restoring.PartialRetained || restored?.PartialRetained == true);
+                restoring.LeaseToken = null; restoring.LeaseExpiresAtUtc = null; restoring.Version++; break;
         }
         var job = await db.OperationJobs.FromSqlInterpolated($"SELECT * FROM operation_jobs WHERE id={recovery.OriginalExecutionJobId} FOR UPDATE").SingleAsync(cancellationToken);
         job.State = state == "Succeeded" ? "Succeeded" : "Failed"; job.Phase = "AdministratorRecovery"; job.ErrorCode = state == "Succeeded" ? null : code;
@@ -72,7 +78,7 @@ public sealed partial class FileRecoverySources
         var sequence = (await db.OperationJobEvents.Where(row => row.JobId == job.Id).MaxAsync(row => (long?)row.Sequence, cancellationToken) ?? 0) + 1;
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
         await FilePathLocks.Release(db, job.Id, cancellationToken);
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('FileUploadRequested','FileUploadCancellationRequested','FileMutationRequested','FileMutationCancellationRequested','FileArchiveRequested','FileArchiveCancellationRequested','FileTreeCopyRequested','FileTreeCopyCancellationRequested','FileTreeMoveRequested','FileTreeMoveCancellationRequested','FileTreePackingRequested','FileTreePackingCancellationRequested','FileTreeUnpackingRequested','FileTreeUnpackingCancellationRequested','FileTreeRecyclingRequested','FileTreeRecyclingCancellationRequested') AND payload_json->>'jobId'={job.Id.ToString("D")}", cancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('FileUploadRequested','FileUploadCancellationRequested','FileMutationRequested','FileMutationCancellationRequested','FileArchiveRequested','FileArchiveCancellationRequested','FileTreeCopyRequested','FileTreeCopyCancellationRequested','FileTreeMoveRequested','FileTreeMoveCancellationRequested','FileTreePackingRequested','FileTreePackingCancellationRequested','FileTreeUnpackingRequested','FileTreeUnpackingCancellationRequested','FileTreeRecyclingRequested','FileTreeRecyclingCancellationRequested','FileTreeRestoringRequested','FileTreeRestoringCancellationRequested') AND payload_json->>'jobId'={job.Id.ToString("D")}", cancellationToken);
         return state;
     }
 }

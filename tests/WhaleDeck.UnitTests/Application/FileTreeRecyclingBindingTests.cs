@@ -18,6 +18,15 @@ public sealed class FileTreeRecyclingBindingTests : IDisposable
         Protector = new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = _key }).Build());
     }
     public void Dispose() => File.Delete(_key);
+    [Fact]
+    public void ActualGatewayIncludesRecyclingProtectorForExistingAdministratorRecovery()
+    {
+        using var gateway = new AgentGateway(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = _key }).Build());
+        var material = Assert.IsType<FileRecoveryMaterial>(typeof(AgentGateway).GetField("_recoveryMaterial", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(gateway));
+        var row = Operation(); row.State = "Unknown";
+        var snapshot = material.Capture(row);
+        Assert.Equal(row.Id, material.Read<FileTreeRecyclingOperation>(snapshot).Id);
+    }
     public static FileTreeRecyclingPlan Plan() => new(new(new("test.tree", "代码/原目录"), new('A', 64)), new(ulong.MaxValue, 9007199254740993),
         new('B', 64), new('C', 64), 4, FileManagementService.MaximumBytes + 7, new('D', 64));
     public FileTreeRecyclingOperation Operation(bool execution = true)
