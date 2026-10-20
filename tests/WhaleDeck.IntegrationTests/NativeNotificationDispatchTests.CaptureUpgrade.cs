@@ -51,6 +51,12 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal("Trash", FileTreeCaptureValidation.Verify(upgraded, protector, protector).Kind);
             var persisted = await db.FileTreeRecyclingOperations.AsNoTracking().SingleAsync(item => item.Id == id);
             Assert.True(FileTreeRecyclingValidation.HasValidBinding(persisted, protector));
+            // Complete the fixture's actual notification side effects before
+            // later fanout tests establish their own exact event inventory.
+            // Do not delete facts or weaken those tests' expected counts.
+            Assert.Equal(2, await new NotificationDispatchStore(db).RouteBatchAsync(now, default));
+            Assert.Equal(2, await db.NotificationDispatchReceipts.CountAsync(receipt => receipt.Outcome == "Personal" &&
+                db.NotificationEvents.Any(item => item.Id == receipt.NotificationId && (item.SourceId == id || item.SourceId == execution))));
             Console.WriteLine("INBOX_PHASE=tree-capture-old-schema-upgrade-preserves-original-signature");
         }
         finally { File.Delete(keyPath); }
