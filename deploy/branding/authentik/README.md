@@ -34,5 +34,5 @@ Full image prompt:
 
 > Use case: stylized-concept. Asset type: original panoramic login background for Whale Deck, a blue-themed self-hosted workstation dashboard using Authentik. Create a refined editorial 3D/painted ocean-at-dawn scene: a single graceful humpback whale swimming beneath a translucent deep-navy-to-cobalt ocean surface, soft cyan shafts of light and delicate suspended particles, a quiet luminous wave near the upper left, calm secure technical atmosphere, no UI, no servers, no cubes, no typography, no logos, no watermark. Anatomically coherent whale with a single tail fluke and only the natural pair of pectoral fins, seen in subtle distant silhouette occupying the left third; no extra fins or fantastical appendages. Wide 16:9 composition, premium restrained blue palette, generous low-detail dark blue negative space in the center/right to keep a login form readable. The ocean must feel elegant and welcoming, not scary, not neon, no busy objects or harsh bloom. A polished production background usable behind both translucent dark and light login cards.
 
-Official references: [Brand custom CSS (2026.8)](https://version-2026-8.goauthentik.io/brands/custom-css/),
+Official references: [native Brand customization](https://docs.goauthentik.io/customize/branding/),
 [media picker](https://next.goauthentik.io/customize/file-picker/).

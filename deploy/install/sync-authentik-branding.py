@@ -112,7 +112,9 @@ def synchronize(session, assets, apply=False):
     logo_payload = wordmark(assets)
     icon_payload = (assets / 'whaledeck-mark.png').read_bytes()
     background_payload = (assets / 'whaledeck-ocean-v1.png').read_bytes()
-    css = (assets / 'whaledeck.css').read_text()
+    # DRF's native CharField trims outer whitespace. Canonicalize before both
+    # comparison and hashing so a final newline never causes perpetual writes.
+    css = (assets / 'whaledeck.css').read_text().strip()
     if len(css.encode()) > 65536 or any(value in css.lower() for value in ('@import', 'javascript:', '{{')):
         raise ValueError('BRANDING_CSS_INVALID')
     if any(not 0 < len(payload) <= 25 * 1024**2 for payload in (logo_payload, icon_payload, background_payload)):
@@ -131,8 +133,10 @@ def synchronize(session, assets, apply=False):
         if not changes.keys() <= MANAGED: raise ValueError('BRANDING_PATCH_INVALID')
         request(session, 'PATCH', path, json=changes)
     after = request(session, 'GET', path).json()
-    if unmanaged(after) != unmanaged(before) or any(after.get(key) != value for key, value in desired.items()):
-        raise RuntimeError('BRANDING_VERIFICATION_FAILED')
+    if unmanaged(after) != unmanaged(before):
+        raise RuntimeError('BRANDING_VERIFICATION_UNMANAGED')
+    for key, value in desired.items():
+        if after.get(key) != value: raise RuntimeError('BRANDING_VERIFICATION_' + key.upper())
     # Resolve relative media values through Authentik, never freeze its signed
     # temporary media URL in CSS or depend on Whale Deck to serve assets.
     public = request(session, 'GET', API + 'core/brands/current/').json()

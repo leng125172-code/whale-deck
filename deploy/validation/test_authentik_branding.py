@@ -179,6 +179,28 @@ class AuthentikBrandingTests(unittest.TestCase):
         for name, content in self.http.media.items():
             self.assertIn(hashlib.sha256(content).hexdigest()[:20], name)
 
+    def test_css_outer_whitespace_matches_drf_trim_and_second_run_has_no_write(self):
+        css = '\n  :root { --whaledeck-brand: #409eff; }\n\n'
+        (self.assets / 'whaledeck.css').write_text(css)
+        original_handle = self.http.handle
+
+        def drf_handle(session, method, url, **kwargs):
+            if method == 'PATCH' and 'branding_custom_css' in kwargs.get('json', {}):
+                kwargs['json'] = {**kwargs['json'], 'branding_custom_css': kwargs['json']['branding_custom_css'].strip()}
+            return original_handle(session, method, url, **kwargs)
+
+        self.http.handle = drf_handle
+        first = self.apply()
+        self.assertEqual('verified', first['authentikBranding'])
+        self.assertEqual(css.strip(), self.http.brand['branding_custom_css'])
+        self.assertEqual(hashlib.sha256(css.strip().encode()).hexdigest(), first['cssSha256'])
+        self.http.calls.clear()
+        second = self.apply()
+        self.assertEqual('verified', second['authentikBranding'])
+        self.assertEqual(first['cssSha256'], second['cssSha256'])
+        self.assertEqual([], second['changedFields'])
+        self.assertEqual([], self.http.writes)
+
     def test_existing_same_name_media_is_still_verified_without_upload(self):
         self.apply()
         self.http.calls.clear()
@@ -291,12 +313,14 @@ class AuthentikBrandingTests(unittest.TestCase):
         self.assertEqual([], self.http.patches)
 
     def test_post_patch_identity_or_appearance_mutation_is_not_reported_as_success(self):
-        for key, changed in (('flow_authentication', 'changed-after-patch'), ('branding_title', 'changed-after-patch')):
+        for key, changed, code in (
+            ('flow_authentication', 'changed-after-patch', 'BRANDING_VERIFICATION_UNMANAGED'),
+            ('branding_title', 'changed-after-patch', 'BRANDING_VERIFICATION_BRANDING_TITLE')):
             with self.subTest(key=key):
                 self.http = FakeHttp()
                 self.authenticated = self.http.session()
                 self.http.detail_hook = lambda row, count, key=key, changed=changed: row.update({key: changed}) if count == 2 else None
-                with self.assertRaisesRegex(RuntimeError, 'BRANDING_VERIFICATION_FAILED'):
+                with self.assertRaisesRegex(RuntimeError, '^' + code + '$'):
                     self.apply()
 
     def test_derived_media_urls_may_change_without_becoming_patch_fields(self):

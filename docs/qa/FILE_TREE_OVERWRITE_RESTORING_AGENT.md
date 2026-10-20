@@ -1,5 +1,7 @@
 # 目录覆盖恢复 Agent 候选（RPC1.34，2026-10-20）
 
+最新安装态补记：为修复首页磁盘采集，6a6f8e2的Agent/MaintenanceHost已实际安装并通过宿主在位验证，因此1.34不再是“未安装”候选。前序7d2bd38及6a6f8e2四CI已全部成功；新覆盖恢复专用签名UDS/独立磁盘证明仍未执行，业务任务/Worker/API/UI仍缺，不能把宿主健康检查当作覆盖恢复功能验收。用户随后通知离线，远程步骤等恢复通知。下面未安装/旧运行时描述保留为实施历史。
+
 ## 范围与边界
 
 在96ae47b内部引擎之上新增独立 `FileTreeOverwriteRestoringService`：Plan/Apply/Inspect/Discard、`files.tree-overwrite-restore-intents` 和 RPC minor34。旧不存在目标恢复保持独立方法/契约/授权，不把 overwrite 参数塞进旧 RPC。

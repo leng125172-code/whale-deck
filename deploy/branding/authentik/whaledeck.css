@@ -37,6 +37,23 @@ ak-flow-executor::part(login),
   grid-template-rows: [header] minmax(3rem, 1fr) [main] auto [footer] minmax(3rem, 1fr);
   grid-template-areas: 'header header header' '. main .' 'footer footer footer';
   padding-block: 1rem;
+  /* Authentik normally suppresses flow backgrounds on small screens. Use its
+     dynamically resolved native variable, never a frozen signed media URL. */
+  background-image: var(--ak-global--background-image);
+  background-size: cover;
+  background-position: 32% center;
+}
+
+ak-flow-executor::part(locale-select),
+:host(ak-flow-executor) [part='locale-select'] {
+  max-width: calc(100vw - 4rem);
+  width: min(18rem, calc(100vw - 4rem));
+}
+
+:host(ak-locale-select) select[part='select'] {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
 }
 
 ak-flow-executor::part(main),
@@ -64,8 +81,24 @@ ak-flow-executor::part(branding),
 
 /* Nested stages adopt this sheet individually; keep rules scoped to flow
    stage hosts rather than restyling or hiding Admin UI controls. */
+:host(ak-stage-password) form,
+:host(ak-stage-password) fieldset,
+:host(ak-stage-password) .pf-c-form__group,
+:host(ak-form-static),
+:host(ak-form-static) .primary-content,
+:host(ak-flow-input-password) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+:host(ak-form-static) .primary-content {
+  flex-wrap: wrap;
+}
+
 :host(ak-stage-identification) .pf-c-form-control,
-:host(ak-stage-password) .pf-c-form-control {
+:host(ak-stage-password) .pf-c-form-control,
+:host(ak-flow-input-password) .pf-c-form-control {
   min-height: 44px;
   border-radius: 9px;
   padding-inline: 12px;
@@ -90,7 +123,10 @@ ak-flow-executor::part(branding),
   outline-offset: 3px;
 }
 
-ak-flow-executor::part(footer) {
+ak-flow-executor::part(footer),
+:host(ak-flow-executor) [part='footer'] {
+  color: #e6f3ff;
+  --pf-c-login__footer--Color: #e6f3ff;
   text-shadow: 0 1px 6px rgb(0 17 45 / 70%);
 }
 
