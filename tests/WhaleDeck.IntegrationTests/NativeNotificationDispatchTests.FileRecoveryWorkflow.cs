@@ -131,7 +131,9 @@ public sealed partial class NativeNotificationDispatchTests
                 _ => await db.FileTreeMoveOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync()
             };
             Assert.Equal(resolution, original.State); Assert.NotEqual(actor.Subject, original.ActorSubject);
-            Assert.NotEqual(actor.LoginBinding, original.LoginBinding); Assert.Null(original.PublishedVersion);
+            Assert.NotEqual(actor.LoginBinding, original.LoginBinding);
+            if (recycleCompleted && kind == FileRecoveryKinds.TreeRestoring) Assert.Equal(new string('A', 64), original.PublishedVersion);
+            else Assert.Null(original.PublishedVersion);
             Assert.Equal(recycleCompleted ? "Succeeded" : "Failed", (await db.OperationJobs.AsNoTracking().SingleAsync(row => row.Id == originalExecution)).State);
             Assert.Equal("Succeeded", (await db.OperationJobs.AsNoTracking().SingleAsync(row => row.Id == execution)).State);
             var audit = await db.AuditEvents.AsNoTracking().SingleAsync(row => row.JobId == execution && row.Action == "files.recovery.original-disposed");
