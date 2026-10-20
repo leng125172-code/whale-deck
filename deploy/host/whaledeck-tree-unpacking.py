@@ -25,6 +25,7 @@ class FileTreeUnpacking:
     TRANSIENT = ('Preparing', 'Staging', 'Ready', 'Publishing')
     PLAN_FIELDS = {'command', 'archiveSha256', 'archiveBytes', 'contentSha256',
         'entryCount', 'totalBytes', 'targetParent', 'sourcePolicyHash', 'targetPolicyHash', 'fingerprint'}
+    RECORD_FIELDS = {'operationId', 'owner', 'plan', 'state', 'mayHaveStaged', 'newIdentity', 'treeSha256', 'version'}
     SOURCE_ACTIONS = frozenset(('files-list', 'files-download', 'files-archive', 'files-tree-unpack'))
     TARGET_ACTIONS = frozenset(('files-mutate', 'files-upload', 'files-archive', 'files-tree-unpack'))
 
@@ -111,15 +112,19 @@ class FileTreeUnpacking:
         with self.archive(command, codec) as descriptor:
             inventory = codec.inspect(descriptor, command['format'], check=check)
         with self.target(command) as (_, parent, leaf):
-            try: os.stat(leaf, dir_fd=parent, follow_symlinks=False)
-            except FileNotFoundError: pass
-            else: self.reject('FILES_VERSION_CONFLICT')
+            target_proof = self.target_proof(command, parent, leaf, check)
             parent_identity = self.identity(parent)
         # Full entries stay in the trusted process, not a private JSON RPC frame.
         value = {key: inventory[key] for key in ('archiveSha256', 'archiveBytes', 'contentSha256', 'entryCount', 'totalBytes')}
         value.update(command=command, targetParent=parent_identity, sourcePolicyHash=self.digest(source), targetPolicyHash=self.digest(target))
+        value.update(target_proof)
         check()
         return {**value, 'fingerprint': self.digest(value)}
+
+    def target_proof(self, command, parent, leaf, check):
+        try: os.stat(leaf, dir_fd=parent, follow_symlinks=False)
+        except FileNotFoundError: return {}
+        self.reject('FILES_VERSION_CONFLICT')
 
     def validate_plan(self, plan):
         if not isinstance(plan, dict) or set(plan) != self.PLAN_FIELDS: self.reject('FILES_PLAN_INVALID')
@@ -142,7 +147,7 @@ class FileTreeUnpacking:
             if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1 or info.st_size > 32768:
                 self.reject('FILES_RECEIPT_UNSAFE')
             value = json.loads(os.read(descriptor, 32769), object_pairs_hook=self.f.unique_object)
-            if not isinstance(value, dict) or set(value) - {'operationId', 'owner', 'plan', 'state', 'mayHaveStaged', 'newIdentity', 'treeSha256', 'version'} or value.get('operationId') != operation or value.get('state') not in self.TERMINAL + self.TRANSIENT:
+            if not isinstance(value, dict) or set(value) - self.RECORD_FIELDS or value.get('operationId') != operation or value.get('state') not in self.TERMINAL + self.TRANSIENT:
                 self.reject('FILES_RECEIPT_UNSAFE')
             self.validate_plan(value.get('plan'))
             if type(value.get('owner')) is not str or not re.fullmatch('[A-F0-9]{64}', value['owner']) or type(value.get('mayHaveStaged', False)) is not bool:
@@ -286,13 +291,16 @@ class FileTreeUnpacking:
                 staged_info = os.stat(temporary, dir_fd=private, follow_symlinks=False)
                 if not stat.S_ISDIR(staged_info.st_mode) or self.identity(target) != [staged_info.st_dev, staged_info.st_ino]:
                     self.reject('FILES_ARCHIVE_CONTENT_INVALID')
-                check(); self.bound(plan)
-                self.f.exchange(private, temporary, parent, leaf, 1)
+                self.publish_target(folder, record, private, temporary, parent, leaf, check)
                 os.fsync(parent); os.fsync(private); self.checkpoint('Published')
                 self.recover(folder, record)
             finally:
                 if target is not None: os.close(target)
                 os.close(private)
+
+    def publish_target(self, folder, record, private, temporary, parent, leaf, check):
+        check(); self.bound(record['plan'])
+        self.f.exchange(private, temporary, parent, leaf, 1)
 
     def recover(self, folder, record):
         if record['state'] in self.TERMINAL: return
