@@ -105,6 +105,7 @@ test('directory packing is a distinct current-administrator recovery kind', asyn
 for (const [kind, label] of [
   ['tree-unpack', '归档解压'],
   ['tree-trash', '目录回收'],
+  ['tree-restore', '目录恢复'],
 ])
   test(`${kind} is a distinct current-administrator recovery kind`, async ({ page }) => {
     const control = await installFileRecoveryFixture(page, { kind })

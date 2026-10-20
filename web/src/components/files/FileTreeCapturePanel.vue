@@ -8,9 +8,10 @@ import { assertCapturePage } from '@/services/fileTreeRecyclings'
 import type { TreeCapturePage, TreeCapture } from '@/services/fileTreeRecyclings'
 import type { FileRoot } from '@/services/fileManagement'
 import { validTreeLocation } from '@/services/fileTreeCopies'
+import { canRestoreCapture, canReceiveRestoring } from '@/services/fileTreeRestorings'
 
-const props = defineProps<{ roots: FileRoot[]; rootId: string }>()
-const emit = defineEmits<{ failure: [reason: unknown] }>()
+const props = defineProps<{ roots: FileRoot[]; rootId: string; disabled?: boolean }>()
+const emit = defineEmits<{ failure: [reason: unknown]; restore: [capture: TreeCapture] }>()
 const authorized = computed(() => authSession.user.value?.isAdministrator === true)
 const available = computed(() =>
   props.roots.filter((root) =>
@@ -115,6 +116,25 @@ function nextPage() {
 function previousPage() {
   if (page.value > 0 && !busy.value) void load(page.value - 1)
 }
+function restoreDisabledReason(capture: TreeCapture) {
+  if (
+    !canRestoreCapture(
+      props.roots.find((root) => root.id === capture.source.source.rootId),
+      capture,
+    )
+  )
+    return '此登记根缺少独立目录恢复授权，或捕获证明无效'
+  if (!props.roots.some(canReceiveRestoring)) return '没有具备目录恢复写入授权的目标根'
+  if (props.disabled || busy.value) return '请先核实当前文件任务并关闭其引用，再发起新的恢复'
+  return ''
+}
+function restore(capture: TreeCapture) {
+  if (!authorized.value || restoreDisabledReason(capture)) return
+  // Close the catalogue before opening the next dialog. Vue proxies are never
+  // persisted; only the selected verified public capture is handed to the form.
+  emit('restore', capture)
+  dialog.value = false
+}
 watch([() => authSession.user.value?.subject, authorized], () => {
   reset()
   dialog.value = false
@@ -146,7 +166,7 @@ onBeforeUnmount(reset)
     class="tree-capture-dialog"
   >
     <el-alert
-      title="这里展示曾完整验证的目录归档，不等于源目录已移除或当前磁盘仍健康。恢复和彻底清理尚未接入此页面。"
+      title="这里展示曾完整验证的目录归档，不等于源目录已移除或当前磁盘仍健康。恢复前会重新验证归档，生成计划后仍需确认；彻底清理尚未接入。"
       type="info"
       :closable="false"
       show-icon
@@ -206,6 +226,16 @@ onBeforeUnmount(reset)
           <dd>{{ item.archiveSha256 }}</dd>
         </dl>
       </details>
+      <div class="tree-capture-restore">
+        <span v-if="restoreDisabledReason(item)">{{ restoreDisabledReason(item) }}</span>
+        <el-button
+          type="primary"
+          plain
+          :disabled="!!restoreDisabledReason(item)"
+          @click="restore(item)"
+          >恢复目录</el-button
+        >
+      </div>
     </section>
     <template #footer
       ><div class="tree-capture-footer">
@@ -275,6 +305,20 @@ onBeforeUnmount(reset)
 }
 .tree-capture-item dd {
   margin: 0;
+}
+.tree-capture-restore {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.tree-capture-restore span {
+  flex: 1;
+  min-width: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 .tree-capture-footer {
   display: flex;

@@ -34,6 +34,7 @@ import FileTreePackingPanel from '@/components/files/FileTreePackingPanel.vue'
 import FileTreeUnpackingPanel from '@/components/files/FileTreeUnpackingPanel.vue'
 import FileTreeRecyclingPanel from '@/components/files/FileTreeRecyclingPanel.vue'
 import FileTreeCapturePanel from '@/components/files/FileTreeCapturePanel.vue'
+import FileTreeRestoringPanel from '@/components/files/FileTreeRestoringPanel.vue'
 import { canRecycleDirectory } from '@/services/fileTreeRecyclings'
 import FileRecoveryPanel from '@/components/files/FileRecoveryPanel.vue'
 import { canCopyDirectory } from '@/services/fileTreeCopies'
@@ -55,6 +56,8 @@ const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
   treePackingLocked = ref(false),
   treeUnpackingLocked = ref(false),
   treeRecyclingLocked = ref(false)
+const treeRestoringLocked = ref(false)
+const treeRestoringPanel = ref<InstanceType<typeof FileTreeRestoringPanel> | null>(null)
 const archivePanel = ref<InstanceType<typeof FileArchivePanel> | null>(null)
 const treeCopyPanel = ref<InstanceType<typeof FileTreeCopyPanel> | null>(null)
 const treeMovePanel = ref<InstanceType<typeof FileTreeMovePanel> | null>(null)
@@ -76,6 +79,7 @@ const mutationLocked = computed(
     treeMoveLocked.value ||
     treePackingLocked.value ||
     treeUnpackingLocked.value ||
+    treeRestoringLocked.value ||
     treeRecyclingLocked.value,
 )
 function canTreeCopy(entry: FileEntry) {
@@ -634,7 +638,13 @@ onBeforeUnmount(() => {
       </div>
       <div class="page-heading__actions">
         <FileRecoveryPanel @changed="afterMutation" @failure="message" />
-        <FileTreeCapturePanel :roots="roots" :root-id="rootId" @failure="message" />
+        <FileTreeCapturePanel
+          :roots="roots"
+          :root-id="rootId"
+          :disabled="busy || activeIntent || !!frozen || mutationLocked"
+          @restore="treeRestoringPanel?.open($event)"
+          @failure="message"
+        />
         <el-button :loading="loading" @click="refresh"
           ><el-icon><RefreshRight /></el-icon>刷新</el-button
         >
@@ -719,6 +729,7 @@ onBeforeUnmount(() => {
           treeMoveLocked ||
           treePackingLocked ||
           treeUnpackingLocked ||
+          treeRestoringLocked ||
           treeRecyclingLocked
         "
         @locked="mutationOperationLocked = $event"
@@ -739,6 +750,7 @@ onBeforeUnmount(() => {
           treeMoveLocked ||
           treePackingLocked ||
           treeUnpackingLocked ||
+          treeRestoringLocked ||
           treeRecyclingLocked
         "
         @locked="editorLocked = $event"
@@ -760,6 +772,7 @@ onBeforeUnmount(() => {
           treeMoveLocked ||
           treePackingLocked ||
           treeUnpackingLocked ||
+          treeRestoringLocked ||
           treeRecyclingLocked
         "
         @locked="archiveOperationLocked = $event"
@@ -781,6 +794,7 @@ onBeforeUnmount(() => {
           treeMoveLocked ||
           treePackingLocked ||
           treeUnpackingLocked ||
+          treeRestoringLocked ||
           treeRecyclingLocked
         "
         @locked="treeCopyLocked = $event"
@@ -802,6 +816,7 @@ onBeforeUnmount(() => {
           treeCopyLocked ||
           treePackingLocked ||
           treeUnpackingLocked ||
+          treeRestoringLocked ||
           treeRecyclingLocked
         "
         @locked="treeMoveLocked = $event"
@@ -823,6 +838,7 @@ onBeforeUnmount(() => {
           treeCopyLocked ||
           treeMoveLocked ||
           treeUnpackingLocked ||
+          treeRestoringLocked ||
           treeRecyclingLocked
         "
         @locked="treePackingLocked = $event"
@@ -844,6 +860,7 @@ onBeforeUnmount(() => {
           treeCopyLocked ||
           treeMoveLocked ||
           treePackingLocked ||
+          treeRestoringLocked ||
           treeRecyclingLocked
         "
         @locked="treeUnpackingLocked = $event"
@@ -865,9 +882,32 @@ onBeforeUnmount(() => {
           treeCopyLocked ||
           treeMoveLocked ||
           treePackingLocked ||
-          treeUnpackingLocked
+          treeUnpackingLocked ||
+          treeRestoringLocked
         "
         @locked="treeRecyclingLocked = $event"
+        @changed="afterMutation"
+        @failure="message"
+      />
+      <FileTreeRestoringPanel
+        ref="treeRestoringPanel"
+        :roots="roots"
+        :root-id="rootId"
+        :path="path"
+        :disabled="
+          busy ||
+          activeIntent ||
+          !!frozen ||
+          mutationOperationLocked ||
+          editorLocked ||
+          archiveOperationLocked ||
+          treeCopyLocked ||
+          treeMoveLocked ||
+          treePackingLocked ||
+          treeUnpackingLocked ||
+          treeRecyclingLocked
+        "
+        @locked="treeRestoringLocked = $event"
         @changed="afterMutation"
         @failure="message"
       />
