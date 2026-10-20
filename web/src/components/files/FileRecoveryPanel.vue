@@ -421,6 +421,14 @@ onBeforeUnmount(() => {
       :closable="false"
     />
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
+    <el-alert
+      v-if="
+        intent?.kind === 'tree-overwrite-restore' || candidate?.kind === 'tree-overwrite-restore'
+      "
+      title="目录覆盖恢复接管只封存、核对回执和明确处置历史结果，绝不会再次执行覆盖；覆盖前备份和旧原件按原记录保留。"
+      type="warning"
+      :closable="false"
+    />
     <template v-if="hasReference">
       <p role="status">
         {{ intent ? recoveryState(intent.state) : '正在核实原登记；只查询，不自动新建' }}

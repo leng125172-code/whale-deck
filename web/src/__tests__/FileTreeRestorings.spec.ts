@@ -157,11 +157,31 @@ describe('directory restoring public capture and input proof', () => {
       { executionJobId: row.id },
       { ownerHash: 'private' },
       { command: { ...row.command, captureOwner: 'private' } },
-      { command: { ...row.command, captureKind: 'Overwrite' as 'Trash' } },
+      { command: { ...row.command, captureKind: 'Unrecognized' as 'Trash' } },
     ])
       expect(() => assertRestoringIntent({ ...row, ...change })).toThrow(/无法核实/)
     expect(() => assertRestoringIntent(row, capture().id)).toThrow(/无法核实/)
     expect(restoringState('Unknown')).toContain('未知')
     expect(restoringState('Ready')).toContain('尚未恢复')
+  })
+  it('accepts a catalogue-verified overwritten backup without changing absent-target semantics', () => {
+    const row = ready()
+    row.command.captureKind = 'Overwrite'
+    expect(assertRestoringIntent(row)).toBe(row)
+    expect(
+      validRestoringRequest({ captureId: row.command.captureId, target: row.command.target }),
+    ).toBe(true)
+    expect('targetExpectedVersion' in row.command).toBe(false)
+    const root = {
+      id: 'test.tree',
+      name: 'test',
+      actions: ['files-list', 'files-download', 'files-history', 'files-tree-restore'],
+    }
+    const backup: TreeCapture = { ...capture(), kind: 'Overwrite', contentSha256: 'E'.repeat(64) }
+    expect(canRestoreCapture(root, backup)).toBe(true)
+    expect(canRestoreCapture(root, { ...backup, contentSha256: null })).toBe(false)
+    expect(
+      canRestoreCapture(root, { ...capture(), kind: 'Trash', contentSha256: 'E'.repeat(64) }),
+    ).toBe(false)
   })
 })

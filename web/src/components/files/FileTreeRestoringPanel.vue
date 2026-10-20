@@ -8,6 +8,7 @@ import { authSession } from '@/services/authSession'
 import { formatBytes } from '@/services/displayUnits'
 import type { FileRoot } from '@/services/fileManagement'
 import type { TreeCapture } from '@/services/fileTreeRecyclings'
+import { captureKind } from '@/services/fileTreeRecyclings'
 import {
   assertRestoringIntent,
   canRestoreCapture,
@@ -113,6 +114,7 @@ async function accept(value: TreeRestoringIntent, token: number, expected?: stri
   if (
     capture &&
     (value.command.captureId !== capture.id ||
+      value.command.captureKind !== captureKind(capture) ||
       value.command.source.rootId !== capture.source.source.rootId ||
       value.command.source.path !== capture.source.source.path ||
       (value.entryCount !== null &&
@@ -467,7 +469,9 @@ defineExpose({ open })
         <dt>捕获 ID</dt>
         <dd>{{ intent.command.captureId }}</dd>
         <dt>归档类型</dt>
-        <dd>目录回收归档</dd>
+        <dd>
+          {{ intent.command.captureKind === 'Overwrite' ? '覆盖前备份归档' : '目录回收归档' }}
+        </dd>
         <dt>目标目录</dt>
         <dd>{{ intent.command.target.rootId }} / {{ intent.command.target.path }}</dd>
         <dt>完整清单</dt>

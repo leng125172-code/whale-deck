@@ -12,7 +12,7 @@ export interface TreeRestoringRequest {
 }
 export interface TreeRestoringCommand extends TreeRestoringRequest {
   source: TreeLocation
-  captureKind: 'Trash'
+  captureKind: 'Trash' | 'Overwrite'
 }
 export interface TreeRestoringIntent extends Omit<TreeCopyIntent, 'command'> {
   command: TreeRestoringCommand
@@ -152,7 +152,7 @@ export function assertRestoringIntent(value: TreeRestoringIntent, expectedId?: s
     privateMaterial(command) ||
     !validRestoringRequest(command) ||
     !validTreeLocation(command.source) ||
-    command.captureKind !== 'Trash' ||
+    !['Trash', 'Overwrite'].includes(command.captureKind) ||
     !Number.isSafeInteger(value.version) ||
     value.version < 0 ||
     typeof value.partialRetained !== 'boolean' ||

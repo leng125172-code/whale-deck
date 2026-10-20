@@ -106,6 +106,7 @@ for (const [kind, label] of [
   ['tree-unpack', '归档解压'],
   ['tree-trash', '目录回收'],
   ['tree-restore', '目录恢复'],
+  ['tree-overwrite-restore', '目录覆盖恢复'],
 ])
   test(`${kind} is a distinct current-administrator recovery kind`, async ({ page }) => {
     const control = await installFileRecoveryFixture(page, { kind })

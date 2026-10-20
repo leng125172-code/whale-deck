@@ -38,6 +38,11 @@ export interface TreeCapture {
   archiveBytes: number
   archiveSha256: string
   createdAtUtc: string
+  kind?: 'Trash' | 'Overwrite'
+  contentSha256?: string | null
+}
+export function captureKind(value: TreeCapture): 'Trash' | 'Overwrite' {
+  return value.kind === undefined ? 'Trash' : value.kind
 }
 export interface TreeCapturePage {
   items: TreeCapture[]
@@ -205,8 +210,30 @@ export function assertCapturePage(value: TreeCapturePage, rootId: string, path =
       !row ||
       !treeUuid.test(row.id) ||
       !treeUuid.test(row.intentId) ||
+      row.id === '00000000-0000-0000-0000-000000000000' ||
+      row.intentId === '00000000-0000-0000-0000-000000000000' ||
+      Object.keys(row).some(
+        (key) =>
+          ![
+            'id',
+            'intentId',
+            'source',
+            'manifestSha256',
+            'entryCount',
+            'totalBytes',
+            'archiveBytes',
+            'archiveSha256',
+            'createdAtUtc',
+            'kind',
+            'contentSha256',
+          ].includes(key),
+      ) ||
       row.id === row.intentId ||
       seen.has(row.id) ||
+      !['Trash', 'Overwrite'].includes(captureKind(row)) ||
+      (captureKind(row) === 'Overwrite'
+        ? !hash.test(row.contentSha256 || '')
+        : row.contentSha256 != null) ||
       !validRecyclingCommand(row.source) ||
       row.source.source.rootId !== rootId ||
       (path && row.source.source.path !== path) ||

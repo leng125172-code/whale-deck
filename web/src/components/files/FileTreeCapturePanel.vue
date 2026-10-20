@@ -9,9 +9,20 @@ import type { TreeCapturePage, TreeCapture } from '@/services/fileTreeRecyclings
 import type { FileRoot } from '@/services/fileManagement'
 import { validTreeLocation } from '@/services/fileTreeCopies'
 import { canRestoreCapture, canReceiveRestoring } from '@/services/fileTreeRestorings'
+import { canOverwriteCapture } from '@/services/fileTreeOverwriteRestorings'
+import { captureKind } from '@/services/fileTreeRecyclings'
 
-const props = defineProps<{ roots: FileRoot[]; rootId: string; disabled?: boolean }>()
-const emit = defineEmits<{ failure: [reason: unknown]; restore: [capture: TreeCapture] }>()
+const props = defineProps<{
+  roots: FileRoot[]
+  rootId: string
+  disabled?: boolean
+  overwriteAvailable?: boolean
+}>()
+const emit = defineEmits<{
+  failure: [reason: unknown]
+  restore: [capture: TreeCapture]
+  overwrite: [capture: TreeCapture]
+}>()
 const authorized = computed(() => authSession.user.value?.isAdministrator === true)
 const available = computed(() =>
   props.roots.filter((root) =>
@@ -135,6 +146,21 @@ function restore(capture: TreeCapture) {
   emit('restore', capture)
   dialog.value = false
 }
+function overwrite(capture: TreeCapture) {
+  if (
+    !authorized.value ||
+    props.disabled ||
+    busy.value ||
+    !props.overwriteAvailable ||
+    !canOverwriteCapture(
+      props.roots.find((root) => root.id === capture.source.source.rootId),
+      capture,
+    )
+  )
+    return
+  emit('overwrite', capture)
+  dialog.value = false
+}
 watch([() => authSession.user.value?.subject, authorized], () => {
   reset()
   dialog.value = false
@@ -206,6 +232,9 @@ onBeforeUnmount(reset)
       <header>
         <strong>{{ item.source.source.path }}</strong
         ><el-tag size="small" type="success">归档曾验证</el-tag>
+        <el-tag size="small" :type="captureKind(item) === 'Overwrite' ? 'warning' : 'info'">{{
+          captureKind(item) === 'Overwrite' ? '覆盖前备份' : '目录回收'
+        }}</el-tag>
       </header>
       <p>
         {{ item.entryCount }} 项 · 内容 {{ formatBytes(item.totalBytes) }} · 归档
@@ -224,10 +253,28 @@ onBeforeUnmount(reset)
           <dd>{{ item.manifestSha256 }}</dd>
           <dt>归档 SHA256</dt>
           <dd>{{ item.archiveSha256 }}</dd>
+          <template v-if="item.contentSha256"
+            ><dt>内容摘要</dt>
+            <dd>{{ item.contentSha256 }}</dd></template
+          >
         </dl>
       </details>
       <div class="tree-capture-restore">
         <span v-if="restoreDisabledReason(item)">{{ restoreDisabledReason(item) }}</span>
+        <el-button
+          v-if="
+            overwriteAvailable &&
+            canOverwriteCapture(
+              roots.find((root) => root.id === item.source.source.rootId),
+              item,
+            )
+          "
+          type="warning"
+          plain
+          :disabled="disabled || busy"
+          @click="overwrite(item)"
+          >覆盖现有目录（先备份）</el-button
+        >
         <el-button
           type="primary"
           plain
