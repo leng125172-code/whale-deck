@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-21真实覆盖网页子门禁通过**：已装2c8d1bb/1.35的1440明色/320暗色回收与覆盖、独立完整2MiB+7磁盘与HDD证明、刷新/取消、普通权限/正常退出通过。自有载荷精确清理、永久记录保留，5操作/9任务/4捕获及零活动/锁/pending Outbox独立复核；运行时和上一文档CI四路成功，新观察器14项Linux-root通过。[证据](qa/FILE_TREE_OVERWRITE_REAL_UI.md)。只验收此子范围，不签完整文件管理；目录清理、容器文件及全部76项保持active。
+
 - **2026-10-21已安装2c8d1bb/1.35**：覆盖历史内容域修复通过冻结PG、同源码已装UDS/2MiB+7与1GiB+7独立完整磁盘、实际Cookie/BFF/Worker/SQL与Overwrite捕获两条实际恢复链，已dev覆盖发布/六组件来源与健康核对；网页覆盖交互仍未签收。1758 Unit/146 Integration（6本机原生跳过）、Linux32+23+5通过，新CI前端继续；首次旧预期失败保留。[证据及剩余](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。完整76项仍active，不签整个文件管理。
 
 - **2026-10-21覆盖历史内容证明修复候选**：发现目录inode树摘要/归档内容域混用，新增独立TargetContentSha256及Agent1.35专用能力、捕获签名与备份复核，未削弱原证明。1758 Unit/146 Integration、Release通过（6本机原生跳过），新实际Linux/PG/UDS/BFF/页面仍待验。上一1ea9de6已dev覆盖部署并核对来源/健康；完整76项保持active。[边界](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。

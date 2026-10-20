@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-21覆盖恢复真实网页子范围通过**：在已装2c8d1bb/1.35上，1440明色及320暗色各2MiB+7真实登录/回收/历史选择/覆盖完成，独立全字节/原件inode/两组HDD归档与不同内容域核验通过；Ready刷新零文件写请求、取消不改目标、真实普通用户拒绝/零文件请求及正常退出通过。自有载荷精确清理并独立确认，5操作/9任务/4捕获永久保留、active/锁/pending Outbox均0。新增观察器14项真实Linux-root通过；运行时与文档四路CI均成功、11核心healthy。[网页证据](qa/FILE_TREE_OVERWRITE_REAL_UI.md)。本批不重复部署，目录彻底清理/容器文件与完整76项仍active；下列网页未签收为前轮历史。
+
 - **2026-10-21实际2c8d1bb/Agent1.35**：独立归档内容证明修复已覆盖发布，六组件/HTTP来源一致、两宿主active及11核心healthy。冻结真实PG1执行1通过、临时清理独立复核；同源码签名UDS/2MiB+7与1GiB+7完整校验，以及真实Cookie/BFF/Worker/SQL的覆盖、Overwrite历史经两条流程再次恢复、CSRF/普通拒绝/审计/零锁均通过。1758 Unit/146 Integration（6本机原生跳过）、Linux32+23+5通过；首轮共用测试旧预期失败已保留并正确修复。新CI三路成功/前端原作业继续。真实网页仅匿名登录1440视觉，主题工具超时，覆盖交互仍未签收。[最新证据](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。完整76项active，下列未安装为历史。
 
 - **2026-10-21摘要绑定修复候选，未部署**：实际复用验收准备中发现Overwrite目录把inode树摘要误存为归档ContentSha，后续严格恢复会拒绝。新增独立TargetContentSha256全链绑定及RPC1.35专用能力，保留旧树/文件inode证明、不放宽校验。1758 Unit/146 Integration及Release零警告错误通过（6本机原生跳过）；真实Linux/PG/新UDS/BFF/网页仍待验证。[故障与证据](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。1ea9de6上一候选已正常dev覆盖发布，六组件/HTTP来源一致、11核心healthy；不冒称新修复已装，完整76项继续。

@@ -6,6 +6,6 @@
   "summary": "面向 Precision 7920 工作站的容器化控制平面，包含管理界面、主机 Agent 与维护入口。MVP/P1 主体已部署，P0–P5 扩展目标仍在推进。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
-  "nextStep": "实际2c8d1bb/Agent1.35独立归档内容证明修复已发布，六组件/HTTP来源与11核心健康通过；冻结PG1执行1通过及清理独立复核，1758 Unit/146 Integration（6本机原生跳过）、Linux32+23+5通过。同源码UDS/2MiB+7与1GiB+7全磁盘、真实身份BFF/Worker/SQL与Overwrite捕获经两条实际恢复链均通过，首轮旧测试预期失败保留。新CI三路成功/前端继续；网页只检查匿名1440登录，主题工具超时，覆盖交互尚未签收。继续独立网页夹具/真实页面、目录清理/容器文件与完整76项；文件源/备份同HDD不算异盘。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-21）",
+  "nextStep": "实际2c8d1bb/Agent1.35保持；1440明色及320暗色真实页面回收/覆盖与独立完整2MiB+7字节、inode及两组归档通过，刷新/取消/普通用户拒绝与正常退出通过。自有载荷已精确清理，5操作/9任务/4捕获永久保留，active/锁/pending Outbox均0；新增观察器14项Linux-root通过，两版四路CI成功，11核心healthy。继续真实中断接管UI、目录彻底清理/容器文件及完整76项；文件源/备份同HDD不算异盘。"
 }
