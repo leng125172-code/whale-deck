@@ -30,6 +30,8 @@ jobs:
           python3 -m unittest discover -s deploy/validation -p test_unpacking_probe_scope.py
           python3 -m unittest discover -s deploy/validation -p test_restoring_probe_scope.py
           sudo python3 -m unittest discover -s deploy/validation -p test_overwrite_probe_scope.py
+          sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_purging_probe_scope.py
+          python3 -m py_compile deploy/validation/validate_tree_purging_agent.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_overwrite_bff_contract.py
           python3 -m py_compile deploy/validation/validate_tree_overwrite_restoring_agent.py
           python3 -m py_compile deploy/validation/validate_file_tree_overwrite_restoring_bff.py
