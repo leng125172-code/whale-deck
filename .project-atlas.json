@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-21）",
-  "nextStep": "清理业务材料候选已接Application/签名确认/续租调度和Gateway、签名历史目录解析及Unknown组件三态；Release/2124 Unit/146 Integration（6本机原生跳过）通过。旧维护状态并发失败已修，原测试10轮及全套再通过。未部署/未注册EF模型，无清理SQL/迁移/Worker/API/UI；实际Agent/维护56101c8/1.36、应用2c8d1bb/11核心healthy。下一步实现永久仓储/migration、Job/Outbox/捕获及层级锁、事务审计/按组件清理事实，接Worker/API、第11类管理员处置、原生PG和页面；完整76项继续。"
+  "nextStep": "563f48a清理永久仓储/migration/Job-Outbox/捕获与层级锁、事务审计和签名组件事实已通过Release、2124 Unit/147 Integration（6本机原生跳过）及工作站独立PG库1项完整编排，临时资源清理确认。CI后端/原生PG/安装器通过，前端待终态。未部署；实际Agent/维护56101c8/1.36、应用2c8d1bb/11核心healthy。下一步接Worker/API、第11类管理员接管与WebUI/真实权限，继续未知和孤儿对象、容器文件及完整76项。"
 }
