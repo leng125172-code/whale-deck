@@ -26,6 +26,14 @@ Status: active, candidate source only. This is not installed Agent, live BFF, br
 - The scout returned a partial inventory, but the Worker read was truncated and router success was false. GPT directly inspected the affected production files and selected/implemented/reviewed all permission and persistence changes; the partial inventory is not acceptance evidence.
 - Two test agents modified only their assigned test files. GPT reviewed their diffs and ran the combined build and tests.
 
+## Frozen workstation PostgreSQL evidence
+
+- Source `d50b765d18b5d5f2c15aaf0a138ba6bf3e3f557e`, detached shared validation clone only, not the production checkout.
+- Existing isolated dispatch runner: state Passed, executedTests 1, passedTests 1, cleanupConfirmed true. Started 2026-10-20T13:21:56Z; finished 13:24:32Z. This executes legacy schema upgrade and all existing dispatch/file workflows together with the two new current-administrator overwrite cases.
+- Status file `deploy/artifacts/native-source-d50b765/deploy/artifacts/native-status/dispatch-b786fa503cb64967872cd2eeb3821f28.json`; SDK image ID `sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa`.
+- Owned SDK container `whaledeck-native-dispatch-cee192c6012c` independently confirmed absent after completion; temporary database cleanup confirmed. Eleven existing core containers remained healthy and Agent/MaintenanceHost active.
+- Previous source 67a33a9 CI run 39424750947 completed with backend/frontend/native-postgres/installer all successful. It is preceding-source evidence, not the new candidate CI result.
+
 ## Remaining gate
 
-Freeze source and execute the existing isolated workstation PostgreSQL runner; require exactly one executed/passed native test and cleanup proof. Then continue UI integration, installed UDS, live BFF and browser acceptance before deployment acceptance. The complete 76-item P0–P5 objective remains active.
+Continue UI integration, installed signed UDS with independent original/backup/output disk-byte proof, live BFF/identity and browser acceptance before deployment acceptance. Native PostgreSQL uses deliberate identity and Agent transport stubs. The complete 76-item P0–P5 objective remains active.

@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
-  "nextStep": "覆盖恢复SQL仓储/永久双任务/Outbox/共享锁/lease及备份目录签名兼容已实现；冻结62cd5dc工作站真实隔离PG1执行1通过，五次夹具/JSON查询失败已修正并保留；临时容器清理与11核心健康复核通过。1700 Unit/144 Integration通过，6本机原生依赖跳过。候选未部署，继续当前管理员Unknown对账、通用Job取消/Outbox分流、Worker/API/UI及安装态UDS/BFF/页面验收，完整76项仍active；品牌已签收。"
+  "nextStep": "覆盖恢复第10类现任管理员对账、独立Worker/API、Job取消/Outbox分流及32字符约束迁移已接通；冻结d50b765工作站真实隔离PG1执行1通过，临时DB/容器清理与11核心健康复核通过。1738 Unit/146 Integration通过，6本机原生依赖明确跳过。候选未部署，继续覆盖恢复UI、安装态签名UDS/独立磁盘证明、真实身份BFF/页面验收，完整76项仍active；品牌已签收。"
 }
