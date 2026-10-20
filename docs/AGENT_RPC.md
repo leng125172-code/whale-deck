@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-10-21新增未部署清理业务材料：独立 Application 校验/签名确认/调度和 Gateway 已接；2124 Unit/146 Integration（6 本机原生跳过）、Release及旧维护快照并发10轮通过，修复候选包含同实例维护读取/发布协调。没有清理 SQL/迁移/Worker 注册/Controller/UI，不冒称永久任务已落库；[材料及失败账本](qa/FILE_TREE_PURGING_BUSINESS_MATERIAL.md)。实际 Agent/维护56101c8/1.36、API/Worker/Gateway2c8d1bb保持，完整76项继续。
+
 2026-10-21实际安装56101c8/minor36：独立清理能力与固定helper通过宿主验证，6c60ea3签名UDS探针/独立磁盘观察器验证两类捕获、三范围、2MiB+7/1GiB+7完整内容、6完成/6取消及精确清理；81精确路径另行确认消失，5私有证据保留。源/归档同HDD，不冒称异盘/安装态强杀或BFF/SQL/人类权限/UI。API/Worker/Gateway仍2c8d1bb；[完整证据](qa/FILE_TREE_PURGING_INSTALLED.md)。清理业务与全部76项继续；以下“未安装minor36”为候选历史。
 
 2026-10-21新增未安装minor36候选：`FileTreePurgingService` Plan/Apply/Inspect/Discard，独立`files.tree-purge-intents`、三范围、严格6/18/12字段、uint64身份和删除事实校验。固定helper/可信loader、精确默认授权升级及测试已接；Release零警告错误、1856 Unit/146 Integration（6本机原生跳过）、冻结Linux清理30/文件184通过。生产仍2c8d1bb/1.35；尚无清理BFF/Worker/SQL/UI或安装态验收。[边界与证据](qa/FILE_TREE_PURGING_AGENT.md)。以下运行版本及候选条目保留各自历史背景。

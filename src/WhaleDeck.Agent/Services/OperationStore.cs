@@ -104,6 +104,15 @@ public sealed class OperationStore
 
     public OperationHandle GetMaintenance()
     {
+        // File.Replace can expose a transient missing name to a Windows opener
+        // even though existing shared-delete readers retain their old inode.
+        // Serialize this store's existence/open pair with its own publication;
+        // never turn that window into a false Ready result or weaken readers.
+        lock (_writeLock) return ReadMaintenance();
+    }
+
+    private OperationHandle ReadMaintenance()
+    {
         if (!File.Exists(_maintenancePath))
         {
             return new OperationHandle { State = OperationState.Succeeded, Phase = "Ready", ProgressPercent = 100 };
