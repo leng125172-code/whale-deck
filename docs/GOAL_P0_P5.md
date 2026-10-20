@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- 目录恢复后端修正候选 **66451f7**：1383 Unit/143 Integration（6本机原生跳过）、工作站冻结真实PG1执行1通过及独立临时容器清理通过；CI39359695663后端/原生PG/安装成功、前端仍运行。首次29245ce共用测试将已完成恢复版本误断为null的失败已修正并保留。新恢复实际UDS/身份BFF/WebUI与安装尚缺，实际仍e0175a0/1.32、全部76项继续；见[冻结证据](qa/FILE_TREE_RESTORING_BFF.md)。
+
 - 目录恢复业务后端新候选：原捕获索引解析、永久双Job/共享路径及捕获锁/Worker/事务审计/第九类当前管理员对账/API与EF迁移已接通，1383 Unit/143 Integration通过（6本机原生跳过）。冻结实际PG/新CI及恢复WebUI、真实身份和安装态尚待验收；实际仍e0175a0/1.32，全部76项继续，见[业务边界](qa/FILE_TREE_RESTORING_BFF.md)。
 
 - 目录恢复新增 **RPC1.33 源码候选，未部署**：独立Plan/Apply/Inspect/Discard、固定helper/可信模块与精确默认授权升级已实现；1336 Unit/141 Integration（6本机原生跳过）、19恢复/19根升级真实Linux通过。新签名UDS/独立磁盘探针已编译但未运行；实际e0175a0/1.32不变。永久任务/Worker/API/UI、覆盖恢复/彻底清理、容器文件及全部76项继续，P2-03/P2-04仍部分实现；见[候选证据](qa/FILE_TREE_RESTORING_AGENT.md)。

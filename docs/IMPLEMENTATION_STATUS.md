@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 目录恢复后端 **66451f7** 已通过同源码工作站隔离真实PG（1执行/1通过、cleanupConfirmed及独立Docker移除复核），1383 Unit/143 Integration（6本机原生跳过）保持。CI39359695663三项成功、前端继续；首次原生断言失败已修且保留。恢复WebUI/新身份BFF/真实UDS及部署仍缺，实际e0175a0/1.32不变，完整76项继续，见[最新证据](qa/FILE_TREE_RESTORING_BFF.md)。
+
 - 目录恢复业务后端新增候选（未部署）：捕获ID/目标专用公开请求、签名历史事实解析、永久计划/执行、捕获和路径锁/预算、Worker/取消/事务审计、第九类当前管理员处置及迁移已实现。1383 Unit/143 Integration通过，6原生本机跳过；新冻结实际PG/CI/身份BFF/WebUI待验收，实际e0175a0/1.32不变，见[证据](qa/FILE_TREE_RESTORING_BFF.md)。
 
 - 目录恢复 **RPC1.33 新源码候选，未部署**：独立恢复契约/Agent方法、固定helper/可信模块、精确旧默认根授权升级及原捕获/当前操作owner分离已实现。Release零警告/错误，1336 Unit/141 Integration通过（6本机原生跳过），工作站隔离19恢复/19根升级通过；真实签名UDS与独立全磁盘探针已编译未执行。业务永久任务/Worker/HTTP/WebUI与覆盖恢复/清理继续；实际仍e0175a0/1.32，完整76项不缩减，见[边界](qa/FILE_TREE_RESTORING_AGENT.md)。

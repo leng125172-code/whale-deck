@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
-  "nextStep": "目录恢复业务后端新增签名捕获解析、永久双Job/共享路径及捕获锁/Worker/事务审计、第九类当前管理员处置/API和迁移，1383 Unit/143 Integration通过（6本机原生跳过）；新冻结实际PG/CI/身份BFF/恢复WebUI待验收。实际仍e0175a0/1.32；继续实测与完整页面、覆盖恢复/清理、容器文件和全部76项。"
+  "nextStep": "目录恢复后端66451f7已过1383 Unit/143 Integration（6本机原生跳过）、冻结实际PG1执行1通过与清理复核，CI后端/PG/安装成功、前端仍运行。实际仍e0175a0/1.32；继续恢复WebUI/第九类页面、真实身份BFF/签名UDS和覆盖发布，补覆盖恢复/清理、容器文件及全部76项。"
 }
