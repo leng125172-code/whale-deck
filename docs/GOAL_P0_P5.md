@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-20覆盖恢复持久化候选**：SQL仓储、永久双任务/Outbox/共享锁/租约、不可降级的覆盖前备份目录及Trash/Overwrite签名兼容已实现。Release零警告错误、1700 Unit/144 Integration通过（6本机原生跳过）；冻结62cd5dc在工作站隔离真实PG实际1执行/1通过、旧schema升级与审计回滚/取消/Unknown/跨Kind重用通过，临时容器清理独立确认、11核心healthy。前五次夹具/JSON查询失败均保留并修正后完整重验。[证据及未完成边界](qa/FILE_TREE_OVERWRITE_RESTORING_PERSISTENCE.md)。尚未部署：当前管理员对账、Worker/API/UI与安装态UDS/BFF/页面继续；实际Agent/MaintenanceHost/Gateway6a6f8e2，API/Worker18f38bb，完整76项仍active。以下为对应历史。
+
 - **2026-10-20恢复在线后**：11核心healthy、Agent/维护服务重启0、WD live200。Authentik品牌最终验收通过：320/390/740短窗口/1440明暗无横向溢出，修复系统主题切换背景回退及语言控件遮Logo；独立匿名背景全SHA吻合，真实密码/OIDC/双端正常退出与临时身份清理通过。见[最终证据](qa/DISK_CAPACITY_AUTHENTIK_BRANDING.md)。新增覆盖恢复Application绑定/服务/调度与Gateway候选，1678 Unit/143 Integration通过（6本机原生跳过）、183项新纯测试；Windows原子快照并发问题也已修复并回归。尚无覆盖恢复SQL仓储/迁移/Worker/API/UI，未部署候选；见[业务材料边界](qa/FILE_TREE_OVERWRITE_RESTORING_MATERIAL.md)。实际Agent/MaintenanceHost/Gateway仍6a6f8e2，API/Worker18f38bb；完整76项继续active。以下离线/旧候选状态是对应历史。
 
 目录覆盖恢复新RPC1.34候选已接独立capability/四方法/固定helper/默认根升级，1463 Unit/143 Integration（6原生本机跳过）、27覆盖恢复/驱动和23配置升级实际Linux通过。未安装，业务任务/API/UI与签名UDS仍缺，实际18f38bb/1.33不变；[证据](qa/FILE_TREE_OVERWRITE_RESTORING_AGENT.md)。全量76项继续，P2-03/P2-04仍部分实现。
