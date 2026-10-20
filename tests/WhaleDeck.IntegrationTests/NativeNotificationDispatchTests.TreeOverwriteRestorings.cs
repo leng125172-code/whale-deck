@@ -239,6 +239,42 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Contains((await captureService.CapturesAsync(actor, acknowledged.Command.Target, null, 25, default)).Items,
                 item => item.Id == acknowledged.OverwrittenCaptureId && item.Kind == "Overwrite" && item.ContentSha256 is not null);
 
+            foreach (var completedRecovery in new[] { false, true })
+            {
+                var adopted = await Confirm(await Ready(completedRecovery ? "current-admin-completed" : "current-admin-unknown"));
+                gateway.Unknown = !completedRecovery; gateway.LoseResponse = completedRecovery;
+                Assert.True(await worker.TickAsync(default)); gateway.Unknown = false;
+                var prior = Assert.IsType<FileTreeOverwriteRestoringOperation>(await repository.OwnedAsync(actor, adopted.Id, default));
+                Assert.Equal("Unknown", prior.State); Assert.NotNull(prior.RootStartedAtUtc);
+                Assert.Equal(!completedRecovery, prior.BackupVerified);
+                var existingCapture = await db.FileTreeCaptures.AsNoTracking().SingleOrDefaultAsync(item => item.Id == adopted.ExecutionJobId);
+                if (completedRecovery) { Assert.Null(existingCapture); Assert.Null(prior.OverwrittenCaptureId); }
+                else { Assert.NotNull(existingCapture); Assert.Equal(adopted.ExecutionJobId, prior.OverwrittenCaptureId); }
+                // Make the original actually eligible, so the helper's Claim
+                // assertion proves reservation fencing rather than a future due time.
+                await Due(adopted.Id); var previousApplies = gateway.Applies;
+                identity.Admin = false;
+                try
+                {
+                    await FileRecoveryWorkflowBoundaries(options, protector, FileRecoveryKinds.TreeOverwriteRestoring, adopted.Id, recoveryAt: clock.GetUtcNow());
+                    await FileRecoveryWorkflowBoundaries(options, protector, FileRecoveryKinds.TreeOverwriteRestoring, adopted.Id,
+                        dispose: true, recycleCompleted: completedRecovery, recoveryAt: clock.GetUtcNow());
+                }
+                finally { identity.Admin = true; }
+                Assert.Equal(previousApplies, gateway.Applies);
+                var disposed = await service.GetAsync(actor, adopted.Id, default);
+                Assert.Equal(completedRecovery ? "Succeeded" : "Acknowledged", disposed.State);
+                Assert.True(disposed.BackupVerified && disposed.BackupMayBeRetained && disposed.OriginalsRetained && disposed.TargetMayHaveChanged);
+                Assert.Equal(adopted.ExecutionJobId, disposed.OverwrittenCaptureId);
+                Assert.Equal(completedRecovery ? new string('A', 64) : null, disposed.PublishedVersion);
+                Assert.Empty(await db.FilePathLocks.Where(item => item.OperationId == adopted.ExecutionJobId).ToArrayAsync());
+                var retained = await db.FileTreeCaptures.AsNoTracking().SingleAsync(item => item.Id == adopted.ExecutionJobId);
+                Assert.Equal(prior.ActorSubject, actor.Subject); Assert.Equal(prior.OwnerHash, retained.OwnerHash);
+                var currentAdmin = actor with { Subject = NativeRecoveryIdentity.CurrentSubject, LoginBinding = new('F', 64) };
+                Assert.Contains((await captureService.CapturesAsync(currentAdmin, disposed.Command.Target, null, 25, default)).Items,
+                    item => item.Id == retained.Id && item.Kind == "Overwrite" && item.ContentSha256 is not null);
+            }
+
             // Audit rejection rolls back queue, confirmation, backup catalogue,
             // Jobs, Outbox and locks as one transaction, not just the intent row.
             var rollbackReady = await Ready("confirm-audit-rollback");

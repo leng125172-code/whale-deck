@@ -9,7 +9,8 @@ using WhaleDeck.Infrastructure.Agent;
 namespace WhaleDeck.Infrastructure.Persistence;
 
 public sealed partial class FileRecoveryRepository(PlatformDbContext db, FileRecoverySources sources, FileRecoveryMaterial material,
-    FileArchiveRepository archiveCatalog, IFileRecoveryProtector protector, TimeProvider clock, FileTreeRecyclingRepository? recyclingCatalog = null) : IFileRecoveryRepository
+    FileArchiveRepository archiveCatalog, IFileRecoveryProtector protector, TimeProvider clock, FileTreeRecyclingRepository? recyclingCatalog = null,
+    FileTreeOverwriteRestoringRepository? overwriteCatalog = null) : IFileRecoveryRepository
 {
     private DateTimeOffset Now() => FileTreeCopyValidation.Timestamp(clock.GetUtcNow());
     public Task<FileRecoveryOperation?> OwnedAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) =>
@@ -148,7 +149,7 @@ public sealed partial class FileRecoveryRepository(PlatformDbContext db, FileRec
                 await End(row, "Failed", "FILES_RECOVERY_RECEIPT_CHANGED", cancellationToken);
             else
             {
-                row.OriginalResolution = await sources.DisposeAsync(row, observation, archiveCatalog, cancellationToken, recyclingCatalog);
+                row.OriginalResolution = await sources.DisposeAsync(row, observation, archiveCatalog, cancellationToken, recyclingCatalog, overwriteCatalog);
                 // The original Job lock and catalogue queries may have waited.
                 // Roll the whole transaction back if this lease/deadline expired.
                 RequireLive(row);

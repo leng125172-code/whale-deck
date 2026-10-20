@@ -430,6 +430,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             .Where(item => item.MessageType != "FileTreePackingRequested" && item.MessageType != "FileTreePackingCancellationRequested")
             .Where(item => item.MessageType != "FileTreeUnpackingRequested" && item.MessageType != "FileTreeUnpackingCancellationRequested")
             .Where(item => item.MessageType != "FileTreeRestoringRequested" && item.MessageType != "FileTreeRestoringCancellationRequested")
+            .Where(item => item.MessageType != "FileTreeOverwriteRestoringRequested" && item.MessageType != "FileTreeOverwriteRestoringCancellationRequested")
             .Where(item => item.MessageType != "FileTreeRecyclingRequested" && item.MessageType != "FileTreeRecyclingCancellationRequested")
             .Where(item => item.MessageType != "FileRecoveryRequested" && item.MessageType != "FileRecoveryCancellationRequested")
             .OrderBy(item => item.OccurredAtUtc).Take(10).ToArrayAsync(cancellationToken);

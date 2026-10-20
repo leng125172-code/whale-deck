@@ -11,7 +11,7 @@ public sealed partial class PlatformDbContext
         {
             entity.ToTable("file_recovery_operations", table =>
             {
-                table.HasCheckConstraint("ck_file_recovery_kind", "kind IN ('upload','mutation','archive','tree-copy','tree-move','tree-pack','tree-unpack','tree-trash','tree-restore') AND disposition IN ('AcknowledgeUnknown','ReconcileCompleted') AND reason_code IN ('OriginalSessionLost','OperatorHandover','IncidentReview')");
+                table.HasCheckConstraint("ck_file_recovery_kind", "kind IN ('upload','mutation','archive','tree-copy','tree-move','tree-pack','tree-unpack','tree-trash','tree-restore','tree-overwrite-restore') AND disposition IN ('AcknowledgeUnknown','ReconcileCompleted') AND reason_code IN ('OriginalSessionLost','OperatorHandover','IncidentReview')");
                 table.HasCheckConstraint("ck_file_recovery_state", "state IN ('Queued','Planning','Ready','DispositionQueued','Fencing','Unknown','Disposed','Failed','Canceled','Expired') AND (completed_at_utc IS NULL)=(state IN ('Queued','Planning','Ready','DispositionQueued','Fencing','Unknown'))");
                 table.HasCheckConstraint("ck_file_recovery_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND original_binding_hash ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$' AND (plan_hash IS NULL OR plan_hash ~ '^[A-F0-9]{64}$') AND (observation_hash IS NULL OR observation_hash ~ '^[A-F0-9]{64}$')");
                 table.HasCheckConstraint("ck_file_recovery_limits", "version>=0 AND original_version>=0 AND planning_expires_at_utc=created_at_utc+INTERVAL '15 minutes' AND octet_length(original_json::text)<=262144 AND jsonb_typeof(original_json)='object' AND idempotency_key ~ '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' AND (observation_json IS NULL OR octet_length(observation_json::text)<=16384)");
@@ -20,7 +20,7 @@ public sealed partial class PlatformDbContext
                 table.HasCheckConstraint("ck_file_recovery_resolution", "(state='Disposed')=(original_resolution IS NOT NULL) AND (original_resolution IS NULL OR original_resolution IN ('Acknowledged','Succeeded','Superseded','Failed'))");
             });
             entity.HasKey(row => row.Id); entity.Property(row => row.ActorSubject).HasMaxLength(256);
-            entity.Property(row => row.Kind).HasMaxLength(16); entity.Property(row => row.Disposition).HasMaxLength(24); entity.Property(row => row.ReasonCode).HasMaxLength(32);
+            entity.Property(row => row.Kind).HasMaxLength(32); entity.Property(row => row.Disposition).HasMaxLength(24); entity.Property(row => row.ReasonCode).HasMaxLength(32);
             entity.Property(row => row.IdempotencyKey).HasMaxLength(36); entity.Property(row => row.State).HasMaxLength(24); entity.Property(row => row.RootState).HasMaxLength(16);
             entity.Property(row => row.ResultCode).HasMaxLength(80); entity.Property(row => row.OriginalResolution).HasMaxLength(16);
             foreach (var name in new[] { nameof(FileRecoveryOperation.LoginBinding), nameof(FileRecoveryOperation.OriginalBindingHash), nameof(FileRecoveryOperation.RequestHash), nameof(FileRecoveryOperation.PlanHash), nameof(FileRecoveryOperation.ObservationHash) }) entity.Property(name).HasMaxLength(64);

@@ -50,7 +50,7 @@ public static class FileRecoveryValidation
     {
         FileRecoveryKinds.Archive => 0, FileRecoveryKinds.Mutation => 1, FileRecoveryKinds.TreeCopy => 2,
         FileRecoveryKinds.TreeMove => 3, FileRecoveryKinds.Upload => 4, FileRecoveryKinds.TreePacking => 5, FileRecoveryKinds.TreeUnpacking => 6, FileRecoveryKinds.TreeRecycling => 7,
-        FileRecoveryKinds.TreeRestoring => 8, _ => throw new ArgumentException("FILES_RECOVERY_KIND_INVALID")
+        FileRecoveryKinds.TreeRestoring => 8, FileRecoveryKinds.TreeOverwriteRestoring => 9, _ => throw new ArgumentException("FILES_RECOVERY_KIND_INVALID")
     };
     public static void Target(FileRecoveryTargetBinding target)
     {
@@ -64,6 +64,7 @@ public static class FileRecoveryValidation
             FileRecoveryKinds.TreeUnpacking => FileTreeUnpackingValidation.ExecutionId(target.IntentId),
             FileRecoveryKinds.TreeRecycling => FileTreeRecyclingValidation.ExecutionId(target.IntentId),
             FileRecoveryKinds.TreeRestoring => FileTreeRestoringValidation.ExecutionId(target.IntentId),
+            FileRecoveryKinds.TreeOverwriteRestoring => FileTreeOverwriteRestoringValidation.ExecutionId(target.IntentId),
             _ => target.IntentId
         };
         if (target.IntentId == Guid.Empty || target.ExecutionJobId != execution || target.OriginalVersion < 0 ||

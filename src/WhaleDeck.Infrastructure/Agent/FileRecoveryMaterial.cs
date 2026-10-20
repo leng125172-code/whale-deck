@@ -11,7 +11,7 @@ namespace WhaleDeck.Infrastructure.Agent;
 /// <summary>Validates the real old intent MAC and freezes exact material, not an old human's authority.</summary>
 public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutationProtector mutations,
     IFileArchiveProtector archives, IFileTreeCopyProtector copies, IFileTreeMoveProtector moves, IFileTreePackingProtector packings, IFileTreeUnpackingProtector unpackings,
-    IFileTreeRecyclingProtector? recyclings = null, IFileTreeRestoringProtector? restorings = null)
+    IFileTreeRecyclingProtector? recyclings = null, IFileTreeRestoringProtector? restorings = null, IFileTreeOverwriteRestoringProtector? overwrites = null)
 {
     public const int MaximumBytes = 262144;
     public object? ValidateObservation(FileRecoverySnapshot original, FileRecoveryObservation observation)
@@ -20,6 +20,8 @@ public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutati
             throw new FileTransferRejectedException();
         if (observation.State == "Missing")
         {
+            // Missing root evidence does not make the signed historical snapshot optional.
+            _ = Read<object>(original);
             if (observation.ReceiptJson != "null" || observation.BindingCurrent || observation.ReceiptHash != FileRecoveryValidation.ReceiptHash(original.Kind, original.Binding.ExecutionJobId, "Missing", "null"))
                 throw new FileTransferRejectedException();
             return null;
@@ -68,6 +70,13 @@ public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutati
                 var restoring = Read<FileTreeRestoringOperation>(original); var restored = Decode<FileTreeRestoringReceipt>();
                 FileTreeRestoringValidation.Receipt(restoring.ExecutionJobId!.Value, FileTreeRestoringValidation.ReadPlan(restoring), restored);
                 value = restored; state = restored.State; current = restored.State == "Completed"; break;
+            case FileRecoveryKinds.TreeOverwriteRestoring:
+                var overwrite = Read<FileTreeOverwriteRestoringOperation>(original); var overwritten = Decode<FileTreeOverwriteRestoringReceipt>();
+                FileTreeOverwriteRestoringValidation.Receipt(overwrite.ExecutionJobId!.Value, FileTreeOverwriteRestoringValidation.ReadPlan(overwrite), overwritten);
+                if (overwrite.BackupVerified && (!overwritten.BackupVerified || overwrite.BackupArchiveBytes != overwritten.BackupArchiveBytes || overwrite.BackupArchiveSha256 != overwritten.BackupArchiveSha256) ||
+                    overwrite.BackupMayBeRetained && !overwritten.BackupMayBeRetained || overwrite.OriginalsRetained && !overwritten.OriginalsRetained ||
+                    overwrite.TargetMayHaveChanged && !overwritten.TargetMayHaveChanged) throw new FileTransferRejectedException();
+                value = overwritten; state = overwritten.State; current = overwritten.State == "Completed"; break;
             default: throw new ArgumentException("FILES_RECOVERY_KIND_INVALID");
         }
         var canonical = JsonSerializer.Serialize(value, value.GetType());
@@ -94,6 +103,8 @@ public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutati
         recyclings is not null && FileTreeRecyclingValidation.HasValidBinding(row, recyclings), row.State, row.CompletedAtUtc, row);
     public FileRecoverySnapshot Capture(FileTreeRestoringOperation row) => Freeze(FileRecoveryKinds.TreeRestoring, row.Id, row.ExecutionJobId ?? Guid.Empty, row.Version,
         restorings is not null && FileTreeRestoringValidation.HasValidBinding(row, restorings), row.State, row.CompletedAtUtc, row);
+    public FileRecoverySnapshot Capture(FileTreeOverwriteRestoringOperation row) => Freeze(FileRecoveryKinds.TreeOverwriteRestoring, row.Id, row.ExecutionJobId ?? Guid.Empty, row.Version,
+        overwrites is not null && FileTreeOverwriteRestoringValidation.HasValidBinding(row, overwrites), row.State, row.CompletedAtUtc, row);
     public T Read<T>(FileRecoverySnapshot snapshot) where T : class
     {
         FileRecoveryValidation.Target(snapshot.Binding);
@@ -111,6 +122,7 @@ public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutati
             case FileRecoveryKinds.TreeUnpacking: var unpacking = Decode<FileTreeUnpackingOperation>(); row = unpacking; verified = Capture(unpacking); break;
             case FileRecoveryKinds.TreeRecycling: var recycling = Decode<FileTreeRecyclingOperation>(); row = recycling; verified = Capture(recycling); break;
             case FileRecoveryKinds.TreeRestoring: var restoring = Decode<FileTreeRestoringOperation>(); row = restoring; verified = Capture(restoring); break;
+            case FileRecoveryKinds.TreeOverwriteRestoring: var overwrite = Decode<FileTreeOverwriteRestoringOperation>(); row = overwrite; verified = Capture(overwrite); break;
             default: throw new ArgumentException("FILES_RECOVERY_KIND_INVALID");
         }
         if (verified.Binding != snapshot.Binding || row is not T expected) throw new InvalidOperationException("FILES_RECOVERY_SNAPSHOT_CHANGED");
