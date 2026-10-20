@@ -255,7 +255,7 @@ public sealed partial class NativeNotificationDispatchTests
                 Assert.False(await db.OperationJobEvents.AnyAsync(item => item.JobId == rejectedExecution));
                 Assert.False(await db.AuditEvents.AnyAsync(item => item.JobId == rejectedExecution));
                 var rejectedMarker = rejectedExecution.ToString("D");
-                Assert.False(await db.OutboxMessages.AnyAsync(item => item.PayloadJson.Contains(rejectedMarker)));
+                Assert.False(await db.OutboxMessages.FromSqlInterpolated($"SELECT * FROM outbox_messages WHERE payload_json->>'jobId'={rejectedMarker}").AnyAsync());
                 Assert.Empty(await db.FilePathLocks.Where(item => item.OperationId == rejectedExecution).ToArrayAsync());
             }
             finally { await db.Database.ExecuteSqlRawAsync("ALTER TABLE audit_events DROP CONSTRAINT native_overwrite_audit_failure"); }
@@ -273,7 +273,7 @@ public sealed partial class NativeNotificationDispatchTests
                 Assert.Equal("Running", (await db.OperationJobs.AsNoTracking().SingleAsync(item => item.Id == rollbackResult.ExecutionJobId)).State);
                 Assert.Equal(3, await db.FilePathLocks.CountAsync(item => item.OperationId == rollbackResult.ExecutionJobId));
                 var pendingMarker = rollbackResult.ExecutionJobId!.Value.ToString("D");
-                var pending = await db.OutboxMessages.Where(item => item.MessageType == "FileTreeOverwriteRestoringRequested" && item.PayloadJson.Contains(pendingMarker)).ToArrayAsync();
+                var pending = await db.OutboxMessages.FromSqlInterpolated($"SELECT * FROM outbox_messages WHERE message_type='FileTreeOverwriteRestoringRequested' AND payload_json->>'jobId'={pendingMarker}").ToArrayAsync();
                 Assert.Single(pending); Assert.Null(pending[0].ProcessedAtUtc);
             }
             finally { await db.Database.ExecuteSqlRawAsync("ALTER TABLE audit_events DROP CONSTRAINT native_overwrite_result_audit_failure"); }
