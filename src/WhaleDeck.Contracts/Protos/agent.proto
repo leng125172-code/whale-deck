@@ -891,3 +891,40 @@ service FileTreeRecyclingService {
   rpc Inspect(FileTreeRecyclingLookup) returns (FileTreeRecyclingReceipt);
   rpc Discard(FileTreeRecyclingApplyRequest) returns (FileTreeRecyclingReceipt);
 }
+
+// Restore a verified private capture to an absent registered destination.
+// capture_owner identifies the original resource, never the current actor.
+// It is resolved from trusted capture metadata by the application workflow.
+// No private storage path, executable, UID/GID or member list is accepted.
+message FileTreeRestoringCommand {
+  FileLocation source = 1; string expected_version = 2;
+  FileLocation target = 3; string capture_id = 4;
+  string capture_owner = 5; string capture_kind = 6; string manifest_sha256 = 7;
+}
+message FileTreeRestoringPlan {
+  FileTreeRestoringCommand command = 1; string archive_sha256 = 2;
+  int64 archive_bytes = 3; string content_sha256 = 4;
+  uint32 entry_count = 5; int64 total_bytes = 6;
+  FileDirectoryIdentity target_parent = 7;
+  string source_policy_hash = 8; string target_policy_hash = 9;
+  string fingerprint = 10;
+}
+message FileTreeRestoringPlanRequest { FileTreeRestoringCommand command = 1; RequestContext context = 2; }
+message FileTreeRestoringApplyRequest {
+  string operation_id = 1; string owner = 2;
+  FileTreeRestoringPlan plan = 3; RequestContext context = 4;
+}
+message FileTreeRestoringLookup { string operation_id = 1; string owner = 2; }
+message FileTreeRestoringReceipt {
+  string operation_id = 1; string state = 2; string fingerprint = 3;
+  string format = 4; uint32 entry_count = 5; int64 total_bytes = 6;
+  int64 archive_bytes = 7; string archive_sha256 = 8;
+  string version = 9; bool partial_retained = 10;
+  string kind = 11; string capture_id = 12;
+}
+service FileTreeRestoringService {
+  rpc Plan(FileTreeRestoringPlanRequest) returns (FileTreeRestoringPlan);
+  rpc Apply(FileTreeRestoringApplyRequest) returns (FileTreeRestoringReceipt);
+  rpc Inspect(FileTreeRestoringLookup) returns (FileTreeRestoringReceipt);
+  rpc Discard(FileTreeRestoringApplyRequest) returns (FileTreeRestoringReceipt);
+}

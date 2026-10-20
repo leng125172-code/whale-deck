@@ -98,6 +98,20 @@ public sealed class CapabilityValidatorTests : IDisposable
     }
 
     [Theory]
+    [InlineData("Plan")][InlineData("Apply")][InlineData("Inspect")][InlineData("Discard")]
+    public void DirectoryRestoreRequiresItsOwnMethodAndCannotReplayOrUseRecyclingGrant(string action)
+    {
+        var method = "/whaledeck.agent.v1.FileTreeRestoringService/" + action;
+        Assert.False(_validator.Validate(null, method));
+        foreach (var service in new[] { "FileArchiveService", "FileTreeUnpackingService", "FileTreeRecyclingService" })
+            Assert.False(_validator.Validate(Sign(DateTimeOffset.UtcNow.AddSeconds(45), "restore-wrong-service", "/whaledeck.agent.v1." + service + "/" + action), method));
+        var wrongAction = action == "Inspect" ? "Apply" : "Inspect";
+        Assert.False(_validator.Validate(Sign(DateTimeOffset.UtcNow.AddSeconds(45), "restore-wrong-action", "/whaledeck.agent.v1.FileTreeRestoringService/" + wrongAction), method));
+        var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "restore-correct-method", method);
+        Assert.True(_validator.Validate(token, method)); Assert.False(_validator.Validate(token, method));
+    }
+
+    [Theory]
     [InlineData("List")][InlineData("Plan")][InlineData("Apply")][InlineData("Inspect")][InlineData("Discard")]
     public void ArchiveMethodsRequireTheirOwnNonReplayableCapability(string action)
     {

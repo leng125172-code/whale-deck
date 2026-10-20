@@ -85,6 +85,7 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-tree-packing.py" /usr
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-tree-unpacking.py" /usr/local/libexec/whaledeck-tree-unpacking.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-tree-backups.py" /usr/local/libexec/whaledeck-tree-backups.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-tree-recycling.py" /usr/local/libexec/whaledeck-tree-recycling.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-tree-restoring.py" /usr/local/libexec/whaledeck-tree-restoring.py
 install -d -o root -g root -m 0700 /var/lib/whaledeck-application-backup /data/DockerData/whaledeck/application-backups
 for unit in whaledeck-application-backup-recovery.service whaledeck-application-backup-recovery.timer; do
   install -o root -g root -m 0644 "$(dirname "$0")/$unit" "/etc/systemd/system/$unit"

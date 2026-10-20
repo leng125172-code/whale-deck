@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Private HDD directory capture -> independently verified new directory.
 
-No public loader/CLI/RPC, source removal, overwrite, purge or automatic retry.
-An eventual application workflow must authorize a current actor, bind the old
+The fixed Agent loader exposes only plan/apply/status/discard. No source
+removal, overwrite, purge or automatic retry. The application workflow must
+authorize a current actor, bind the old
 capture as a resource (not impersonate its owner), and add persistent plans,
 hierarchical locks, jobs and audit. This is the absent-target restore leg, not
 the complete directory recycle/overwrite-restore workflow.

@@ -1,6 +1,6 @@
 # WhaleDeck Agent RPC 契约
 
-新增未安装 **RPC1.32 源码候选**：独立 `FileTreeRecyclingService` Plan/Apply/Inspect/Discard 和 `files.tree-trash-intents`，固定 helper/可信模块/精确默认升级及严格源和HDD捕获证明已实现。1265 Unit、139 Integration（6本机原生跳过）、40实际Linux通过；尚无新业务任务/Worker/API/UI及安装态证明。目录恢复仍内部引擎。实际adc6cae/RPC1.31和全部76项不变，见[候选边界](qa/FILE_TREE_RECYCLING_AGENT.md)；下方仅内部/未开放CLI是前序源码历史。
+新增未安装 **RPC1.33 源码候选**：独立 `FileTreeRestoringService` Plan/Apply/Inspect/Discard 和 `files.tree-restore-intents`，固定 helper/可信恢复模块与精确默认授权升级已接通。1336 Unit、141 Integration（6本机原生跳过）、19恢复/19配置升级真实Linux通过；新真实UDS探针已编译但未执行。当前实际e0175a0/RPC1.32的目录回收已上线；恢复Application/任务/Worker/API/UI、覆盖恢复/清理及全部76项继续，见[恢复候选边界](qa/FILE_TREE_RESTORING_AGENT.md)。下方未安装1.32及1.31说明为历史，不代表当前安装态。
 
 新增目录回收/HDD恢复仍仅内部源码：独立tree-recycling/restore计划和回执、HDD先验收后逐文件隔离及只观察恢复已通过Linux验证；`files-tree-trash`与`files-tree-restore`只允许被注册表识别，不自动升级默认根或开放CLI/Agent/HTTP。已有目录移动新增父路径/私有目录inode复核候选尚未安装；后续应完成固定源码CI和实际移动链路回归。当前仍adc6cae/RPC1.31，全部76项继续。
 

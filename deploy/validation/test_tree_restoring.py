@@ -8,7 +8,9 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import stat
+import sys
 import unittest
 from unittest.mock import patch
 import uuid
@@ -252,6 +254,63 @@ class TreeRestoringTests(unittest.TestCase):
                 else:
                     self.assertIn(result['state'], ('Aborted', 'Unknown')); self.assertFalse((self.root / target).exists())
                 self.assertEqual(self.capture_proof(), before)
+
+    def test_fixed_loader_only_loads_root_owned_single_link_non_writable_modules(self):
+        folder = self.fixture.base / 'installed-restoring'; folder.mkdir(mode=0o700)
+        names = ('whaledeck-file-tree.py', 'whaledeck-tree-archive.py', 'whaledeck-tree-backups.py', 'whaledeck-tree-unpacking.py', 'whaledeck-tree-restoring.py')
+        for name in names:
+            target = folder / name; shutil.copyfile(Path(driver.__file__).with_name(name), target); target.chmod(0o640)
+        before = self.capture_proof()
+        with patch.dict(sys.modules, {driver.__name__: driver}), patch.object(driver, '__file__', str(folder / 'whaledeck-files.py')), patch.object(driver, 'backup_engine', return_value=self.fixture.backups.engine):
+            loaded = driver.tree_restoring_engine(); command = self.command()
+            self.assertEqual(loaded.plan(command), self.engine.plan(command))
+            request = {'operationId': uuid.uuid4().hex, 'owner': 'B' * 64, 'plan': loaded.plan(command)}
+            self.assertEqual(loaded.restore(request)['state'], 'Completed'); self.assert_tree(self.root / command['target']['path'])
+            for name in names:
+                target = folder / name
+                with self.subTest(module=name):
+                    target.chmod(0o660)
+                    with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_restoring_engine()
+                    target.chmod(0o640); linked = folder / 'linked'; os.link(target, linked)
+                    with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_restoring_engine()
+                    linked.unlink(); os.chown(target, 12345, 0)
+                    with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_restoring_engine()
+                    os.chown(target, 0, 0); original = folder / 'original.py'; target.rename(original); target.symlink_to(original)
+                    with self.assertRaisesRegex(driver.Rejected, 'FILES_MODULE_UNSAFE'): driver.tree_restoring_engine()
+                    target.unlink(); original.rename(target)
+        self.assertEqual(self.capture_proof(), before)
+
+    def invoke_main(self, action, value, trailing=b''):
+        reader, writer = os.pipe()
+        try: os.write(writer, json.dumps(value).encode() + b'\n' + trailing)
+        finally: os.close(writer)
+        output = []
+        with os.fdopen(reader, 'r') as stream, patch.object(sys, 'stdin', stream), patch.object(sys, 'argv', ['whaledeck-files.py', action]), patch.dict(os.environ, {'INVOCATION_ID': uuid.uuid4().hex}), patch.object(driver, 'tree_restoring_engine', return_value=self.engine), patch.object(driver, 'emit', side_effect=output.append):
+            driver.main()
+        self.assertEqual(output[0]['type'], 'driver'); self.assertEqual(len(output), 2)
+        return output[1]
+
+    def test_fixed_driver_plan_apply_status_and_discard_restore_absent_original_without_replay(self):
+        before = self.capture_proof(); self.remove_source(); command = self.command(self.source.name)
+        plan = self.invoke_main('tree-restore-plan', command)
+        canceled = {'operationId': uuid.uuid4().hex, 'owner': 'B' * 64, 'plan': plan}
+        self.assertEqual(self.invoke_main('tree-restore-discard', canceled)['state'], 'Aborted')
+        self.assertFalse(self.source.exists())
+        with patch.object(codec.TreeArchive, 'extract', side_effect=AssertionError('discard must not replay')):
+            self.assertEqual(self.invoke_main('tree-restore-apply', canceled)['state'], 'Aborted')
+        request = {**canceled, 'operationId': uuid.uuid4().hex}
+        result = self.invoke_main('tree-restore-apply', request); self.assertEqual(result['state'], 'Completed'); self.assert_tree(self.source)
+        with patch.object(codec.TreeArchive, 'extract', side_effect=AssertionError('lookup must not replay')):
+            self.assertEqual(self.invoke_main('tree-restore-status', {key: request[key] for key in ('operationId', 'owner')}), result)
+            self.assertEqual(self.invoke_main('tree-restore-discard', request), result)
+        self.assertEqual(self.capture_proof(), before)
+
+    def test_fixed_driver_rejects_trailing_input_and_unapproved_actions_without_mutation(self):
+        before = self.capture_proof(); request = self.request()
+        with self.assertRaises(driver.Rejected): self.invoke_main('tree-restore-apply', request, b'{}\n')
+        for action in ('tree-restore-delete', 'tree-restore-shell', 'tree-restore-apply;true'):
+            with self.assertRaisesRegex(driver.Rejected, 'FILES_ACTION_INVALID'): self.invoke_main(action, request)
+        self.assertFalse((self.root / '恢复目录').exists()); self.assertEqual(self.capture_proof(), before)
 
 
 if __name__ == '__main__': unittest.main()
