@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-20安装态覆盖恢复子门禁通过**：57877a9验证客户端/观察器对已装6a6f8e2完成签名UDS及2MiB+7、1GiB+7完整原件/被覆盖目录/归档/新输出证明和新夹具精确清理；首轮观察器目录inode误断言已修并以5项真实Linux root回归保护，旧失败现场保留。6e68746四CI全成功，尚无候选API/Worker/WebUI覆盖发布；真实身份BFF/页面与Overwrite捕获复用继续。文件根/备份同HDD已明确，不冒充物理异盘或整个数据库平台问题。[证据](qa/FILE_TREE_OVERWRITE_RESTORING_UI.md)。完整76项仍active，下方为前序历史。
+
 - **2026-10-20覆盖恢复WebUI候选 f35ee05**：独立3字段登记、当前目录版本冻结、计划/执行双任务、by-key与丢确认只查、取消/Unknown二次确认、覆盖前备份事实及第10类接管提示已接通；历史Trash/Overwrite严格类型均可复用。364前端单元、类型/生产构建/lint/格式通过，主代理Chrome生产预览88/88通过（含320/1045/1440明暗、普通拒绝页就绪后0文件请求）。一次DEV演示身份测试环境不匹配已保留、未削弱断言；[证据与未完成边界](qa/FILE_TREE_OVERWRITE_RESTORING_UI.md)。独立观察器3项真实Linux root范围/清理测试通过，Linux客户端已发布，安装态专用签名UDS/完整磁盘核验正在观察原句柄；未部署候选，真实身份BFF/页面与全76项仍active。实际Agent/MaintenanceHost/Gateway6a6f8e2、API/Worker18f38bb保持；以下为前序历史。
 
 - **2026-10-20覆盖恢复管理员接管/Worker/API候选 d50b765**：第10类现任管理员Inspect/Discard对账、原身份冻结、备份证明单调、原子目录登记/审计/Job/Outbox/锁释放，以及独立HTTP/Worker/取消分流已接通；恢复kind字段扩至32并新增防截断降级保护迁移。Release零警告错误、1738 Unit/146 Integration通过（6本机原生明确跳过）；冻结d50b765工作站隔离真实PG1执行/1通过，临时DB/容器已清理并独立复核、11核心healthy。[证据及未完成边界](qa/FILE_TREE_OVERWRITE_ADMINISTRATOR_RECOVERY.md)。尚未部署：覆盖恢复UI、安装态专用签名UDS/独立磁盘证明、真实身份BFF/页面验收继续；实际Agent/MaintenanceHost/Gateway6a6f8e2、API/Worker18f38bb。完整76项仍active；以下为前序历史。

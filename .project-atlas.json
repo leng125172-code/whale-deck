@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
-  "nextStep": "覆盖恢复WebUI候选f35ee05完成独立版本绑定/计划确认/备份事实/第10类接管，364前端单元及主代理Chrome生产预览88项通过；观察器3项真实Linux root测试通过，Linux客户端已发布，专用签名UDS/完整磁盘核验正在观察原句柄。后端冻结d50b765真实隔离PG1执行1通过，1738 Unit/146 Integration通过、6本机原生明确跳过，先前1f4e7f7四CI成功。尚未部署候选，继续真实身份BFF/页面及完整76项；品牌已签收。"
+  "nextStep": "57877a9专用安装态签名UDS及2MiB+7/1GiB+7完整原件/旧目标/归档/输出与精确清理通过，5项Linux root观察器测试通过，首轮误断言已修且旧现场保留；文件源/备份同HDD明确不算异盘。覆盖恢复UI364单元及Chrome生产预览88项通过，6e68746四CI成功。后端冻结d50b765真实隔离PG1执行1通过，1738 Unit/146 Integration通过、6本机原生跳过。候选业务尚未部署，继续真实身份BFF/Worker/页面、Overwrite捕获复用与完整76项。"
 }
