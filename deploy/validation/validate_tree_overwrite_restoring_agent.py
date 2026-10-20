@@ -14,6 +14,7 @@ import stat
 import subprocess
 import sys
 import tarfile
+import traceback
 import uuid
 from validate_tree_backup_engine import DIRECTORY, ROOT, proof
 from validate_tree_unpacking_agent import run
@@ -33,6 +34,43 @@ def fixture_scope(path):
     assert path.parent == DIRECTORY and re.fullmatch(r'wdv-agent-overwrite-[a-f0-9]{16}', path.name)
     assert path.resolve() == path and path.is_dir() and path.lstat().st_uid == 0
     assert stat.S_IMODE(path.lstat().st_mode) == 0o700
+
+
+def preserve_evidence(folder, name, value):
+    assert folder.parent == REPOSITORY / 'deploy/artifacts' and re.fullmatch('overwrite-evidence-[a-f0-9]{16}', folder.name)
+    assert name in ('baseline.json', 'rpc-result.json') and folder.resolve() == folder
+    metadata = folder.lstat()
+    assert metadata.st_uid == 0 and stat.S_IMODE(metadata.st_mode) == 0o700
+    raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+    assert len(raw) <= 65536
+    descriptor = os.open(folder / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        remaining = memoryview(raw)
+        while remaining:
+            written = os.write(descriptor, remaining)
+            assert written > 0
+            remaining = remaining[written:]
+        os.fsync(descriptor)
+    finally: os.close(descriptor)
+    directory = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try: os.fsync(directory)
+    finally: os.close(directory)
+    print(json.dumps({'ownedOverwriteEvidence': folder.name + '/' + name, 'sha256': hashlib.sha256(raw).hexdigest().upper()}), flush=True)
+
+
+def attest_retained(retained, kind, original_tree, original_data, retained_identity):
+    assert kind in ('source', 'target')
+    root = proof(retained)
+    assert retained.resolve() == retained and root[:2] == tuple(retained_identity)
+    if kind == 'source':
+        # Recycling creates a private skeleton and moves the original files into
+        # it; only the displaced overwrite target keeps its directory inode.
+        assert (root[3], root[4], stat.S_IMODE(root[2])) == (0, 0, 0o700)
+    else:
+        assert root[:2] == original_tree[:2]
+    data = proof(retained / '中文.bin')
+    assert data[:8] == original_data[:8] and data[-1] == original_data[-1]
+    assert {str(path.relative_to(retained)) for path in retained.rglob('*')} == {'空目录', '中文.bin'}
 
 
 def exact_cleanup(fixture, identity, expected_children, private_proofs):
@@ -92,6 +130,8 @@ def main():
     fixture.mkdir(mode=0o700)
     fixture_scope(fixture)
     identity = proof(fixture)[:2]
+    evidence = REPOSITORY / 'deploy/artifacts' / ('overwrite-evidence-' + fixture.name.removeprefix('wdv-agent-overwrite-'))
+    evidence.mkdir(mode=0o700)
     print(json.dumps({'ownedAgentOverwriteFixture': fixture.name}), flush=True)
     originals = {}
     for size, length in (('small', 2 * 1024**2 + 7), ('large', 1024**3 + 7)):
@@ -109,6 +149,9 @@ def main():
             data.chmod(0o640)
             os.utime(data, ns=(1712345678123456789, 1712345678123456789))
             originals[(size, kind)] = (proof(tree), proof(data))
+    preserve_evidence(evidence, 'baseline.json', {'schemaVersion': 1, 'fixture': fixture.name, 'fixtureIdentity': identity,
+        'clientSourceRevision': client_revision, 'runtimeSourceRevision': runtime_revision,
+        'originals': {size + '-' + kind: value for (size, kind), value in originals.items()}})
     PHASE = 'installed-signed-uds-fixed-helper'
     result = subprocess.run([str(binary), 'tree-overwrite-restore'], env={**os.environ, 'WHALEDECK_OVERWRITE_PROBE_RELATIVE_PATH': fixture.name},
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3000)
@@ -117,6 +160,7 @@ def main():
         for failure in client_failure(result.stdout, result.stderr): print(json.dumps(failure), flush=True)
         raise RuntimeError('installed-probe-failed')
     received = rows[0]
+    preserve_evidence(evidence, 'rpc-result.json', received)
     completed = identifiers(received['completedOperationIds'], 2)
     canceled = identifiers(received['canceledOperationIds'], 2)
     captures = identifiers(received['captureIds'], 2)
@@ -153,9 +197,8 @@ def main():
             ('target', operation, '.tree-overwrite-restore', overwrite['owner'], command['target'], 'Overwrite')):
             retained = fixture / '.whaledeck-files' / (identifier + retained_suffix)
             original_tree, original_data = originals[(size, kind)]
-            assert proof(retained)[:2] == original_tree[:2]
-            assert proof(retained / '中文.bin')[:8] == original_data[:8] and proof(retained / '中文.bin')[-1] == original_data[-1]
-            assert {str(path.relative_to(retained)) for path in retained.rglob('*')} == {'空目录', '中文.bin'}
+            retained_identity = recycle['retainedIdentity'] if kind == 'source' else overwrite['plan']['targetIdentity']
+            attest_retained(retained, kind, original_tree, original_data, retained_identity)
             capture_path = store / (identifier + '.json')
             plain_file(capture_path, 32768)
             saved = json.loads(capture_path.read_bytes())
@@ -169,8 +212,15 @@ def main():
             assert manifest['manifestSha256'] == saved['manifestSha256'] and manifest['entryCount'] == 3 and manifest['totalBytes'] == original_data[6]
             assert manifest['rootId'] == ROOT and manifest['path'] == source_location['path'] and manifest['rootVersion'] == source_location['expectedVersion']
             assert {entry['path'] for entry in manifest['entries']} == {'', '空目录', '中文.bin'}
+            root_proof = next(entry for entry in manifest['entries'] if entry['path'] == '')
+            assert tuple(root_proof['sourceIdentity'][:8]) == original_tree[:8]
             member_proof = next(entry for entry in manifest['entries'] if entry['path'] == '中文.bin')
             assert tuple(member_proof['sourceIdentity'][:8]) == original_data[:8] and member_proof['sha256'] == original_data[-1]
+            if kind == 'source':
+                retained_manifest = STATE / 'tree-recycling' / (capture + '.manifest.json')
+                plain_file(retained_manifest, 16 * 1024**2)
+                assert json.loads(retained_manifest.read_bytes()) == manifest
+                private_proofs[retained_manifest] = proof(retained_manifest)
             archive = store / (identifier + '.tar.gz')
             plain_file(archive)
             archive_proof = proof(archive)
@@ -218,6 +268,7 @@ def main():
 if __name__ == '__main__':
     try: main()
     except BaseException as error:
+        own_frames = [frame for frame in traceback.extract_tb(error.__traceback__) if Path(frame.filename).resolve() == Path(__file__).resolve()]
         print(json.dumps({'installedTreeOverwriteRestoringAcceptance': 'failed', 'phase': PHASE, 'failureType': type(error).__name__,
-            'unknownObjectsPreserved': True, 'privateDetailsWithheld': True}), flush=True)
+            'failedLine': own_frames[-1].lineno if own_frames else None, 'unknownObjectsPreserved': True, 'privateDetailsWithheld': True}), flush=True)
         raise SystemExit(1) from None

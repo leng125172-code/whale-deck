@@ -10,6 +10,28 @@ import validate_tree_overwrite_restoring_agent as observer
 
 
 class OverwriteProbeScopeTests(unittest.TestCase):
+    def test_retained_skeleton_and_displaced_root_have_distinct_identity_rules(self):
+        retained = Path('/owned/retained')
+        original_tree = (1, 10, stat.S_IFDIR | 0o750, 0, 0, 3, 4096, 100, 101, None)
+        skeleton = (1, 20, stat.S_IFDIR | 0o700, 0, 0, 3, 4096, 102, 103, None)
+        original_data = (1, 30, stat.S_IFREG | 0o640, 0, 0, 1, 7, 104, 105, 'A' * 64)
+        leaves = [retained / '空目录', retained / '中文.bin']
+        def check(kind, root, data=original_data, identity=None):
+            with patch.object(Path, 'resolve', lambda value: value), patch.object(Path, 'rglob', return_value=iter(leaves)), patch.object(observer, 'proof', side_effect=lambda path: root if path == retained else data):
+                observer.attest_retained(retained, kind, original_tree, original_data, identity or root[:2])
+        check('source', skeleton)
+        check('target', original_tree)
+        for kind, root, data, identity in (
+            ('target', skeleton, original_data, None),
+            ('source', skeleton, original_data, original_tree[:2]),
+            ('source', (*skeleton[:3], 1000, *skeleton[4:]), original_data, None),
+            ('source', original_tree, original_data, None),
+            ('source', skeleton, (1, 31, *original_data[2:]), None),
+            ('source', skeleton, (*original_data[:7], 999, *original_data[8:]), None),
+            ('target', original_tree, (*original_data[:-1], 'B' * 64), None),
+            ('unknown', skeleton, original_data, None)):
+            with self.subTest(kind=kind, root=root, data=data), self.assertRaises(AssertionError): check(kind, root, data, identity)
+
     def test_fixture_name_parent_owner_and_mode_are_strict(self):
         root = observer.DIRECTORY
         good = root / ('wdv-agent-overwrite-' + 'a' * 16)
@@ -31,6 +53,24 @@ class OverwriteProbeScopeTests(unittest.TestCase):
         self.assertNotIn('File.Delete', probe)
         self.assertNotIn('Directory.Delete', probe)
         self.assertNotIn('docker.sock', probe)
+
+    @unittest.skipUnless(hasattr(os, 'geteuid') and os.geteuid() == 0, 'Linux root filesystem metadata required')
+    def test_evidence_is_private_exclusive_and_never_follows_an_existing_link(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            folder = repository / 'deploy/artifacts' / ('overwrite-evidence-' + 'a' * 16)
+            folder.mkdir(mode=0o700, parents=True)
+            with patch.object(observer, 'REPOSITORY', repository), patch('builtins.print'):
+                observer.preserve_evidence(folder, 'baseline.json', {'owned': True})
+                self.assertEqual(stat.S_IMODE((folder / 'baseline.json').stat().st_mode), 0o600)
+                with self.assertRaises(FileExistsError): observer.preserve_evidence(folder, 'baseline.json', {'changed': True})
+                external = repository / 'preserve.txt'; external.write_bytes(b'untouched')
+                (folder / 'rpc-result.json').symlink_to(external)
+                with self.assertRaises(FileExistsError): observer.preserve_evidence(folder, 'rpc-result.json', {'changed': True})
+                self.assertEqual(external.read_bytes(), b'untouched')
+                with self.assertRaises(AssertionError): observer.preserve_evidence(folder, '../escape.json', {})
+                folder.chmod(0o750)
+                with self.assertRaises(AssertionError): observer.preserve_evidence(folder, 'rpc-result.json', {})
 
     @unittest.skipUnless(hasattr(os, 'geteuid') and os.geteuid() == 0, 'Linux root filesystem metadata required')
     def test_exact_owned_cleanup_and_mismatches(self):
