@@ -20,7 +20,7 @@ public sealed partial class NativeNotificationDispatchTests
         await using var db = new PlatformDbContext(options);
         var material = new FileRecoveryMaterial(protector, protector, protector, protector, protector, protector, protector, protector, protector);
         var clock = new NativeRecoveryClock();
-        FileRecoveryRepository Repository(PlatformDbContext context) => new(context, new(context, material, clock), material, new(context, protector), protector, clock, new FileTreeRecyclingRepository(context, protector, clock));
+        FileRecoveryRepository Repository(PlatformDbContext context) => new(context, new(context, material, clock), material, new(context, protector), protector, clock, new FileTreeRecyclingRepository(context, protector, clock, protector));
         var repository = Repository(db); var identity = new NativeRecoveryIdentity();
         var authorization = new FileManagementService(null!, null!, null!, identity, clock);
         var service = new FileRecoveryService(authorization, repository, protector, clock);
@@ -49,11 +49,11 @@ public sealed partial class NativeNotificationDispatchTests
         if (kind == FileRecoveryKinds.TreePacking)
             Assert.Null(await new FileTreePackingRepository(db, protector, clock).ClaimAsync(clock.GetUtcNow(), default));
         if (kind == FileRecoveryKinds.TreeRecycling)
-            Assert.Null(await new FileTreeRecyclingRepository(db, protector, clock).ClaimAsync(clock.GetUtcNow(), default));
+            Assert.Null(await new FileTreeRecyclingRepository(db, protector, clock, protector).ClaimAsync(clock.GetUtcNow(), default));
         if (kind == FileRecoveryKinds.TreeUnpacking)
             Assert.Null(await new FileTreeUnpackingRepository(db, protector, clock).ClaimAsync(clock.GetUtcNow(), default));
         if (kind == FileRecoveryKinds.TreeRestoring)
-            Assert.Null(await new FileTreeRestoringRepository(db, protector, clock, protector).ClaimAsync(clock.GetUtcNow(), default));
+            Assert.Null(await new FileTreeRestoringRepository(db, protector, clock, protector, protector).ClaimAsync(clock.GetUtcNow(), default));
         Assert.True(await worker.TickAsync(default)); var ready = await service.GetAsync(actor, queued.Id, default);
         Assert.Equal("Ready", ready.State); Assert.NotNull(ready.Confirmation); Assert.Equal(0, gateway.Fences);
         await using (var reloaded = new PlatformDbContext(options))

@@ -59,8 +59,8 @@ public sealed partial class FileTreeRecyclingRepository
         {
             var cursor = await db.FileTreeCaptures.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken)
                 ?? throw new ArgumentException("FILES_CURSOR_INVALID");
-            FileTreeRecyclingValidation.Capture(cursor, protector);
-            if (wholeRoot ? FileTreeRecyclingValidation.CaptureBinding(cursor).Command.Source.RootId != location.RootId : cursor.SourceHash != sourceHash) throw new ArgumentException("FILES_CURSOR_INVALID");
+            var verifiedCursor = FileTreeCaptureValidation.Verify(cursor, protector, overwriteProtector);
+            if (wholeRoot ? verifiedCursor.Source.Source.RootId != location.RootId : cursor.SourceHash != sourceHash) throw new ArgumentException("FILES_CURSOR_INVALID");
             rows = wholeRoot
                 ? await db.FileTreeCaptures.FromSqlInterpolated($"SELECT * FROM file_tree_captures WHERE source_json->'Source'->>'RootId'={location.RootId} AND (created_at_utc,id)>({cursor.CreatedAtUtc},{cursor.Id}) ORDER BY created_at_utc,id LIMIT {take + 1}").AsNoTracking().ToArrayAsync(cancellationToken)
                 : await db.FileTreeCaptures.FromSqlInterpolated($"SELECT * FROM file_tree_captures WHERE source_hash={sourceHash} AND (created_at_utc,id)>({cursor.CreatedAtUtc},{cursor.Id}) ORDER BY created_at_utc,id LIMIT {take + 1}").AsNoTracking().ToArrayAsync(cancellationToken);
@@ -68,11 +68,7 @@ public sealed partial class FileTreeRecyclingRepository
         else rows = wholeRoot
             ? await db.FileTreeCaptures.FromSqlInterpolated($"SELECT * FROM file_tree_captures WHERE source_json->'Source'->>'RootId'={location.RootId} ORDER BY created_at_utc,id LIMIT {take + 1}").AsNoTracking().ToArrayAsync(cancellationToken)
             : await db.FileTreeCaptures.Where(item => item.SourceHash == sourceHash).OrderBy(item => item.CreatedAtUtc).ThenBy(item => item.Id).Take(take + 1).AsNoTracking().ToArrayAsync(cancellationToken);
-        var items = rows.Take(take).Select(item =>
-        {
-            FileTreeRecyclingValidation.Capture(item, protector); var binding = FileTreeRecyclingValidation.CaptureBinding(item);
-            return new FileTreeCaptureDto(item.Id, item.IntentId, binding.Command, item.ManifestSha256, item.EntryCount, item.TotalBytes, item.ArchiveBytes, item.ArchiveSha256, item.CreatedAtUtc);
-        }).ToArray();
+        var items = rows.Take(take).Select(item => FileTreeCaptureValidation.Verify(item, protector, overwriteProtector)).ToArray();
         return new(items, rows.Length > take ? items[^1].Id : null);
     }
 }

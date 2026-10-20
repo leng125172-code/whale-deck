@@ -22,14 +22,14 @@ public sealed partial class NativeNotificationDispatchTests
         {
             var protector = new FilePlanProtector(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = keyPath }).Build());
             var clock = new NativeRestoringClock(); var identity = new NativeRestoringIdentity(); var gateway = new NativeRestoringGateway();
-            var repository = new FileTreeRestoringRepository(db, protector, clock, protector);
+            var repository = new FileTreeRestoringRepository(db, protector, clock, protector, protector);
             var authorization = new FileManagementService(null!, null!, null!, identity, clock);
             var service = new FileTreeRestoringService(authorization, repository, protector, gateway, clock);
             var worker = new FileTreeRestoringDispatcher(repository, gateway, identity, protector, clock);
             var actor = new TerminalActor("native-restoring-admin", null, [], new('A', 64), "native-restoring", null);
             var captureActor = actor with { Subject = "native-restoring-original-capture-owner" };
             var captureGateway = new NativeRecyclingGateway();
-            var captureRepository = new FileTreeRecyclingRepository(db, protector, clock);
+            var captureRepository = new FileTreeRecyclingRepository(db, protector, clock, protector);
             var captureService = new FileTreeRecyclingService(authorization, captureRepository, protector, captureGateway, clock);
             var captureWorker = new FileTreeRecyclingDispatcher(captureRepository, captureGateway, identity, protector, clock);
             var captureQueued = await captureService.QueueAsync(captureActor, new(new("test.treeflow", "source-one"), new('B', 64)), Guid.NewGuid().ToString("D"), default);
@@ -63,7 +63,7 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal(0, gateway.Applies); Assert.Null(ready.ExecutionJobId);
             await using (var reloaded = new PlatformDbContext(options))
             {
-                var reloadedService = new FileTreeRestoringService(authorization, new FileTreeRestoringRepository(reloaded, protector, clock, protector), protector, gateway, clock);
+                var reloadedService = new FileTreeRestoringService(authorization, new FileTreeRestoringRepository(reloaded, protector, clock, protector, protector), protector, gateway, clock);
                 Assert.Equal(ready.Confirmation.PlanHash, (await reloadedService.GetAsync(actor, ready.Id, default)).Confirmation!.PlanHash);
                 await Assert.ThrowsAsync<KeyNotFoundException>(() => reloadedService.GetAsync(actor with { LoginBinding = new('C', 64) }, ready.Id, default));
                 await Assert.ThrowsAsync<UnauthorizedAccessException>(() => reloadedService.ConfirmAsync(actor with { LoginBinding = new('C', 64) }, ready.Id, new(ready.Confirmation.PlanHash, true, ready.Version), default));
@@ -71,7 +71,7 @@ public sealed partial class NativeNotificationDispatchTests
             var confirmations = await Task.WhenAll(Enumerable.Range(0, 2).Select(async _ =>
             {
                 await using var concurrent = new PlatformDbContext(options);
-                return await new FileTreeRestoringService(authorization, new FileTreeRestoringRepository(concurrent, protector, clock, protector), protector, gateway, clock)
+                return await new FileTreeRestoringService(authorization, new FileTreeRestoringRepository(concurrent, protector, clock, protector, protector), protector, gateway, clock)
                     .ConfirmAsync(actor, ready.Id, new(ready.Confirmation.PlanHash, true, ready.Version), default);
             }));
             Assert.Single(confirmations.Select(item => item.ExecutionJobId).Distinct()); var copy = confirmations[0];
@@ -127,7 +127,7 @@ public sealed partial class NativeNotificationDispatchTests
             {
                 await using var transaction = await locker.Database.BeginTransactionAsync();
                 await locker.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM operation_jobs WHERE id={late.ExecutionJobId!.Value} FOR UPDATE");
-                var blocked = Task.Run(async () => { await using var contender = new PlatformDbContext(options); return await new FileTreeRestoringRepository(contender, protector, clock, protector).StartedAsync(lateClaim, default); });
+                var blocked = Task.Run(async () => { await using var contender = new PlatformDbContext(options); return await new FileTreeRestoringRepository(contender, protector, clock, protector, protector).StartedAsync(lateClaim, default); });
                 var observedWait = false;
                 for (var attempt = 0; attempt < 40; attempt++)
                 {

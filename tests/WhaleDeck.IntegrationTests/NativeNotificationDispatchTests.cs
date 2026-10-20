@@ -51,7 +51,7 @@ public sealed partial class NativeNotificationDispatchTests
             Kind = "trash", RootId = "test.upgrade", RelativePath = "pending", TargetHash = upgradeHash, ExpectedVersion = upgradeHash, Sha256 = upgradeHash,
             PlanJson = "{}", CreatedAtUtc = upgradeAt, ExpiresAtUtc = upgradeAt.AddMinutes(15), NextAttemptAtUtc = upgradeAt });
         await db.SaveChangesAsync(); db.ChangeTracker.Clear();
-        await db.Database.MigrateAsync(); Assert.False(db.Database.HasPendingModelChanges());
+        await FileTreeCaptureUpgrade(db); Assert.False(db.Database.HasPendingModelChanges());
         var archiveRegistration = await db.FileArchiveRegistrations.AsNoTracking().SingleAsync(item => item.Id == archiveUpgradeId);
         Assert.Equal("native-upgrade", archiveRegistration.ActorSubject); Assert.Equal(archiveUpgradeId.ToString("D"), archiveRegistration.IdempotencyKey);
         Assert.Equal(upgradeHash, archiveRegistration.RequestHash);
@@ -159,6 +159,7 @@ public sealed partial class NativeNotificationDispatchTests
         await FileTreeUnpackingWorkflowBoundaries(options);
         await FileTreeRecyclingWorkflowBoundaries(options);
         await FileTreeRestoringWorkflowBoundaries(options);
+        await FileTreeOverwriteRestoringWorkflowBoundaries(options);
         await FileTreeMoveWorkflowBoundaries(options);
     }
 

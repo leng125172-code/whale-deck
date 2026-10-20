@@ -7,7 +7,8 @@ using WhaleDeck.Domain.Entities;
 
 namespace WhaleDeck.Infrastructure.Persistence;
 
-public sealed partial class FileTreeRecyclingRepository(PlatformDbContext db, IFileTreeRecyclingProtector protector, TimeProvider clock) : IFileTreeRecyclingRepository
+public sealed partial class FileTreeRecyclingRepository(PlatformDbContext db, IFileTreeRecyclingProtector protector, TimeProvider clock,
+    IFileTreeOverwriteRestoringProtector overwriteProtector) : IFileTreeRecyclingRepository
 {
     public Task<FileTreeRecyclingOperation?> OwnedAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) => db.FileTreeRecyclingOperations.AsNoTracking()
         .SingleOrDefaultAsync(item => item.Id == id && item.ActorSubject == actor.Subject && item.LoginBinding == actor.LoginBinding, cancellationToken);

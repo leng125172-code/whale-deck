@@ -40,11 +40,14 @@ public sealed partial class PlatformDbContext
             {
                 table.HasCheckConstraint("ck_tree_capture_hashes", "owner_hash ~ '^[A-F0-9]{64}$' AND source_hash ~ '^[A-F0-9]{64}$' AND manifest_sha256 ~ '^[A-F0-9]{64}$' AND archive_sha256 ~ '^[A-F0-9]{64}$' AND proof_hash ~ '^[A-F0-9]{64}$'");
                 table.HasCheckConstraint("ck_tree_capture_limits", "entry_count BETWEEN 1 AND 10000 AND total_bytes BETWEEN 0 AND 17179869184 AND archive_bytes BETWEEN 1 AND 18253611008 AND jsonb_typeof(source_json)='object' AND octet_length(source_json::text)<=32768");
+                table.HasCheckConstraint("ck_tree_capture_kind", "(kind='Trash' AND content_sha256 IS NULL) OR (kind='Overwrite' AND content_sha256 IS NOT NULL AND content_sha256 ~ '^[A-F0-9]{64}$')");
             });
             entity.HasKey(item => item.Id); entity.Property(item => item.SourceJson).HasColumnType("jsonb");
+            entity.Property(item => item.Kind).HasMaxLength(16).HasDefaultValue("Trash");
+            entity.Property(item => item.ContentSha256).HasMaxLength(64);
             foreach (var name in new[] { nameof(FileTreeCapture.OwnerHash), nameof(FileTreeCapture.SourceHash), nameof(FileTreeCapture.ManifestSha256), nameof(FileTreeCapture.ArchiveSha256), nameof(FileTreeCapture.ProofHash) }) entity.Property(name).HasMaxLength(64);
             entity.HasIndex(item => item.IntentId).IsUnique(); entity.HasIndex(item => new { item.SourceHash, item.CreatedAtUtc, item.Id });
-            entity.HasOne<FileTreeRecyclingOperation>().WithMany().HasForeignKey(item => item.IntentId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<OperationJob>().WithMany().HasForeignKey(item => item.IntentId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<OperationJob>().WithMany().HasForeignKey(item => item.Id).OnDelete(DeleteBehavior.Restrict);
         });
     }

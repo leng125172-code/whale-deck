@@ -61,6 +61,7 @@ public static class FileTreeRecyclingValidation
         capture.EntryCount, capture.TotalBytes, capture.ArchiveBytes, capture.ArchiveSha256, capture.CreatedAtUtc);
     public static void Capture(FileTreeCapture capture, IFileTreeRecyclingProtector protector)
     {
+        if (capture.Kind != "Trash" || capture.ContentSha256 is not null) throw new FileTransferRejectedException();
         var binding = CaptureBinding(capture); Command(binding.Command);
         if (capture.Id == Guid.Empty || capture.IntentId == Guid.Empty || capture.Id != ExecutionId(capture.IntentId) || !FileManagementService.Hex(capture.OwnerHash) ||
             new FilePathScope(binding.Command.Source).Hash != capture.SourceHash || !FileManagementService.Hex(capture.ManifestSha256) ||

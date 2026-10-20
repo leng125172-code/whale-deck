@@ -5,6 +5,8 @@ public sealed class FileTreeCapture
 {
     public Guid Id { get; init; }
     public Guid IntentId { get; init; }
+    public string Kind { get; init; } = "Trash";
+    public string? ContentSha256 { get; init; }
     public required string OwnerHash { get; init; }
     public required string SourceHash { get; init; }
     public required string SourceJson { get; init; }

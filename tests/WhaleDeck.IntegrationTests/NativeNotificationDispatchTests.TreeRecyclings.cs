@@ -22,7 +22,7 @@ public sealed partial class NativeNotificationDispatchTests
         {
             var protector = new FilePlanProtector(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = keyPath }).Build());
             var clock = new NativeRecyclingClock(); var identity = new NativeRecyclingIdentity(); var gateway = new NativeRecyclingGateway();
-            var repository = new FileTreeRecyclingRepository(db, protector, clock);
+            var repository = new FileTreeRecyclingRepository(db, protector, clock, protector);
             var authorization = new FileManagementService(null!, null!, null!, identity, clock);
             var service = new FileTreeRecyclingService(authorization, repository, protector, gateway, clock);
             var worker = new FileTreeRecyclingDispatcher(repository, gateway, identity, protector, clock);
@@ -53,7 +53,7 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal(0, gateway.Applies); Assert.Null(ready.ExecutionJobId);
             await using (var reloaded = new PlatformDbContext(options))
             {
-                var reloadedService = new FileTreeRecyclingService(authorization, new FileTreeRecyclingRepository(reloaded, protector, clock), protector, gateway, clock);
+                var reloadedService = new FileTreeRecyclingService(authorization, new FileTreeRecyclingRepository(reloaded, protector, clock, protector), protector, gateway, clock);
                 Assert.Equal(ready.Confirmation.PlanHash, (await reloadedService.GetAsync(actor, ready.Id, default)).Confirmation!.PlanHash);
                 await Assert.ThrowsAsync<KeyNotFoundException>(() => reloadedService.GetAsync(actor with { LoginBinding = new('C', 64) }, ready.Id, default));
                 await Assert.ThrowsAsync<UnauthorizedAccessException>(() => reloadedService.ConfirmAsync(actor with { LoginBinding = new('C', 64) }, ready.Id, new(ready.Confirmation.PlanHash, true, ready.Version), default));
@@ -61,7 +61,7 @@ public sealed partial class NativeNotificationDispatchTests
             var confirmations = await Task.WhenAll(Enumerable.Range(0, 2).Select(async _ =>
             {
                 await using var concurrent = new PlatformDbContext(options);
-                return await new FileTreeRecyclingService(authorization, new FileTreeRecyclingRepository(concurrent, protector, clock), protector, gateway, clock)
+                return await new FileTreeRecyclingService(authorization, new FileTreeRecyclingRepository(concurrent, protector, clock, protector), protector, gateway, clock)
                     .ConfirmAsync(actor, ready.Id, new(ready.Confirmation.PlanHash, true, ready.Version), default);
             }));
             Assert.Single(confirmations.Select(item => item.ExecutionJobId).Distinct()); var copy = confirmations[0];
@@ -143,7 +143,7 @@ public sealed partial class NativeNotificationDispatchTests
             {
                 await using var transaction = await locker.Database.BeginTransactionAsync();
                 await locker.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM operation_jobs WHERE id={late.ExecutionJobId!.Value} FOR UPDATE");
-                var blocked = Task.Run(async () => { await using var contender = new PlatformDbContext(options); return await new FileTreeRecyclingRepository(contender, protector, clock).StartedAsync(lateClaim, default); });
+                var blocked = Task.Run(async () => { await using var contender = new PlatformDbContext(options); return await new FileTreeRecyclingRepository(contender, protector, clock, protector).StartedAsync(lateClaim, default); });
                 var observedWait = false;
                 for (var attempt = 0; attempt < 40; attempt++)
                 {

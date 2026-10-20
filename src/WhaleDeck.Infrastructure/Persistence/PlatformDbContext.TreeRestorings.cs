@@ -20,7 +20,7 @@ public sealed partial class PlatformDbContext
                 table.HasCheckConstraint("ck_tree_restoring_lease", "(lease_token IS NULL)=(lease_expires_at_utc IS NULL)");
                 table.HasCheckConstraint("ck_tree_restoring_result", "(state='Succeeded')=(published_version IS NOT NULL) AND (NOT partial_retained OR state IN ('Unknown','Failed','Canceled','Acknowledged'))");
                 table.HasCheckConstraint("ck_tree_restoring_archive", "(archive_bytes IS NULL)=(archive_sha256 IS NULL) AND (plan_json IS NOT NULL)=(archive_bytes IS NOT NULL) AND (archive_bytes IS NULL OR (archive_bytes BETWEEN 1 AND 18253611008 AND archive_sha256 ~ '^[A-F0-9]{64}$' AND archive_bytes=(plan_json->>'ArchiveBytes')::bigint AND archive_sha256=plan_json->>'ArchiveSha256'))");
-                table.HasCheckConstraint("ck_tree_restoring_capture", "capture_id<>'00000000-0000-0000-0000-000000000000'::uuid AND command_json->>'CaptureId'=capture_id::text AND command_json->>'Format'='tar.gz' AND command_json->>'CaptureKind'='Trash'");
+                table.HasCheckConstraint("ck_tree_restoring_capture", "capture_id<>'00000000-0000-0000-0000-000000000000'::uuid AND command_json->>'CaptureId'=capture_id::text AND command_json->>'Format'='tar.gz' AND command_json->>'CaptureKind' IN ('Trash','Overwrite')");
             });
             entity.HasKey(item => item.Id); entity.Property(item => item.ActorSubject).HasMaxLength(256);
             entity.Property(item => item.IdempotencyKey).HasMaxLength(36); entity.Property(item => item.State).HasMaxLength(16);

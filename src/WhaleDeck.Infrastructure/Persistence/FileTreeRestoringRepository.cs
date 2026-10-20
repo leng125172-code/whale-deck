@@ -8,7 +8,7 @@ using WhaleDeck.Domain.Entities;
 namespace WhaleDeck.Infrastructure.Persistence;
 
 public sealed partial class FileTreeRestoringRepository(PlatformDbContext db, IFileTreeRestoringProtector protector, TimeProvider clock,
-    IFileTreeRecyclingProtector captureProtector) : IFileTreeRestoringRepository
+    IFileTreeRecyclingProtector captureProtector, IFileTreeOverwriteRestoringProtector overwriteProtector) : IFileTreeRestoringRepository
 {
     public Task<FileTreeRestoringOperation?> OwnedAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) => db.FileTreeRestoringOperations.AsNoTracking()
         .SingleOrDefaultAsync(item => item.Id == id && item.ActorSubject == actor.Subject && item.LoginBinding == actor.LoginBinding, cancellationToken);
