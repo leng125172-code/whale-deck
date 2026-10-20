@@ -7,8 +7,23 @@ import {
   recoveryResult,
   recoveryState,
   recoveryTerminal,
+  recoveryPurgeFollows,
+  recoveryDeletionFact,
 } from '@/services/fileRecovery'
-import type { RecoveryCandidate, RecoveryIntent } from '@/services/fileRecovery'
+import type { RecoveryCandidate, RecoveryIntent, RecoveryPurge } from '@/services/fileRecovery'
+
+function purge(): RecoveryPurge {
+  return {
+    captureId: '846516d5-6a48-4ba5-9468-cd61f55728ed',
+    captureKind: 'Trash',
+    scope: 'All',
+    version: 17,
+    state: 'Unknown',
+    deletionStarted: true,
+    archiveRemoved: null,
+    originalsRemoved: true,
+  }
+}
 
 function candidate(): RecoveryCandidate {
   return {
@@ -53,6 +68,93 @@ function ready(): RecoveryIntent {
   }
 }
 describe('current-administrator recovery presentation boundaries', () => {
+  it('does not accept a changed same-version snapshot or erase established positive facts', () => {
+    const original = purge()
+    expect(recoveryPurgeFollows(original, { ...original })).toBe(true)
+    expect(recoveryPurgeFollows(original, { ...original, archiveRemoved: true })).toBe(false)
+    expect(recoveryPurgeFollows(original, { ...original, version: 18, archiveRemoved: true })).toBe(
+      true,
+    )
+    expect(
+      recoveryPurgeFollows(original, { ...original, version: 18, originalsRemoved: null }),
+    ).toBe(false)
+    expect(
+      recoveryPurgeFollows(original, { ...original, version: 18, captureKind: 'Overwrite' }),
+    ).toBe(false)
+    expect(recoveryDeletionFact(null)).toContain('不推断未删除')
+    expect(recoveryDeletionFact(true)).toBe('已确认删除')
+    expect(recoveryDeletionFact(false)).toBe('未执行该项删除')
+  })
+  it('requires strict purge summary only for signed eleventh-kind candidates and intents', () => {
+    const item = { ...candidate(), kind: 'tree-purge' as const, target: null, purge: purge() }
+    expect(assertRecoveryPage({ entries: [item], nextCursor: null })).toBeTruthy()
+    const intent = { ...ready(), kind: 'tree-purge' as const, purge: purge() }
+    expect(assertRecoveryIntent(intent)).toBe(intent)
+    for (const change of [
+      undefined,
+      null,
+      { ...purge(), version: 16 },
+      { ...purge(), state: 'Succeeded' },
+      { ...purge(), archiveRemoved: false },
+      { ...purge(), originalsRemoved: true, deletionStarted: null },
+      { ...purge(), scope: 'Archive' },
+      { ...purge(), captureId: '' },
+      { ...purge(), ownerHash: 'private' },
+      { ...purge(), CaptureId: 'alias' },
+    ]) {
+      expect(() =>
+        assertRecoveryPage({ entries: [{ ...item, purge: change }], nextCursor: null } as never),
+      ).toThrow('异常任务元数据无法核实')
+      expect(() => assertRecoveryIntent({ ...intent, purge: change } as never)).toThrow(
+        '接管任务响应无法核实',
+      )
+    }
+    expect(() =>
+      assertRecoveryPage({ entries: [{ ...candidate(), purge: purge() }], nextCursor: null }),
+    ).toThrow('异常任务元数据无法核实')
+    expect(() => assertRecoveryIntent({ ...ready(), purge: purge() })).toThrow(
+      '接管任务响应无法核实',
+    )
+    expect(() =>
+      assertRecoveryPage({
+        entries: [{ ...item, integrity: 'InvalidBinding', source: null }],
+        nextCursor: null,
+      }),
+    ).toThrow('异常任务元数据无法核实')
+  })
+  it('allows newer immutable original facts after disposition without turning partial deletion into success', () => {
+    const base = {
+      ...ready(),
+      kind: 'tree-purge' as const,
+      executionJobId: '11c8ecb3-112e-4d6b-b26c-d63982ca941e',
+      state: 'Disposed',
+      confirmation: null,
+      originalResolution: 'Acknowledged',
+      purge: { ...purge(), version: 18, state: 'Acknowledged' },
+    }
+    expect(assertRecoveryIntent(base)).toBe(base)
+    expect(() =>
+      assertRecoveryIntent({ ...base, purge: { ...base.purge, state: 'Unknown' } }),
+    ).toThrow('接管任务响应无法核实')
+    const completed = {
+      ...base,
+      disposition: 'ReconcileCompleted' as const,
+      rootState: 'Completed',
+      originalResolution: 'Succeeded',
+      purge: { ...base.purge, state: 'Succeeded', archiveRemoved: true },
+    }
+    expect(assertRecoveryIntent(completed)).toBe(completed)
+    for (const scope of ['Archive', 'Originals', 'All'] as const) {
+      const p = {
+        ...purge(),
+        scope,
+        deletionStarted: null,
+        archiveRemoved: scope === 'Originals' ? false : null,
+        originalsRemoved: scope === 'Archive' ? false : null,
+      }
+      expect(assertRecoveryIntent({ ...ready(), kind: 'tree-purge', purge: p })).toBeTruthy()
+    }
+  })
   it('keeps all eleven workflow kinds and does not turn unknown or planning into success', () => {
     expect(recoveryKinds).toHaveLength(11)
     expect(recoveryKind('tree-restore')).toBe('目录恢复')

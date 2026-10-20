@@ -24,6 +24,7 @@ public interface IFileRecoveryRepository
 {
     Task<FileRecoveryOperation> QueueAsync(TerminalActor actor, string key, QueueFileRecoveryCommand command, CancellationToken cancellationToken);
     Task<FileRecoveryOperation?> OwnedAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken);
+    Task<FileRecoveryPurgeDto?> PurgeSummaryAsync(FileRecoveryOperation row, CancellationToken cancellationToken);
     Task<FileRecoveryOperation> ConfirmAsync(TerminalActor actor, FileRecoveryPlanClaims claims, long version, CancellationToken cancellationToken);
     Task CancelAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken);
     Task<FileRecoveryOperation?> ClaimAsync(DateTimeOffset now, CancellationToken cancellationToken);

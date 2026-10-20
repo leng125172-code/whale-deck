@@ -13,6 +13,14 @@ public sealed partial class FileRecoveryRepository(PlatformDbContext db, FileRec
     FileTreeOverwriteRestoringRepository? overwriteCatalog = null, FileTreePurgingRepository? purgingCatalog = null) : IFileRecoveryRepository
 {
     private DateTimeOffset Now() => FileTreeCopyValidation.Timestamp(clock.GetUtcNow());
+    public async Task<FileRecoveryPurgeDto?> PurgeSummaryAsync(FileRecoveryOperation row, CancellationToken cancellationToken)
+    {
+        Bound(row);
+        if (row.Kind != FileRecoveryKinds.TreePurging) return null;
+        var original = material.Read<WhaleDeck.Domain.Entities.FileTreePurgingOperation>(FileRecoveryValidation.Snapshot(row));
+        return await (purgingCatalog ?? throw new InvalidOperationException("FILES_RECOVERY_CATALOG_UNAVAILABLE"))
+            .RecoverySummaryAsync(original, cancellationToken);
+    }
     public Task<FileRecoveryOperation?> OwnedAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) =>
         db.FileRecoveryOperations.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id && row.ActorSubject == actor.Subject && row.LoginBinding == actor.LoginBinding, cancellationToken);
     public Task<FileRecoveryOperation> QueueAsync(TerminalActor actor, string key, QueueFileRecoveryCommand command, CancellationToken cancellationToken) => Transaction(async () =>

@@ -51,6 +51,14 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal(11, FileRecoveryKinds.All.Count); Assert.True(kind.Length > 16);
         }
         var queued = await service.QueueAsync(actor, command, key, default);
+        if (kind == FileRecoveryKinds.TreePurging)
+        {
+            Assert.NotNull(before.Purge); Assert.Equal(before.Purge, queued.Purge);
+            Assert.Equal(before.Version, queued.Purge!.Version); Assert.Equal("Unknown", queued.Purge.State);
+            var summaryJson = JsonSerializer.SerializeToElement(queued.Purge);
+            Assert.Equal(8, summaryJson.EnumerateObject().Count());
+        }
+        else Assert.False(JsonSerializer.SerializeToElement(queued).TryGetProperty("Purge", out _));
         Assert.Equal(queued.Id, (await service.GetByKeyAsync(actor, key, default)).Id);
         Assert.Equal(queued.Id, (await service.QueueAsync(actor, command, key, default)).Id);
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.QueueAsync(actor, command with { ReasonCode = "OperatorHandover" }, key, default));
@@ -151,6 +159,20 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.True(await worker.TickAsync(default)); var disposed = await service.GetAsync(actor, ready.Id, default);
             var resolution = recycleCompleted ? "Succeeded" : kind == FileRecoveryKinds.Upload ? "Failed" : "Acknowledged";
             Assert.Equal("Disposed", disposed.State); Assert.Equal(resolution, disposed.OriginalResolution); Assert.Equal(1, gateway.Fences);
+            if (kind == FileRecoveryKinds.TreePurging)
+            {
+                var current = await db.FileTreePurgingOperations.AsNoTracking().SingleAsync(row => row.Id == originalId);
+                Assert.Equal(FileTreePurgingValidation.RecoverySummary(current, protector), disposed.Purge);
+                Assert.Equal(before.Purge!.CaptureId, disposed.Purge!.CaptureId);
+                Assert.Equal(before.Purge.Scope, disposed.Purge.Scope);
+                Assert.True(disposed.Purge.Version > before.Purge.Version);
+                Assert.Equal(resolution, disposed.Purge.State); Assert.True(disposed.Purge.DeletionStarted);
+                Assert.True(disposed.Purge.OriginalsRemoved);
+                Assert.Equal(recycleCompleted ? true : (bool?)null, disposed.Purge.ArchiveRemoved);
+                await using var readBack = new PlatformDbContext(options);
+                var reread = await new FileRecoveryService(authorization, Repository(readBack), protector, clock).GetAsync(actor, disposed.Id, default);
+                Assert.Equal(disposed.Purge, reread.Purge);
+            }
             Assert.Empty(await db.FilePathLocks.Where(row => row.OperationId == originalExecution).ToArrayAsync());
             var original = kind switch {
                 FileRecoveryKinds.Upload => await db.FileUploadOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),

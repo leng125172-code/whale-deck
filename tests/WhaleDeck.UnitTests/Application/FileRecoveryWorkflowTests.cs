@@ -165,6 +165,7 @@ public sealed class FileRecoveryWorkflowTests : IDisposable
         var result = await service.GetAsync(Actor, row.Id, default); Assert.NotNull(result.Confirmation);
         var claims = Protector.VerifyRecovery(result.Confirmation.PlanHash); Assert.Equal(Actor.Subject, claims.Actor); Assert.Equal(Actor.LoginBinding, claims.LoginBinding);
         var json = JsonSerializer.SerializeToElement(result);
+        Assert.False(json.TryGetProperty("Purge", out _));
         Assert.DoesNotContain(json.EnumerateObject(), property => property.Name is "OriginalJson" or "ObservationJson" or "LoginBinding" or "OwnerHash" or "RequestHash");
         await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(Actor with { LoginBinding = new('D', 64) }, row.Id, default));
         await Assert.ThrowsAsync<ArgumentException>(() => service.ConfirmAsync(Actor, row.Id, new(result.Confirmation.PlanHash, false, row.Version), default));
@@ -223,6 +224,11 @@ public sealed class FileRecoveryWorkflowTests : IDisposable
         public Task DeferAsync(FileRecoveryOperation claimed, CancellationToken cancellationToken) { Deferrals++; return Task.CompletedTask; }
         public Task<FileRecoveryOperation> QueueAsync(TerminalActor actor, string key, QueueFileRecoveryCommand command, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<FileRecoveryOperation?> OwnedAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) => Task.FromResult<FileRecoveryOperation?>(row.ActorSubject == actor.Subject && row.LoginBinding == actor.LoginBinding && row.Id == id ? row : null);
+        public Task<FileRecoveryPurgeDto?> PurgeSummaryAsync(FileRecoveryOperation original, CancellationToken cancellationToken)
+        {
+            Assert.NotEqual(FileRecoveryKinds.TreePurging, original.Kind);
+            return Task.FromResult<FileRecoveryPurgeDto?>(null);
+        }
         public Task<FileRecoveryOperation> ConfirmAsync(TerminalActor actor, FileRecoveryPlanClaims claims, long version, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task CancelAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
     }

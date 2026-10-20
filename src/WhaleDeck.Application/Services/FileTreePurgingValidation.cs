@@ -85,6 +85,31 @@ public static class FileTreePurgingValidation
     public static FileTreePurgingCommand ReadCommand(FileTreePurgingOperation row) => Read<FileTreePurgingCommand>(row.CommandJson);
     public static FileTreePurgingPlan ReadPlan(FileTreePurgingOperation row) => Read<FileTreePurgingPlan>(row.PlanJson);
     public static FileTreePurgingReceipt ReadReceipt(FileTreePurgingOperation row) => Read<FileTreePurgingReceipt>(row.ReceiptJson);
+    public static FileRecoveryPurgeDto RecoverySummary(FileTreePurgingOperation row, IFileTreePurgingProtector protector,
+        FileTreePurgingOperation? original = null)
+    {
+        if (!HasValidBinding(row, protector)) throw new InvalidOperationException("FILES_INTENT_BINDING_CHANGED");
+        if (original is not null)
+        {
+            // Current facts may advance after disposition, but cannot be from a
+            // different capture, owner, plan, execution or older observation.
+            if (!HasValidBinding(original, protector) || row.Id != original.Id || row.CaptureId != original.CaptureId ||
+                row.RequestHash != original.RequestHash || row.PlanHash != original.PlanHash || row.OwnerHash != original.OwnerHash ||
+                row.ExecutionJobId != original.ExecutionJobId || row.ExecutionExpiresAtUtc != original.ExecutionExpiresAtUtc ||
+                ReadCommand(row) != ReadCommand(original) || row.Version < original.Version ||
+                row.Version == original.Version && (row.State != original.State || row.RootStartedAtUtc != original.RootStartedAtUtc ||
+                    row.ReceiptHash != original.ReceiptHash || row.ReceiptObservedAtUtc != original.ReceiptObservedAtUtc) ||
+                original.RootStartedAtUtc is not null && row.RootStartedAtUtc != original.RootStartedAtUtc ||
+                original.ReceiptJson is not null && (row.ReceiptJson is null || row.ReceiptHash != original.ReceiptHash || row.ReceiptObservedAtUtc != original.ReceiptObservedAtUtc))
+                throw new InvalidOperationException("FILES_RECOVERY_ORIGINAL_CHANGED");
+            if (original.ReceiptJson is not null) MonotonicReceipt(ReadReceipt(original), ReadReceipt(row));
+        }
+        var command = ReadCommand(row); var receipt = row.ReceiptJson is null ? null : ReadReceipt(row);
+        var noDeletion = row.RootStartedAtUtc is null && receipt is null || receipt?.State == "Aborted";
+        bool? Removed(string component, bool established) => established ? true : noDeletion || !Selects(command.Scope, component) ? false : null;
+        return new(command.CaptureId, command.CaptureKind, command.Scope, row.Version, row.State,
+            row.DeletionStarted ? true : noDeletion ? false : null, Removed("Archive", row.ArchiveRemoved), Removed("Originals", row.OriginalsRemoved));
+    }
     private static T Read<T>(string? json)
     {
         if (json is null || Encoding.UTF8.GetByteCount(json) > 32768) throw new ArgumentException("FILES_TREE_PURGE_MATERIAL_INVALID");

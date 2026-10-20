@@ -71,13 +71,11 @@ public sealed class FileTreePurgingService(FileManagementService authorization, 
             command.CaptureId, command.Scope, plan!.Fingerprint, row.ReadyExpiresAtUtc!.Value)), row.ReadyExpiresAtUtc.Value, Warning(command.Scope)) : null;
         // RootStarted is only an admission fact, not evidence that deletion did
         // or did not happen. A lost result remains nullable, never false-success.
-        var receipt = row.ReceiptJson is null ? null : FileTreePurgingValidation.ReadReceipt(row);
-        var noDeletion = row.RootStartedAtUtc is null && receipt is null || receipt?.State == "Aborted";
-        bool? Removed(string component, bool established) => established ? true : noDeletion || !FileTreePurgingValidation.Selects(command.Scope, component) ? false : null;
+        var facts = FileTreePurgingValidation.RecoverySummary(row, protector);
         return new(row.Id, row.Id, row.ExecutionJobId, row.State == "Ready" && !ready ? "Expired" : row.State,
             new(command.CaptureId, command.Source, command.CaptureKind, command.Scope), plan?.EntryCount, plan?.TotalBytes, plan?.ArchiveBytes,
-            row.ReadyExpiresAtUtc, row.ResultCode, row.Version, row.DeletionStarted ? true : noDeletion ? false : null,
-            Removed("Archive", row.ArchiveRemoved), Removed("Originals", row.OriginalsRemoved), confirmation);
+            row.ReadyExpiresAtUtc, row.ResultCode, row.Version, facts.DeletionStarted,
+            facts.ArchiveRemoved, facts.OriginalsRemoved, confirmation);
     }
     private static string Warning(string scope) => scope switch
     {

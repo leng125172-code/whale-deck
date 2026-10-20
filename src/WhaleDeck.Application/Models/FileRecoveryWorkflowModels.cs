@@ -25,4 +25,5 @@ public sealed record FileRecoveryConfirmationDto(string PlanHash, DateTimeOffset
 public sealed record FileRecoveryIntentDto(Guid Id, Guid PlanningJobId, Guid? ExecutionJobId, string Kind, Guid OriginalIntentId,
     Guid OriginalExecutionJobId, long OriginalVersion, string State, string Disposition, string ReasonCode,
     string? RootState, DateTimeOffset? ReadyExpiresAtUtc, long Version, string? ResultCode, string? OriginalResolution,
-    FileRecoveryConfirmationDto? Confirmation);
+    FileRecoveryConfirmationDto? Confirmation,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FileRecoveryPurgeDto? Purge = null);

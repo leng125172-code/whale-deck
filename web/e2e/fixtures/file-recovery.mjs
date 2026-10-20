@@ -14,6 +14,12 @@ export async function installFileRecoveryFixture(page, options = {}) {
   const row = { id, planningJobId: id, executionJobId: null, kind: candidate.kind, originalIntentId: originalId, originalExecutionJobId: originalExecution, originalVersion: 17,
     state: 'Queued', disposition: 'AcknowledgeUnknown', reasonCode: 'OriginalSessionLost', rootState: null, readyExpiresAtUtc: null, version: 0,
     resultCode: null, originalResolution: null, confirmation: null }
+  if (candidate.kind === 'tree-purge' && !options.invalidBinding) {
+    candidate.target = null
+    candidate.purge = { captureId: '846516d5-6a48-4ba5-9468-cd61f55728ed', captureKind: 'Trash', scope: options.scope || 'All', version: candidate.version, state: 'Unknown',
+      deletionStarted: true, archiveRemoved: options.scope === 'Originals' ? false : null, originalsRemoved: options.scope === 'Archive' ? false : true }
+    row.purge = structuredClone(candidate.purge)
+  }
   await page.route('**/api/v1/files/recovery**', async route => {
     const request = route.request(), url = new URL(request.url()), path = url.pathname.replace('/api/v1/files/recovery', '')
     const reply = (value, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(value) })
@@ -41,7 +47,16 @@ export async function installFileRecoveryFixture(page, options = {}) {
         row.state = 'Ready'; row.rootState = row.disposition === 'ReconcileCompleted' ? 'Completed' : 'Unknown'
         row.readyExpiresAtUtc = new Date(Date.now() + (options.expiryMs || 300000)).toISOString(); row.version++
         row.confirmation = { planHash: 'ui-recovery-plan-not-auth-token', expiresAtUtc: row.readyExpiresAtUtc, warning: row.disposition === 'ReconcileCompleted' ? '仅按完整可信回执对账，不重做原文件操作。' : '只接受历史不确定性，不代表原文件操作成功；不重做、不删除留存对象。' }
-      } else if (row.state === 'DispositionQueued') { row.state = 'Disposed'; row.originalResolution = row.disposition === 'ReconcileCompleted' ? 'Succeeded' : 'Acknowledged'; row.resultCode = 'FILES_RECOVERY_DISPOSED'; row.version++ }
+      } else if (row.state === 'DispositionQueued') {
+        row.state = 'Disposed'; row.originalResolution = row.disposition === 'ReconcileCompleted' ? 'Succeeded' : 'Acknowledged'; row.resultCode = 'FILES_RECOVERY_DISPOSED'; row.version++
+        if (row.purge) {
+          row.purge.version++; row.purge.state = row.originalResolution
+          if (row.originalResolution === 'Succeeded') {
+            row.purge.archiveRemoved = row.purge.scope !== 'Originals'
+            row.purge.originalsRemoved = row.purge.scope !== 'Archive'
+          }
+        }
+      }
       return reply(row)
     }
     return reply({ status: 404 }, 404)

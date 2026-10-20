@@ -162,7 +162,7 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
                 var command = valid ? FileTreePurgingValidation.ReadCommand(row) : null;
                 // A negative purge flag is not proof of any retained object.
                 return Candidate(row.Id, row.ExecutionJobId, row.Version, row.CreatedAtUtc, row.LeaseExpiresAtUtc, row.RootStartedAtUtc, valid,
-                    command?.Source, null, false);
+                    command?.Source, null, false) with { Purge = valid ? FileTreePurgingValidation.RecoverySummary(row, purgings!) : null };
             }
             default:
             {

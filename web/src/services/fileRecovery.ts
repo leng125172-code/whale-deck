@@ -17,6 +17,16 @@ export const recoveryKinds = [
 export type RecoveryKind = (typeof recoveryKinds)[number]
 export type RecoveryDisposition = 'AcknowledgeUnknown' | 'ReconcileCompleted'
 export type RecoveryReason = 'OriginalSessionLost' | 'OperatorHandover' | 'IncidentReview'
+export interface RecoveryPurge {
+  captureId: string
+  captureKind: 'Trash' | 'Overwrite'
+  scope: 'Archive' | 'Originals' | 'All'
+  version: number
+  state: string
+  deletionStarted: boolean | null
+  archiveRemoved: boolean | null
+  originalsRemoved: boolean | null
+}
 export interface RecoveryCandidate {
   kind: RecoveryKind
   intentId: string
@@ -29,6 +39,7 @@ export interface RecoveryCandidate {
   source: TreeLocation | null
   target: TreeLocation | null
   hasRetainedObjects: boolean | null
+  purge?: RecoveryPurge
 }
 export interface RecoveryPage {
   entries: RecoveryCandidate[]
@@ -58,6 +69,40 @@ export interface RecoveryIntent {
   resultCode: string | null
   originalResolution: string | null
   confirmation: { planHash: string; expiresAtUtc: string; warning: string } | null
+  purge?: RecoveryPurge
+}
+export const recoveryPurgeScope = (scope: RecoveryPurge['scope']) =>
+  ({ Archive: '仅HDD归档', Originals: '仅保留原件', All: 'HDD归档和保留原件' })[scope]
+export const recoveryDeletionFact = (value: boolean | null) =>
+  value === null ? '结果待核实，不推断未删除' : value ? '已确认删除' : '未执行该项删除'
+export const recoveryPurgeState = (state: string) =>
+  (
+    ({
+      Unknown: '结果未知',
+      Succeeded: '完整清理已确认',
+      Acknowledged: '已接受未知历史',
+      Failed: '未完成',
+      Canceled: '已取消',
+      Expired: '已过期',
+      Queued: '等待计划',
+      Planning: '正在核对',
+      Ready: '等待确认',
+      PurgingQueued: '等待清理',
+      Purging: '正在清理',
+    }) as Record<string, string>
+  )[state] || '无法核实'
+export function sameRecoveryPurge(a: RecoveryPurge, b: RecoveryPurge) {
+  return a.captureId === b.captureId && a.captureKind === b.captureKind && a.scope === b.scope
+}
+export function recoveryPurgeFollows(previous: RecoveryPurge, current: RecoveryPurge) {
+  const facts = ['deletionStarted', 'archiveRemoved', 'originalsRemoved'] as const
+  return (
+    sameRecoveryPurge(previous, current) &&
+    current.version >= previous.version &&
+    facts.every((key) => previous[key] !== true || current[key] === true) &&
+    (current.version > previous.version ||
+      (current.state === previous.state && facts.every((key) => current[key] === previous[key])))
+  )
 }
 export function recoveryTerminal(state: string) {
   return ['Disposed', 'Failed', 'Canceled', 'Expired'].includes(state)
@@ -135,6 +180,60 @@ const privateFields = [
 function privateMaterial(value: object) {
   return Object.keys(value).some((key) => privateFields.includes(key))
 }
+function validPurge(value: RecoveryPurge | undefined): value is RecoveryPurge {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const fields = [
+    'captureId',
+    'captureKind',
+    'scope',
+    'version',
+    'state',
+    'deletionStarted',
+    'archiveRemoved',
+    'originalsRemoved',
+  ]
+  if (
+    Object.keys(value).length !== fields.length ||
+    Object.keys(value).some((key) => !fields.includes(key)) ||
+    !uuid(value.captureId) ||
+    !['Trash', 'Overwrite'].includes(value.captureKind) ||
+    !['Archive', 'Originals', 'All'].includes(value.scope) ||
+    !integer(value.version) ||
+    ![
+      'Queued',
+      'Planning',
+      'Ready',
+      'PurgingQueued',
+      'Purging',
+      'Unknown',
+      'Succeeded',
+      'Failed',
+      'Canceled',
+      'Expired',
+      'Acknowledged',
+    ].includes(value.state) ||
+    [value.deletionStarted, value.archiveRemoved, value.originalsRemoved].some(
+      (v) => v !== null && typeof v !== 'boolean',
+    )
+  )
+    return false
+  for (const [component, fact] of [
+    ['Archive', value.archiveRemoved],
+    ['Originals', value.originalsRemoved],
+  ] as const) {
+    const selected = value.scope === 'All' || value.scope === component
+    if (
+      (!selected && fact !== false) ||
+      (selected && value.deletionStarted === false && fact !== false) ||
+      (selected && value.deletionStarted === null && fact !== null) ||
+      (selected && value.deletionStarted === true && fact === false) ||
+      (fact === true && value.deletionStarted !== true) ||
+      (selected && value.state === 'Succeeded' && fact !== true)
+    )
+      return false
+  }
+  return value.state !== 'Succeeded' || value.deletionStarted === true
+}
 export function assertRecoveryPage(page: RecoveryPage) {
   if (
     !page ||
@@ -161,7 +260,17 @@ export function assertRecoveryPage(page: RecoveryPage) {
       (row.target !== null && !validTreeLocation(row.target)) ||
       (row.hasRetainedObjects !== null && typeof row.hasRetainedObjects !== 'boolean') ||
       (row.integrity === 'InvalidBinding' &&
-        (row.source !== null || row.target !== null || row.hasRetainedObjects !== null)) ||
+        (row.source !== null ||
+          row.target !== null ||
+          row.hasRetainedObjects !== null ||
+          row.purge !== undefined)) ||
+      (row.kind === 'tree-purge' && row.integrity === 'Verified'
+        ? !validPurge(row.purge) ||
+          row.purge.version !== row.version ||
+          row.purge.state !== 'Unknown' ||
+          row.target !== null ||
+          row.hasRetainedObjects !== null
+        : row.purge !== undefined) ||
       seen.has(`${row.kind}:${row.intentId}`)
     )
       throw new Error('异常任务元数据无法核实')
@@ -186,6 +295,11 @@ export function assertRecoveryIntent(
     !uuid(row.originalExecutionJobId) ||
     !integer(row.originalVersion) ||
     !integer(row.version) ||
+    (row.kind === 'tree-purge'
+      ? !validPurge(row.purge) ||
+        row.purge.version < row.originalVersion ||
+        (row.state === 'Disposed' && row.purge.state !== row.originalResolution)
+      : row.purge !== undefined) ||
     (row.executionJobId !== null &&
       (!uuid(row.executionJobId) ||
         row.executionJobId === row.id ||

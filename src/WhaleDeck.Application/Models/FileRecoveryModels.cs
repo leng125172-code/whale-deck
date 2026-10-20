@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace WhaleDeck.Application.Models;
 
 /// <summary>Recovery is a new administrator action, never a replacement original login.</summary>
@@ -20,7 +22,11 @@ public static class FileRecoveryKinds
 /// <summary>Safe inventory only: no original login, owner key, signed plan or private receipt.</summary>
 public sealed record FileRecoveryCandidateDto(string Kind, Guid IntentId, Guid? ExecutionJobId,
     long Version, DateTimeOffset CreatedAtUtc, DateTimeOffset? LeaseExpiresAtUtc, bool RootStartRecorded,
-    string Integrity, FileLocationDto? Source, FileLocationDto? Target, bool? HasRetainedObjects);
+    string Integrity, FileLocationDto? Source, FileLocationDto? Target, bool? HasRetainedObjects,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FileRecoveryPurgeDto? Purge = null);
+/// <summary>Current signed original facts only; null never means that deletion did not happen.</summary>
+public sealed record FileRecoveryPurgeDto(Guid CaptureId, string CaptureKind, string Scope, long Version, string State,
+    bool? DeletionStarted, bool? ArchiveRemoved, bool? OriginalsRemoved);
 public sealed record FileRecoveryPageDto(IReadOnlyList<FileRecoveryCandidateDto> Entries, string? NextCursor);
 public sealed record FileRecoveryCursor(DateTimeOffset CreatedAtUtc, string Kind, Guid IntentId);
 

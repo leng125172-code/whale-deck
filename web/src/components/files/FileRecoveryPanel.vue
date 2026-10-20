@@ -13,6 +13,11 @@ import {
   recoveryResult,
   recoveryState,
   recoveryTerminal,
+  recoveryPurgeScope,
+  recoveryPurgeState,
+  recoveryDeletionFact,
+  sameRecoveryPurge,
+  recoveryPurgeFollows,
 } from '@/services/fileRecovery'
 import type {
   RecoveryCandidate,
@@ -43,6 +48,7 @@ const referenceId = ref(''),
   pendingKey = ref(''),
   now = ref(Date.now()),
   confirmUncertain = ref(false)
+const verificationFailed = ref(false)
 const hasReference = computed(() => !!(referenceId.value || pendingKey.value || intent.value))
 const canConfirm = computed(() => {
   const row = intent.value,
@@ -52,11 +58,18 @@ const canConfirm = computed(() => {
     !!row.confirmation &&
     Date.parse(row.confirmation.expiresAtUtc) > now.value &&
     !confirmUncertain.value &&
+    !verificationFailed.value &&
     selected?.integrity === 'Verified' &&
     selected.version === row.originalVersion &&
     selected.executionJobId === row.originalExecutionJobId &&
     selected.kind === row.kind &&
-    selected.intentId === row.originalIntentId
+    selected.intentId === row.originalIntentId &&
+    (row.kind !== 'tree-purge' ||
+      (!!row.purge &&
+        !!selected.purge &&
+        sameRecoveryPurge(row.purge, selected.purge) &&
+        row.purge.version === row.originalVersion &&
+        row.purge.state === 'Unknown'))
   )
 })
 let generation = 0,
@@ -83,10 +96,12 @@ function reset() {
   intent.value = candidate.value = null
   referenceId.value = pendingKey.value = ''
   confirmUncertain.value = false
+  verificationFailed.value = false
   dialog.value = false
   notified = ''
 }
 function fail(cause: unknown) {
+  verificationFailed.value = true
   if (cause instanceof ApiError && [401, 403].includes(cause.status)) {
     reset()
     emit('failure', cause)
@@ -155,7 +170,27 @@ async function accept(
   signal?: AbortSignal,
 ) {
   if (!owned(token)) return
+  verificationFailed.value = true
   assertRecoveryIntent(row, id, command)
+  const previous = intent.value
+  if (
+    previous &&
+    (row.id !== previous.id ||
+      row.kind !== previous.kind ||
+      row.originalIntentId !== previous.originalIntentId ||
+      row.originalExecutionJobId !== previous.originalExecutionJobId ||
+      row.originalVersion !== previous.originalVersion ||
+      row.disposition !== previous.disposition ||
+      row.reasonCode !== previous.reasonCode ||
+      row.version < previous.version ||
+      (previous.purge && (!row.purge || !recoveryPurgeFollows(previous.purge, row.purge))))
+  )
+    throw new Error('接管任务绑定或已确认删除事实发生变化，只查询原引用')
+  if (
+    candidate.value?.purge &&
+    (!row.purge || !recoveryPurgeFollows(candidate.value.purge, row.purge))
+  )
+    throw new Error('清理捕获或范围发生变化，不允许确认')
   intent.value = row
   referenceId.value = row.id
   pendingKey.value = ''
@@ -181,6 +216,7 @@ async function accept(
   }
   if (candidate.value && row.state === 'Ready' && candidate.value.version !== row.originalVersion)
     error.value = '原任务版本与本计划不同；本页不会确认，请结束本次引用后重新核对。'
+  verificationFailed.value = false
   window.clearTimeout(timer)
   window.clearInterval(clockTimer)
   if (row.state === 'Ready')
@@ -416,6 +452,12 @@ onBeforeUnmount(() => {
     class="file-recovery-dialog"
   >
     <el-alert
+      v-if="intent?.kind === 'tree-purge' || candidate?.kind === 'tree-purge'"
+      title="接管只核对并封存原清理，不会再次删除。归档与原件分别保留删除事实；接受未知结果不代表副本仍存在。"
+      type="warning"
+      :closable="false"
+    />
+    <el-alert
       title="接管是当前管理员的新操作，不冒充原登录。不重做文件操作、不删除留存对象；接受未知结果不代表操作成功。"
       type="warning"
       :closable="false"
@@ -440,6 +482,30 @@ onBeforeUnmount(() => {
         <dd>{{ intent.originalExecutionJobId }}</dd>
         <dt>原版本</dt>
         <dd>{{ intent.originalVersion }}</dd>
+        <template v-if="intent.purge">
+          <dt>捕获 ID</dt>
+          <dd>{{ intent.purge.captureId }}</dd>
+          <dt>捕获类型</dt>
+          <dd>{{ intent.purge.captureKind === 'Trash' ? '目录回收' : '覆盖前备份' }}</dd>
+          <dt>原清理范围</dt>
+          <dd>{{ recoveryPurgeScope(intent.purge.scope) }}</dd>
+          <dt>原记录当前版本</dt>
+          <dd>{{ intent.purge.version }} · {{ recoveryPurgeState(intent.purge.state) }}</dd>
+          <dt>删除是否开始</dt>
+          <dd>
+            {{
+              intent.purge.deletionStarted === null
+                ? '结果待核实'
+                : intent.purge.deletionStarted
+                  ? '已开始，不代表全部完成'
+                  : '未开始'
+            }}
+          </dd>
+          <dt>HDD归档</dt>
+          <dd>{{ recoveryDeletionFact(intent.purge.archiveRemoved) }}</dd>
+          <dt>保留原件</dt>
+          <dd>{{ recoveryDeletionFact(intent.purge.originalsRemoved) }}</dd>
+        </template>
         <template v-if="candidate?.source">
           <dt>原任务源路径</dt>
           <dd>{{ candidate.source.rootId }} / {{ candidate.source.path }}</dd>
@@ -526,6 +592,15 @@ onBeforeUnmount(() => {
         <p class="recovery-id">{{ entry.executionJobId || entry.intentId }}</p>
         <p v-if="entry.source">源：{{ entry.source.rootId }} / {{ entry.source.path }}</p>
         <p v-if="entry.target">目标：{{ entry.target.rootId }} / {{ entry.target.path }}</p>
+        <template v-if="entry.purge">
+          <p>
+            捕获 ID：{{ entry.purge.captureId }} ·
+            {{ entry.purge.captureKind === 'Trash' ? '目录回收' : '覆盖前备份' }}
+          </p>
+          <p>原清理范围：{{ recoveryPurgeScope(entry.purge.scope) }}</p>
+          <p>HDD归档：{{ recoveryDeletionFact(entry.purge.archiveRemoved) }}</p>
+          <p>保留原件：{{ recoveryDeletionFact(entry.purge.originalsRemoved) }}</p>
+        </template>
         <p>
           版本 {{ entry.version }} · 留存对象：{{
             entry.hasRetainedObjects === null

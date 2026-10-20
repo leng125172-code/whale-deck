@@ -86,6 +86,50 @@ test('directory purge is the eleventh kind and accepting uncertainty never impli
   expect(confirms(control)).toHaveLength(1)
   expect(control.state.writes.every((item) => !item.path.endsWith('/apply'))).toBe(true)
 })
+for (const width of [320, 1440])
+  for (const colorScheme of ['light', 'dark'] as const)
+    for (const scope of ['Archive', 'Originals', 'All']) {
+      test(`${width} ${colorScheme} ${scope}: purge capture and component facts stay visible through disposition and reload`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 1000 })
+        await page.emulateMedia({ colorScheme })
+        const control = await installFileRecoveryFixture(page, { kind: 'tree-purge', scope })
+        await page.goto('/files')
+        const dialog = await plan(page)
+        await expect(dialog.locator('.recovery-details')).toContainText(control.candidate.purge.captureId)
+        await expect(dialog.locator('.recovery-details')).toContainText(scope === 'Archive' ? '仅HDD归档' : scope === 'Originals' ? '仅保留原件' : 'HDD归档和保留原件')
+        await expect(dialog.locator('.recovery-details')).toContainText(scope === 'Originals' ? '未执行该项删除' : '结果待核实，不推断未删除')
+        await page.screenshot({ path: `test-results/file-recovery-purge-${scope}-${width}-${colorScheme}.png` })
+        await dialog.getByRole('button', { name: '接受未知结果', exact: true }).click()
+        await page.getByRole('button', { name: '确认处置', exact: true }).click()
+        await dialog.getByRole('button', { name: '查询原接管任务', exact: true }).click()
+        await expect(dialog.locator('.recovery-details')).toContainText('18 · 已接受未知历史')
+        await page.reload()
+        await expect(page.locator('.recovery-details')).toContainText(control.candidate.purge.captureId)
+        await expect(page.locator('.recovery-details')).toContainText('18 · 已接受未知历史')
+        expect(creates(control)).toHaveLength(1)
+        expect(confirms(control)).toHaveLength(1)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+      })
+    }
+for (const change of ['scope', 'capture', 'positive', 'missing', 'private', 'version']) {
+  test(`purge ${change} response change freezes an already-ready confirmation without another write`, async ({ page }) => {
+    const control = await installFileRecoveryFixture(page, { kind: 'tree-purge' })
+    await page.goto('/files')
+    const dialog = await plan(page)
+    if (change === 'scope') control.row.purge.scope = 'Originals'
+    if (change === 'capture') control.row.purge.captureId = '54d9a230-7ae7-4594-849b-5bd95d2f66fa'
+    if (change === 'positive') control.row.purge.originalsRemoved = null
+    if (change === 'missing') delete control.row.purge
+    if (change === 'private') control.row.purge.ownerHash = 'must-not-be-public'
+    if (change === 'version') control.row.purge.version = 16
+    await dialog.getByRole('button', { name: '查询原接管任务', exact: true }).click()
+    await expect(dialog.getByRole('button', { name: '接受未知结果', exact: true })).toBeDisabled()
+    await page.waitForTimeout(100)
+    expect(confirms(control)).toHaveLength(0)
+    expect(creates(control)).toHaveLength(1)
+    expect(page.url()).toContain(control.row.id)
+  })
+}
 test('lost registration response survives reload by original key lookup, never a replacement POST', async ({
   page,
 }) => {

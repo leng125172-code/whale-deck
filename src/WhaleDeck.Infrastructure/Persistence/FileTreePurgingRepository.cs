@@ -10,6 +10,12 @@ namespace WhaleDeck.Infrastructure.Persistence;
 public sealed partial class FileTreePurgingRepository(PlatformDbContext db, IFileTreePurgingProtector protector, TimeProvider clock,
     IFileTreeRecyclingProtector captureProtector, IFileTreeOverwriteRestoringProtector overwriteProtector) : IFileTreePurgingRepository
 {
+    internal async Task<FileRecoveryPurgeDto> RecoverySummaryAsync(FileTreePurgingOperation original, CancellationToken cancellationToken)
+    {
+        var current = await db.FileTreePurgingOperations.AsNoTracking().SingleOrDefaultAsync(item => item.Id == original.Id, cancellationToken)
+            ?? throw new InvalidOperationException("FILES_RECOVERY_ORIGINAL_CHANGED");
+        return FileTreePurgingValidation.RecoverySummary(current, protector, original);
+    }
     public Task<FileTreePurgingOperation?> OwnedAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) => db.FileTreePurgingOperations.AsNoTracking()
         .SingleOrDefaultAsync(item => item.Id == id && item.ActorSubject == actor.Subject && item.LoginBinding == actor.LoginBinding, cancellationToken);
     public Task<FileTreePurgingOperation> QueueAsync(TerminalActor actor, string key, CreateFileTreePurgingCommand request, CancellationToken cancellationToken) => Transaction(async () =>
