@@ -69,6 +69,10 @@ public sealed partial class FileTreeRecyclingRepository
             ? await db.FileTreeCaptures.FromSqlInterpolated($"SELECT * FROM file_tree_captures WHERE source_json->'Source'->>'RootId'={location.RootId} ORDER BY created_at_utc,id LIMIT {take + 1}").AsNoTracking().ToArrayAsync(cancellationToken)
             : await db.FileTreeCaptures.Where(item => item.SourceHash == sourceHash).OrderBy(item => item.CreatedAtUtc).ThenBy(item => item.Id).Take(take + 1).AsNoTracking().ToArrayAsync(cancellationToken);
         var items = rows.Take(take).Select(item => FileTreeCaptureValidation.Verify(item, protector, overwriteProtector)).ToArray();
+        var states = await FileTreeCaptureStates.Read(db, items.Select(item => item.Id).ToArray(),
+            purgingProtector ?? protector as WhaleDeck.Application.Abstractions.IFileTreePurgingProtector, cancellationToken);
+        items = items.Select(item => item with { ArchiveState = states[item.Id].Archive, OriginalsState = states[item.Id].Originals,
+            CleanupActive = states[item.Id].CleanupActive }).ToArray();
         return new(items, rows.Length > take ? items[^1].Id : null);
     }
 }

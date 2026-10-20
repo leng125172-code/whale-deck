@@ -10,7 +10,9 @@ public sealed partial class FileTreeRestoringRepository
     {
         var row = await db.FileTreeCaptures.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken)
             ?? throw new KeyNotFoundException("FILES_CAPTURE_NOT_FOUND");
-        return (FileTreeCaptureValidation.Verify(row, captureProtector, overwriteProtector), row.OwnerHash);
+        var verified = FileTreeCaptureValidation.Verify(row, captureProtector, overwriteProtector);
+        await FileTreeCaptureStates.RequireRestore(db, id, purgingProtector ?? protector as WhaleDeck.Application.Abstractions.IFileTreePurgingProtector, cancellationToken);
+        return (verified, row.OwnerHash);
     }
     private async Task<FileTreeRestoringCommand> CaptureCommand(CreateFileTreeRestoringCommand request, CancellationToken cancellationToken)
     {

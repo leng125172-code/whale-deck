@@ -17,6 +17,7 @@ public sealed record FileTreeRecyclingIntentDto(Guid Id, Guid PlanningJobId, Gui
 public sealed record FileTreeCaptureBinding(Guid Id, Guid IntentId, string OwnerHash, string SourceHash, FileTreeRecyclingCommand Command,
     string ManifestSha256, int EntryCount, long TotalBytes, long ArchiveBytes, string ArchiveSha256, DateTimeOffset CreatedAtUtc);
 public sealed record FileTreeCaptureDto(Guid Id, Guid IntentId, FileTreeRecyclingCommand Source, string ManifestSha256, int EntryCount,
-    long TotalBytes, long ArchiveBytes, string ArchiveSha256, DateTimeOffset CreatedAtUtc, string Kind = "Trash", string? ContentSha256 = null);
+    long TotalBytes, long ArchiveBytes, string ArchiveSha256, DateTimeOffset CreatedAtUtc, string Kind = "Trash", string? ContentSha256 = null,
+    string ArchiveState = "Retained", string OriginalsState = "Retained", bool CleanupActive = false);
 public sealed record FileTreeCapturePage(IReadOnlyList<FileTreeCaptureDto> Items, Guid? Next);
 public sealed class FileTreeRecyclingRejectedException(string code) : InvalidOperationException(code);

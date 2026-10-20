@@ -49,6 +49,7 @@ internal static class FilePathLocks
         var recyclings = await db.FileTreeRecyclingOperations.AsNoTracking().Where(item => item.ExecutionJobId != null && ids.Contains(item.ExecutionJobId.Value)).ToDictionaryAsync(item => item.ExecutionJobId!.Value, cancellationToken);
         var restorings = await db.FileTreeRestoringOperations.AsNoTracking().Where(item => item.ExecutionJobId != null && ids.Contains(item.ExecutionJobId.Value)).ToDictionaryAsync(item => item.ExecutionJobId!.Value, cancellationToken);
         var overwrites = await db.FileTreeOverwriteRestoringOperations.AsNoTracking().Where(item => item.ExecutionJobId != null && ids.Contains(item.ExecutionJobId.Value)).ToDictionaryAsync(item => item.ExecutionJobId!.Value, cancellationToken);
+        var purges = await db.FileTreePurgingOperations.AsNoTracking().Where(item => item.ExecutionJobId != null && ids.Contains(item.ExecutionJobId.Value)).ToDictionaryAsync(item => item.ExecutionJobId!.Value, cancellationToken);
         var result = new Dictionary<string, FilePathScope?>(StringComparer.Ordinal);
         foreach (var row in held)
         {
@@ -61,6 +62,7 @@ internal static class FilePathLocks
                 owners += recyclings.ContainsKey(row.OperationId) ? 1 : 0;
                 owners += restorings.ContainsKey(row.OperationId) ? 1 : 0;
                 owners += overwrites.ContainsKey(row.OperationId) ? 1 : 0;
+                owners += purges.ContainsKey(row.OperationId) ? 1 : 0;
                 if (owners != 1) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
                 if (uploads.TryGetValue(row.OperationId, out var upload))
                 {
@@ -158,6 +160,16 @@ internal static class FilePathLocks
                         if (scope is null) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
                     }
                 }
+                else if (purges.TryGetValue(row.OperationId, out var purge))
+                {
+                    var command = FileTreePurgingValidation.ReadCommand(purge); FileTreePurgingValidation.Command(command);
+                    var plan = FileTreePurgingValidation.ReadPlan(purge); FileTreePurgingValidation.Plan(plan);
+                    var source = new FilePathScope(command.Source);
+                    if (plan.Command != command || purge.CaptureId != command.CaptureId || purge.SourceHash != source.Hash ||
+                        purge.ExecutionJobId != FileTreePurgingValidation.ExecutionId(purge.Id)) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
+                    if (row.PathHash == FileTreePurgingValidation.CaptureToken(command.CaptureId)) token = true;
+                    else { scope = source; if (row.PathHash != source.Hash) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID"); }
+                }
                 var kind = token ? "Token" : "Path";
                 if (row.ScopeKind != "Legacy" && (row.ScopeKind != kind || row.RootId != scope?.RootId || row.RelativePath != scope?.Path)) throw new ArgumentException("FILES_LOCK_SCOPE_INVALID");
                 if (row.ScopeKind == "Legacy") { row.ScopeKind = kind; row.RootId = scope?.RootId; row.RelativePath = scope?.Path; }
@@ -183,12 +195,13 @@ internal static class FilePathLocks
         var recyclings = db.FileTreeRecyclingOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         var restorings = db.FileTreeRestoringOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         var overwrites = db.FileTreeOverwriteRestoringOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
+        var purges = db.FileTreePurgingOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         if (await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
-            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) + await trees.CountAsync(cancellationToken) + await moves.CountAsync(cancellationToken) + await packings.CountAsync(cancellationToken) + await unpackings.CountAsync(cancellationToken) + await recyclings.CountAsync(cancellationToken) + await restorings.CountAsync(cancellationToken) + await overwrites.CountAsync(cancellationToken) >= 64 ||
+            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) + await trees.CountAsync(cancellationToken) + await moves.CountAsync(cancellationToken) + await packings.CountAsync(cancellationToken) + await unpackings.CountAsync(cancellationToken) + await recyclings.CountAsync(cancellationToken) + await restorings.CountAsync(cancellationToken) + await overwrites.CountAsync(cancellationToken) + await purges.CountAsync(cancellationToken) >= 64 ||
             await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
             await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
-            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) + await trees.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await moves.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await packings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await unpackings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await recyclings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await restorings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await overwrites.CountAsync(item => item.ActorSubject == actor, cancellationToken) >= 4)
+            await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) + await trees.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await moves.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await packings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await unpackings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await recyclings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await restorings.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await overwrites.CountAsync(item => item.ActorSubject == actor, cancellationToken) + await purges.CountAsync(item => item.ActorSubject == actor, cancellationToken) >= 4)
             throw new InvalidOperationException("FILES_OPERATION_BUDGET_EXHAUSTED");
     }
 }

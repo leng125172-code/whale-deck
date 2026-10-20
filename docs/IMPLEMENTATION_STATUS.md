@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-21清理SQL候选**：永久意图/签名回执/组件历史叠加、迁移和仓储事务已实现；确认共用捕获/层级锁，两种恢复尊重清理状态。Release与2124 Unit/147 Integration通过（6本机原生跳过）；原生PG用例待实际运行。未接Worker/API/UI、未部署。详见[SQL候选证据与边界](qa/FILE_TREE_PURGING_POSTGRES.md)，前轮无SQL说明为历史状态；完整76项继续。
+
 - **2026-10-21清理业务材料候选**：HTTP仅capture/scope、后端签名目录解析、独立请求/计划/回执/确认、当前管理员与续租调度、minor36 Gateway严格映射已实现；Unknown已选组件无正面证明显示null。Release及2124 Unit/146 Integration（6原生跳过）通过；旧Windows维护快照并发失败已修，同一原测试10轮及全套再通过。[证据及剩余](qa/FILE_TREE_PURGING_BUSINESS_MATERIAL.md)。没有SQL仓储/迁移/Worker注册/清理API/UI，未部署；实际56101c8/1.36与2c8d1bb应用、11核心healthy保持。完整76项active。
 
 - **2026-10-21目录清理安装态子门禁通过**：Agent/MaintenanceHost实际56101c8/1.36、默认授权原件备份/宿主权限及UDS验收通过；6c60ea3客户端与双检查点独立磁盘验证两捕获类型/三范围、2MiB+7及1GiB+7完整内容，6清理完成/6取消。测试载荷与journal精确清理，81路径另验缺失、5份私有证据保留，11核心healthy/宿主重启0。[证据及剩余](qa/FILE_TREE_PURGING_INSTALLED.md)。同HDD不宣称异盘/已装中断；尚无清理业务任务/SQL墓碑/真人权限与页面，API/Worker/Gateway保持2c8d1bb，完整76项active。以下未安装为前轮历史。
