@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+新增**未安装RPC1.34源码候选**：独立 `FileTreeOverwriteRestoringService` 四方法/专用capability、目标版本/双树证明、覆盖前归档回执、固定helper/可信模块及精确默认根升级。1463 Unit/143 Integration（6本机原生跳过）、27覆盖恢复/驱动与23根升级实际Linux通过；[完整边界](qa/FILE_TREE_OVERWRITE_RESTORING_AGENT.md)。安装态签名UDS、业务永久任务/API/UI及覆盖发布仍缺，实际18f38bb/1.33保持，全部76项继续；以下旧候选/实际版本为历史。
+
 新增未安装 **RPC1.33 源码候选**：独立 `FileTreeRestoringService` Plan/Apply/Inspect/Discard 和 `files.tree-restore-intents`，固定 helper/可信恢复模块与精确默认授权升级已接通。后续66451f7已接Application永久双任务/锁/Worker/事务审计/第九类处置/API，1383 Unit/143 Integration（6本机原生跳过）及冻结实际PG通过；[业务证据](qa/FILE_TREE_RESTORING_BFF.md)。新真实UDS探针已编译但未执行，恢复WebUI/安装态/身份验收与覆盖恢复/清理及全部76项继续。实际e0175a0/RPC1.32不变；[Agent边界](qa/FILE_TREE_RESTORING_AGENT.md)。下方未安装1.32/1.31和业务未接说明为历史。
 
 新增目录回收/HDD恢复仍仅内部源码：独立tree-recycling/restore计划和回执、HDD先验收后逐文件隔离及只观察恢复已通过Linux验证；`files-tree-trash`与`files-tree-restore`只允许被注册表识别，不自动升级默认根或开放CLI/Agent/HTTP。已有目录移动新增父路径/私有目录inode复核候选尚未安装；后续应完成固定源码CI和实际移动链路回归。当前仍adc6cae/RPC1.31，全部76项继续。

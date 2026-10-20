@@ -92,7 +92,7 @@ class FileRootUpgradeTests(unittest.TestCase):
         self.assertEqual((self.folder / 'file-roots.json.pre-tree-copy.json').read_bytes(), original)
         self.assertEqual(prior.read_text(), '[]')
         for before, after in zip(previous, json.loads(self.current.read_bytes())):
-            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-copy', 'files-tree-move', 'files-tree-pack', 'files-tree-unpack', 'files-tree-trash', 'files-tree-restore'})
+            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-copy', 'files-tree-move', 'files-tree-pack', 'files-tree-unpack', 'files-tree-trash', 'files-tree-restore', 'files-tree-overwrite-restore'})
             self.assertEqual({key:value for key,value in before.items() if key != 'allowedActions'}, {key:value for key,value in after.items() if key != 'allowedActions'})
         self.assertEqual(upgrade.upgrade(self.current, previous, self.desired, '.pre-tree-copy.json'), 'unchanged')
 
@@ -112,7 +112,7 @@ class FileRootUpgradeTests(unittest.TestCase):
         self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'upgraded-defaults')
         self.assertEqual((self.folder / 'file-roots.json.pre-tree-move.json').read_bytes(), original); self.assertEqual(old.read_bytes(), b'[]')
         for before, after in zip(previous, json.loads(self.current.read_bytes())):
-            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-move','files-tree-pack','files-tree-unpack','files-tree-trash','files-tree-restore'})
+            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-move','files-tree-pack','files-tree-unpack','files-tree-trash','files-tree-restore','files-tree-overwrite-restore'})
             self.assertEqual({key:value for key,value in before.items() if key != 'allowedActions'}, {key:value for key,value in after.items() if key != 'allowedActions'})
         inode = self.current.stat().st_ino
         self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'unchanged'); self.assertEqual(self.current.stat().st_ino, inode)
@@ -135,7 +135,7 @@ class FileRootUpgradeTests(unittest.TestCase):
         self.assertEqual(upgrade.upgrade_defaults(self.current,source),'upgraded-defaults')
         backup=self.folder/'file-roots.json.pre-tree-pack.json'; self.assertEqual(backup.read_bytes(),original)
         for before,after in zip(previous,json.loads(self.current.read_bytes())):
-            self.assertEqual(set(after['allowedActions'])-set(before['allowedActions']),{'files-tree-pack','files-tree-unpack','files-tree-trash','files-tree-restore'})
+            self.assertEqual(set(after['allowedActions'])-set(before['allowedActions']),{'files-tree-pack','files-tree-unpack','files-tree-trash','files-tree-restore','files-tree-overwrite-restore'})
             self.assertEqual({key:item for key,item in before.items() if key!='allowedActions'},{key:item for key,item in after.items() if key!='allowedActions'})
         inode=self.current.stat().st_ino; self.assertEqual(upgrade.upgrade_defaults(self.current,source),'unchanged'); self.assertEqual(self.current.stat().st_ino,inode)
 
@@ -156,7 +156,7 @@ class FileRootUpgradeTests(unittest.TestCase):
         self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'upgraded-defaults')
         self.assertEqual((self.folder / 'file-roots.json.pre-tree-unpack.json').read_bytes(), original)
         for before, after in zip(previous, json.loads(self.current.read_bytes())):
-            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-unpack', 'files-tree-trash', 'files-tree-restore'})
+            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-unpack', 'files-tree-trash', 'files-tree-restore', 'files-tree-overwrite-restore'})
             self.assertEqual({key: item for key, item in before.items() if key != 'allowedActions'}, {key: item for key, item in after.items() if key != 'allowedActions'})
         inode = self.current.stat().st_ino
         self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'unchanged'); self.assertEqual(self.current.stat().st_ino, inode)
@@ -181,7 +181,7 @@ class FileRootUpgradeTests(unittest.TestCase):
         backup = self.folder / 'file-roots.json.pre-tree-trash.json'
         self.assertEqual(backup.read_bytes(), original); self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
         for before, after in zip(previous, json.loads(self.current.read_bytes())):
-            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-trash', 'files-tree-restore'})
+            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-trash', 'files-tree-restore', 'files-tree-overwrite-restore'})
             self.assertEqual({key: item for key, item in before.items() if key != 'allowedActions'}, {key: item for key, item in after.items() if key != 'allowedActions'})
         inode = self.current.stat().st_ino
         self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'unchanged'); self.assertEqual(self.current.stat().st_ino, inode)
@@ -208,7 +208,7 @@ class FileRootUpgradeTests(unittest.TestCase):
         self.assertEqual(backup.read_bytes(), original); self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
         self.assertEqual(old.read_bytes(), b'[]')
         for before, after in zip(previous, json.loads(self.current.read_bytes())):
-            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-restore'})
+            self.assertEqual(set(after['allowedActions']) - set(before['allowedActions']), {'files-tree-restore', 'files-tree-overwrite-restore'})
             self.assertEqual({key: value for key, value in before.items() if key != 'allowedActions'}, {key: value for key, value in after.items() if key != 'allowedActions'})
         inode = self.current.stat().st_ino
         self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'unchanged'); self.assertEqual(self.current.stat().st_ino, inode)
@@ -225,5 +225,68 @@ class FileRootUpgradeTests(unittest.TestCase):
         backup = self.folder / 'file-roots.json.pre-tree-restore.json'; backup.write_text('[]'); backup.chmod(0o600)
         with self.assertRaisesRegex(ValueError, 'FILES_REGISTRY_BACKUP_CONFLICT'): upgrade.upgrade_defaults(self.current, source)
         self.assertEqual(self.current.read_bytes(), original); self.assertEqual(backup.read_bytes(), b'[]')
+
+    def test_known_restoring_defaults_gain_only_overwrite_restore_with_original_backup_permissions_and_idempotence(self):
+        source = Path(__file__).resolve().parents[1] / 'host'
+        previous = json.loads((source / 'file-roots.v1.33.json').read_text())
+        self.assertEqual(len(previous), len(self.desired))
+        for before, after in zip(previous, self.desired):
+            self.assertEqual(after, {**before, 'allowedActions': before['allowedActions'] + ['files-tree-overwrite-restore']})
+        self.current.write_text(json.dumps(previous)); original = self.current.read_bytes()
+        old = self.folder / 'file-roots.json.pre-tree-restore.json'; old.write_bytes(b'[]'); old.chmod(0o600)
+        old_identity = (old.stat().st_ino, old.stat().st_mtime_ns, old.read_bytes())
+        self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'upgraded-defaults')
+        self.assertEqual(json.loads(self.current.read_bytes()), self.desired)
+        info = self.current.stat()
+        self.assertEqual((info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)), (0, 12345, 0o640))
+        backup = self.folder / 'file-roots.json.pre-tree-overwrite-restore.json'
+        self.assertEqual(backup.read_bytes(), original)
+        backup_info = backup.stat()
+        self.assertEqual((backup_info.st_uid, backup_info.st_gid, stat.S_IMODE(backup_info.st_mode), backup_info.st_nlink), (0, 12345, 0o600, 1))
+        self.assertEqual((old.stat().st_ino, old.stat().st_mtime_ns, old.read_bytes()), old_identity)
+        identities = (info.st_ino, info.st_mtime_ns, backup_info.st_ino, backup_info.st_mtime_ns)
+        self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'unchanged')
+        self.assertEqual((self.current.stat().st_ino, self.current.stat().st_mtime_ns, backup.stat().st_ino, backup.stat().st_mtime_ns), identities)
+        self.assertEqual(backup.read_bytes(), original)
+        self.assertFalse(any(item.name.startswith('.file-roots.json-') for item in self.folder.iterdir()))
+
+    def test_custom_restoring_roots_never_gain_overwrite_restore_or_allocate_backup(self):
+        source = Path(__file__).resolve().parents[1] / 'host'
+        previous = json.loads((source / 'file-roots.v1.33.json').read_text())
+        for field, value in (('ownerUid', 12345), ('path', '/data/WhaleDeck/custom'),
+                ('allowedActions', [action for action in previous[0]['allowedActions'] if action != 'files-tree-restore']),
+                ('allowedActions', previous[0]['allowedActions'] + ['files-tree-overwrite-restore'])):
+            with self.subTest(field=field, value=value):
+                custom = json.loads(json.dumps(previous)); custom[0][field] = value
+                self.current.write_text(json.dumps(custom)); original = self.current.read_bytes()
+                identity = (self.current.stat().st_ino, self.current.stat().st_mtime_ns)
+                self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'custom-preserved')
+                self.assertEqual(self.current.read_bytes(), original)
+                self.assertEqual((self.current.stat().st_ino, self.current.stat().st_mtime_ns), identity)
+                self.assertFalse((self.folder / 'file-roots.json.pre-tree-overwrite-restore.json').exists())
+
+    def test_conflicting_overwrite_restore_backup_fails_closed_and_preserves_both_files(self):
+        source = Path(__file__).resolve().parents[1] / 'host'
+        previous = json.loads((source / 'file-roots.v1.33.json').read_text())
+        self.current.write_text(json.dumps(previous)); original = self.current.read_bytes()
+        backup = self.folder / 'file-roots.json.pre-tree-overwrite-restore.json'; backup.write_bytes(b'[]'); backup.chmod(0o600)
+        before = (self.current.stat().st_ino, backup.stat().st_ino, backup.stat().st_mtime_ns)
+        with self.assertRaisesRegex(ValueError, '^FILES_REGISTRY_BACKUP_CONFLICT$'): upgrade.upgrade_defaults(self.current, source)
+        self.assertEqual(self.current.read_bytes(), original); self.assertEqual(backup.read_bytes(), b'[]')
+        self.assertEqual((self.current.stat().st_ino, backup.stat().st_ino, backup.stat().st_mtime_ns), before)
+        self.assertFalse(any(item.name.startswith('.file-roots.json-') for item in self.folder.iterdir()))
+
+    def test_matching_existing_overwrite_restore_backup_is_reused_without_rewriting_history(self):
+        source = Path(__file__).resolve().parents[1] / 'host'
+        previous = json.loads((source / 'file-roots.v1.33.json').read_text())
+        self.current.write_text(json.dumps(previous))
+        backup = self.folder / 'file-roots.json.pre-tree-overwrite-restore.json'
+        original = json.dumps(previous, ensure_ascii=False, separators=(',', ':')).encode()
+        backup.write_bytes(original); backup.chmod(0o600)
+        identity = (backup.stat().st_ino, backup.stat().st_mtime_ns, stat.S_IMODE(backup.stat().st_mode))
+        self.assertEqual(upgrade.upgrade_defaults(self.current, source), 'upgraded-defaults')
+        self.assertEqual(json.loads(self.current.read_bytes()), self.desired)
+        self.assertEqual(backup.read_bytes(), original)
+        self.assertEqual((backup.stat().st_ino, backup.stat().st_mtime_ns, stat.S_IMODE(backup.stat().st_mode)), identity)
 
 if __name__ == '__main__': unittest.main()

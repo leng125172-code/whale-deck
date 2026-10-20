@@ -1,5 +1,7 @@
 # 目录覆盖恢复内部引擎（2026-10-20）
 
+后续新增RPC1.34/固定helper/精确默认授权候选与27项驱动/23项升级测试，详见[Agent边界](FILE_TREE_OVERWRITE_RESTORING_AGENT.md)。尚未安装，以下96ae47b内部引擎阶段说明为历史，不代表当前候选仍无RPC。
+
 ## 范围与部署边界
 
 新增 `deploy/host/whaledeck-tree-overwrite-restoring.py`，在已验证的目录恢复/解包引擎上组合覆盖恢复。**尚未接入固定 helper、Agent RPC、Application/Worker 永久任务、捕获目录登记、API 或网页，也未安装。** 当前实际仍为 `18f38bb / Agent1.33`；不把这批内部引擎等同已可用的覆盖恢复。

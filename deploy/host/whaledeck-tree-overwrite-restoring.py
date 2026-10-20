@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Internal overwrite restoration: verified HDD history + atomic directory swap.
 
-Not loaded by the fixed helper or exposed through RPC/API. A later application
-workflow must add distinct authorization, confirmation, hierarchy locks, jobs,
-history registration and audit. Never deletes the displaced directory or a
+The fixed helper and signed Agent RPC expose only plan/apply/status/discard.
+A later application workflow must add current-user authorization,
+confirmation, hierarchy locks, jobs, history registration and audit before
+HTTP/UI exposure. Never deletes the displaced directory or a
 capture; never resumes/retries a swap after interruption. A retained original
 and an independently verified HDD capture precede a successful outcome.
 """
@@ -181,6 +182,7 @@ def overwrite_restoration_type(restoring_type):
             result = super().public(record)
             return {**result, 'kind': 'DirectoryOverwriteRestore', 'overwrittenCaptureId': record['operationId'] if record.get('backupVerified') else '',
                 'backupMayBeRetained': bool(record.get('backupStarted')), 'backupVerified': bool(record.get('backupVerified')),
-                'originalsRetained': bool(record.get('originalsRetained')), 'targetMayHaveChanged': bool(record.get('swapStarted'))}
+                'originalsRetained': bool(record.get('originalsRetained')), 'targetMayHaveChanged': bool(record.get('swapStarted')),
+                'backupArchiveBytes': record.get('backupArchiveBytes', 0), 'backupArchiveSha256': record.get('backupArchiveSha256', '')}
 
     return FileTreeOverwriteRestoring

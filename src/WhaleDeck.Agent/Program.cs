@@ -79,4 +79,5 @@ app.MapGrpcService<FileTreePackingGrpcService>();
 app.MapGrpcService<FileTreeUnpackingGrpcService>();
 app.MapGrpcService<FileTreeRecyclingGrpcService>();
 app.MapGrpcService<FileTreeRestoringGrpcService>();
+app.MapGrpcService<FileTreeOverwriteRestoringGrpcService>();
 await app.RunAsync();

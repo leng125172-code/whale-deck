@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
-  "nextStep": "目录不存在目标恢复实际网页、11组既有实机回归及f3f9a80四CI通过，首次失败自有现场完整核验后可恢复隔离。目录覆盖恢复内部引擎新增独立授权、HDD捕获后原子交换/旧原件保留和中断只观察；24真实Linux（含1GiB+7全字节、8强杀）及180旧回归、Release/1383 Unit/143 Integration通过，6本机原生跳过。新引擎未安装；实际18f38bb/1.33与11核心健康保持。接独立固定helper/RPC、永久任务/Worker/捕获目录/API/UI和安装态验收，再继续彻底清理、容器文件及全部76项。"
+  "nextStep": "目录覆盖恢复RPC1.34新候选已接独立capability/四方法、严格证明、固定helper/可信模块与默认根精确升级；1463 Unit/143 Integration（6本机原生跳过）、27覆盖恢复/驱动和23配置升级及72相邻旧回归实际Linux通过，Release零警告/错误。三路GPT代理补测试/盘点，由主代理复核。前一96ae47b四CI全绿；新候选未安装，实际18f38bb/1.33与11核心健康保持。冻结CI/实依赖、签名UDS和独立全磁盘探针，再接永久任务/Worker/捕获索引/API/UI；继续清理、容器文件及全部76项。"
 }

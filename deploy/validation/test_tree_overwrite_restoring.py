@@ -9,7 +9,9 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import stat
+import sys
 import tarfile
 import unittest
 from unittest.mock import patch
@@ -312,6 +314,108 @@ class TreeOverwriteRestoringTests(unittest.TestCase):
                         self.assertEqual(observed['state'], 'Unknown' if phase == 'SwapStarting' else 'Aborted')
                         case.assert_original(case.target)
                 finally: case.doCleanups()
+
+    def test_fixed_loader_only_loads_all_root_owned_single_link_non_writable_regular_modules(self):
+        folder = self.fixture.fixture.base / 'installed-overwrite-restoring'; folder.mkdir(mode=0o700)
+        names = ('whaledeck-file-tree.py', 'whaledeck-tree-archive.py', 'whaledeck-tree-backups.py',
+            'whaledeck-tree-unpacking.py', 'whaledeck-tree-restoring.py', 'whaledeck-tree-overwrite-restoring.py')
+        for name in names:
+            target = folder / name; shutil.copyfile(Path(driver.__file__).with_name(name), target); target.chmod(0o640)
+        before = self.fixture.capture_proof()
+        with patch.dict(sys.modules, {driver.__name__: driver}), patch.object(driver, '__file__', str(folder / 'whaledeck-files.py')), patch.object(driver, 'backup_engine', return_value=self.fixture.fixture.backups.engine):
+            loaded = driver.tree_overwrite_restoring_engine(); command = self.command()
+            self.assertEqual(loaded.plan(command), self.engine.plan(command))
+            self.assertEqual(driver.tree_restoring_engine(overwrite=True).DOMAIN, self.engine.DOMAIN)
+            ordinary = driver.tree_restoring_engine()
+            self.assertNotEqual(loaded.DOMAIN, ordinary.DOMAIN)
+            with self.assertRaises(driver.Rejected): ordinary.plan(command)
+            request = {'operationId': uuid.uuid4().hex, 'owner': 'B' * 64, 'plan': loaded.plan(command)}
+            result = loaded.restore(request); self.assertEqual(result['state'], 'Completed')
+            self.fixture.assert_tree(self.target); self.assert_original(self.retained(request)); self.assert_backup(request)
+            for name in names:
+                target = folder / name
+                for mode in (0o660, 0o642):
+                    with self.subTest(module=name, unsafe='writable', mode=oct(mode)):
+                        try:
+                            target.chmod(mode)
+                            with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_overwrite_restoring_engine()
+                        finally: target.chmod(0o640)
+                with self.subTest(module=name, unsafe='hardlink'):
+                    linked = folder / 'linked'; os.link(target, linked)
+                    try:
+                        with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_overwrite_restoring_engine()
+                    finally: linked.unlink()
+                with self.subTest(module=name, unsafe='owner'):
+                    try:
+                        os.chown(target, 12345, 0)
+                        with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_overwrite_restoring_engine()
+                    finally: os.chown(target, 0, 0)
+                for kind in ('symlink', 'directory'):
+                    with self.subTest(module=name, unsafe=kind):
+                        original = folder / 'original.py'; target.rename(original)
+                        try:
+                            if kind == 'symlink': target.symlink_to(original)
+                            else: target.mkdir(mode=0o700)
+                            with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_overwrite_restoring_engine()
+                        finally:
+                            if kind == 'symlink': target.unlink()
+                            else: target.rmdir()
+                            original.rename(target)
+                with self.subTest(module=name, unsafe='oversized'):
+                    contents = target.read_bytes()
+                    try:
+                        with target.open('ab') as stream: stream.write(b' ' * 131073)
+                        with self.assertRaisesRegex(driver.Rejected, '^FILES_MODULE_UNSAFE$'): driver.tree_overwrite_restoring_engine()
+                    finally: target.write_bytes(contents)
+            with patch.object(driver, 'exchange', side_effect=AssertionError('loader status must not repeat swap')):
+                self.assertEqual(driver.tree_overwrite_restoring_engine().lookup({key: request[key] for key in ('operationId', 'owner')}), result)
+        for name, proof in before.items(): self.assertEqual(self.fixture.capture_proof()[name], proof)
+
+    def invoke_main(self, action, value, trailing=b''):
+        reader, writer = os.pipe()
+        try: os.write(writer, json.dumps(value).encode() + b'\n' + trailing)
+        finally: os.close(writer)
+        output = []
+        with os.fdopen(reader, 'r') as stream, patch.object(sys, 'stdin', stream), patch.object(sys, 'argv', ['whaledeck-files.py', action]), patch.dict(os.environ, {'INVOCATION_ID': uuid.uuid4().hex}), patch.object(driver, 'tree_overwrite_restoring_engine', return_value=self.engine), patch.object(driver, 'tree_restoring_engine', side_effect=AssertionError('overwrite commands must not use ordinary restoration')), patch.object(driver, 'emit', side_effect=output.append):
+            driver.main()
+        self.assertEqual(output[0]['type'], 'driver'); self.assertEqual(len(output), 2)
+        return output[1]
+
+    def test_fixed_driver_plan_apply_status_and_discard_overwrite_without_repeating_swap(self):
+        before = self.fixture.capture_proof(); plan = self.invoke_main('tree-overwrite-restore-plan', self.command())
+        self.assert_original(self.target); self.assertEqual(self.fixture.capture_proof(), before)
+        canceled = {'operationId': uuid.uuid4().hex, 'owner': 'B' * 64, 'plan': plan}
+        self.assertEqual(self.invoke_main('tree-overwrite-restore-discard', canceled)['state'], 'Aborted')
+        with patch.object(self.engine.captures, 'ensure', side_effect=AssertionError('discard must not capture')), patch.object(driver, 'exchange', side_effect=AssertionError('discard must not swap')):
+            self.assertEqual(self.invoke_main('tree-overwrite-restore-apply', canceled)['state'], 'Aborted')
+            self.assertEqual(self.invoke_main('tree-overwrite-restore-status', {key: canceled[key] for key in ('operationId', 'owner')})['state'], 'Aborted')
+        self.assert_original(self.target); self.assertEqual(self.fixture.capture_proof(), before)
+        request = {**canceled, 'operationId': uuid.uuid4().hex}
+        result = self.invoke_main('tree-overwrite-restore-apply', request)
+        self.assertEqual(result['state'], 'Completed'); self.assertEqual(result['kind'], 'DirectoryOverwriteRestore')
+        self.assertEqual(result['backupArchiveBytes'], (self.fixture.store / (request['operationId'] + '.tar.gz')).stat().st_size)
+        self.assertEqual(result['backupArchiveSha256'], hashlib.sha256((self.fixture.store / (request['operationId'] + '.tar.gz')).read_bytes()).hexdigest().upper())
+        self.fixture.assert_tree(self.target); self.assert_original(self.retained(request)); self.assert_backup(request)
+        with patch.object(self.engine.captures, 'ensure', side_effect=AssertionError('receipt must not recapture')), patch.object(driver, 'exchange', side_effect=AssertionError('receipt must not repeat swap')):
+            self.assertEqual(self.invoke_main('tree-overwrite-restore-status', {key: request[key] for key in ('operationId', 'owner')}), result)
+            self.assertEqual(self.invoke_main('tree-overwrite-restore-apply', request), result)
+            self.assertEqual(self.invoke_main('tree-overwrite-restore-discard', request), result)
+        for name, proof in before.items(): self.assertEqual(self.fixture.capture_proof()[name], proof)
+
+    def test_fixed_driver_rejects_trailing_input_and_unapproved_commands_before_mutation(self):
+        before = self.fixture.capture_proof(); command = self.command(); request = self.request()
+        for action, value in (('tree-overwrite-restore-plan', command), ('tree-overwrite-restore-apply', request),
+                ('tree-overwrite-restore-status', {key: request[key] for key in ('operationId', 'owner')}),
+                ('tree-overwrite-restore-discard', request)):
+            with self.subTest(action=action), patch.object(self.engine, 'plan', side_effect=AssertionError('no plan with trailing input')), patch.object(self.engine, 'restore', side_effect=AssertionError('no swap with trailing input')), patch.object(self.engine, 'lookup', side_effect=AssertionError('no lookup with trailing input')), patch.object(self.engine, 'discard', side_effect=AssertionError('no discard with trailing input')):
+                with self.assertRaises(driver.Rejected): self.invoke_main(action, value, b'{}\n')
+        for action in ('tree-overwrite-restore-delete', 'tree-overwrite-restore-shell', 'tree-overwrite-restore-apply;true',
+                'tree-overwrite-restore', 'tree-overwrite-restore-apply --force'):
+            with self.subTest(action=action), self.assertRaisesRegex(driver.Rejected, '^FILES_ACTION_INVALID$'):
+                self.invoke_main(action, request)
+        self.assert_original(self.target); self.assertEqual(self.fixture.capture_proof(), before)
+        self.assertFalse((self.root / driver.STAGING).exists())
+        self.assertFalse((self.state / self.engine.FOLDER / (request['operationId'] + '.json')).exists())
 
 
 if __name__ == '__main__': unittest.main()

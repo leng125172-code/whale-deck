@@ -9,6 +9,7 @@ namespace WhaleDeck.UnitTests.Agent;
 public sealed class CapabilityValidatorTests : IDisposable
 {
     private const string Method = "/whaledeck.agent.v1.HostService/GetHostInfo";
+    private static readonly string[] OverwriteRestoreActions = ["Plan", "Apply", "Inspect", "Discard"];
     private readonly string _directory = Path.Combine(Path.GetTempPath(), $"whaledeck-capability-{Guid.NewGuid():N}");
     private readonly byte[] _key = RandomNumberGenerator.GetBytes(32);
     private readonly CapabilityValidator _validator;
@@ -109,6 +110,39 @@ public sealed class CapabilityValidatorTests : IDisposable
         Assert.False(_validator.Validate(Sign(DateTimeOffset.UtcNow.AddSeconds(45), "restore-wrong-action", "/whaledeck.agent.v1.FileTreeRestoringService/" + wrongAction), method));
         var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "restore-correct-method", method);
         Assert.True(_validator.Validate(token, method)); Assert.False(_validator.Validate(token, method));
+    }
+
+    [Theory]
+    [InlineData("Plan")][InlineData("Apply")][InlineData("Inspect")][InlineData("Discard")]
+    public async Task DirectoryOverwriteRestoreRequiresDistinctServiceActionAndSingleUseNonceBeforeContinuation(string action)
+    {
+        const string service = "/whaledeck.agent.v1.FileTreeOverwriteRestoringService/";
+        var method = service + action;
+        var interceptor = new CapabilityInterceptor(_validator); var invoked = false;
+        Task<string> Continue(string _, ServerCallContext __) { invoked = true; return Task.FromResult("ok"); }
+
+        var missing = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, null), Continue));
+        Assert.Equal(StatusCode.PermissionDenied, missing.StatusCode); Assert.False(invoked);
+        foreach (var other in new[] { "FileTreeRestoringService", "FileArchiveService", "FileTreeRecyclingService" })
+        {
+            var wrongService = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "overwrite-wrong-service-" + other,
+                "/whaledeck.agent.v1." + other + "/" + action);
+            var mismatch = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, wrongService), Continue));
+            Assert.Equal(StatusCode.PermissionDenied, mismatch.StatusCode); Assert.False(invoked);
+        }
+        foreach (var otherAction in OverwriteRestoreActions)
+        {
+            if (otherAction == action) continue;
+            var wrongAction = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "overwrite-wrong-action-" + otherAction, service + otherAction);
+            var mismatch = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, wrongAction), Continue));
+            Assert.Equal(StatusCode.PermissionDenied, mismatch.StatusCode); Assert.False(invoked);
+        }
+
+        var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "overwrite-correct-method-" + action, method);
+        Assert.Equal("ok", await interceptor.UnaryServerHandler("", new Context(method, token), Continue));
+        Assert.True(invoked); invoked = false;
+        var replay = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, token), Continue));
+        Assert.Equal(StatusCode.PermissionDenied, replay.StatusCode); Assert.False(invoked);
     }
 
     [Theory]

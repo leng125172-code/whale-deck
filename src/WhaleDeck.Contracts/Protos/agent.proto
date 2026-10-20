@@ -928,3 +928,48 @@ service FileTreeRestoringService {
   rpc Inspect(FileTreeRestoringLookup) returns (FileTreeRestoringReceipt);
   rpc Discard(FileTreeRestoringApplyRequest) returns (FileTreeRestoringReceipt);
 }
+
+// Separate destructive capability; ordinary absent-target restoration cannot
+// authorize overwrite. Both the historical capture and current live target
+// are bound. The displaced tree is archived and retained, never deleted.
+message FileTreeOverwriteRestoringCommand {
+  FileLocation source = 1; string expected_version = 2;
+  FileLocation target = 3; string capture_id = 4;
+  string capture_owner = 5; string capture_kind = 6; string manifest_sha256 = 7;
+  string target_expected_version = 8;
+}
+message FileTreeOverwriteRestoringPlan {
+  FileTreeOverwriteRestoringCommand command = 1; string archive_sha256 = 2;
+  int64 archive_bytes = 3; string content_sha256 = 4;
+  uint32 entry_count = 5; int64 total_bytes = 6;
+  FileDirectoryIdentity target_parent = 7;
+  string source_policy_hash = 8; string target_policy_hash = 9;
+  string fingerprint = 10;
+  string target_manifest_sha256 = 11; string target_tree_sha256 = 12;
+  uint32 target_entry_count = 13; int64 target_total_bytes = 14;
+  FileDirectoryIdentity target_identity = 15;
+}
+message FileTreeOverwriteRestoringPlanRequest { FileTreeOverwriteRestoringCommand command = 1; RequestContext context = 2; }
+message FileTreeOverwriteRestoringApplyRequest {
+  string operation_id = 1; string owner = 2;
+  FileTreeOverwriteRestoringPlan plan = 3; RequestContext context = 4;
+}
+message FileTreeOverwriteRestoringLookup { string operation_id = 1; string owner = 2; }
+message FileTreeOverwriteRestoringReceipt {
+  string operation_id = 1; string state = 2; string fingerprint = 3;
+  string format = 4; uint32 entry_count = 5; int64 total_bytes = 6;
+  int64 archive_bytes = 7; string archive_sha256 = 8;
+  string version = 9; bool partial_retained = 10;
+  string kind = 11; string capture_id = 12;
+  string overwritten_capture_id = 13; bool backup_may_be_retained = 14;
+  bool backup_verified = 15; bool originals_retained = 16;
+  bool target_may_have_changed = 17;
+  // Zero/empty only when no verified displaced-tree capture proof exists.
+  int64 backup_archive_bytes = 18; string backup_archive_sha256 = 19;
+}
+service FileTreeOverwriteRestoringService {
+  rpc Plan(FileTreeOverwriteRestoringPlanRequest) returns (FileTreeOverwriteRestoringPlan);
+  rpc Apply(FileTreeOverwriteRestoringApplyRequest) returns (FileTreeOverwriteRestoringReceipt);
+  rpc Inspect(FileTreeOverwriteRestoringLookup) returns (FileTreeOverwriteRestoringReceipt);
+  rpc Discard(FileTreeOverwriteRestoringApplyRequest) returns (FileTreeOverwriteRestoringReceipt);
+}
