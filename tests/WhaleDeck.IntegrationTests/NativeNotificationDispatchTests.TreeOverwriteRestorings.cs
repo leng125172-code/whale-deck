@@ -64,7 +64,7 @@ public sealed partial class NativeNotificationDispatchTests
                 Assert.False(await db.OperationJobEvents.AnyAsync(item => item.JobId == intentId));
                 Assert.False(await db.AuditEvents.AnyAsync(item => item.JobId == intentId));
                 var marker = intentId.ToString("D");
-                Assert.False(await db.OutboxMessages.AnyAsync(item => item.PayloadJson.Contains(marker)));
+                Assert.False(await db.OutboxMessages.FromSqlInterpolated($"SELECT * FROM outbox_messages WHERE payload_json->>'jobId'={marker}").AnyAsync());
             }
 
             identity.Admin = false;
