@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+最新实际2c8d1bb/minor35：新内容证明字段/专用能力已安装并通过同源码签名UDS与完整2MiB+7/1GiB+7独立磁盘、真实身份BFF/Worker/SQL和Overwrite归档实际复用。六组件/HTTP来源及健康独立核对，未增加Agent TCP或绕过原inode树证明。网页交互未签收，[完整边界](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。下方“1.35未安装”为前序候选，完整76项继续。
+
 2026-10-21未安装修复候选：minor35及`files.tree-overwrite-restore-content-proof`，覆盖计划字段16 `target_content_sha256` 独立于带inode的 `target_tree_sha256`；二者都进入严格计划指纹，Verified目标归档/目录签名改用正确内容域。Gateway新方法要求35和两项能力，不回退旧计划。旧root回执只读可查，不重新执行缺新证明计划。[验证及旧混用问题](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。实际仍1ea9de6/1.34，完整76项继续。
 
 - **2026-10-20专用覆盖恢复安装态子门禁通过**：57877a9客户端/独立观察器对已装6a6f8e2（1.34）完成签名UDS/固定helper及2MiB+7、1GiB+7完整双原件/新输出/归档manifest校验；新自有夹具与回执精确清理，旧失败现场保留。回收新私有目录按durable retainedIdentity核验，不错误要求沿用原目录inode；原文件与被覆盖目标inode要求保持。5项真实Linux root观察器回归通过。文件源/备份同HDD，不宣称异盘；不包含新BFF/Worker/人类审计/网页或中断交换及Overwrite捕获复用验收。[证据](qa/FILE_TREE_OVERWRITE_RESTORING_UI.md)。下方“未执行/正在运行”为历史，候选业务未部署，完整76项继续。

@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-21实际2c8d1bb/Agent1.35**：独立归档内容证明修复已覆盖发布，六组件/HTTP来源一致、两宿主active及11核心healthy。冻结真实PG1执行1通过、临时清理独立复核；同源码签名UDS/2MiB+7与1GiB+7完整校验，以及真实Cookie/BFF/Worker/SQL的覆盖、Overwrite历史经两条流程再次恢复、CSRF/普通拒绝/审计/零锁均通过。1758 Unit/146 Integration（6本机原生跳过）、Linux32+23+5通过；首轮共用测试旧预期失败已保留并正确修复。新CI三路成功/前端原作业继续。真实网页仅匿名登录1440视觉，主题工具超时，覆盖交互仍未签收。[最新证据](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。完整76项active，下列未安装为历史。
+
 - **2026-10-21摘要绑定修复候选，未部署**：实际复用验收准备中发现Overwrite目录把inode树摘要误存为归档ContentSha，后续严格恢复会拒绝。新增独立TargetContentSha256全链绑定及RPC1.35专用能力，保留旧树/文件inode证明、不放宽校验。1758 Unit/146 Integration及Release零警告错误通过（6本机原生跳过）；真实Linux/PG/新UDS/BFF/网页仍待验证。[故障与证据](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。1ea9de6上一候选已正常dev覆盖发布，六组件/HTTP来源一致、11核心healthy；不冒称新修复已装，完整76项继续。
 
 - **2026-10-20安装态覆盖恢复子门禁通过**：验证源码57877a9在已装6a6f8e2上完成专用签名UDS/固定helper、2MiB+7与1GiB+7原件/被覆盖目录/新输出/两组归档manifest完整校验，精确清理后独立确认11核心healthy及两宿主服务active。首轮观察器错误要求回收私有新目录沿用旧inode，已修正并补5项真实Linux root回归；旧失败现场原样保留，原文件inode/元数据/全SHA断言未放宽。6e68746四CI全成功，候选API/Worker/WebUI仍未部署；真实身份BFF/页面、Overwrite捕获复用及全76项继续。文件根与备份实为同一HDD，不能算异盘备份；与数据库NVMe运行目录分开记录，未移动数据。[完整证据与边界](qa/FILE_TREE_OVERWRITE_RESTORING_UI.md)。下列“正在运行”为前序历史。

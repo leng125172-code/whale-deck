@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-21已安装2c8d1bb/1.35**：覆盖历史内容域修复通过冻结PG、同源码已装UDS/2MiB+7与1GiB+7独立完整磁盘、实际Cookie/BFF/Worker/SQL与Overwrite捕获两条实际恢复链，已dev覆盖发布/六组件来源与健康核对；网页覆盖交互仍未签收。1758 Unit/146 Integration（6本机原生跳过）、Linux32+23+5通过，新CI前端继续；首次旧预期失败保留。[证据及剩余](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。完整76项仍active，不签整个文件管理。
+
 - **2026-10-21覆盖历史内容证明修复候选**：发现目录inode树摘要/归档内容域混用，新增独立TargetContentSha256及Agent1.35专用能力、捕获签名与备份复核，未削弱原证明。1758 Unit/146 Integration、Release通过（6本机原生跳过），新实际Linux/PG/UDS/BFF/页面仍待验。上一1ea9de6已dev覆盖部署并核对来源/健康；完整76项保持active。[边界](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。
 
 - **2026-10-20安装态覆盖恢复子门禁通过**：57877a9验证客户端/观察器对已装6a6f8e2完成签名UDS及2MiB+7、1GiB+7完整原件/被覆盖目录/归档/新输出证明和新夹具精确清理；首轮观察器目录inode误断言已修并以5项真实Linux root回归保护，旧失败现场保留。6e68746四CI全成功，尚无候选API/Worker/WebUI覆盖发布；真实身份BFF/页面与Overwrite捕获复用继续。文件根/备份同HDD已明确，不冒充物理异盘或整个数据库平台问题。[证据](qa/FILE_TREE_OVERWRITE_RESTORING_UI.md)。完整76项仍active，下方为前序历史。

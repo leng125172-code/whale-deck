@@ -1,6 +1,18 @@
 # 覆盖历史归档内容证明修复候选（2026-10-21，RPC1.35）
 
-状态：active，尚未部署本修复或执行新真实身份BFF/网页验收。
+状态：active。修复已以2c8d1bb覆盖部署并通过安装态UDS与真实身份BFF子范围；完整网页交互仍未验收。
+
+## 最新冻结实机结果
+
+- **2c8d1bb5fab15f6f79bd07b22de8eea344114da6** 的工作站隔离真实PG：1实际执行/1通过、无跳过，临时库清理完成；状态`dispatch-64b5d6a3c5ba4cdd8dcff0f9b0a35083.json`为Passed/cleanupConfirmed，独立Docker查询确认自有SDK容器不存在。SDK摘要仍为`sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa`。原c865a75失败保留，不改成成功。
+- c865a75→2c8d1bb的src/host/web生产代码差异为空；新冻结修正共用接管测试及BFF元数据检查。最终本地Release零警告/错误、1758 Unit/146 Integration通过（6本机原生跳过）保持；32覆盖引擎+23 BFF隔离+5观察器为真实Linux root通过的证明，不冒充生产文件执行。
+- 通过既有固定更新动作完成正常dev覆盖，无回滚请求。安装/迁移/容器更新单元已结束；六组件实际binary/image来源和HTTP API/Gateway均独立核对为2c8d1bb，Agent minor35。两宿主服务active、11核心healthy。
+- 新同源码Linux自包含探针构建成功，根所有artifact副本SHA一致：executable `5a5b0ce4a436bb73bd3730b90be1906db06a868531c3814e174f74885912d927`，DLL `5f17523025277b745d8d99bda0a5122cd84442f46cbdd0ecbe1b6798173912cc`；自有构建容器独立确认不存在。
+- 同源码已装签名UDS/固定helper：2,097,159与1,073,741,831字节原件/旧目标/归档/新输出、正确独立归档内容域、操作/owner/取消/错指纹核验全部通过，退出0。新夹具精确清理并独立确认不存在。私有baseline SHA `9B5ECEC6A5C1B604323F67ECC25C52BFBE4FAC3DD07A74E6A7E049C5DA873254`，公开RPC结果SHA `C02EBA2383D8D855E9A0196174BEBA3116ED364D5AFD2242FDE96C353AF25362`。此前4ab928625d794320失败现场仍保留。
+- **实际Cookie/CSRF/BFF/SQL/Worker/已装UDS/完整磁盘通过**：专用源目录经产品回收生成Trash捕获，换登录绑定消费历史并覆盖；生成的Overwrite捕获实际用于旧不存在目标恢复及再次覆盖。每树2MiB+7，全量字节/元数据/旧目标原inode/新输出及两组新归档内容域一致；计划/执行分离、同key/确认重放不重做、取消、陈旧版本拒绝、另一登录404/403、匿名401、Origin/CSRF及真实普通有效CSRF403均通过。人类审计、永久Job/SQL/Outbox及零活动意图/零锁核验通过。
+- BFF只清理精确自有载荷，永久捕获/归档/root回执/Job/审计保留，不在目录背后删归档。夹具独立确认不存在；私有baseline SHA `3FA5FF14C2A0550E2D0AF686E31EF77506D25DE2694D04B9CB63ACFC6601E4B2`，结果SHA `04BB846474E5FC4BB921E0D2AFB1D8E8784E9A2344E214A0E699E8C63FE6C7EA`。字段不含凭据。
+- CI39460444206当前backend/native-postgres/installer成功、frontend仍在原作业执行；1ea9de6及57877a9四CI已全成功。没有把旧CI冒认为新版本全绿。
+- 所有新实盘源/备份不同设备观察仍false，不能宣称物理异盘灾备或完整文件管理。真实网页只完成匿名1440登录页截图/边界检查，主题操作工具超时、未发生覆盖写入，详见[网页清单与未完成边界](FILE_TREE_OVERWRITE_REAL_UI.md)。
 
 ## 问题与改动
 
@@ -32,4 +44,4 @@
 
 GLM/glm-5.3-flash仅整理公开DTO字段，未用工具/读仓库：1次成功、23183ms，input11869/cached0/output269，费用未返回。其“command包含Job”表述不正确，已由GPT按真实DTO纠正；不采纳为实现依据。GPT代理仅补限定测试，主代理负责全部协议/权限/生产源码、发布与实际复核。
 
-下一步冻结候选执行真实Linux与隔离PG、CI，再覆盖发布1.35，重新执行专用签名UDS、真实身份BFF/Worker及网页；完整76项P0–P5仍active。
+下一步观察原CI句柄至完成，补独立覆盖网页夹具/观察器、实际管理员桌面/手机操作及普通权限/正常双端退出；继续目录清理/容器文件及完整76项P0–P5。上方冻结PG、1.35覆盖部署、UDS和BFF已实测，不再重复安排；下方“尚未执行”是对应早期证据边界。

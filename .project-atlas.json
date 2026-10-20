@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
-  "nextStep": "57877a9专用安装态签名UDS及2MiB+7/1GiB+7完整原件/旧目标/归档/输出与精确清理通过，5项Linux root观察器测试通过，首轮误断言已修且旧现场保留；文件源/备份同HDD明确不算异盘。覆盖恢复UI364单元及Chrome生产预览88项通过，6e68746四CI成功。后端冻结d50b765真实隔离PG1执行1通过，1738 Unit/146 Integration通过、6本机原生跳过。候选业务尚未部署，继续真实身份BFF/Worker/页面、Overwrite捕获复用与完整76项。"
+  "nextStep": "实际2c8d1bb/Agent1.35独立归档内容证明修复已发布，六组件/HTTP来源与11核心健康通过；冻结PG1执行1通过及清理独立复核，1758 Unit/146 Integration（6本机原生跳过）、Linux32+23+5通过。同源码UDS/2MiB+7与1GiB+7全磁盘、真实身份BFF/Worker/SQL与Overwrite捕获经两条实际恢复链均通过，首轮旧测试预期失败保留。新CI三路成功/前端继续；网页只检查匿名1440登录，主题工具超时，覆盖交互尚未签收。继续独立网页夹具/真实页面、目录清理/容器文件与完整76项；文件源/备份同HDD不算异盘。"
 }
