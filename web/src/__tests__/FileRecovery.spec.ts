@@ -53,11 +53,12 @@ function ready(): RecoveryIntent {
   }
 }
 describe('current-administrator recovery presentation boundaries', () => {
-  it('keeps all nine workflow kinds and does not turn unknown or planning into success', () => {
-    expect(recoveryKinds).toHaveLength(10)
+  it('keeps all eleven workflow kinds and does not turn unknown or planning into success', () => {
+    expect(recoveryKinds).toHaveLength(11)
     expect(recoveryKind('tree-restore')).toBe('目录恢复')
     expect(recoveryKind('tree-overwrite-restore')).toBe('目录覆盖恢复')
     expect(recoveryKind('tree-trash')).toBe('目录回收')
+    expect(recoveryKind('tree-purge')).toBe('目录永久清理')
     expect(recoveryKind('tree-unpack')).toBe('归档解压')
     expect(recoveryKind('tree-pack')).toBe('目录压缩')
     expect(

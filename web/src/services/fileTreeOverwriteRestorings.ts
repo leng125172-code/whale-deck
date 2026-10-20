@@ -157,6 +157,8 @@ export function overwriteResult(code: string) {
 export function canOverwriteCapture(root: FileRoot | undefined, capture: TreeCapture) {
   if (
     !root ||
+    capture.archiveState !== 'Retained' ||
+    capture.cleanupActive ||
     ![
       'files-list',
       'files-download',

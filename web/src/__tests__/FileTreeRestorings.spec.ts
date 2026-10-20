@@ -25,6 +25,9 @@ function capture(): TreeCapture {
     archiveBytes: 17 * 1024 ** 3,
     archiveSha256: 'B'.repeat(64),
     createdAtUtc: new Date().toISOString(),
+    archiveState: 'Retained',
+    originalsState: 'Retained',
+    cleanupActive: false,
   }
 }
 function ready(): TreeRestoringIntent {

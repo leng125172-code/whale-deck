@@ -43,6 +43,9 @@ function capture(kind: 'Trash' | 'Overwrite' = 'Trash'): TreeCapture {
     createdAtUtc: new Date().toISOString(),
     kind,
     contentSha256: kind === 'Overwrite' ? '9'.repeat(64) : null,
+    archiveState: 'Retained',
+    originalsState: 'Retained',
+    cleanupActive: false,
   }
 }
 

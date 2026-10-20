@@ -64,6 +64,8 @@ export function canReceiveRestoring(root: FileRoot) {
 export function canRestoreCapture(root: FileRoot | undefined, capture: TreeCapture) {
   if (
     !root ||
+    capture.archiveState !== 'Retained' ||
+    capture.cleanupActive ||
     !uuid(capture.id) ||
     !['files-list', 'files-download', 'files-history', 'files-tree-restore'].every((action) =>
       root.actions.includes(action),

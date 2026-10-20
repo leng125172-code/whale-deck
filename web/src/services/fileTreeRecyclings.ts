@@ -40,6 +40,9 @@ export interface TreeCapture {
   createdAtUtc: string
   kind?: 'Trash' | 'Overwrite'
   contentSha256?: string | null
+  archiveState: 'Retained' | 'Purged' | 'Uncertain'
+  originalsState: 'Retained' | 'Purged' | 'Uncertain'
+  cleanupActive: boolean
 }
 export function captureKind(value: TreeCapture): 'Trash' | 'Overwrite' {
   return value.kind === undefined ? 'Trash' : value.kind
@@ -226,10 +229,16 @@ export function assertCapturePage(value: TreeCapturePage, rootId: string, path =
             'createdAtUtc',
             'kind',
             'contentSha256',
+            'archiveState',
+            'originalsState',
+            'cleanupActive',
           ].includes(key),
       ) ||
       row.id === row.intentId ||
       seen.has(row.id) ||
+      !['Retained', 'Purged', 'Uncertain'].includes(row.archiveState) ||
+      !['Retained', 'Purged', 'Uncertain'].includes(row.originalsState) ||
+      typeof row.cleanupActive !== 'boolean' ||
       !['Trash', 'Overwrite'].includes(captureKind(row)) ||
       (captureKind(row) === 'Overwrite'
         ? !hash.test(row.contentSha256 || '')

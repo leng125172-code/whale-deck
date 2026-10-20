@@ -128,6 +128,9 @@ function previousPage() {
   if (page.value > 0 && !busy.value) void load(page.value - 1)
 }
 function restoreDisabledReason(capture: TreeCapture) {
+  if (capture.cleanupActive) return '此捕获正在清理或等待结果核实，暂不能恢复'
+  if (capture.archiveState === 'Purged') return '此归档已永久清理，不能恢复'
+  if (capture.archiveState === 'Uncertain') return '归档清理结果不确定，不能确认可恢复'
   if (
     !canRestoreCapture(
       props.roots.find((root) => root.id === capture.source.source.rootId),
@@ -138,6 +141,11 @@ function restoreDisabledReason(capture: TreeCapture) {
   if (!props.roots.some(canReceiveRestoring)) return '没有具备目录恢复写入授权的目标根'
   if (props.disabled || busy.value) return '请先核实当前文件任务并关闭其引用，再发起新的恢复'
   return ''
+}
+function componentState(state: TreeCapture['archiveState']) {
+  return { Retained: '无已知清理（恢复前复验）', Purged: '已永久清理', Uncertain: '结果不确定' }[
+    state
+  ]
 }
 function restore(capture: TreeCapture) {
   if (!authorized.value || restoreDisabledReason(capture)) return
@@ -192,7 +200,7 @@ onBeforeUnmount(reset)
     class="tree-capture-dialog"
   >
     <el-alert
-      title="这里展示曾完整验证的目录归档，不等于源目录已移除或当前磁盘仍健康。恢复前会重新验证归档，生成计划后仍需确认；彻底清理尚未接入。"
+      title="原捕获记录永久保留，不等于归档仍存在或可恢复。归档与原件清理状态分别展示；恢复前会重新验证归档，生成计划后仍需确认。"
       type="info"
       :closable="false"
       show-icon
@@ -240,6 +248,14 @@ onBeforeUnmount(reset)
         {{ item.entryCount }} 项 · 内容 {{ formatBytes(item.totalBytes) }} · 归档
         {{ formatBytes(item.archiveBytes) }} · {{ new Date(item.createdAtUtc).toLocaleString() }}
       </p>
+      <p>
+        归档：{{ componentState(item.archiveState) }} · 原件：{{
+          componentState(item.originalsState)
+        }}
+      </p>
+      <el-tag v-if="item.cleanupActive" size="small" type="warning"
+        >清理处理中，或等待核实原结果</el-tag
+      >
       <details>
         <summary>查看捕获证明</summary>
         <dl>
@@ -327,7 +343,7 @@ onBeforeUnmount(reset)
 }
 .tree-capture-item strong {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 240px;
   font-size: 14px;
 }
 .tree-capture-item p {
@@ -392,6 +408,9 @@ onBeforeUnmount(reset)
   }
   .tree-capture-item dl {
     grid-template-columns: 64px minmax(0, 1fr);
+  }
+  .tree-capture-restore > span {
+    flex-basis: 100%;
   }
 }
 </style>

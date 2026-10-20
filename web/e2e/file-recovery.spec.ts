@@ -63,6 +63,29 @@ test('reload recovers the original plan and metadata with GET only', async ({ pa
   expect(confirms(control)).toHaveLength(0)
   expect(control.state.reads).toContain('/tree-move/' + control.candidate.intentId)
 })
+
+test('directory purge is the eleventh kind and accepting uncertainty never implies deletion success', async ({
+  page,
+}) => {
+  const control = await installFileRecoveryFixture(page, { kind: 'tree-purge' })
+  control.candidate.target = null
+  await page.goto('/files')
+  const dialog = await plan(page)
+  await expect(dialog.getByText('目录永久清理', { exact: true }).first()).toBeVisible()
+  expect(creates(control)[0].body.kind).toBe('tree-purge')
+  expect(confirms(control)).toHaveLength(0)
+  await dialog.getByRole('button', { name: '接受未知结果', exact: true }).click()
+  await page.getByRole('button', { name: '确认处置', exact: true }).click()
+  await dialog.getByRole('button', { name: '查询原接管任务', exact: true }).click()
+  await expect(
+    dialog.getByText('已记录接受未知历史；没有证明原文件操作成功。请检查原路径和留存对象。', {
+      exact: true,
+    }),
+  ).toBeVisible()
+  expect(control.row.originalResolution).toBe('Acknowledged')
+  expect(confirms(control)).toHaveLength(1)
+  expect(control.state.writes.every((item) => !item.path.endsWith('/apply'))).toBe(true)
+})
 test('lost registration response survives reload by original key lookup, never a replacement POST', async ({
   page,
 }) => {

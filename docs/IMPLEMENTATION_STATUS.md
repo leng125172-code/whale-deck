@@ -1,6 +1,6 @@
 # 实施状态与恢复入口
 
-- **2026-10-21清理Worker/API/第11类接管候选**：独立六路由、专用Worker及Outbox隔离、跨账号当前管理员Inspect/Discard与永久组件回执事务处置已实现。Release/2145 Unit/159 Integration通过（6本机原生跳过）；当前候选原生PG与页面/部署待验。见[候选证据](qa/FILE_TREE_PURGING_HTTP_RECOVERY.md)，未因此签收完整76项。
+- **2026-10-21清理Worker/API/第11类接管子门禁**：独立六路由、专用Worker及Outbox隔离、跨账号当前管理员Inspect/Discard与永久组件回执事务处置已实现。Release/2145 Unit/159 Integration通过（6本机原生跳过）；3eca529工作站独立PG库实际1项完整编排通过、临时资源清理确认，CI四路success。捕获历史与第11类界面消费者已接字段，Vue构建/373单测/lint/格式及102项相关生产预览浏览器回归通过（Chrome155、0跳过）；发起清理面板/真实BFF与发布仍未完成。见[证据及剩余](qa/FILE_TREE_PURGING_HTTP_RECOVERY.md)，完整76项仍active。
 
 - **2026-10-21清理SQL子门禁通过**：永久意图/签名回执/组件历史叠加、迁移和仓储事务已实现；确认共用捕获/层级锁，两种恢复尊重清理状态。Release与2124 Unit/147 Integration通过（6本机原生跳过）；563f48a在工作站独立PG库实际1项完整编排通过、临时资源清理确认。CI后端/原生PG/安装器通过，前端待终态。未接Worker/API/UI、未部署。详见[SQL证据与边界](qa/FILE_TREE_PURGING_POSTGRES.md)，前轮无SQL说明为历史状态；完整76项继续。
 
