@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
-  "nextStep": "覆盖恢复第10类现任管理员对账、独立Worker/API、Job取消/Outbox分流及32字符约束迁移已接通；冻结d50b765工作站真实隔离PG1执行1通过，临时DB/容器清理与11核心健康复核通过。1738 Unit/146 Integration通过，6本机原生依赖明确跳过。候选未部署，继续覆盖恢复UI、安装态签名UDS/独立磁盘证明、真实身份BFF/页面验收，完整76项仍active；品牌已签收。"
+  "nextStep": "覆盖恢复WebUI候选f35ee05完成独立版本绑定/计划确认/备份事实/第10类接管，364前端单元及主代理Chrome生产预览88项通过；观察器3项真实Linux root测试通过，Linux客户端已发布，专用签名UDS/完整磁盘核验正在观察原句柄。后端冻结d50b765真实隔离PG1执行1通过，1738 Unit/146 Integration通过、6本机原生明确跳过，先前1f4e7f7四CI成功。尚未部署候选，继续真实身份BFF/页面及完整76项；品牌已签收。"
 }
