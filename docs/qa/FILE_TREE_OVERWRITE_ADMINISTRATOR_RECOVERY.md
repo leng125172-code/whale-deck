@@ -25,6 +25,7 @@ Status: active, candidate source only. This is not installed Agent, live BFF, br
 - GLM / glm-5.3-flash, router `mechanical`, read-only, 1 attempt, 66,120 ms: input 30,534 tokens, cached input 11,840, output 1,827. Actual charge/resource balance not returned.
 - The scout returned a partial inventory, but the Worker read was truncated and router success was false. GPT directly inspected the affected production files and selected/implemented/reviewed all permission and persistence changes; the partial inventory is not acceptance evidence.
 - Two test agents modified only their assigned test files. GPT reviewed their diffs and ran the combined build and tests.
+- A later read-only UI inventory used GLM / glm-5.3-flash through the router: 1 successful attempt, 415,417 ms, input 1,756,638 tokens, cached input 1,669,120, output 12,978; actual charge/balance not returned. The sub-agent reported the missing tenth-kind frontend decoder and separate target-version-bound UI requirements. This is planning input, not frontend implementation or acceptance; GPT retains final source verification and implementation decisions.
 
 ## Frozen workstation PostgreSQL evidence
 

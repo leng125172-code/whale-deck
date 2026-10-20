@@ -19,6 +19,7 @@ try
     else if (args.Length == 1 && args[0] == "tree-pack") await FileTreePackingProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "tree-unpack") await FileTreeUnpackingProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "tree-restore") await FileTreeRestoringProbe.RunAsync();
+    else if (args.Length == 1 && args[0] == "tree-overwrite-restore") await FileTreeOverwriteRestoringProbe.RunAsync();
     else if (args.Length == 0) await TerminalProbe.RunAsync();
     else throw new ArgumentException("Unsupported probe mode");
     return 0;
@@ -29,8 +30,8 @@ catch (Exception error)
     var rpc = error as RpcException;
     var detail = rpc?.Status.Detail;
     var ownFileCode = detail is { Length: <= 80 } && detail.StartsWith("FILES_", StringComparison.Ordinal) && detail.All(c => char.IsAsciiLetterUpper(c) || c == '_') ? detail : null;
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = args is ["files"] ? FileTransferProbe.Phase : args is ["file-operations"] ? FileOperationProbe.Phase : args is ["tree-copy"] ? FileTreeCopyProbe.Phase : args is ["tree-move"] ? FileTreeMoveProbe.Phase : args is ["tree-pack"] ? FileTreePackingProbe.Phase : args is ["tree-unpack"] ? FileTreeUnpackingProbe.Phase : args is ["tree-restore"] ? FileTreeRestoringProbe.Phase : TerminalProbe.Phase,
-        code = TerminalProbe.FailureCode, failureType = error.GetType().Name, rpcStatus = rpc?.StatusCode.ToString(), fileCode = ownFileCode }));
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = args is ["files"] ? FileTransferProbe.Phase : args is ["file-operations"] ? FileOperationProbe.Phase : args is ["tree-copy"] ? FileTreeCopyProbe.Phase : args is ["tree-move"] ? FileTreeMoveProbe.Phase : args is ["tree-pack"] ? FileTreePackingProbe.Phase : args is ["tree-unpack"] ? FileTreeUnpackingProbe.Phase : args is ["tree-restore"] ? FileTreeRestoringProbe.Phase : args is ["tree-overwrite-restore"] ? FileTreeOverwriteRestoringProbe.Phase : TerminalProbe.Phase,
+        code = args is ["tree-overwrite-restore"] ? FileTreeOverwriteRestoringProbe.FailureCode : TerminalProbe.FailureCode, failureType = error.GetType().Name, rpcStatus = rpc?.StatusCode.ToString(), fileCode = ownFileCode }));
     return 1;
 }
 
