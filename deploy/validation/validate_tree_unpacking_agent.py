@@ -35,7 +35,10 @@ def run(arguments):
 def validation_only_changes(git, runtime_revision, client_revision):
     # Disable rename detection: src/x -> docs/x must include the src deletion.
     changes = run(git + ['diff', '--no-renames', '--name-only', runtime_revision, client_revision, '--']).splitlines()
-    return all(path.startswith(('deploy/validation/', 'docs/')) or path == '.project-atlas.json' for path in changes)
+    # This single CI workflow controls validation only. It is not consumed by
+    # the workstation's local frozen source/image builder. No other workflow,
+    # dependency, installer or product/build input is classified as QA-only.
+    return all(path.startswith(('deploy/validation/', 'docs/')) or path in ('.project-atlas.json', '.github/workflows/ci.yml') for path in changes)
 
 
 def main():

@@ -38,7 +38,7 @@ class UnpackingProbeScopeTests(unittest.TestCase):
 
     def test_same_revision_and_only_explicit_qa_documentation_metadata_paths_are_allowed(self):
         self.assertTrue(validation_only_changes(self.git, self.initial, self.initial))
-        for name in ('deploy/validation/client.txt', 'docs/evidence.txt', '.project-atlas.json'):
+        for name in ('deploy/validation/client.txt', 'docs/evidence.txt', '.project-atlas.json', '.github/workflows/ci.yml'):
             path = self.root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('test-only\n')
         latest = self.commit(); self.assertTrue(validation_only_changes(self.git, self.initial, latest))
 
@@ -50,8 +50,23 @@ class UnpackingProbeScopeTests(unittest.TestCase):
     def test_actual_product_or_root_build_changes_are_not_qa_only(self):
         (self.root / 'src/product.txt').write_text('changed product\n'); latest = self.commit()
         self.assertFalse(validation_only_changes(self.git, self.initial, latest))
+
+    def test_root_build_change_alone_is_not_qa_only(self):
         (self.root / 'Directory.Build.props').write_text('changed build inputs\n'); latest = self.commit()
         self.assertFalse(validation_only_changes(self.git, self.initial, latest))
+
+    def test_other_workflows_installers_and_dependencies_are_not_qa_only(self):
+        for name in ('.github/workflows/publish.yml', 'deploy/build-images.sh', 'web/package.json'):
+            with self.subTest(path=name):
+                path = self.root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('changed\n')
+                latest = self.commit(); self.assertFalse(validation_only_changes(self.git, self.initial, latest))
+                path.unlink(); self.commit()
+
+    def test_ci_change_does_not_hide_a_product_change(self):
+        path = self.root / '.github/workflows/ci.yml'; path.parent.mkdir(parents=True); path.write_text('qa-only\n')
+        latest = self.commit(); self.assertTrue(validation_only_changes(self.git, self.initial, latest))
+        (self.root / 'src/product.txt').write_text('changed runtime\n')
+        latest = self.commit(); self.assertFalse(validation_only_changes(self.git, self.initial, latest))
 
 
 if __name__ == '__main__': unittest.main()

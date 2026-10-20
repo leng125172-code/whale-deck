@@ -42,15 +42,16 @@ class RestoringObserverTests(unittest.TestCase):
                     writer.add(private / relative, arcname=relative, recursive=False)
             archive.chmod(0o600); archive_proof = self.module.proof(archive)
             location = {'rootId': self.module.ROOT, 'path': self.fixture['marker'] + '/' + source['name']}
+            snapshot = {**location, 'expectedVersion': 'A' * 64}
             owner, manifest = 'C' * 64, 'D' * 64
-            saved = {'state': 'Verified', 'source': location, 'owner': owner, 'manifestSha256': manifest, 'differentSourceDevice': False,
+            saved = {'state': 'Verified', 'source': snapshot, 'owner': owner, 'manifestSha256': manifest, 'differentSourceDevice': False,
                 'archiveIdentity': archive_proof[:2], 'archiveBytes': archive_proof[6], 'archiveSha256': archive_proof[-1]}
             self.write(self.store / (capture.hex + '.json'), saved)
             self.write(self.store / (capture.hex + '.manifest.json'), {'fixture': True})
             self.write(self.store / (capture.hex + '.lock'), {})
             self.write(self.module.STATE / 'tree-recycling' / (capture.hex + '.json'), {'state': 'Completed', 'operationId': capture.hex,
                 'sourceRemoved': True, 'sourceRetained': True, 'retainedIdentity': self.module.proof(private)[:2], 'owner': owner,
-                'plan': {'source': location, 'entryCount': 4, 'totalBytes': self.module.SIZE, 'manifestSha256': manifest},
+                'plan': {'source': snapshot, 'entryCount': 4, 'totalBytes': self.module.SIZE, 'manifestSha256': manifest},
                 'archiveBytes': archive_proof[6], 'archiveSha256': archive_proof[-1]})
             target = source['name'] if theme == 'light' else 'restored-dark'
             output = self.folder / target
@@ -59,7 +60,7 @@ class RestoringObserverTests(unittest.TestCase):
             self.write(self.module.STATE / 'tree-restoring' / (operation.hex + '.json'), {'operationId': operation.hex, 'state': 'Completed', 'version': 'F' * 64,
                 'owner': owner if theme == 'light' else 'E' * 64,
                 'newIdentity': self.module.proof(output)[:2], 'plan': {'entryCount': 4, 'totalBytes': self.module.SIZE,
-                    'archiveBytes': archive_proof[6], 'archiveSha256': archive_proof[-1], 'command': {'source': location,
+                    'archiveBytes': archive_proof[6], 'archiveSha256': archive_proof[-1], 'command': {'source': snapshot,
                         'target': {'rootId': self.module.ROOT, 'path': self.fixture['marker'] + '/' + target}, 'captureId': capture.hex,
                         'captureOwner': owner, 'captureKind': 'Trash', 'manifestSha256': manifest, 'format': 'tar.gz'}}})
             self.operations.append({'theme': theme, 'captureId': str(capture), 'restoringOperationId': str(operation),
@@ -127,6 +128,18 @@ class RestoringObserverTests(unittest.TestCase):
     def test_dark_restore_must_not_impersonate_the_original_capture_owner(self):
         path = self.module.STATE / 'tree-restoring' / (uuid.UUID(self.operations[1]['restoringOperationId']).hex + '.json')
         value = json.loads(path.read_bytes()); value['owner'] = 'C' * 64; self.write(path, value)
+        with self.assertRaises(AssertionError): self.finish()
+        self.assert_preserved()
+
+    def test_historical_source_version_must_match_capture_and_restoration(self):
+        path = self.module.STATE / 'tree-recycling' / (uuid.UUID(self.operations[0]['captureId']).hex + '.json')
+        value = json.loads(path.read_bytes()); value['plan']['source']['expectedVersion'] = 'B' * 64; self.write(path, value)
+        with self.assertRaises(AssertionError): self.finish()
+        self.assert_preserved()
+
+    def test_source_snapshot_without_version_is_not_a_valid_root_capture(self):
+        path = self.module.STATE / 'tree-recycling' / (uuid.UUID(self.operations[0]['captureId']).hex + '.json')
+        value = json.loads(path.read_bytes()); del value['plan']['source']['expectedVersion']; self.write(path, value)
         with self.assertRaises(AssertionError): self.finish()
         self.assert_preserved()
 

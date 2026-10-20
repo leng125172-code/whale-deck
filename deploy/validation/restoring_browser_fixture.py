@@ -82,7 +82,10 @@ def main():
         recycle = private_json(STATE / 'tree-recycling' / (capture + '.json'))
         assert recycle['operationId'] == capture and recycle['state'] == 'Completed'
         assert recycle['sourceRemoved'] is True and recycle['sourceRetained'] is True
-        assert recycle['plan']['source'] == location and recycle['plan']['entryCount'] == 4 and recycle['plan']['totalBytes'] == SIZE
+        snapshot = recycle['plan']['source']
+        assert set(snapshot) == {'rootId', 'path', 'expectedVersion'}
+        assert {key: snapshot[key] for key in ('rootId', 'path')} == location and re.fullmatch('[A-F0-9]{64}', snapshot['expectedVersion'])
+        assert recycle['plan']['entryCount'] == 4 and recycle['plan']['totalBytes'] == SIZE
         original = folder / '.whaledeck-files' / (capture + '.tree-trash')
         assert original.resolve() == original and proof(original)[:2] == recycle['retainedIdentity']
         assert original.lstat().st_uid == 0 and stat.S_IMODE(original.lstat().st_mode) == 0o700
@@ -92,7 +95,7 @@ def main():
         assert (original / MEMBER).read_bytes() == payload(marker)
         saved = private_json(store / (capture + '.json'))
         archive = store / (capture + '.tar.gz'); current = proof(archive)
-        assert saved['state'] == 'Verified' and saved['source'] == location and saved['owner'] == recycle['owner']
+        assert saved['state'] == 'Verified' and saved['source'] == snapshot and saved['owner'] == recycle['owner']
         assert type(saved['differentSourceDevice']) is bool and saved['archiveIdentity'] == current[:2]
         assert saved['manifestSha256'] == recycle['plan']['manifestSha256']
         assert current[6] == operation['archiveBytes'] == saved['archiveBytes'] == recycle['archiveBytes']
@@ -111,7 +114,7 @@ def main():
         if theme == 'dark': assert record['owner'] != saved['owner']
         command = record['plan']['command']
         target = source['name'] if theme == 'light' else 'restored-dark'
-        assert command['source'] == location and command['target'] == {'rootId': ROOT, 'path': marker + '/' + target}
+        assert command['source'] == snapshot and command['target'] == {'rootId': ROOT, 'path': marker + '/' + target}
         assert command['captureId'] == capture and command['captureOwner'] == saved['owner'] and command['captureKind'] == 'Trash'
         assert command['manifestSha256'] == saved['manifestSha256'] and command['format'] == 'tar.gz'
         assert record['plan']['archiveBytes'] == current[6] and record['plan']['archiveSha256'] == current[-1]

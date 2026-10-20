@@ -65,6 +65,26 @@ CI39367120491四项全部成功后，通过真实BFF计划/确认任务d9f35532-
 
 两份网页专用源尚未执行，夹具wd-browser-restoring-c6f82d3bd8a44112aeb933e96f67c11e保留；原始UInt64/纳秒JSON已原样保存于ignored deploy/artifacts/ui/tree-restoring/installed-fixture.json（不能经JS数值重新序列化）。后续复用该原始描述完成回收/恢复及独立观察，而不是重做已知写操作。首轮低层失败现场wdv-agent-restore-097bb3963bab4c8d仍保留，需单独核实后精确清理。当前不签真实恢复网页、旧账号删除后捕获恢复、普通真实网页/双端退出、跨管理员中断接管或完整P2/76项。
 
+## 真实网页与独立磁盘子范围签收（18f38bb/Agent1.33）
+
+以上未签收文字为历史。本轮沿用原始夹具，不重新生成源或重做未知操作。真实管理员在1440明色通过共享根进入唯一测试目录，两份2MiB+7源均在网页回收，登记/确认各一次；从精确路径历史记录恢复light到原路径，计划不发布、取消二次弹窗选择继续保留、收起/重开、刷新只查询原计划，随后显式确认。light计划076866bd-7371-0b9b-be4e-63b81089137b，执行37c312b3-e600-d251-968b-99aea7ebab33，完成与归档证明可见，恢复登记/确认各一次。
+
+桌面管理员正常用户菜单退出：操作前BFF/Authentik均200，之后401/403，恢复引用/对话框/文件目录记忆均0。随后私有通道自然终结exit0并确认该账号删除404。320×800暗色使用独立Cookie上下文和不同新管理员，读取旧账号形成的dark捕获，恢复至新目标restored-dark；计划818689f7-0a7d-ad12-bf9f-8af8e5cb7c00，执行33ac9ca0-90bc-95a6-52fd-51d372c4c433。刷新不重做，恢复登记/确认各一次；Root独立观察确认当前恢复resource owner与原capture owner不同，不冒充旧登录。手机实际菜单退出前同为200/200，之后401/403，引用/对话框/目录记忆0；独立账号精确SIGTERM通道清理GET404，exit1/KeyboardInterrupt是主动清理，不是产品失败。
+
+视觉独立复核了桌面Ready/完成、手机Ready/完成及正文滚动底部和普通权限页；长路径/完整SHA换行、MiB单位正确、输入证明与输出回执不混淆，未见横向溢出、按钮遮挡或错误成功文案。手机Ready对话框x12/y20/w296/h760，确认按钮x204/y732/w88/h32，均在800px内；正文有界纵向滚动，底部历史事实/保留说明可达。截图在ignored deploy/artifacts/ui/tree-restoring/installed-{ready-desktop,completed-desktop,ready-mobile-dark,completed-mobile-dark,completed-mobile-dark-bottom,ordinary-mobile}.png。桌面独立正常输入探索覆盖取消弹窗保留、收起/重开、刷新、空历史范围查询，跨两次交互约50秒（之后107秒为包含后续工具定位的观察值，不当作纯交互时长）。
+
+真实普通身份：匿名深链接先到登录页，文件请求0；登录后isAdministrator=false/me200，首次恢复深链接和刷新均403界面/文件请求0/恢复对话框0。使用该Cookie取得有效CSRF后，恢复POST与意图GET均HTTP403，不以缺Token假拒绝充数。权限页返回允许的首页后，经真实导航/用户菜单正常退出，前200/200→后401/403。普通账号精确私有通道删除404，全部自有context/浏览器已关闭、WMI测试profile进程0。
+
+独立root观察器先inspect仅验证不删除，再finish重新核验所有对象后精确清理：两组各2MiB+7原inode/完整归档SHA与TAR成员/新inode/全字节/纳秒/属主/模式通过，dark resource owner与capture不同，differentSourceDevice均false。原始整数JSON原样传递；没有用浏览器完成提示代替磁盘检查。自有网页夹具与两份HDD合成载荷已移除，永久SQL意图/捕获目录/审计/Root回执保留；独立SQL对账回收2、恢复2且终结2、8永久Job全部Succeeded、路径锁0，11核心healthy。
+
+### 观察器与持续门禁补强、验证工具边界
+
+实际观察前发现独立观察器的合成测试源快照少了真实Root的expectedVersion，已改为严格三字段source snapshot，并要求原回收、HDD捕获和恢复命令完全一致；不忽略版本或改产品。新增版本缺失/变更两项，10项临时Linux root观察器测试通过，随后实际inspect/finish通过。10项已加入CI。QA-only diff guard只额外允许单个ci.yml（不被工作站本地产品构建器读取），其他工作流/构建/依赖/产品变更仍拒绝；6项独立临时Git测试在Linux通过，包括产品单独变更、单独Directory.Build.props、产品重命名、其他工作流/安装器/依赖和CI不隐藏产品改动。首次QA目录缺少依赖导入导致0测试执行已保留；补正确PYTHONPATH后六项实际执行，不把ImportError当通过。
+
+UI工具的三处定位修正不改产品：Element Plus只读combobox内部输入被占位层截获，改点实际可见选择框外壳；用户按钮用已声明aria-label“打开用户菜单”而非内部文字；普通403独立布局先用可见“首页”再开导航退出。所有失败等待均10秒内返回，没有重置本轮kernel、没有重复登记/确认，也未用force或注入点击冒充人类操作。
+
+GLM Flash只读核对控件文案，GPT对照原文件和实际DOM复核：input163085/cached135360/output1677、68302ms、1次/0重试、费用未返回。实际身份、写操作、权限、快照/清理及最终判断均由GPT处理。该签收只覆盖不存在目标的目录恢复常规网页与新管理员资源恢复；不是第九类中断Unknown实盘接管、目录覆盖恢复/彻底清理/长期保留、容器文件或完整76项。首次低层失败现场仍保留待精确取证清理，不把它写成已删除。
+
 | 用户可见能力/控制 | 功能检查 | 视觉状态与预期证据 |
 | --- | --- | --- |
 | 回收记录中的恢复入口 | 仅管理员/独立根授权显示可用；选择历史捕获，不发写请求 | 历史卡片、长路径/摘要、禁用提示；桌面/320明暗 |
