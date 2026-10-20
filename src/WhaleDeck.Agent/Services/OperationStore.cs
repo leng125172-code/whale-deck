@@ -10,6 +10,7 @@ public sealed class OperationStore
 {
     private readonly ConcurrentDictionary<string, OperationHandle> _operations = new(StringComparer.Ordinal);
     private readonly object _createLock = new();
+    private readonly object _writeLock = new();
     private readonly string _directory;
     private readonly string _idempotencyDirectory;
     private readonly string _maintenancePath;
@@ -26,7 +27,7 @@ public sealed class OperationStore
         {
             try
             {
-                var operation = JsonSerializer.Deserialize<OperationHandle>(File.ReadAllText(file));
+                var operation = JsonSerializer.Deserialize<OperationHandle>(ReadSnapshot(file));
                 if (operation is not null)
                 {
                     var recoverableBackup = Guid.TryParse(operation.OperationId, out _) &&
@@ -110,7 +111,7 @@ public sealed class OperationStore
 
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(_maintenancePath));
+            using var document = JsonDocument.Parse(ReadSnapshot(_maintenancePath));
             var root = document.RootElement;
             return new OperationHandle
             {
@@ -129,26 +130,50 @@ public sealed class OperationStore
 
     public void Save(OperationHandle operation, string? maintenanceMessage = null)
     {
-        _operations[operation.OperationId] = operation;
-        AtomicWrite(Path.Combine(_directory, $"{operation.OperationId}.json"), JsonSerializer.Serialize(operation));
-        if (maintenanceMessage is not null)
+        lock (_writeLock)
         {
-            AtomicWrite(_maintenancePath, JsonSerializer.Serialize(new
+            _operations[operation.OperationId] = operation;
+            AtomicWrite(Path.Combine(_directory, $"{operation.OperationId}.json"), JsonSerializer.Serialize(operation));
+            if (maintenanceMessage is not null)
             {
-                operationId = operation.OperationId,
-                state = operation.State.ToString(),
-                phase = operation.Phase,
-                message = maintenanceMessage,
-                observedAtUtc = DateTimeOffset.UtcNow
-            }));
+                AtomicWrite(_maintenancePath, JsonSerializer.Serialize(new
+                {
+                    operationId = operation.OperationId,
+                    state = operation.State.ToString(),
+                    phase = operation.Phase,
+                    message = maintenanceMessage,
+                    observedAtUtc = DateTimeOffset.UtcNow
+                }));
+            }
         }
     }
 
     private static void AtomicWrite(string path, string content)
     {
         var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
-        File.WriteAllText(temporary, content);
-        File.Move(temporary, path, true);
+        try
+        {
+            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                var bytes = Encoding.UTF8.GetBytes(content); stream.Write(bytes); stream.Flush(flushToDisk: true);
+            }
+            // Replace an existing snapshot instead of MoveFileEx's overwrite
+            // path, which can reject a still-open Windows reader even when it
+            // shares deletion. Initial publication stays a no-replace rename.
+            if (File.Exists(path)) File.Replace(temporary, path, null);
+            else File.Move(temporary, path);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    private static string ReadSnapshot(string path)
+    {
+        // Writers replace directory entries, never mutate a published inode.
+        // On Windows a reader must explicitly share DELETE or a concurrent
+        // atomic rename can fail (or the reader itself sees a sharing error).
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
     }
 
     private string GetIdempotencyPath(string key)
@@ -160,7 +185,7 @@ public sealed class OperationStore
     private OperationHandle? ReadIdempotentOperation(string indexPath)
     {
         if (!File.Exists(indexPath)) return null;
-        var operationId = File.ReadAllText(indexPath).Trim();
+        var operationId = ReadSnapshot(indexPath).Trim();
         return _operations.GetValueOrDefault(operationId);
     }
 }

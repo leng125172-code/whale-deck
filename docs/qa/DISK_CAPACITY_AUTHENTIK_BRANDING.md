@@ -39,6 +39,17 @@
 
 ## 本地收尾与后续
 
+### 恢复在线后的最终验收
+
+- 用户明确通知恢复连接后才重新请求工作站。启动时间2026-10-20 18:08:34 CST；11核心容器healthy，Agent和维护服务active、NRestarts均0，WD `/health/live` HTTP200。Agent仍6a6f8e2/1.34、API/Worker仍18f38bb，不冒称本地新业务已部署。
+- 最终CSS SHA为`0cb423bd901d0d1f63580c4ea969e6e9ca09193f9813bf6256db3543bdef1afe`。补语言控件阴影、独立header定位/最小高度，解决短窗口与Logo重叠。发现真实系统主题动态切换会由FlowExecutor用流程默认背景覆盖body变量；使用仅在HTML解析的背景别名继承，保留原生动态URL，不硬编码signed URL、不改登录流程。1440明→暗→明→暗循环背景均为鲸鱼图。原因参照[实际版本原生主题同步代码](https://github.com/goauthentik/authentik/blob/version/2026.8.3/web/src/flow/FlowExecutor.ts)。
+- 独立匿名新浏览器上下文完整下载实际动态背景：HTTP200、1,735,237字节、SHA256 `13b32257811f9a9ed11baf4e8414c426205a9d8accb56bec6526836bfd7b1ee3`，与源图全字节相等；未向下载携带管理凭据。此为补齐证据，不再使用前序“待校验”的状态。
+- 使用playwright-interactive保持自有headed Chrome会话：最终320×780明色、390×844暗色、740×360短窗口、1440×900明暗截图均独立审视；document scrollWidth等于viewport宽，语言控件与主卡无重叠。短屏为正常纵向滚动，主按钮44px且可滚动到可见位置。320暗色也已独立审视，密码步骤正常输入/按钮可达，辅助页脚与语言图标可辨；不隐藏官方署名。
+- 最终截图保存在忽略目录`deploy/artifacts/authentik-final-*.png`，不含凭据。视觉与正常操作探索分别完成：空用户名被原生校验拒绝、键盘焦点、窄屏/短屏滚动、明暗完整循环；未发现最终状态横向溢出、Logo畸变或主按钮遮挡。
+- 新临时真实管理员通过用户名/密码、Authentik门户、WD OIDC显式同意进入工作台，overview HTTP200。正常用户菜单退出实际发生CSRF GET200→logout POST302→Authentik invalidation流程→WD `/login`；WD me401、Authentik me403，再打开身份门户出现用户名输入。确认两端会话均结束，不以重载或删Cookie冒充退出。
+- 加密临时身份通道完成后返回`temporaryBrowserUserRemoved=true`，自有浏览器关闭、私有身份内存清除。最后发布仅Brand CSS变化、identityChanges=false；未修改用户组/OIDC/provider/flow、数据库卷或既有用户凭据。
+- 外观脚本26项纯fake测试再次通过。后续仍继续完整76项目标，品牌子阶段签收不表示整个项目完成。新增覆盖恢复业务基础见[独立材料记录](FILE_TREE_OVERWRITE_RESTORING_MATERIAL.md)。
+
 - 独立品牌脚本纯fake HTTP测试26/26通过，包含默认只读、五字段白名单、非外观/并发保护、恶意CSS/SVG预上传零写入、无外部认证转发、匿名媒体hash、幂等及DRF裁剪。没有真实网络/token参与这些单测。
 - GLM `glm-5.3-flash`仅只读检查CSS/wordmark，GPT复核并负责实际修改和发布。一次成功、零重试，input25303/cached256/output932、56948ms；平台未返回费用，不推算实际扣款。GLM提示的窄屏/暗色风险由实机验证决定，未直接作为结论。
 - 2026-10-20用户通知工作站离线：立即停止工作站请求/部署及重连，等待用户恢复通知；继续本地实现、测试和仓库更新。完整76项目标仍active；不把远程子步骤的暂停作为整个目标暂停或阻塞。

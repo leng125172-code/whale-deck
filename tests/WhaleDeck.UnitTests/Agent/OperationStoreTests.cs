@@ -105,6 +105,60 @@ public sealed class OperationStoreTests
         }
     }
 
+    [Fact]
+    public void PublishedSnapshotRemainsCompleteWhileDirectoryEntryIsAtomicallyReplaced()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"whaledeck-operation-store-{Guid.NewGuid():N}");
+        try
+        {
+            var configuration = BuildConfiguration(root); var store = new OperationStore(configuration);
+            var operation = store.Create("Before"); store.Save(operation, "before");
+            using (var priorOperation = new FileStream(Path.Combine(root, "operations", operation.OperationId + ".json"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var priorMaintenance = new FileStream(Path.Combine(root, "run", "status.json"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                operation.State = OperationState.Succeeded; operation.Phase = "After"; store.Save(operation, "after");
+                Assert.Equal("Before", System.Text.Json.JsonSerializer.Deserialize<OperationHandle>(priorOperation)!.Phase);
+                using var previous = System.Text.Json.JsonDocument.Parse(priorMaintenance);
+                Assert.Equal("Before", previous.RootElement.GetProperty("phase").GetString());
+                Assert.Equal("After", store.GetMaintenance().Phase);
+                Assert.Equal("After", new OperationStore(configuration).Get(operation.OperationId)!.Phase);
+            }
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ConcurrentMaintenanceReadsObserveOnlyCompletePublishedSnapshots()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"whaledeck-operation-store-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new OperationStore(BuildConfiguration(root)); var operation = store.Create("Initial");
+            store.Save(operation, "initial");
+            using var barrier = new Barrier(2);
+            var writer = Task.Run(() =>
+            {
+                for (var index = 0; index < 100; index++)
+                {
+                    Assert.True(barrier.SignalAndWait(TimeSpan.FromSeconds(5)));
+                    operation.Phase = "Publication"; store.Save(operation, "publication");
+                }
+            });
+            try
+            {
+                for (var index = 0; index < 100; index++)
+                {
+                    Assert.True(barrier.SignalAndWait(TimeSpan.FromSeconds(5)));
+                    var snapshot = store.GetMaintenance(); Assert.Equal(operation.OperationId, snapshot.OperationId);
+                    Assert.True(snapshot.Phase is "Initial" or "Publication");
+                }
+            }
+            finally { await writer.WaitAsync(TimeSpan.FromSeconds(10)); }
+            Assert.Equal("Publication", store.GetMaintenance().Phase);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+    }
+
     private static IConfiguration BuildConfiguration(string root) =>
         new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {

@@ -34,10 +34,15 @@ public sealed class OperationCoordinatorTests
             Assert.Equal(completionWins ? OperationState.Succeeded : OperationState.Canceled, operation.State);
             var persisted = Path.Combine(root, "operations", operation.OperationId + ".json");
             var expected = completionWins ? OperationState.Succeeded : OperationState.Canceled;
-            while (JsonSerializer.Deserialize<OperationHandle>(File.ReadAllText(persisted))!.State != expected && DateTimeOffset.UtcNow < deadline)
+            while (ReadPersisted(persisted).State != expected && DateTimeOffset.UtcNow < deadline)
                 await Task.Delay(10);
-            Assert.Equal(expected, JsonSerializer.Deserialize<OperationHandle>(File.ReadAllText(persisted))!.State);
+            Assert.Equal(expected, ReadPersisted(persisted).State);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+    }
+    private static OperationHandle ReadPersisted(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        return JsonSerializer.Deserialize<OperationHandle>(stream)!;
     }
 }

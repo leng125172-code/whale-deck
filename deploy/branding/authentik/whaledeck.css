@@ -1,4 +1,11 @@
 /* Whale Deck / Authentik 2026.8. Native brand CSS, no JS or external fonts. */
+/* Resolve the brand background on HTML, before flow theme synchronization can
+   override the native property on BODY with the flow's default background.
+   Do not redeclare this alias on :host: that would resolve the overridden value. */
+:root {
+  --wd-flow-background: var(--ak-global--background-image);
+}
+
 :root,
 :host {
   --wd-brand: #409eff;
@@ -34,20 +41,22 @@ ak-flow-executor::part(login),
   --ak-c-login__main--BoxShadow: 0 24px 72px rgb(0 16 47 / 28%);
   --ak-c-login--BackgroundColorOverlay: transparent;
   grid-template-columns: minmax(1rem, 1fr) [main] minmax(0, 28rem) minmax(1rem, 8vw);
-  grid-template-rows: [header] minmax(3rem, 1fr) [main] auto [footer] minmax(3rem, 1fr);
+  grid-template-rows: [header] minmax(4rem, 1fr) [main] auto [footer] minmax(3rem, 1fr);
   grid-template-areas: 'header header header' '. main .' 'footer footer footer';
   padding-block: 1rem;
   /* Authentik normally suppresses flow backgrounds on small screens. Use its
      dynamically resolved native variable, never a frozen signed media URL. */
-  background-image: var(--ak-global--background-image);
+  background-image: var(--wd-flow-background, var(--ak-global--background-image));
   background-size: cover;
   background-position: 32% center;
 }
 
 ak-flow-executor::part(locale-select),
 :host(ak-flow-executor) [part='locale-select'] {
+  grid-area: header;
   max-width: calc(100vw - 4rem);
   width: min(18rem, calc(100vw - 4rem));
+  filter: drop-shadow(0 1px 2px rgb(0 16 47 / 90%));
 }
 
 :host(ak-locale-select) select[part='select'] {
@@ -134,7 +143,7 @@ ak-flow-executor::part(footer),
   ak-flow-executor::part(login),
   :host(ak-flow-executor) .pf-c-login {
     grid-template-columns: minmax(1rem, 1fr) [main] minmax(0, 28rem) minmax(1rem, 1fr);
-    grid-template-rows: [header] minmax(3rem, 0.6fr) [main] auto [footer] minmax(3rem, 1fr);
+    grid-template-rows: [header] minmax(4rem, 0.6fr) [main] auto [footer] minmax(3rem, 1fr);
   }
   ak-flow-executor::part(branding),
   :host(ak-flow-executor) .pf-c-login__main-header.pf-c-brand {

@@ -100,6 +100,8 @@ public static class DependencyInjection
         services.AddScoped<FileTreeUnpackingService>();
         services.AddScoped<FileTreeUnpackingDispatcher>();
         services.AddSingleton<IFileTreeRestoringProtector, FilePlanProtector>();
+        services.AddSingleton<IFileTreeOverwriteRestoringProtector, FilePlanProtector>();
+        services.AddSingleton<IFileTreeOverwriteRestoringGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IFileTreeRestoringGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<IFileTreeRestoringRepository, FileTreeRestoringRepository>();
         services.AddScoped<FileTreeRestoringService>();
