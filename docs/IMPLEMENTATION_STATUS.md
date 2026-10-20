@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-21目录清理安装态子门禁通过**：Agent/MaintenanceHost实际56101c8/1.36、默认授权原件备份/宿主权限及UDS验收通过；6c60ea3客户端与双检查点独立磁盘验证两捕获类型/三范围、2MiB+7及1GiB+7完整内容，6清理完成/6取消。测试载荷与journal精确清理，81路径另验缺失、5份私有证据保留，11核心healthy/宿主重启0。[证据及剩余](qa/FILE_TREE_PURGING_INSTALLED.md)。同HDD不宣称异盘/已装中断；尚无清理业务任务/SQL墓碑/真人权限与页面，API/Worker/Gateway保持2c8d1bb，完整76项active。以下未安装为前轮历史。
+
 - **2026-10-21目录清理Agent源码候选**：minor36独立签名方法、严格计划/回执、可信固定helper/loader和精确默认根升级已实现；1856 Unit/146 Integration（6本机原生跳过）及Release通过，冻结Linux清理30/文件184通过。新增安装器元数据验证，尚未安装，不冒充真实HDD/UDS/BFF或页面验收。[证据](qa/FILE_TREE_PURGING_AGENT.md)。实际2c8d1bb/1.35、11核心healthy；当前管理员/永久任务/SQL墓碑/页面及全部76项继续。下列无helper/RPC为前轮历史。
 
 - **2026-10-21目录清理内部候选**：新增Archive/Originals/All单捕获冻结计划、已完成原任务证明、隔离/逐文件销毁、墓碑和不续删Unknown；未开放helper/RPC/业务任务或页面、未安装。最终v6清理24/普通文件181实际Linux-root通过，含1GiB+7完整内容及6强杀；v5目录253整组通过，三个旧宿主模块与v6逐个cmp一致。早期重建目录错误码失败保留并修复，未放宽断言。Release零警告错误、1758 Unit/146 Integration通过（6本机原生跳过），44bcd66四CI全绿、11核心healthy。[候选证据与剩余](qa/FILE_TREE_PURGING_ENGINE.md)。实际2c8d1bb/1.35不变；签名RPC/任务/页面、孤儿与长期清理及全部76项继续。

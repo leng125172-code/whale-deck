@@ -1,6 +1,6 @@
 # 目录捕获载荷清理内部引擎（2026-10-21）
 
-状态：active。后续批次已补固定helper四动词、严格Agent RPC及默认根升级，见[清理Agent源码候选](FILE_TREE_PURGING_AGENT.md)。尚无Application/Worker/数据库工作流或WebUI，也未安装到工作站。运行时保持2c8d1bb/Agent1.35；不把临时Linux I/O测试冒充安装态、真实HDD身份、业务或页面验收。完整76项及P2-03/P2-04仍部分实现。下文为内部引擎批次证据，当时没有helper/RPC及默认授权。
+状态：active。后续已安装56101c8/Agent1.36，固定helper/签名UDS与独立完整磁盘子门禁通过，见[安装态证据](FILE_TREE_PURGING_INSTALLED.md)。尚无清理Application/Worker/数据库工作流或WebUI；API/Worker/Gateway仍2c8d1bb。完整76项及P2-03/P2-04仍部分实现。下文为内部引擎批次证据，当时没有helper/RPC及默认授权，临时Linux I/O测试不冒充后续安装态、真实HDD身份、业务或页面验收。
 
 ## 已实现范围与不变量
 
