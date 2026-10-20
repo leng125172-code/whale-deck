@@ -27,7 +27,7 @@ def read(path):
 
 
 def upgrade(path, baseline, desired, backup_suffix='.pre-mutations.json'):
-    if backup_suffix not in ('.pre-mutations.json', '.pre-archives.json', '.pre-tree-copy.json', '.pre-tree-move.json', '.pre-tree-pack.json', '.pre-tree-unpack.json', '.pre-tree-trash.json', '.pre-tree-restore.json', '.pre-tree-overwrite-restore.json'): raise ValueError('FILES_REGISTRY_BACKUP_INVALID')
+    if backup_suffix not in ('.pre-mutations.json', '.pre-archives.json', '.pre-tree-copy.json', '.pre-tree-move.json', '.pre-tree-pack.json', '.pre-tree-unpack.json', '.pre-tree-trash.json', '.pre-tree-restore.json', '.pre-tree-overwrite-restore.json', '.pre-tree-purge.json'): raise ValueError('FILES_REGISTRY_BACKUP_INVALID')
     payload, current, info = read(path)
     if current == desired: return 'unchanged'
     if current != baseline: return 'custom-preserved'
@@ -69,6 +69,8 @@ def upgrade_defaults(path, folder):
     unpacking = json.loads((folder / 'file-roots.v1.31.json').read_text(), object_pairs_hook=unique)
     recycling = json.loads((folder / 'file-roots.v1.32.json').read_text(), object_pairs_hook=unique)
     restoring = json.loads((folder / 'file-roots.v1.33.json').read_text(), object_pairs_hook=unique)
+    overwriting = json.loads((folder / 'file-roots.v1.35.json').read_text(), object_pairs_hook=unique)
+    if current == overwriting: return upgrade(path, overwriting, desired, '.pre-tree-purge.json')
     if current == restoring: return upgrade(path, restoring, desired, '.pre-tree-overwrite-restore.json')
     if current == recycling: return upgrade(path, recycling, desired, '.pre-tree-restore.json')
     if current == unpacking: return upgrade(path, unpacking, desired, '.pre-tree-trash.json')

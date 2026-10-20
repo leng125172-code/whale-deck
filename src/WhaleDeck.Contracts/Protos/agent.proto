@@ -975,3 +975,51 @@ service FileTreeOverwriteRestoringService {
   rpc Inspect(FileTreeOverwriteRestoringLookup) returns (FileTreeOverwriteRestoringReceipt);
   rpc Discard(FileTreeOverwriteRestoringApplyRequest) returns (FileTreeOverwriteRestoringReceipt);
 }
+
+// Separate irreversible payload deletion capability. Capture ownership is a
+// resource binding resolved by the application, never the current actor.
+// No caller-selected private paths, shell, member list or UID/GID is accepted.
+enum FileTreePurgeScope {
+  FILE_TREE_PURGE_SCOPE_UNSPECIFIED = 0;
+  FILE_TREE_PURGE_SCOPE_ARCHIVE = 1;
+  FILE_TREE_PURGE_SCOPE_ORIGINALS = 2;
+  FILE_TREE_PURGE_SCOPE_ALL = 3;
+}
+message FileTreePurgingCommand {
+  FileLocation source = 1; string expected_version = 2;
+  string capture_id = 3; string capture_owner = 4;
+  string capture_kind = 5; string manifest_sha256 = 6;
+  FileTreePurgeScope scope = 7;
+}
+message FileTreePurgingPlan {
+  FileTreePurgingCommand command = 1; string source_policy_hash = 2;
+  // Absent for archive-only cleanup: the old parent need not exist.
+  FileDirectoryIdentity source_parent = 3;
+  string storage_hash = 4; FileDirectoryIdentity store_identity = 5;
+  string capture_metadata_hash = 6; string origin_receipt_hash = 7;
+  string manifest_file_sha256 = 8; FileDirectoryIdentity archive_identity = 9;
+  int64 archive_bytes = 10; string archive_sha256 = 11;
+  string content_sha256 = 12; uint32 entry_count = 13; int64 total_bytes = 14;
+  FileDirectoryIdentity retained_identity = 15;
+  FileDirectoryIdentity staging_identity = 16;
+  optional string retained_tree_sha256 = 17;
+  string fingerprint = 18;
+}
+message FileTreePurgingPlanRequest { FileTreePurgingCommand command = 1; RequestContext context = 2; }
+message FileTreePurgingApplyRequest {
+  string operation_id = 1; string owner = 2;
+  FileTreePurgingPlan plan = 3; RequestContext context = 4;
+}
+message FileTreePurgingLookup { string operation_id = 1; string owner = 2; }
+message FileTreePurgingReceipt {
+  string operation_id = 1; string kind = 2; string state = 3;
+  string fingerprint = 4; string capture_id = 5; FileTreePurgeScope scope = 6;
+  uint32 entry_count = 7; int64 total_bytes = 8; int64 archive_bytes = 9;
+  bool deletion_started = 10; bool archive_removed = 11; bool originals_removed = 12;
+}
+service FileTreePurgingService {
+  rpc Plan(FileTreePurgingPlanRequest) returns (FileTreePurgingPlan);
+  rpc Apply(FileTreePurgingApplyRequest) returns (FileTreePurgingReceipt);
+  rpc Inspect(FileTreePurgingLookup) returns (FileTreePurgingReceipt);
+  rpc Discard(FileTreePurgingApplyRequest) returns (FileTreePurgingReceipt);
+}

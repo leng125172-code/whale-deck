@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-21清理Agent候选**：独立minor36/capability四方法、固定helper/可信loader、严格三范围计划与回执、精确默认根升级已实现。Release及1856 Unit/146 Integration（6原生跳过）、冻结Linux清理30/文件184通过；尚未安装，未接业务任务/数据库墓碑/页面。[证据及剩余](qa/FILE_TREE_PURGING_AGENT.md)。运行仍2c8d1bb/1.35，全部76项保持active；下列“无RPC”为前轮历史。
+
 - **2026-10-21目录清理内部候选**：单捕获三范围、完整证明、逐文件删除与墓碑/Unknown不续删已实现；未开放helper/RPC/任务/页面，未安装。最终专项24/普通181真实Linux-root通过，v5目录253整组通过，旧宿主模块字节一致；1GiB+7完整内容及6强杀通过，早期错误码失败保留并修复。Release及1758 Unit/146 Integration（6本机原生跳过）通过，上一44bcd66四CI成功；[证据及边界](qa/FILE_TREE_PURGING_ENGINE.md)。实际2c8d1bb/1.35与全部76项保持，不签整项。
 
 - **2026-10-21真实覆盖网页子门禁通过**：已装2c8d1bb/1.35的1440明色/320暗色回收与覆盖、独立完整2MiB+7磁盘与HDD证明、刷新/取消、普通权限/正常退出通过。自有载荷精确清理、永久记录保留，5操作/9任务/4捕获及零活动/锁/pending Outbox独立复核；运行时和上一文档CI四路成功，新观察器14项Linux-root通过。[证据](qa/FILE_TREE_OVERWRITE_REAL_UI.md)。只验收此子范围，不签完整文件管理；目录清理、容器文件及全部76项保持active。

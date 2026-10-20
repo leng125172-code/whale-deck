@@ -235,6 +235,38 @@ public sealed class CapabilityValidatorTests : IDisposable
         await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, token), Continue)); Assert.False(invoked);
     }
 
+    [Theory]
+    [InlineData("Plan")][InlineData("Apply")][InlineData("Inspect")][InlineData("Discard")]
+    public async Task DirectoryPurgeRequiresIndependentServiceActionAndSingleUseCapabilityBeforeContinuation(string action)
+    {
+        const string service = "/whaledeck.agent.v1.FileTreePurgingService/";
+        var method = service + action;
+        var interceptor = new CapabilityInterceptor(_validator); var invoked = false;
+        Task<string> Continue(string _, ServerCallContext __) { invoked = true; return Task.FromResult("ok"); }
+        var missing = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, null), Continue));
+        Assert.Equal(StatusCode.PermissionDenied, missing.StatusCode); Assert.False(invoked);
+        foreach (var other in new[] { "FileTreeRestoringService", "FileTreeOverwriteRestoringService", "FileTreeRecyclingService", "FileArchiveService" })
+        {
+            var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "purge-other-" + other, "/whaledeck.agent.v1." + other + "/" + action);
+            var denied = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, token), Continue));
+            Assert.Equal(StatusCode.PermissionDenied, denied.StatusCode); Assert.False(invoked);
+        }
+        foreach (var other in OverwriteRestoreActions.Where(candidate => candidate != action))
+        {
+            var token = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "purge-other-action-" + other, service + other);
+            var denied = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, token), Continue));
+            Assert.Equal(StatusCode.PermissionDenied, denied.StatusCode); Assert.False(invoked);
+        }
+        var expired = Sign(DateTimeOffset.UtcNow.AddSeconds(-1), "purge-expired", method);
+        await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, expired), Continue));
+        Assert.False(invoked);
+        var valid = Sign(DateTimeOffset.UtcNow.AddSeconds(45), "purge-single-use", method);
+        Assert.Equal("ok", await interceptor.UnaryServerHandler("", new Context(method, valid), Continue));
+        Assert.True(invoked); invoked = false;
+        var replay = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler("", new Context(method, valid), Continue));
+        Assert.Equal(StatusCode.PermissionDenied, replay.StatusCode); Assert.False(invoked);
+    }
+
     private sealed class Context(string method, string? token) : ServerCallContext
     {
         protected override string MethodCore => method;

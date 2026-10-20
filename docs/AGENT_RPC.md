@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-10-21新增未安装minor36候选：`FileTreePurgingService` Plan/Apply/Inspect/Discard，独立`files.tree-purge-intents`、三范围、严格6/18/12字段、uint64身份和删除事实校验。固定helper/可信loader、精确默认授权升级及测试已接；Release零警告错误、1856 Unit/146 Integration（6本机原生跳过）、冻结Linux清理30/文件184通过。生产仍2c8d1bb/1.35；尚无清理BFF/Worker/SQL/UI或安装态验收。[边界与证据](qa/FILE_TREE_PURGING_AGENT.md)。以下运行版本及候选条目保留各自历史背景。
+
 最新实际2c8d1bb/minor35：新内容证明字段/专用能力已安装并通过同源码签名UDS与完整2MiB+7/1GiB+7独立磁盘、真实身份BFF/Worker/SQL和Overwrite归档实际复用。六组件/HTTP来源及健康独立核对，未增加Agent TCP或绕过原inode树证明。网页交互未签收，[完整边界](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。下方“1.35未安装”为前序候选，完整76项继续。
 
 2026-10-21未安装修复候选：minor35及`files.tree-overwrite-restore-content-proof`，覆盖计划字段16 `target_content_sha256` 独立于带inode的 `target_tree_sha256`；二者都进入严格计划指纹，Verified目标归档/目录签名改用正确内容域。Gateway新方法要求35和两项能力，不回退旧计划。旧root回执只读可查，不重新执行缺新证明计划。[验证及旧混用问题](qa/FILE_TREE_OVERWRITE_CONTENT_PROOF.md)。实际仍1ea9de6/1.34，完整76项继续。

@@ -185,7 +185,7 @@ public sealed class FileTreeRestoringPolicyTests
         var discard = await Assert.ThrowsAsync<RpcException>(() => service.Discard(new() { OperationId = Operation, Owner = new('A', 64), Plan = Plan() }, null!));
         Assert.Equal("FILES_ACTOR_REQUIRED", discard.Status.Detail);
         var capabilities = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
-        Assert.Equal(35U, capabilities.ProtocolMinor); Assert.Contains("files.tree-restore-intents", capabilities.Capabilities);
+        Assert.Equal(36U, capabilities.ProtocolMinor); Assert.Contains("files.tree-restore-intents", capabilities.Capabilities);
         Assert.Equal("whaledeck.agent.v1.FileTreeRestoringService", FileTreeRestoringService.Descriptor.FullName);
     }
 }

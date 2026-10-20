@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Internal, explicitly scoped directory capture/original payload destruction.
 
-No helper verb, RPC, Worker, HTTP or UI exposure yet. A caller must later add
-signed administrator confirmation, durable jobs, shared capture/hierarchy locks
-and human audit. Never accepts a caller-selected private path. Never deletes
+Fixed helper and distinct signed Agent RPC expose plan/apply/status/discard.
+Before HTTP/UI exposure a caller must add signed administrator confirmation,
+durable jobs, shared capture/hierarchy locks and human audit. Never accepts a caller-selected private path. Never deletes
 capture metadata/manifests, root journals, jobs or audit. Recovery only observes:
 after the first quarantine an interruption is Unknown, never an automatic retry.
 """

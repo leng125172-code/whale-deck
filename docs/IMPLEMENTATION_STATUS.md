@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-21目录清理Agent源码候选**：minor36独立签名方法、严格计划/回执、可信固定helper/loader和精确默认根升级已实现；1856 Unit/146 Integration（6本机原生跳过）及Release通过，冻结Linux清理30/文件184通过。新增安装器元数据验证，尚未安装，不冒充真实HDD/UDS/BFF或页面验收。[证据](qa/FILE_TREE_PURGING_AGENT.md)。实际2c8d1bb/1.35、11核心healthy；当前管理员/永久任务/SQL墓碑/页面及全部76项继续。下列无helper/RPC为前轮历史。
+
 - **2026-10-21目录清理内部候选**：新增Archive/Originals/All单捕获冻结计划、已完成原任务证明、隔离/逐文件销毁、墓碑和不续删Unknown；未开放helper/RPC/业务任务或页面、未安装。最终v6清理24/普通文件181实际Linux-root通过，含1GiB+7完整内容及6强杀；v5目录253整组通过，三个旧宿主模块与v6逐个cmp一致。早期重建目录错误码失败保留并修复，未放宽断言。Release零警告错误、1758 Unit/146 Integration通过（6本机原生跳过），44bcd66四CI全绿、11核心healthy。[候选证据与剩余](qa/FILE_TREE_PURGING_ENGINE.md)。实际2c8d1bb/1.35不变；签名RPC/任务/页面、孤儿与长期清理及全部76项继续。
 
 - **2026-10-21覆盖恢复真实网页子范围通过**：在已装2c8d1bb/1.35上，1440明色及320暗色各2MiB+7真实登录/回收/历史选择/覆盖完成，独立全字节/原件inode/两组HDD归档与不同内容域核验通过；Ready刷新零文件写请求、取消不改目标、真实普通用户拒绝/零文件请求及正常退出通过。自有载荷精确清理并独立确认，5操作/9任务/4捕获永久保留、active/锁/pending Outbox均0。新增观察器14项真实Linux-root通过；运行时与文档四路CI均成功、11核心healthy。[网页证据](qa/FILE_TREE_OVERWRITE_REAL_UI.md)。本批不重复部署，目录彻底清理/容器文件与完整76项仍active；下列网页未签收为前轮历史。

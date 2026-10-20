@@ -1069,8 +1069,20 @@ def tree_recycling_engine():
     return modules[5].FileTreeRecycling(sys.modules[__name__], captures, modules[0].FileTreeManifest, modules[1].TreeArchive, modules[4].FileTreeMoves)
 
 
+def tree_purging_engine():
+    recycling = tree_recycling_engine(); overwriting = tree_overwrite_restoring_engine()
+    filename = 'whaledeck-tree-purging.py'
+    path = Path(__file__).with_name(filename); info = os.stat(path, follow_symlinks=False)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or info.st_mode & 0o022 or info.st_size > 131072:
+        raise Rejected('FILES_MODULE_UNSAFE')
+    specification = importlib.util.spec_from_file_location(filename.replace('-', '_'), path)
+    module = importlib.util.module_from_spec(specification); specification.loader.exec_module(module)
+    return module.purging_type(type(recycling))(sys.modules[__name__], recycling.captures, recycling.manifest_type,
+        recycling.codec_type, recycling.io, origins={'Trash': recycling, 'Overwrite': overwriting})
+
+
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'content-search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard', 'archive-list', 'archive-plan', 'archive-apply', 'archive-status', 'archive-discard', 'tree-copy-plan', 'tree-copy-apply', 'tree-copy-status', 'tree-copy-discard', 'tree-move-plan', 'tree-move-apply', 'tree-move-status', 'tree-move-discard', 'tree-pack-plan', 'tree-pack-apply', 'tree-pack-status', 'tree-pack-discard', 'tree-pack-download', 'tree-unpack-plan', 'tree-unpack-apply', 'tree-unpack-status', 'tree-unpack-discard', 'tree-trash-plan', 'tree-trash-apply', 'tree-trash-status', 'tree-trash-discard', 'tree-restore-plan', 'tree-restore-apply', 'tree-restore-status', 'tree-restore-discard', 'tree-overwrite-restore-plan', 'tree-overwrite-restore-apply', 'tree-overwrite-restore-status', 'tree-overwrite-restore-discard'):
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('roots', 'list', 'directories', 'search', 'content-search', 'stat', 'download', 'upload', 'stage', 'publish', 'discard', 'status', 'operation-plan', 'operation-apply', 'operation-status', 'operation-discard', 'archive-list', 'archive-plan', 'archive-apply', 'archive-status', 'archive-discard', 'tree-copy-plan', 'tree-copy-apply', 'tree-copy-status', 'tree-copy-discard', 'tree-move-plan', 'tree-move-apply', 'tree-move-status', 'tree-move-discard', 'tree-pack-plan', 'tree-pack-apply', 'tree-pack-status', 'tree-pack-discard', 'tree-pack-download', 'tree-unpack-plan', 'tree-unpack-apply', 'tree-unpack-status', 'tree-unpack-discard', 'tree-trash-plan', 'tree-trash-apply', 'tree-trash-status', 'tree-trash-discard', 'tree-restore-plan', 'tree-restore-apply', 'tree-restore-status', 'tree-restore-discard', 'tree-overwrite-restore-plan', 'tree-overwrite-restore-apply', 'tree-overwrite-restore-status', 'tree-overwrite-restore-discard', 'tree-purge-plan', 'tree-purge-apply', 'tree-purge-status', 'tree-purge-discard'):
         raise Rejected('FILES_ACTION_INVALID')
     invocation = identity(os.environ.get('INVOCATION_ID'))
     emit({'type': 'driver', 'invocationId': invocation})
@@ -1102,6 +1114,9 @@ def main():
     elif action.startswith('tree-trash-'):
         source.finish(); engine = tree_recycling_engine()
         emit(engine.plan(request) if action == 'tree-trash-plan' else engine.recycle(request) if action == 'tree-trash-apply' else engine.discard(request) if action == 'tree-trash-discard' else engine.lookup(request))
+    elif action.startswith('tree-purge-'):
+        source.finish(); engine = tree_purging_engine()
+        emit(engine.plan(request) if action == 'tree-purge-plan' else engine.purge(request) if action == 'tree-purge-apply' else engine.discard(request) if action == 'tree-purge-discard' else engine.lookup(request))
     elif action.startswith('tree-overwrite-restore-'):
         source.finish(); engine = tree_overwrite_restoring_engine()
         emit(engine.plan(request) if action == 'tree-overwrite-restore-plan' else engine.restore(request) if action == 'tree-overwrite-restore-apply' else engine.discard(request) if action == 'tree-overwrite-restore-discard' else engine.lookup(request))

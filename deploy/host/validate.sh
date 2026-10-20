@@ -42,6 +42,8 @@ for module in /usr/local/libexec/whaledeck-file-tree.py /usr/local/libexec/whale
   [[ ! -L $module && $(stat -c %h "$module") == 1 ]]
 done
 [[ ! -L /etc/whaledeck/file-backups.json && $(stat -c %u /etc/whaledeck/file-backups.json) == 0 && $(stat -c %h /etc/whaledeck/file-backups.json) == 1 ]]
+assert_metadata /usr/local/libexec/whaledeck-tree-purging.py '750:root:root'
+[[ ! -L /usr/local/libexec/whaledeck-tree-purging.py && $(stat -c %h /usr/local/libexec/whaledeck-tree-purging.py) == 1 ]]
 [[ $(stat -c %a /etc/whaledeck/file-backups.json) =~ ^(600|640|644)$ ]]
 assert_metadata /data/DockerData/whaledeck/file-backups '700:root:root'
 python3 "$(dirname "$0")/configure-file-backups.py" --check
