@@ -31,4 +31,5 @@ chmod 0600 "$temporary"
 mv -T "$temporary" "$output"
 trap - EXIT
 python3 "$script_dir/sync-authentik-presentation.py" --env-file "$output"
+python3 "$script_dir/sync-authentik-branding.py" --env-file "$output" --apply
 echo "Whale Deck Authentik applications and API token are ready; private values were written to $output."

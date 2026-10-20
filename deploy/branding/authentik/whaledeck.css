@@ -1,0 +1,116 @@
+/* Whale Deck / Authentik 2026.8. Native brand CSS, no JS or external fonts. */
+:root,
+:host {
+  --wd-brand: #409eff;
+  --wd-brand-hover: #2786ed;
+  --wd-surface: rgb(255 255 255 / 94%);
+  --wd-border: rgb(179 209 244 / 55%);
+  --wd-ink: #172c47;
+  --pf-global--primary-color--100: #2786ed;
+  --pf-global--primary-color--200: #1764bb;
+  --pf-global--link--Color: #1976d2;
+  --ak-color-primary: #409eff;
+  --pf-global--FontFamily--text: ui-monospace, 'Cascadia Code', Consolas, 'Microsoft YaHei', monospace;
+  --pf-global--FontFamily--heading: var(--pf-global--FontFamily--text);
+}
+
+:host([theme='dark']),
+:root[data-theme='dark'] {
+  --wd-surface: rgb(15 29 50 / 94%);
+  --wd-border: rgb(104 161 230 / 28%);
+  --wd-ink: #e2edff;
+  --pf-global--primary-color--100: #409eff;
+  --pf-global--link--Color: #77baff;
+}
+
+/* Official CSS parts are the outer styling API; local rules are adopted into
+   the component shadow root too. Neither path changes authentication logic. */
+ak-flow-executor::part(login),
+:host(ak-flow-executor) .pf-c-login {
+  --ak-c-login--MaxWidth: 28rem;
+  --ak-c-login__main-ColumnWidth: min(28rem, calc(100vw - 2rem));
+  --ak-c-login__main--BackgroundColor: var(--wd-surface);
+  --ak-c-login__main--Color: var(--wd-ink);
+  --ak-c-login__main--BoxShadow: 0 24px 72px rgb(0 16 47 / 28%);
+  --ak-c-login--BackgroundColorOverlay: transparent;
+  grid-template-columns: minmax(1rem, 1fr) [main] minmax(0, 28rem) minmax(1rem, 8vw);
+  grid-template-rows: [header] minmax(3rem, 1fr) [main] auto [footer] minmax(3rem, 1fr);
+  grid-template-areas: 'header header header' '. main .' 'footer footer footer';
+  padding-block: 1rem;
+}
+
+ak-flow-executor::part(main),
+:host(ak-flow-executor) .pf-c-login__main {
+  min-width: 0;
+  border: 1px solid var(--wd-border);
+  border-radius: 22px;
+  background: var(--wd-surface);
+  color: var(--wd-ink);
+  overflow-wrap: anywhere;
+}
+
+ak-flow-executor::part(branding),
+:host(ak-flow-executor) .pf-c-login__main-header.pf-c-brand {
+  padding: 2rem 1.75rem 1.25rem;
+  justify-content: flex-start;
+}
+
+:host(ak-flow-executor) .branding-logo {
+  width: 260px;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Nested stages adopt this sheet individually; keep rules scoped to flow
+   stage hosts rather than restyling or hiding Admin UI controls. */
+:host(ak-stage-identification) .pf-c-form-control,
+:host(ak-stage-password) .pf-c-form-control {
+  min-height: 44px;
+  border-radius: 9px;
+  padding-inline: 12px;
+}
+
+:host(ak-stage-identification) .pf-c-button,
+:host(ak-stage-password) .pf-c-button {
+  min-height: 44px;
+  border-radius: 9px;
+  font-weight: 600;
+}
+
+:host(ak-stage-identification) .pf-c-button.pf-m-primary,
+:host(ak-stage-password) .pf-c-button.pf-m-primary {
+  background-color: var(--wd-brand-hover);
+  box-shadow: 0 4px 12px rgb(39 134 237 / 15%);
+}
+
+:host(ak-stage-identification) .pf-c-button:focus-visible,
+:host(ak-stage-password) .pf-c-button:focus-visible {
+  outline: 3px solid var(--wd-brand);
+  outline-offset: 3px;
+}
+
+ak-flow-executor::part(footer) {
+  text-shadow: 0 1px 6px rgb(0 17 45 / 70%);
+}
+
+@media (max-width: 760px) {
+  ak-flow-executor::part(login),
+  :host(ak-flow-executor) .pf-c-login {
+    grid-template-columns: minmax(1rem, 1fr) [main] minmax(0, 28rem) minmax(1rem, 1fr);
+    grid-template-rows: [header] minmax(3rem, 0.6fr) [main] auto [footer] minmax(3rem, 1fr);
+  }
+  ak-flow-executor::part(branding),
+  :host(ak-flow-executor) .pf-c-login__main-header.pf-c-brand {
+    padding: 1.5rem 1.25rem 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host(ak-flow-executor) *,
+  :host(ak-stage-identification) *,
+  :host(ak-stage-password) * {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}

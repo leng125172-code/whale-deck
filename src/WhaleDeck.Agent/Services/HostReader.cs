@@ -99,16 +99,39 @@ public sealed class HostReader(TimeProvider? timeProvider = null)
             {
                 result.AddRange(DiskIoMetrics.Calculate(device, value, _previousDisk.GetValueOrDefault(device), elapsed));
             }
-            foreach (var drive in DriveInfo.GetDrives().Where(item => item.IsReady && item.TotalSize > 0))
-            {
-                var used = (drive.TotalSize - drive.AvailableFreeSpace) * 100d / drive.TotalSize;
-                result.Add(new("disk.utilization", drive.Name, used, "percent"));
-            }
+            result.AddRange(ReadDiskCapacityMetrics());
             _previousIoTimestamp = timestamp;
             _previousNetwork = network;
             _previousDisk = disks;
             return result;
         }
+    }
+
+    private static List<HostMetric> ReadDiskCapacityMetrics()
+    {
+        var result = new List<HostMetric>();
+        IReadOnlyDictionary<string, LinuxFileSystemMount>? mounts = null;
+        try
+        {
+            if (OperatingSystem.IsLinux())
+                mounts = DiskCapacityMetrics.ParseMountInfo(File.ReadLines("/proc/self/mountinfo"));
+            foreach (var drive in DriveInfo.GetDrives())
+            {
+                try
+                {
+                    if (!drive.IsReady) continue;
+                    var mount = mounts?.GetValueOrDefault(drive.Name);
+                    if (OperatingSystem.IsLinux() && mount is null) continue;
+                    var snapshot = new FileSystemCapacitySnapshot(drive.Name, drive.DriveFormat, drive.DriveType,
+                        drive.TotalSize, drive.AvailableFreeSpace);
+                    if (DiskCapacityMetrics.TryCalculate(snapshot, mount, out var metric)) result.Add(metric);
+                }
+                // A disappearing USB/network mount must not discard healthy disks or the rest of the batch.
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        return result;
     }
 
     private static long ReadUptime()
