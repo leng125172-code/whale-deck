@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
-  "nextStep": "目录恢复后端66451f7已过1383 Unit/143 Integration（6本机原生跳过）、冻结实际PG1执行1通过与清理复核，CI后端/PG/安装成功、前端仍运行。实际仍e0175a0/1.32；继续恢复WebUI/第九类页面、真实身份BFF/签名UDS和覆盖发布，补覆盖恢复/清理、容器文件及全部76项。"
+  "nextStep": "目录恢复WebUI候选9d83056已接通，328前端单元及类型/lint/格式/生产构建通过，同源码工作站冻结PG1执行1通过且清理。完整474浏览器和新CI继续，真实身份BFF/签名UDS/网页及部署未签收；实际e0175a0/1.32。继续覆盖恢复/清理、容器文件及全部76项。"
 }

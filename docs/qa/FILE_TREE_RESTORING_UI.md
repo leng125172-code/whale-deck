@@ -16,6 +16,10 @@
 
 已部署仍e0175a0/Agent1.32，工作站只读复核11核心healthy、Agent/Maintenance active、sudo -n可用。新1.33真实签名UDS、真实恢复BFF/网页、跨管理员中断处置与覆盖发布继续；不签完整文件管理或全部76项。
 
+### 冻结候选的工作站原生验证
+
+9d83056c27f9a2b6fd9ef4b4616da6d742b667a1已在工作站公开源码归档的隔离临时库执行原生套件：1实际执行/1通过、无跳过，2026-10-20 03:48:36.338843–03:51:48.724537 UTC，状态dispatch-ed31d2c328f0498ebdaf6cb3e0c187d6.json为Passed且cleanupConfirmed=true。SDK摘要sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa；精确临时容器whaledeck-native-dispatch-38fab3d8bd1f经独立成功Docker查询确认不存在。真实身份与Agent仍是该套件明确的stub，不当作恢复实盘/BFF/网页验收。CI39365808863后端/原生PG/安装成功、前端仍在执行；另已补CI命令显式纳入新的tree-restorings.spec.ts，下一冻结提交单独跟踪。
+
 | 用户可见能力/控制 | 功能检查 | 视觉状态与预期证据 |
 | --- | --- | --- |
 | 回收记录中的恢复入口 | 仅管理员/独立根授权显示可用；选择历史捕获，不发写请求 | 历史卡片、长路径/摘要、禁用提示；桌面/320明暗 |
