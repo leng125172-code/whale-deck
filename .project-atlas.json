@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-20）",
-  "nextStep": "18f38bb四CI成功且已实际覆盖发布，六组件/HTTP来源一致、宿主与11核心健康。首轮1.33探针对错误owner拒绝状态预期有误，验收代码已修NotFound并保留旧现场；继续冻结验证专用提交、重建探针/实际UDS与真实身份BFF/网页、精确清理和旧功能回归。328前端单元/474完整浏览器通过，8观察器Linux测试仅QA工具证据。覆盖恢复/清理、容器文件及全部76项继续。"
+  "nextStep": "实际18f38bb/Agent1.33，四CI成功、六组件/HTTP来源一致与11核心健康。a90b9d7验证客户端的真实签名UDS和完整2MiB+7/1GiB+7、真实身份BFF/SQL/Worker/UDS的2MiB+7恢复与普通CSRF403/清理均通过。恢复真实网页只读登录后验证工具超时，临时身份/浏览器已清理；复用ignored原始网页fixture JSON重开短步骤会话，完成跨管理员捕获恢复/普通网页/双端退出/精确清理和旧回归，再推进覆盖恢复/清理、容器文件及全部76项。"
 }

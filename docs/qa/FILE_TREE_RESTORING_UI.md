@@ -49,6 +49,22 @@ CI39367120491四项全部成功后，通过真实BFF计划/确认任务d9f35532-
 
 新网页磁盘观察器及其8项临时Linux root隔离测试通过，含inspect零删除、原始纳秒/归档/输出/未知文件拒删及暗色恢复不能复用原捕获owner；本测试使用明确合成回执/输出，不算实际恢复。暗色网页计划用新管理员恢复旧管理员形成的捕获，旧账号先通过私有通道删除404；不同资源owner与完整磁盘观察独立核验。实际跨管理员中断任务接管仍另行验收，不混为捕获资源恢复。
 
+### 实际1.33签名UDS与真实身份BFF子范围通过
+
+运行时18f38bb保持不变；验证客户端**a90b9d7536e415f03175950a2b62acc046a1b454**仅改deploy/validation、文档和项目元数据，整个diff由validation_only_changes核实，不重建产品。修正后的自包含探针位于terminal-probe.fPWLiO，2项标识符/入口拒绝回归与8项观察器隔离Linux均通过。
+
+- 实际签名UDS/固定沙箱helper恢复验证通过：2MiB+7与1GiB+7完整归档、原inode保留、新inode输出及全部SHA/字节、独立捕获/当前资源owner、原路径/新目标、缺少能力/nonce重放/方法混用/owner隐藏/坏fingerprint/取消栅栏/完成重放均核实。新夹具wdv-agent-restore-57cfa06f9ae143d9及精确测试载荷/低层测试回执已清理。两组differentSourceDevice均false，不称异盘容灾或网页执行1GiB。
+- 真实Cookie/OIDC/BFF→SQL双Job/Worker→已安装签名UDS/helper→独立磁盘验证通过：2MiB+7回收归档后按公开captureId/target恢复到原路径，保留原inode且新目录全字节/纳秒/属主/模式正确。归档不变、生成计划不改目标、幂等登记/确认、另一登录拒绝、取消后迟到确认拒绝、已有目标整计划失败且不覆盖、匿名/CSRF/Origin、普通真实Cookie有效CSRF403、人类审计/零锁均通过。脚本及临时账号包装进程最终exit0，自有wdv-restoring-bff-b22509fa628f433f载荷精确清理，永久意图/Job/捕获目录/审计/Root回执保留。
+- 发布来源和宿主安装检查维持六组件/HTTP均18f38bb；新增表存在；11核心healthy。最初独立psql诊断的PowerShell转义失败、随后camelCase私有JSON路径使对照计数0，不记产品失败或零操作证据；改用literal脚本和实际PascalCase键后，对照BFF恢复行3，网页夹具回收行0/恢复行0。该只读校准没有改数据库。
+
+### 真实网页尚未签收：验证工具恢复入口
+
+临时真实管理员已通过页面按钮→Authentik识别/密码/显式同意→回调，auth/me200且isAdministrator=true；只到文件页只读浏览，尚未点击回收/恢复。随后独立REPL等待不存在的.files-location定位器触发30秒工具超时并重置kernel。该超时不是KDE、浏览器页面或工作站后端崩溃，不把登录成功当恢复网页通过。
+
+重置后独立WMI确认无本轮Playwright测试profile浏览器进程；本批唯一私有SSH身份通道94072保留，核实Python PID1947173的完整脚本/公钥/角色后SIGTERM，终于返回temporaryBrowserUserRemoved=true（ helper同时GET确认404），终态exit1/KeyboardInterrupt属于主动清理。没有关闭用户其他浏览器，没有复用失去内存私钥的身份。真实网页须重新创建短步骤会话，控件等待限定10秒，避免对未观察到的选择器做30秒等待。
+
+两份网页专用源尚未执行，夹具wd-browser-restoring-c6f82d3bd8a44112aeb933e96f67c11e保留；原始UInt64/纳秒JSON已原样保存于ignored deploy/artifacts/ui/tree-restoring/installed-fixture.json（不能经JS数值重新序列化）。后续复用该原始描述完成回收/恢复及独立观察，而不是重做已知写操作。首轮低层失败现场wdv-agent-restore-097bb3963bab4c8d仍保留，需单独核实后精确清理。当前不签真实恢复网页、旧账号删除后捕获恢复、普通真实网页/双端退出、跨管理员中断接管或完整P2/76项。
+
 | 用户可见能力/控制 | 功能检查 | 视觉状态与预期证据 |
 | --- | --- | --- |
 | 回收记录中的恢复入口 | 仅管理员/独立根授权显示可用；选择历史捕获，不发写请求 | 历史卡片、长路径/摘要、禁用提示；桌面/320明暗 |
