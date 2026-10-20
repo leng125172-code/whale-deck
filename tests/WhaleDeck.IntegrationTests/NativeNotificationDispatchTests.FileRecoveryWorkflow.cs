@@ -18,12 +18,13 @@ public sealed partial class NativeNotificationDispatchTests
         FilePlanProtector protector, string kind, Guid originalId, bool dispose = false, bool exclusiveMove = false, bool recycleCompleted = false, DateTimeOffset? recoveryAt = null)
     {
         await using var db = new PlatformDbContext(options);
-        var material = new FileRecoveryMaterial(protector, protector, protector, protector, protector, protector, protector, protector, protector, protector);
+        var material = new FileRecoveryMaterial(protector, protector, protector, protector, protector, protector, protector, protector, protector, protector, protector);
         var clock = new NativeRecoveryClock();
         if (recoveryAt is { } at) clock.Now = FileTreeCopyValidation.Timestamp(at);
         FileRecoveryRepository Repository(PlatformDbContext context) => new(context, new(context, material, clock), material, new(context, protector), protector, clock,
-            new FileTreeRecyclingRepository(context, protector, clock, protector), new FileTreeOverwriteRestoringRepository(context, protector, clock, protector));
-        FileRecoveryInventory Inventory() => new(db, protector, protector, protector, protector, protector, protector, protector, protector, protector, protector);
+            new FileTreeRecyclingRepository(context, protector, clock, protector), new FileTreeOverwriteRestoringRepository(context, protector, clock, protector),
+            new FileTreePurgingRepository(context, protector, clock, protector, protector));
+        FileRecoveryInventory Inventory() => new(db, protector, protector, protector, protector, protector, protector, protector, protector, protector, protector, protector);
         var repository = Repository(db); var identity = new NativeRecoveryIdentity();
         var authorization = new FileManagementService(null!, null!, null!, identity, clock);
         var service = new FileRecoveryService(authorization, repository, protector, clock);
@@ -47,7 +48,7 @@ public sealed partial class NativeNotificationDispatchTests
             // not the original actor retained in the signed historical intent.
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.QueueAsync(actor with { Subject = overwriteBefore.ActorSubject, LoginBinding = overwriteBefore.LoginBinding },
                 command, Guid.NewGuid().ToString("D"), default));
-            Assert.Equal(10, FileRecoveryKinds.All.Count); Assert.True(kind.Length > 16);
+            Assert.Equal(11, FileRecoveryKinds.All.Count); Assert.True(kind.Length > 16);
         }
         var queued = await service.QueueAsync(actor, command, key, default);
         Assert.Equal(queued.Id, (await service.GetByKeyAsync(actor, key, default)).Id);
@@ -78,6 +79,8 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Null(await new FileTreeRestoringRepository(db, protector, clock, protector, protector).ClaimAsync(clock.GetUtcNow(), default));
         if (kind == FileRecoveryKinds.TreeOverwriteRestoring)
             Assert.Null(await new FileTreeOverwriteRestoringRepository(db, protector, clock, protector).ClaimAsync(clock.GetUtcNow(), default));
+        if (kind == FileRecoveryKinds.TreePurging)
+            Assert.Null(await new FileTreePurgingRepository(db, protector, clock, protector, protector).ClaimAsync(clock.GetUtcNow(), default));
         Assert.True(await worker.TickAsync(default)); var ready = await service.GetAsync(actor, queued.Id, default);
         Assert.Equal("Ready", ready.State); Assert.NotNull(ready.Confirmation); Assert.Equal(0, gateway.Fences);
         await using (var reloaded = new PlatformDbContext(options))
@@ -159,6 +162,7 @@ public sealed partial class NativeNotificationDispatchTests
                 FileRecoveryKinds.TreeRecycling => await db.FileTreeRecyclingOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, null)).SingleAsync(),
                 FileRecoveryKinds.TreeRestoring => await db.FileTreeRestoringOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),
                 FileRecoveryKinds.TreeOverwriteRestoring => await db.FileTreeOverwriteRestoringOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync(),
+                FileRecoveryKinds.TreePurging => await db.FileTreePurgingOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, null)).SingleAsync(),
                 _ => await db.FileTreeMoveOperations.Where(row => row.Id == originalId).Select(row => new RecoveryOriginalFacts(row.State, row.ActorSubject, row.LoginBinding, row.PublishedVersion)).SingleAsync()
             };
             Assert.Equal(resolution, original.State); Assert.NotEqual(actor.Subject, original.ActorSubject);
@@ -221,7 +225,7 @@ public sealed partial class NativeNotificationDispatchTests
         private FileRecoveryObservation Observe(FileRecoverySnapshot original, TerminalActor actor)
         {
             Assert.Equal(NativeRecoveryIdentity.CurrentSubject, actor.Subject); object receipt;
-            var state = recycleCompleted && (original.Kind is FileRecoveryKinds.TreeRecycling or FileRecoveryKinds.TreeRestoring or FileRecoveryKinds.TreeOverwriteRestoring) ? "Completed" : "Unknown";
+            var state = recycleCompleted && (original.Kind is FileRecoveryKinds.TreeRecycling or FileRecoveryKinds.TreeRestoring or FileRecoveryKinds.TreeOverwriteRestoring or FileRecoveryKinds.TreePurging) ? "Completed" : "Unknown";
             switch (original.Kind)
             {
                 case FileRecoveryKinds.Upload:
@@ -263,6 +267,13 @@ public sealed partial class NativeNotificationDispatchTests
                         backupVerified ? original.Binding.ExecutionJobId : null, backupVerified || overwrite.BackupMayBeRetained, backupVerified,
                         state == "Completed" || overwrite.OriginalsRetained, state == "Completed" || overwrite.TargetMayHaveChanged,
                         backupVerified ? overwrite.BackupArchiveBytes ?? 2147498000 : 0, backupVerified ? overwrite.BackupArchiveSha256 ?? new('8', 64) : ""); break;
+                case FileRecoveryKinds.TreePurging:
+                    var purging = material.Read<FileTreePurgingOperation>(original); var purgePlan = FileTreePurgingValidation.ReadPlan(purging);
+                    receipt = purging.ReceiptJson is not null ? FileTreePurgingValidation.ReadReceipt(purging) :
+                        new FileTreePurgingReceipt(original.Binding.ExecutionJobId, "DirectoryPurge", state, purgePlan.Fingerprint, purging.CaptureId, purgePlan.Command.Scope,
+                            purgePlan.EntryCount, purgePlan.TotalBytes, purgePlan.ArchiveBytes, true,
+                            state == "Completed" && FileTreePurgingValidation.Selects(purgePlan.Command.Scope, "Archive"),
+                            FileTreePurgingValidation.Selects(purgePlan.Command.Scope, "Originals")); break;
                 default:
                     var move = FileTreeMoveValidation.ReadPlan(material.Read<FileTreeMoveOperation>(original));
                     receipt = new FileTreeMoveReceipt(original.Binding.ExecutionJobId, "Unknown", move.Fingerprint, move.EntryCount, move.TotalBytes, "", true, false, false, true); break;

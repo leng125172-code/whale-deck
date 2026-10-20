@@ -33,6 +33,7 @@ builder.Services.AddHostedService<FileTreePackingWorker>();
 builder.Services.AddHostedService<FileTreeUnpackingWorker>();
 builder.Services.AddHostedService<FileTreeRestoringWorker>();
 builder.Services.AddHostedService<FileTreeOverwriteRestoringWorker>();
+builder.Services.AddHostedService<FileTreePurgingWorker>();
 builder.Services.AddHostedService<FileTreeRecyclingWorker>();
 builder.Services.AddHostedService<FileTreeMoveWorker>();
 builder.Services.AddHostedService<FileRecoveryWorker>();

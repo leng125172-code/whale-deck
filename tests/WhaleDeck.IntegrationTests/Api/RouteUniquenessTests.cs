@@ -13,6 +13,7 @@ public sealed class RouteUniquenessTests
         var endpoints = Collect(typeof(FilesController).Assembly.GetTypes());
         Assert.Contains("POST api/v1/files/tree-packings", endpoints.Keys);
         Assert.Contains("POST api/v1/files/tree-copies", endpoints.Keys);
+        Assert.Contains("POST api/v1/files/tree-purgings", endpoints.Keys);
     }
     [Fact]
     public void RegressionGuardRejectsTheOriginalCopiedControllerPrefix()

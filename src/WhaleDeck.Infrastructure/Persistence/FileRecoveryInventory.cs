@@ -9,7 +9,8 @@ namespace WhaleDeck.Infrastructure.Persistence;
 public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtector uploads,
     IFileMutationProtector mutations, IFileArchiveProtector archives,
     IFileTreeCopyProtector copies, IFileTreeMoveProtector moves, IFileTreePackingProtector packings, IFileTreeUnpackingProtector unpackings,
-    IFileTreeRecyclingProtector? recyclings = null, IFileTreeRestoringProtector? restorings = null, IFileTreeOverwriteRestoringProtector? overwrites = null) : IFileRecoveryInventory
+    IFileTreeRecyclingProtector? recyclings = null, IFileTreeRestoringProtector? restorings = null, IFileTreeOverwriteRestoringProtector? overwrites = null,
+    IFileTreePurgingProtector? purgings = null) : IFileRecoveryInventory
 {
     private sealed class Header
     {
@@ -45,6 +46,8 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
             .Select(row => new Header { Kind = FileRecoveryKinds.TreeRestoring, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.TreeRestoring);
         await Add(db.FileTreeOverwriteRestoringOperations.AsNoTracking().Where(row => row.State == "Unknown" && row.CompletedAtUtc == null)
             .Select(row => new Header { Kind = FileRecoveryKinds.TreeOverwriteRestoring, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.TreeOverwriteRestoring);
+        await Add(db.FileTreePurgingOperations.AsNoTracking().Where(row => row.State == "Unknown" && row.CompletedAtUtc == null)
+            .Select(row => new Header { Kind = FileRecoveryKinds.TreePurging, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.TreePurging);
         var ordered = headers.OrderBy(row => row.CreatedAtUtc).ThenBy(row => FileRecoveryValidation.Rank(row.Kind)).ThenBy(row => row.Id).Take(take + 1).ToArray();
         List<FileRecoveryCandidateDto> entries = [];
         foreach (var header in ordered.Take(take))
@@ -150,6 +153,16 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
                 var command = valid ? FileTreeOverwriteRestoringValidation.ReadCommand(row) : null;
                 return Candidate(row.Id, row.ExecutionJobId, row.Version, row.CreatedAtUtc, row.LeaseExpiresAtUtc, row.RootStartedAtUtc, valid,
                     command?.Source, command?.Target, row.PartialRetained || row.BackupMayBeRetained || row.OriginalsRetained);
+            }
+            case FileRecoveryKinds.TreePurging:
+            {
+                var row = await db.FileTreePurgingOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.State == "Unknown" && x.CompletedAtUtc == null, cancellationToken);
+                if (row is null) return null;
+                var valid = purgings is not null && FileTreePurgingValidation.HasValidBinding(row, purgings) && row.ExecutionJobId is not null;
+                var command = valid ? FileTreePurgingValidation.ReadCommand(row) : null;
+                // A negative purge flag is not proof of any retained object.
+                return Candidate(row.Id, row.ExecutionJobId, row.Version, row.CreatedAtUtc, row.LeaseExpiresAtUtc, row.RootStartedAtUtc, valid,
+                    command?.Source, null, false);
             }
             default:
             {

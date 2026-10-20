@@ -9,7 +9,7 @@ public sealed partial class FileRecoverySources
 {
     public async Task<string> DisposeAsync(FileRecoveryOperation recovery, FileRecoveryObservation observation,
         FileArchiveRepository archiveCatalog, CancellationToken cancellationToken, FileTreeRecyclingRepository? recyclingCatalog = null,
-        FileTreeOverwriteRestoringRepository? overwriteCatalog = null)
+        FileTreeOverwriteRestoringRepository? overwriteCatalog = null, FileTreePurgingRepository? purgingCatalog = null)
     {
         var snapshot = await LockAsync(recovery.Kind, recovery.OriginalIntentId, cancellationToken);
         if (snapshot.Binding != FileRecoveryValidation.Target(recovery)) throw new InvalidOperationException("FILES_RECOVERY_ORIGINAL_CHANGED");
@@ -83,6 +83,10 @@ public sealed partial class FileRecoverySources
                 overwrite.ArchiveBytes = overwritten?.ArchiveBytes ?? overwrite.ArchiveBytes; overwrite.ArchiveSha256 = overwritten?.ArchiveSha256 ?? overwrite.ArchiveSha256;
                 overwrite.PartialRetained = !complete && (overwrite.PartialRetained || overwritten?.PartialRetained == true);
                 overwrite.LeaseToken = null; overwrite.LeaseExpiresAtUtc = null; overwrite.Version++; break;
+            case FileRecoveryKinds.TreePurging:
+                var purging = material.Read<FileTreePurgingOperation>(snapshot); db.Attach(purging);
+                if (purgingCatalog is null || receipt is not FileTreePurgingReceipt purged) throw new InvalidOperationException("FILES_CAPTURE_CATALOGUE_REQUIRED");
+                purgingCatalog.DisposeRecovery(purging, purged, now, complete); state = purging.State; break;
         }
         var job = await db.OperationJobs.FromSqlInterpolated($"SELECT * FROM operation_jobs WHERE id={recovery.OriginalExecutionJobId} FOR UPDATE").SingleAsync(cancellationToken);
         job.State = state == "Succeeded" ? "Succeeded" : "Failed"; job.Phase = "AdministratorRecovery"; job.ErrorCode = state == "Succeeded" ? null : code;
@@ -90,7 +94,7 @@ public sealed partial class FileRecoverySources
         var sequence = (await db.OperationJobEvents.Where(row => row.JobId == job.Id).MaxAsync(row => (long?)row.Sequence, cancellationToken) ?? 0) + 1;
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
         await FilePathLocks.Release(db, job.Id, cancellationToken);
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('FileUploadRequested','FileUploadCancellationRequested','FileMutationRequested','FileMutationCancellationRequested','FileArchiveRequested','FileArchiveCancellationRequested','FileTreeCopyRequested','FileTreeCopyCancellationRequested','FileTreeMoveRequested','FileTreeMoveCancellationRequested','FileTreePackingRequested','FileTreePackingCancellationRequested','FileTreeUnpackingRequested','FileTreeUnpackingCancellationRequested','FileTreeRecyclingRequested','FileTreeRecyclingCancellationRequested','FileTreeRestoringRequested','FileTreeRestoringCancellationRequested','FileTreeOverwriteRestoringRequested','FileTreeOverwriteRestoringCancellationRequested') AND payload_json->>'jobId'={job.Id.ToString("D")}", cancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('FileUploadRequested','FileUploadCancellationRequested','FileMutationRequested','FileMutationCancellationRequested','FileArchiveRequested','FileArchiveCancellationRequested','FileTreeCopyRequested','FileTreeCopyCancellationRequested','FileTreeMoveRequested','FileTreeMoveCancellationRequested','FileTreePackingRequested','FileTreePackingCancellationRequested','FileTreeUnpackingRequested','FileTreeUnpackingCancellationRequested','FileTreeRecyclingRequested','FileTreeRecyclingCancellationRequested','FileTreeRestoringRequested','FileTreeRestoringCancellationRequested','FileTreeOverwriteRestoringRequested','FileTreeOverwriteRestoringCancellationRequested','FileTreePurgingRequested','FileTreePurgingCancellationRequested') AND payload_json->>'jobId'={job.Id.ToString("D")}", cancellationToken);
         return state;
     }
 }

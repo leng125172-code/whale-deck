@@ -8,6 +8,19 @@ namespace WhaleDeck.Infrastructure.Persistence;
 
 public sealed partial class FileTreePurgingRepository
 {
+    internal void DisposeRecovery(FileTreePurgingOperation row, FileTreePurgingReceipt receipt, DateTimeOffset now, bool complete)
+    {
+        if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("FILES_RECOVERY_TRANSACTION_REQUIRED");
+        if (row.State != "Unknown" || row.CompletedAtUtc is not null || !FileTreePurgingValidation.HasValidBinding(row, protector))
+            throw new InvalidOperationException("FILES_INTENT_BINDING_CHANGED");
+        if (complete != (receipt.State == "Completed") || !complete && receipt.State is not ("Unknown" or "Aborted"))
+            throw new InvalidOperationException("FILES_RECOVERY_RECEIPT_CHANGED");
+        StoreReceipt(row, receipt, FileTreePurgingValidation.Timestamp(now));
+        row.State = complete ? "Succeeded" : "Acknowledged"; row.CompletedAtUtc = FileTreePurgingValidation.Timestamp(now);
+        row.ResultCode = "FILES_ADMINISTRATOR_RECOVERY_DISPOSED"; row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
+        if (!FileTreePurgingValidation.HasValidBinding(row, protector)) throw new InvalidOperationException("FILES_INTENT_BINDING_CHANGED");
+    }
+
     public Task<bool> FinishAsync(FileTreePurgingOperation claimed, string state, string code, FileTreePurgingReceipt? receipt, CancellationToken cancellationToken) => Transaction(async () =>
     {
         if (state is not ("Succeeded" or "Unknown" or "Canceled" or "Failed")) throw new ArgumentException("FILES_RESULT_INVALID");

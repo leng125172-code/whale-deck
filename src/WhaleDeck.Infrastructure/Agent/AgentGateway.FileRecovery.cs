@@ -88,6 +88,12 @@ public sealed partial class AgentGateway : IFileRecoveryGateway
                 var receipt = fence ? await OverwriteRestoringAction(row, true, cancellationToken, currentActor) : await InspectTreeOverwriteRestoringAsync(row, cancellationToken);
                 return RecoveryObservation(original, receipt?.State, receipt, receipt?.State == "Completed");
             }
+            case FileRecoveryKinds.TreePurging:
+            {
+                var row = _recoveryMaterial.Read<FileTreePurgingOperation>(original);
+                var receipt = fence ? await PurgingAction(row, true, cancellationToken, currentActor) : await InspectTreePurgingAsync(row, cancellationToken);
+                return RecoveryObservation(original, receipt?.State, receipt, receipt?.State == "Completed");
+            }
             default: throw new ArgumentException("FILES_RECOVERY_KIND_INVALID");
         }
     }

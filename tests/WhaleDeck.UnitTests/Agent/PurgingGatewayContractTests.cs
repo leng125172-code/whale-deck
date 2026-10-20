@@ -28,6 +28,20 @@ public sealed class PurgingGatewayContractTests
     private static App.FileTreePurgingCommand Command(string scope = "All") => new(new("test.shared", "代码/历史目录"),
         new('A', 64), Capture, new('B', 64), "Overwrite", new('C', 64), scope, new('D', 64));
 
+    private static FileTreePurgingOperation SignedUnknown(FilePlanProtector protector)
+    {
+        var plan = Plan(); var actor = new App.TerminalActor("historical-purge-owner", null, [], new('A', 64), "historical-trace", null);
+        var key = Guid.NewGuid().ToString("D"); var id = FileTreePurgingValidation.IntentId(actor, key); var now = FileTreePurgingValidation.Timestamp(DateTimeOffset.UtcNow);
+        var row = new FileTreePurgingOperation { Id = id, CaptureId = Capture, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding, IdempotencyKey = key,
+            OwnerHash = FileManagementService.Hash("file-owner-v1:" + actor.Subject + ":" + actor.LoginBinding), SourceHash = new FilePathScope(plan.Command.Source).Hash,
+            RequestHash = protector.FingerprintRequest(new App.FileTreePurgingRequestBinding(id, actor.Subject, actor.LoginBinding, plan.Command, now, now.AddMinutes(15))),
+            CreatedAtUtc = now, PlanningExpiresAtUtc = now.AddMinutes(15), ReadyExpiresAtUtc = now.AddMinutes(5), CommandJson = JsonSerializer.Serialize(plan.Command),
+            PlanJson = JsonSerializer.Serialize(plan), ExecutionJobId = FileTreePurgingValidation.ExecutionId(id), ExecutionExpiresAtUtc = now.AddMinutes(15),
+            State = "Unknown", RootStartedAtUtc = now, Version = 17 };
+        row.PlanHash = protector.FingerprintPlan(FileTreePurgingValidation.PlanBinding(row));
+        Assert.True(FileTreePurgingValidation.HasValidBinding(row, protector)); return row;
+    }
+
     private static App.FileTreePurgingPlan Plan(string scope = "All") => new(Command(scope), new('1', 64),
         scope == "Archive" ? null : new(ulong.MaxValue, 9_007_199_254_740_993UL), new('2', 64),
         new(9_007_199_254_740_993UL, ulong.MaxValue), new('3', 64), new('4', 64), new('5', 64),
@@ -277,6 +291,29 @@ public sealed class PurgingGatewayContractTests
     }
 
     [Theory]
+    [InlineData(false)][InlineData(true)]
+    public async Task CurrentAdminRecoveryCanOnlyInspectOrFenceTheExactHistoricalBinding(bool fence)
+    {
+        var response = Receipt(state: "Unknown"); using var harness = new Harness(fence ? "Discard" : "Inspect", response);
+        var row = SignedUnknown(harness.Protector); response.OperationId = row.ExecutionJobId!.Value.ToString("N");
+        var material = new FileRecoveryMaterial(harness.Protector, harness.Protector, harness.Protector, harness.Protector, harness.Protector, harness.Protector,
+            harness.Protector, harness.Protector, harness.Protector, harness.Protector, harness.Protector);
+        var snapshot = material.Capture(row); var current = new App.TerminalActor("current-recovery-admin", null, [], new('F', 64), "current-recovery-trace", null);
+        var observation = fence ? await harness.Gateway.FenceForRecoveryAsync(snapshot, current, default) : await harness.Gateway.InspectForRecoveryAsync(snapshot, current, default);
+        Assert.Equal("Unknown", observation.State); Assert.False(observation.BindingCurrent); Assert.NotNull(material.ValidateObservation(snapshot, observation));
+        if (fence)
+        {
+            var request = Assert.IsType<Rpc.FileTreePurgingApplyRequest>(harness.Handler.Request);
+            Assert.Equal(row.OwnerHash, request.Owner); Assert.Equal(row.ExecutionJobId.Value.ToString("N"), request.OperationId);
+            Assert.Equal(current.Subject, request.Context.ActorSubject); Assert.Equal(current.TraceId, request.Context.TraceId);
+            Assert.Equal(Plan().Command.CaptureOwner, request.Plan.Command.CaptureOwner); Assert.Equal(Capture.ToString("N"), request.Plan.Command.CaptureId);
+        }
+        else Assert.Equal(row.OwnerHash, Assert.IsType<Rpc.FileTreePurgingLookup>(harness.Handler.Request).Owner);
+        Assert.Equal(row.ActorSubject, material.Read<FileTreePurgingOperation>(snapshot).ActorSubject);
+        harness.AssertSignature(fence ? "Discard" : "Inspect", "Apply"); Assert.Equal(1, harness.Handler.Calls);
+    }
+
+    [Theory]
     [InlineData(StatusCode.Unavailable)][InlineData(StatusCode.PermissionDenied)][InlineData(StatusCode.InvalidArgument)]
     public async Task InspectDoesNotConcealOtherRpcFailuresAsMissing(StatusCode code)
     {
@@ -382,10 +419,12 @@ public sealed class PurgingGatewayContractTests
         private readonly string _keyFile = Path.Combine(Path.GetTempPath(), "wd-purge-contract-" + Guid.NewGuid().ToString("N"));
         private readonly byte[] _key = RandomNumberGenerator.GetBytes(32);
         public AgentGateway Gateway { get; }
+        public FilePlanProtector Protector { get; }
         public ResponseHandler Handler { get; }
         public Harness(string method, IMessage response, StatusCode status = StatusCode.OK)
         {
             File.WriteAllBytes(_keyFile, _key);
+            Protector = new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = _keyFile }).Build());
             Gateway = PurgingGatewayContractTests.Gateway(new CapabilitiesInvoker(Capabilities()), _keyFile);
             Handler = new(method, response, status);
             var channel = GrpcChannel.ForAddress("http://127.0.0.1", new GrpcChannelOptions { HttpHandler = Handler });

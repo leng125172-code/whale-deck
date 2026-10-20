@@ -54,12 +54,12 @@ public sealed partial class AgentGateway : IFileTreePurgingGateway
     }
     public Task<App.FileTreePurgingReceipt> ApplyTreePurgingAsync(FileTreePurgingOperation operation, CancellationToken cancellationToken) => PurgingAction(operation, false, cancellationToken);
     public Task<App.FileTreePurgingReceipt> DiscardTreePurgingAsync(FileTreePurgingOperation operation, CancellationToken cancellationToken) => PurgingAction(operation, true, cancellationToken);
-    private async Task<App.FileTreePurgingReceipt> PurgingAction(FileTreePurgingOperation operation, bool discard, CancellationToken cancellationToken)
+    private async Task<App.FileTreePurgingReceipt> PurgingAction(FileTreePurgingOperation operation, bool discard, CancellationToken cancellationToken, App.TerminalActor? currentActor = null)
     {
         var id = PurgingExecution(operation); var plan = FileTreePurgingValidation.ReadPlan(operation); FileTreePurgingValidation.Plan(plan);
         var client = await PurgingClient(cancellationToken);
         var request = new FileTreePurgingApplyRequest { OperationId = id.ToString("N"), Owner = operation.OwnerHash,
-            Context = new() { ActorSubject = operation.ActorSubject, TraceId = operation.Id.ToString("D") }, Plan = new() {
+            Context = new() { ActorSubject = currentActor?.Subject ?? operation.ActorSubject, TraceId = currentActor?.TraceId ?? operation.Id.ToString("D") }, Plan = new() {
                 Command = PurgingCommand(plan.Command), SourcePolicyHash = plan.SourcePolicyHash, SourceParent = PurgingIdentity(plan.SourceParent),
                 StorageHash = plan.StorageHash, StoreIdentity = PurgingIdentity(plan.StoreIdentity), CaptureMetadataHash = plan.CaptureMetadataHash,
                 OriginReceiptHash = plan.OriginReceiptHash, ManifestFileSha256 = plan.ManifestFileSha256, ArchiveIdentity = PurgingIdentity(plan.ArchiveIdentity),

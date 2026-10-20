@@ -130,6 +130,22 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal("Uncertain", (await History(lostCapture)).ArchiveState); Assert.Empty(await db.FilePathLocks.Where(item => item.OperationId == lost.ExecutionJobId).ToArrayAsync());
             await Assert.ThrowsAsync<InvalidOperationException>(() => restoring.QueueAsync(actor, new(lostCapture, new("test.purgeflow", "uncertain-archive")), Guid.NewGuid().ToString("D"), default));
             gateway.Unknown = false;
+            foreach (var completed in new[] { false, true })
+            {
+                var adoptedCapture = await Capture(completed ? "admin-completed" : "admin-unknown"); var adopted = await Confirm(await Ready(adoptedCapture, "All"));
+                gateway.Unknown = !completed; gateway.LoseResponse = completed; Assert.True(await worker.TickAsync(default)); gateway.Unknown = false;
+                var beforeAdoption = (await repository.OwnedAsync(actor, adopted.Id, default))!;
+                Assert.Equal("Unknown", beforeAdoption.State); var appliesBeforeAdoption = gateway.Applies;
+                await FileRecoveryWorkflowBoundaries(options, protector, FileRecoveryKinds.TreePurging, adopted.Id, recoveryAt: clock.Now);
+                await FileRecoveryWorkflowBoundaries(options, protector, FileRecoveryKinds.TreePurging, adopted.Id, true, false, completed, clock.Now);
+                var disposed = (await repository.OwnedAsync(actor, adopted.Id, default))!;
+                Assert.Equal(completed ? "Succeeded" : "Acknowledged", disposed.State); Assert.Equal(appliesBeforeAdoption, gateway.Applies);
+                Assert.True(FileTreePurgingValidation.HasValidBinding(disposed, protector));
+                if (beforeAdoption.ReceiptJson is not null)
+                { Assert.Equal(beforeAdoption.ReceiptHash, disposed.ReceiptHash); Assert.Equal(beforeAdoption.ReceiptObservedAtUtc, disposed.ReceiptObservedAtUtc); }
+                var adoptedHistory = await History(adoptedCapture); Assert.False(adoptedHistory.CleanupActive);
+                Assert.Equal(completed ? "Purged" : "Uncertain", adoptedHistory.ArchiveState); Assert.Equal("Purged", adoptedHistory.OriginalsState);
+            }
             var canceledCapture = await Capture("canceled"); var canceled = await Confirm(await Ready(canceledCapture, "All")); await service.CancelAsync(actor, canceled.Id, default);
             applied = gateway.Applies; Assert.True(await worker.TickAsync(default)); Assert.Equal(applied, gateway.Applies); Assert.Equal("Canceled", (await service.GetAsync(actor, canceled.Id, default)).State);
             Assert.Equal("Retained", (await History(canceledCapture)).ArchiveState);
@@ -172,7 +188,7 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal("FILES_OPERATION_BUDGET_EXHAUSTED", (await Assert.ThrowsAsync<InvalidOperationException>(() => service.QueueAsync(actor, new(canceledCapture, "All"), Guid.NewGuid().ToString("D"), default))).Message);
             foreach (var item in waiting) await service.CancelAsync(actor, item.Id, default);
             var downgrade = await Assert.ThrowsAsync<PostgresException>(() => db.GetService<IMigrator>().MigrateAsync("20261020112522_FileTreeOverwriteRestoringWorkflow"));
-            Assert.Contains("tree_purging_downgrade_requires_empty_kind", downgrade.MessageText, StringComparison.Ordinal);
+            Assert.Contains("tree_purging_recovery_downgrade_requires_empty_kind", downgrade.MessageText, StringComparison.Ordinal);
             Assert.False(db.Database.HasPendingModelChanges()); Assert.Equal(0, await db.FileTreePurgingOperations.CountAsync(item => item.CompletedAtUtc == null));
             var details = string.Join(' ', await db.AuditEvents.Where(item => item.Action.StartsWith("files.tree-purge.")).Select(item => item.DetailJson).ToArrayAsync());
             Assert.DoesNotContain("CaptureOwner", details, StringComparison.Ordinal); Assert.DoesNotContain("lost-response", details, StringComparison.Ordinal);
