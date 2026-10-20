@@ -29,6 +29,8 @@ jobs:
           python3 -m unittest discover -s deploy/validation -p test_tree_rpc_diagnostics.py
           python3 -m unittest discover -s deploy/validation -p test_unpacking_probe_scope.py
           python3 -m unittest discover -s deploy/validation -p test_restoring_probe_scope.py
+          sudo python3 -m unittest discover -s deploy/validation -p test_overwrite_probe_scope.py
+          python3 -m py_compile deploy/validation/validate_tree_overwrite_restoring_agent.py
           python3 -m py_compile deploy/validation/validate_file_tree_unpacking_bff.py
           python3 -m py_compile deploy/validation/validate_file_tree_restoring_bff.py
           sudo python3 -m unittest discover -s deploy/validation -p test_unpacking_browser_fixture.py
