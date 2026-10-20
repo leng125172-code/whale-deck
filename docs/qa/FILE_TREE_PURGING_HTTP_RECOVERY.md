@@ -30,4 +30,4 @@
 
 ## 后续
 
-补三范围清理面板、第11类接管的捕获/范围/组件事实、实际身份/BFF/Worker/已装UDS/HDD与重启错误态验收，再按dev流程覆盖发布；观察后续前端消费者提交的独立CI。当前未升级生产API/Worker/Gateway、未运行生产migration或清理任务；不把源码候选、普通路由反射测试或前序Agent证据代作这一步实测。完整76项目标仍active。
+第11类接管的捕获/范围/组件当前事实已在后续6ce7dad候选补齐，见[独立证据与失败修正](FILE_TREE_PURGING_RECOVERY_SUMMARY.md)。接续三范围清理发起/确认面板、实际身份/BFF/Worker/已装UDS/HDD与重启错误态验收，再按dev流程覆盖发布；观察新源码独立CI。当前未升级生产API/Worker/Gateway、未运行生产migration或清理任务；不把源码候选、普通路由反射测试或前序Agent证据代作这一步实测。完整76项目标仍active。
