@@ -63,7 +63,10 @@ internal static class FileTreeRestoringProbe
                     plan.ArchiveBytes == capture.ArchiveBytes && plan.ArchiveSha256 == capture.ArchiveSha256);
                 await Denied(async () => _ = await restoring.PlanAsync(new() { Context = actor, Command = command }, token), StatusCode.PermissionDenied);
                 var substituted = command.Clone(); substituted.CaptureOwner = new('0', 64);
-                await Denied(async () => _ = await restoring.PlanAsync(new() { Context = actor, Command = substituted }, Headers(method + "Plan")), StatusCode.FailedPrecondition);
+                Phase = "restoring-" + size + "-capture-owner-denial";
+                // A foreign owner must not learn whether this private capture exists.
+                await Denied(async () => _ = await restoring.PlanAsync(new() { Context = actor, Command = substituted }, Headers(method + "Plan")), StatusCode.NotFound);
+                Phase = "restoring-" + size + "-cancel-and-method-denials";
                 var canceledRequest = new FileTreeRestoringApplyRequest { Context = actor, Owner = currentOwner, OperationId = Guid.NewGuid().ToString("N"), Plan = plan };
                 var aborted = await restoring.DiscardAsync(canceledRequest, Headers(method + "Discard"));
                 Check(aborted.State == "Aborted" && !aborted.PartialRetained && aborted.CaptureId == capture.CaptureId);

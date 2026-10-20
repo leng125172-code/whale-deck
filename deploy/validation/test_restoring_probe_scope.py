@@ -20,6 +20,8 @@ class RestoringProbeScopeTests(unittest.TestCase):
         self.assertIn('CryptographicOperations.ZeroMemory(key)', probe)
         self.assertNotIn('FileTreeRestoringPolicy', probe)
         self.assertNotIn('docker.sock', probe)
+        self.assertIn('"-capture-owner-denial"', probe)
+        self.assertIn('Command = substituted }, Headers(method + "Plan")), StatusCode.NotFound)', probe)
 
 
 if __name__ == '__main__': unittest.main()
