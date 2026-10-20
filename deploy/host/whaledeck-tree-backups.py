@@ -18,6 +18,7 @@ import time
 
 class TreeBackups:
     FOLDER = 'directory-archives'
+    MAX_STORE_ENTRIES = 100000  # Separate bounded permanent-metadata budget.
 
     def __init__(self, files, backups, manifest_type, codec_type, *, cancelled=None):
         self.f, self.b, self.manifest_type, self.codec_type = files, backups, manifest_type, codec_type
@@ -70,7 +71,7 @@ class TreeBackups:
                     with os.scandir(folder) as children:
                         for _ in children:
                             count += 1
-                            if count >= configuration['maxVersions'] * 5: self.reject('FILES_BACKUP_HISTORY_LIMIT')
+                            if count >= self.MAX_STORE_ENTRIES: self.reject('FILES_TREE_BACKUP_METADATA_LIMIT')
                 lock = os.open(request['operationId']+'.lock',os.O_WRONLY | (0 if require_existing else os.O_CREAT) | os.O_NOFOLLOW,0o600,dir_fd=folder)
                 info = os.fstat(lock)
                 if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600: self.reject('FILES_TREE_BACKUP_STORE_UNSAFE')
@@ -91,11 +92,31 @@ class TreeBackups:
         count = 0
         with os.scandir(folder) as children:
             for item in children:
-                if re.fullmatch(r'[a-f0-9]{32}\.json',item.name): count += 1
+                if re.fullmatch(r'[a-f0-9]{32}\.json',item.name) and not self.purged_payload(folder, item.name[:-5]): count += 1
                 if count >= configuration['maxVersions']: self.reject('FILES_BACKUP_HISTORY_LIMIT')
         usage = os.fstatvfs(folder)
         reserve = max(configuration['reserveBytes'],usage.f_blocks * usage.f_frsize * configuration['reservePercent']//100)
         if usage.f_bavail * usage.f_frsize < estimate + reserve: self.reject('FILES_BACKUP_CAPACITY_REQUIRED')
+
+    def purged_payload(self, folder, operation):
+        # Retain the immutable proof/tombstone, but an explicitly purged payload
+        # must release its live-version slot. Malformed or contradictory history
+        # still consumes a slot; never interpret a missing archive alone as purge.
+        try:
+            value = self.b.read_json(folder, operation + '.json')
+            if value.get('state') != 'Purged': return False
+            if type(value.get('schemaVersion')) is not int or value['schemaVersion'] != 1 or value.get('kind') != 'Directory' or value.get('operationId') != operation or value.get('captureKind') not in ('Trash', 'Overwrite'): return False
+            if type(value.get('storageId')) is not str or not re.fullmatch('[a-z0-9.-]{1,64}', value['storageId']): return False
+            for key in ('owner', 'manifestSha256', 'policyHash', 'storageHash'):
+                if type(value.get(key)) is not str or not re.fullmatch('[A-F0-9]{64}', value[key]): return False
+            source = value.get('source')
+            if not isinstance(source, dict) or set(source) != {'rootId', 'path', 'expectedVersion'} or any(type(item) is not str for item in source.values()) or not re.fullmatch('[a-z0-9.-]{1,64}', source['rootId']) or not re.fullmatch('[A-F0-9]{64}', source['expectedVersion']): return False
+            self.f.relative(source['path'])
+            if self.f.protected(source['path']): return False
+            seed_keys = ('schemaVersion', 'kind', 'storageId', 'operationId', 'owner', 'source', 'manifestSha256', 'captureKind', 'policyHash', 'storageHash', 'storeIdentity')
+            self.read(folder, operation, {key: value[key] for key in seed_keys})
+            return self.f.current(folder, operation + '.tar.gz') is None and self.f.current(folder, operation + '.partial') is None
+        except (OSError, KeyError, TypeError, ValueError, self.f.Rejected): return False
 
     def checkpoint(self, phase):
         """Trusted disposable-test crash instrumentation, never request data."""
@@ -107,13 +128,17 @@ class TreeBackups:
         if any(value.get(key) != item for key,item in seed.items()): self.reject('FILES_TREE_BACKUP_IDEMPOTENCY_CONFLICT')
         if type(value.get('schemaVersion')) is not int or not isinstance(value.get('storeIdentity'),list) or len(value['storeIdentity']) != 2 or any(type(item) is not int for item in value['storeIdentity']):
             self.reject('FILES_TREE_BACKUP_METADATA_INVALID')
-        if value.get('state') not in ('Preparing','Ready','Verified') or type(value.get('createdAtUnixMs')) is not int or not 0 <= value['createdAtUnixMs'] <= 253402300799999 or type(value.get('differentSourceDevice')) is not bool:
+        if value.get('state') not in ('Preparing','Ready','Verified','Purged') or type(value.get('createdAtUnixMs')) is not int or not 0 <= value['createdAtUnixMs'] <= 253402300799999 or type(value.get('differentSourceDevice')) is not bool:
             self.reject('FILES_TREE_BACKUP_METADATA_INVALID')
+        if 'originalsPurged' in value and type(value['originalsPurged']) is not bool: self.reject('FILES_TREE_BACKUP_METADATA_INVALID')
+        for flag, marker in ((value.get('originalsPurged', False), 'originalsPurgedBy'), (value['state'] == 'Purged', 'archivePurgedBy')):
+            if flag != (marker in value): self.reject('FILES_TREE_BACKUP_METADATA_INVALID')
+            if flag: self.f.identity(value[marker])
         for key in ('manifestFileSha256','contentSha256'):
             if type(value.get(key)) is not str or not re.fullmatch('[A-F0-9]{64}',value[key]): self.reject('FILES_TREE_BACKUP_METADATA_INVALID')
         if type(value.get('entryCount')) is not int or not 1 <= value['entryCount'] <= 10000 or type(value.get('totalBytes')) is not int or not 0 <= value['totalBytes'] <= 16 * 1024**3:
             self.reject('FILES_TREE_BACKUP_METADATA_INVALID')
-        if value['state'] in ('Ready','Verified'):
+        if value['state'] in ('Ready','Verified','Purged'):
             if type(value.get('archiveSha256')) is not str or not re.fullmatch('[A-F0-9]{64}',value['archiveSha256']) or type(value.get('archiveBytes')) is not int or not 1 <= value['archiveBytes'] <= 17 * 1024**3:
                 self.reject('FILES_TREE_BACKUP_METADATA_INVALID')
             identity = value.get('archiveIdentity')

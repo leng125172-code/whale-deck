@@ -70,7 +70,7 @@ def restoration_type(unpacking_type):
                     # exactly the new restore/recycle grants, not a changed
                     # path/owner or any other policy relaxation. Never rewrite
                     # old metadata or accept arbitrary removed action sets.
-                    grants = ('files-tree-restore', 'files-tree-trash', 'files-tree-overwrite-restore')
+                    grants = ('files-tree-restore', 'files-tree-trash', 'files-tree-overwrite-restore', 'files-tree-purge')
                     for added in itertools.chain.from_iterable(itertools.combinations(grants, size) for size in range(1, len(grants) + 1)):
                         previous = {**policy, 'allowedActions': [action for action in policy['allowedActions'] if action not in added]}
                         legacy = self.captures.seed(request, previous, configuration, folder)
