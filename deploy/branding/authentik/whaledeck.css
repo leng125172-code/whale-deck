@@ -107,6 +107,31 @@ ak-flow-executor::part(branding),
 }
 
 @media (max-width: 760px) {
+  /* Native header keeps tools in a fixed column, squeezing the logo to ~28px
+     at 320px. Stack brand/tools instead of hiding controls or clipping text. */
+  :host(ak-interface-user) .pf-c-page__header,
+  :host(ak-interface-admin) .pf-c-page__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  :host(ak-interface-user) .pf-c-page__header-brand,
+  :host(ak-interface-admin) .pf-c-page__header-brand {
+    flex: 0 0 100%;
+    padding: 0.5rem 1rem 0;
+  }
+  :host(ak-interface-user) .pf-c-page__header-brand-link,
+  :host(ak-interface-admin) .pf-c-page__header-brand-link {
+    flex: 0 0 auto;
+  }
+  :host(ak-interface-user) .pf-c-page__header-tools,
+  :host(ak-interface-admin) .pf-c-page__header-tools {
+    flex: 1 1 100%;
+    margin: 0;
+    padding: 0.25rem 1rem 0.5rem;
+    justify-content: flex-end;
+    min-width: 0;
+  }
   :host(ak-interface-user) .pf-c-page__header-brand .pf-c-brand,
   :host(ak-interface-admin) .pf-c-page__header-brand .pf-c-brand {
     width: 160px;
