@@ -151,6 +151,19 @@ ak-flow-executor::part(branding),
   background: var(--wd-panel-bg);
 }
 
+/* Pages and cards have their own shadow roots and native local backgrounds;
+   changing only the outer shell leaves the original grey/black blocks behind. */
+.pf-c-page__main-section {
+  background-color: var(--wd-page-bg);
+}
+
+.pf-c-card,
+.pf-c-table {
+  background-color: var(--wd-panel-bg);
+  --pf-c-card--BackgroundColor: var(--wd-panel-bg);
+  --pf-c-table--BackgroundColor: var(--wd-panel-bg);
+}
+
 :host(ak-interface-user) .pf-c-page__header-brand .pf-c-brand,
 :host(ak-interface-admin) .pf-c-page__header-brand .pf-c-brand {
   width: 224px;
@@ -161,6 +174,39 @@ ak-flow-executor::part(branding),
 }
 
 @media (max-width: 760px) {
+  :host(ak-page-navbar),
+  :host(ak-interface-admin) .pf-c-page__drawer,
+  :host(ak-interface-admin) .pf-c-page__main {
+    min-width: 0;
+    max-width: 100%;
+  }
+  :host(ak-page-navbar) .main-content {
+    height: auto;
+    min-height: 104px;
+    grid-template: 'toggle primary' auto 'secondary secondary' auto / auto minmax(0, 1fr);
+    column-gap: 0.5rem;
+  }
+  :host(ak-page-navbar) .items.primary {
+    grid-area: primary;
+    min-width: 0;
+    padding-block: 0.75rem;
+  }
+  :host(ak-page-navbar) .page-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  :host(ak-page-navbar) .items.page-description {
+    display: none;
+  }
+  :host(ak-page-navbar) .items.secondary {
+    grid-area: secondary;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    padding-inline: 0.5rem;
+    justify-content: flex-end;
+  }
   /* Native header keeps tools in a fixed column, squeezing the logo to ~28px
      at 320px. Stack brand/tools instead of hiding controls or clipping text. */
   :host(ak-interface-user) .pf-c-page__header,
