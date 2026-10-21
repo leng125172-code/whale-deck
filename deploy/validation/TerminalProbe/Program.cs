@@ -12,6 +12,7 @@ using WhaleDeck.Contracts.Agent.V1;
 try
 {
     if (args.Length == 1 && args[0] == "container") await ContainerTerminalProbe.RunAsync();
+    else if (args.Length == 1 && args[0] == "metrics") await HostMetricProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "files") await FileTransferProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "file-operations") await FileOperationProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "tree-copy") await FileTreeCopyProbe.RunAsync();

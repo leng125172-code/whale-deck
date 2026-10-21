@@ -9,6 +9,7 @@ namespace WhaleDeck.Worker;
 /// <summary>Host ingestion does not wait for discovery, jobs, backup, catalog or rollup work.</summary>
 public sealed partial class HostMetricIngestionWorker(IServiceScopeFactory scopeFactory, ILogger<HostMetricIngestionWorker> logger) : BackgroundService
 {
+    public const long WriteLock = 82_592_831_620_707;
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         DateTimeOffset? acknowledged = null;
@@ -55,7 +56,7 @@ public sealed partial class HostMetricIngestionWorker(IServiceScopeFactory scope
             // This dedicated context is not shared with any other Worker job.
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-            if (!await db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_xact_lock(82592831620706) AS \"Value\"").SingleAsync(cancellationToken))
+            if (!await db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_xact_lock({WriteLock}) AS \"Value\"").SingleAsync(cancellationToken))
                 return acknowledged;
             var resource = await db.ManagedResources.SingleOrDefaultAsync(item => item.ResourceType == "Host" && item.ExternalId == "local", cancellationToken);
             if (resource is null)

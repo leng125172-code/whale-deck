@@ -208,6 +208,17 @@ public sealed class NativeMetricAggregationTests
             Assert.All(stored.Skip(1), sample => Assert.Equal("Good", sample.Quality));
         }
         var next = samples[^1] with { SampledAtUtc = samples[^1].SampledAtUtc.AddSeconds(6), Value = 99 };
+        // Holding the production alert lock must NOT block independent metric ingestion.
+        await using (var alert = new NpgsqlConnection(connection))
+        {
+            await alert.OpenAsync();
+            await using var alertTransaction = await alert.BeginTransactionAsync();
+            await using var holdAlert = new NpgsqlCommand("SELECT pg_advisory_xact_lock(82592831620706)", alert, alertTransaction);
+            await holdAlert.ExecuteNonQueryAsync();
+            await using var independent = new PlatformDbContext(options);
+            Assert.Equal(samples[^1].SampledAtUtc, await HostMetricIngestionWorker.PersistAsync(independent, samples, null, DateTimeOffset.UtcNow, default));
+            await alertTransaction.RollbackAsync();
+        }
         var failingOptions = new DbContextOptionsBuilder<PlatformDbContext>().UseNpgsql(connection, provider => provider.EnableRetryOnFailure())
             .AddInterceptors(new RejectSave()).Options;
         await using (var failed = new PlatformDbContext(failingOptions))
@@ -218,7 +229,8 @@ public sealed class NativeMetricAggregationTests
         {
             await held.OpenAsync();
             await using var transaction = await held.BeginTransactionAsync();
-            await using var acquire = new NpgsqlCommand("SELECT pg_advisory_xact_lock(82592831620706)", held, transaction);
+            await using var acquire = new NpgsqlCommand("SELECT pg_advisory_xact_lock(@key)", held, transaction);
+            acquire.Parameters.AddWithValue("key", HostMetricIngestionWorker.WriteLock);
             await acquire.ExecuteNonQueryAsync();
             await using var blocked = new PlatformDbContext(options);
             Assert.Equal(samples[^1].SampledAtUtc, await HostMetricIngestionWorker.PersistAsync(blocked, [next], samples[^1].SampledAtUtc, DateTimeOffset.UtcNow, default));
