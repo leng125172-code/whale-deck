@@ -25,6 +25,8 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_build_*.py'
           bash -n deploy/host/whaledeck-privileged
           python3 -m unittest discover -s deploy/validation -p test_container_terminal.py
+          sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_container_files.py
+          python3 -m py_compile deploy/validation/validate_container_file_reads.py
           python3 -m unittest discover -s deploy/validation -p test_metric_continuity.py
           python3 -m unittest discover -s deploy/validation -p test_scope_baseline.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_authentik_branding.py
