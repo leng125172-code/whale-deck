@@ -131,6 +131,7 @@ internal static partial class ContainerFilePolicy
             "CONTAINER_FILES_VERSION_CONFLICT" or "CONTAINER_FILES_READ_CHANGED" => StatusCode.Aborted,
             "CONTAINER_FILES_BUSY" or "CONTAINER_FILES_CAPACITY_LOW" or "CONTAINER_FILES_SIZE_LIMIT" or "CONTAINER_FILES_SCAN_LIMIT" => StatusCode.ResourceExhausted,
             "CONTAINER_FILES_TIMEOUT" or "CONTAINER_FILES_INPUT_TIMEOUT" => StatusCode.DeadlineExceeded,
+            "CONTAINER_FILES_CLIENT_DISCONNECTED" => StatusCode.Cancelled,
             "CONTAINER_FILES_NOT_FOUND" => StatusCode.NotFound,
             "CONTAINER_FILES_INSTANCE_CHANGED" or "CONTAINER_FILES_TARGET_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or "CONTAINER_NOT_RUNNING" => StatusCode.FailedPrecondition,
             _ => StatusCode.Unavailable

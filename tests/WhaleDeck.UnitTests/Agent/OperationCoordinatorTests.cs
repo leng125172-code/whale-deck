@@ -34,15 +34,22 @@ public sealed class OperationCoordinatorTests
             Assert.Equal(completionWins ? OperationState.Succeeded : OperationState.Canceled, operation.State);
             var persisted = Path.Combine(root, "operations", operation.OperationId + ".json");
             var expected = completionWins ? OperationState.Succeeded : OperationState.Canceled;
-            while (ReadPersisted(persisted).State != expected && DateTimeOffset.UtcNow < deadline)
+            while (ReadPersisted(persisted)?.State != expected && DateTimeOffset.UtcNow < deadline)
                 await Task.Delay(10);
-            Assert.Equal(expected, ReadPersisted(persisted).State);
+            Assert.Equal(expected, Assert.IsType<OperationHandle>(ReadPersisted(persisted)).State);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
     }
-    private static OperationHandle ReadPersisted(string path)
+    private static OperationHandle? ReadPersisted(string path)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        return JsonSerializer.Deserialize<OperationHandle>(stream)!;
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return JsonSerializer.Deserialize<OperationHandle>(stream)!;
+        }
+        // A Windows File.Replace opener may observe the transient missing name.
+        // This is a bounded persistence poll, not a successful terminal result:
+        // the final assertion still requires the actual complete disk record.
+        catch (FileNotFoundException) { return null; }
     }
 }

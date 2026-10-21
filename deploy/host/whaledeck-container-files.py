@@ -331,6 +331,14 @@ class ReadLease:
         if self.descriptor is not None: os.close(self.descriptor); self.descriptor = None
 
 
+def receiver_current(output):
+    if output is not None: return  # Isolated in-memory callers do not own a transport pipe.
+    poller = select.poll()
+    poller.register(sys.stdout.fileno(), select.POLLHUP | select.POLLERR)
+    if any(events & (select.POLLHUP | select.POLLERR | select.POLLNVAL) for _, events in poller.poll(0)):
+        raise Rejected('CONTAINER_FILES_CLIENT_DISCONNECTED')
+
+
 def download(request, session, files, output=None):
     request_fields(request, 'download')
     if protected(request['path'], files): raise Rejected('CONTAINER_FILES_PROTECTED')
@@ -349,6 +357,7 @@ def download(request, session, files, output=None):
             if os.fstat(captured.fileno()).st_nlink != 0: raise Rejected('CONTAINER_FILES_STATE_UNSAFE')
             digest = hashlib.sha256(); copied = 0; deadline = time.monotonic() + 300
             while copied < info.st_size:
+                receiver_current(output)
                 session.current()
                 if time.monotonic() > deadline: raise Rejected('CONTAINER_FILES_TIMEOUT')
                 data = os.read(descriptor, min(CHUNK, info.st_size - copied))
@@ -366,6 +375,7 @@ def download(request, session, files, output=None):
             files.emit({'type': 'metadata', **metadata(request, request['path'], info, files)}, output)
             sent = 0
             while sent < copied:
+                receiver_current(output)
                 session.current()
                 if time.monotonic() > deadline: raise Rejected('CONTAINER_FILES_TIMEOUT')
                 data = captured.read(min(CHUNK, copied - sent))
@@ -414,5 +424,6 @@ if __name__ == '__main__':
     try: main()
     except BaseException as error:
         # Stable code only: never a path, Docker exception body or contents.
-        print(json.dumps({'type': 'error', 'code': error_code(error)}), file=sys.stdout, flush=True)
+        try: print(json.dumps({'type': 'error', 'code': error_code(error)}), file=sys.stdout, flush=True)
+        except (OSError, ValueError): pass  # A disconnected peer has no response/log sink.
         raise SystemExit(1) from None

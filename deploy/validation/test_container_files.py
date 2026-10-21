@@ -228,6 +228,19 @@ class LinuxReadTests(unittest.TestCase):
             engine.download(self.download_request(), self.session, self.files, output)
         self.assertEqual(b'', output.getvalue()); self.assertEqual([], list(self.spool.iterdir()))
 
+    def test_disconnected_receiver_stops_capture_without_content_or_cache_files(self):
+        output = io.BytesIO()
+        with patch.object(engine, 'receiver_current', side_effect=engine.Rejected('CONTAINER_FILES_CLIENT_DISCONNECTED')), self.assertRaisesRegex(engine.Rejected, 'CLIENT_DISCONNECTED'):
+            engine.download(self.download_request(), self.session, self.files, output)
+        self.assertEqual(b'', output.getvalue()); self.assertEqual([], list(self.spool.iterdir()))
+
+    def test_real_closed_pipe_is_detected_before_writing_any_content(self):
+        read, write = os.pipe(); os.close(read)
+        try:
+            with patch.object(engine.sys, 'stdout', SimpleNamespace(fileno=lambda: write)), self.assertRaisesRegex(engine.Rejected, 'CLIENT_DISCONNECTED'):
+                engine.receiver_current(None)
+        finally: os.close(write)
+
     def test_native_probe_accepts_only_fixed_root_or_trusted_agent_owner(self):
         path = Path(__file__).with_name('validate_container_file_reads.py')
         specification = importlib.util.spec_from_file_location('container_native_probe_unit', path)

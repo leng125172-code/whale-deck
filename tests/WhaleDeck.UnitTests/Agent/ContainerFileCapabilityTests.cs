@@ -23,9 +23,9 @@ public sealed class ContainerFileCapabilityTests
             var token = nonce + "." + Convert.ToHexString(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(nonce + "." + service + name)));
             Assert.False(validator.Validate(null, service + name));
             Assert.False(validator.Validate(token, "/whaledeck.agent.v1.FileTransferService/" + name));
+            Assert.False(validator.Validate(token, service + (name == "List" ? "Download" : "List")));
             Assert.True(validator.Validate(token, service + name));
             Assert.False(validator.Validate(token, service + name));
-            Assert.False(validator.Validate(token, service + (name == "List" ? "Download" : "List")));
         }
         finally { CryptographicOperations.ZeroMemory(key); File.Delete(path); }
     }

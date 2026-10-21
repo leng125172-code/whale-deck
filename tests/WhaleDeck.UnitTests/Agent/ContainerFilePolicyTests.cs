@@ -88,6 +88,7 @@ public sealed class ContainerFilePolicyTests
     [InlineData("CONTAINER_FILES_NOT_FOUND", StatusCode.NotFound)]
     [InlineData("CONTAINER_FILES_INSTANCE_CHANGED", StatusCode.FailedPrecondition)]
     [InlineData("CONTAINER_FILES_TIMEOUT", StatusCode.DeadlineExceeded)]
+    [InlineData("CONTAINER_FILES_CLIENT_DISCONNECTED", StatusCode.Cancelled)]
     public void FixedErrorCodesKeepTheirSemantics(string code, StatusCode expected) =>
         Assert.Equal(expected, ContainerFilePolicy.Failure(code).StatusCode);
 

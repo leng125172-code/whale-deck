@@ -358,7 +358,8 @@ public sealed partial class FileTransferRunner
         var container = ContainerAction(action);
         var start = new ProcessStartInfo("/usr/bin/sudo") { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         start.ArgumentList.Add("-n"); start.ArgumentList.Add(Helper);
-        start.ArgumentList.Add(invocation is null ? container ? "container-file-transport" : "file-transport" : container ? "container-file-transport-stop" : "file-transport-stop");
+        var transport = container ? "container-file-transport" : "file-transport";
+        start.ArgumentList.Add(invocation is null ? transport : transport + "-stop");
         if (invocation is null) start.ArgumentList.Add(container ? action[10..] : action);
         start.ArgumentList.Add(id); if (invocation is not null) start.ArgumentList.Add(invocation);
         start.Environment.Clear(); start.Environment["PATH"] = "/usr/sbin:/usr/bin:/sbin:/bin"; start.Environment["LANG"] = "C.UTF-8";

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Frozen-source native container read probe. Not an installed helper/RPC/BFF test.
+"""Frozen-source native read probe, optionally including the installed helper.
 
 Creates one private synthetic application directory and one immutable-image,
 non-root/no-network/read-only container. No production mounts or image builds.
@@ -12,18 +12,119 @@ import io
 import json
 import os
 from pathlib import Path
-import pwd
 import re
+import select
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
+
+if os.name == 'posix':
+    import pwd
 
 REPOSITORY = Path('/data/GitRepos/whale-deck')
 APPS = Path('/data/WhaleDeck/apps')
 SIZE = 2 * 1024**2 + 7
 PHASE = 'startup'
+HELPER = '/usr/local/libexec/whaledeck-privileged'
+
+
+def assert_helper_sandbox(properties, invocation):
+    assert properties.get('InvocationID') == invocation and re.fullmatch('[a-f0-9]{32}', invocation)
+    for name, expected in {'User': 'root', 'Group': 'root', 'NoNewPrivileges': 'yes', 'ProtectSystem': 'strict',
+            'ProtectHome': 'yes', 'PrivateTmp': 'yes', 'PrivateDevices': 'yes', 'ProtectKernelTunables': 'yes',
+            'ProtectKernelModules': 'yes', 'ProtectControlGroups': 'yes', 'KillMode': 'control-group',
+            'MemoryMax': str(128*1024**2), 'TasksMax': '8', 'LimitNOFILE': '64',
+            'LimitFSIZE': str(1024**3), 'ReadWritePaths': '/var/lib/whaledeck-container-files'}.items():
+        assert properties.get(name) == expected, 'sandbox-property-' + name
+    assert set(properties.get('CapabilityBoundingSet', '').split()) == {'cap_dac_read_search', 'cap_sys_ptrace'}
+    assert set(properties.get('RestrictAddressFamilies', '').split()) == {'AF_UNIX'}
+
+
+def installed_source(revision):
+    for name in ('whaledeck-privileged', 'whaledeck-container-files.py', 'whaledeck-files.py', 'whaledeck-container-terminal.py'):
+        path = Path('/usr/local/libexec') / name; info = path.lstat()
+        assert stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1 and not info.st_mode & 0o022
+        assert path.read_bytes() == git('show', revision + ':deploy/host/' + name)
+    state = Path('/var/lib/whaledeck-container-files'); info = state.lstat()
+    assert state.resolve(strict=True) == state and stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o700
+
+
+def helper_ready(stream):
+    # Read raw bytes, not a blocking buffered readline after select: a partial
+    # first line must still obey the same total Ready deadline.
+    deadline = time.monotonic() + 10; body = bytearray()
+    while len(body) <= 65536:
+        remaining = deadline - time.monotonic()
+        assert remaining > 0 and select.select([stream], [], [], remaining)[0], 'helper-ready-timeout'
+        value = os.read(stream.fileno(), 1)
+        assert value, 'helper-ready-eof'
+        if value == b'\n':
+            opening = json.loads(body)
+            assert opening.get('type') == 'driver', 'helper-ready-rejected'
+            invocation = opening['invocationId']
+            assert type(invocation) is str and re.fullmatch('[a-f0-9]{32}', invocation), 'helper-ready-invalid'
+            return invocation
+        body.extend(value)
+    raise AssertionError('helper-ready-size')
+
+
+def close_helper(process, command, session, invocation):
+    stop_failed = False
+    try:
+        if process.poll() is None:
+            try:
+                if invocation is not None:
+                    stopped = subprocess.run([*command, 'container-file-transport-stop', session, invocation], capture_output=True, timeout=10)
+                    stop_failed = stopped.returncode != 0
+                else:
+                    # No target body is sent before Ready. Closing the caller
+                    # gives the fixed root driver's input alarm a bounded exit.
+                    if process.stdin: process.stdin.close()
+            except (OSError, subprocess.TimeoutExpired):
+                stop_failed = True
+            finally:
+                try: process.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    stop_failed = True
+                    process.kill(); process.wait(timeout=5)
+    finally:
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None and not stream.closed: stream.close()
+    assert not stop_failed, 'helper-cleanup-failed'
+
+
+def helper_request(action, request):
+    assert action in ('list', 'stat', 'download')
+    session = uuid.uuid4().hex; unit = 'whaledeck-container-files-' + session + '.service'
+    command = ['/usr/sbin/runuser', '-u', 'whaledeck-agent', '--', '/usr/bin/sudo', '-n', HELPER]
+    process = subprocess.Popen([*command, 'container-file-transport', action, session], stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8'})
+    invocation = None
+    try:
+        invocation = helper_ready(process.stdout)
+        names = ('InvocationID', 'User', 'Group', 'NoNewPrivileges', 'ProtectSystem', 'ProtectHome', 'PrivateTmp', 'PrivateDevices',
+            'ProtectKernelTunables', 'ProtectKernelModules', 'ProtectControlGroups', 'KillMode', 'MemoryMax', 'TasksMax',
+            'LimitNOFILE', 'LimitFSIZE', 'ReadWritePaths', 'CapabilityBoundingSet', 'RestrictAddressFamilies')
+        show = subprocess.run(['/usr/bin/systemctl', 'show', unit, *['--property='+name for name in names]],
+            check=True, capture_output=True, text=True, timeout=5)
+        properties = dict(line.split('=', 1) for line in show.stdout.splitlines() if '=' in line)
+        assert_helper_sandbox(properties, invocation)
+        output, errors_output = process.communicate((json.dumps(request, ensure_ascii=False)+'\n').encode(), timeout=40)
+        assert len(output) <= 4*1024**2 and len(errors_output) <= 65536
+        packets = [json.loads(line) for line in output.splitlines()]
+        errors = [row.get('code') for row in packets if row.get('type') == 'error']
+        if process.returncode or errors:
+            code = errors[-1] if errors and type(errors[-1]) is str and re.fullmatch('(?:CONTAINER_FILES|FILES|CONTAINER)_[A-Z_]{1,80}', errors[-1]) else 'CONTAINER_FILES_HELPER_FAILED'
+            raise RuntimeError(code)
+        journal = subprocess.run(['/usr/bin/journalctl', '--unit='+unit, '--no-pager', '--output=cat', '--lines=50'],
+            check=True, capture_output=True, text=True, timeout=5).stdout
+        assert len(journal.encode()) <= 65536 and not re.search(r'"type"\s*:\s*"(?:chunk|metadata|driver)"', journal)
+        return packets
+    finally:
+        close_helper(process, command, session, invocation)
 
 
 def load(path, name):
@@ -65,9 +166,12 @@ def verify_apps_directory(path, agent_uid):
 
 def main():
     global PHASE
-    assert os.geteuid() == 0 and len(sys.argv) == 2 and re.fullmatch('sha256:[a-f0-9]{64}', sys.argv[1])
+    assert os.geteuid() == 0 and len(sys.argv) in (2, 3) and re.fullmatch('sha256:[a-f0-9]{64}', sys.argv[1])
+    installed = len(sys.argv) == 3
+    if installed: assert sys.argv[2] == '--installed-helper'
     revision = git('rev-parse', 'HEAD').decode().strip(); assert re.fullmatch('[a-f0-9]{40}', revision)
     assert not git('status', '--porcelain')
+    if installed: installed_source(revision)
     verify_apps_directory(APPS, pwd.getpwnam('whaledeck-agent').pw_uid)
     capacity = os.statvfs(APPS)
     assert capacity.f_bavail * capacity.f_frsize > SIZE + max(128 * 1024**2, capacity.f_blocks * capacity.f_frsize // 20)
@@ -138,6 +242,21 @@ def main():
                 assert bytes(captured) == payload and packets[-1]['sizeBytes'] == SIZE
                 assert packets[-1]['sha256'] == hashlib.sha256(payload).hexdigest().upper()
                 assert engine.fingerprint(leaf.stat()) == before and not list(spool.iterdir())
+                if installed:
+                    PHASE = 'installed-helper-sandbox-and-content'
+                    page_packets = helper_request('list', {**request, 'after': '', 'take': 100})
+                    assert len(page_packets) == 1 and {row['name'] for row in page_packets[0]['entries']} == {leaf.name, '.env', 'empty', 'link'}
+                    inspected_packets = helper_request('stat', location)
+                    assert len(inspected_packets) == 1 and inspected_packets[0]['version'] == meta['version']
+                    downloaded = helper_request('download', {**location, 'expectedVersion': meta['version']})
+                    assert downloaded[0]['type'] == 'metadata' and downloaded[-1]['type'] == 'end'
+                    delivered = bytearray()
+                    for packet in downloaded[1:-1]:
+                        assert packet['type'] == 'chunk' and packet['offset'] == len(delivered)
+                        delivered.extend(base64.b64decode(packet['data'], validate=True))
+                    assert bytes(delivered) == payload and downloaded[-1]['sha256'] == hashlib.sha256(payload).hexdigest().upper()
+                    assert downloaded[-1]['version'] == meta['version'] and downloaded[-1]['sizeBytes'] == SIZE
+                    assert engine.fingerprint(leaf.stat()) == before
                 PHASE = 'protected-symlink-version-refusals'
                 for path in ('work/.env', 'proc/self/status', 'etc/shadow'):
                     try: engine.inspect({**request, 'path': path}, session, files)
@@ -167,7 +286,8 @@ def main():
             private_record(evidence, 'result.json', {'revision': revision, 'marker': marker, 'containerId': identifier,
                 'bytes': SIZE, 'sha256': hashlib.sha256(payload).hexdigest().upper(), 'fullContent': True,
                 'sourceUnchanged': True, 'protectedAndSymlinkAndOldVersionRefused': True,
-                'pidExitRefused': True, 'coreProtected': True, 'spoolEmpty': True, 'protectedContainersUnchanged': True})
+                'pidExitRefused': True, 'coreProtected': True, 'spoolEmpty': True, 'protectedContainersUnchanged': True,
+                'installedHelperValidated': installed})
             complete = True
         finally:
             if identifier:
@@ -194,12 +314,13 @@ def main():
             assert core_snapshot(engine, docker) == protected_before
     print(json.dumps({'containerFileNativeRead': 'passed', 'revision': revision, 'bytes': SIZE,
         'fullContentAndSourceIdentity': True, 'exitProtectedAndSymlinkRefused': True,
-        'ownedContainerAndPayloadRemoved': complete, 'installedRpcBffOrUi': False}), flush=True)
+        'ownedContainerAndPayloadRemoved': complete, 'installedHelperValidated': installed, 'installedRpcBffOrUi': False}), flush=True)
 
 
 if __name__ == '__main__':
     try: main()
     except BaseException as error:
+        code = str(error) if re.fullmatch(r'(?:CONTAINER_FILES|FILES|CONTAINER)_[A-Z_]{1,80}', str(error)) else None
         print(json.dumps({'containerFileNativeRead': 'failed', 'failureType': type(error).__name__,
-            'phase': PHASE, 'unverifiedFilesPreserved': True}), file=sys.stderr)
+            'phase': PHASE, 'code': code, 'unverifiedFilesPreserved': True}), file=sys.stderr)
         raise SystemExit(1) from None
