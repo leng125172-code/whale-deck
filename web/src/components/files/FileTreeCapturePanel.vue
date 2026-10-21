@@ -11,6 +11,7 @@ import { validTreeLocation } from '@/services/fileTreeCopies'
 import { canRestoreCapture, canReceiveRestoring } from '@/services/fileTreeRestorings'
 import { canOverwriteCapture } from '@/services/fileTreeOverwriteRestorings'
 import { captureKind } from '@/services/fileTreeRecyclings'
+import { canPurgeCapture, canPurgeRoot } from '@/services/fileTreePurgings'
 
 const props = defineProps<{
   roots: FileRoot[]
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   failure: [reason: unknown]
   restore: [capture: TreeCapture]
   overwrite: [capture: TreeCapture]
+  purge: [capture: TreeCapture]
 }>()
 const authorized = computed(() => authSession.user.value?.isAdministrator === true)
 const available = computed(() =>
@@ -169,6 +171,20 @@ function overwrite(capture: TreeCapture) {
   emit('overwrite', capture)
   dialog.value = false
 }
+function purge(capture: TreeCapture) {
+  if (
+    !authorized.value ||
+    props.disabled ||
+    busy.value ||
+    !canPurgeCapture(
+      props.roots.find((root) => root.id === capture.source.source.rootId),
+      capture,
+    )
+  )
+    return
+  emit('purge', capture)
+  dialog.value = false
+}
 watch([() => authSession.user.value?.subject, authorized], () => {
   reset()
   dialog.value = false
@@ -276,6 +292,28 @@ onBeforeUnmount(reset)
         </dl>
       </details>
       <div class="tree-capture-restore">
+        <el-button
+          v-if="canPurgeRoot(roots.find((root) => root.id === item.source.source.rootId))"
+          type="danger"
+          plain
+          :disabled="
+            disabled ||
+            busy ||
+            !canPurgeCapture(
+              roots.find((root) => root.id === item.source.source.rootId),
+              item,
+            )
+          "
+          :title="
+            item.cleanupActive
+              ? '请先核实原清理结果'
+              : item.archiveState === 'Purged' && item.originalsState === 'Purged'
+                ? '全部组件已有永久删除证明'
+                : '选择历史组件并生成只读清理计划'
+          "
+          @click="purge(item)"
+          >永久清理</el-button
+        >
         <span v-if="restoreDisabledReason(item)">{{ restoreDisabledReason(item) }}</span>
         <el-button
           v-if="

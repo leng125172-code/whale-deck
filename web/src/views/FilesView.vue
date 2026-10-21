@@ -36,6 +36,7 @@ import FileTreeRecyclingPanel from '@/components/files/FileTreeRecyclingPanel.vu
 import FileTreeCapturePanel from '@/components/files/FileTreeCapturePanel.vue'
 import FileTreeRestoringPanel from '@/components/files/FileTreeRestoringPanel.vue'
 import FileTreeOverwriteRestoringPanel from '@/components/files/FileTreeOverwriteRestoringPanel.vue'
+import FileTreePurgingPanel from '@/components/files/FileTreePurgingPanel.vue'
 import { canOverwriteDirectory } from '@/services/fileTreeOverwriteRestorings'
 import { canRecycleDirectory } from '@/services/fileTreeRecyclings'
 import FileRecoveryPanel from '@/components/files/FileRecoveryPanel.vue'
@@ -59,6 +60,8 @@ const mutationPanel = ref<InstanceType<typeof FileMutationPanel> | null>(null),
   treeUnpackingLocked = ref(false),
   treeRecyclingLocked = ref(false)
 const treeRestoringLocked = ref(false)
+const treePurgingLocked = ref(false)
+const treePurgingPanel = ref<InstanceType<typeof FileTreePurgingPanel> | null>(null)
 const treeOverwriteRestoringLocked = ref(false)
 const treeOverwriteRestoringPanel = ref<InstanceType<
   typeof FileTreeOverwriteRestoringPanel
@@ -87,6 +90,7 @@ const mutationLocked = computed(
     treeUnpackingLocked.value ||
     treeRestoringLocked.value ||
     treeOverwriteRestoringLocked.value ||
+    treePurgingLocked.value ||
     treeRecyclingLocked.value,
 )
 function canTreeCopy(entry: FileEntry) {
@@ -659,6 +663,7 @@ onBeforeUnmount(() => {
           "
           @restore="treeRestoringPanel?.open($event)"
           @overwrite="treeOverwriteRestoringPanel?.open($event)"
+          @purge="treePurgingPanel?.open($event)"
           @failure="message"
         />
         <el-button :loading="loading" @click="refresh"
@@ -686,7 +691,7 @@ onBeforeUnmount(() => {
         <div class="files-upload">
           <el-button
             v-if="canHistory"
-            :disabled="busy || activeIntent || !!frozen || mutationOperationLocked || editorLocked"
+            :disabled="busy || activeIntent || !!frozen || mutationLocked"
             @click="archivePanel?.openHistory()"
             >历史与回收站</el-button
           >
@@ -747,7 +752,8 @@ onBeforeUnmount(() => {
           treeUnpackingLocked ||
           treeRestoringLocked ||
           treeOverwriteRestoringLocked ||
-          treeRecyclingLocked
+          treeRecyclingLocked ||
+          treePurgingLocked
         "
         @locked="mutationOperationLocked = $event"
         @changed="afterMutation"
@@ -769,7 +775,8 @@ onBeforeUnmount(() => {
           treeUnpackingLocked ||
           treeRestoringLocked ||
           treeOverwriteRestoringLocked ||
-          treeRecyclingLocked
+          treeRecyclingLocked ||
+          treePurgingLocked
         "
         @locked="editorLocked = $event"
         @prepared="acceptText"
@@ -792,7 +799,8 @@ onBeforeUnmount(() => {
           treeUnpackingLocked ||
           treeRestoringLocked ||
           treeOverwriteRestoringLocked ||
-          treeRecyclingLocked
+          treeRecyclingLocked ||
+          treePurgingLocked
         "
         @locked="archiveOperationLocked = $event"
         @changed="afterMutation"
@@ -815,7 +823,8 @@ onBeforeUnmount(() => {
           treeUnpackingLocked ||
           treeRestoringLocked ||
           treeOverwriteRestoringLocked ||
-          treeRecyclingLocked
+          treeRecyclingLocked ||
+          treePurgingLocked
         "
         @locked="treeCopyLocked = $event"
         @changed="afterMutation"
@@ -838,7 +847,8 @@ onBeforeUnmount(() => {
           treeUnpackingLocked ||
           treeRestoringLocked ||
           treeOverwriteRestoringLocked ||
-          treeRecyclingLocked
+          treeRecyclingLocked ||
+          treePurgingLocked
         "
         @locked="treeMoveLocked = $event"
         @changed="afterMutation"
@@ -861,7 +871,8 @@ onBeforeUnmount(() => {
           treeUnpackingLocked ||
           treeRestoringLocked ||
           treeOverwriteRestoringLocked ||
-          treeRecyclingLocked
+          treeRecyclingLocked ||
+          treePurgingLocked
         "
         @locked="treePackingLocked = $event"
         @changed="afterMutation"
@@ -884,7 +895,8 @@ onBeforeUnmount(() => {
           treePackingLocked ||
           treeRestoringLocked ||
           treeOverwriteRestoringLocked ||
-          treeRecyclingLocked
+          treeRecyclingLocked ||
+          treePurgingLocked
         "
         @locked="treeUnpackingLocked = $event"
         @changed="afterMutation"
@@ -907,7 +919,8 @@ onBeforeUnmount(() => {
           treePackingLocked ||
           treeUnpackingLocked ||
           treeRestoringLocked ||
-          treeOverwriteRestoringLocked
+          treeOverwriteRestoringLocked ||
+          treePurgingLocked
         "
         @locked="treeRecyclingLocked = $event"
         @changed="afterMutation"
@@ -930,7 +943,8 @@ onBeforeUnmount(() => {
           treePackingLocked ||
           treeUnpackingLocked ||
           treeOverwriteRestoringLocked ||
-          treeRecyclingLocked
+          treeRecyclingLocked ||
+          treePurgingLocked
         "
         @locked="treeRestoringLocked = $event"
         @changed="afterMutation"
@@ -954,9 +968,32 @@ onBeforeUnmount(() => {
           treePackingLocked ||
           treeUnpackingLocked ||
           treeRecyclingLocked ||
-          treeRestoringLocked
+          treeRestoringLocked ||
+          treePurgingLocked
         "
         @locked="treeOverwriteRestoringLocked = $event"
+        @changed="afterMutation"
+        @failure="message"
+      />
+      <FileTreePurgingPanel
+        ref="treePurgingPanel"
+        :roots="roots"
+        :disabled="
+          busy ||
+          activeIntent ||
+          !!frozen ||
+          mutationOperationLocked ||
+          editorLocked ||
+          archiveOperationLocked ||
+          treeCopyLocked ||
+          treeMoveLocked ||
+          treePackingLocked ||
+          treeUnpackingLocked ||
+          treeRecyclingLocked ||
+          treeRestoringLocked ||
+          treeOverwriteRestoringLocked
+        "
+        @locked="treePurgingLocked = $event"
         @changed="afterMutation"
         @failure="message"
       />

@@ -180,7 +180,7 @@ const privateFields = [
 function privateMaterial(value: object) {
   return Object.keys(value).some((key) => privateFields.includes(key))
 }
-function validPurge(value: RecoveryPurge | undefined): value is RecoveryPurge {
+export function validRecoveryPurge(value: RecoveryPurge | undefined): value is RecoveryPurge {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const fields = [
     'captureId',
@@ -265,7 +265,7 @@ export function assertRecoveryPage(page: RecoveryPage) {
           row.hasRetainedObjects !== null ||
           row.purge !== undefined)) ||
       (row.kind === 'tree-purge' && row.integrity === 'Verified'
-        ? !validPurge(row.purge) ||
+        ? !validRecoveryPurge(row.purge) ||
           row.purge.version !== row.version ||
           row.purge.state !== 'Unknown' ||
           row.target !== null ||
@@ -296,7 +296,7 @@ export function assertRecoveryIntent(
     !integer(row.originalVersion) ||
     !integer(row.version) ||
     (row.kind === 'tree-purge'
-      ? !validPurge(row.purge) ||
+      ? !validRecoveryPurge(row.purge) ||
         row.purge.version < row.originalVersion ||
         (row.state === 'Disposed' && row.purge.state !== row.originalResolution)
       : row.purge !== undefined) ||
