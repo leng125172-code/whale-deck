@@ -54,6 +54,9 @@ ak-flow-executor::part(login),
 ak-flow-executor::part(locale-select),
 :host(ak-flow-executor) [part='locale-select'] {
   grid-area: header;
+  color: #f1f7ff;
+  --pf-global--Color--100: #f1f7ff;
+  --pf-global--Color--200: #f1f7ff;
   max-width: calc(100vw - 4rem);
   width: min(18rem, calc(100vw - 4rem));
   filter: drop-shadow(0 1px 2px rgb(0 16 47 / 90%));
