@@ -7,6 +7,10 @@ must add independent staging, HDD proof, plans/jobs and audit, never a Docker
 archive PUT shortcut. No file content, environment or Docker JSON is logged.
 """
 import base64
+try:
+    import fcntl
+except ImportError:  # Pure validation tests remain portable; actual file access is Linux only.
+    fcntl = None
 from datetime import datetime
 import hashlib
 import heapq
@@ -16,6 +20,7 @@ import os
 from pathlib import Path
 import re
 import select
+import signal
 import stat
 import sys
 import tempfile
@@ -301,6 +306,30 @@ def spool_directory():
     return STATE
 
 
+class ReadLease:
+    """Two process-wide read slots; kernel releases leases even after SIGKILL."""
+    def __enter__(self):
+        self.descriptor = None
+        if fcntl is None: raise Rejected('CONTAINER_FILES_LINUX_REQUIRED')
+        directory = spool_directory()
+        for number in range(2):
+            descriptor = os.open(directory / ('read-slot-' + str(number)), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+            try:
+                info = os.fstat(descriptor)
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size != 0:
+                    raise Rejected('CONTAINER_FILES_STATE_UNSAFE')
+                try: fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError: continue
+                self.descriptor = descriptor; descriptor = None
+                return self
+            finally:
+                if descriptor is not None: os.close(descriptor)
+        raise Rejected('CONTAINER_FILES_BUSY')
+
+    def __exit__(self, *_):
+        if self.descriptor is not None: os.close(self.descriptor); self.descriptor = None
+
+
 def download(request, session, files, output=None):
     request_fields(request, 'download')
     if protected(request['path'], files): raise Rejected('CONTAINER_FILES_PROTECTED')
@@ -352,12 +381,20 @@ def main():
         raise Rejected('CONTAINER_FILES_ACTION_INVALID')
     files = trusted_module('whaledeck-files.py', 'whaledeck_container_files_primitives')
     docker = trusted_module('whaledeck-container-terminal.py', 'whaledeck_container_files_docker')
-    request = files.line(sys.stdin.buffer); request_fields(request, sys.argv[1])
-    if protected(request['path'], files): raise Rejected('CONTAINER_FILES_PROTECTED')
-    with ContainerRoot(request, files, docker) as session:
-        if sys.argv[1] == 'list': files.emit(listing(request, session, files))
-        elif sys.argv[1] == 'stat': files.emit(inspect(request, session, files))
-        else: download(request, session, files)
+    invocation = os.environ.get('INVOCATION_ID', '')
+    if not re.fullmatch('[a-f0-9]{32}', invocation): raise Rejected('CONTAINER_FILES_INVOCATION_INVALID')
+    with ReadLease():
+        files.emit({'type': 'driver', 'invocationId': invocation})
+        def expired(_number, _frame): raise Rejected('CONTAINER_FILES_INPUT_TIMEOUT')
+        signal.signal(signal.SIGALRM, expired); signal.alarm(10)
+        try: request = files.line(sys.stdin.buffer)
+        finally: signal.alarm(0)
+        request_fields(request, sys.argv[1])
+        if protected(request['path'], files): raise Rejected('CONTAINER_FILES_PROTECTED')
+        with ContainerRoot(request, files, docker) as session:
+            if sys.argv[1] == 'list': files.emit(listing(request, session, files))
+            elif sys.argv[1] == 'stat': files.emit(inspect(request, session, files))
+            else: download(request, session, files)
 
 
 if __name__ == '__main__':

@@ -69,6 +69,34 @@ case "$action" in
     [[ "$files_instance" == "$3" ]] || exit 2
     exec /usr/bin/systemctl stop "whaledeck-files-$2.service"
     ;;
+  container-file-transport)
+    [[ $# -eq 3 && ( "$2" == list || "$2" == stat || "$2" == download ) && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    # Fixed read-only code, no container Exec or mount/namespace entry. Only
+    # anonymous captures and kernel-released slot locks can write this directory.
+    # As with the existing file helper, openat2 requires this narrowly scoped
+    # RestrictSUIDSGID exception; the engine never creates privileged files.
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit="whaledeck-container-files-$3" \
+      --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
+      --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=no \
+      --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
+      --property=RestrictNamespaces=yes --property=RestrictAddressFamilies=AF_UNIX \
+      --property=RuntimeMaxSec=330 --property=TimeoutStopSec=5 --property=KillMode=control-group \
+      --property=Restart=no --property=TasksMax=8 --property=MemoryMax=128M --property=CPUQuota=50% \
+      --property=LimitCORE=0 --property=LimitNOFILE=64 --property=LimitFSIZE=1073741824 \
+      --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
+      --property="CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE" \
+      --property=ReadWritePaths=/var/lib/whaledeck-container-files \
+      /usr/bin/python3 -I /usr/local/libexec/whaledeck-container-files.py "$2"
+    ;;
+  container-file-transport-stop)
+    [[ $# -eq 3 && "$2" =~ ^[a-f0-9]{32}$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    container_files_instance=$(/usr/bin/systemctl show "whaledeck-container-files-$2.service" -p InvocationID --value 2>/dev/null || true)
+    [[ -n "$container_files_instance" ]] || exit 0
+    [[ "$container_files_instance" == "$3" ]] || exit 2
+    exec /usr/bin/systemctl stop "whaledeck-container-files-$2.service"
+    ;;
   container-terminal)
     [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ ]] || exit 2
     exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \

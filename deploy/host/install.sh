@@ -73,6 +73,8 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-application-backup.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-notification-config.py" /usr/local/libexec/whaledeck-notification-config.py
 install -o root -g root -m 0755 "$(dirname "$0")/whaledeck-host-terminal.py" /usr/local/libexec/whaledeck-host-terminal.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-terminal.py" /usr/local/libexec/whaledeck-container-terminal.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-files.py" /usr/local/libexec/whaledeck-container-files.py
+install -d -o root -g root -m 0700 /var/lib/whaledeck-container-files
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-files.py" /usr/local/libexec/whaledeck-files.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-file-operations.py" /usr/local/libexec/whaledeck-file-operations.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-file-backups.py" /usr/local/libexec/whaledeck-file-backups.py

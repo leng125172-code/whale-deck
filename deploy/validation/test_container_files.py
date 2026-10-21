@@ -7,7 +7,10 @@ import io
 import json
 import os
 from pathlib import Path
+import select
 import stat
+import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -230,6 +233,51 @@ class LinuxReadTests(unittest.TestCase):
                 with self.subTest(owner=owner, mode=mode), self.assertRaises(AssertionError): probe.verify_apps_directory(approved, 997)
             approved.resolve.return_value = Path('/other')
             with self.assertRaises(AssertionError): probe.verify_apps_directory(approved, 997)
+
+    def test_two_kernel_leases_bound_concurrent_reads_and_release_on_close(self):
+        first, second = engine.ReadLease(), engine.ReadLease()
+        try:
+            first.__enter__(); second.__enter__()
+            with self.assertRaisesRegex(engine.Rejected, 'BUSY'): engine.ReadLease().__enter__()
+            first.__exit__()
+            with engine.ReadLease(): pass
+        finally:
+            first.__exit__(); second.__exit__()
+        self.assertTrue({path.name for path in self.spool.iterdir()} <= {'read-slot-0', 'read-slot-1'})
+        self.assertTrue(all(path.stat().st_size == 0 for path in self.spool.iterdir()))
+
+    def test_lease_rejects_symlink_hardlink_nonempty_and_unsafe_permissions(self):
+        slot = self.spool / 'read-slot-0'
+        slot.symlink_to(self.leaf)
+        with self.assertRaises(OSError): engine.ReadLease().__enter__()
+        slot.unlink(); os.link(self.leaf, slot)
+        with self.assertRaisesRegex(engine.Rejected, 'STATE_UNSAFE'): engine.ReadLease().__enter__()
+        slot.unlink(); slot.write_bytes(b'not-a-lease')
+        with self.assertRaisesRegex(engine.Rejected, 'STATE_UNSAFE'): engine.ReadLease().__enter__()
+        slot.write_bytes(b''); slot.chmod(0o666)
+        with self.assertRaisesRegex(engine.Rejected, 'STATE_UNSAFE'): engine.ReadLease().__enter__()
+
+    def test_sigkill_releases_both_kernel_read_slots_without_recovery_mutation(self):
+        code = """import importlib.util,pathlib,signal,sys
+spec=importlib.util.spec_from_file_location('owned_read_slot_child',sys.argv[1])
+engine=importlib.util.module_from_spec(spec);spec.loader.exec_module(engine)
+engine.STATE=pathlib.Path(sys.argv[2])
+first=engine.ReadLease();second=engine.ReadLease()
+first.__enter__();second.__enter__()
+print('ready',flush=True)
+signal.pause()
+"""
+        child = subprocess.Popen([sys.executable, '-c', code, str(HOST / 'whaledeck-container-files.py'), str(self.spool)],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            self.assertTrue(select.select([child.stdout], [], [], 5)[0])
+            self.assertEqual('ready', child.stdout.readline().strip())
+            with self.assertRaisesRegex(engine.Rejected, 'BUSY'): engine.ReadLease().__enter__()
+            child.kill(); child.wait(timeout=5); self.assertEqual(-9, child.returncode)
+            with engine.ReadLease(), engine.ReadLease(): pass
+        finally:
+            if child.poll() is None: child.kill()
+            child.communicate(timeout=5)
 
     def pinned_root(self):
         """Real temporary descriptors; fake proc/Docker identity, never a live PID or container."""
