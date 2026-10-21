@@ -1,6 +1,7 @@
 """Pure policy + isolated Linux-root file read tests, not installed RPC/UI proof."""
 import base64
 import copy
+import errno
 import hashlib
 import importlib.util
 import io
@@ -35,6 +36,14 @@ def request(path='', **extra):
 
 
 class PolicyTests(unittest.TestCase):
+    def test_transport_errors_are_stable_and_do_not_echo_paths_or_exception_text(self):
+        for number, code in ((errno.ELOOP, 'PATH_REJECTED'), (errno.EXDEV, 'PATH_REJECTED'), (errno.ENOTDIR, 'PATH_REJECTED'),
+                (errno.EACCES, 'ACCESS_DENIED'), (errno.EPERM, 'ACCESS_DENIED'), (errno.ENOENT, 'NOT_FOUND'),
+                (errno.ENOSPC, 'CAPACITY_LOW'), (errno.ETIMEDOUT, 'TIMEOUT')):
+            with self.subTest(number=number):
+                self.assertEqual('CONTAINER_FILES_' + code, engine.error_code(OSError(number, 'private message', '/private/path')))
+        self.assertEqual('CONTAINER_FILES_UNAVAILABLE', engine.error_code(ValueError('private credential body')))
+        self.assertEqual('CONTAINER_PROTECTED', engine.error_code(PermissionError('CONTAINER_PROTECTED')))
     def test_immutable_exact_target_and_valid_startup(self):
         self.assertEqual(777, engine.target_binding(ID, INSTANCE))
         for identifier in ('a' * 12, 'A' * 64, '../ordinary', 'ordinary', '', None, True):

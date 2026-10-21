@@ -179,7 +179,7 @@ internal static partial class FileTransferPolicy
 }
 
 /// <summary>Only fixed root helper pipes. Bounded memory, four shared root slots, exact-invocation cancellation.</summary>
-public sealed class FileTransferRunner
+public sealed partial class FileTransferRunner
 {
     private const string Helper = "/usr/local/libexec/whaledeck-privileged";
     public async Task<JsonDocument> OnceAsync(string action, string input, CancellationToken cancellationToken)
@@ -307,7 +307,17 @@ public sealed class FileTransferRunner
             if (bytes.Length + count > 65536) throw new InvalidOperationException("FILES_OUTPUT_LIMIT");
             bytes.Write(driver.Buffer, driver.BufferOffset, count);
             var consumed = count + (newline < 0 ? 0 : 1); driver.BufferCount -= consumed; driver.BufferOffset += consumed;
-            if (newline >= 0) return JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 8 });
+            if (newline >= 0)
+            {
+                var document = JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 8 });
+                if (driver.IsContainerRead && document.RootElement.TryGetProperty("type", out var type) && type.GetString() == "error")
+                {
+                    var code = document.RootElement.TryGetProperty("code", out var error) && error.ValueKind == JsonValueKind.String ? error.GetString() : null;
+                    document.Dispose();
+                    throw ContainerFilePolicy.Failure(code);
+                }
+                return document;
+            }
         }
     }
     private static async Task CaptureErrorsAsync(Driver driver, CancellationToken cancellationToken)
@@ -345,10 +355,11 @@ public sealed class FileTransferRunner
     }
     private static ProcessStartInfo Start(string action, string id, string? invocation = null)
     {
+        var container = ContainerAction(action);
         var start = new ProcessStartInfo("/usr/bin/sudo") { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         start.ArgumentList.Add("-n"); start.ArgumentList.Add(Helper);
-        start.ArgumentList.Add(invocation is null ? "file-transport" : "file-transport-stop");
-        if (invocation is null) start.ArgumentList.Add(action);
+        start.ArgumentList.Add(invocation is null ? container ? "container-file-transport" : "file-transport" : container ? "container-file-transport-stop" : "file-transport-stop");
+        if (invocation is null) start.ArgumentList.Add(container ? action[10..] : action);
         start.ArgumentList.Add(id); if (invocation is not null) start.ArgumentList.Add(invocation);
         start.Environment.Clear(); start.Environment["PATH"] = "/usr/sbin:/usr/bin:/sbin:/bin"; start.Environment["LANG"] = "C.UTF-8";
         return start;
@@ -364,6 +375,7 @@ public sealed class FileTransferRunner
         public MemoryStream ErrorBuffer { get; } = new(4096);
         public Task Errors { get; set; } = Task.CompletedTask;
         public string? InvocationId { get; set; }
+        public bool IsContainerRead => ContainerAction(action);
         public Driver(string action)
         {
             this.action = action;

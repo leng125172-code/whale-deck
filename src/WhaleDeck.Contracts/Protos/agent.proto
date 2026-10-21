@@ -574,6 +574,18 @@ service ContainerTerminalService {
 }
 
 // Registered host roots only; paths are relative and never host executables.
+// A separate capability/method family binds reads to a running immutable
+// container startup. No host root ID, shell, command or upload action here.
+message ContainerFileLocation { string container_id = 1; string instance_id = 2; string path = 3; }
+message ContainerFileListRequest { ContainerFileLocation location = 1; string after = 2; uint32 take = 3; }
+message ContainerFileDownloadRequest { ContainerFileLocation location = 1; string expected_version = 2; }
+service ContainerFileService {
+  rpc InspectTarget(ResourceReference) returns (ContainerTerminalTarget);
+  rpc List(ContainerFileListRequest) returns (FileListResponse);
+  rpc Inspect(ContainerFileLocation) returns (FileEntry);
+  rpc Download(ContainerFileDownloadRequest) returns (stream FileDownloadFrame);
+}
+
 message FileLocation { string root_id = 1; string path = 2; }
 message FileRoot { string id = 1; string name = 2; repeated string actions = 3; }
 message FileRoots { repeated FileRoot roots = 1; }

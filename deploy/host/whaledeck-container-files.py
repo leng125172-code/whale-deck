@@ -12,6 +12,7 @@ try:
 except ImportError:  # Pure validation tests remain portable; actual file access is Linux only.
     fcntl = None
 from datetime import datetime
+import errno
 import hashlib
 import heapq
 import importlib.util
@@ -397,11 +398,21 @@ def main():
             else: download(request, session, files)
 
 
+def error_code(error):
+    value = str(error)
+    if re.fullmatch(r'(?:CONTAINER_FILES|FILES|CONTAINER)_[A-Z_]{1,80}', value): return value
+    if isinstance(error, OSError):
+        if error.errno in (errno.ELOOP, errno.EXDEV, errno.ENOTDIR): return 'CONTAINER_FILES_PATH_REJECTED'
+        if error.errno in (errno.EACCES, errno.EPERM): return 'CONTAINER_FILES_ACCESS_DENIED'
+        if error.errno == errno.ENOENT: return 'CONTAINER_FILES_NOT_FOUND'
+        if error.errno == errno.ENOSPC: return 'CONTAINER_FILES_CAPACITY_LOW'
+        if error.errno == errno.ETIMEDOUT: return 'CONTAINER_FILES_TIMEOUT'
+    return 'CONTAINER_FILES_UNAVAILABLE'
+
+
 if __name__ == '__main__':
     try: main()
     except BaseException as error:
         # Stable code only: never a path, Docker exception body or contents.
-        value = str(error)
-        code = value if re.fullmatch(r'(?:CONTAINER_FILES|FILES|CONTAINER)_[A-Z_]{1,80}', value) else 'CONTAINER_FILES_UNAVAILABLE'
-        print(json.dumps({'type': 'error', 'code': code}), file=sys.stdout, flush=True)
+        print(json.dumps({'type': 'error', 'code': error_code(error)}), file=sys.stdout, flush=True)
         raise SystemExit(1) from None
