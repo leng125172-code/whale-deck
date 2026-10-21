@@ -13,6 +13,12 @@
   --wd-surface: rgb(255 255 255 / 94%);
   --wd-border: rgb(179 209 244 / 55%);
   --wd-ink: #172c47;
+  --wd-page-bg: #f7f9fc;
+  --wd-panel-bg: #fff;
+  --wd-panel-muted: #f0f3f8;
+  --pf-global--BackgroundColor--100: var(--wd-panel-bg);
+  --pf-global--BackgroundColor--200: var(--wd-page-bg);
+  --pf-global--BackgroundColor--300: var(--wd-panel-muted);
   --pf-global--primary-color--100: #2786ed;
   --pf-global--primary-color--200: #1764bb;
   --pf-global--link--Color: #1976d2;
@@ -26,6 +32,9 @@
   --wd-surface: rgb(15 29 50 / 94%);
   --wd-border: rgb(104 161 230 / 28%);
   --wd-ink: #e2edff;
+  --wd-page-bg: #111820;
+  --wd-panel-bg: #1b2430;
+  --wd-panel-muted: #253141;
   --pf-global--primary-color--100: #409eff;
   --pf-global--link--Color: #77baff;
 }
@@ -103,6 +112,43 @@ ak-flow-executor::part(branding),
   display: flex;
   align-items: center;
   min-width: 0;
+}
+
+/* 2026.8 Admin uses ak-page-navbar, not the portal's pf-c-brand image.
+   Scope to its brand only: never enlarge avatars, charts or application icons. */
+:host(ak-page-navbar) .brand .logo {
+  width: min(224px, 100%);
+  height: auto;
+}
+
+:host(ak-page-navbar) .brand .logo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 64px;
+  object-fit: contain;
+}
+
+/* Opaque, quiet work surfaces. The selected wallpaper stays flow-only.
+   Keep native status/alert colours and navigation state contrast intact. */
+:host(ak-interface-admin) .pf-c-page,
+:host(ak-interface-user) [part='background-wrapper'] {
+  background: var(--wd-page-bg);
+}
+
+:host(ak-interface-user) [part='background-default-slant'] {
+  background: transparent;
+  clip-path: none;
+}
+
+:host(ak-page-navbar) .main-content,
+:host(ak-page-navbar) .brand,
+:host(ak-interface-user) .pf-c-page__header {
+  background: var(--wd-panel-bg);
+}
+
+:host(ak-interface-admin) .pf-c-page__sidebar {
+  background: var(--wd-panel-bg);
 }
 
 :host(ak-interface-user) .pf-c-page__header-brand .pf-c-brand,

@@ -8,9 +8,40 @@ The upstream "Powered by authentik" attribution remains visible.
 
 `python3 deploy/install/sync-authentik-branding.py` inspects without writes.
 Add `--apply` to upload content-addressed media and update only the default
-Brand's five presentation fields. The token is read privately from the running
+Brand's five presentation fields plus four allowlisted native UI attributes.
+The token is read privately from the running
 API or an installer private environment file. Never pass it on the command line.
 Run twice: the second run must report no changed fields or duplicate media.
+
+## Native global UI defaults
+
+The Brand's **Other global settings > Attributes** is now used, not left empty.
+The synchronizer deep-merges only these four leaf paths (the equivalent YAML is
+shown below). All other attributes, feature flags, policies and identity settings
+are preserved; malformed parent objects or concurrent edits fail closed.
+
+```yaml
+settings:
+  locale: zh-Hans
+  theme:
+    base: automatic
+    background: 'background: var(--wd-page-bg);'
+  layout:
+    type: 2-column
+```
+
+These are per-brand defaults; users can retain their own preferences. The portal
+background uses a theme-aware neutral CSS variable instead of the native diagonal
+decoration. Administrator page/header/sidebar backgrounds are styled separately
+in `whaledeck.css`; the flow wallpaper remains independent. Notifications, search,
+API tools and user-editing permissions are not hidden or changed.
+
+The Admin sidebar logo belongs to `ak-page-navbar .brand .logo`, not the portal
+header. Both assets are 224px wide on desktop, keeping the SVG aspect ratio.
+Portal branding stacks above tools on narrow screens so controls stay accessible.
+
+References: [Admin interface attributes](https://docs.goauthentik.io/customize/interfaces/admin),
+[User interface attributes](https://docs.goauthentik.io/customize/interfaces/user/).
 
 For a host-specific original wallpaper, add `--background-file /absolute/private/image.jpg`
 (JPG/PNG/WebP). The original bytes are uploaded as content-addressed native media,

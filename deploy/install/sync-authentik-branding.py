@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import copy
 import hashlib
 import json
 import re
@@ -28,6 +29,14 @@ MANAGED = frozenset(('branding_title', 'branding_logo', 'branding_favicon',
     'branding_default_flow_background', 'branding_custom_css'))
 DERIVED = frozenset(('branding_logo_url', 'branding_favicon_url', 'branding_default_flow_background_url',
     'branding_logo_themed_urls', 'branding_favicon_themed_urls', 'branding_default_flow_background_themed_urls'))
+# Only these native UI defaults are owned. Never replace arbitrary policy,
+# feature, identity or other custom attributes when applying presentation.
+UI_DEFAULTS = {
+    ('settings', 'locale'): 'zh-Hans',
+    ('settings', 'theme', 'base'): 'automatic',
+    ('settings', 'theme', 'background'): 'background: var(--wd-page-bg);',
+    ('settings', 'layout', 'type'): '2-column',
+}
 
 
 def token_from_runtime(env_file=None):
@@ -102,7 +111,35 @@ def select_default(session):
 
 
 def unmanaged(row):
-    return {key: value for key, value in row.items() if key not in MANAGED | DERIVED}
+    result = {key: value for key, value in row.items() if key not in MANAGED | DERIVED | {'attributes'}}
+    attributes = copy.deepcopy(row.get('attributes', {}))
+    for path in UI_DEFAULTS:
+        parent = attributes
+        ancestors = []
+        for key in path[:-1]:
+            if key not in parent: break
+            ancestors.append((parent, key))
+            parent = parent[key]
+        else:
+            parent.pop(path[-1], None)
+            for container, key in reversed(ancestors):
+                if container[key]: break
+                del container[key]
+    result['attributes'] = attributes
+    return result
+
+
+def presentation_attributes(row):
+    attributes = copy.deepcopy(row.get('attributes', {}))
+    if not isinstance(attributes, dict): raise ValueError('BRANDING_ATTRIBUTES_INVALID')
+    for path, value in UI_DEFAULTS.items():
+        parent = attributes
+        for key in path[:-1]:
+            if key not in parent: parent[key] = {}
+            if not isinstance(parent[key], dict): raise ValueError('BRANDING_ATTRIBUTES_INVALID')
+            parent = parent[key]
+        parent[path[-1]] = value
+    return attributes
 
 
 def background_asset(path):
@@ -120,8 +157,10 @@ def background_asset(path):
 
 def synchronize(session, assets, apply=False, background_file=None):
     before = select_default(session)
+    attributes = presentation_attributes(before)
     if not apply:
         return {'authentikBranding': 'inspected', 'defaultBrands': 1, 'managedFields': sorted(MANAGED),
+            'managedUiAttributes': ['.'.join(path) for path in UI_DEFAULTS],
             'existingCssBytes': len(before.get('branding_custom_css', '').encode()), 'identityChanges': False}
     logo_payload = wordmark(assets)
     icon_payload = (assets / 'whaledeck-mark.png').read_bytes()
@@ -149,14 +188,15 @@ def synchronize(session, assets, apply=False, background_file=None):
     else:
         background, background_hash = upload(session, 'wallpaper' if background_file is not None else 'ocean', background_payload, background_extension, background_type)
     desired = {'branding_title': 'Whale Deck · 身份中心', 'branding_logo': logo, 'branding_favicon': icon,
-        'branding_default_flow_background': background, 'branding_custom_css': css}
+        'branding_default_flow_background': background, 'branding_custom_css': css, 'attributes': attributes}
     changes = {key: value for key, value in desired.items() if before.get(key) != value}
     path = API + 'core/brands/' + before['brand_uuid'] + '/'
     current = request(session, 'GET', path).json()
-    if unmanaged(current) != unmanaged(before) or any(current.get(key) != before.get(key) for key in MANAGED):
+    if ({key: value for key, value in current.items() if key not in DERIVED} !=
+            {key: value for key, value in before.items() if key not in DERIVED}):
         raise RuntimeError('BRANDING_CONCURRENT_CHANGE')
     if changes:
-        if not changes.keys() <= MANAGED: raise ValueError('BRANDING_PATCH_INVALID')
+        if not changes.keys() <= MANAGED | {'attributes'}: raise ValueError('BRANDING_PATCH_INVALID')
         request(session, 'PATCH', path, json=changes)
     after = request(session, 'GET', path).json()
     if unmanaged(after) != unmanaged(before):
@@ -176,6 +216,7 @@ def synchronize(session, assets, apply=False, background_file=None):
     return {'authentikBranding': 'verified', 'changedFields': sorted(changes), 'identityChanges': False,
         'cssSha256': hashlib.sha256(css.encode()).hexdigest(), 'backgroundSha256': background_hash,
         'backgroundPreserved': preserve_background,
+        'managedUiAttributes': {'.'.join(path): value for path, value in UI_DEFAULTS.items()},
         'logoSha256': logo_hash, 'faviconSha256': icon_hash}
 
 

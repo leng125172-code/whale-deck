@@ -104,7 +104,7 @@ class FakeHttp:
                     self.detail_hook(self.brand, self.detail_reads)
                 return Response(self.brand)
             if method == 'PATCH':
-                if not kwargs['json'].keys() <= BRANDING.MANAGED:
+                if not kwargs['json'].keys() <= BRANDING.MANAGED | {'attributes'}:
                     raise AssertionError('Non-presentation field reached PATCH')
                 self.brand.update(copy.deepcopy(kwargs['json']))
                 return Response(self.brand)
@@ -155,6 +155,55 @@ class AuthentikBrandingTests(unittest.TestCase):
         self.assertEqual([], self.http.writes)
         self.assertEqual([('GET', '/api/v3/core/brands/')], [(row[0], row[1]) for row in self.http.calls])
 
+    def test_ui_defaults_merge_without_replacing_custom_or_security_attributes(self):
+        original = {'policy': {'unchanged': True}, 'settings': {'enabledFeatures': {'apiDrawer': True},
+            'theme': {'other': 'preserved'}, 'layout': {'custom': 7}, 'unknown': ['keep']},
+            'goauthentik.io/user/can-change-email': False}
+        self.http.brand['attributes'] = copy.deepcopy(original)
+        result = self.apply()
+        expected = BRANDING.presentation_attributes({'attributes': original})
+        self.assertEqual(expected, self.http.brand['attributes'])
+        self.assertEqual({'unchanged': True}, expected['policy'])
+        self.assertFalse(expected['goauthentik.io/user/can-change-email'])
+        self.assertEqual({'apiDrawer': True}, expected['settings']['enabledFeatures'])
+        self.assertEqual('preserved', expected['settings']['theme']['other'])
+        self.assertEqual(7, expected['settings']['layout']['custom'])
+        self.assertEqual('zh-Hans', expected['settings']['locale'])
+        self.assertEqual('automatic', expected['settings']['theme']['base'])
+        self.assertEqual('2-column', expected['settings']['layout']['type'])
+        self.assertFalse(result['identityChanges'])
+        self.http.calls.clear()
+        self.assertEqual([], self.apply()['changedFields'])
+        self.assertEqual([], self.http.writes)
+
+    def test_ui_attributes_reject_non_object_ancestors_before_media_writes(self):
+        for attributes in (None, [], {'settings': None}, {'settings': []},
+            {'settings': {'theme': 'dark'}}, {'settings': {'layout': False}}):
+            with self.subTest(attributes=attributes):
+                self.http.brand['attributes'] = attributes
+                with self.assertRaisesRegex(ValueError, 'BRANDING_ATTRIBUTES_INVALID'):
+                    self.apply()
+                self.assertEqual([], self.http.writes)
+
+    def test_concurrent_ui_default_change_is_not_silently_overwritten(self):
+        self.apply()
+        self.http.calls.clear()
+        self.http.detail_reads = 0
+        self.http.detail_hook = lambda row, count: row['attributes']['settings']['theme'].update(base='dark') if count == 1 else None
+        with self.assertRaisesRegex(RuntimeError, 'BRANDING_CONCURRENT_CHANGE'):
+            self.apply()
+        self.assertEqual([], self.http.patches)
+
+    def test_server_cannot_change_unowned_attributes_during_patch(self):
+        self.http.detail_hook = lambda row, count: row['attributes'].update(policy={'unchanged': False}) if count == 2 else None
+        with self.assertRaisesRegex(RuntimeError, 'BRANDING_VERIFICATION_UNMANAGED'):
+            self.apply()
+
+    def test_server_cannot_ignore_managed_ui_defaults(self):
+        self.http.detail_hook = lambda row, count: row['attributes']['settings']['theme'].update(base='dark') if count == 2 else None
+        with self.assertRaisesRegex(RuntimeError, 'BRANDING_VERIFICATION_ATTRIBUTES'):
+            self.apply()
+
     def test_original_jpeg_wallpaper_is_uploaded_without_reencoding_and_repeat_is_idempotent(self):
         image = self.assets / 'selected.jpg'
         payload = b'\xff\xd8\xff' + b'original-fixture-bytes' * 4
@@ -191,13 +240,13 @@ class AuthentikBrandingTests(unittest.TestCase):
                     BRANDING.synchronize(self.authenticated, self.assets, True, image)
                 self.assertEqual([], self.http.writes)
 
-    def test_only_five_appearance_fields_are_patched_and_identity_configuration_is_unchanged(self):
+    def test_only_appearance_and_owned_ui_attributes_are_patched_and_identity_configuration_is_unchanged(self):
         before = copy.deepcopy(self.http.brand)
         result = self.apply()
         self.assertEqual('verified', result['authentikBranding'])
         self.assertEqual(1, len(self.http.patches))
-        self.assertEqual(BRANDING.MANAGED, self.http.patches[0][2]['json'].keys())
-        self.assertEqual(5, len(self.http.patches[0][2]['json']))
+        self.assertEqual(BRANDING.MANAGED | {'attributes'}, self.http.patches[0][2]['json'].keys())
+        self.assertEqual(6, len(self.http.patches[0][2]['json']))
         self.assertEqual(BRANDING.unmanaged(before), BRANDING.unmanaged(self.http.brand))
         self.assertEqual({'POST', 'PATCH'}, {row[0] for row in self.http.writes})
         self.assertTrue(all(path == '/api/v3/admin/file/' or path == '/api/v3/core/brands/' + before['brand_uuid'] + '/'
