@@ -41,6 +41,37 @@ PUBLIC_FIELDS = set('id planningJobId executionJobId state command entryCount to
 PHASE = 'startup'
 
 
+def response_code(response):
+    try:
+        payload = response.json()
+        code = payload.get('code') if type(payload) is dict else None
+    except ValueError: code = None
+    return code if type(code) is str and re.fullmatch('[A-Z][A-Z0-9_]{0,79}', code) else 'UNSPECIFIED'
+
+
+def checked_status(response, expected, operation):
+    if response.status_code != expected:
+        raise RuntimeError('BFF_' + operation + '_STATUS_' + str(response.status_code) + '_' + response_code(response))
+    return response
+
+
+def checked_read(request, expected=200):
+    # Read-only budget recovery is bounded; this helper is never used for a
+    # POST/confirm or a transport failure. Do not weaken the actual API limiter.
+    for attempt in range(3):
+        response = request()
+        if response.status_code == expected: return response
+        if response.status_code != 429 or response_code(response) != 'API_RATE_LIMITED' or attempt == 2:
+            return checked_status(response, expected, 'READ')
+        value = response.headers.get('Retry-After', '60')
+        if type(value) is not str or not re.fullmatch('[0-9]{1,2}', value) or not 1 <= int(value) <= 60:
+            raise RuntimeError('BFF_RATE_RETRY_AFTER_INVALID')
+        remaining = int(value)
+        while remaining:
+            interval = min(remaining, 30); time.sleep(interval); remaining -= interval
+    raise RuntimeError('BFF_READ_BUDGET_EXHAUSTED')
+
+
 def identifier(value):
     assert type(value) is str and re.fullmatch('[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}', value)
     assert str(uuid.UUID(value)) == value and uuid.UUID(value).int
@@ -172,17 +203,27 @@ def main():
     evidence = REPOSITORY / 'deploy/artifacts' / ('purge-evidence-' + marker.removeprefix('wdv-purge-bff-'))
     evidence.mkdir(mode=0o700)
     jobs, purges, executions, captures, live = [], [], [], [], {}
+    last_request = 0.0
     print(json.dumps({'ownedPurgeBffFixture': marker, 'applicationRevision': application, 'agentRevision': agent, 'validationRevision': validation}), flush=True)
 
+    def pace():
+        nonlocal last_request
+        # A full scenario intentionally makes many small calls. Stay below
+        # the real 120/min operations budget, rather than disabling security.
+        delay = 0.65 - (time.monotonic() - last_request)
+        if delay > 0: time.sleep(delay)
+        last_request = time.monotonic()
+
     def get(path, status=200, **kwargs):
-        result = session.get(base + '/api/v1/' + path, timeout=30, **kwargs)
-        assert result.status_code == status, 'read-status-mismatch'
-        return result
+        def once():
+            pace()
+            return session.get(base + '/api/v1/' + path, timeout=30, **kwargs)
+        return checked_read(once, status)
 
     def post(path, body=None, status=202, key=None):
+        pace()
         result = session.post(base + '/api/v1/' + path, json=body, headers={**api.headers, **({'Idempotency-Key': key} if key else {})}, timeout=40)
-        assert result.status_code == status, 'write-status-mismatch'
-        return result
+        return checked_status(result, status, 'WRITE')
 
     def wait(kind, operation, states):
         deadline = time.monotonic() + 240
@@ -364,5 +405,7 @@ if __name__ == '__main__':
     try: main()
     except BaseException as error:
         lines = [frame.lineno for frame in traceback.extract_tb(error.__traceback__) if Path(frame.filename).name == Path(__file__).name]
-        print(json.dumps({'realDirectoryPurgingBff': 'failed', 'phase': PHASE, 'failureType': type(error).__name__, 'sourceLines': lines[-8:], 'privateOutput': 'withheld'}), flush=True)
+        code = str(error)
+        public_code = code if len(code) <= 160 and re.fullmatch('BFF_[A-Z0-9_]+', code) else None
+        print(json.dumps({'realDirectoryPurgingBff': 'failed', 'phase': PHASE, 'failureType': type(error).__name__, 'failureCode': public_code, 'sourceLines': lines[-8:], 'privateOutput': 'withheld'}), flush=True)
         raise SystemExit(1) from None

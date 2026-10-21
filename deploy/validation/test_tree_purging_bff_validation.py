@@ -3,7 +3,7 @@
 import copy
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import validate_file_tree_purging_bff as validator
 
@@ -125,6 +125,41 @@ class PurgingBffValidationTests(unittest.TestCase):
         self.assertEqual((True, True), validator.metadata_components({'state': 'Purged', 'originalsPurged': True}))
         for saved in ({'state': 'Unknown'}, {'state': 'Purged', 'originalsPurged': 'true'}):
             with self.assertRaises(AssertionError): validator.metadata_components(saved)
+
+    def test_read_only_budget_recovery_obeys_retry_after_without_long_blocking_sleep(self):
+        limited = Mock(status_code=429, headers={'Retry-After': '60'})
+        limited.json.return_value = {'code': 'API_RATE_LIMITED'}
+        success = Mock(status_code=200)
+        request = Mock(side_effect=[limited, success])
+        with patch.object(validator.time, 'sleep') as sleep:
+            self.assertIs(success, validator.checked_read(request))
+            self.assertEqual([30, 30], [call.args[0] for call in sleep.call_args_list])
+        self.assertEqual(2, request.call_count)
+
+    def test_write_failure_never_retries_or_exposes_a_private_response_body(self):
+        limited = Mock(status_code=429, headers={'Retry-After': '60'})
+        limited.json.return_value = {'code': 'API_RATE_LIMITED', 'detail': 'private-password-not-for-output'}
+        with patch.object(validator.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(RuntimeError, '^BFF_WRITE_STATUS_429_API_RATE_LIMITED$'):
+                validator.checked_status(limited, 202, 'WRITE')
+            sleep.assert_not_called()
+        limited.json.return_value = {'code': 'private token value'}
+        with self.assertRaisesRegex(RuntimeError, '^BFF_WRITE_STATUS_429_UNSPECIFIED$'):
+            validator.checked_status(limited, 202, 'WRITE')
+
+    def test_read_retries_are_bounded_and_malformed_retry_after_is_rejected(self):
+        limited = Mock(status_code=429, headers={'Retry-After': '1'})
+        limited.json.return_value = {'code': 'API_RATE_LIMITED'}
+        request = Mock(return_value=limited)
+        with patch.object(validator.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(RuntimeError, '^BFF_READ_STATUS_429_API_RATE_LIMITED$'):
+                validator.checked_read(request)
+            self.assertEqual(3, request.call_count)
+            self.assertEqual(2, sleep.call_count)
+        for value in ('0', '61', '-1', 'nonsense'):
+            limited.headers = {'Retry-After': value}
+            with self.assertRaisesRegex(RuntimeError, '^BFF_RATE_RETRY_AFTER_INVALID$'):
+                validator.checked_read(lambda: limited)
 
 
 if __name__ == '__main__': unittest.main()
