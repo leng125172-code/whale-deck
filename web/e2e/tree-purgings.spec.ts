@@ -88,7 +88,10 @@ for (const scenario of matrix)
   test(`${scenario.width} ${scenario.colorScheme} ${scenario.captureKind} ${scenario.scope}: explicit plan and second confirmation preserve capture history`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width: scenario.width, height: 1000 })
+    await page.setViewportSize({
+      width: scenario.width,
+      height: scenario.width === 320 ? 780 : 900,
+    })
     await page.emulateMedia({ colorScheme: scenario.colorScheme })
     const control = await installTreePurgingFixture(page, {
       captureKind: scenario.captureKind,
@@ -114,6 +117,10 @@ for (const scenario of matrix)
     expect(control.row.command.captureKind).toBe(scenario.captureKind)
     expect(control.row.executionJobId).toBeNull()
     await fit(page)
+    if (scenario.width === 320 || scenario.width === 1440)
+      await page.screenshot({
+        path: `test-results/tree-purgings-ready-${scenario.width}-${scenario.colorScheme}.png`,
+      })
 
     await dialog(page).getByRole('button', { name: '确认清理', exact: true }).click()
     await page.getByRole('button', { name: '暂不清理', exact: true }).click()
