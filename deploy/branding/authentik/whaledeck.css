@@ -68,6 +68,11 @@ ak-flow-executor::part(locale-select),
   width: 100%;
 }
 
+:host(ak-locale-select[part='locale-select']) svg {
+  color: #f1f7ff;
+  fill: currentColor;
+}
+
 ak-flow-executor::part(main),
 :host(ak-flow-executor) .pf-c-login__main {
   min-width: 0;
