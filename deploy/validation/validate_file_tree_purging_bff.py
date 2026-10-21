@@ -97,6 +97,29 @@ def public_response(row):
     return row
 
 
+def completed_root_receipt(saved, execution, capture, scope):
+    # The internal journal is intentionally sparse: an unselected deletion
+    # flag can be absent. The PUBLIC DTO still requires all three nullable
+    # facts. Selected positive facts must be explicitly present, never inferred.
+    assert type(saved) is dict and saved['state'] == 'Completed'
+    assert saved['operationId'] == uuid.UUID(identifier(execution)).hex
+    assert type(saved['owner']) is str and re.fullmatch('[A-F0-9]{64}', saved['owner'])
+    assert saved['plan']['command']['captureId'] == uuid.UUID(identifier(capture)).hex
+    assert saved['plan']['command']['scope'] == scope and scope in SCOPES
+    assert saved['deletionStarted'] is True
+    assert saved.get('archiveRemoved', False) is (scope != 'Originals')
+    assert saved.get('originalsRemoved', False) is (scope != 'Archive')
+
+
+def metadata_components(saved):
+    assert type(saved) is dict and saved['state'] in ('Verified', 'Purged')
+    originals = saved.get('originalsPurged', False)
+    assert type(originals) is bool
+    # Native capture metadata marks its archive through state=Purged, not a
+    # non-existent archivePurged property. It retains the original manifest.
+    return saved['state'] == 'Purged', originals
+
+
 def cleanup_live_fixture(folder, identity, expected):
     assert folder.parent == DATA and re.fullmatch('wdv-purge-bff-[a-f0-9]{16}', folder.name)
     assert folder.resolve() == folder and proof(folder)[:2] == identity
@@ -129,6 +152,12 @@ def main():
     assert os.geteuid() == 0 and len(sys.argv) == 3
     application, agent = sys.argv[1:]
     assert all(re.fullmatch('[a-f0-9]{40}', value) for value in (application, agent))
+    git = ['git', '-c', 'safe.directory=' + str(REPOSITORY), '-C', str(REPOSITORY)]
+    validation = subprocess.check_output(git + ['rev-parse', 'HEAD'], text=True).strip()
+    assert re.fullmatch('[a-f0-9]{40}', validation)
+    assert not subprocess.check_output(git + ['status', '--porcelain'], text=True).strip()
+    changes = subprocess.check_output(git + ['diff', '--name-only', application, validation], text=True).splitlines()
+    assert all(path.startswith(('deploy/validation/', 'docs/')) or path == '.project-atlas.json' for path in changes)
     assert json.loads(subprocess.check_output(['/opt/whaledeck-agent/WhaleDeck.Agent', '--build-info'], text=True))['sourceRevision'] == agent
     assert json.loads(subprocess.check_output(['docker', 'exec', 'whaledeck-worker', 'dotnet', 'WhaleDeck.Worker.dll', '--build-info'], text=True))['sourceRevision'] == application
     assert DATA.resolve() == DATA and DATA.is_dir()
@@ -143,7 +172,7 @@ def main():
     evidence = REPOSITORY / 'deploy/artifacts' / ('purge-evidence-' + marker.removeprefix('wdv-purge-bff-'))
     evidence.mkdir(mode=0o700)
     jobs, purges, executions, captures, live = [], [], [], [], {}
-    print(json.dumps({'ownedPurgeBffFixture': marker, 'applicationRevision': application, 'agentRevision': agent}), flush=True)
+    print(json.dumps({'ownedPurgeBffFixture': marker, 'applicationRevision': application, 'agentRevision': agent, 'validationRevision': validation}), flush=True)
 
     def get(path, status=200, **kwargs):
         result = session.get(base + '/api/v1/' + path, timeout=30, **kwargs)
@@ -221,8 +250,7 @@ def main():
         assert proof(material['manifest']) == material['manifestProof']
         plain_file(material['metadata'], 32768)
         saved = json.loads(material['metadata'].read_bytes())
-        assert saved.get('archivePurged', False) == (row['archiveState'] == 'Purged')
-        assert saved.get('originalsPurged', False) == (row['originalsState'] == 'Purged')
+        assert metadata_components(saved) == (row['archiveState'] == 'Purged', row['originalsState'] == 'Purged')
         for path, expected in live.items(): assert tree(path) == expected
         return row
 
@@ -246,9 +274,7 @@ def main():
         result = public_response(wait(KIND, row['id'], (*TERMINAL, 'Unknown'))); assert result['state'] == 'Succeeded'
         receipt = STATE / 'tree-purging' / (uuid.UUID(execution).hex + '.json'); plain_file(receipt, 32768)
         saved = json.loads(receipt.read_bytes())
-        assert saved['state'] == 'Completed' and saved['plan']['command']['captureId'] == uuid.UUID(command['captureId']).hex
-        assert saved['plan']['command']['scope'] == scope and saved['deletionStarted'] is True
-        assert saved['archiveRemoved'] is (scope != 'Originals') and saved['originalsRemoved'] is (scope != 'Archive')
+        completed_root_receipt(saved, execution, command['captureId'], scope)
         assert_material(material)
         return result
 
@@ -280,7 +306,7 @@ def main():
             (replacement / 'current.bin').write_bytes(os.urandom(257))
             live[replacement] = tree(replacement); live[folder / ('target-' + str(index))] = tree(folder / ('target-' + str(index)))
         assert len({item['row']['id'] for item in captures}) == 6
-        preserve_evidence(evidence, 'baseline.json', {'fixture': marker, 'identity': identity, 'application': application, 'agent': agent, 'captures': [item['row'] for item in captures]})
+        preserve_evidence(evidence, 'baseline.json', {'fixture': marker, 'identity': identity, 'application': application, 'agent': agent, 'validation': validation, 'captures': [item['row'] for item in captures]})
         PHASE = 'csrf-origin-schema-and-canceled-plan'
         command = {'captureId': captures[0]['row']['id'], 'scope': 'All'}
         with requests.Session() as anonymous:
@@ -323,7 +349,7 @@ def main():
         for path, entries in live.items():
             for relative, value in entries.items(): expected[path / relative] = value
         cleanup_live_fixture(folder, identity, expected)
-        print(json.dumps({'realDirectoryPurgingBff': 'passed', 'applicationRevision': application, 'agentRevision': agent,
+        print(json.dumps({'realDirectoryPurgingBff': 'passed', 'applicationRevision': application, 'agentRevision': agent, 'validationRevision': validation,
             'captureKinds': ['Trash', 'Overwrite'], 'scopes': list(SCOPES), 'mainExecutions': 6, 'complementExecutions': 4,
             'completeBytesPerHistoricalTree': 2 * 1024**2 + 7, 'currentReplacementPathsPreserved': True,
             'sqlAuditJobsAndZeroLocks': True, 'catalogueManifestRootJournalAuditRetained': True, 'ownedLivePayloadRemoved': True,

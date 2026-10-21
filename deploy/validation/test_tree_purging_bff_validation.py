@@ -100,5 +100,31 @@ class PurgingBffValidationTests(unittest.TestCase):
                         validator.cleanup_live_fixture(path, (1, 2), {})
                 unlink.assert_not_called(); rmdir.assert_not_called()
 
+    def test_sparse_internal_journal_does_not_infer_selected_positive_facts(self):
+        execution = '6237205e-fc42-4cf4-9b58-1b2d67360eef'
+        capture = self.row['command']['captureId']
+        for scope in validator.SCOPES:
+            saved = {'state': 'Completed', 'operationId': '6237205efc424cf49b581b2d67360eef',
+                'owner': 'A' * 64, 'plan': {'command': {'captureId': '3699984d73e44cf2a90cc291cb5621af', 'scope': scope}},
+                'deletionStarted': True}
+            if scope != 'Originals': saved['archiveRemoved'] = True
+            if scope != 'Archive': saved['originalsRemoved'] = True
+            validator.completed_root_receipt(saved, execution, capture, scope)
+            for field in ('archiveRemoved', 'originalsRemoved'):
+                if field not in saved: continue
+                missing = copy.deepcopy(saved); missing.pop(field)
+                with self.assertRaises(AssertionError):
+                    validator.completed_root_receipt(missing, execution, capture, scope)
+        with self.assertRaises(AssertionError):
+            validator.completed_root_receipt({**saved, 'operationId': '0' * 32}, execution, capture, 'All')
+
+    def test_archive_metadata_state_is_distinct_from_originals_deletion_flag(self):
+        self.assertEqual((False, False), validator.metadata_components({'state': 'Verified'}))
+        self.assertEqual((True, False), validator.metadata_components({'state': 'Purged'}))
+        self.assertEqual((False, True), validator.metadata_components({'state': 'Verified', 'originalsPurged': True}))
+        self.assertEqual((True, True), validator.metadata_components({'state': 'Purged', 'originalsPurged': True}))
+        for saved in ({'state': 'Unknown'}, {'state': 'Purged', 'originalsPurged': 'true'}):
+            with self.assertRaises(AssertionError): validator.metadata_components(saved)
+
 
 if __name__ == '__main__': unittest.main()
