@@ -1,6 +1,6 @@
 # WhaleDeck 设计文档索引
 
-本目录把产品功能基线拆分为可以直接指导设计、开发、测试和验收的文档。`FEATURES.md` 是产品决策的唯一来源；其他文档描述如何实现这些决策，不得自行扩大范围。
+本目录拆分产品、设计、开发与验收文档。2026-10-21用户授权的[SCOPE_SINGLE_WORKSTATION.md](SCOPE_SINGLE_WORKSTATION.md)及[GOAL_P0_P5.md](GOAL_P0_P5.md)定义当前59项范围，`FEATURES.md`同步产品定位；其他文档不得自行恢复已移出的17项或扩大目标。10月13日76项和更早HOLD为历史，不作为当前要求。
 
 2026-10-13 已确认扩大为 [P0–P5 完整目标](GOAL_P0_P5.md)，原 HOLD/预留不再排除任务。旧页面/用例/RPC/模型/权限表是历史实现契约；新增能力须按任务 ID 同步专用设计后实现，不因解除预留而直接放开权限。用户已恢复开发，不设独立原型阶段。
 
@@ -8,6 +8,7 @@
 
 | 文档 | 责任 |
 | --- | --- |
+| [SCOPE_SINGLE_WORKSTATION.md](SCOPE_SINGLE_WORKSTATION.md) | 用户授权的单工作站精简决策、17个移出原ID、保留59项与安全底线 |
 | [GOAL_P0_P5.md](GOAL_P0_P5.md) | 最新完整目标、范围变更、P0–P5 任务/依赖/完成标准 |
 | [FEATURES.md](FEATURES.md) | 产品范围、已确认决策、功能状态和边界 |
 | [DEVELOPMENT_WORKSPACES.md](DEVELOPMENT_WORKSPACES.md) | P3-13–P3-18：多语言开发空间、代码导入、远程调试/测试、报告、隔离及验收 |

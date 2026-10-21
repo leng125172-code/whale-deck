@@ -2,6 +2,8 @@
 
 日期：2026-10-13。用户新增需求；状态：**设计已纳入，功能待实现**。对应 [完整目标](GOAL_P0_P5.md) 的 P3-13–P3-18；直接开发，不设置独立原型确认阶段。
 
+2026-10-21修订：六项开发空间需求完整保留，按[单工作站实用版](SCOPE_SINGLE_WORKSTATION.md)实施。不依赖tenant/node/套餐/VM；保留资源上限、空间所有者和显式开发授权。以下“配额”仅指主机安全预算，不是商业订阅。
+
 ## 1. 产品范围
 
 开发空间是代码调试、远程开发测试的隔离工作区，不是生产网站或应用。一个空间可以同时包含多种语言、SDK、调试适配器、前后端服务与独立测试数据库。用户可通过 Git 或上传导入源码，在浏览器/本地 IDE 编辑、构建、测试、调试和访问私有预览；平台自动保存运行证据，输出可用的报告。
@@ -11,7 +13,7 @@
 - 调试报告：由实际执行证据生成，不把“应用启动成功”当成测试通过，不把未知异常自动判为确定根因。
 - 生产发布：另走 P3 网站/P1 应用的导出、预检、确认和发布流程。本模块不自动升级生产、不挂载生产数据卷、不直接复制生产 Secret。
 
-初始语言模板覆盖 .NET/C#、Node.js/TypeScript/JavaScript（含 Vue）、Python、Go、Java、C/C++；版本由模板配置并锁定。第一条端到端验收使用同一空间的 C# API + Vue/Node 前端，随后逐语言验证构建、测试及可用调试适配器。SDK 安装与调试器/扩展许可分别核对，不假设所有 VS Code 扩展都可在第三方 Web IDE 使用。没有真实断点验收的语言不标“支持调试”。
+首批内置语言模板为.NET/C#、Node.js/TypeScript/JavaScript（含Vue）、Python，版本由模板锁定；Go/Java/C/C++等可用受控环境模板扩展，不纳入本次全语言自研管理与调试矩阵。第一条端到端验收是同一空间的C# API + Vue/Node前端，再验证Python；已有支持的构建、测试和调试能力必须分别真实验收。SDK与调试器/扩展许可分别核对，不假设所有VS Code扩展均可用于第三方Web IDE；没有真实断点证据不能标“支持调试”。
 
 ## 2. 使用流程
 
@@ -98,7 +100,7 @@ Agent 只管理登记工作负载与只读白名单路径。空间容器没有�
 
 ## 7. 权限与隔离
 
-默认 User 保持仪表盘/门户。新增 Developer 表示 Authentik 显式组映射/资源授权结果，不建立本地密码用户；管理员控制模板、允许语言/网络、配额和委派。P3 先落地本人空间授权，P5 接入团队共享/节点/项目配额，不能为等待 P5 而对所有登录用户放开开发功能。
+默认User保持仪表盘/门户。Developer仅表示Authentik显式组映射/空间授权结果，不建立本地密码、企业租户或团队角色体系；管理员控制模板、允许语言/网络和资源预算。P3直接实现本人/指定空间动作授权，不等待P5；不能对所有登录用户默认开放开发功能。
 
 | 权限 | 默认 User | 授权 Developer | Administrator |
 | --- | --- | --- | --- |
@@ -116,17 +118,17 @@ Agent 只管理登记工作负载与只读白名单路径。空间容器没有�
 - API 入队、Worker 签发、Agent 执行/会话建立分别校验目标与权限；2 小时权限复核继续适用，紧急撤权主动断开。
 - 非特权、非 root 用户运行，capabilities 最小化、no-new-privileges、资源/pids/磁盘/网络预算；禁止 host PID/network、设备直通、宿主敏感挂载和生产网络。
 - 默认仅工作负载私网；依赖下载按批准源/代理开通，私有预览经授权网关。不能以一般 Docker bridge 存在声称已经阻止全部横向访问，须验证实际 egress/跨网络策略。
-- 项目空间不获得宿主 `user` 的 NOPASSWD:ALL；所有脚本/断点/变量访问属于不可信代码，内核共享容器不被宣称为绝对沙箱。高风险外来项目可使用后续 P5 VM 隔离模式。
+- 项目空间不获得宿主`user`的NOPASSWD:ALL；所有脚本/断点/变量访问按不可信代码处理，共享内核容器不是绝对沙箱。VM平台已移出，不声称具有VM隔离；不满足安全边界的高风险任务明确拒绝，不能靠扩大宿主权限执行。
 - 空间资源使用独立 `whaledeck-dev-*` 命名及稳定 workspace/run ID 标签，并同时登记资源注册表；不放入 `database-platform-*` 基础依赖或普通生产应用目录。通用容器页不能绕过空间权限/活动会话锁来修改空间；标签本身不能赋权。
 - 禁止 Secret/OIDC Token/API Key 进入 PostgreSQL 业务列、审计、报告或镜像层；日志过滤已知凭据并对敏感模式脱敏。无法证明任意用户代码不会打印未知 Secret，界面应提醒不要把生产凭据带入空间。
 
 ## 8. 数据库与存储模型
 
-模型为待实现设计；稳定字段明确建表，EF migration、外键/唯一/索引/租户约束随实现生成，不使用生产 EnsureCreated。
+模型为待实现设计；稳定字段建表，EF migration、外键/唯一/索引及用户/空间归属约束随实现生成，不使用生产EnsureCreated，不新增tenant/node/订阅模型。
 
 | ID / 实体 | 关键字段、关系与约束 |
 | --- | --- |
-| DM-DEV-WORKSPACE | UUID、ownerSubject、可选 project/node、slug、state、environmentVersion、storageRootId、quotas、Version；节点/slug 唯一、所有者+状态索引 |
+| DM-DEV-WORKSPACE | UUID、ownerSubject、slug、state、environmentVersion、storageRootId、resourceLimits、Version；本机slug唯一、所有者+状态索引，无tenant/node/套餐外键 |
 | DM-DEV-ENVIRONMENT | 模板/版本、manifestDigest、immutable/创建时间、依赖/任务规范；模板版本唯一，不存凭据值 |
 | DM-DEV-RUNTIME | environmentId、serviceName、language、SDK/toolchainVersion、imageDigest、debugCapabilities、预算；环境/服务唯一、多行支持多语言 |
 | DM-DEV-SOURCE | workspaceId、revision、Git URL（无凭据）/ref/commit 或导入清单 hash、originKind、worktreeFingerprint、dirty；空间/revision 唯一 |
@@ -152,7 +154,7 @@ Valkey 保存有 TTL 的上传/会话一次性票据、运行进度与缓存，�
 | P3-17 | PAGE-DEV-006 + REPORT + UC-009 + RPC-006 | 自动收集并下载 Markdown/JSON；实际测试解析/指标关联/脱敏/有界，失败也有报告 |
 | P3-18 | UC-010 + RPC-007 + QA/文档 | 空闲停机/重建保留源码、删除确认、NVMe/HDD/备份、跨用户/越权/核心保护和精确清理 |
 
-先完成 P0 权限/任务/指标基础、P1 创建容器及 P2 受控文件/备份能力；P3 内并行准备模板，但不跳过安全边界。不等 P4 GitLab 才提供通用 Git 导入；P5 接入团队与多节点。当前 P0 监控聚合任务继续，补充范围不暂停活动目标。
+先完成P0权限/任务/指标、P1创建容器及P2受控文件/备份；P3内并行准备模板但不跳过安全边界。通用Git导入不等P4 GitLab；不再接P5团队/多节点，直接完成本机多语言调试和真实报告。范围修订不暂停活动目标。
 
 ### 报告必须包含
 

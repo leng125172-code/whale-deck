@@ -1,6 +1,6 @@
 # WhaleDeck
 
-Whale Deck is a containerized control plane for the Precision 7920 workstation, with a host-side Agent and maintenance entry point. The current MVP/P1 backend, Vue management UI and workstation integration are deployed on the target workstation. The expanded [P0–P5 delivery scope](docs/GOAL_P0_P5.md) is active; old `HOLD` restrictions have been removed, but newly included features are not yet implemented or accepted.
+Whale Deck is a containerized control plane for the Precision 7920 workstation, with a host-side Agent and maintenance entry point. The current MVP/P1 backend, Vue management UI and workstation integration are deployed. The active [P0–P5 scope](docs/GOAL_P0_P5.md) now targets a practical single-workstation panel: 59 retained tasks, with 17 former tasks explicitly removed by the user-authorized [scope revision](docs/SCOPE_SINGLE_WORKSTATION.md). It does not build a multi-node, enterprise-tenant, subscription, mail/DNS-hosting or virtualization platform. Retained features still require complete implementation and real acceptance.
 
 See [implementation status](docs/IMPLEMENTATION_STATUS.md) for the distinction between implemented code, placeholders and pending workstation acceptance. A passing build does not mean the complete backend is ready for production.
 
@@ -20,7 +20,7 @@ WhaleDeck has no local password store and does not duplicate Authentik user prof
 
 The product baseline starts in [docs/FEATURES.md](docs/FEATURES.md). The complete page, use-case, Agent RPC, permission, data-model, and delivery breakdown is indexed in [docs/README.md](docs/README.md).
 
-The 76-task scope includes [multi-language development workspaces](docs/DEVELOPMENT_WORKSPACES.md): Git/upload source import, remote editing/debugging/testing, private previews and automatically collected diagnostic reports. These isolated environments are for development and testing only, not automatic production deployment. Their design is recorded; runtime implementation remains pending.
+The retained scope includes [multi-language development workspaces](docs/DEVELOPMENT_WORKSPACES.md): Git/upload source import, remote editing/debugging/testing, private previews and automatically collected diagnostic reports. Resource limits and per-user/workspace authorization remain mandatory without enterprise tenants. These environments are for development/testing, not automatic production deployment. Their design is recorded; runtime implementation remains pending.
 
 ## Repository layout
 
