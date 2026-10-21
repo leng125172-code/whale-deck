@@ -33,6 +33,7 @@ builder.Services.AddReverseProxy()
         [
             TerminalProxyConfiguration.CreateRoute(),
             FileProxyConfiguration.CreateRoute(),
+            MetricProxyConfiguration.CreateRoute(),
             new Yarp.ReverseProxy.Configuration.RouteConfig
             {
                 RouteId = "authentik",
@@ -56,6 +57,7 @@ builder.Services.AddReverseProxy()
         [
         TerminalProxyConfiguration.CreateCluster(),
         FileProxyConfiguration.CreateCluster(),
+        MetricProxyConfiguration.CreateCluster(),
         new Yarp.ReverseProxy.Configuration.ClusterConfig
         {
             ClusterId = "gateway",
