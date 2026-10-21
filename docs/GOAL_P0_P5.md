@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-21清理WebUI候选**：6a0083f/39d10e2显式三范围、二次确认、双任务及只读接管已接；415前端单元、139联合浏览器+手机780高19重跑、2186 Unit/159 Integration（6原生跳过）及Release通过；冻结工作站隔离PG1执行/1通过且清理。新BFF客户端9项纯测试通过但尚未运行，真实身份/UDS/HDD/网页和覆盖发布继续，不签完整文件模块或76项。[证据](qa/FILE_TREE_PURGING_UI.md)。以下旧候选“尚无页面”为对应历史。
+
 - **2026-10-21清理业务材料候选**：独立当前登录/目录证明绑定、签名确认、续租调度与严格Gateway、Unknown组件三态已实现；2124 Unit/146 Integration（6本机原生跳过）及Release通过，旧维护快照并发修复后原测试10轮通过。[证据](qa/FILE_TREE_PURGING_BUSINESS_MATERIAL.md)。尚无清理SQL/migration/Worker注册/API/页面，未部署；下一步永久任务/锁/事务审计、数据库清理事实及第11类管理员处置。完整76项保持active。
 
 - **2026-10-21清理安装态子门禁通过**：56101c8/1.36宿主/签名UDS及6c60ea3双检查点独立完整磁盘通过：两捕获类型/三范围、2MiB+7/1GiB+7、6完成/6取消及81路径精确清理复核。[证据](qa/FILE_TREE_PURGING_INSTALLED.md)。尚缺清理当前管理员/永久业务任务/SQL墓碑/页面，同HDD不冒称异盘或安装态强杀；API/Worker/Gateway保持2c8d1bb，全部76项仍active。

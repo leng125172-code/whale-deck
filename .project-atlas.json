@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-21）",
-  "nextStep": "f788a1e已更新Authentik管理员Logo/纯色明暗背景与四个原生全局UI属性，34测试双机通过、实际主题/320窄屏/导航/登录退出、原图完整哈希与临时账号0通过，11核心healthy；只改Brand，CI仍执行。主线6ce7dad接管摘要CI四路成功；三范围清理面板工作副本保留、39单元通过、19浏览器仅登记，未提交或部署。下一步最终构建和浏览器回归、真实BFF/UDS/HDD/权限与发布；继续未知/孤儿对象、容器文件及完整76项。"
+  "nextStep": "6a0083f/39d10e2目录历史组件清理WebUI已提交：415前端单元、139联合浏览器与手机780高19重跑、Release/2186 Unit/159 Integration（6原生跳过）通过；同源码工作站隔离PG1执行/1通过且清理。新版实机BFF客户端9项纯测试通过但未执行；CI前端继续。工作站已恢复且11核心healthy，下一步dev原位覆盖（无自动回滚）、真实身份/BFF/UDS/HDD/普通用户及网页验收；继续未知/孤儿对象、容器文件和完整76项。Authentik品牌外观已验收保持。"
 }
