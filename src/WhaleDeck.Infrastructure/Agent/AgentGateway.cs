@@ -355,6 +355,18 @@ public sealed partial class AgentGateway : IAgentGateway, IManagementQuery, IHos
         return values;
     }
 
+    public async Task<IReadOnlyCollection<MetricValueDto>> GetRecentMetricsAsync(DateTimeOffset? afterUtc, CancellationToken cancellationToken)
+    {
+        var capabilities = await GetCapabilitiesAsync(cancellationToken);
+        if (capabilities.ProtocolMajor != 1 || capabilities.ProtocolMinor < 37 || !capabilities.Capabilities.Contains("host.metrics.replay", StringComparer.Ordinal))
+            throw new InvalidOperationException("HOST_METRIC_REPLAY_UNSUPPORTED");
+        var request = new MetricsRequest { ReplayRecent = true };
+        if (afterUtc is not null) request.AfterSampledAtUtc = Timestamp.FromDateTimeOffset(afterUtc.Value);
+        using var call = _host.StreamMetrics(request, Headers("/whaledeck.agent.v1.HostService/StreamMetrics"),
+            deadline: DateTime.UtcNow.AddSeconds(15), cancellationToken: cancellationToken);
+        return await HostMetricReplayReader.ReadAsync(call.ResponseStream, afterUtc, cancellationToken);
+    }
+
     public async Task<AgentOperationDto> ExecuteAsync(string area, string action, string resourceId, IReadOnlyDictionary<string, string> parameters, string? planHash, Guid jobId, string idempotencyKey, CancellationToken cancellationToken)
     {
         var requestContext = new RequestContext { JobId = jobId.ToString("D"), IdempotencyKey = idempotencyKey };

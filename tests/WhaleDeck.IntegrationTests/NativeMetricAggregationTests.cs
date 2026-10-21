@@ -9,11 +9,14 @@ using Npgsql;
 using WhaleDeck.Application.Services;
 using WhaleDeck.Domain.Entities;
 using WhaleDeck.Infrastructure.Persistence;
+using WhaleDeck.Application.Models;
+using WhaleDeck.Worker;
 
 namespace WhaleDeck.IntegrationTests;
 
 public sealed class NativeMetricAggregationTests
 {
+    private static readonly string[] ReplayKinds = ["network.receive", "disk.write"];
     [NativePostgresFact]
     public async Task UpgradeBackfillQualityWeightedHistoryLateSamplesAndRestartAreCorrectInRealPostgres()
     {
@@ -176,6 +179,61 @@ public sealed class NativeMetricAggregationTests
             Assert.True(loaded.Count >= 32); Assert.All(loaded, item => Assert.Equal(169, item.Points.Count));
             Console.WriteLine($"METRIC_QUERY_BENCH_MS={timer.ElapsedMilliseconds}");
         }
+        await VerifyCanonicalReplayAsync(options, connection.ConnectionString);
+    }
+
+    private static async Task VerifyCanonicalReplayAsync(DbContextOptions<PlatformDbContext> options, string connection)
+    {
+        var start = DateTimeOffset.UtcNow.AddMinutes(-5).AddTicks(7);
+        var samples = Enumerable.Range(0, 40).SelectMany(index => ReplayKinds.Select(kind =>
+            new MetricValueDto(kind, "replay-fixture", index, "bytesPerSecond", index == 0 ? "Warmup" : "Good", start.AddSeconds(index * 6)))).ToArray();
+        await using (var first = new PlatformDbContext(options))
+        {
+            var acknowledged = await HostMetricIngestionWorker.PersistAsync(first, samples, null, DateTimeOffset.UtcNow, default);
+            Assert.Equal(samples[^1].SampledAtUtc, acknowledged); // Raw 100-ns cursor, not the database-normalized timestamp.
+        }
+        await using (var restarted = new PlatformDbContext(options))
+            Assert.Equal(samples[^1].SampledAtUtc, await HostMetricIngestionWorker.PersistAsync(restarted, samples, null, DateTimeOffset.UtcNow, default));
+        await using var inspect = new PlatformDbContext(options);
+        var host = await inspect.ManagedResources.AsNoTracking().SingleAsync(item => item.ResourceType == "Host" && item.ExternalId == "local");
+        var series = await inspect.MetricSeries.AsNoTracking().Where(item => item.ResourceId == host.Id).ToArrayAsync();
+        Assert.Equal(2, series.Length);
+        foreach (var item in series)
+        {
+            var stored = await inspect.MetricSamples.AsNoTracking().Where(sample => sample.SeriesId == item.Id).OrderBy(sample => sample.SampledAtUtc).ToArrayAsync();
+            Assert.Equal(40, stored.Length);
+            Assert.Equal(Enumerable.Range(0, 40).Select(i => MetricSampleWriter.NormalizeTimestamp(start.AddSeconds(i * 6))), stored.Select(sample => sample.SampledAtUtc));
+            Assert.Equal(Enumerable.Range(0, 40).Select(i => (double?)i), stored.Select(sample => sample.ValueDouble));
+            Assert.Equal("Warmup", stored[0].Quality);
+            Assert.All(stored.Skip(1), sample => Assert.Equal("Good", sample.Quality));
+        }
+        var next = samples[^1] with { SampledAtUtc = samples[^1].SampledAtUtc.AddSeconds(6), Value = 99 };
+        var failingOptions = new DbContextOptionsBuilder<PlatformDbContext>().UseNpgsql(connection, provider => provider.EnableRetryOnFailure())
+            .AddInterceptors(new RejectSave()).Options;
+        await using (var failed = new PlatformDbContext(failingOptions))
+            await Assert.ThrowsAsync<InvalidOperationException>(() => HostMetricIngestionWorker.PersistAsync(failed, [next], samples[^1].SampledAtUtc, DateTimeOffset.UtcNow, default));
+        Assert.Equal(80, await inspect.MetricSamples.Join(inspect.MetricSeries.Where(item => item.ResourceId == host.Id), sample => sample.SeriesId, item => item.Id, (sample, _) => sample).CountAsync());
+        // A concurrent ingestion process cannot advance its cursor while another owns the write transaction.
+        await using (var held = new NpgsqlConnection(connection))
+        {
+            await held.OpenAsync();
+            await using var transaction = await held.BeginTransactionAsync();
+            await using var acquire = new NpgsqlCommand("SELECT pg_advisory_xact_lock(82592831620706)", held, transaction);
+            await acquire.ExecuteNonQueryAsync();
+            await using var blocked = new PlatformDbContext(options);
+            Assert.Equal(samples[^1].SampledAtUtc, await HostMetricIngestionWorker.PersistAsync(blocked, [next], samples[^1].SampledAtUtc, DateTimeOffset.UtcNow, default));
+            await transaction.RollbackAsync();
+        }
+        await using (var retry = new PlatformDbContext(options))
+            Assert.Equal(next.SampledAtUtc, await HostMetricIngestionWorker.PersistAsync(retry, [next], samples[^1].SampledAtUtc, DateTimeOffset.UtcNow, default));
+        Assert.Equal(81, await inspect.MetricSamples.Join(inspect.MetricSeries.Where(item => item.ResourceId == host.Id), sample => sample.SeriesId, item => item.Id, (sample, _) => sample).CountAsync());
+        Console.WriteLine("METRIC_CANONICAL_REPLAY=80-preserved-restart-idempotent-failure-and-lock-retry-passed");
+    }
+
+    private sealed class RejectSave : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("SYNTHETIC_METRIC_SAVE_REJECTION");
     }
 
     private sealed class RacingArrival(string connection, Guid series, DateTimeOffset timestamp) : DbCommandInterceptor

@@ -85,6 +85,13 @@ message MetricsRequest {
   // Zero requests one batch and closes the stream. Values from 6 through 60
   // keep the stream open at the requested sampling interval.
   uint32 interval_seconds = 2;
+  // Capability host.metrics.replay, protocol minor >= 37. Only with interval_seconds=0.
+  // Replay retained canonical batches, bounded by 120 batches / 65536 metric points.
+  // Each batch ends in batch.complete; the RPC ends normally after the snapshot.
+  bool replay_recent = 3;
+  // Exclusive raw timestamp, acknowledged by the caller only AFTER successful persistence.
+  // Absence requests the available buffer. Eviction/offline gaps are never fabricated.
+  google.protobuf.Timestamp after_sampled_at_utc = 4;
 }
 
 message MetricPoint {

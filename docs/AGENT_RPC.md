@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-10-21新增minor37指标连续性候选：`host.metrics.replay`在现有`HostService.StreamMetrics`中提供单次有界原始批次重放。`replay_recent=true`仅允许`interval_seconds=0`，可选`after_sampled_at_utc`为exclusive原始游标；最多120批/65536点，每批`batch.complete`且RPC正常结束后才交付业务层。Worker独立摄取并在SQL提交后确认游标，不插值、不伪造停机数据。旧单批/持续流兼容；新客户端明确检查major1/minor>=37及独立能力，不静默退回丢点模式。当前未部署，[证据与边界](qa/TELEMETRY_CONTINUITY.md)。
+
 2026-10-21范围覆盖：按[单工作站59项](SCOPE_SINGLE_WORKSTATION.md)实现，仅本机UDS，不新增远程mTLS节点协议、VM/邮件/DNS托管或插件RPC。既有能力/主版本协商、peer credentials、短时签名、固定helper、资源/路径白名单与核心保护保持；用户/空间授权不能因取消企业租户而省略。下方旧76项与候选版本记录为历史。
 
 2026-10-21新增未部署清理业务材料：独立 Application 校验/签名确认/调度和 Gateway 已接；2124 Unit/146 Integration（6 本机原生跳过）、Release及旧维护快照并发10轮通过，修复候选包含同实例维护读取/发布协调。没有清理 SQL/迁移/Worker 注册/Controller/UI，不冒称永久任务已落库；[材料及失败账本](qa/FILE_TREE_PURGING_BUSINESS_MATERIAL.md)。实际 Agent/维护56101c8/1.36、API/Worker/Gateway2c8d1bb保持，完整76项继续。

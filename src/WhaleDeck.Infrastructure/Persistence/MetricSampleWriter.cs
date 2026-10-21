@@ -13,8 +13,7 @@ public static class MetricSampleWriter
 
     public static async Task StageManyAsync(PlatformDbContext db, IReadOnlyCollection<ResourceMetric> metrics, CancellationToken cancellationToken)
     {
-        var batch = metrics.GroupBy(item => (item.ResourceId, item.Metric.Kind, item.Metric.DeviceId)).Select(group => group.MaxBy(item => item.Metric.SampledAtUtc)!)
-            .Select(item => item with { Metric = item.Metric with { SampledAtUtc = NormalizeTimestamp(item.Metric.SampledAtUtc) } }).ToArray();
+        var batch = Canonicalize(metrics);
         if (batch.Length == 0) return;
         var kinds = batch.Select(item => item.Metric.Kind).Distinct(StringComparer.Ordinal).ToArray();
         var resourceIds = batch.Select(item => item.ResourceId).Distinct().ToArray();
@@ -50,6 +49,12 @@ public static class MetricSampleWriter
     // Normalize BEFORE lookup and HashSet identity comparison, not only when the provider writes SQL.
     public static DateTimeOffset NormalizeTimestamp(DateTimeOffset value) =>
         value.ToUniversalTime().AddTicks(-(value.UtcTicks % 10));
+
+    public static ResourceMetric[] Canonicalize(IReadOnlyCollection<ResourceMetric> metrics) => metrics
+        .Select(item => item with { Metric = item.Metric with { SampledAtUtc = NormalizeTimestamp(item.Metric.SampledAtUtc) } })
+        .GroupBy(item => (item.ResourceId, item.Metric.Kind, item.Metric.DeviceId, item.Metric.SampledAtUtc))
+        .Select(group => group.Distinct().Count() == 1 ? group.First() : throw new InvalidOperationException("METRIC_IDENTITY_CONFLICT"))
+        .OrderBy(item => item.Metric.SampledAtUtc).ToArray();
 
     private static string DeviceId(string dimensions)
     {

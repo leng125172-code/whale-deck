@@ -51,20 +51,37 @@ public sealed class HostGrpcService(HostReader host, OperationStore operations, 
 
     public override async Task StreamMetrics(MetricsRequest request, IServerStreamWriter<MetricPoint> responseStream, ServerCallContext context)
     {
+        if (request.ReplayRecent && request.IntervalSeconds != 0 || !request.ReplayRecent && request.AfterSampledAtUtc is not null)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "METRIC_REPLAY_REQUEST_INVALID"));
+        DateTimeOffset? after = null;
+        if (request.AfterSampledAtUtc is not null)
+        {
+            try { after = request.AfterSampledAtUtc.ToDateTimeOffset(); }
+            catch (InvalidOperationException) { throw new RpcException(new Status(StatusCode.InvalidArgument, "METRIC_REPLAY_TIMESTAMP_INVALID")); }
+        }
+        if (request.ReplayRecent)
+        {
+            foreach (var retained in host.ReadRecentMetrics(after))
+                await WriteBatch(retained, responseStream);
+            return;
+        }
         var singleBatch = request.IntervalSeconds == 0;
         var interval = TimeSpan.FromSeconds(Math.Clamp(request.IntervalSeconds, 6, 60));
         while (!context.CancellationToken.IsCancellationRequested)
         {
             var batch = host.SampleMetrics();
-            var timestamp = Timestamp.FromDateTimeOffset(batch.SampledAtUtc);
-            foreach (var metric in batch.Metrics)
-            {
-                await responseStream.WriteAsync(new MetricPoint { MetricKind = metric.Kind, DeviceId = metric.DeviceId, Value = metric.Value, Unit = metric.Unit, Quality = metric.Quality, SampledAtUtc = timestamp });
-            }
-            await responseStream.WriteAsync(new MetricPoint { MetricKind = "batch.complete", DeviceId = "host", Unit = "none", Quality = "Good", SampledAtUtc = timestamp });
+            await WriteBatch(batch, responseStream);
             if (singleBatch) return;
             await Task.Delay(interval, context.CancellationToken);
         }
+    }
+
+    private static async Task WriteBatch(HostMetricBatch batch, IServerStreamWriter<MetricPoint> responseStream)
+    {
+        var timestamp = Timestamp.FromDateTimeOffset(batch.SampledAtUtc);
+        foreach (var metric in batch.Metrics)
+            await responseStream.WriteAsync(new MetricPoint { MetricKind = metric.Kind, DeviceId = metric.DeviceId, Value = metric.Value, Unit = metric.Unit, Quality = metric.Quality, SampledAtUtc = timestamp });
+        await responseStream.WriteAsync(new MetricPoint { MetricKind = "batch.complete", DeviceId = "host", Unit = "none", Quality = "Good", SampledAtUtc = timestamp });
     }
 
     public override Task<ResourceCollectionResponse> ListNetworkInterfaces(Empty request, ServerCallContext context)

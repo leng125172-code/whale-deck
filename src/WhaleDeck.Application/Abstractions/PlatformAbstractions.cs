@@ -41,6 +41,8 @@ public interface IAgentGateway
         Task.FromResult(BackupTargetCapacityDto.Unknown("AGENT_CAPACITY_UNSUPPORTED"));
     Task<PlanDto> PlanAsync(string area, string action, string? resourceId, IReadOnlyDictionary<string, string> parameters, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<MetricValueDto>> GetMetricsSnapshotAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<MetricValueDto>> GetRecentMetricsAsync(DateTimeOffset? afterUtc, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("HOST_METRIC_REPLAY_UNSUPPORTED");
     Task<AgentOperationDto> ExecuteAsync(string area, string action, string resourceId, IReadOnlyDictionary<string, string> parameters, string? planHash, Guid jobId, string idempotencyKey, CancellationToken cancellationToken);
     Task<AgentOperationDto> GetOperationAsync(string operationId, CancellationToken cancellationToken);
     Task<AgentOperationDto> CancelOperationAsync(string operationId, CancellationToken cancellationToken);

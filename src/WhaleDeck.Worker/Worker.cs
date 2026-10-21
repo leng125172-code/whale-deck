@@ -69,7 +69,6 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             if (await MetricPartitions.MaintainAsync(db, now, cancellationToken) < 0) return;
             _nextMetricPartitionMaintenance = now.AddHours(1);
         }
-        await CollectMetrics(db, agent, cancellationToken);
         await SyncManagedResources(db, agent, cancellationToken);
         await CollectContainerMetrics(db, agent, cancellationToken);
         await SyncDockerEvents(db, agent, cancellationToken);
@@ -90,22 +89,6 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             await ApplyRetention(db, cancellationToken);
             _nextRetentionSweep = DateTimeOffset.UtcNow.AddHours(1);
         }
-    }
-
-    private static async Task CollectMetrics(PlatformDbContext db, IAgentGateway agent, CancellationToken cancellationToken)
-    {
-        var health = await agent.GetHealthAsync(cancellationToken);
-        if (!health.Available) return;
-        var resource = await db.ManagedResources.SingleOrDefaultAsync(item => item.ResourceType == "Host" && item.ExternalId == "local", cancellationToken);
-        if (resource is null)
-        {
-            resource = new ManagedResource { ResourceType = "Host", ExternalId = "local", DisplayName = "Precision-7920-Tower", ProtectionLevel = "ControlPlane", Source = "Agent" };
-            db.ManagedResources.Add(resource);
-        }
-        var snapshot = await agent.GetMetricsSnapshotAsync(cancellationToken);
-        await MetricSampleWriter.StageAsync(db, resource.Id, snapshot, cancellationToken);
-        resource.LastSeenAtUtc = health.ObservedAtUtc;
-        await db.SaveChangesAsync(cancellationToken);
     }
 
     private static async Task CollectContainerMetrics(PlatformDbContext db, IAgentGateway agent, CancellationToken cancellationToken)

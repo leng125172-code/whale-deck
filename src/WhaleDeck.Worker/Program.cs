@@ -21,6 +21,7 @@ builder.Services.AddSerilog((services, configuration) => configuration
     .WriteTo.Console(new JsonFormatter()));
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService<HostMetricIngestionWorker>();
 builder.Services.AddHostedService<MonitoringAlertWorker>();
 builder.Services.AddHostedService<NotificationRetentionWorker>();
 builder.Services.AddHostedService<NotificationSenderWorker>();

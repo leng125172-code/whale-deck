@@ -25,6 +25,7 @@ public sealed class HostReader(TimeProvider? timeProvider = null)
     private CpuCounters? _previousCpu;
     private long? _previousIoTimestamp;
     private HostMetricBatch? _cachedMetrics;
+    private readonly HostMetricHistory _metricHistory = new();
     private Dictionary<string, (ulong Received, ulong Sent)> _previousNetwork = new(StringComparer.Ordinal);
     private Dictionary<string, DiskIoCounters> _previousDisk = new(StringComparer.Ordinal);
 
@@ -50,8 +51,18 @@ public sealed class HostReader(TimeProvider? timeProvider = null)
             }
             values.AddRange(HostLoadMetrics.Parse(load, Environment.ProcessorCount));
             values.AddRange(ReadDeviceMetrics());
-            _cachedMetrics = new(_clock.GetUtcNow(), values);
+            _cachedMetrics = new(_clock.GetUtcNow(), values.AsReadOnly());
+            _metricHistory.Append(_cachedMetrics);
             return _cachedMetrics;
+        }
+    }
+
+    public IReadOnlyCollection<HostMetricBatch> ReadRecentMetrics(DateTimeOffset? afterUtc)
+    {
+        lock (_sync)
+        {
+            SampleMetrics();
+            return _metricHistory.ReadAfter(afterUtc);
         }
     }
 
