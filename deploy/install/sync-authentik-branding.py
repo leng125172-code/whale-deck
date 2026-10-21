@@ -12,6 +12,7 @@ import argparse
 import base64
 import hashlib
 import json
+import re
 from pathlib import Path
 import shlex
 import subprocess
@@ -104,24 +105,49 @@ def unmanaged(row):
     return {key: value for key, value in row.items() if key not in MANAGED | DERIVED}
 
 
-def synchronize(session, assets, apply=False):
+def background_asset(path):
+    with path.open('rb') as stream:
+        payload = stream.read(25 * 1024**2 + 1)
+    if len(payload) > 25 * 1024**2: raise ValueError('BRANDING_ASSET_SIZE_INVALID')
+    extension = path.suffix.lower().lstrip('.')
+    if extension == 'jpeg': extension = 'jpg'
+    signatures = {'jpg': payload.startswith(b'\xff\xd8\xff'), 'png': payload.startswith(b'\x89PNG\r\n\x1a\n'),
+        'webp': len(payload) >= 12 and payload[:4] == b'RIFF' and payload[8:12] == b'WEBP'}
+    if extension not in signatures or not signatures[extension]: raise ValueError('BRANDING_BACKGROUND_INVALID')
+    if not 0 < len(payload) <= 25 * 1024**2: raise ValueError('BRANDING_ASSET_SIZE_INVALID')
+    return payload, extension, {'jpg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'}[extension]
+
+
+def synchronize(session, assets, apply=False, background_file=None):
     before = select_default(session)
     if not apply:
         return {'authentikBranding': 'inspected', 'defaultBrands': 1, 'managedFields': sorted(MANAGED),
             'existingCssBytes': len(before.get('branding_custom_css', '').encode()), 'identityChanges': False}
     logo_payload = wordmark(assets)
     icon_payload = (assets / 'whaledeck-mark.png').read_bytes()
-    background_payload = (assets / 'whaledeck-ocean-v1.png').read_bytes()
+    # A user-selected wallpaper is native persistent media. Later installer
+    # synchronizations must not silently replace it with the bundled default.
+    preserve_background = background_file is None and isinstance(before.get('branding_default_flow_background'), str) and bool(
+        re.fullmatch(r'whaledeck-wallpaper-[a-f0-9]{20}\.(?:jpg|png|webp)', before['branding_default_flow_background']))
+    if background_file is not None:
+        background_payload, background_extension, background_type = background_asset(background_file)
+    elif preserve_background:
+        background_payload, background_extension, background_type = None, None, None
+    else:
+        background_payload, background_extension, background_type = (assets / 'whaledeck-ocean-v1.png').read_bytes(), 'png', 'image/png'
     # DRF's native CharField trims outer whitespace. Canonicalize before both
     # comparison and hashing so a final newline never causes perpetual writes.
     css = (assets / 'whaledeck.css').read_text().strip()
     if len(css.encode()) > 65536 or any(value in css.lower() for value in ('@import', 'javascript:', '{{')):
         raise ValueError('BRANDING_CSS_INVALID')
-    if any(not 0 < len(payload) <= 25 * 1024**2 for payload in (logo_payload, icon_payload, background_payload)):
+    if any(not 0 < len(payload) <= 25 * 1024**2 for payload in (logo_payload, icon_payload, background_payload) if payload is not None):
         raise ValueError('BRANDING_ASSET_SIZE_INVALID')
     logo, logo_hash = upload(session, 'wordmark', logo_payload, 'svg', 'image/svg+xml')
     icon, icon_hash = upload(session, 'mark', icon_payload, 'png', 'image/png')
-    background, background_hash = upload(session, 'ocean', background_payload, 'png', 'image/png')
+    if preserve_background:
+        background, background_hash = before['branding_default_flow_background'], None
+    else:
+        background, background_hash = upload(session, 'wallpaper' if background_file is not None else 'ocean', background_payload, background_extension, background_type)
     desired = {'branding_title': 'Whale Deck · 身份中心', 'branding_logo': logo, 'branding_favicon': icon,
         'branding_default_flow_background': background, 'branding_custom_css': css}
     changes = {key: value for key, value in desired.items() if before.get(key) != value}
@@ -149,6 +175,7 @@ def synchronize(session, assets, apply=False):
                 raise RuntimeError('BRANDING_MEDIA_MISMATCH')
     return {'authentikBranding': 'verified', 'changedFields': sorted(changes), 'identityChanges': False,
         'cssSha256': hashlib.sha256(css.encode()).hexdigest(), 'backgroundSha256': background_hash,
+        'backgroundPreserved': preserve_background,
         'logoSha256': logo_hash, 'faviconSha256': icon_hash}
 
 
@@ -157,11 +184,12 @@ def main():
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--env-file', type=Path)
     parser.add_argument('--assets-directory', type=Path, default=Path(__file__).resolve().parents[1] / 'branding/authentik')
+    parser.add_argument('--background-file', type=Path, help='Upload an original JPG/PNG/WebP as the persistent selected background; never passed to Git.')
     args = parser.parse_args()
     with requests.Session() as session:
         session.trust_env = False
         session.headers['Authorization'] = 'Bearer ' + token_from_runtime(args.env_file)
-        print(json.dumps(synchronize(session, args.assets_directory, args.apply), ensure_ascii=False))
+        print(json.dumps(synchronize(session, args.assets_directory, args.apply, args.background_file), ensure_ascii=False))
 
 
 if __name__ == '__main__':

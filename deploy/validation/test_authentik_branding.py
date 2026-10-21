@@ -155,6 +155,42 @@ class AuthentikBrandingTests(unittest.TestCase):
         self.assertEqual([], self.http.writes)
         self.assertEqual([('GET', '/api/v3/core/brands/')], [(row[0], row[1]) for row in self.http.calls])
 
+    def test_original_jpeg_wallpaper_is_uploaded_without_reencoding_and_repeat_is_idempotent(self):
+        image = self.assets / 'selected.jpg'
+        payload = b'\xff\xd8\xff' + b'original-fixture-bytes' * 4
+        image.write_bytes(payload)
+        result = BRANDING.synchronize(self.authenticated, self.assets, True, image)
+        name = self.http.brand['branding_default_flow_background']
+        self.assertEqual('whaledeck-wallpaper-' + hashlib.sha256(payload).hexdigest()[:20] + '.jpg', name)
+        self.assertEqual(payload, self.http.media[name])
+        self.assertEqual(hashlib.sha256(payload).hexdigest(), result['backgroundSha256'])
+        self.assertFalse(result['backgroundPreserved'])
+        self.http.calls.clear()
+        again = BRANDING.synchronize(self.authenticated, self.assets, True, image)
+        self.assertEqual([], again['changedFields'])
+        self.assertEqual([], self.http.writes)
+
+    def test_default_future_synchronization_preserves_selected_wallpaper_without_reading_default_image(self):
+        image = self.assets / 'selected.png'; image.write_bytes(b'\x89PNG\r\n\x1a\noriginal-png-fixture')
+        BRANDING.synchronize(self.authenticated, self.assets, True, image)
+        name = self.http.brand['branding_default_flow_background']
+        (self.assets / 'whaledeck-ocean-v1.png').unlink()
+        self.http.calls.clear()
+        result = self.apply()
+        self.assertTrue(result['backgroundPreserved'])
+        self.assertIsNone(result['backgroundSha256'])
+        self.assertEqual(name, self.http.brand['branding_default_flow_background'])
+        self.assertEqual([], result['changedFields']); self.assertEqual([], self.http.writes)
+
+    def test_user_wallpaper_requires_supported_raster_signature_before_any_write(self):
+        for name, payload in (('selected.svg', b'<svg/>'), ('selected.jpg', b'not-jpeg'),
+            ('selected.png', b'\xff\xd8\xffincorrect-extension'), ('selected.webp', b'RIFFbad'), ('selected.jpg', b'')):
+            with self.subTest(name=name):
+                image = self.assets / name; image.write_bytes(payload)
+                with self.assertRaisesRegex(ValueError, 'BRANDING_BACKGROUND_INVALID'):
+                    BRANDING.synchronize(self.authenticated, self.assets, True, image)
+                self.assertEqual([], self.http.writes)
+
     def test_only_five_appearance_fields_are_patched_and_identity_configuration_is_unchanged(self):
         before = copy.deepcopy(self.http.brand)
         result = self.apply()

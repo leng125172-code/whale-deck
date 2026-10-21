@@ -12,6 +12,15 @@ Brand's five presentation fields. The token is read privately from the running
 API or an installer private environment file. Never pass it on the command line.
 Run twice: the second run must report no changed fields or duplicate media.
 
+For a host-specific original wallpaper, add `--background-file /absolute/private/image.jpg`
+(JPG/PNG/WebP). The original bytes are uploaded as content-addressed native media,
+not re-encoded. Future default synchronizations preserve that selected wallpaper;
+they do not replace it with the bundled fallback. Keep third-party user images
+outside Git (for example in ignored `deploy/artifacts/`); do not publish them as
+part of the public source repository. A preserved background has a null returned
+`backgroundSha256`: no new full-byte background verification is claimed by that
+run; independently verify the actual anonymous login background when accepting it.
+
 Media values are relative filenames resolved by Authentik; temporary signed
 download URLs are never persisted in CSS. Assets survive container replacement
 in Authentik's existing persistent data mount. No Whale Deck asset server is
@@ -25,7 +34,8 @@ required. Keep this directory when packaging the installer.
   theme-blue Whale Deck wordmark. No raster re-editing.
 - `whaledeck-ocean-v1.png`: original 1672 × 941 PNG generated on 2026-10-20 with
   the built-in image generation tool (native mode), not an external CLI. It is
-  the selected final background. No post-generation raster editing.
+  the default fallback background for new installations. An existing host-specific
+  selected wallpaper is preserved. No post-generation raster editing.
 - `whaledeck.css`: native Brand custom CSS, scoped flow parts/stage hosts,
   light/dark surfaces, responsive card, keyboard focus, reduced motion; no JS,
   remote fonts, heavyweight blur or replacement authentication forms.
