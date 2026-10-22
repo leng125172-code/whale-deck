@@ -200,9 +200,24 @@ def interrupted_download(url, headers, size):
 
 
 def audits(session, base, subject, identifier):
+    from validate_metric_continuity import query
     response = session.get(base + '/api/v1/audit', params={'actorSubject': subject, 'take': 100}, timeout=20)
     assert response.status_code == 200
-    return [row for row in response.json() if row['targetId'] == identifier and row['action'] == 'containers.files.download']
+    public = [row for row in response.json() if row['targetId'] == identifier and row['action'] == 'containers.files.download']
+    # The administrator audit DTO deliberately excludes DetailJson. Read exact
+    # owned event details independently through local PostgreSQL; never expand
+    # the product API or silently treat a missing field as an empty object.
+    details = query('''SELECT COALESCE(json_agg(q),'[]'::json) FROM (
+        SELECT id::text AS id,result,detail_json AS detail FROM audit_events
+        WHERE actor_subject=:'subject' AND target_id=:'target'
+          AND action='containers.files.download' ORDER BY occurred_at_utc,id LIMIT 100
+        ) q;''', subject=subject, target=identifier)
+    actual = {row['id']: row for row in details}
+    assert len(actual) == len(details) == len(public)
+    for row in public:
+        assert row['id'] in actual and actual[row['id']]['result'] == row['result']
+        row['detailJson'] = json.dumps(actual[row['id']]['detail'])
+    return public
 
 
 def wait_incomplete(session, base, subject, identifier, version):
