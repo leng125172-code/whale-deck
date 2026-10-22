@@ -44,3 +44,14 @@
 首轮proxy测试实际发现ASP.NET正则约束默认IgnoreCase，大写ID意外匹配，保留失败后显式`(?-i:...)`修复，未降低拒绝断言。最后完整2308 Unit/160 Integration通过、6项原生本机跳过。另修正目视发现的根面包屑重复斜杠；新代理与面包屑候选继续冻结验收。
 
 面包屑修正后11项新容器文件生产预览浏览器全部重跑通过。CI持续门禁显式加入新容器文件浏览器和`test_container_file*.py`（引擎+观察器），前序6136c1f的CI不冒称包含这些新增的CI入口。工作站两次HTTPS Git拉取TLS失败均发生在新原生测试启动之前，不存在需重发的测试句柄；准备通过仅公开Git对象的校验增量包传递原提交，保持TLS验证和现有代理配置，不改为直接覆盖工作树文件。
+
+## dd290e9实际覆盖发布及管理员BFF冒烟
+
+1. 公开增量包SHA256、Git前置6136c1f与目标dd290e9均核对一致，工作站仅快进原提交，没有更改TLS验证或代理。dd290e9冻结原生dispatch再次实际1执行/1通过、零跳过，临时资源清理通过；新审计检查包含在其中。
+2. 固定platform-update动作只调度一次，实际InvocationID为a9e7b71ec3284669bae35deff6d22825，运行期间确认MainPID存活。后续unit被`--collect`回收，第一次以“当前InvocationID必须还在”观察触发断言；没有重发发布。另查本次时间段journal为Deactivated successfully、无Failed result，维护状态healthy，五个运行组件实际build-info均dd290e9，11核心healthy。不能把unit已收集误判失败或把默认空状态当成功。
+3. Agent/MaintenanceHost/API/Worker/Gateway已覆盖；没有回滚、Docker daemon重启、生产数据库重建或用户权限扩张。宿主/容器文件写入、HDD历史/恢复仍不由本只读入口实现。
+4. 观察器源码a9119fe通过第二个同样校验的公开增量包传递，只增加验证工具，未重新构建应用。短时真实Authentik管理员Cookie→维护入口→Gateway→API→SQL审计→已安装UDS，读取一个不可变镜像、非root/无网络/只读根/无挂载和端口的独占临时容器。列表/属性及896字节下载与独立Docker归档完整字节一致；NoStore/nosniff/attachment、旧版本/实例/越界路径/敏感文件/Range/核心及匿名401拒绝通过。
+5. 审计实际保存Validated和Incomplete，最后内容版本不变；正常退出后同Cookie读取401。这里仅验证WD Cookie失效，不扩大为本轮完整Authentik双端注销证据。
+6. 新SSH独立复核：临时验收身份0，临时测试容器不存在；8个真实容器读取审计、1 Validated下载/1 Incomplete下载，原始文件名泄漏0，11核心healthy。两个公开传输包及其唯一私有临时目录经完整摘要/条目核对后精确删除，可由本地Git对象重新生成；未删任何用户数据。浏览器与本轮预览服务已关闭。
+
+这不是普通用户/权限撤销、真实浏览器、2MiB+7大文件BFF或安装态中断签收。前轮Agent 2MiB+7、内部管道测试和本机夹具不能替代这些缺口；继续全部59项。6136c1f/bb511ea/dd290e9/a9119fe CI最后仍在运行，仅e062413已确认success；未重发任何CI。
