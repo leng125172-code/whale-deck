@@ -146,7 +146,7 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.15.0
           # setup-node probes pnpm from the repository root, which has no
