@@ -81,8 +81,9 @@ def core_snapshot():
 
 
 @contextlib.contextmanager
-def fixture():
+def fixture(lifetime_seconds=600):
     assert os.geteuid() == 0
+    assert lifetime_seconds in (600, 1200)
     verify_apps_directory(APPS, pwd.getpwnam('whaledeck-agent').pw_uid)
     capacity = os.statvfs(APPS)
     assert capacity.f_bavail * capacity.f_frsize > SIZE + CANCEL_SIZE + max(128 * 1024**2, capacity.f_blocks * capacity.f_frsize // 20)
@@ -115,7 +116,7 @@ def fixture():
             '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--user', '1000:1000', '--pids-limit', '16',
             '--memory', '32m', '--cpus', '0.25', '--log-driver', 'local', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=2',
             '--label', 'io.whaledeck.validation=' + name, '--mount', 'type=bind,src=' + str(folder) + ',dst=/work,readonly',
-            '--entrypoint', '/bin/sleep', IMAGE, '600']).decode().strip()
+            '--entrypoint', '/bin/sleep', IMAGE, str(lifetime_seconds)]).decode().strip()
         # Docker --mount is represented in HostConfig.Mounts, not Binds. Keep
         # one canonical representation in the fixture and its cleanup proof.
         owned = json.loads(command(['docker', 'inspect', identifier]))[0]

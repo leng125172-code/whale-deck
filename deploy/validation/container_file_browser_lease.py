@@ -26,8 +26,8 @@ def evidence(identifier, digest):
         target=identifier, digest=digest, cancel=hashlib.sha256(b'work/cancel.bin').hexdigest().upper())
 
 
-def hold(owned, stream=sys.stdin, emit=print, clock=time.monotonic, ready=select.select, seconds=500):
-    assert seconds == 500
+def hold(owned, stream=sys.stdin, emit=print, clock=time.monotonic, ready=select.select, seconds=900):
+    assert seconds == 900
     deadline = clock() + seconds
     try:
         while True:
@@ -49,8 +49,8 @@ def hold(owned, stream=sys.stdin, emit=print, clock=time.monotonic, ready=select
 def main():
     for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP): signal.signal(number, interrupted)
     payload = json.loads(sys.stdin.readline(2049))
-    with temporary_identity(payload), fixture() as owned:
-        print(json.dumps({'ready': True, 'lifetimeSeconds': 500,
+    with temporary_identity(payload), fixture(lifetime_seconds=1200) as owned:
+        print(json.dumps({'ready': True, 'lifetimeSeconds': 900,
             'containerId': owned['identifier'], 'name': owned['folder'].name,
             'bytes': SIZE, 'cancelBytes': CANCEL_SIZE, 'sha256': owned['proofs']['中文.bin'][1]}), flush=True)
         hold(owned)

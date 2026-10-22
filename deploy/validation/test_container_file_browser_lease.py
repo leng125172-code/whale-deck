@@ -43,7 +43,7 @@ class BrowserLeaseTests(unittest.TestCase):
     def test_deadline_is_absolute_not_extended_by_commands(self):
         stream = io.StringIO('evidence\nevidence\n')
         with patch.object(lease, 'evidence', return_value={}) as evidence:
-            lease.hold(self.owned(), stream=stream, emit=Mock(), clock=Mock(side_effect=[0, 499, 501]), ready=lambda *args: ([stream], [], []))
+            lease.hold(self.owned(), stream=stream, emit=Mock(), clock=Mock(side_effect=[0, 899, 901]), ready=lambda *args: ([stream], [], []))
         self.assertEqual(1, evidence.call_count)
 
     def test_unknown_or_oversized_command_is_not_executed(self):
