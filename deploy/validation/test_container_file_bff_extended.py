@@ -84,6 +84,19 @@ class BffObserverTests(unittest.TestCase):
         with patch.object(probe, 'audits', return_value=[]), patch.object(probe.time, 'monotonic', side_effect=[0, 21]), self.assertRaisesRegex(AssertionError, 'not-finalized'):
             probe.wait_incomplete(None, '', '', '', version)
 
+    def test_public_audit_without_detail_requires_independent_matching_sql_event(self):
+        import validate_metric_continuity as sql
+        row = {'id': 'owned-event', 'targetId': 'a'*64, 'action': 'containers.files.download', 'result': 'Validated'}
+        details = [{'id': 'owned-event', 'result': 'Validated', 'detail': {'version': 'B'*64, 'sizeBytes': 17}}]
+        session = Mock(); session.get.return_value = Mock(status_code=200, json=Mock(return_value=[row]))
+        with patch.object(sql, 'query', return_value=details) as query:
+            result = probe.audits(session, 'http://127.0.0.1', 'owned-subject', 'a'*64)
+        self.assertEqual(17, __import__('json').loads(result[0]['detailJson'])['sizeBytes'])
+        self.assertEqual({'subject': 'owned-subject', 'target': 'a'*64}, query.call_args.kwargs)
+        for invalid in ([], [{**details[0], 'id': 'other-event'}], [{**details[0], 'result': 'Incomplete'}]):
+            with self.subTest(invalid=invalid), patch.object(sql, 'query', return_value=invalid), self.assertRaises(AssertionError):
+                probe.audits(session, 'http://127.0.0.1', 'owned-subject', 'a'*64)
+
 
 @unittest.skipUnless(os.name == 'posix' and getattr(os, 'geteuid', lambda: -1)() == 0, 'real root metadata required')
 class PayloadObserverTests(unittest.TestCase):
