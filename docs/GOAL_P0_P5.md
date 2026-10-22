@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+> **2026-10-22扩展BFF验收，运行时dd290e9不变**：44c4d1d工具通过真实2MiB+7完整下载、64MiB+7实际响应断开与Incomplete、后续完整下载，普通四路403及退出原Cookie重放四路401。51真实Linux-root测试和独立身份/文件/容器清理、SQL审计/11核心健康通过。真实浏览器因工具超时仍未签收，下载中途撤权、容器写入/HDD历史/恢复与全部59项继续；CI前端依赖安装失败待查，不能称整CI通过。[完整证据](qa/CONTAINER_FILE_BFF_UI.md)。
+
 > **2026-10-22容器文件只读BFF/UI已覆盖dd290e9**：五运行组件实际来源一致、固定更新正常结束/11核心healthy。新管理员权限/审计/只读HTTP/容器详情浏览下载已接；2308 Unit/160 Integration（6原生本机跳过）、431前端单元、51联合浏览器+2专项及11新用例修后重跑通过，两个冻结源码真实PG各1执行/1通过并清理。真实临时管理员Cookie/BFF/SQL/UDS的896字节独立内容、核心/匿名/路径/实例/版本/Range拒绝与WD退出通过；独立核对身份0/容器清理/审计无原名泄漏。普通/撤权、真实网页、大文件/中断以及写入/HDD历史/恢复仍缺，不签整模块或59项。[完整证据](qa/CONTAINER_FILE_BFF_UI.md)。
 
 > 2026-10-22容器只读Agent子门禁：fd3bda2/minor38及维护入口已装；43项真实Linux-root、实际受限helper/独立签名四RPC、完整2MiB+7和新SSH精确清理证明通过，11核心healthy。API/Worker/Gateway仍9ec8721，尚无业务审计/BFF/UI；Gateway候选11纯协议测试与完整2275 Unit/159 Integration（6原生本机跳过）通过，未部署。当前59项仍active，不签整个容器文件/文件管理。[证据及剩余](qa/CONTAINER_FILE_READS_INSTALLED.md)。
