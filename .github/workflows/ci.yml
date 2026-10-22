@@ -23,6 +23,8 @@ jobs:
           python3 -m unittest discover -s tests -p test_host_runtime.py
           bash -n deploy/build-images.sh
           python3 -m unittest discover -s tests -p 'test_build_*.py'
+          bash -n deploy/ci/install-frontend-dependencies.sh
+          python3 -m unittest discover -s tests -p test_ci_frontend_install.py
           bash -n deploy/host/whaledeck-privileged
           python3 -m unittest discover -s deploy/validation -p test_container_terminal.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_file*.py'
@@ -150,7 +152,8 @@ jobs:
           node-version: 24.15.0
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
-      - run: corepack pnpm install --frozen-lockfile
+      - name: Install pinned frontend dependencies with bounded download retry
+        run: bash ../deploy/ci/install-frontend-dependencies.sh
       - run: corepack pnpm lint
       - run: corepack pnpm format:check
       - run: corepack pnpm test:unit

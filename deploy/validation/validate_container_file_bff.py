@@ -87,13 +87,12 @@ def main():
         assert anonymous.get(endpoint + 'target', allow_redirects=False, timeout=20).status_code == 401
         PHASE = 'durable-private-audit'
         me = session.get(base + '/api/v1/auth/me', timeout=20); assert me.status_code == 200 and me.json()['isAdministrator']
-        audit_response = session.get(base + '/api/v1/audit', params={'actorSubject': me.json()['subject'], 'take': 100}, timeout=20)
-        assert audit_response.status_code == 200
-        audits = [row for row in audit_response.json() if row['action'].startswith('containers.files.') and row['targetId'] == identifier]
+        from validate_container_file_bff_extended import audits as independently_verified_audits
+        audits = independently_verified_audits(session, base, me.json()['subject'], identifier)
         assert any(row['action'] == 'containers.files.download' and row['result'] == 'Validated' for row in audits)
         assert any(row['action'] == 'containers.files.download' and row['result'] == 'Incomplete' for row in audits)
         for row in audits:
-            detail = row.get('detailJson') or '{}'
+            detail = row['detailJson']
             assert 'index.html' not in detail and instance not in detail and expected.decode(errors='replace') not in detail
         assert get('entry', params=location).json()['version'] == version
         PHASE = 'normal-cookie-logout'
