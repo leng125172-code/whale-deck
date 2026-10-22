@@ -2,6 +2,19 @@
 
 日期：2026-10-22。单工作站59项中的P0-01/P1-11子范围；不签完整文件管理或P0–P5。
 
+## 后续CDP网络终态已补齐，运行时仍0d18dd3
+
+- 新增仅QA用的`browser_download_probe.mjs`，精确固定一个下载路径/请求ID，仅保留状态、长度、累计字节和Chromium网络错误枚举；不留URL/query、Cookie、头部全集或正文。snapshot/timeout/dispose均不冒充终态，没有未处理异步Promise。8项Node原生测试覆盖准确绑定、部分/完成区别、无事件不成功、重复/无关请求、预算/缺失长度、快照不可伪造、错误文本裁剪及监听清理，并接入frontend CI。它的模拟事件单元不是实机证据。
+- 正常真实Authentik临时管理员、独占只读/非root/无网络合成容器、实际Gateway/API/UDS，没有API拦截。320暗色页面收到67,108,871字节声明的HTTP200及6,405,456实际字节后，正常点击“取消”；CDP最终receivedBodyBytes=6,412,956、loadingFailed=`net::ERR_ABORTED`、canceled=true、invalid=false。无保存成功。独立SQL该路径Incomplete1/Validated0。
+- 取消后不重新登录，正常点击小文件下载：浏览器完整2,097,159字节和独立宿主源SHA一致；同一观察器新实例记录declared/received=2,097,159、loadingFinished（wire encoded=2,097,462，不把HTTP开销当文件长度）、invalid=false。不是只验证下载触发事件。
+- 同Cookie的1440明色页面准备正常退出。重新启动大文件，确认HTTP200、声明67,108,871、实际6,942,456字节且未终止后，通过另一页用户菜单退出；原页CDP终态receivedBodyBytes=7,050,456、loadingFailed=`net::ERR_ABORTED`、canceled=true、invalid=false。两页login、returnUrl=/containers、0私有文件区/用户菜单/成功保存，WD401/Authentik403。独立SQL小文件Validated1、大文件Incomplete2/Validated0，与两次不同取消吻合。
+- 320×844暗色和1440×900明色退出后截图已实际目视检查，document宽度分别320/1440，无横向溢出、残留管理控件或保存完成文案。原始无凭据网络JSON和截图保存在忽略目录`deploy/artifacts/session-network-real-ui-0d18dd3/`。
+- 正常close租约报告源身份/完整摘要/核心快照通过后精确清理，temporaryBrowserUserRemoved=true；新SSH再核对身份0、独占容器/目录不存在、11核心healthy，专用浏览器正常关闭、空私有交接目录删除。没有重启/重建产品服务、改权限、停止其他容器或删除用户数据。
+
+本批补齐的是**页面取消与同源跨标签正常退出的浏览器网络终态**。下方pending是前次失败历史，不再是当前同场景缺口；2小时过期/组撤权组合、跨不同源/Storage受限场景、容器写入/HDD历史/恢复及完整59项仍未签。未依据本次CDP证据修改产品下载逻辑或放宽任何授权。
+
+GLM `glm-5.3-flashx`仅只读定位指定下载函数/测试：41,692ms、input76,983/cache45,504/output2,176 tokens，一次成功无重试、费用未返回。GPT复核定位结果，独立编写观察器/测试并完成全部真实身份/SQL/页面及安全判断。
+
 ## 0d18dd3已部署后的真实复测
 
 - 固定更新任务正常完成，未回滚dev。当前实际API、Worker、Gateway、Agent、MaintenanceHost、Migrator六组件及实际HTTP来源均为`0d18dd31f030fb2acad15b91f33e4f9a46839a6b`；Agent协议minor38。覆盖前该冻结源码的隔离真实PG dispatch实际1执行/1通过、cleanupConfirmed=true；不是仅发现TRX文件就记通过。

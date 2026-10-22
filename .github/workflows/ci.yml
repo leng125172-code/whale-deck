@@ -156,6 +156,8 @@ jobs:
       - run: corepack enable
       - name: Install pinned frontend dependencies with bounded download retry
         run: bash ../deploy/ci/install-frontend-dependencies.sh
+      - name: Verify bounded browser download evidence observer
+        run: node --test ../deploy/validation/test_browser_download_probe.mjs
       - run: corepack pnpm lint
       - run: corepack pnpm format:check
       - run: corepack pnpm test:unit

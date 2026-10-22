@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+> **2026-10-22后续真实CDP终态通过，运行时0d18dd3不变**：页面取消和同源另一页正常退出均在真实大文件部分接收后记录ERR_ABORTED/canceled，SQL两条Incomplete/0 Validated；重新完整小文件全SHA与loadingFinished、双页login/清空私有管理壳和WD401/Authentik403通过。8项新观察器单元已接CI，临时资源精确清理/11核心健康独立确认。下方网络未证明是前次历史；2小时过期/组撤权及容器写入/HDD历史/恢复、其余59项继续。[完整证据](qa/SESSION_EXPIRY_UI.md)。
+
 > **2026-10-22实际0d18dd3/minor38**：冻结PG1执行/1通过且清理、CI39726926076四路success、六组件/HTTP来源一致。真实320暗色完整2MiB+7摘要、跨页正常退出双页回login/清空管理壳、无Storage信号的401刷新兜底及普通真实用户拒绝/首页/个人门户/双端退出通过；新SSH临时身份0/独占数据清理/11核心healthy，13单元和60 Linux-root重新通过。大文件SQLIncomplete但浏览器网络终态观察未签；完整组撤权、容器写入/HDD历史/恢复及其余59项继续。下方未部署/未签及旧76项均为历史，不当作当前完成率。[证据](qa/SESSION_EXPIRY_UI.md)。
 
 > **2026-10-22扩展BFF验收，运行时dd290e9不变**：44c4d1d工具通过真实2MiB+7完整下载、64MiB+7实际响应断开与Incomplete、后续完整下载，普通四路403及退出原Cookie重放四路401。51真实Linux-root测试和独立身份/文件/容器清理、SQL审计/11核心健康通过。真实浏览器因工具超时仍未签收，下载中途撤权、容器写入/HDD历史/恢复与全部59项继续；CI前端依赖安装失败待查，不能称整CI通过。[完整证据](qa/CONTAINER_FILE_BFF_UI.md)。
