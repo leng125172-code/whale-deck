@@ -135,6 +135,7 @@ try
     builder.Services.AddScoped<IAuthorizationHandler, AdministratorAuthorizationHandler>();
     builder.Services.AddScoped<TerminalCookieIdentity>();
     builder.Services.AddScoped<WhaleDeck.Api.Files.FileHttpTransport>();
+    builder.Services.AddScoped<WhaleDeck.Api.Files.ContainerFileHttpTransport>();
     builder.Services.AddScoped<WhaleDeck.Api.Files.FilePackingHttpTransport>();
     builder.Services.AddScoped<WhaleDeck.Api.Terminals.HostTerminalWebSocket>();
     var authorization = builder.Services.AddAuthorizationBuilder()

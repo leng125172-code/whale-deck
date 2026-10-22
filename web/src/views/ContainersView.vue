@@ -7,6 +7,7 @@ import { ApiError, apiRequest, apiUrl } from '@/services/apiClient'
 import { enqueueOperation, planOperation, stageSecret } from '@/services/operations'
 import ContainerUsageCell from '@/components/containers/ContainerUsageCell.vue'
 import ContainerRelationships from '@/components/containers/ContainerRelationships.vue'
+import ContainerFilePanel from '@/components/containers/ContainerFilePanel.vue'
 import { authSession } from '@/services/authSession'
 import { formatBytes } from '@/services/displayUnits'
 import type {
@@ -180,8 +181,12 @@ const form = reactive({
   healthRetries: 3,
 })
 const detailVisible = ref(false)
+const filesVisible = ref(false)
 const detailLoading = ref(false)
 const selected = ref<Container | null>(null)
+watch([detailVisible, () => selected.value?.id], () => {
+  filesVisible.value = false
+})
 const logs = ref<ContainerLogs>({ lines: [], truncated: false })
 const stats = ref<Record<string, string>>({})
 const inspect = ref<ContainerInspect | null>(null)
@@ -957,6 +962,13 @@ onMounted(() => {
           <el-button
             v-if="selected && !selected.isProtected"
             :disabled="!terminalAllowed(selected)"
+            :aria-expanded="filesVisible"
+            @click="filesVisible = !filesVisible"
+            >{{ filesVisible ? '收起文件' : '容器文件' }}</el-button
+          >
+          <el-button
+            v-if="selected && !selected.isProtected"
+            :disabled="!terminalAllowed(selected)"
             @click="openTerminal(selected)"
             >容器终端</el-button
           >
@@ -976,6 +988,11 @@ onMounted(() => {
             >复制配置创建</el-button
           >
         </div>
+        <ContainerFilePanel
+          v-if="detailVisible && filesVisible && selected && terminalAllowed(selected)"
+          :key="selected.id"
+          :container-id="selected.id"
+        />
         <el-descriptions v-if="selected" :column="1" border>
           <el-descriptions-item label="镜像">{{ selected.image }}</el-descriptions-item>
         </el-descriptions>

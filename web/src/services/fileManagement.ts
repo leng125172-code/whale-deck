@@ -184,6 +184,15 @@ export async function downloadFile(
     apiUrl(`files/download?${fileQuery(rootId, path, { expectedVersion: entry.version })}`),
     { credentials: 'include', signal, headers: { Accept: 'application/octet-stream' } },
   )
+  return readFileDownloadResponse(response, entry, progress)
+}
+
+/** Shared attachment verifier; no save link is produced until exact EOF. */
+export async function readFileDownloadResponse(
+  response: Response,
+  entry: FileEntry,
+  progress: (percent: number) => void,
+): Promise<Blob> {
   if (!response.ok) throw await toApiError(response)
   if (!response.body || response.headers.get('Content-Length') !== String(entry.sizeBytes))
     throw new Error('下载大小已变化，请刷新目录')

@@ -10,3 +10,9 @@ public interface IContainerFileGateway
     Task<FileEntryDto?> InspectContainerFileAsync(ContainerFileLocationDto location, CancellationToken cancellationToken);
     IAsyncEnumerable<FileDownloadPart> DownloadContainerFileAsync(ContainerFileLocationDto location, string expectedVersion, CancellationToken cancellationToken);
 }
+
+public interface IContainerFileReadAudit
+{
+    Task RecordAsync(TerminalActor actor, ContainerFileLocationDto location, string action, string result,
+        string? version, long? sizeBytes, string? sha256, CancellationToken cancellationToken);
+}
