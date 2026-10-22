@@ -205,7 +205,7 @@ onBeforeUnmount(() => {
       <nav aria-label="容器文件路径" class="container-files__crumbs">
         <el-button link :disabled="!!busy" @click="load('')">/</el-button>
         <template v-for="(part, index) in breadcrumbs" :key="index">
-          <span>/</span
+          <span v-if="index > 0">/</span
           ><el-button
             link
             :title="part"

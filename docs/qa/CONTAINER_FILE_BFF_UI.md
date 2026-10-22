@@ -34,3 +34,11 @@
 - 新真实PostgreSQL审计用例已接入既有隔离dispatch套件，尚待冻结源码实际执行；复用现有AuditEvent，无新增migration或数据库结构。
 
 本候选尚未部署。实际仍Agent/MaintenanceHost fd3bda2、API/Worker/Gateway 9ec8721；仍需冻结真实PG、普通/管理员/撤权/下载中断实际BFF与页面验收，以及写入/HDD历史/恢复等完整范围。
+
+## 冻结6136c1f的真实数据库与发布前修正
+
+工作站以6136c1f冻结公开源码运行既有隔离dispatch套件，实际1执行/1通过、无跳过，临时数据库和SDK测试容器清理通过；新容器文件审计用例实际包括在内，外部通知投递0。不是生产Cookie/BFF/UDS或页面证据；runtime仍未更改。
+
+发布检查发现新路径未进入宿主文件专用代理，默认5秒会截断先捕获后交付的大文件。新增仅规范小写64位ID的GET download路由：Maintenance315秒、API/Agent310秒固定总预算，Gateway关闭二进制缓冲及315秒read；其他API、Authentik和原宿主文件预算不变。真实独立loopback延迟6秒返回通过；其他路径/ID别名/大写ID/POST拒绝，不用全局放宽超时代替修复。
+
+首轮proxy测试实际发现ASP.NET正则约束默认IgnoreCase，大写ID意外匹配，保留失败后显式`(?-i:...)`修复，未降低拒绝断言。最后完整2308 Unit/160 Integration通过、6项原生本机跳过。另修正目视发现的根面包屑重复斜杠；新代理与面包屑候选继续冻结验收。
