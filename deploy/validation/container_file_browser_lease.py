@@ -36,7 +36,8 @@ def hold(owned, stream=sys.stdin, emit=print, clock=time.monotonic, ready=select
             if not ready([stream], [], [], remaining)[0]: return
             line = stream.readline(65)
             if not line or line.strip() == 'close': return
-            assert line == 'evidence\n', 'browser-lease-command-invalid'
+            if line in ('\n', '\r\n'): continue
+            assert line in ('evidence\n', 'evidence\r\n'), 'browser-lease-command-invalid'
             result = evidence(owned['identifier'], owned['proofs']['中文.bin'][1])
             emit(json.dumps({'browserFileEvidence': result}), flush=True)
     except KeyboardInterrupt:

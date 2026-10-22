@@ -32,6 +32,12 @@ class BrowserLeaseTests(unittest.TestCase):
         evidence.assert_called_once_with('a'*64, 'B'*64)
         self.assertEqual({'browserFileEvidence': {'completeDigestValidated': 1}}, json.loads(emit.call_args.args[0]))
 
+    def test_windows_pipe_blank_and_crlf_frames_do_not_end_the_lease(self):
+        stream = io.StringIO('\r\n\nevidence\r\nclose\r\n'); emit = Mock()
+        with patch.object(lease, 'evidence', return_value={}) as evidence:
+            lease.hold(self.owned(), stream=stream, emit=emit, clock=lambda: 0, ready=lambda *args: ([stream], [], []))
+        evidence.assert_called_once_with('a'*64, 'B'*64)
+
     def test_eof_timeout_and_signal_end_without_evidence_or_target_mutation(self):
         for stream, ready in ((io.StringIO(''), lambda *args: ([args[0][0]], [], [])),
                 (io.StringIO('evidence\n'), lambda *args: ([], [], [])),

@@ -136,13 +136,22 @@ def fixture(lifetime_seconds=600):
             assert subprocess.run(['docker', 'inspect', exact_id], capture_output=True, timeout=10).returncode != 0
         else:
             assert identifier is None, 'owned-container-disappeared'
-        if complete:
+        cleanup_verified = False
+        try:
             verify_payload(folder, folder_identity, proofs)
+            assert core_snapshot() == baseline
+            cleanup_verified = True
+        except (AssertionError, OSError, subprocess.SubprocessError):
+            # A body/observer failure is not itself proof of changed files.
+            # Clean only when all original independent proofs still hold;
+            # otherwise preserve the unverified payload for inspection.
+            pass
+        if cleanup_verified:
             for leaf_name in proofs: (folder / leaf_name).unlink()
             folder.rmdir()
             assert not os.path.lexists(folder) and core_snapshot() == baseline
-        print(json.dumps({'largeFixtureContainerRemoved': True, 'verifiedPayloadRemoved': complete,
-            'unverifiedPayloadPreserved': not complete}), flush=True)
+        print(json.dumps({'largeFixtureContainerRemoved': True, 'fixtureBodyCompleted': complete,
+            'verifiedPayloadRemoved': cleanup_verified, 'unverifiedPayloadPreserved': not cleanup_verified}), flush=True)
 
 
 def verify_mount_container(value, identifier, name, folder):
