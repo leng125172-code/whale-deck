@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-10-22 minor38已安装：fd3bda2宿主及独立签名UDS四方法通过，真实完整2097159字节及保护拒绝、systemd沙箱和清理已核对；43项Linux-root通过，最终本机2275 Unit/159 Integration通过（6明确跳过）。API/Worker/Gateway仍9ec8721，业务管理员/审计/BFF/UI未接，不能算完整功能。下方“未部署38”为前序候选历史。[安装态证据](qa/CONTAINER_FILE_READS_INSTALLED.md)。
+
 2026-10-21新增未部署minor38：独立`docker.files.read`及`ContainerFileService` InspectTarget/List/Inspect/Download，严格容器实例/相对路径、各方法签名、完整内容哈希和helper成功EOF后end；原宿主传输profile不变。2263 Unit/159 Integration通过（6原生本机跳过），没有本次安装态或业务/UI验收；实际仍9ec8721/1.37。[候选及未完成边界](qa/CONTAINER_FILE_AGENT_RPC.md)。
 
 2026-10-21 minor37指标连续性已部署：`host.metrics.replay`在现有`HostService.StreamMetrics`中提供单次有界原始批次重放。`replay_recent=true`仅允许`interval_seconds=0`，可选`after_sampled_at_utc`为exclusive原始游标；最多120批/65536点，每批`batch.complete`且RPC正常结束后才交付业务层。Worker独立摄取并在SQL提交后确认游标，不插值、不伪造停机数据。旧单批/持续流兼容；新客户端明确检查major1/minor>=37及独立能力，不静默退回丢点模式。9ba8b9e真实UDS停读20秒补取3批及420秒14序列每条70点/零缺批通过；当前六组件9ec8721来源一致，四历史窗口/80桶SQL比对及匿名/普通权限通过。窄屏和全部下拉交互仍待补验，[证据与边界](qa/TELEMETRY_CONTINUITY.md)。

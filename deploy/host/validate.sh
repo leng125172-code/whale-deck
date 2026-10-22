@@ -33,6 +33,10 @@ assert_metadata /etc/whaledeck/agent-capability.key '640:root:whaledeck'
 assert_metadata /etc/whaledeck/resources.json '640:root:whaledeck'
 assert_metadata /etc/whaledeck/agent.env '640:root:whaledeck'
 assert_metadata /usr/local/libexec/whaledeck-privileged '750:root:root'
+assert_metadata /usr/local/libexec/whaledeck-container-files.py '750:root:root'
+[[ ! -L /usr/local/libexec/whaledeck-container-files.py && $(stat -c %h /usr/local/libexec/whaledeck-container-files.py) == 1 ]]
+assert_metadata /var/lib/whaledeck-container-files '700:root:root'
+[[ ! -L /var/lib/whaledeck-container-files ]]
 assert_metadata /usr/local/libexec/whaledeck-files.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-operations.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-backups.py '750:root:root'

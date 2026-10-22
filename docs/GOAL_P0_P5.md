@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+> 2026-10-22容器只读Agent子门禁：fd3bda2/minor38及维护入口已装；43项真实Linux-root、实际受限helper/独立签名四RPC、完整2MiB+7和新SSH精确清理证明通过，11核心healthy。API/Worker/Gateway仍9ec8721，尚无业务审计/BFF/UI；Gateway候选11纯协议测试与完整2275 Unit/159 Integration（6原生本机跳过）通过，未部署。当前59项仍active，不签整个容器文件/文件管理。[证据及剩余](qa/CONTAINER_FILE_READS_INSTALLED.md)。
+
 > **2026-10-21单工作站范围修订，优先于下方历史76项记录：当前59项，17项明确移出，不是完成。** 用户不需要多节点/租户，并授权去掉复杂低收益能力。完整决策、删项原ID和保留底线见 [单工作站实用版范围](SCOPE_SINGLE_WORKSTATION.md)。当前任务表保留原ID且已移除删项；旧QA/提交证据不重写、不作为恢复旧范围的指令。
 
 - **2026-10-21容器文件Agent候选**：minor38独立只读四RPC、精确实例/UTF-8路径、完整字节SHA/正常helper EOF后end及独立helper profile已接；2263 Unit/159 Integration通过（6原生本机跳过），Windows Python9纯通过/23原生跳过。没有安装或RPC实机验收、业务/BFF/UI尚缺，实际仍9ec8721/1.37；全59项继续。[候选证据](qa/CONTAINER_FILE_AGENT_RPC.md)。
