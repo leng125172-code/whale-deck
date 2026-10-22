@@ -43,9 +43,16 @@ import 'element-plus/theme-chalk/dark/css-vars.css'
 
 import App from './App.vue'
 import router from './router'
+import { authSession } from '@/services/authSession'
 import './styles/main.css'
 
 const app = createApp(App)
+const stopSessionLifecycle = authSession.bindLifecycle(() => {
+  const current = router.currentRoute.value
+  if (current.meta.requiresAuth)
+    void router.replace({ name: 'login', query: { returnUrl: current.fullPath } })
+})
+if (import.meta.hot) import.meta.hot.dispose(stopSessionLifecycle)
 
 app.use(createPinia())
 app.use(router)

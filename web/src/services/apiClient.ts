@@ -1,4 +1,5 @@
 import { runtimeConfig } from '@/config/runtime'
+import { notifySessionExpired } from '@/services/sessionExpiry'
 
 export interface ApiProblem {
   status?: number
@@ -41,6 +42,10 @@ export async function csrfHeaders(signal: AbortSignal) {
 }
 
 export async function toApiError(response: Response) {
+  if (response.status === 401) {
+    csrf = null
+    notifySessionExpired()
+  }
   let problem: ApiProblem = { status: response.status }
   try {
     problem = { ...problem, ...((await response.json()) as ApiProblem) }

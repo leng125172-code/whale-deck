@@ -4,6 +4,12 @@ import { ApiError, apiRequest } from '@/services/apiClient'
 import { navigateToLogout } from '@/services/logoutNavigation'
 import type { CurrentUser } from '@/services/contracts'
 import {
+  onSessionExpired,
+  publishSessionEnded,
+  sessionEndedStorageKey,
+  validSessionEndedSignal,
+} from '@/services/sessionExpiry'
+import {
   clearFileBrowserLocation,
   reconcileFileBrowserLocation,
 } from '@/services/fileBrowserLocation'
@@ -14,9 +20,54 @@ const initialized = ref(false)
 const user = ref<CurrentUser | null>(null)
 const unavailable = ref(false)
 let initialization: Promise<void> | undefined
+let generation = 0
+let expiredAction: (() => void) | undefined
+let stopLifecycle: (() => void) | undefined
+
+function expireSession() {
+  const hadIdentity = authenticated.value || user.value !== null
+  generation++
+  authenticated.value = false
+  user.value = null
+  unavailable.value = false
+  initialized.value = true
+  initialization = undefined
+  clearFileBrowserLocation()
+  if (import.meta.env.DEV) sessionStorage.removeItem(previewStorageKey)
+  if (hadIdentity) expiredAction?.()
+}
+
+function bindLifecycle(onExpired: () => void) {
+  stopLifecycle?.()
+  expiredAction = onExpired
+  const off = onSessionExpired(expireSession)
+  const storage = (event: StorageEvent) => {
+    try {
+      if (
+        event.key === sessionEndedStorageKey &&
+        event.storageArea === localStorage &&
+        validSessionEndedSignal(event.newValue)
+      )
+        expireSession()
+    } catch {
+      // No storage access is required for the BFF 401 fallback.
+    }
+  }
+  window.addEventListener('storage', storage)
+  const stop = () => {
+    if (stopLifecycle !== stop) return
+    off()
+    window.removeEventListener('storage', storage)
+    expiredAction = undefined
+    stopLifecycle = undefined
+  }
+  stopLifecycle = stop
+  return stop
+}
 
 async function loadAuthSession() {
   if (initialized.value) return
+  const current = generation
 
   if (import.meta.env.DEV && sessionStorage.getItem(previewStorageKey) === 'true') {
     authenticated.value = true
@@ -43,17 +94,22 @@ async function loadAuthSession() {
   const timeout = window.setTimeout(() => controller.abort(), 2500)
 
   try {
-    user.value = await apiRequest<CurrentUser>('auth/me', { signal: controller.signal })
+    const resolved = await apiRequest<CurrentUser>('auth/me', { signal: controller.signal })
+    if (current !== generation) return
+    user.value = resolved
     authenticated.value = true
     unavailable.value = false
   } catch (reason) {
+    if (current !== generation) return
     authenticated.value = false
     user.value = null
     unavailable.value = !(reason instanceof ApiError && reason.status === 401)
   } finally {
-    reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
     window.clearTimeout(timeout)
-    initialized.value = true
+    if (current === generation) {
+      reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
+      initialized.value = true
+    }
   }
 }
 
@@ -88,9 +144,11 @@ function redirectToAuthentik(returnUrl = '/') {
 async function logout() {
   clearFileBrowserLocation()
   if (import.meta.env.DEV) {
+    generation++
     sessionStorage.removeItem(previewStorageKey)
     authenticated.value = false
     user.value = null
+    publishSessionEnded()
     window.location.assign('/login')
     return
   }
@@ -98,21 +156,23 @@ async function logout() {
   // redirect in the background, where cross-origin identity pages are not JSON.
   // A same-origin POST form preserves CSRF protection and the browser session.
   await navigateToLogout()
+  publishSessionEnded()
 }
 
 async function refresh() {
+  const current = generation
   try {
-    user.value = await apiRequest<CurrentUser>('auth/me')
+    const resolved = await apiRequest<CurrentUser>('auth/me')
+    if (current !== generation) return
+    user.value = resolved
     authenticated.value = true
     unavailable.value = false
     reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
   } catch (reason) {
-    if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
-      clearFileBrowserLocation()
-      user.value = null
-      authenticated.value = false
+    if (current === generation) {
+      if (reason instanceof ApiError && [401, 403].includes(reason.status)) expireSession()
+      else unavailable.value = true
     }
-    unavailable.value = !(reason instanceof ApiError && reason.status === 401)
     throw reason
   }
 }
@@ -127,4 +187,5 @@ export const authSession = {
   redirectToAuthentik,
   logout,
   refresh,
+  bindLifecycle,
 }
