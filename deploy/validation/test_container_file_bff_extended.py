@@ -1,8 +1,12 @@
 """Observer tests only; these do not replace real deployed BFF acceptance."""
 import hashlib
+import contextlib
 import importlib.util
+import io
+import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -100,6 +104,38 @@ class BffObserverTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == 'posix' and getattr(os, 'geteuid', lambda: -1)() == 0, 'real root metadata required')
 class PayloadObserverTests(unittest.TestCase):
+    def test_failed_body_cleans_only_unchanged_proven_payload_and_preserves_changed_bytes(self):
+        for changed in (False, True):
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); name = 'wdv-container-bff-large-' + 'c'*16; folder = root/name
+                identifier = 'a'*64
+                container = {'Id': identifier, 'Name': '/'+name, 'Image': probe.IMAGE,
+                    'Config': {'Labels': {'io.whaledeck.validation': name}},
+                    'HostConfig': {'NetworkMode': 'none', 'ReadonlyRootfs': True, 'Binds': None,
+                        'Mounts': [{'Type': 'bind', 'Source': str(folder), 'Target': '/work', 'ReadOnly': True}]},
+                    'Mounts': [{'Type': 'bind', 'Source': str(folder), 'Destination': '/work', 'RW': False}]}
+                def command(args):
+                    if args[:3] == ['docker', 'image', 'inspect']: return json.dumps([{'Id': probe.IMAGE, 'Config': {}}]).encode()
+                    if args[:2] == ['docker', 'run']: return identifier.encode()
+                    if args == ['docker', 'inspect', identifier]: return json.dumps([container]).encode()
+                    if args == ['docker', 'rm', '--force', identifier]: return b''
+                    raise AssertionError('unexpected-fake-docker-command')
+                output = io.StringIO()
+                with patch.object(probe, 'APPS', root), patch.object(probe, 'SIZE', 1031), patch.object(probe, 'CANCEL_SIZE', 2055), \
+                        patch.object(probe, 'verify_apps_directory'), patch.object(probe.pwd, 'getpwnam', return_value=SimpleNamespace(pw_uid=0)), \
+                        patch.object(probe.uuid, 'uuid4', return_value=SimpleNamespace(hex='c'*32)), \
+                        patch.object(probe, 'core_snapshot', return_value={'fixed-core': 'unchanged'}), patch.object(probe, 'command', side_effect=command), \
+                        patch.object(probe.subprocess, 'run', side_effect=[SimpleNamespace(returncode=0, stdout=json.dumps([container]).encode()), SimpleNamespace(returncode=1)]), \
+                        contextlib.redirect_stdout(output), self.assertRaisesRegex(RuntimeError, 'observer-body-failed'):
+                    with probe.fixture() as owned:
+                        if changed: (owned['folder']/'中文.bin').write_bytes(b'changed-evidence')
+                        raise RuntimeError('observer-body-failed')
+                result = json.loads(output.getvalue())
+                self.assertFalse(result['fixtureBodyCompleted'])
+                self.assertEqual(not changed, result['verifiedPayloadRemoved'])
+                self.assertEqual(changed, result['unverifiedPayloadPreserved'])
+                self.assertEqual(changed, folder.exists())
+
     def test_full_payload_identity_tail_and_unexpected_children_refuse_cleanup(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
