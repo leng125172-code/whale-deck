@@ -86,5 +86,13 @@ class ProbeTests(unittest.TestCase):
         process.kill.assert_called_once_with(); self.assertEqual(2, process.wait.call_count)
         self.assertTrue(all(stream.closed for stream in (process.stdin, process.stdout, process.stderr)))
 
+    def test_agent_probe_refuses_unpublished_or_aliased_executable_before_execution(self):
+        for path in (Path('/tmp/probe'), probe.REPOSITORY / 'deploy/artifacts/TerminalProbe',
+                probe.REPOSITORY / 'deploy/artifacts/terminal-probe.invalid-long/TerminalProbe',
+                probe.REPOSITORY / 'deploy/artifacts/terminal-probe.123456/another-binary'):
+            with self.subTest(path=path), patch.object(probe.subprocess, 'run') as command, self.assertRaises(AssertionError):
+                probe.agent_probe(path, {})
+            command.assert_not_called()
+
 
 if __name__ == '__main__': unittest.main()

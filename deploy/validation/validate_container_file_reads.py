@@ -127,6 +127,36 @@ def helper_request(action, request):
         close_helper(process, command, session, invocation)
 
 
+def agent_probe(path, fixture):
+    # A published validator, not an arbitrary caller-supplied executable.
+    assert path.name == 'TerminalProbe' and path.parent.parent == REPOSITORY / 'deploy/artifacts'
+    assert re.fullmatch(r'terminal-probe\.[A-Za-z0-9]{6}', path.parent.name)
+    assert path.resolve(strict=True) == path
+    for target in (path.parent, path, path.parent / 'SHA256SUMS'):
+        info = target.lstat()
+        assert info.st_uid == 0 and not info.st_mode & 0o022
+        assert stat.S_ISDIR(info.st_mode) if target == path.parent else stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+    subprocess.run(['/usr/bin/sha256sum', '--check', '--strict', 'SHA256SUMS'], cwd=path.parent,
+        check=True, capture_output=True, timeout=15)
+    result = subprocess.run([str(path), 'container-files'], input=json.dumps(fixture), text=True,
+        capture_output=True, timeout=160, env={'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8'})
+    assert len(result.stdout.encode()) <= 16384 and len(result.stderr.encode()) <= 16384
+    if result.returncode:
+        # Only the probe's fixed structured result is retained in private QA
+        # evidence; no exception, capabilities, key or binary content is printed.
+        try: failure = json.loads(result.stderr)
+        except (ValueError, TypeError): failure = {}
+        phase = failure.get('phase')
+        code = failure.get('rpcStatus')
+        assert False, 'agent-probe-' + (phase if type(phase) is str and re.fullmatch('[a-z-]{1,80}', phase) else 'failed') + '-' + (code if type(code) is str and re.fullmatch('[A-Za-z]{1,40}', code) else 'unknown')
+    outcome = json.loads(result.stdout)
+    assert outcome['installedContainerFileRpc'] == 'passed' and outcome['revision'] == fixture['revision'] and outcome['bytes'] == SIZE
+    for name in ('fullByteDigest', 'fourMethods', 'methodAndServiceBinding', 'replayRefused', 'coreSecretSymlinkOldVersionAndInstanceRefused'):
+        assert outcome.get(name) is True
+    assert outcome.get('productionMutation') is False
+    return outcome
+
+
 def load(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec); sys.modules[name] = module; spec.loader.exec_module(module)
@@ -141,7 +171,7 @@ def private_record(folder, name, value):
     assert folder.parent == REPOSITORY / 'deploy/artifacts'
     assert re.fullmatch(r'container-files-native-evidence-[a-f0-9]{16}', folder.name)
     assert folder.resolve() == folder and folder.lstat().st_uid == 0 and stat.S_IMODE(folder.lstat().st_mode) == 0o700
-    assert name in ('baseline.json', 'result.json')
+    assert name in ('baseline.json', 'result.json', 'rpc.json')
     descriptor = os.open(folder / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'wb') as stream:
         stream.write(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()); stream.flush(); os.fsync(stream.fileno())
@@ -166,9 +196,13 @@ def verify_apps_directory(path, agent_uid):
 
 def main():
     global PHASE
-    assert os.geteuid() == 0 and len(sys.argv) in (2, 3) and re.fullmatch('sha256:[a-f0-9]{64}', sys.argv[1])
-    installed = len(sys.argv) == 3
+    assert os.geteuid() == 0 and len(sys.argv) in (2, 3, 4) and re.fullmatch('sha256:[a-f0-9]{64}', sys.argv[1])
+    installed = len(sys.argv) >= 3
     if installed: assert sys.argv[2] == '--installed-helper'
+    probe_path = None
+    if len(sys.argv) == 4:
+        assert sys.argv[3].startswith('--agent-probe=')
+        probe_path = Path(sys.argv[3].removeprefix('--agent-probe='))
     revision = git('rev-parse', 'HEAD').decode().strip(); assert re.fullmatch('[a-f0-9]{40}', revision)
     assert not git('status', '--porcelain')
     if installed: installed_source(revision)
@@ -257,6 +291,14 @@ def main():
                     assert bytes(delivered) == payload and downloaded[-1]['sha256'] == hashlib.sha256(payload).hexdigest().upper()
                     assert downloaded[-1]['version'] == meta['version'] and downloaded[-1]['sizeBytes'] == SIZE
                     assert engine.fingerprint(leaf.stat()) == before
+                if probe_path is not None:
+                    PHASE = 'installed-agent-uds'
+                    core = docker.api('GET', '/containers/whaledeck-api/json')
+                    rpc = agent_probe(probe_path, {'revision': revision, 'containerId': identifier, 'coreId': core['Id'],
+                        'instanceId': target['instanceId'], 'version': meta['version'], 'sizeBytes': SIZE,
+                        'sha256': hashlib.sha256(payload).hexdigest().upper()})
+                    private_record(evidence, 'rpc.json', rpc)
+                    assert engine.fingerprint(leaf.stat()) == before and leaf.read_bytes() == payload
                 PHASE = 'protected-symlink-version-refusals'
                 for path in ('work/.env', 'proc/self/status', 'etc/shadow'):
                     try: engine.inspect({**request, 'path': path}, session, files)
@@ -287,7 +329,7 @@ def main():
                 'bytes': SIZE, 'sha256': hashlib.sha256(payload).hexdigest().upper(), 'fullContent': True,
                 'sourceUnchanged': True, 'protectedAndSymlinkAndOldVersionRefused': True,
                 'pidExitRefused': True, 'coreProtected': True, 'spoolEmpty': True, 'protectedContainersUnchanged': True,
-                'installedHelperValidated': installed})
+                'installedHelperValidated': installed, 'installedAgentRpcValidated': probe_path is not None})
             complete = True
         finally:
             if identifier:
@@ -314,13 +356,15 @@ def main():
             assert core_snapshot(engine, docker) == protected_before
     print(json.dumps({'containerFileNativeRead': 'passed', 'revision': revision, 'bytes': SIZE,
         'fullContentAndSourceIdentity': True, 'exitProtectedAndSymlinkRefused': True,
-        'ownedContainerAndPayloadRemoved': complete, 'installedHelperValidated': installed, 'installedRpcBffOrUi': False}), flush=True)
+        'ownedContainerAndPayloadRemoved': complete, 'installedHelperValidated': installed,
+        'installedAgentRpcValidated': probe_path is not None, 'businessBffOrUiValidated': False}), flush=True)
 
 
 if __name__ == '__main__':
     try: main()
     except BaseException as error:
         code = str(error) if re.fullmatch(r'(?:CONTAINER_FILES|FILES|CONTAINER)_[A-Z_]{1,80}', str(error)) else None
+        diagnostic = str(error) if re.fullmatch(r'agent-probe-[a-z-]{1,80}-[A-Za-z]{1,40}', str(error)) else None
         print(json.dumps({'containerFileNativeRead': 'failed', 'failureType': type(error).__name__,
-            'phase': PHASE, 'code': code, 'unverifiedFilesPreserved': True}), file=sys.stderr)
+            'phase': PHASE, 'code': code, 'probeFailure': diagnostic, 'unverifiedFilesPreserved': True}), file=sys.stderr)
         raise SystemExit(1) from None
