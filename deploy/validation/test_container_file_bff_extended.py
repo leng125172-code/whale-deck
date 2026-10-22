@@ -105,6 +105,7 @@ class BffObserverTests(unittest.TestCase):
 @unittest.skipUnless(os.name == 'posix' and getattr(os, 'geteuid', lambda: -1)() == 0, 'real root metadata required')
 class PayloadObserverTests(unittest.TestCase):
     def test_failed_body_cleans_only_unchanged_proven_payload_and_preserves_changed_bytes(self):
+        original_mask = os.umask(0o077); os.umask(original_mask)
         for changed in (False, True):
             with self.subTest(changed=changed), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory); name = 'wdv-container-bff-large-' + 'c'*16; folder = root/name
@@ -135,11 +136,12 @@ class PayloadObserverTests(unittest.TestCase):
                 self.assertEqual(not changed, result['verifiedPayloadRemoved'])
                 self.assertEqual(changed, result['unverifiedPayloadPreserved'])
                 self.assertEqual(changed, folder.exists())
+                after_mask = os.umask(original_mask); self.assertEqual(original_mask, after_mask)
 
     def test_full_payload_identity_tail_and_unexpected_children_refuse_cleanup(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            folder = root / ('wdv-container-bff-large-' + 'c'*16); folder.mkdir(mode=0o750)
+            folder = root / ('wdv-container-bff-large-' + 'c'*16); folder.mkdir(mode=0o750); folder.chmod(0o750)
             leaf = folder / '中文.bin'; leaf.write_bytes(b'full-content-and-tail'); leaf.chmod(0o640)
             proofs = {leaf.name: (probe.fingerprint(leaf), probe.file_digest(leaf))}
             identity = folder.stat().st_dev, folder.stat().st_ino

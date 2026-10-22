@@ -92,7 +92,8 @@ def fixture(lifetime_seconds=600):
     baseline = core_snapshot()
     name = 'wdv-container-bff-large-' + uuid.uuid4().hex[:16]
     folder = APPS / name
-    os.umask(0o077)
+    # Each synthetic object has an explicit mode below. This reusable context
+    # must not change the caller's process-global umask (e.g. later QA fixtures).
     folder.mkdir(mode=0o750); folder.chmod(0o750)
     folder_identity = folder.stat().st_dev, folder.stat().st_ino
     proofs = {}
