@@ -146,12 +146,14 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v5
-      - run: corepack enable
       - uses: actions/setup-node@v5
         with:
           node-version: 24.15.0
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          # setup-node probes pnpm from the repository root, which has no
+          # packageManager pin. Do not fetch an unpinned manager before the
+          # bounded, web-directory install step below.
+          package-manager-cache: false
+      - run: corepack enable
       - name: Install pinned frontend dependencies with bounded download retry
         run: bash ../deploy/ci/install-frontend-dependencies.sh
       - run: corepack pnpm lint

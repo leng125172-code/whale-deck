@@ -1,11 +1,24 @@
 """Offline process tests; no dependency downloads or registry access."""
 import os
+import json
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'deploy/ci/install-frontend-dependencies.sh'
+
+
+class FrontendWorkflowTests(unittest.TestCase):
+    def test_setup_does_not_resolve_an_unpinned_root_package_manager(self):
+        root = SCRIPT.parents[2]
+        frontend = (root/'.github/workflows/ci.yml').read_text(encoding='utf-8').split('  frontend:\n', 1)[1]
+        self.assertNotIn('cache: pnpm', frontend)
+        self.assertIn('package-manager-cache: false', frontend)
+        self.assertLess(frontend.index('uses: actions/setup-node@v5'), frontend.index('run: corepack enable'))
+        self.assertIn('working-directory: web', frontend)
+        self.assertIn('run: bash ../deploy/ci/install-frontend-dependencies.sh', frontend)
+        self.assertEqual('pnpm@12.10.1', json.loads((root/'web/package.json').read_text(encoding='utf-8'))['packageManager'])
 
 
 @unittest.skipUnless(os.name == 'posix', 'Linux CI shell process test')
