@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+**2026-10-26 容器写入协议候选（未安装）**：Agent minor39独立五RPC与请求体绑定一次性签名、SDK/Agent/root三层完整流校验、固定受限helper已实现。Release零警告错误、2410 Unit/160 Integration通过（6原生夹具跳过）、138容器Linux-root通过；真实systemd profile完成2MiB+7全内容发布/HDD旧原件、精确InvocationID活任务取消和清理，11核心healthy。没有产品安装态、永久任务/当前权限/审计或BFF写入页面；59项继续active。[证据及边界](qa/CONTAINER_FILE_WRITE_RPC.md)。
+
 2026-10-22 minor38已安装：fd3bda2宿主及独立签名UDS四方法通过，真实完整2097159字节及保护拒绝、systemd沙箱和清理已核对；43项Linux-root通过，最终本机2275 Unit/159 Integration通过（6明确跳过）。API/Worker/Gateway仍9ec8721，业务管理员/审计/BFF/UI未接，不能算完整功能。下方“未部署38”为前序候选历史。[安装态证据](qa/CONTAINER_FILE_READS_INSTALLED.md)。
 
 2026-10-21新增未部署minor38：独立`docker.files.read`及`ContainerFileService` InspectTarget/List/Inspect/Download，严格容器实例/相对路径、各方法签名、完整内容哈希和helper成功EOF后end；原宿主传输profile不变。2263 Unit/159 Integration通过（6原生本机跳过），没有本次安装态或业务/UI验收；实际仍9ec8721/1.37。[候选及未完成边界](qa/CONTAINER_FILE_AGENT_RPC.md)。

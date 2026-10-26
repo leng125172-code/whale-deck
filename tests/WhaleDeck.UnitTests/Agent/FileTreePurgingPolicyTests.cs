@@ -327,7 +327,7 @@ public sealed class FileTreePurgingPolicyTests
         var capture = await Assert.ThrowsAsync<RpcException>(() => service.Plan(new() { Context = new() { ActorSubject = "admin" }, Command = invalid }, null!));
         Assert.Equal("FILES_OPERATION_INVALID", capture.Status.Detail);
         var capabilities = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
-        Assert.Equal(38U, capabilities.ProtocolMinor); Assert.Contains("files.tree-purge-intents", capabilities.Capabilities);
+        Assert.Equal(39U, capabilities.ProtocolMinor); Assert.Contains("files.tree-purge-intents", capabilities.Capabilities);
         Assert.Equal("whaledeck.agent.v1.FileTreePurgingService", FileTreePurgingService.Descriptor.FullName);
     }
 }

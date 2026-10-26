@@ -74,7 +74,7 @@ public sealed class ContainerFilePolicyTests
         await Assert.ThrowsAsync<ArgumentException>(() => service.Inspect(Location("../bad"), null!));
         Assert.Throws<ArgumentException>(() => { _ = service.Download(new() { Location = Location(), ExpectedVersion = "ABSENT" }, null!, null!); });
         var capabilities = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
-        Assert.Equal(38U, capabilities.ProtocolMinor); Assert.Contains("docker.files.read", capabilities.Capabilities);
+        Assert.Equal(39U, capabilities.ProtocolMinor); Assert.Contains("docker.files.read", capabilities.Capabilities);
         Assert.Equal("whaledeck.agent.v1.ContainerFileService", ContainerFileService.Descriptor.FullName);
         Assert.Equal(4, ContainerFileService.Descriptor.Methods.Count);
         Assert.DoesNotContain(ContainerFileService.Descriptor.Methods, method => method.Name is "Upload" or "Exec" or "Run");

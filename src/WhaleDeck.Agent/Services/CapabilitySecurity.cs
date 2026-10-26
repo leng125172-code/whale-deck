@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
+using WhaleDeck.Contracts;
 
 namespace WhaleDeck.Agent.Services;
 
@@ -15,6 +16,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
 
     public bool Validate(string? token, string method)
     {
+        if (method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal)) return false;
         if (method.EndsWith("/GetCapabilities", StringComparison.Ordinal) ||
             method.EndsWith("/GetHealth", StringComparison.Ordinal) ||
             method.EndsWith("/WatchHealth", StringComparison.Ordinal))
@@ -57,6 +59,31 @@ public sealed class CapabilityValidator(IConfiguration configuration)
 
         return _usedNonces.TryAdd(parts[1], expiresAt);
     }
+
+    public bool ValidateContainerWrite(string? token, string method, string? requestHash)
+    {
+        if (!method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) ||
+            requestHash is not { Length: 64 } || requestHash.Any(c => !(char.IsAsciiDigit(c) || c is >= 'A' and <= 'F')) ||
+            string.IsNullOrEmpty(token) || token.Length > 256) return false;
+        var parts = token.Split('.', 3);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (parts.Length != 3 || !long.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var expires) ||
+            expires < now || expires - now > MaximumLifetimeSeconds ||
+            !Guid.TryParseExact(parts[1], "N", out var nonce) || nonce == Guid.Empty || nonce.ToString("N") != parts[1] ||
+            parts[2].Length != 64 || parts[2].Any(c => !(char.IsAsciiDigit(c) || c is >= 'A' and <= 'F'))) return false;
+        byte[] key;
+        try { key = File.ReadAllBytes(_keyFile); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return false; }
+        try
+        {
+            if (key.Length < 32) return false;
+            var expected = HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(ContainerFileWriteBinding.Payload(parts[0], parts[1], method, requestHash)));
+            if (!CryptographicOperations.FixedTimeEquals(expected, Convert.FromHexString(parts[2]))) return false;
+        }
+        finally { CryptographicOperations.ZeroMemory(key); }
+        foreach (var used in _usedNonces) if (used.Value < now) _usedNonces.TryRemove(used.Key, out _);
+        return _usedNonces.TryAdd(parts[1], expires);
+    }
 }
 
 public sealed class CapabilityInterceptor(CapabilityValidator validator) : Interceptor
@@ -97,7 +124,10 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     private void Authorize(ServerCallContext context)
     {
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");
-        if (!validator.Validate(token, context.Method))
+        var valid = context.Method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal)
+            ? validator.ValidateContainerWrite(token, context.Method, context.RequestHeaders.GetValue(ContainerFileWriteBinding.Header))
+            : validator.Validate(token, context.Method);
+        if (!valid)
         {
             throw new RpcException(new Status(StatusCode.PermissionDenied, "Agent capability is missing or invalid."));
         }

@@ -178,6 +178,7 @@ public static class DependencyInjection
         services.AddSingleton<IHostTerminalGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerTerminalGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerFileGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddSingleton<IContainerFileWriteGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<INotificationPrivateGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IManagementQuery>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<PortalService>();

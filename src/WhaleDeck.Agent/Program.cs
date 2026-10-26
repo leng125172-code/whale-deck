@@ -71,6 +71,7 @@ app.MapGrpcService<NotificationConfigurationGrpcService>();
 app.MapGrpcService<HostTerminalGrpcService>();
 app.MapGrpcService<ContainerTerminalGrpcService>();
 app.MapGrpcService<ContainerFileGrpcService>();
+app.MapGrpcService<ContainerFileWriteGrpcService>();
 app.MapGrpcService<FileTransferGrpcService>();
 app.MapGrpcService<FileOperationGrpcService>();
 app.MapGrpcService<FileArchiveGrpcService>();

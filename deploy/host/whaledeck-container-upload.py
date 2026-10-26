@@ -52,7 +52,9 @@ class ContainerUploads:
     def upload_request(self, request):
         required = {'containerId', 'instanceId', 'path', 'expectedVersion', 'expectedParentVersion',
                     'operationId', 'owner', 'sizeBytes', 'sha256'}
-        if type(request) is not dict or set(request) != required:
+        if type(request) is not dict or set(request) not in (required, required | {'expectedTargetProof'}):
+            self.reject('REQUEST_INVALID')
+        if 'expectedTargetProof' in request and (type(request['expectedTargetProof']) is not str or not re.fullmatch('[A-F0-9]{64}', request['expectedTargetProof'])):
             self.reject('REQUEST_INVALID')
         self.r.target_binding(request['containerId'], request['instanceId'])
         self.r.canonical_path(request['path'], empty=False)
@@ -195,13 +197,16 @@ class ContainerUploads:
     def public(self, record, replayed=False):
         return {'operationId': record['operationId'], 'containerId': record['containerId'],
                 'instanceId': record['instanceId'], 'state': record['state'],
-                'sizeBytes': record['request']['sizeBytes'], 'sha256': record['request']['sha256'], 'replayed': replayed}
+                'targetProof': record['targetProof'],
+                'sizeBytes': record['request']['sizeBytes'], 'sha256': record['request']['sha256'], 'replayed': replayed,
+                'backupCapture': record.get('backupCapture')}
 
     def stage(self, request, session, source):
         fingerprint = self.upload_request(request)
         self.session_scope(request, session)
         session.revalidate()
         proof = self.target_proof(session)
+        if request.get('expectedTargetProof', proof) != proof: self.reject('TARGET_CHANGED')
         self.target(request, session)
         operation = request['operationId']
         with self.locked(operation, allow_new=True) as state, self.stream_slot(state):

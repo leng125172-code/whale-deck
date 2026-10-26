@@ -586,6 +586,37 @@ service ContainerFileService {
   rpc Download(ContainerFileDownloadRequest) returns (stream FileDownloadFrame);
 }
 
+// Independent write family. Its single-use capability covers the exact request
+// (or first upload header), including the complete body digest/length.
+message ContainerUploadTarget {
+  ContainerFileLocation location = 1; string target_proof = 2;
+  string expected_parent_version = 3; string expected_version = 4; int64 current_size_bytes = 5;
+}
+message ContainerUploadHeader {
+  ContainerFileLocation location = 1; string operation_id = 2; string owner = 3;
+  int64 size_bytes = 4; string sha256 = 5; string expected_version = 6;
+  string expected_parent_version = 7; string expected_target_proof = 8; RequestContext context = 9;
+}
+message ContainerUploadFrame { ContainerUploadHeader header = 1; bytes data = 2; int64 offset = 3; bool commit = 4; }
+message ContainerUploadReference {
+  string container_id = 1; string instance_id = 2; string operation_id = 3; string owner = 4; RequestContext context = 5;
+  string expected_target_proof = 6;
+}
+message ContainerUploadBackup {
+  FileHddBackupProof proof = 1; string container_id = 2; string instance_id = 3; string target_proof = 4;
+}
+message ContainerUploadReceipt {
+  string container_id = 1; string instance_id = 2; FileUploadReceipt upload = 3;
+  ContainerUploadBackup backup = 4; string target_proof = 5;
+}
+service ContainerFileWriteService {
+  rpc InspectTarget(ContainerFileLocation) returns (ContainerUploadTarget);
+  rpc StageUpload(stream ContainerUploadFrame) returns (ContainerUploadReceipt);
+  rpc Publish(ContainerUploadReference) returns (ContainerUploadReceipt);
+  rpc Inspect(ContainerUploadReference) returns (ContainerUploadReceipt);
+  rpc Discard(ContainerUploadReference) returns (ContainerUploadReceipt);
+}
+
 message FileLocation { string root_id = 1; string path = 2; }
 message FileRoot { string id = 1; string name = 2; repeated string actions = 3; }
 message FileRoots { repeated FileRoot roots = 1; }

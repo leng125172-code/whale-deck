@@ -31,6 +31,7 @@ public sealed partial class AgentGateway : IAgentGateway, IManagementQuery, IHos
         _capabilityKey = File.Exists(keyFile) ? File.ReadAllBytes(keyFile) : null;
         var handler = new SocketsHttpHandler
         {
+            UseProxy = false,
             ConnectCallback = async (_, cancellationToken) =>
             {
                 var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);

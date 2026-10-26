@@ -310,11 +310,11 @@ public sealed partial class FileTransferRunner
             if (newline >= 0)
             {
                 var document = JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 8 });
-                if (driver.IsContainerRead && document.RootElement.TryGetProperty("type", out var type) && type.GetString() == "error")
+                if ((driver.IsContainerRead || driver.IsContainerWrite) && document.RootElement.TryGetProperty("type", out var type) && type.GetString() == "error")
                 {
                     var code = document.RootElement.TryGetProperty("code", out var error) && error.ValueKind == JsonValueKind.String ? error.GetString() : null;
                     document.Dispose();
-                    throw ContainerFilePolicy.Failure(code);
+                    throw driver.IsContainerWrite ? ContainerUploadPolicy.Failure(code) : ContainerFilePolicy.Failure(code);
                 }
                 return document;
             }
@@ -356,11 +356,12 @@ public sealed partial class FileTransferRunner
     private static ProcessStartInfo Start(string action, string id, string? invocation = null)
     {
         var container = ContainerAction(action);
+        var containerWrite = ContainerWriteAction(action);
         var start = new ProcessStartInfo("/usr/bin/sudo") { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         start.ArgumentList.Add("-n"); start.ArgumentList.Add(Helper);
-        var transport = container ? "container-file-transport" : "file-transport";
+        var transport = containerWrite ? "container-file-write" : container ? "container-file-transport" : "file-transport";
         start.ArgumentList.Add(invocation is null ? transport : transport + "-stop");
-        if (invocation is null) start.ArgumentList.Add(container ? action[10..] : action);
+        if (invocation is null) start.ArgumentList.Add(containerWrite ? action[16..] : container ? action[10..] : action);
         start.ArgumentList.Add(id); if (invocation is not null) start.ArgumentList.Add(invocation);
         start.Environment.Clear(); start.Environment["PATH"] = "/usr/sbin:/usr/bin:/sbin:/bin"; start.Environment["LANG"] = "C.UTF-8";
         return start;
@@ -377,6 +378,7 @@ public sealed partial class FileTransferRunner
         public Task Errors { get; set; } = Task.CompletedTask;
         public string? InvocationId { get; set; }
         public bool IsContainerRead => ContainerAction(action);
+        public bool IsContainerWrite => ContainerWriteAction(action);
         public Driver(string action)
         {
             this.action = action;
@@ -411,7 +413,7 @@ internal static class FileTransferPipe
     // Metadata/publication actions have no body after their opening request.
     public static void CompleteOpeningInput(StreamWriter input, string action)
     {
-        if (action is not ("upload" or "stage")) input.Close();
+        if (action is not ("upload" or "stage" or "container-write:stage")) input.Close();
     }
     // A helper may reject a stale version before consuming buffered input.
     // Close the underlying pipe first: disposal must not flush that buffer and

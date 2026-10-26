@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+> **2026-10-26 容器写入协议候选（未安装）**：Agent minor39独立五RPC与请求体绑定一次性签名、SDK/Agent/root三层完整流校验、固定受限helper已实现。Release零警告错误、2410 Unit/160 Integration通过（6原生夹具跳过）、138容器Linux-root通过；真实systemd profile完成2MiB+7全内容发布/HDD旧原件、精确InvocationID活任务取消和清理，11核心healthy。没有产品安装态、永久任务/当前权限/审计或BFF写入页面；59项继续active。[证据及边界](qa/CONTAINER_FILE_WRITE_RPC.md)。
+
 > **Linux 接续：容器原子发布/中断候选**。跨盘准备、完整输出读回、NOREPLACE/EXCHANGE、旧 inode/HDD 原件保留与取消/Unknown 观察已实现。23 项新真实 Linux-root 含 10 处 SIGKILL，127 容器/184 宿主/14 目录备份/8 范围通过。实际可写绑定和容器可写层的新建/覆盖、镜像原有文件及真实强杀后新会话不重复写入对账通过，合成资源精确清理、11 核心 healthy。未接 RPC/helper、任务/权限审计与 BFF/UI，运行时不变，59 项继续 active。[证据](qa/CONTAINER_FILE_PUBLISHING.md)。
 
 > **Linux 接续：容器 HDD 捕获候选**。新增冻结目标证明、独立容器历史域与覆盖前捕获；19 项新真实 Linux-root（含三处真实 SIGKILL）、104 项容器/184 项宿主文件联合通过。实际容器 2 MiB+7 在物理 HDD 全内容/摘要/重放/错误 UUID 与停止实例拒绝通过，原件/父版本不变；源与留存同 HDD，仅版本留存。另宿主 NVMe→HDD 实际沙箱通过，临时内容精确清理、11 核心 healthy。尚未原子发布、RPC/helper/任务/BFF/UI，运行时不变，59 项继续 active。[证据](qa/CONTAINER_FILE_HDD_CAPTURE.md)。

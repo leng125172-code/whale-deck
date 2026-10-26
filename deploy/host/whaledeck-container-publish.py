@@ -286,9 +286,12 @@ class ContainerPublisher:
         with self.u.locked(request['operationId']) as state, self.b.gate(state):
             record = self.u.scoped(state, request)
             self.u.validate_target_proof(record, session)
-            if 'publication' not in record: return self.public(record)
-            with self.parent(record, session) as parent:
-                return self.observe_locked(state, parent, record, session, time.monotonic() + 300)
+            if 'publication' in record:
+                with self.parent(record, session) as parent:
+                    return self.observe_locked(state, parent, record, session, time.monotonic() + 300)
+        # Receiving/Verified recovery belongs to the staging engine. Re-read
+        # under its lock; a concurrent transition fails closed, never guesses.
+        return self.u.inspect(request, session)
 
     @staticmethod
     def exists(parent, name):

@@ -97,6 +97,32 @@ case "$action" in
     [[ "$container_files_instance" == "$3" ]] || exit 2
     exec /usr/bin/systemctl stop "whaledeck-container-files-$2.service"
     ;;
+  container-file-write)
+    [[ $# -eq 3 && ( "$2" == target || "$2" == stage || "$2" == publish || "$2" == inspect || "$2" == discard ) && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    # Fixed writer code and fixed host storage only. Target access uses the
+    # guarded foreign container root FD, never a caller-supplied host path.
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit="whaledeck-container-file-write-$3" \
+      --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
+      --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=no \
+      --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
+      --property=RestrictNamespaces=yes --property=RestrictAddressFamilies=AF_UNIX \
+      --property=RuntimeMaxSec=660 --property=TimeoutStopSec=5 --property=KillMode=control-group \
+      --property=Restart=no --property=TasksMax=8 --property=MemoryMax=128M --property=CPUQuota=50% \
+      --property=LimitCORE=0 --property=LimitNOFILE=64 --property=LimitFSIZE=1073741824 \
+      --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
+      --property="CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_CHOWN CAP_SYS_PTRACE" \
+      --property="ReadWritePaths=/var/lib/whaledeck-container-uploads /data/WhaleDeck/apps /data/DockerData/whaledeck/file-backups" \
+      /usr/bin/python3 -I /usr/local/libexec/whaledeck-container-file-write.py "$2"
+    ;;
+  container-file-write-stop)
+    [[ $# -eq 3 && "$2" =~ ^[a-f0-9]{32}$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    container_write_instance=$(/usr/bin/systemctl show "whaledeck-container-file-write-$2.service" -p InvocationID --value 2>/dev/null || true)
+    [[ -n "$container_write_instance" ]] || exit 0
+    [[ "$container_write_instance" == "$3" ]] || exit 2
+    exec /usr/bin/systemctl stop "whaledeck-container-file-write-$2.service"
+    ;;
   container-terminal)
     [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ ]] || exit 2
     exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \

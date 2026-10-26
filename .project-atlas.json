@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_PUBLISHING.md",
-  "nextStep": "按59项继续，17项移出不算完成。容器跨盘原子发布、旧inode/HDD原件留存与取消/Unknown观察内部候选已验证：23项新Linux-root含10处SIGKILL，127容器/184宿主/14目录备份/8范围通过。实际绑定及容器可写层、镜像原件覆盖、真实强杀后新真实会话无重复写入对账通过，精确清理/11核心healthy；未安装或接产品写入。继续独立协议/capability/helper和产品沙箱、永久任务/当前权限/审计、BFF上传/编辑/历史恢复及管理员接管；再推进其余数据库恢复/网络、网站/多语言开发空间、通知/GitLab和最终安装交付。不能把内部引擎算完整功能完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_WRITE_RPC.md",
+  "nextStep": "按59项继续。minor39独立请求体签名/五RPC/SDK及固定写helper候选通过Release、2410 Unit、160 Integration（6原生夹具跳过）、138容器Linux-root和真实systemd profile的完整2MiB+7/取消/精确清理；11核心healthy，未安装。下一步真实安装态签名UDS、永久任务/共享锁/当前权限/审计、BFF上传编辑/历史恢复/Unknown接管及真实桌面手机。17项移出不算完成，其余保留任务继续。"
 }
