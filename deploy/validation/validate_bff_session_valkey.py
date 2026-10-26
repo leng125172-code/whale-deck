@@ -41,7 +41,7 @@ def main():
     marker='wd-bff-session-'+uuid.uuid4().hex[:16];folder=Path('/tmp')/marker
     folder.mkdir(mode=0o700);os.chown(folder,user.pw_uid,user.pw_gid)
     identity=folder.stat().st_dev,folder.stat().st_ino
-    acl=b'user default reset on nopass ~whaledeck:auth:session:v2:* +@all -@dangerous\n'
+    acl=b'user default reset on nopass ~whaledeck:auth:session:v2:* +@read +@write +@connection +@scripting -@dangerous -config -shutdown -acl +time\n'
     acl_path=folder/'users.acl';acl_path.write_bytes(acl);os.chown(acl_path,user.pw_uid,user.pw_gid);acl_path.chmod(0o600)
     acl_identity=acl_path.stat().st_dev,acl_path.stat().st_ino
     identifier=None;socket_identity=None;complete=False

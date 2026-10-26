@@ -1,6 +1,16 @@
 # BFF 登录存活与注销续期竞态
 
-2026-10-26，单工作站59项范围。当前为源码候选，尚未替换运行API/Worker或验收真实身份页面。
+2026-10-26，单工作站59项范围。f5a0029已覆盖部署；六组件/HTTP来源一致、11核心健康，真实双登录/注销/Worker取消已通过。浏览器交互、进行中发布撤销和容器写入完整业务链仍未签收。
+
+## 安装与真实依赖发现
+
+固定维护更新unit已正常结束（Result=success、ExecMainStatus=0），API、Worker、Gateway、Agent、MaintenanceHost和Migrator的实际来源均为f5a00299a111050e09e3cf6cce513881d14f0577。发布前文件活动任务/路径锁/接收发布均为0；迁移器确认无需SQL变更，未自动回滚。
+
+首次真实OIDC回调失败，API抛RedisServerException：会话脚本第1行的TIME被生产Valkey ACL拒绝。原生夹具此前的`+@all -@dangerous`覆盖过宽，未证明生产类别权限；不能据旧原生通过宣称实际登录可用。已仅为专用whaledeck身份补`+time`并ACL SAVE持久化，不改密码、不清缓存、不放开配置/ACL/清库权限。database-platform引导和只读ACL预检同步修正；独立原生夹具及CI改为read/write/connection/scripting加TIME的生产类别组合，补CONFIG和ACL拒绝断言。
+
+修后`validate_bff_login_liveness.py`真实临时管理员双次OIDC登录：同主体第二登录仍为管理员，另一个登录无法读取第一个登录的上传；正常退出原登录后18次旧Cookie请求均401，未显式取消任务。已部署Worker根据原登录撤销将自有AwaitingUpload意图和Job置Canceled/FILES_CANCELED，实际root保留Aborted/canceledBeforeReceive证据，目标从未写入，锁和待处理消息为0且结果审计恰好1条。没有直接改SQL/缓存/权限、伪造终态或删除取消标记；临时身份由外层精确清理。此用例不等同于发布进行中撤销或人类网页验收。
+
+f5a0029冻结原生门禁执行1/通过1/0跳过、要求新构建和清理通过，源码SHA256为a81bdb08291b9f67b22997f954000bd0ea0e3f1fe5001c5290fd492d4546aadf；该次仍使用旧宽夹具，保留事实但不作为生产ACL通过依据。生产ACL组合的新冻结复验仍待执行。
 
 ## 实现与边界
 
@@ -24,4 +34,4 @@ CI新增固定摘要的native-valkey独立job，必须1执行/1通过/0跳过，
 
 ## 仍需完成
 
-同一冻结提交原生复验、CI、覆盖发布，以及实际Authenticator Cookie/登录/注销、跨页/进行中上传撤销、普通用户隔离和真实Worker/页面验收。随后接容器上传永久实体/迁移、Job/Outbox/租约/宿主与容器共享写屏障、当前权限/审计、BFF上传编辑和历史恢复/Unknown接管。当前没有新容器写HTTP或页面，不签完整文件模块或59项交付。
+生产ACL组合的冻结原生复验、完整CI，以及完整Authentik双端退出、跨页/进行中上传撤销、普通用户隔离和真实页面验收。已完成的安装/真实双登录Worker门禁见上文，不冒称完整发布中撤销。随后接容器上传永久实体/迁移、Job/Outbox/租约/宿主与容器共享写屏障、当前权限/审计、BFF上传编辑和历史恢复/Unknown接管。当前没有新容器写HTTP或页面，不签完整文件模块或59项交付。

@@ -33,7 +33,7 @@ jobs:
           python3 -m py_compile deploy/host/whaledeck-container-backups.py deploy/validation/validate_container_file_backups.py
           python3 -m py_compile deploy/host/whaledeck-container-publish.py deploy/validation/validate_container_file_publishing.py
           python3 -m py_compile deploy/host/whaledeck-container-file-write.py deploy/validation/validate_container_file_write_profile.py deploy/validation/validate_container_file_write_agent.py
-          python3 -m py_compile deploy/validation/validate_bff_session_valkey.py
+          python3 -m py_compile deploy/validation/validate_bff_session_valkey.py deploy/validation/validate_bff_login_liveness.py
           python3 -m py_compile deploy/validation/validate_container_file_bff_extended.py
           python3 -m unittest discover -s deploy/validation -p test_metric_continuity.py
           python3 -m unittest discover -s deploy/validation -p test_scope_baseline.py
@@ -167,7 +167,7 @@ jobs:
       - name: Restrict the disposable session fixture to its own key namespace
         env:
           VALKEY_CONTAINER: ${{ job.services.valkey.id }}
-        run: docker exec "$VALKEY_CONTAINER" valkey-cli ACL SETUSER default resetkeys '~whaledeck:auth:session:v2:*' +@all -@dangerous
+        run: docker exec "$VALKEY_CONTAINER" valkey-cli ACL SETUSER default reset on nopass '~whaledeck:auth:session:v2:*' +@read +@write +@connection +@scripting -@dangerous -config -shutdown -acl +time
       - name: Run actual Valkey BFF session and revocation gate
         env:
           WHALEDECK_NATIVE_BFF_SESSION_ENDPOINT: 127.0.0.1:16379

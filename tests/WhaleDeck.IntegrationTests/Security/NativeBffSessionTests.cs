@@ -35,6 +35,12 @@ public sealed class NativeBffSessionTests
         }
         using var firstConnection = await ConnectionMultiplexer.ConnectAsync(options);
         using var secondConnection = await ConnectionMultiplexer.ConnectAsync(options);
+        // Use the deployed read/write/connection/scripting + TIME policy,
+        // never a broad +@all fixture that conceals missing production rights.
+        await Assert.ThrowsAsync<RedisServerException>(async () =>
+        { _ = await firstConnection.GetDatabase().ExecuteAsync("CONFIG", "GET", "maxmemory"); });
+        await Assert.ThrowsAsync<RedisServerException>(async () =>
+        { _ = await firstConnection.GetDatabase().ExecuteAsync("ACL", "LIST"); });
         var first = new ValkeyBffSessionStorage(firstConnection, TimeProvider.System);
         var second = new ValkeyBffSessionStorage(secondConnection, TimeProvider.System);
         var protection = new EphemeralDataProtectionProvider();
