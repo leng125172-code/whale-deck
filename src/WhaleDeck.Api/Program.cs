@@ -51,6 +51,11 @@ try
     {
         throw new InvalidOperationException("Authentication:Authentik:AdministratorGroupId is required outside Development.");
     }
+    if (oidcSettings.Enabled && !builder.Environment.IsDevelopment() &&
+        (string.IsNullOrWhiteSpace(builder.Configuration["Valkey:Endpoint"]) || string.IsNullOrWhiteSpace(builder.Configuration["DataProtection:KeyDirectory"])))
+    {
+        throw new InvalidOperationException("SESSION_SHARED_CACHE_AND_PERSISTENT_KEYS_REQUIRED");
+    }
 
     builder.Services.AddInfrastructure(builder.Configuration);
     var dataProtection = builder.Services.AddDataProtection().SetApplicationName("WhaleDeck.Api");

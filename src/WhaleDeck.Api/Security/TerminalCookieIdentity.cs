@@ -1,8 +1,7 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
 using WhaleDeck.Application.Models;
+using WhaleDeck.Application.Services;
 
 namespace WhaleDeck.Api.Security;
 
@@ -27,7 +26,7 @@ public sealed class TerminalCookieIdentity(IOptionsMonitor<CookieAuthenticationO
         var subject = ticket?.Principal.FindFirst("sub")?.Value;
         if (ticket?.Principal.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(subject)) throw new UnauthorizedAccessException("TERMINAL_LOGIN_EXPIRED");
         return new(reference, new(subject, ticket.Principal.Identity.Name, ticket.Principal.FindAll("groups").Select(item => item.Value).ToArray(),
-            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(reference))), context.TraceIdentifier, context.Connection.RemoteIpAddress?.ToString()));
+            BffSessionValidation.Binding(reference), context.TraceIdentifier, context.Connection.RemoteIpAddress?.ToString()));
     }
 }
 // Never returned in HTTP/WS responses. The raw reference only lives in memory.

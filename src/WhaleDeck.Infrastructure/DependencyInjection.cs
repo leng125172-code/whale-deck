@@ -31,6 +31,7 @@ public static class DependencyInjection
         {
             services.AddDistributedMemoryCache();
             services.AddSingleton<IOneTimeSecretStore, MemoryOneTimeSecretStore>();
+            services.AddSingleton<IBffSessionStorage, MemoryBffSessionStorage>();
         }
         else
         {
@@ -49,7 +50,9 @@ public static class DependencyInjection
                 AbortOnConnectFail = false
             }));
             services.AddSingleton<IOneTimeSecretStore, ValkeyOneTimeSecretStore>();
+            services.AddSingleton<IBffSessionStorage, ValkeyBffSessionStorage>();
         }
+        services.AddSingleton<ILoginSessionRegistry>(provider => provider.GetRequiredService<IBffSessionStorage>());
 
         services.AddHttpClient("Authentik", client =>
         {

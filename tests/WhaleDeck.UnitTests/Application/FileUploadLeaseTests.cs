@@ -63,7 +63,7 @@ public sealed class FileUploadLeaseTests
     {
         var operation = Operation(); var repository = new Repository(operation); var gateway = new Gateway(operation); var identity = new Identity(); using var clock = new StepClock();
         repository.OnRenew = () => { if (repository.Renewals == 3) gateway.Result.TrySetResult(Completed(operation)); return true; };
-        var tick = new FileUploadDispatcher(repository, gateway, identity, clock, new Plans()).TickAsync(default);
+        var tick = new FileUploadDispatcher(repository, gateway, identity, clock, new Plans(), new Sessions()).TickAsync(default);
         await clock.AdvanceAsync(); await clock.AdvanceAsync();
         Assert.True(await tick.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal(3, repository.Renewals); Assert.Equal(1, gateway.Publishes); Assert.False(gateway.Canceled);
@@ -71,10 +71,10 @@ public sealed class FileUploadLeaseTests
     }
     [Theory]
     [InlineData("cancel")][InlineData("lease")][InlineData("role")][InlineData("subject")][InlineData("snapshot-expired")]
-    [InlineData("identity-failure")][InlineData("database-failure")][InlineData("intent-expired")]
+    [InlineData("identity-failure")][InlineData("database-failure")][InlineData("intent-expired")][InlineData("logout")][InlineData("session-failure")]
     public async Task FailedGuardCancelsAndObservesTheOnlyInFlightPublishWithoutClaimingSuccess(string failure)
     {
-        var operation = Operation(); var repository = new Repository(operation); var gateway = new Gateway(operation); var identity = new Identity(); var clock = new FastClock();
+        var operation = Operation(); var repository = new Repository(operation); var gateway = new Gateway(operation); var identity = new Identity(); var clock = new FastClock(); var logins = new Sessions();
         gateway.OnPublish = () =>
         {
             switch (failure)
@@ -87,9 +87,11 @@ public sealed class FileUploadLeaseTests
                 case "identity-failure": identity.Fail = true; break;
                 case "database-failure": repository.OnRenew = () => throw new InvalidOperationException("test database unavailable"); break;
                 case "intent-expired": clock.Now = operation.ExpiresAtUtc.AddSeconds(1); break;
+                case "logout": logins.Active = false; break;
+                case "session-failure": logins.Fail = true; break;
             }
         };
-        Assert.True(await new FileUploadDispatcher(repository, gateway, identity, clock, new Plans()).TickAsync(default).WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(await new FileUploadDispatcher(repository, gateway, identity, clock, new Plans(), logins).TickAsync(default).WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.True(gateway.Canceled); Assert.Equal(1, gateway.Publishes); Assert.Null(repository.Finished); Assert.Equal(1, repository.Deferrals);
     }
     [Fact]
@@ -97,7 +99,7 @@ public sealed class FileUploadLeaseTests
     {
         using var cancellation = new CancellationTokenSource(); var operation = Operation(); var repository = new Repository(operation); var gateway = new Gateway(operation);
         gateway.OnPublish = cancellation.Cancel;
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new FileUploadDispatcher(repository, gateway, new Identity(), new FastClock(), new Plans())
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new FileUploadDispatcher(repository, gateway, new Identity(), new FastClock(), new Plans(), new Sessions())
             .TickAsync(cancellation.Token).WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.True(gateway.Canceled); Assert.Null(repository.Finished); Assert.Equal(0, repository.Deferrals);
     }
@@ -105,8 +107,29 @@ public sealed class FileUploadLeaseTests
     public async Task LeaseLostBeforePublicationNeverStartsAHelper()
     {
         var operation = Operation(); var repository = new Repository(operation) { OnRenew = () => false }; var gateway = new Gateway(operation);
-        Assert.True(await new FileUploadDispatcher(repository, gateway, new Identity(), new FastClock(), new Plans()).TickAsync(default));
+        Assert.True(await new FileUploadDispatcher(repository, gateway, new Identity(), new FastClock(), new Plans(), new Sessions()).TickAsync(default));
         Assert.Equal(0, gateway.Publishes); Assert.Null(repository.Finished); Assert.Equal(1, repository.Deferrals);
+    }
+    [Fact]
+    public async Task LoggedOutOriginCannotPublishEvenWhenItsSubjectRemainsAdministrator()
+    {
+        var operation = Operation(); var repository = new Repository(operation); var gateway = new Gateway(operation);
+        await new FileUploadDispatcher(repository, gateway, new Identity(), new FastClock(), new Plans(), new Sessions { Active = false }).TickAsync(default);
+        Assert.Equal(0, gateway.Publishes); Assert.Equal(1, gateway.Discards); Assert.Equal("Canceled", repository.Finished);
+    }
+    [Fact]
+    public async Task SessionRegistryFailureBeforePublicationDefersWithoutSigningOrClaimingCancellation()
+    {
+        var operation = Operation(); var repository = new Repository(operation); var gateway = new Gateway(operation);
+        await new FileUploadDispatcher(repository, gateway, new Identity(), new FastClock(), new Plans(), new Sessions { Fail = true }).TickAsync(default);
+        Assert.Equal(0, gateway.Publishes); Assert.Equal(0, gateway.Discards); Assert.Null(repository.Finished); Assert.Equal(1, repository.Deferrals);
+    }
+    [Fact]
+    public async Task AProvenPublicationIsReconciledAfterLogoutWithoutReissuingIt()
+    {
+        var operation = Operation(); var repository = new Repository(operation); var gateway = new Gateway(operation) { ReceiptOverride = Completed(operation) };
+        await new FileUploadDispatcher(repository, gateway, new Identity(), new FastClock(), new Plans(), new Sessions { Active = false }).TickAsync(default);
+        Assert.Equal(0, gateway.Publishes); Assert.Equal(0, gateway.Discards); Assert.Equal("Succeeded", repository.Finished);
     }
     private sealed class Identity : IIdentityDirectory
     {
@@ -118,10 +141,22 @@ public sealed class FileUploadLeaseTests
         public Task<IReadOnlyCollection<ManagedResourceDto>> ListGroupsAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyCollection<ManagedResourceDto>> ListSsoApplicationsAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
     }
+    private sealed class Sessions : ILoginSessionRegistry
+    {
+        public bool Active { get; set; } = true;
+        public bool Fail { get; set; }
+        public Task<bool> IsActiveAsync(string subject, string loginBinding, CancellationToken cancellationToken)
+        {
+            Assert.Equal("lease-admin", subject); Assert.Equal(new string('A', 64), loginBinding);
+            return Fail ? Task.FromException<bool>(new InvalidOperationException("fixture session store unavailable")) : Task.FromResult(Active);
+        }
+    }
     private sealed class Gateway(FileUploadOperation operation) : IFileGateway
     {
         public TaskCompletionSource<FileUploadReceiptDto> Result { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Action? OnPublish { get; set; } public int Publishes { get; private set; } public bool Canceled { get; private set; }
+        public int Discards { get; private set; }
+        public FileUploadReceiptDto? ReceiptOverride { get; set; }
         public async Task<FileUploadReceiptDto> PublishFileAsync(FileUploadOperation value, CancellationToken cancellationToken)
         {
             Assert.Same(operation, value); Publishes++; OnPublish?.Invoke();
@@ -129,13 +164,14 @@ public sealed class FileUploadLeaseTests
             catch (OperationCanceledException) { Canceled = true; throw; }
         }
         public Task<FileUploadReceiptDto?> UploadReceiptAsync(FileUploadOperation value, CancellationToken cancellationToken) =>
-            Task.FromResult<FileUploadReceiptDto?>(new("Staged", operation.SizeBytes, operation.Sha256, "", false, false, false));
+            Task.FromResult<FileUploadReceiptDto?>(ReceiptOverride ?? new("Staged", operation.SizeBytes, operation.Sha256, "", false, false, false));
         public Task<IReadOnlyCollection<FileRootDto>> RootsAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<FilePageDto> ListFilesAsync(FileLocationDto location, string after, int take, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<FileEntryDto?> InspectFileAsync(FileLocationDto location, CancellationToken cancellationToken) => throw new NotSupportedException();
         public IAsyncEnumerable<FileDownloadPart> DownloadFileAsync(FileLocationDto location, string expectedVersion, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<FileUploadReceiptDto> StageFileAsync(FileUploadOperation value, IAsyncEnumerable<ReadOnlyMemory<byte>> bytes, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<FileUploadReceiptDto> DiscardFileAsync(FileUploadOperation value, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<FileUploadReceiptDto> DiscardFileAsync(FileUploadOperation value, CancellationToken cancellationToken)
+        { Discards++; return Task.FromResult(new FileUploadReceiptDto("Aborted", operation.SizeBytes, operation.Sha256, "", false, false, false)); }
     }
     private sealed class Repository(FileUploadOperation operation) : IFileUploadRepository
     {

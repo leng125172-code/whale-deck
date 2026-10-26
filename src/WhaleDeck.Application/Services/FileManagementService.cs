@@ -99,6 +99,7 @@ public sealed class FileManagementService(IFileGateway gateway, IFileUploadRepos
             try { await monitor; } catch (OperationCanceledException) { }
         }
         // No concurrent DbContext operation remains when marking the durable state.
+        await validateLogin(cancellationToken); await AuthorizeAsync(actor, cancellationToken);
         await repository.ReadyAsync(operation, cancellationToken);
         return Map(await Owned(actor, id, cancellationToken));
         async Task Monitor()
@@ -186,7 +187,8 @@ public sealed class FileManagementService(IFileGateway gateway, IFileUploadRepos
         row.ExpiresAtUtc, row.ResultCode, row.Version, row.PublishedVersion, row.PreviousRetained);
 }
 
-public sealed class FileUploadDispatcher(IFileUploadRepository repository, IFileGateway gateway, IIdentityDirectory identity, TimeProvider clock, IFilePlanProtector plans)
+public sealed class FileUploadDispatcher(IFileUploadRepository repository, IFileGateway gateway, IIdentityDirectory identity, TimeProvider clock, IFilePlanProtector plans,
+    ILoginSessionRegistry logins)
 {
     public async Task<bool> TickAsync(CancellationToken cancellationToken)
     {
@@ -253,7 +255,8 @@ public sealed class FileUploadDispatcher(IFileUploadRepository repository, IFile
     private async Task<bool> AdministratorAsync(FileUploadOperation operation, CancellationToken cancellationToken)
     {
         var current = await identity.ResolveCurrentAsync(operation.ActorSubject, null, [], cancellationToken);
-        return current.IsAdministrator && current.Subject == operation.ActorSubject && current.PermissionExpiresAtUtc > clock.GetUtcNow();
+        return current.IsAdministrator && current.Subject == operation.ActorSubject && current.PermissionExpiresAtUtc > clock.GetUtcNow() &&
+            await logins.IsActiveAsync(operation.ActorSubject, operation.LoginBinding, cancellationToken);
     }
 
     private async Task<FileUploadReceiptDto> PublishWithLeaseAsync(FileUploadOperation operation, CancellationToken cancellationToken)

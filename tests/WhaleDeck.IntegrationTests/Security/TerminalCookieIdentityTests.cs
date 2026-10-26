@@ -3,10 +3,9 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using WhaleDeck.Api.Security;
+using WhaleDeck.Infrastructure.Identity;
 
 namespace WhaleDeck.IntegrationTests.Security;
 
@@ -44,7 +43,7 @@ public sealed class TerminalCookieIdentityTests
     internal static async Task<(TerminalCookieIdentity Reader, ServerSideTicketStore Store, DefaultHttpContext Context, string Key)> Setup()
     {
         var protection = new EphemeralDataProtectionProvider();
-        var store = new ServerSideTicketStore(new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())), protection);
+        var store = new ServerSideTicketStore(new MemoryBffSessionStorage(TimeProvider.System), protection, TimeProvider.System);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "admin-subject")], "Cookies")), new() { ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(10) }, "Cookies");
         var key = await store.StoreAsync(ticket);
         var format = new TicketDataFormat(protection.CreateProtector("terminal-test-cookie"));
