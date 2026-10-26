@@ -128,8 +128,21 @@ class ContainerUploads:
             if descriptor is not None: os.close(descriptor)
 
     def receipt(self, state, operation):
+        try: info = os.stat(operation + '.json', dir_fd=state, follow_symlinks=False)
+        except FileNotFoundError: return None
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600:
+            self.reject('RECEIPT_INVALID')
         value = self.f.read_receipt(state, operation)
         if value is None: return None
+        if type(value) is dict and value.get('schemaVersion') == 2:
+            expected = {'schemaVersion', 'resourceType', 'state', 'operationId', 'owner', 'containerId', 'instanceId', 'targetProof', 'createdAtUnixMs'}
+            if set(value) != expected or type(value['schemaVersion']) is not int or value['resourceType'] != 'ContainerUploadCancellation' or value['state'] != 'Prevented':
+                self.reject('RECEIPT_INVALID')
+            self.scope_request({key: value[key] for key in ('operationId', 'owner', 'containerId', 'instanceId')})
+            if value['operationId'] != operation or type(value['targetProof']) is not str or not re.fullmatch('[A-F0-9]{64}', value['targetProof']) or \
+                    type(value['createdAtUnixMs']) is not int or not 0 <= value['createdAtUnixMs'] <= 253402300799999:
+                self.reject('RECEIPT_INVALID')
+            return value
         if type(value) is not dict or type(value.get('schemaVersion')) is not int or value['schemaVersion'] != 1:
             self.reject('RECEIPT_INVALID')
         request = value.get('request')
@@ -195,11 +208,33 @@ class ContainerUploads:
         return name
 
     def public(self, record, replayed=False):
+        if record['state'] == 'Prevented':
+            return {'operationId': record['operationId'], 'containerId': record['containerId'], 'instanceId': record['instanceId'],
+                'state': 'Prevented', 'targetProof': record['targetProof'], 'sizeBytes': 0,
+                'sha256': hashlib.sha256(b'').hexdigest().upper(), 'replayed': replayed, 'backupCapture': None}
         return {'operationId': record['operationId'], 'containerId': record['containerId'],
                 'instanceId': record['instanceId'], 'state': record['state'],
                 'targetProof': record['targetProof'],
                 'sizeBytes': record['request']['sizeBytes'], 'sha256': record['request']['sha256'], 'replayed': replayed,
                 'backupCapture': record.get('backupCapture')}
+
+    def prevent_missing(self, request, session, expected_proof):
+        """Fence a delayed first sender; never fabricate a staged byte receipt."""
+        self.scope_request(request); self.session_scope(request, session); session.revalidate()
+        if self.target_proof(session) != expected_proof: self.reject('TARGET_CHANGED')
+        with self.locked(request['operationId'], allow_new=True) as state:
+            record = self.receipt(state, request['operationId'])
+            if record is not None:
+                record = self.scoped(state, request); self.validate_target_proof(record, session)
+                return self.public(record, True) if record['state'] == 'Prevented' else None
+            # This shares the exact operation lock with stage, including after
+            # a process crash. If stage won the lock, normal discard must prove
+            # and remove that payload; missing data is never called discarded.
+            record = {'schemaVersion': 2, 'resourceType': 'ContainerUploadCancellation', 'state': 'Prevented',
+                **request, 'targetProof': expected_proof, 'createdAtUnixMs': time.time_ns() // 1000000}
+            session.revalidate(); self.validate_target_proof(record, session)
+            self.f.save_receipt(state, request['operationId'], record)
+            return self.public(record)
 
     def stage(self, request, session, source):
         fingerprint = self.upload_request(request)
@@ -215,6 +250,10 @@ class ContainerUploads:
             created = False
             try:
                 if record is not None:
+                    if record['state'] == 'Prevented':
+                        self.scoped(state, {key: request[key] for key in ('operationId', 'owner', 'containerId', 'instanceId')})
+                        self.validate_target_proof(record, session)
+                        self.reject('CANCELED')
                     if record['fingerprint'] != fingerprint: self.reject('IDEMPOTENCY_CONFLICT')
                     self.validate_target_proof(record, session)
                     if record['state'] not in ('Verified', 'Staged'): self.reject('PREVIOUS_OPERATION_INCOMPLETE')
@@ -296,6 +335,7 @@ class ContainerUploads:
         with self.locked(request['operationId']) as state:
             record = self.scoped(state, request)
             self.validate_target_proof(record, session)
+            if record['state'] == 'Prevented': return self.public(record, True)
             if 'publication' in record: self.reject('PUBLISHER_REQUIRED')
             if record['state'] == 'Receiving':
                 record['state'] = 'Interrupted'
@@ -315,6 +355,7 @@ class ContainerUploads:
         with self.locked(request['operationId']) as state:
             record = self.scoped(state, request)
             self.validate_target_proof(record, session)
+            if record['state'] == 'Prevented': return self.public(record, True)
             if 'publication' in record: self.reject('PUBLISHER_REQUIRED')
             if record['state'] == 'Discarded': return self.public(record, True)
             if record['state'] == 'Unknown': self.reject('PREVIOUS_OPERATION_INCOMPLETE')

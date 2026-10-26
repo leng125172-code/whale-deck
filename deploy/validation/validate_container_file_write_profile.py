@@ -121,6 +121,15 @@ def main():
                 call('stage', cancel, replacement)
                 cancel_ref = {key: cancel[key] for key in ('containerId', 'instanceId', 'operationId', 'owner', 'expectedTargetProof')}
                 assert call('discard', cancel_ref)['state'] == 'Discarded' and not (fixture['folder'] / 'canceled.bin').exists()
+                # A canceled intent may have no root payload yet. Its durable
+                # fence must outlive this RPC and refuse a delayed first body.
+                prevented = {**cancel_ref, 'operationId': uuid.uuid4().hex}
+                assert call('discard', prevented)['state'] == 'Prevented'
+                assert call('inspect', prevented)['state'] == 'Prevented'
+                assert call('discard', prevented)['replayed']
+                call('stage', {**cancel, 'operationId': prevented['operationId']}, replacement, expected_error='CONTAINER_UPLOAD_CANCELED')
+                call('publish', prevented, expected_error='CONTAINER_UPLOAD_CANCELED')
+                assert not (state / (prevented['operationId']+'.data')).exists() and not (state / (prevented['operationId']+'.partial')).exists()
                 # Stop a genuinely live receiver, not an already-collected
                 # unit. A wrong InvocationID must leave it alive; exact stop
                 # must release locks and allow explicit interrupted cleanup.
@@ -168,6 +177,7 @@ def main():
             print(json.dumps({'actualContainerWriteSystemdProfile': 'passed', 'fullBytes': owned.common.SIZE,
                 'targetStagePublishInspectDiscardAndFixedErrors': 'passed', 'stdoutExactReadyAndReceipt': True,
                 'exactInvocationStop': True, 'liveWrongInvocationRefusedAndExactCancellationCleaned': True,
+                'preReceiveFenceAndDelayedStageRefusal': True,
                 'installedAgentRpcOrSsoUi': False, 'sourceSha256': hashes}), flush=True)
         finally:
             for transport in active:

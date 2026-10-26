@@ -39,8 +39,10 @@ internal static class ContainerFileWriteProbe
         Require(location.ContainerId.Length == 64 && location.ContainerId.All(char.IsAsciiHexDigitLower));
         var operation = fixture.GetProperty("operationId").GetString()!;
         var cancelOperation = fixture.GetProperty("cancelOperationId").GetString()!;
+        var fenceOperation = fixture.GetProperty("fenceOperationId").GetString()!;
         Require(Guid.TryParseExact(operation, "N", out var firstId) && firstId != Guid.Empty &&
-            Guid.TryParseExact(cancelOperation, "N", out var secondId) && secondId != Guid.Empty && firstId != secondId);
+            Guid.TryParseExact(cancelOperation, "N", out var secondId) && secondId != Guid.Empty && firstId != secondId &&
+            Guid.TryParseExact(fenceOperation, "N", out var thirdId) && thirdId != Guid.Empty && thirdId != firstId && thirdId != secondId);
         var body = new byte[Size];
         for (var index = 0; index < body.Length; index++) body[index] = (byte)(index % 251);
         var digest = Convert.ToHexString(SHA256.HashData(body));
@@ -87,7 +89,7 @@ internal static class ContainerFileWriteProbe
             }
             Phase = "capability-and-request-binding";
             var caps = await new AgentService.AgentServiceClient(channel).GetCapabilitiesAsync(new(), deadline: Until(), cancellationToken: lifetime.Token);
-            Require(caps.ProtocolMajor == 1 && caps.ProtocolMinor >= 39 && caps.Capabilities.Contains("docker.files.bound-uploads"));
+            Require(caps.ProtocolMajor == 1 && caps.ProtocolMinor >= 40 && caps.Capabilities.Contains("docker.files.bound-uploads") && caps.Capabilities.Contains("docker.files.upload-cancel-fence"));
             await Denied(async () => await client.InspectTargetAsync(location, [], Until()), StatusCode.PermissionDenied);
             await Denied(async () => await client.InspectTargetAsync(location, Headers("InspectTarget", location, legacy: true), Until()), StatusCode.PermissionDenied);
             var changed = location.Clone(); changed.Path = "work/unapproved.bin";
@@ -181,9 +183,24 @@ internal static class ContainerFileWriteProbe
             await Stage(cancelHeader);
             Require((await Action("Discard", cancelReference)).Upload.State == "Discarded");
             Require((await Action("Discard", cancelReference)).Upload.State == "Discarded" && (await Action("Inspect", cancelReference)).Upload.State == "Discarded");
+            Phase = "pre-receive-fence-and-delayed-stage-refusal";
+            var fencePlan = await Target(cancel);
+            var fenceHeader = Open(fencePlan, fenceOperation); var fenceReference = Reference(fenceHeader);
+            var prevented = await Action("Discard", fenceReference);
+            Require(prevented.Upload.State == "Prevented" && prevented.Upload.SizeBytes == 0 &&
+                prevented.Upload.Sha256 == Convert.ToHexString(SHA256.HashData([])) && prevented.Backup is null &&
+                !prevented.Upload.BindingCurrent && !prevented.Upload.PreviousRetained && prevented.Upload.Version.Length == 0);
+            Require((await Action("Inspect", fenceReference)).Upload.State == "Prevented" && (await Action("Discard", fenceReference)).Upload.Replayed);
+            using (var late = client.StageUpload(Headers("StageUpload", fenceHeader), Until(), lifetime.Token))
+            {
+                await late.RequestStream.WriteAsync(new() { Header = fenceHeader }, lifetime.Token);
+                await Denied(async () => await late.ResponseAsync, StatusCode.FailedPrecondition);
+            }
+            Require((await Action("Inspect", fenceReference)).Upload.State == "Prevented");
             Console.WriteLine(JsonSerializer.Serialize(new { installedContainerFileWriteRpc = "passed", revision, bytes = Size,
                 fiveMethods = true, bodyMethodReplayAndLegacyRefused = true, completeInstalledReadback = true,
                 hddOverwriteProof = true, explicitStagedDiscard = true, operationId = operation, cancelOperationId = cancelOperation,
+                fenceOperationId = fenceOperation, preReceiveFenceAndLateSenderRefused = true,
                 targetProof = plan.TargetProof, sha256 = digest, humanBffOrUi = false }));
         }
         finally { CryptographicOperations.ZeroMemory(key); }

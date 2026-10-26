@@ -13,11 +13,12 @@ namespace WhaleDeck.Infrastructure.Agent;
 
 public sealed partial class AgentGateway : IContainerFileWriteGateway
 {
-    private async Task<ContainerFileWriteService.ContainerFileWriteServiceClient> ContainerWrites(CancellationToken cancellationToken)
+    private async Task<ContainerFileWriteService.ContainerFileWriteServiceClient> ContainerWrites(CancellationToken cancellationToken, bool cancellationFence = false)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(TimeSpan.FromSeconds(5));
         var caps = await GetCapabilitiesAsync(timeout.Token);
-        if (caps.ProtocolMajor != 1 || caps.ProtocolMinor < 39 || !caps.Capabilities.Contains("docker.files.bound-uploads"))
+        if (caps.ProtocolMajor != 1 || caps.ProtocolMinor < 39 || !caps.Capabilities.Contains("docker.files.bound-uploads") ||
+            cancellationFence && (caps.ProtocolMinor < 40 || !caps.Capabilities.Contains("docker.files.upload-cancel-fence")))
             throw new RpcException(new(StatusCode.Unimplemented, "CONTAINER_UPLOAD_CAPABILITY_UNAVAILABLE"));
         return new(_channel);
     }
@@ -93,15 +94,16 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
 
     public Task<ContainerFileUploadReceiptDto> PublishContainerFileAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken) => ContainerUploadAction("Publish", request, cancellationToken);
     public Task<ContainerFileUploadReceiptDto> DiscardContainerUploadAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken) => ContainerUploadAction("Discard", request, cancellationToken);
+    public Task<ContainerFileUploadReceiptDto> PreventContainerUploadAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken) => ContainerUploadAction("Discard", request, cancellationToken, cancellationFence: true);
     public async Task<ContainerFileUploadReceiptDto?> InspectContainerUploadAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken)
     {
         try { return await ContainerUploadAction("Inspect", request, cancellationToken); }
         catch (RpcException error) when (error.StatusCode == StatusCode.NotFound && error.Status.Detail == "CONTAINER_UPLOAD_NOT_FOUND") { return null; }
     }
-    private async Task<ContainerFileUploadReceiptDto> ContainerUploadAction(string action, ContainerFileUploadReferenceDto request, CancellationToken cancellationToken)
+    private async Task<ContainerFileUploadReceiptDto> ContainerUploadAction(string action, ContainerFileUploadReferenceDto request, CancellationToken cancellationToken, bool cancellationFence = false)
     {
         ContainerFileUploadValidation.Reference(request);
-        var client = await ContainerWrites(cancellationToken);
+        var client = await ContainerWrites(cancellationToken, cancellationFence);
         var message = new ContainerUploadReference { ContainerId = request.ContainerId, InstanceId = request.InstanceId,
             OperationId = request.OperationId.ToString("N"), Owner = request.Owner, ExpectedTargetProof = request.ExpectedTargetProof, Context = UploadContext(request.Context) };
         using var call = action switch
@@ -111,7 +113,9 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
             "Discard" => client.DiscardAsync(message, ContainerWriteHeaders(action, message), deadline: DateTime.UtcNow.AddSeconds(650), cancellationToken: cancellationToken),
             _ => throw new ArgumentException("CONTAINER_UPLOAD_ACTION_INVALID")
         };
-        return UploadReceipt(await call, request);
+        var result = UploadReceipt(await call, request);
+        if (cancellationFence && result.Upload.State is not ("Prevented" or "Discarded" or "PublishDiscarded")) throw UploadOutput();
+        return result;
     }
 
     private static RequestContext UploadContext(ContainerFileWriteContextDto value) => new()
@@ -122,10 +126,11 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
         var receipt = value.Upload;
         if (value.ContainerId != request.ContainerId || value.InstanceId != request.InstanceId || value.TargetProof != request.ExpectedTargetProof ||
             receipt is null || receipt.OperationId != request.OperationId.ToString("N") || receipt.HddBackup is not null || receipt.IsInProgress || receipt.ResultCode.Length > 0 ||
-            receipt.SizeBytes is < 0 or > 1073741824L || receipt.State is not ("Receiving" or "Verified" or "Staged" or "Interrupted" or "Aborted" or "Discarded" or "Unknown" or
+            receipt.SizeBytes is < 0 or > 1073741824L || receipt.State is not ("Receiving" or "Verified" or "Staged" or "Interrupted" or "Aborted" or "Discarded" or "Prevented" or "Unknown" or
                 "PublishPreparing" or "PublishApplying" or "PublishInterrupted" or "Published" or "PublishDiscarding" or "PublishDiscarded") ||
             receipt.State != "Published" && (receipt.Version.Length != 0 || receipt.BindingCurrent || receipt.PreviousRetained)) throw UploadOutput();
         UploadOutputHash(receipt.Sha256);
+        if (receipt.State == "Prevented" && (receipt.SizeBytes != 0 || receipt.Sha256 != Convert.ToHexString(SHA256.HashData([])) || value.Backup is not null)) throw UploadOutput();
         if (receipt.State == "Published") UploadOutputHash(receipt.Version);
         FileHddBackupDto? backup = null;
         if (value.Backup is { } container)

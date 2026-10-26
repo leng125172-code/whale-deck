@@ -101,6 +101,9 @@ def execute(action, request, source, reader, files, docker, uploads, publisher):
             try: return snapshot(request, session, uploads, publisher)
             except FileNotFoundError: raise Rejected('CONTAINER_UPLOAD_PATH_NOT_FOUND') from None
         if action == 'stage': return uploads.stage(request, session, source)
+        if action == 'discard':
+            prevented = uploads.prevent_missing(scope, session, request['expectedTargetProof'])
+            if prevented is not None: return prevented
         with uploads.locked(scope['operationId']) as state:
             record = uploads.scoped(state, scope)
             if record['targetProof'] != request['expectedTargetProof']: raise Rejected('CONTAINER_UPLOAD_TARGET_CHANGED')
@@ -136,7 +139,7 @@ def main():
 def error_code(error):
     # No exception message or arbitrary code suffix is ever emitted.
     codes = {'CONTAINER_UPLOAD_' + suffix for suffix in (
-        'MODULE_UNSAFE', 'STATE_UNSAFE', 'BUSY', 'REQUEST_INVALID', 'ACTION_INVALID', 'INVOCATION_INVALID', 'TIMEOUT',
+        'MODULE_UNSAFE', 'STATE_UNSAFE', 'BUSY', 'REQUEST_INVALID', 'ACTION_INVALID', 'INVOCATION_INVALID', 'TIMEOUT', 'CANCELED',
         'SESSION_SCOPE_MISMATCH', 'SESSION_PROOF_INVALID', 'TARGET_CHANGED', 'PROTECTED', 'SIZE_LIMIT', 'VERSION_INVALID',
         'NOT_FOUND', 'PATH_NOT_FOUND', 'RECEIPT_LIMIT', 'RECEIPT_INVALID', 'SCOPE_MISMATCH', 'PARENT_VERSION_CONFLICT', 'VERSION_CONFLICT',
         'PAYLOAD_CHANGED', 'IDEMPOTENCY_CONFLICT', 'PREVIOUS_OPERATION_INCOMPLETE', 'CAPACITY_LOW', 'CHUNK_INVALID',

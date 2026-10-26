@@ -96,5 +96,46 @@ class WriteProbeCleanupTests(unittest.TestCase):
             with self.assertRaises(AssertionError): observer.cleanup_receipt(directory, operation, binding, body)
             self.assertTrue((directory/(operation+'.data')).exists())
 
+    @staticmethod
+    def fence(directory,operation,binding):
+        expected={key:value for key,value in binding.items() if key!='state'}
+        record={**expected,'schemaVersion':2,'resourceType':'ContainerUploadCancellation','state':'Prevented','createdAtUnixMs':1792990471366}
+        (directory/(operation+'.json')).write_text(json.dumps(record))
+        return expected
+
+    def test_quiescent_owned_fence_cleanup_keeps_unrelated_records(self):
+        with self.fixture('Discarded') as (directory,operation,binding,_,_):
+            expected=self.fence(directory,operation,binding)
+            outside=directory/'unrelated.json';outside.write_bytes(b'preserve')
+            observer.cleanup_fence(directory,operation,expected)
+            self.assertEqual({'unrelated.json'},{p.name for p in directory.iterdir()})
+            self.assertEqual(outside.read_bytes(),b'preserve')
+
+    def test_fence_cleanup_refuses_extra_payload_and_preserves_everything(self):
+        with self.fixture('Discarded') as (directory,operation,binding,_,_):
+            expected=self.fence(directory,operation,binding)
+            (directory/(operation+'.partial')).write_bytes(b'unknown')
+            before={p.name:p.read_bytes() for p in directory.iterdir()}
+            with self.assertRaises(AssertionError):observer.cleanup_fence(directory,operation,expected)
+            self.assertEqual(before,{p.name:p.read_bytes() for p in directory.iterdir()})
+
+    def test_fence_cleanup_refuses_foreign_scope_and_fake_schema(self):
+        with self.fixture('Discarded') as (directory,operation,binding,_,_):
+            expected=self.fence(directory,operation,binding)
+            with self.assertRaises(AssertionError):observer.cleanup_fence(directory,operation,{**expected,'owner':'C'*64})
+            metadata=directory/(operation+'.json');original=json.loads(metadata.read_bytes())
+            for change in ({'schemaVersion':1},{'state':'Discarded'},{'createdAtUnixMs':True},{'resourceType':'ContainerFile'}):
+                metadata.write_text(json.dumps({**original,**change}))
+                with self.subTest(change=change),self.assertRaises(AssertionError):observer.cleanup_fence(directory,operation,expected)
+                self.assertTrue(metadata.exists())
+
+    def test_live_fence_owner_lock_blocks_qa_cleanup(self):
+        with self.fixture('Discarded') as (directory,operation,binding,_,_):
+            expected=self.fence(directory,operation,binding)
+            with (directory/(operation+'.lock')).open('rb') as held:
+                fcntl.flock(held,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                with self.assertRaises(BlockingIOError):observer.cleanup_fence(directory,operation,expected)
+                self.assertTrue((directory/(operation+'.json')).exists())
+
 
 if __name__ == '__main__': unittest.main()

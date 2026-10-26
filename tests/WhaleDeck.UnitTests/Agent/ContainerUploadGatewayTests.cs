@@ -32,6 +32,37 @@ public sealed class ContainerUploadGatewayTests
         bytes.Length, Convert.ToHexString(SHA256.HashData(bytes)), new('D', 64), new('E', 64), Reference.ExpectedTargetProof, Context);
 
     [Theory]
+    [InlineData(1U, 39U, true)][InlineData(1U, 40U, false)][InlineData(2U, 40U, true)]
+    public async Task PreReceiveCancellationRequiresItsOwnNegotiatedCapability(uint major, uint minor, bool fence)
+    {
+        await using var harness = await Harness.Start(major, minor, cancellationFence: fence);
+        var error = await Assert.ThrowsAsync<RpcException>(() => harness.Gateway.PreventContainerUploadAsync(Reference, CancellationToken.None));
+        Assert.Equal(StatusCode.Unimplemented, error.StatusCode); Assert.Empty(harness.Calls);
+    }
+
+    [Fact]
+    public async Task PreventedReceiptUsesTheSameBodyBoundDiscardMethodWithoutClaimingUploadedBytes()
+    {
+        await using var harness = await Harness.Start(minor: 40, cancellationFence: true);
+        harness.ReturnPrevented = true;
+        var result = await harness.Gateway.PreventContainerUploadAsync(Reference, CancellationToken.None);
+        Assert.Equal("Prevented", result.Upload.State); Assert.Equal(0, result.Upload.SizeBytes);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData([])), result.Upload.Sha256);
+        Assert.False(result.Upload.BindingCurrent); Assert.False(result.Upload.PreviousRetained); Assert.Null(result.Upload.HddBackup);
+        var call = Assert.Single(harness.Calls); Assert.Equal("Discard", call.Action); harness.AssertSignature(call);
+    }
+
+    [Theory]
+    [InlineData("size")][InlineData("digest")][InlineData("backup")][InlineData("version")][InlineData("state")]
+    public async Task InvalidPreventedFactsNeverBecomePositiveCancellationProof(string variant)
+    {
+        await using var harness = await Harness.Start(minor: 40, cancellationFence: true);
+        harness.ReturnPrevented = true; harness.InvalidFence = variant;
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Gateway.PreventContainerUploadAsync(Reference, CancellationToken.None));
+        Assert.Equal("CONTAINER_UPLOAD_OUTPUT_INVALID", error.Message);
+    }
+
+    [Theory]
     [InlineData(1U, 38U, true)][InlineData(0U, 39U, true)]
     [InlineData(2U, 39U, true)][InlineData(1U, 39U, false)]
     public async Task OldMinorUnknownMajorOrMissingIndependentCapabilityRefusesBeforeWriteRequest(uint major, uint minor, bool capability)
@@ -228,6 +259,7 @@ public sealed class ContainerUploadGatewayTests
         public uint Major { get; private init; }
         public uint Minor { get; private init; }
         public bool Capability { get; private init; }
+        public bool CancellationFence { get; private init; }
         public ConcurrentQueue<Captured> Calls { get; } = new();
         public ConcurrentQueue<Rpc.ContainerUploadFrame> Frames { get; } = new();
         public TaskCompletionSource<bool> HeaderSeen { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -235,10 +267,12 @@ public sealed class ContainerUploadGatewayTests
         public bool UploadReachedEof { get; set; }
         public Status? InspectFailure { get; set; }
         public bool InspectWithoutBackup { get; set; }
+        public bool ReturnPrevented { get; set; }
+        public string? InvalidFence { get; set; }
 
-        public static async Task<Harness> Start(uint major = 1, uint minor = 39, bool capability = true)
+        public static async Task<Harness> Start(uint major = 1, uint minor = 39, bool capability = true, bool cancellationFence = false)
         {
-            var harness = new Harness { Major = major, Minor = minor, Capability = capability };
+            var harness = new Harness { Major = major, Minor = minor, Capability = capability, CancellationFence = cancellationFence };
             if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Private UDS transport fixture requires Linux.");
             Directory.CreateDirectory(harness._directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             var socket = Path.Combine(harness._directory, "agent.sock");
@@ -317,6 +351,7 @@ public sealed class ContainerUploadGatewayTests
         {
             var result = new Rpc.CapabilitiesResponse { ProtocolMajor = harness.Major, ProtocolMinor = harness.Minor };
             if (harness.Capability) result.Capabilities.Add("docker.files.bound-uploads");
+            if (harness.CancellationFence) result.Capabilities.Add("docker.files.upload-cancel-fence");
             return Task.FromResult(result);
         }
     }
@@ -369,6 +404,16 @@ public sealed class ContainerUploadGatewayTests
         public override Task<Rpc.ContainerUploadReceipt> Discard(Rpc.ContainerUploadReference request, ServerCallContext context)
         {
             harness.Capture("Discard", request.Clone(), context);
+            if (harness.ReturnPrevented)
+            {
+                var result = Receipt(request, "Prevented", size: 0, digest: Convert.ToHexString(SHA256.HashData([])));
+                if (harness.InvalidFence == "size") result.Upload.SizeBytes = 1;
+                if (harness.InvalidFence == "digest") result.Upload.Sha256 = new('A', 64);
+                if (harness.InvalidFence == "backup") result.Backup = Receipt(request, "Published").Backup;
+                if (harness.InvalidFence == "version") result.Upload.Version = new('A', 64);
+                if (harness.InvalidFence == "state") result.Upload.State = "Staged";
+                return Task.FromResult(result);
+            }
             return Task.FromResult(Receipt(request, "Discarded"));
         }
 

@@ -220,6 +220,7 @@ class ContainerPublisher:
         with self.u.locked(request['operationId']) as state:
             record = self.u.scoped(state, request)
             self.u.validate_target_proof(record, session)
+            if record['state'] == 'Prevented': self.u.reject('CANCELED')
             fresh = record['state'] == 'Staged'
             if fresh:
                 with self.parent(record, session) as parent: self.writable(record, session, parent)

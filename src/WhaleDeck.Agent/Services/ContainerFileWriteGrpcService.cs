@@ -121,10 +121,12 @@ internal static class ContainerUploadPolicy
             PreviousRetained = value.TryGetProperty("previousRetained", out var previous) && previous.GetBoolean(),
             BindingCurrent = value.TryGetProperty("bindingCurrent", out var binding) && binding.GetBoolean(),
             Replayed = value.GetProperty("replayed").GetBoolean() };
-        if (receipt.State is not ("Receiving" or "Verified" or "Staged" or "Interrupted" or "Aborted" or "Discarded" or "Unknown" or
+        if (receipt.State is not ("Receiving" or "Verified" or "Staged" or "Interrupted" or "Aborted" or "Discarded" or "Prevented" or "Unknown" or
                 "PublishPreparing" or "PublishApplying" or "PublishInterrupted" or "Published" or "PublishDiscarding" or "PublishDiscarded") ||
             receipt.SizeBytes is < 0 or > FileTransferPolicy.MaximumBytes || receipt.State != "Published" && (receipt.BindingCurrent || receipt.PreviousRetained || receipt.Version.Length != 0)) throw Invalid();
         OutputHash(receipt.Sha256);
+        if (receipt.State == "Prevented" && (receipt.SizeBytes != 0 || receipt.Sha256 != Convert.ToHexString(SHA256.HashData([])) ||
+            value.TryGetProperty("backupCapture", out var canceledBackup) && canceledBackup.ValueKind != JsonValueKind.Null)) throw Invalid();
         if (receipt.State == "Published") OutputHash(receipt.Version);
         if (expected is not null && (receipt.State != "Staged" || receipt.SizeBytes != expected.SizeBytes || receipt.Sha256 != expected.Sha256)) throw Invalid();
         var result = new ContainerUploadReceipt { ContainerId = reference.ContainerId, InstanceId = reference.InstanceId,
@@ -161,6 +163,7 @@ internal static class ContainerUploadPolicy
             "CONTAINER_UPLOAD_TIMEOUT" or "CONTAINER_UPLOAD_PUBLISH_TIMEOUT" or "FILES_INPUT_TIMEOUT" => StatusCode.DeadlineExceeded,
             "CONTAINER_UPLOAD_NOT_FOUND" or "CONTAINER_UPLOAD_PATH_NOT_FOUND" => StatusCode.NotFound,
             "CONTAINER_UPLOAD_TARGET_CHANGED" or "CONTAINER_FILES_INSTANCE_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or "CONTAINER_FILES_TARGET_CHANGED" or
+                "CONTAINER_UPLOAD_CANCELED" or
                 "CONTAINER_NOT_RUNNING" or "CONTAINER_UPLOAD_PREVIOUS_OPERATION_INCOMPLETE" or "CONTAINER_UPLOAD_ALREADY_PUBLISHED" or
                 "CONTAINER_UPLOAD_STAGED_REQUIRED" or "CONTAINER_UPLOAD_PAYLOAD_CHANGED" or "CONTAINER_UPLOAD_BACKUP_BINDING_CHANGED" or
                 "CONTAINER_UPLOAD_PUBLISH_PARENT_CHANGED" or "CONTAINER_UPLOAD_PUBLISH_OBJECT_CHANGED" or "CONTAINER_UPLOAD_PUBLISH_PRIVATE_CHANGED" or

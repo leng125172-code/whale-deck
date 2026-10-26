@@ -5,6 +5,7 @@ Does not install a helper or prove a systemd/UDS/product authorization boundary.
 from contextlib import contextmanager
 import errno
 import hashlib
+import json
 import os
 from pathlib import Path
 import signal
@@ -107,6 +108,102 @@ class LinuxContainerWriteTransportTests(unittest.TestCase):
         reference = {**scope, 'expectedTargetProof': target['targetProof']}
         self.assertEqual(self.execute('discard', reference)['state'], 'Discarded')
         self.assertEqual(self.fixture.leaf.read_bytes(), self.fixture.original)
+
+    def new_reference(self):
+        return {**self.session.request, 'operationId': uuid.uuid4().hex, 'owner': staging.OWNER,
+            'expectedTargetProof': self.u.target_proof(self.session)}
+
+    def delayed_stage(self, reference):
+        plan = self.execute('target', self.location)
+        return {**self.location, 'operationId': reference['operationId'], 'owner': reference['owner'],
+            'expectedTargetProof': reference['expectedTargetProof'], 'expectedVersion': plan['expectedVersion'],
+            'expectedParentVersion': plan['expectedParentVersion'], 'sizeBytes': len(self.fixture.replacement),
+            'sha256': hashlib.sha256(self.fixture.replacement).hexdigest().upper()}
+
+    def test_discard_before_first_byte_persists_a_distinct_empty_receipt_and_refuses_delayed_stage(self):
+        reference=self.new_reference(); request=self.delayed_stage(reference)
+        before=self.fixture.leaf.read_bytes(),self.r.fingerprint(self.fixture.leaf.stat())
+        receipt=self.execute('discard',reference)
+        self.assertEqual(receipt['state'],'Prevented');self.assertEqual(receipt['sizeBytes'],0)
+        self.assertEqual(receipt['sha256'],hashlib.sha256(b'').hexdigest().upper());self.assertIsNone(receipt['backupCapture'])
+        self.assertEqual(self.execute('inspect',reference)['state'],'Prevented')
+        self.assertTrue(self.execute('discard',reference)['replayed'])
+        with self.assertRaisesRegex(self.r.Rejected,'CANCELED'):self.execute('stage',request,Mock())
+        with self.assertRaisesRegex(self.r.Rejected,'CANCELED'):self.execute('publish',reference)
+        self.assertEqual(before,(self.fixture.leaf.read_bytes(),self.r.fingerprint(self.fixture.leaf.stat())))
+        names={p.name for p in self.fixture.state.iterdir()}
+        self.assertEqual({reference['operationId']+'.json',reference['operationId']+'.lock'},
+            names-{'upload-slot-0.lock','container-capture.lock'})
+        self.assertFalse(list(self.fixture.state.glob('*.partial'))+list(self.fixture.state.glob('*.data')))
+
+    def test_foreign_owner_and_target_cannot_rewrite_or_reuse_fence(self):
+        reference=self.new_reference();self.execute('discard',reference)
+        path=self.fixture.state/(reference['operationId']+'.json');before=path.read_bytes()
+        for change,code in (({'owner':'C'*64},'SCOPE_MISMATCH'),({'expectedTargetProof':'F'*64},'TARGET_CHANGED')):
+            with self.subTest(change=change), self.assertRaisesRegex((self.r.Rejected,driver.Rejected),code):self.execute('discard',{**reference,**change})
+            self.assertEqual(before,path.read_bytes())
+
+    def test_incorrect_target_cannot_create_a_cancellation_record(self):
+        reference={**self.new_reference(),'expectedTargetProof':'F'*64}
+        with self.assertRaisesRegex(self.r.Rejected,'TARGET_CHANGED'):self.execute('discard',reference)
+        self.assertEqual([],list(self.fixture.state.iterdir()))
+
+    def test_already_staged_data_requires_actual_discard_instead_of_a_synthetic_fence(self):
+        _,scope=self.fixture.stage();reference={**scope,'expectedTargetProof':self.u.target_proof(self.session)}
+        self.assertEqual(self.execute('discard',reference)['state'],'Discarded')
+        record=json.loads((self.fixture.state/(scope['operationId']+'.json')).read_bytes())
+        self.assertEqual(record['schemaVersion'],1)
+        self.assertFalse((self.fixture.state/(scope['operationId']+'.data')).exists())
+
+    def test_live_receiver_lock_cannot_be_reported_as_prevented_and_sigkill_releases_it(self):
+        reference=self.new_reference();ready,writer=os.pipe();child=os.fork()
+        if child==0:
+            os.close(ready)
+            try:
+                with self.u.locked(reference['operationId'],allow_new=True):os.write(writer,b'1');signal.pause()
+            except BaseException:os._exit(2)
+            os._exit(3)
+        os.close(writer)
+        try:
+            import select
+            self.assertTrue(select.select([ready],[],[],5)[0]);self.assertEqual(os.read(ready,1),b'1')
+            with self.assertRaisesRegex(self.r.Rejected,'BUSY'):self.execute('discard',reference)
+            self.assertFalse((self.fixture.state/(reference['operationId']+'.json')).exists())
+            os.kill(child,signal.SIGKILL);_,status=os.waitpid(child,0);child=None
+            self.assertTrue(os.WIFSIGNALED(status))
+            self.assertEqual(self.execute('discard',reference)['state'],'Prevented')
+        finally:
+            os.close(ready)
+            if child is not None:os.kill(child,signal.SIGKILL);os.waitpid(child,0)
+
+    def test_sigkill_after_durable_fence_is_recovered_by_a_new_engine_and_delayed_sender_is_refused(self):
+        reference=self.new_reference();request=self.delayed_stage(reference);child=os.fork()
+        if child==0:
+            saved=self.f.save_receipt
+            def kill_after_save(*args):saved(*args);os.kill(os.getpid(),signal.SIGKILL)
+            self.f.save_receipt=kill_after_save
+            try:self.execute('discard',reference)
+            except BaseException:os._exit(2)
+            os._exit(3)
+        _,status=os.waitpid(child,0);self.assertTrue(os.WIFSIGNALED(status));self.assertEqual(os.WTERMSIG(status),signal.SIGKILL)
+        fresh=staging.uploads.ContainerUploads(self.r,self.f,self.fixture.state)
+        self.assertEqual(fresh.inspect({key:reference[key] for key in ('containerId','instanceId','operationId','owner')},self.session)['state'],'Prevented')
+        with self.assertRaisesRegex(self.r.Rejected,'CANCELED'):fresh.stage(request,self.session,Mock())
+        self.assertEqual(self.fixture.leaf.read_bytes(),self.fixture.original)
+
+    def test_malformed_or_hardlinked_fence_is_not_positive_cancellation_proof(self):
+        reference=self.new_reference();self.execute('discard',reference);path=self.fixture.state/(reference['operationId']+'.json')
+        original=path.read_bytes()
+        for extra in ({'state':'Discarded'},{'createdAtUnixMs':True},{'unexpected':'private'},{'resourceType':'ContainerFile'}):
+            path.write_text(json.dumps({**json.loads(original),**extra}))
+            with self.subTest(extra=extra),self.assertRaisesRegex(self.r.Rejected,'RECEIPT_INVALID'):self.execute('inspect',reference)
+        path.write_bytes(original);os.link(path,self.fixture.state/'alias')
+        with self.assertRaisesRegex(self.r.Rejected,'RECEIPT_INVALID'):self.execute('inspect',reference)
+
+    def test_cancellation_records_consume_the_same_finite_receipt_budget(self):
+        self.u.MAX_RECEIPTS=1
+        self.execute('discard',self.new_reference())
+        with self.assertRaisesRegex(self.r.Rejected,'RECEIPT_LIMIT'):self.execute('discard',self.new_reference())
 
     def test_two_kernel_transport_slots_and_actual_sigkill_release(self):
         ready, writer = os.pipe()

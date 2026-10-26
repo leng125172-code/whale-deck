@@ -83,6 +83,27 @@ def cleanup_receipt(directory, operation, expected, body):
     finally: os.close(descriptor)
 
 
+def cleanup_fence(directory, operation, expected):
+    """QA-only cleanup after the sole known synthetic sender has terminated."""
+    assert re.fullmatch('[a-f0-9]{32}', operation)
+    assert set(expected)=={'containerId','instanceId','operationId','owner','targetProof'} and expected['operationId']==operation and expected['owner']=='B'*64
+    assert stat.S_IMODE(trusted(directory,True).st_mode)==0o700
+    lock=directory/(operation+'.lock');metadata=directory/(operation+'.json')
+    assert stat.S_IMODE(trusted(lock).st_mode)==0o600 and lock.stat().st_size==0
+    descriptor=os.open(lock,os.O_RDWR|os.O_NOFOLLOW)
+    try:
+        fcntl.flock(descriptor,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        assert stat.S_IMODE(trusted(metadata).st_mode)==0o600 and metadata.stat().st_size<=16384
+        saved=json.loads(metadata.read_bytes())
+        assert set(saved)==set(expected)|{'schemaVersion','resourceType','state','createdAtUnixMs'}
+        assert type(saved['schemaVersion']) is int and saved['schemaVersion']==2 and saved['state']=='Prevented' and saved['resourceType']=='ContainerUploadCancellation'
+        assert all(saved[key]==value for key,value in expected.items())
+        assert type(saved['createdAtUnixMs']) is int and 0<=saved['createdAtUnixMs']<=253402300799999
+        assert {p.name for p in directory.iterdir() if p.name.startswith(operation+'.')}=={lock.name,metadata.name}
+        metadata.unlink();lock.unlink()
+    finally:os.close(descriptor)
+
+
 def main():
     global PHASE
     assert os.geteuid() == 0 and len(sys.argv) == 3
@@ -107,8 +128,8 @@ def main():
     assert stat.S_IMODE(trusted(STATE, True).st_mode) == 0o700
     folder = REPOSITORY / 'deploy/artifacts' / ('container-write-evidence-' + uuid.uuid4().hex)
     folder.mkdir(mode=0o700)
-    first, second = uuid.uuid4().hex, uuid.uuid4().hex
-    assert not any(p.name.startswith((first + '.', second + '.')) for p in STATE.iterdir())
+    first, second, third = uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex
+    assert not any(p.name.startswith((first + '.', second + '.', third + '.')) for p in STATE.iterdir())
     payload = (bytes(range(251)) * ((owned.common.SIZE + 250) // 251))[:owned.common.SIZE]
     backup_module = load(HOST / 'whaledeck-file-backups.py', 'installed_write_backup_observer')
     file_module = load(HOST / 'whaledeck-files.py', 'installed_write_file_observer')
@@ -123,7 +144,7 @@ def main():
         core = json.loads(owned.common.command(['docker', 'inspect', 'whaledeck-api']))[0]
         request = {'revision': revision, 'containerId': fixture['identifier'], 'instanceId': instance,
             'coreId': core['Id'], 'coreInstanceId': str(core['State']['Pid']) + ':' + core['State']['StartedAt'],
-            'operationId': first, 'cancelOperationId': second, 'originalSha256': hashlib.sha256(fixture['old']).hexdigest().upper()}
+            'operationId': first, 'cancelOperationId': second, 'fenceOperationId': third, 'originalSha256': hashlib.sha256(fixture['old']).hexdigest().upper()}
         evidence(folder, 'baseline.json', {**request, 'hostRevision': host_revision, 'ownedFolder': str(fixture['folder'])})
         before = (fixture['folder'] / 'original.bin').stat()
         PHASE = 'installed-signed-uds'
@@ -142,8 +163,9 @@ def main():
             raise AssertionError('installed UDS probe failed')
         result = json.loads(process.stdout); evidence(folder, 'rpc.json', result)
         assert result['installedContainerFileWriteRpc'] == 'passed' and result['revision'] == revision and result['bytes'] == len(payload)
-        assert all(result[key] is True for key in ('fiveMethods', 'bodyMethodReplayAndLegacyRefused', 'completeInstalledReadback', 'hddOverwriteProof', 'explicitStagedDiscard'))
+        assert all(result[key] is True for key in ('fiveMethods', 'bodyMethodReplayAndLegacyRefused', 'completeInstalledReadback', 'hddOverwriteProof', 'explicitStagedDiscard', 'preReceiveFenceAndLateSenderRefused'))
         assert result['humanBffOrUi'] is False and (result['operationId'], result['cancelOperationId']) == (first, second)
+        assert result['fenceOperationId']==third
         PHASE = 'independent-full-output-and-history'
         output = fixture['folder'] / 'original.bin'; retained = fixture['folder'] / '.whaledeck-container-files-v1' / (first + '.upload')
         assert output.read_bytes() == payload and (output.stat().st_uid, output.stat().st_gid, stat.S_IMODE(output.stat().st_mode)) == (1000, 1000, 0o640)
@@ -165,9 +187,10 @@ def main():
         PHASE = 'precise-owned-receipt-and-history-cleanup'
         cleanup_receipt(STATE, first, {**binding, 'operationId': first, 'state': 'Published'}, payload)
         cleanup_receipt(STATE, second, {**binding, 'operationId': second, 'state': 'Discarded'}, payload)
+        cleanup_fence(STATE, third, {**binding, 'operationId':third})
         archive.unlink(); metadata.unlink()
     print(json.dumps({'installedContainerFileWriter': 'passed', 'hostRevision': host_revision, 'probeRevision': revision, 'bytes': len(payload),
-        'fullUdsAndIndependentFilesystemProof': True, 'ownedFixtureReceiptAndHistoryCleaned': True, 'humanBffOrUi': False}), flush=True)
+        'fullUdsAndIndependentFilesystemProof': True, 'ownedFixtureReceiptAndHistoryCleaned': True, 'preReceiveFenceAndLateSenderRefused': True, 'humanBffOrUi': False}), flush=True)
 
 
 if __name__ == '__main__':

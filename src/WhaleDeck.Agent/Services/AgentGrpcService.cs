@@ -12,7 +12,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = 39,
+            ProtocolMinor = 40,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
@@ -38,6 +38,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
             "docker.terminal.exec",
             "docker.files.read",
             "docker.files.bound-uploads",
+            "docker.files.upload-cancel-fence",
             "notifications.private-configuration",
             "docker.usage",
             "host.load-average",
