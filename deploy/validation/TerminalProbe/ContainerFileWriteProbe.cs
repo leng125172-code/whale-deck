@@ -125,10 +125,12 @@ internal static class ContainerFileWriteProbe
                     staged.ContainerId == location.ContainerId && staged.InstanceId == location.InstanceId && staged.TargetProof == header.ExpectedTargetProof);
                 return staged;
             }
-            Phase = "complete-stage-and-atomic-publication";
+            Phase = "stage-complete-payload";
             var header = Open(plan, operation); var reference = Reference(header);
             Require((await Stage(header)).Backup is null);
+            Phase = "inspect-staged-payload";
             Require((await Action("Inspect", reference)).Upload.State == "Staged");
+            Phase = "publish-staged-payload";
             var published = await Action("Publish", reference);
             Require(published.Upload.State == "Published" && published.Upload.BindingCurrent && published.Upload.PreviousRetained &&
                 published.Upload.SizeBytes == Size && published.Upload.Sha256 == digest && published.Backup is not null &&
@@ -136,13 +138,18 @@ internal static class ContainerFileWriteProbe
                 published.Backup.TargetProof == plan.TargetProof && published.Backup.Proof.OperationId == operation &&
                 published.Backup.Proof.SourceVersion == plan.ExpectedVersion && published.Backup.Proof.SizeBytes == Size &&
                 published.Backup.Proof.Sha256 == fixture.GetProperty("originalSha256").GetString());
+            Phase = "inspect-and-replay-published-payload";
             var replayed = await Action("Publish", reference);
             Require(replayed.Upload.State == "Published" && replayed.Upload.Replayed && (await Action("Inspect", reference)).Upload.BindingCurrent);
+            Phase = "discard-published-refused";
             await Denied(async () => await Action("Discard", reference), StatusCode.FailedPrecondition);
             var wrong = reference.Clone(); wrong.Owner = new('C', 64);
+            Phase = "foreign-owner-inspect-refused";
             await Denied(async () => await Action("Inspect", wrong), StatusCode.PermissionDenied);
             wrong = reference.Clone(); wrong.ExpectedTargetProof = new('F', 64);
+            Phase = "changed-target-proof-inspect-refused";
             await Denied(async () => await Action("Inspect", wrong), StatusCode.FailedPrecondition);
+            Phase = "wrong-method-discard-refused";
             await Denied(async () => await client.DiscardAsync(reference, Headers("Publish", reference), Until()), StatusCode.PermissionDenied);
 
             Phase = "complete-installed-readback";

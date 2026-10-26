@@ -122,6 +122,25 @@ public sealed class ContainerUploadPolicyTests
         Assert.Throws<InvalidOperationException>(() => ContainerUploadPolicy.Receipt(value, wrong));
     }
 
+    [Fact]
+    public void PublishedReceiptPreservesContainerBoundHddOriginalProof()
+    {
+        var reference = Reference();
+        var value = JsonSerializer.SerializeToElement(new { containerId = Id, instanceId = Instance, operationId = reference.OperationId,
+            targetProof = Hash, state = "Published", sizeBytes = 2097159, sha256 = Hash, version = new string('B', 64),
+            previousRetained = true, bindingCurrent = true, replayed = true,
+            backupCapture = new { operationId = reference.OperationId, storageId = "database-platform.backup.hdd", sourceVersion = new string('C', 64),
+                sizeBytes = 2097159, sha256 = new string('D', 64), createdAtUnixMs = 1792990471366L, differentSourceDevice = false,
+                resourceType = "ContainerFile", containerId = Id, instanceId = Instance, targetProof = Hash } });
+        var receipt = ContainerUploadPolicy.Receipt(value, reference);
+        Assert.Equal("Published", receipt.Upload.State); Assert.True(receipt.Upload.Replayed);
+        Assert.True(receipt.Upload.PreviousRetained); Assert.True(receipt.Upload.BindingCurrent);
+        Assert.NotNull(receipt.Backup); Assert.Null(receipt.Upload.HddBackup);
+        Assert.Equal(reference.OperationId, receipt.Backup.Proof.OperationId);
+        Assert.Equal(new string('C', 64), receipt.Backup.Proof.SourceVersion);
+        Assert.Equal(2097159, receipt.Backup.Proof.SizeBytes);
+    }
+
     [Theory]
     [InlineData("state")][InlineData("hash")][InlineData("published")][InlineData("binding")][InlineData("size")]
     public void UnsafeHelperReceiptsNeverBecomeSuccess(string variant)
