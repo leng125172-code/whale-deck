@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_WRITE_RPC.md",
-  "nextStep": "按59项继续，17项移出不算完成。ac72b41/minor39与维护入口已覆盖，独立签名UDS五方法/完整2MiB+7发布读回/HDD原件/权限拒绝/暂存取消通过；修复collect清理竞态，Release、2411 Unit/160 Integration（6原生夹具跳过）、154容器Linux-root通过。自有成功/失败载荷精确清理，11核心healthy。下一步永久容器上传意图/迁移、任务租约/共享锁/Outbox/当前权限审计、BFF上传编辑/历史恢复和Unknown接管，补真实桌面手机及活流断线撤权；其余保留任务继续。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_CANCEL_FENCE.md",
+  "nextStep": "按59项继续，17项移出不算完成。136b8a0/minor40已覆盖：首字节前持久Prevented、真实UDS查询/重放及延迟首帧精确拒绝、完整2MiB+7发布读回/HDD原件通过；2441 Unit/160 Integration（6原生夹具跳过）、166 Linux容器检查通过，载荷/回执精确清理，11核心healthy。接永久容器上传意图/迁移、Job/Outbox/租约/共享写屏障、可撤销登录存活索引与当前权限/审计，再接BFF上传编辑/历史恢复/Unknown接管和真实桌面手机；未开放业务写入。"
 }

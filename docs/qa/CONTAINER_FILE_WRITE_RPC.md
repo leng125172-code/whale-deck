@@ -2,6 +2,8 @@
 
 日期：2026-10-26。当前单工作站59项范围。最新签收源码、SDK、真实systemd profile和下述安装态Agent子门禁；永久业务任务和人类身份/WebUI仍未接通。
 
+后续136b8a0/minor40已覆盖并签收首字节前持久取消标记、跨调用查询/重放及延迟首帧精确拒绝，2441 Unit/160 Integration（6原生夹具跳过）、166容器Linux-root通过；本批自有载荷/回执为零，11核心healthy。[取消边界及后续业务约束](CONTAINER_FILE_CANCEL_FENCE.md)。下方ac72b41为此前独立写入传输的证据，不重复计数。
+
 ## ac72b41 安装态签收
 
 冻结`ac72b419c9d4539f5a9b134de16c799d29615c0b`构建并覆盖安装Agent和MaintenanceHost，minor39、固定helper及源码逐字节核对通过；两宿主程序实际build-info对应该提交，运行库和PKCS均10.0.13。API/Worker/Gateway及八个基础容器未更新，11个核心容器全部healthy。宿主systemd/权限/UDS/受限helper/Docker、当前动态IPv4与回环入口校验通过；本轮没有Whale Deck镜像构建。
