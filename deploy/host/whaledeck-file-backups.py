@@ -21,8 +21,11 @@ STORAGE = 'database-platform.backup.hdd'
 
 
 class FileBackups:
-    def __init__(self, files):
+    def __init__(self, files, *, namespace=None):
         self.f = files
+        if namespace not in (None, 'container-files-v1'):
+            self.reject('FILES_BACKUP_METADATA_UNSAFE')
+        self.namespace = namespace
 
     def reject(self, code='FILES_BACKUP_UNAVAILABLE'):
         raise self.f.Rejected(code)
@@ -125,7 +128,20 @@ class FileBackups:
             info = os.fstat(descriptor)
             if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700: self.reject('FILES_BACKUP_DIRECTORY_UNSAFE')
             self.attest(configuration, descriptor)
-            yield configuration, descriptor
+            if self.namespace is None:
+                yield configuration, descriptor
+            else:
+                # A fixed resource namespace keeps host history readers and
+                # container captures independent. Never accept a user path.
+                try: os.mkdir(self.namespace, 0o700, dir_fd=descriptor); os.fsync(descriptor)
+                except FileExistsError: pass
+                child = self.f.open_at(descriptor, self.namespace, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    info = os.fstat(child)
+                    if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700: self.reject('FILES_BACKUP_DIRECTORY_UNSAFE')
+                    self.attest(configuration, child)
+                    yield configuration, child
+                finally: os.close(child)
         finally: os.close(descriptor)
 
     def metadata(self, record, original):
@@ -151,17 +167,25 @@ class FileBackups:
         reserve = max(configuration['reserveBytes'], usage.f_blocks * usage.f_frsize * configuration['reservePercent'] // 100) + 4 * self.f.MAX_BYTES
         if usage.f_bavail * usage.f_frsize < size + reserve: self.reject('FILES_BACKUP_CAPACITY_REQUIRED')
 
-    def ensure(self, record, parent, leaf, capture_kind='Overwrite'):
+    def ensure(self, record, parent, leaf, capture_kind='Overwrite', *, source_binding=None):
         """No target namespace publication until this returns a verified copy.
 
         Preparing without a complete data object is explicit incomplete state,
         not permission to truncate/re-copy it or overwrite the source again.
         """
-        if capture_kind not in ('Overwrite', 'Trash'): self.reject('FILES_BACKUP_METADATA_UNSAFE')
+        # A trusted in-process adapter may bind a container source. It changes
+        # source identity only, never HDD policy, paths, capacity or durability.
+        version = self.f.version if source_binding is None else source_binding.version
+        validate = (lambda: None) if source_binding is None else source_binding.validate
+        metadata = self.metadata if source_binding is None else source_binding.metadata
+        if capture_kind not in ('Overwrite', 'Trash') or source_binding is not None and capture_kind != 'Overwrite' or \
+                (source_binding is None) != (self.namespace is None):
+            self.reject('FILES_BACKUP_METADATA_UNSAFE')
+        validate()
         original = self.f.current(parent, leaf)
-        if original is None or self.f.version(original) != record['expectedVersion'] or self.f.publication_identity(original) != record['originalIdentity']:
+        if original is None or version(original) != record['expectedVersion'] or self.f.publication_identity(original) != record['originalIdentity']:
             self.reject('FILES_VERSION_CONFLICT')
-        expected = self.metadata(record, original); operation = expected['operationId']
+        expected = metadata(record, original); operation = expected['operationId']
         with self.target() as (configuration, target):
             try: saved = self.read_json(target, operation + '.json')
             except FileNotFoundError: saved = None
@@ -171,6 +195,7 @@ class FileBackups:
                     self.reject('FILES_BACKUP_IDEMPOTENCY_CONFLICT')
                 try: self.verify_data(target, operation, expected)
                 except FileNotFoundError: self.reject('FILES_BACKUP_INCOMPLETE')
+                validate()
                 # Observed bytes after restart can complete metadata, never copy
                 # or publish the source as part of recovery.
                 if saved['state'] != 'Verified':
@@ -181,7 +206,7 @@ class FileBackups:
             pending = operation + '.partial'; output = None
             try:
                 before = self.f.regular(source)
-                if self.f.version(before) != record['expectedVersion']: self.reject('FILES_VERSION_CONFLICT')
+                if version(before) != record['expectedVersion']: self.reject('FILES_VERSION_CONFLICT')
                 created = time.time_ns() // 1000000
                 if not 0 <= created <= 253402300799999: self.reject('FILES_BACKUP_METADATA_UNSAFE')
                 try: output = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=target)
@@ -192,6 +217,7 @@ class FileBackups:
                 self.f.save_receipt(target, operation, saved)
                 checksum = hashlib.sha256(); count = 0
                 while count < before.st_size:
+                    validate()
                     data = os.read(source, min(self.f.CHUNK, before.st_size - count))
                     if not data: self.reject('FILES_READ_CHANGED')
                     checksum.update(data); count += len(data); view = memoryview(data)
@@ -200,13 +226,14 @@ class FileBackups:
                         if written <= 0: self.reject('FILES_BACKUP_WRITE_FAILED')
                         view = view[written:]
                 current = self.f.current(parent, leaf)
-                if checksum.hexdigest().upper() != expected['sha256'] or self.f.version(self.f.regular(source)) != record['expectedVersion'] or current is None or self.f.version(current) != record['expectedVersion']:
+                if checksum.hexdigest().upper() != expected['sha256'] or version(self.f.regular(source)) != record['expectedVersion'] or current is None or version(current) != record['expectedVersion']:
                     self.reject('FILES_READ_CHANGED')
                 os.fsync(output); os.close(output); output = None
                 self.attest(configuration, target)
                 self.f.exchange(target, pending, target, operation + '.data', 1)
                 os.fsync(target)
                 self.verify_data(target, operation, expected)
+                validate()
                 saved['state'] = 'Verified'; self.f.save_receipt(target, operation, saved)
                 return self.public(saved)
             finally:

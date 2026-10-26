@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **Linux 接续，容器 HDD 捕获候选**：暂存冻结根/命名空间/配置证明，容器独立历史域及原件全内容捕获已实现；19 项新真实 Linux-root（含三处真实 SIGKILL）、104 项容器/184 项宿主文件联合通过。实际容器 2 MiB+7 物理 HDD 捕获、原件/父版本不变、重放/错误 UUID/停止拒绝和清理通过（源/备份同 HDD，仅版本留存）；另宿主实际 NVMe→HDD 沙箱通过。原子发布、协议/helper、永久任务/权限审计/BFF/UI及历史恢复继续，未安装、不算完整文件功能或59项完成。[证据](qa/CONTAINER_FILE_HDD_CAPTURE.md)。
+
 - **Linux 接续，容器上传暂存候选**：新增容器/启动实例/父目录和叶版本/主体绑定的私有暂存、严格流/回执/重放/丢弃，25 项 Linux-root（含实际 SIGKILL）及独占真实只读容器 2 MiB+7 完整内容与清理通过；Release/2308 Unit/160 Integration通过，6专用原生夹具跳过。尚无HDD发布、协议/helper、永久任务/BFF/UI，不算完整上传或59项完成，实际产品运行时不变。[证据与后续](qa/CONTAINER_FILE_STAGING.md)。
 
 - **2026-10-22实际下载网络终态补齐，服务仍0d18dd3/minor38**：真实手机大文件页面取消及另一1440标签正常退出，CDP均记录部分字节/HTTP200后loadingFailed ERR_ABORTED/canceled；SQL两条Incomplete/0 Validated，双端401/403与界面清空通过。取消后的完整2MiB+7浏览器全字节/SHA及CDP loadingFinished通过。新只读观察器8项Node测试已接CI，不把模拟单元当实机；精确清理后独立SSH身份0/11核心healthy。当前同场景网络pending已解决，更广撤权、容器写入/HDD历史/恢复与59项继续。[证据](qa/SESSION_EXPIRY_UI.md)。

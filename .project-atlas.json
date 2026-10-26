@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_STAGING.md",
-  "nextStep": "按59项继续，17项移出不算完成。Linux接续已恢复本地SDK；Release、2308 Unit/160 Integration通过（6专用原生夹具跳过）。容器上传私有暂存25项Linux-root与实际容器2MiB+7完整内容/原件不变/精确清理通过；相关85项及范围8项通过，实际产品运行时不变。继续容器HDD前置备份/发布与恢复、独立协议/helper、永久任务/权限审计与BFF/UI；再推进数据库恢复/网络、网站及多语言开发空间、通知/GitLab和最终安装交付。不能把内部引擎验收算完整功能完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_HDD_CAPTURE.md",
+  "nextStep": "按59项继续，17项移出不算完成。容器上传暂存已增加冻结目标证明与独立HDD捕获：19项新真实Linux-root含3处SIGKILL、104项容器/184项宿主文件通过。实际容器2MiB+7物理HDD完整内容、原件/父版本不变、重放/UUID与停止拒绝及精确清理通过；源与留存同HDD，仅版本留存，另宿主NVMe到HDD沙箱通过。产品运行时不变。继续容器原子发布/Unknown对账及历史恢复、独立协议/helper、永久任务/权限审计与BFF/UI；再推进数据库恢复/网络、网站及多语言开发空间、通知/GitLab和最终安装交付。不能把内部引擎验收算完整功能完成。"
 }

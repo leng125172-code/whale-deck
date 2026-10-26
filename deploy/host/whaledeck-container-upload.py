@@ -30,6 +30,25 @@ class ContainerUploads:
         if type(binding) is not dict or any(binding.get(key) != request[key] for key in ('containerId', 'instanceId')):
             self.reject('SESSION_SCOPE_MISMATCH')
 
+    def target_proof(self, session):
+        """Freeze the real root, namespaces and approved Docker configuration.
+
+        This is independent of the file version and must survive a new session
+        before capture/publication. An unchanged ID/start time alone is weaker.
+        """
+        mounts, identity = getattr(session, 'mounts', None), getattr(session, 'identity', None)
+        if type(mounts) is not bytes or len(mounts) != 32 or not isinstance(identity, tuple) or len(identity) != 3 or \
+                type(identity[0]) is not str or not identity[0].isdigit() or any(type(value) is not int or value <= 0 for value in identity[1:]):
+            self.reject('SESSION_PROOF_INVALID')
+        root = os.fstat(session.root)
+        value = [root.st_dev, root.st_ino, *identity, mounts.hex()]
+        return hashlib.sha256(b'whaledeck-container-upload-target-v1\n' + json.dumps(value,
+            separators=(',', ':')).encode()).hexdigest().upper()
+
+    def validate_target_proof(self, record, session):
+        if record.get('targetProof') != self.target_proof(session):
+            self.reject('TARGET_CHANGED')
+
     def upload_request(self, request):
         required = {'containerId', 'instanceId', 'path', 'expectedVersion', 'expectedParentVersion',
                     'operationId', 'owner', 'sizeBytes', 'sha256'}
@@ -117,6 +136,8 @@ class ContainerUploads:
             self.reject('RECEIPT_INVALID')
         if value.get('state') not in ('Receiving', 'Verified', 'Staged', 'Interrupted', 'Aborted', 'Discarded', 'Unknown'):
             self.reject('RECEIPT_INVALID')
+        if type(value.get('targetProof')) is not str or not re.fullmatch('[A-F0-9]{64}', value['targetProof']):
+            self.reject('RECEIPT_INVALID')
         return value
 
     def scoped(self, state, request):
@@ -179,6 +200,7 @@ class ContainerUploads:
         fingerprint = self.upload_request(request)
         self.session_scope(request, session)
         session.revalidate()
+        proof = self.target_proof(session)
         self.target(request, session)
         operation = request['operationId']
         with self.locked(operation, allow_new=True) as state, self.stream_slot(state):
@@ -188,6 +210,7 @@ class ContainerUploads:
             try:
                 if record is not None:
                     if record['fingerprint'] != fingerprint: self.reject('IDEMPOTENCY_CONFLICT')
+                    self.validate_target_proof(record, session)
                     if record['state'] not in ('Verified', 'Staged'): self.reject('PREVIOUS_OPERATION_INCOMPLETE')
                     self.payload(state, record, complete=True)
                 else:
@@ -201,6 +224,7 @@ class ContainerUploads:
                     info = os.fstat(descriptor)
                     record = {'schemaVersion': 1, **{key: request[key] for key in ('operationId', 'owner', 'containerId', 'instanceId')},
                               'request': dict(request), 'fingerprint': fingerprint, 'state': 'Receiving',
+                              'targetProof': proof,
                               'payloadIdentity': [info.st_dev, info.st_ino], 'createdAtUnixMs': time.time_ns() // 1000000}
                     self.f.save_receipt(state, operation, record)
                 digest, offset, deadline = hashlib.sha256(), 0, time.monotonic() + 300
@@ -233,6 +257,7 @@ class ContainerUploads:
                 if offset != request['sizeBytes'] or digest.hexdigest().upper() != request['sha256']:
                     self.reject('CHECKSUM_MISMATCH')
                 session.revalidate()
+                self.validate_target_proof(record, session)
                 self.target(request, session)
                 if created:
                     os.fsync(descriptor)
@@ -264,6 +289,7 @@ class ContainerUploads:
         session.revalidate()
         with self.locked(request['operationId']) as state:
             record = self.scoped(state, request)
+            self.validate_target_proof(record, session)
             if record['state'] == 'Receiving':
                 record['state'] = 'Interrupted'
                 self.f.save_receipt(state, record['operationId'], record)
@@ -281,6 +307,7 @@ class ContainerUploads:
         session.revalidate()
         with self.locked(request['operationId']) as state:
             record = self.scoped(state, request)
+            self.validate_target_proof(record, session)
             if record['state'] == 'Discarded': return self.public(record, True)
             if record['state'] == 'Unknown': self.reject('PREVIOUS_OPERATION_INCOMPLETE')
             if record['state'] == 'Aborted':

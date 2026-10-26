@@ -49,7 +49,8 @@ class LinuxContainerStagingTests(unittest.TestCase):
         self.files = load('whaledeck-files.py', 'container_staging_primitives')
         self.folder = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
         self.addCleanup(os.close, self.folder)
-        self.session = SimpleNamespace(root=self.folder, request={'containerId': ID, 'instanceId': INSTANCE}, current=Mock(), revalidate=Mock())
+        self.session = SimpleNamespace(root=self.folder, request={'containerId': ID, 'instanceId': INSTANCE},
+            mounts=b'M' * 32, identity=('12345', 777, 888), current=Mock(), revalidate=Mock())
         self.engine = uploads.ContainerUploads(read_engine, self.files, self.state)
         self.content = hashlib.shake_256(b'container-private-stage-full-content-v1').digest(2 * 1024**2 + 7)
         self.original = b'original source must remain byte-for-byte intact\n'

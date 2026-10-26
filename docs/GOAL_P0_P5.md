@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+> **Linux 接续：容器 HDD 捕获候选**。新增冻结目标证明、独立容器历史域与覆盖前捕获；19 项新真实 Linux-root（含三处真实 SIGKILL）、104 项容器/184 项宿主文件联合通过。实际容器 2 MiB+7 在物理 HDD 全内容/摘要/重放/错误 UUID 与停止实例拒绝通过，原件/父版本不变；源与留存同 HDD，仅版本留存。另宿主 NVMe→HDD 实际沙箱通过，临时内容精确清理、11 核心 healthy。尚未原子发布、RPC/helper/任务/BFF/UI，运行时不变，59 项继续 active。[证据](qa/CONTAINER_FILE_HDD_CAPTURE.md)。
+
 > **Linux 接续：容器上传暂存候选**。严格容器/启动实例/父与叶版本绑定、私有暂存/回执/重放/明确丢弃已实现；25 项真实 Linux-root（含接收进程 SIGKILL）和独占实际容器 2 MiB+7 全字节/SHA/原件不变与清理通过。Release/2308 Unit/160 Integration 通过，6 原生夹具测试跳过。未接 HDD 发布、RPC/helper、任务/BFF/UI，当前运行时不变，59 项继续 active。[证据](qa/CONTAINER_FILE_STAGING.md)。
 
 > **2026-10-22后续真实CDP终态通过，运行时0d18dd3不变**：页面取消和同源另一页正常退出均在真实大文件部分接收后记录ERR_ABORTED/canceled，SQL两条Incomplete/0 Validated；重新完整小文件全SHA与loadingFinished、双页login/清空私有管理壳和WD401/Authentik403通过。8项新观察器单元已接CI，临时资源精确清理/11核心健康独立确认。下方网络未证明是前次历史；2小时过期/组撤权及容器写入/HDD历史/恢复、其余59项继续。[完整证据](qa/SESSION_EXPIRY_UI.md)。
