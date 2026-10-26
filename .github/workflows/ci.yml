@@ -32,7 +32,7 @@ jobs:
           python3 -m py_compile deploy/host/whaledeck-container-upload.py deploy/validation/validate_container_file_staging.py
           python3 -m py_compile deploy/host/whaledeck-container-backups.py deploy/validation/validate_container_file_backups.py
           python3 -m py_compile deploy/host/whaledeck-container-publish.py deploy/validation/validate_container_file_publishing.py
-          python3 -m py_compile deploy/host/whaledeck-container-file-write.py deploy/validation/validate_container_file_write_profile.py
+          python3 -m py_compile deploy/host/whaledeck-container-file-write.py deploy/validation/validate_container_file_write_profile.py deploy/validation/validate_container_file_write_agent.py
           python3 -m py_compile deploy/validation/validate_container_file_bff_extended.py
           python3 -m unittest discover -s deploy/validation -p test_metric_continuity.py
           python3 -m unittest discover -s deploy/validation -p test_scope_baseline.py
@@ -80,6 +80,8 @@ jobs:
           global-json-file: global.json
       - run: dotnet restore
       - run: dotnet build --configuration Release --no-restore
+      - name: Compile native Agent validation clients
+        run: dotnet build deploy/validation/TerminalProbe/TerminalProbe.csproj --configuration Release
       - run: dotnet test --configuration Release --no-build --logger trx
       - run: dotnet list package --vulnerable --include-transitive
       - name: Inspect actual application binaries without dependency configuration
