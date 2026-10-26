@@ -1,6 +1,6 @@
 # 容器文件上传与发布
 
-属于单工作站 59 项中的 P1-11、P2-03/P2-04。四个只读 RPC 与现有 GET 接口保持原状；暂存和 HDD 捕获引擎尚未注册到 helper、Agent、业务任务或前端。
+属于单工作站 59 项中的 P1-11、P2-03/P2-04。四个只读 RPC 与现有 GET 接口保持原状；暂存、HDD 捕获和发布引擎尚未注册到 helper、Agent、业务任务或前端。
 
 ## 暂存绑定
 
@@ -33,9 +33,32 @@ Preparing 但没有完整 `.data` 的捕获保持 Incomplete，不覆盖重抄�
 
 实机和失败边界见 [HDD 捕获验证](qa/CONTAINER_FILE_HDD_CAPTURE.md)。
 
+## 发布与取消候选
+
+`whaledeck-container-publish.py` 的 `ContainerPublisher` 提供内部 publish/inspect/discard。当前主体与原容器/启动实例、targetProof、源/父版本、私有完整载荷和 HDD 证明均重新检查；同操作锁和全局容器文件提交锁贯穿准备/提交。
+
+宿主暂存与目标可能跨文件系统，因此先将完整内容复制到目标父目录下固定 root/0700 私有目录，按源身份保存原权限和属主并移除新内容的 setuid/setgid；新建采用容器 PID 的内核映射 filesystem UID/GID 和 0600。复制后读回验证实际输出的完整摘要。目标目录和 Docker 配置只读、精确挂载点、链接、保护目标、变化的源/父对象不进入替换。
+
+父版本先按请求检查；创建私有目录是引擎自己引入的目录变化，之后冻结新的父版本并持续复核当前路径仍解析到原父 inode。此过程不是文件系统多对象事务；外部写入若发生在最终检查与 rename 之间，靠置换后身份/内容证明识别为 Unknown，保留原件/置换对象，不擅自重试或回滚。
+
+新建使用 renameat2 NOREPLACE，覆盖使用 EXCHANGE，保留完整旧 inode。覆盖在准备前和提交前重新验证物理 HDD 原件。Applying 意图先 fsync，名称提交后 fsync 两目录，再验证目标新对象和私有旧对象，才能记录 Published。
+
+| 回执状态 | 后续行为 |
+| --- | --- |
+| PublishPreparing | 准备未完成时只观察为 PublishInterrupted；缺失所有权证明则 Unknown |
+| PublishApplying | 检查实际名称、inode、权限/属主/长度/摘要、原件留存与 HDD；完整置换可补记 Published，未确认的准备内容保留，不重复 rename |
+| Published | 永久保留已发布结果；后来目标变化只将 bindingCurrent 置 false，不改写历史结果 |
+| PublishInterrupted | 不能重新发布；明确 discard 仅清理原回执拥有的私有准备对象和宿主载荷，HDD 原件保留 |
+| PublishDiscarding | 取消意图先持久化；观察不删除文件，重复明确取消可完成剩余拥有权已验证的清理 |
+| Unknown | 保留现场；拒绝自动发布、取消和回滚，产品级现任管理员接管仍待接入 |
+
+宿主暂存的旧 inspect/discard 入口遇到 publication 字段会拒绝，不能绕过发布状态机隐藏已发布结果。成功发布不能通过 discard 删除目标或恢复旧内容。
+
+验证与产品缺口见 [发布验证](qa/CONTAINER_FILE_PUBLISHING.md)。
+
 ## 仍须实现
 
-1. HDD 捕获已有内部候选；原子发布与 Unknown 对账、公开历史和恢复、新建/覆盖计划及依赖风险仍待实现。当前 targetProof 已冻结目标配置，不能代替业务预检与当前授权。
+1. HDD 捕获、原子发布与 Unknown 观察已有内部候选；公开历史和恢复、新建/覆盖计划及依赖风险、产品管理员接管仍待实现。当前 targetProof 已冻结目标配置，不能代替业务预检与当前授权。
 2. 独立 RPC/capability、必要的受限 helper 权限、暂存/发布/状态/取消协议；不能将测试 root 能力当成产品沙箱证据。
 3. EF 迁移、永久意图、Job/Outbox/锁/租约、当前权限与登录复核、取消/Unknown 对账及人类审计。
 4. BFF 上传、文本编辑、历史/恢复 UI，以及普通用户拒绝、桌面/手机实际身份端到端验收。

@@ -88,6 +88,39 @@ class ContainerBackups:
                 return proof
             finally: os.close(parent)
 
+    def verify_capture(self, staged, session):
+        """Verify the durable original without reopening a now-published path.
+
+        Called under the upload/namespace locks. This is not another capture,
+        nor permission to adopt a host history or another container's original.
+        """
+        self.u.validate_target_proof(staged, session)
+        session.current()
+        request = staged['request']; original = staged.get('originalCapture')
+        if type(original) is not dict or set(original) != {'originalIdentity', 'originalSha256'}:
+            self.u.reject('BACKUP_BINDING_CHANGED')
+        identity = original['originalIdentity']
+        if type(identity) is not list or len(identity) != 8 or any(type(value) is not int for value in identity) or \
+                not stat.S_ISREG(identity[2]) or identity[5] != 1 or not 0 <= identity[6] <= self.r.MAX_BYTES:
+            self.u.reject('BACKUP_BINDING_CHANGED')
+        expected = {'schemaVersion': 2, 'resourceType': 'ContainerFile', 'storageId': 'database-platform.backup.hdd',
+            'operationId': staged['operationId'], 'owner': staged['owner'], 'containerId': staged['containerId'],
+            'instanceId': staged['instanceId'], 'path': request['path'], 'sourceVersion': request['expectedVersion'],
+            'sourceParentVersion': request['expectedParentVersion'], 'targetProof': staged['targetProof'],
+            'uploadFingerprint': staged['fingerprint'], 'sourceIdentity': identity, 'sizeBytes': identity[6],
+            'sha256': original['originalSha256']}
+        with self.storage.target(create_namespace=False) as (_, target):
+            saved = self.storage.read_json(target, staged['operationId'] + '.json')
+            if any(saved.get(key) != value for key, value in expected.items()) or saved.get('state') != 'Verified' or \
+                    saved.get('captureKind') != 'Overwrite' or saved.get('captureState') != 'Available':
+                self.u.reject('BACKUP_BINDING_CHANGED')
+            self.storage.verify_data(target, staged['operationId'], expected)
+            proof = {**self.storage.public(saved), 'resourceType': 'ContainerFile', 'containerId': staged['containerId'],
+                'instanceId': staged['instanceId'], 'targetProof': staged['targetProof']}
+            if proof != staged.get('backupCapture'): self.u.reject('BACKUP_BINDING_CHANGED')
+        session.current()
+        return proof
+
 
 class _ContainerSource:
     def __init__(self, engine, session, staged, parent, parent_path):

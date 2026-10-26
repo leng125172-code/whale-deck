@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+> **Linux 接续：容器原子发布/中断候选**。跨盘准备、完整输出读回、NOREPLACE/EXCHANGE、旧 inode/HDD 原件保留与取消/Unknown 观察已实现。23 项新真实 Linux-root 含 10 处 SIGKILL，127 容器/184 宿主/14 目录备份/8 范围通过。实际可写绑定和容器可写层的新建/覆盖、镜像原有文件及真实强杀后新会话不重复写入对账通过，合成资源精确清理、11 核心 healthy。未接 RPC/helper、任务/权限审计与 BFF/UI，运行时不变，59 项继续 active。[证据](qa/CONTAINER_FILE_PUBLISHING.md)。
+
 > **Linux 接续：容器 HDD 捕获候选**。新增冻结目标证明、独立容器历史域与覆盖前捕获；19 项新真实 Linux-root（含三处真实 SIGKILL）、104 项容器/184 项宿主文件联合通过。实际容器 2 MiB+7 在物理 HDD 全内容/摘要/重放/错误 UUID 与停止实例拒绝通过，原件/父版本不变；源与留存同 HDD，仅版本留存。另宿主 NVMe→HDD 实际沙箱通过，临时内容精确清理、11 核心 healthy。尚未原子发布、RPC/helper/任务/BFF/UI，运行时不变，59 项继续 active。[证据](qa/CONTAINER_FILE_HDD_CAPTURE.md)。
 
 > **Linux 接续：容器上传暂存候选**。严格容器/启动实例/父与叶版本绑定、私有暂存/回执/重放/明确丢弃已实现；25 项真实 Linux-root（含接收进程 SIGKILL）和独占实际容器 2 MiB+7 全字节/SHA/原件不变与清理通过。Release/2308 Unit/160 Integration 通过，6 原生夹具测试跳过。未接 HDD 发布、RPC/helper、任务/BFF/UI，当前运行时不变，59 项继续 active。[证据](qa/CONTAINER_FILE_STAGING.md)。

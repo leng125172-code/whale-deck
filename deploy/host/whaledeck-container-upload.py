@@ -134,7 +134,8 @@ class ContainerUploads:
         if self.upload_request(request) != value.get('fingerprint') or any(value.get(key) != request[key]
                 for key in ('operationId', 'owner', 'containerId', 'instanceId')) or value['operationId'] != operation:
             self.reject('RECEIPT_INVALID')
-        if value.get('state') not in ('Receiving', 'Verified', 'Staged', 'Interrupted', 'Aborted', 'Discarded', 'Unknown'):
+        if value.get('state') not in ('Receiving', 'Verified', 'Staged', 'Interrupted', 'Aborted', 'Discarded', 'Unknown',
+                'PublishPreparing', 'PublishApplying', 'PublishInterrupted', 'Published', 'PublishDiscarding', 'PublishDiscarded'):
             self.reject('RECEIPT_INVALID')
         if type(value.get('targetProof')) is not str or not re.fullmatch('[A-F0-9]{64}', value['targetProof']):
             self.reject('RECEIPT_INVALID')
@@ -290,6 +291,7 @@ class ContainerUploads:
         with self.locked(request['operationId']) as state:
             record = self.scoped(state, request)
             self.validate_target_proof(record, session)
+            if 'publication' in record: self.reject('PUBLISHER_REQUIRED')
             if record['state'] == 'Receiving':
                 record['state'] = 'Interrupted'
                 self.f.save_receipt(state, record['operationId'], record)
@@ -308,6 +310,7 @@ class ContainerUploads:
         with self.locked(request['operationId']) as state:
             record = self.scoped(state, request)
             self.validate_target_proof(record, session)
+            if 'publication' in record: self.reject('PUBLISHER_REQUIRED')
             if record['state'] == 'Discarded': return self.public(record, True)
             if record['state'] == 'Unknown': self.reject('PREVIOUS_OPERATION_INCOMPLETE')
             if record['state'] == 'Aborted':

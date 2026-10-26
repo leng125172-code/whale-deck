@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **Linux 接续，容器原子发布候选**：跨盘准备/输出全量读回、HDD 前置证明/NOREPLACE/EXCHANGE、旧 inode 保留与取消/Unknown 观察已实现。23 项新 Linux-root（10处实际 SIGKILL）、127 容器/184 宿主/14 目录备份/8 范围通过；实际绑定与容器可写层、镜像原件覆盖和强杀后新真实会话对账通过，精确清理/11核心healthy。没有产品写入 RPC、helper、任务/权限审计或 BFF/UI，实际运行时不变，59项保持active。[证据](qa/CONTAINER_FILE_PUBLISHING.md)。
+
 - **Linux 接续，容器 HDD 捕获候选**：暂存冻结根/命名空间/配置证明，容器独立历史域及原件全内容捕获已实现；19 项新真实 Linux-root（含三处真实 SIGKILL）、104 项容器/184 项宿主文件联合通过。实际容器 2 MiB+7 物理 HDD 捕获、原件/父版本不变、重放/错误 UUID/停止拒绝和清理通过（源/备份同 HDD，仅版本留存）；另宿主实际 NVMe→HDD 沙箱通过。原子发布、协议/helper、永久任务/权限审计/BFF/UI及历史恢复继续，未安装、不算完整文件功能或59项完成。[证据](qa/CONTAINER_FILE_HDD_CAPTURE.md)。
 
 - **Linux 接续，容器上传暂存候选**：新增容器/启动实例/父目录和叶版本/主体绑定的私有暂存、严格流/回执/重放/丢弃，25 项 Linux-root（含实际 SIGKILL）及独占真实只读容器 2 MiB+7 完整内容与清理通过；Release/2308 Unit/160 Integration通过，6专用原生夹具跳过。尚无HDD发布、协议/helper、永久任务/BFF/UI，不算完整上传或59项完成，实际产品运行时不变。[证据与后续](qa/CONTAINER_FILE_STAGING.md)。

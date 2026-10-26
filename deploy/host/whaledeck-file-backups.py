@@ -117,7 +117,7 @@ class FileBackups:
         finally: os.close(mounted)
 
     @contextlib.contextmanager
-    def target(self):
+    def target(self, *, create_namespace=True):
         configuration = self.configuration()
         slash = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         try:
@@ -133,8 +133,9 @@ class FileBackups:
             else:
                 # A fixed resource namespace keeps host history readers and
                 # container captures independent. Never accept a user path.
-                try: os.mkdir(self.namespace, 0o700, dir_fd=descriptor); os.fsync(descriptor)
-                except FileExistsError: pass
+                if create_namespace:
+                    try: os.mkdir(self.namespace, 0o700, dir_fd=descriptor); os.fsync(descriptor)
+                    except FileExistsError: pass
                 child = self.f.open_at(descriptor, self.namespace, os.O_RDONLY | os.O_DIRECTORY)
                 try:
                     info = os.fstat(child)
