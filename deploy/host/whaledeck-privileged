@@ -118,10 +118,16 @@ case "$action" in
     ;;
   container-file-write-stop)
     [[ $# -eq 3 && "$2" =~ ^[a-f0-9]{32}$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
-    container_write_instance=$(/usr/bin/systemctl show "whaledeck-container-file-write-$2.service" -p InvocationID --value 2>/dev/null || true)
+    container_write_instance=$(/usr/bin/systemctl show "whaledeck-container-file-write-$2.service" -p InvocationID --value 2>/dev/null) || exit 2
     [[ -n "$container_write_instance" ]] || exit 0
     [[ "$container_write_instance" == "$3" ]] || exit 2
-    exec /usr/bin/systemctl stop "whaledeck-container-file-write-$2.service"
+    if /usr/bin/systemctl stop "whaledeck-container-file-write-$2.service" 2>/dev/null; then exit 0; fi
+    # --collect may unload a completed unit between show and stop. Only a
+    # now-absent invocation makes that race a successful idempotent cleanup;
+    # a surviving or replaced invocation must still fail closed.
+    container_write_after=$(/usr/bin/systemctl show "whaledeck-container-file-write-$2.service" -p InvocationID --value 2>/dev/null) || exit 2
+    [[ -z "$container_write_after" ]] || exit 2
+    exit 0
     ;;
   container-terminal)
     [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ ]] || exit 2
