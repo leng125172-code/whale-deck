@@ -194,7 +194,7 @@ internal static class ContainerFileWriteProbe
             using (var late = client.StageUpload(Headers("StageUpload", fenceHeader), Until(), lifetime.Token))
             {
                 await late.RequestStream.WriteAsync(new() { Header = fenceHeader }, lifetime.Token);
-                await Denied(async () => await late.ResponseAsync, StatusCode.FailedPrecondition);
+                await Denied(async () => await late.ResponseAsync, StatusCode.FailedPrecondition, "CONTAINER_UPLOAD_CANCELED");
             }
             Require((await Action("Inspect", fenceReference)).Upload.State == "Prevented");
             Console.WriteLine(JsonSerializer.Serialize(new { installedContainerFileWriteRpc = "passed", revision, bytes = Size,
@@ -206,9 +206,9 @@ internal static class ContainerFileWriteProbe
         finally { CryptographicOperations.ZeroMemory(key); }
     }
     private static void Require(bool condition) { if (!condition) throw new InvalidOperationException(); }
-    private static async Task Denied(Func<Task> action, StatusCode expected)
+    private static async Task Denied(Func<Task> action, StatusCode expected, string? expectedDetail = null)
     {
         try { await action(); throw new InvalidOperationException(); }
-        catch (RpcException error) when (error.StatusCode == expected) { }
+        catch (RpcException error) when (error.StatusCode == expected && (expectedDetail is null || error.Status.Detail == expectedDetail)) { }
     }
 }
