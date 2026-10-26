@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **Linux 接续，容器上传暂存候选**：新增容器/启动实例/父目录和叶版本/主体绑定的私有暂存、严格流/回执/重放/丢弃，25 项 Linux-root（含实际 SIGKILL）及独占真实只读容器 2 MiB+7 完整内容与清理通过；Release/2308 Unit/160 Integration通过，6专用原生夹具跳过。尚无HDD发布、协议/helper、永久任务/BFF/UI，不算完整上传或59项完成，实际产品运行时不变。[证据与后续](qa/CONTAINER_FILE_STAGING.md)。
+
 - **2026-10-22实际下载网络终态补齐，服务仍0d18dd3/minor38**：真实手机大文件页面取消及另一1440标签正常退出，CDP均记录部分字节/HTTP200后loadingFailed ERR_ABORTED/canceled；SQL两条Incomplete/0 Validated，双端401/403与界面清空通过。取消后的完整2MiB+7浏览器全字节/SHA及CDP loadingFinished通过。新只读观察器8项Node测试已接CI，不把模拟单元当实机；精确清理后独立SSH身份0/11核心healthy。当前同场景网络pending已解决，更广撤权、容器写入/HDD历史/恢复与59项继续。[证据](qa/SESSION_EXPIRY_UI.md)。
 
 - **2026-10-22实际0d18dd3/minor38**：六组件与实际HTTP来源一致，冻结PG dispatch1执行/1通过/清理、CI39726926076四路success。真实320暗色完整2MiB+7下载摘要、另一同源1440明色正常退出双页回login/清空管理壳及WD401/Authentik403、无Storage信号的实际401刷新兜底通过；普通真实拒绝页0文件请求/API403、首页/个人门户可用及正常退出通过。新SSH确认身份0/独占合成数据清理/11核心healthy，13单元与60 Linux-root重新通过。大文件SQL为Incomplete/0 Validated，但浏览器网络终态观察pending并在关闭时触发工具重置，明确未签；容器写入/HDD历史/恢复与全部59项继续。[实际证据和遗留](qa/SESSION_EXPIRY_UI.md)。以下候选/未部署为对应历史。

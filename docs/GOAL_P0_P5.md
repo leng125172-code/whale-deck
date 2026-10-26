@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+> **Linux 接续：容器上传暂存候选**。严格容器/启动实例/父与叶版本绑定、私有暂存/回执/重放/明确丢弃已实现；25 项真实 Linux-root（含接收进程 SIGKILL）和独占实际容器 2 MiB+7 全字节/SHA/原件不变与清理通过。Release/2308 Unit/160 Integration 通过，6 原生夹具测试跳过。未接 HDD 发布、RPC/helper、任务/BFF/UI，当前运行时不变，59 项继续 active。[证据](qa/CONTAINER_FILE_STAGING.md)。
+
 > **2026-10-22后续真实CDP终态通过，运行时0d18dd3不变**：页面取消和同源另一页正常退出均在真实大文件部分接收后记录ERR_ABORTED/canceled，SQL两条Incomplete/0 Validated；重新完整小文件全SHA与loadingFinished、双页login/清空私有管理壳和WD401/Authentik403通过。8项新观察器单元已接CI，临时资源精确清理/11核心健康独立确认。下方网络未证明是前次历史；2小时过期/组撤权及容器写入/HDD历史/恢复、其余59项继续。[完整证据](qa/SESSION_EXPIRY_UI.md)。
 
 > **2026-10-22实际0d18dd3/minor38**：冻结PG1执行/1通过且清理、CI39726926076四路success、六组件/HTTP来源一致。真实320暗色完整2MiB+7摘要、跨页正常退出双页回login/清空管理壳、无Storage信号的401刷新兜底及普通真实用户拒绝/首页/个人门户/双端退出通过；新SSH临时身份0/独占数据清理/11核心healthy，13单元和60 Linux-root重新通过。大文件SQLIncomplete但浏览器网络终态观察未签；完整组撤权、容器写入/HDD历史/恢复及其余59项继续。下方未部署/未签及旧76项均为历史，不当作当前完成率。[证据](qa/SESSION_EXPIRY_UI.md)。

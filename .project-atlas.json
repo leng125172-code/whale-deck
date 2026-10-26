@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md（2026-10-22）",
-  "nextStep": "按59项继续，17项移出不算完成。实际0d18dd3/minor38六组件与HTTP来源一致，冻结PG及CI39726926076四路通过。真实手机完整下载/双标签正常退出回登录及实际401兜底、普通用户拒绝/首页/个人门户/双端退出通过；页面取消及跨标签退出均补齐真实CDP部分字节/ERR_ABORTED终态和SQL Incomplete/无完整记录，8项观察器单元接CI。11核心健康及临时资源精确清理通过。接续完整撤权组合、容器写入/HDD历史/恢复、数据库恢复/网络、网站/多语言开发空间与报告、通知/GitLab/安全及安装交付。当前40项部分、17项待实现、2项待终验；不把子门禁算整项完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_STAGING.md",
+  "nextStep": "按59项继续，17项移出不算完成。Linux接续已恢复本地SDK；Release、2308 Unit/160 Integration通过（6专用原生夹具跳过）。容器上传私有暂存25项Linux-root与实际容器2MiB+7完整内容/原件不变/精确清理通过；相关85项及范围8项通过，实际产品运行时不变。继续容器HDD前置备份/发布与恢复、独立协议/helper、永久任务/权限审计与BFF/UI；再推进数据库恢复/网络、网站及多语言开发空间、通知/GitLab和最终安装交付。不能把内部引擎验收算完整功能完成。"
 }
