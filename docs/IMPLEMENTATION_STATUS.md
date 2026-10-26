@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-26 容器写入Agent已安装签收**：ac72b41/minor39与维护入口已覆盖，真实签名UDS五方法、完整2MiB+7发布/原只读RPC逐字节读回、旧inode/HDD原件、owner/请求体/MAC/重放拒绝与显式暂存取消通过。修复collect卸载竞态掩盖权限拒绝，8故障注入通过；Release零警告错误、2411 Unit/160 Integration通过（6原生夹具跳过）、154容器Linux-root通过。成功与两次失败现场精确核验清理，11核心healthy，应用容器未更新。永久任务/当前权限审计、BFF上传编辑/历史恢复/Unknown及真实UI仍待，59项继续。[完整证据和失败](qa/CONTAINER_FILE_WRITE_RPC.md)。
+
 - **2026-10-26 容器写入协议候选（未安装）**：Agent minor39独立五RPC与请求体绑定一次性签名、SDK/Agent/root三层完整流校验、固定受限helper已实现。Release零警告错误、2410 Unit/160 Integration通过（6原生夹具跳过）、138容器Linux-root通过；真实systemd profile完成2MiB+7全内容发布/HDD旧原件、精确InvocationID活任务取消和清理，11核心healthy。没有产品安装态、永久任务/当前权限/审计或BFF写入页面；59项继续active。[证据及边界](qa/CONTAINER_FILE_WRITE_RPC.md)。
 
 - **Linux 接续，容器原子发布候选**：跨盘准备/输出全量读回、HDD 前置证明/NOREPLACE/EXCHANGE、旧 inode 保留与取消/Unknown 观察已实现。23 项新 Linux-root（10处实际 SIGKILL）、127 容器/184 宿主/14 目录备份/8 范围通过；实际绑定与容器可写层、镜像原件覆盖和强杀后新真实会话对账通过，精确清理/11核心healthy。没有产品写入 RPC、helper、任务/权限审计或 BFF/UI，实际运行时不变，59项保持active。[证据](qa/CONTAINER_FILE_PUBLISHING.md)。

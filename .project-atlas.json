@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_WRITE_RPC.md",
-  "nextStep": "按59项继续。minor39独立请求体签名/五RPC/SDK及固定写helper候选通过Release、2410 Unit、160 Integration（6原生夹具跳过）、138容器Linux-root和真实systemd profile的完整2MiB+7/取消/精确清理；11核心healthy，未安装。下一步真实安装态签名UDS、永久任务/共享锁/当前权限/审计、BFF上传编辑/历史恢复/Unknown接管及真实桌面手机。17项移出不算完成，其余保留任务继续。"
+  "nextStep": "按59项继续，17项移出不算完成。ac72b41/minor39与维护入口已覆盖，独立签名UDS五方法/完整2MiB+7发布读回/HDD原件/权限拒绝/暂存取消通过；修复collect清理竞态，Release、2411 Unit/160 Integration（6原生夹具跳过）、154容器Linux-root通过。自有成功/失败载荷精确清理，11核心healthy。下一步永久容器上传意图/迁移、任务租约/共享锁/Outbox/当前权限审计、BFF上传编辑/历史恢复和Unknown接管，补真实桌面手机及活流断线撤权；其余保留任务继续。"
 }
