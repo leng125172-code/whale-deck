@@ -11,3 +11,11 @@ Root 固定 helper 仅有 list/source 枚举，使用受限 systemd profile、�
 实际安装门禁为 `validate_container_history_agent.py` 与冻结 `TerminalProbe container-history`：通过真实管理员 BFF 上传生成旧版本，独立 SQL/Root/HDD 校验后，真实签名 UDS 完整读取 2MiB+7；实际仅重启独占普通容器，再从旧捕获读回，验证错误 MAC/重放/请求体变化/核心容器拒绝。另执行实际文本编辑网页门禁；它们尚未运行，不以候选测试代替。
 
 尚缺永久历史目录数据库、当前权限/审计的恢复计划和确认、来源到暂存/发布的完整恢复任务以及 API/UI。只读内部来源不是文件恢复功能，不签 P2 文件管理整项或总目标完成。
+
+## 首次安装门禁失败与只读沙箱修复候选
+
+7b38c0f 已完成正常覆盖发布并验证六组件/HTTP来源；真实 BFF 成功捕获旧版本后，首次 List 在真实 `ProtectSystem=strict` 下返回 `FILES_BACKUP_READ_ONLY`。共用 HDD 校验器把只读读取也误当成写入；没有放开沙箱写权限。失败证据 `container-history-agent-87572c4567ce4b4f9f43134f55944d01` 与日志 `/tmp/wd-container-history-agent-7b38c0f.log` 保留，自有数据准确验证清理，永久 SQL/Root/HDD 不删除。
+
+修正为可信内部显式只读 target/attest，禁止只读模式创建 namespace；挂载、UUID、HDD 和文件身份校验保持，默认写入遇只读仍拒绝。新增完整来源测试也验证错误 UUID 依然拒绝。231 项容器 Linux-root、22 备份安装测试及 Release 零警告错误通过；首轮新测试的 fixture 属性引用错误已修正并完整重跑，日志保留。修正尚待再次覆盖及真实 RPC 完整重跑。
+
+CI 安装器失败另由进度元数据漏写“17项移出不算完成”触发，已补回范围说明，8项范围检查通过；未删除或削弱检查，完整安装器本机重跑和新 CI 继续。

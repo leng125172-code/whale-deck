@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_HISTORY_ENGINE.md；docs/qa/CONTAINER_UPLOAD_BROWSER_INTERRUPTION.md",
-  "nextStep": "自然两小时权限撤销已真实通过；minor42历史List/ReadSource、固定只读helper与SDK候选测试通过。覆盖最新dev，验收真实文本编辑和实际HDD历史来源RPC；继续永久目录/恢复意图/API/UI，59项保持active。"
+  "nextStep": "自然两小时权限撤销已真实通过；minor42历史List/ReadSource、固定只读helper与SDK候选测试通过。覆盖最新dev，验收真实文本编辑和实际HDD历史来源RPC；继续永久目录/恢复意图/API/UI，59项保持active。17项移出不算完成。"
 }

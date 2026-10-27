@@ -23,3 +23,11 @@
 新增 `validate_container_text_browser.py/.mjs`，通过正常可见 Authentik 登录，在独占真实普通容器中文文件上依次完成桌面/手机编辑、取消后返回草稿、确认各一次发送；最后另一页正常退出清空未保存编辑及其放弃对话框。独立 Python 观察器核对 SQL/原版本链、Root 完整载荷、最终文件全字节/UID/GID/模式、两代旧 inode 与 HDD 归档内容和范围，再精确清理测试源。永久 SQL/审计/Root/HDD 记录保留，不确定数据不清理。
 
 这些工具当前只有 Python/Node 语法检查证据，须在实际部署新版编辑器后运行并记录真实结果。当前不签整个容器文件模块或 P2；发布中故障/撤权/重启、有全局保护的 Unknown、HDD 历史查询和恢复及其余59项继续。
+
+## 7b38c0f 真实安装态网页通过
+
+2026-10-27 正常 dev 覆盖发布进程 0/SUCCESS，六组件及实际 HTTP 均为 `7b38c0fbaeb9f031cc515c845a68abef5146c325`，宿主 systemd/权限/UDS/受限 helper/动态入口与运行库 10.0.13 校验通过。
+
+`validate_container_text_browser.py` 实际管理员正常 Authentik 登录，在1440明色和320暗色分别编辑同一中文文本；两个确认取消均零登记/零内容，返回草稿保留，每次确认只发一次 octet-stream。实际完整文件、SQL/Worker/Root 发布、两份旧 inode/权限及 HDD 原文独立核对，BOM/CRLF 保持，第二次的原版本准确衔接第一次发布版本。未保存草稿及放弃对话框在另一页正常双端退出后清空，两页回登录、WD401/Authentik拒绝通过。
+
+私有证据 `deploy/artifacts/container-text-browser-b9a815b816db4583a951c917985c9423/`、日志 `/tmp/wd-container-text-browser-7b38c0f.log`；主代理查看两张实际编辑器截图，手机没有水平溢出、保存按钮可见。准确验证后清理独占容器及源目录；永久任务/审计/Root/HDD历史保留。这不代表已具备内容历史恢复或整个文件管理完成。

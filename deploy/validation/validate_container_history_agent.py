@@ -91,7 +91,7 @@ def main():
                 for line in completed.stderr.splitlines():
                     try:
                         detail=json.loads(line)
-                        if detail.get('terminalProbe')=='failed':print(json.dumps({k:detail.get(k) for k in ('terminalProbe','phase','rpcStatus','detail')}),flush=True)
+                        if detail.get('terminalProbe')=='failed':print(json.dumps({k:detail.get(k) for k in ('terminalProbe','phase','rpcStatus','fileCode')}),flush=True)
                     except ValueError:pass
                 raise AssertionError('INSTALLED_HISTORY_RPC_NOT_VERIFIED')
             runs.append(stage)

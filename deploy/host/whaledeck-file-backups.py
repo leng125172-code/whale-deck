@@ -69,7 +69,7 @@ class FileBackups:
             if type(value[key]) is not int or not minimum <= value[key] <= maximum: self.reject('FILES_BACKUP_CONFIGURATION_INVALID')
         return value
 
-    def attest(self, configuration, descriptor):
+    def attest(self, configuration, descriptor, *, read_only=False):
         """Works with PrivateDevices: attest kernel mount + root-owned udev DB.
 
         Never infer a mounted HDD from directory existence or a parent st_dev.
@@ -106,7 +106,10 @@ class FileBackups:
         rotational = block / 'queue' / 'rotational'
         if not rotational.is_file(): rotational = block.parent / 'queue' / 'rotational'
         if rotational.read_bytes() != b'1\n': self.reject('FILES_BACKUP_HDD_REQUIRED')
-        if os.fstatvfs(descriptor).f_flag & os.ST_RDONLY: self.reject('FILES_BACKUP_READ_ONLY')
+        # ProtectSystem=strict deliberately remounts the history reader's HDD
+        # read-only. Readers still attest the pinned mount/UUID/HDD identity;
+        # writers must continue to fail closed on a read-only filesystem.
+        if not read_only and os.fstatvfs(descriptor).f_flag & os.ST_RDONLY: self.reject('FILES_BACKUP_READ_ONLY')
         # Check the pinned mount's own directory too, not just an unrelated
         # same-device entry fabricated by a bind mount elsewhere.
         slash = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
@@ -117,7 +120,8 @@ class FileBackups:
         finally: os.close(mounted)
 
     @contextlib.contextmanager
-    def target(self, *, create_namespace=True):
+    def target(self, *, create_namespace=True, read_only=False):
+        if read_only and create_namespace: self.reject('FILES_BACKUP_READ_ONLY')
         configuration = self.configuration()
         slash = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         try:
@@ -127,7 +131,7 @@ class FileBackups:
         try:
             info = os.fstat(descriptor)
             if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700: self.reject('FILES_BACKUP_DIRECTORY_UNSAFE')
-            self.attest(configuration, descriptor)
+            self.attest(configuration, descriptor, read_only=read_only)
             if self.namespace is None:
                 yield configuration, descriptor
             else:
@@ -140,7 +144,7 @@ class FileBackups:
                 try:
                     info = os.fstat(child)
                     if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700: self.reject('FILES_BACKUP_DIRECTORY_UNSAFE')
-                    self.attest(configuration, child)
+                    self.attest(configuration, child, read_only=read_only)
                     yield configuration, child
                 finally: os.close(child)
         finally: os.close(descriptor)

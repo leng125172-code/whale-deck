@@ -112,10 +112,12 @@ internal static class ContainerHistoryProbe
             var changed = listRequest.Clone(); changed.Location.Path = "work/changed.bin";
             await Denied(async () => await client.ListAsync(changed, Headers("List", listRequest), Until(), lifetime.Token), StatusCode.PermissionDenied);
 
-            Phase = "list-and-protected-core";
+            Phase = "list-owned-history";
             var replay = Headers("List", listRequest);
             var listing = await client.ListAsync(listRequest, replay, Until(), lifetime.Token);
+            Phase = "list-replay-rejected";
             await Denied(async () => await client.ListAsync(listRequest, replay, Until(), lifetime.Token), StatusCode.PermissionDenied);
+            Phase = "list-protected-core-rejected";
             await Denied(async () =>
             {
                 var core = ListRequest(coreId);

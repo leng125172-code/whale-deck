@@ -114,7 +114,7 @@ class ContainerHistory:
         if request['after'] and not request['expectedVersion']:self.reject('VERSION_REQUIRED')
         proof=self.authorize(request,session,empty=True);deadline=time.monotonic()+self.LIST_SECONDS
         try:
-            with self.b.target(create_namespace=False) as (configuration,target):
+            with self.b.target(create_namespace=False,read_only=True) as (configuration,target):
                 directory_version=self.f.version(os.fstat(target))
                 version=self.digest('inventory',{'containerId':request['containerId'],'instanceId':request['instanceId'],
                     'path':request['path'],'targetProof':proof,'directoryVersion':directory_version})
@@ -146,7 +146,7 @@ class ContainerHistory:
                         entries.append(entry);encoded+=length
                     except (OSError,self.f.Rejected,self.r.Rejected,ValueError,KeyError,TypeError):invalid+=1
                 session.revalidate();self.current(session,proof,deadline)
-                self.b.attest(configuration,target)
+                self.b.attest(configuration,target,read_only=True)
                 if self.f.version(os.fstat(target))!=directory_version:self.reject('VERSION_CONFLICT')
                 return {'containerId':request['containerId'],'instanceId':request['instanceId'],'path':request['path'],
                     'targetProof':proof,'entries':entries,'version':version,'nextCursor':'' if complete else cursor,
@@ -162,7 +162,7 @@ class ContainerHistory:
         if type(request) is not dict or set(request)!=fields:self.reject('REQUEST_INVALID')
         self.f.identity(request['captureId']);self.hash(request['expectedCaptureHash'])
         proof=self.authorize(request,session);deadline=time.monotonic()+self.SOURCE_SECONDS
-        with self.b.target(create_namespace=False) as (configuration,target):
+        with self.b.target(create_namespace=False,read_only=True) as (configuration,target):
             value=self.metadata(target,request['captureId'])
             if value['containerId']!=request['containerId'] or value['path']!=request['path']:self.reject('SCOPE_MISMATCH')
             if self.r.protected(value['path'],self.f):self.reject('PROTECTED')
@@ -177,11 +177,11 @@ class ContainerHistory:
                     digest.update(chunk)
                 if count!=value['sizeBytes'] or digest.hexdigest().upper()!=value['sha256'] or \
                         self.r.fingerprint(os.fstat(descriptor))!=before:self.reject('CONTENT_INVALID')
-                session.revalidate();self.current(session,proof,deadline);self.b.attest(configuration,target)
+                session.revalidate();self.current(session,proof,deadline);self.b.attest(configuration,target,read_only=True)
                 if self.metadata(target,request['captureId'])!=value:self.reject('CAPTURE_CHANGED')
                 os.lseek(descriptor,0,os.SEEK_SET)
                 yield value,descriptor
-                self.current(session,proof,deadline);self.b.attest(configuration,target)
+                self.current(session,proof,deadline);self.b.attest(configuration,target,read_only=True)
                 if self.r.fingerprint(os.fstat(descriptor))!=before or self.metadata(target,request['captureId'])!=value:
                     self.reject('CONTENT_CHANGED')
             finally:os.close(descriptor)

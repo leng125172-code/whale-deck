@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import stat
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import uuid
@@ -61,6 +62,20 @@ class LinuxContainerHistoryTests(unittest.TestCase):
         with self.source(identifier) as (value,descriptor):
             self.assertEqual(value['sha256'],hashlib.sha256(b'').hexdigest().upper())
             self.assertEqual(os.read(descriptor,1),b'')
+
+    def test_history_reads_accept_read_only_mount_but_capture_writers_stay_closed(self):
+        identifier=self.capture();original_meta=(self.target/(identifier+'.json')).read_bytes()
+        with patch.object(os,'fstatvfs',return_value=SimpleNamespace(f_flag=os.ST_RDONLY)):
+            with self.assertRaisesRegex(self.fixture.f.Rejected,'FILES_BACKUP_READ_ONLY'):
+                with self.fixture.storage.target():self.fail('writer must not open read-only target')
+            self.assertEqual(self.listing()['entries'][0]['captureId'],identifier)
+            with self.source(identifier) as (_,descriptor):
+                actual=bytearray()
+                while chunk:=os.read(descriptor,32768):actual.extend(chunk)
+                self.assertEqual(bytes(actual),self.fixture.original)
+            self.fixture.disk.udev_record.write_text('E:ID_FS_UUID=00000000-0000-0000-0000-000000000002\nE:ID_FS_USAGE=filesystem\n')
+            with self.assertRaisesRegex(self.fixture.f.Rejected,'FILES_BACKUP_DEVICE_MISMATCH'):self.listing()
+        self.assertEqual((self.target/(identifier+'.json')).read_bytes(),original_meta)
 
     def test_inventory_does_not_expose_original_owner_inode_or_host_aliases(self):
         identifier=self.capture();page=self.listing();self.assertTrue(page['complete'])
