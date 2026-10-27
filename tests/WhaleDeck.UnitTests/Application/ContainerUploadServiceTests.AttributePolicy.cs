@@ -95,4 +95,25 @@ public sealed partial class ContainerUploadServiceTests
         using var upload = new Fixture(); await upload.Create(); var binding = ContainerFileUploadIntentValidation.ReadBinding(upload.Repository.Row!);
         Assert.Throws<ArgumentException>(() => ContainerFileUploadIntentValidation.Binding(binding with { RestoreAttributes = true }));
     }
+
+    [Fact]
+    public async Task AttributeCapabilityLostAfterStageDefersBeforeBarrierAndResumesWithoutReadingSourceAgain()
+    {
+        using var fixture = new Fixture(); var source = Source(fixture); var service = Restores(fixture, new() { Entry = source });
+        fixture.Gateway.RecordStageReceipt = true;
+        fixture.Gateway.AfterStage = () => fixture.Gateway.RestorationUnavailable = true;
+        var plan = await service.PlanAsync(fixture.Actor, RestoreCommand(fixture, source) with { RestoreAttributes = true }, default);
+        await service.SubmitAsync(fixture.Actor, source.ContainerId, new(plan.PlanHash, true, Guid.NewGuid().ToString("D")), default);
+        Assert.True(await RestoreDispatcher(fixture).TickAsync(default));
+        var row = fixture.Repository.Row!;
+        Assert.Equal("Ready", row.State); Assert.True(row.RestoreAttributes);
+        Assert.Null(row.RootStartedAtUtc); Assert.False(row.PublishBarrier);
+        Assert.Equal(0, fixture.Gateway.Publications); Assert.Empty(fixture.Repository.Results);
+        Assert.Equal(1, fixture.Gateway.Stages); Assert.Equal(1, fixture.History.Reads); Assert.Equal(1, fixture.Repository.Deferred);
+
+        fixture.Gateway.RestorationUnavailable = false;
+        Assert.True(await RestoreDispatcher(fixture).TickAsync(default));
+        Assert.Equal("Succeeded", Assert.Single(fixture.Repository.Results).State);
+        Assert.Equal(1, fixture.Gateway.Publications); Assert.Equal(1, fixture.Gateway.Stages); Assert.Equal(1, fixture.History.Reads);
+    }
 }

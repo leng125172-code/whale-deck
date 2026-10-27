@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -73,6 +74,7 @@ def wait_worker(original):
 def main():
     global PHASE
     assert os.geteuid() == 0 and len(sys.argv) == 2; os.umask(0o077)
+    assert hasattr(os, 'pidfd_open') and hasattr(signal, 'pidfd_send_signal')
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     base = os.environ.get('WHALEDECK_URL', 'http://192.168.100.13:8080').rstrip('/')
     repository = Path(__file__).resolve().parents[2]
@@ -145,7 +147,7 @@ def main():
                 'expectedVersion': entry['version'], 'restoreAttributes': True}).json()
             assert plan['restoreAttributes'] is True
             before_worker, before_agent = worker(), agent_pid()
-            key = str(uuid.uuid4()); stopped = False
+            key = str(uuid.uuid4()); stopped = False; identifier = None; finished = False
             try:
                 if kind == 'queued':
                     command(['docker', 'stop', '--time', '20', before_worker['id']]); stopped = True
@@ -178,7 +180,17 @@ def main():
                                 record = json.loads((STATE / (operation + '.json')).read_bytes())
                                 assert record['schemaVersion'] == 4 and record['state'] == 'Receiving' and record['request']['restoreSource']['captureId'] == capture
                                 partial_bytes = info.st_size
-                                if kind == 'worker-partial': command(['docker', 'kill', '--signal', 'KILL', before_worker['id']])
+                                if kind == 'worker-partial':
+                                    # Docker's kill endpoint marks a manual stop
+                                    # and suppresses its restart policy. Kill the
+                                    # independently verified container init PID
+                                    # instead, modelling an actual process crash.
+                                    assert before_worker['pid'] > 1
+                                    descriptor = os.pidfd_open(before_worker['pid'])
+                                    try:
+                                        assert worker() == before_worker
+                                        signal.pidfd_send_signal(descriptor, signal.SIGKILL)
+                                    finally: os.close(descriptor)
                                 else: command(['systemctl', 'restart', 'whaledeck-agent.service'])
                                 break
                         except FileNotFoundError: pass
@@ -235,10 +247,23 @@ def main():
                     'fullHistoricalBytesVerified': SIZE, 'immutablePolicyUnchanged': True, 'targetAndHistoryVerified': True,
                     'maintenancePidUnchanged': True, 'newWorkerPid': worker()['pid'], 'newAgentPid': agent_pid()}
                 outcomes.append(outcome); save(kind + '.json', outcome)
+                finished = True
                 print(json.dumps({'restorationRestartCase': kind, 'state': expected, 'partialBytesBeforeRestart': partial_bytes}), flush=True)
             finally:
-                if stopped:
+                if stopped or not worker()['running']:
                     command(['docker', 'start', before_worker['id']]); wait_worker(before_worker)
+                if not finished and identifier is not None:
+                    # While this exact fixture still exists, request normal
+                    # cancellation and wait for facts before its context exits.
+                    # Never rewrite the failed task or fabricate a root proof.
+                    failure = snapshot(identifier, 'restore')
+                    if failure['row']['state'] not in ('Succeeded', 'Superseded', 'Canceled', 'Failed', 'Unknown'):
+                        request(session, 'POST', endpoint + f'restores/{identifier}/cancel', 202,
+                            headers={**api.headers, 'Idempotency-Key': identifier})
+                        deadline = time.monotonic() + 120
+                        while snapshot(identifier, 'restore')['row']['state'] not in ('Succeeded', 'Superseded', 'Canceled', 'Failed', 'Unknown'):
+                            assert time.monotonic() < deadline
+                            time.sleep(0.5)
     assert worker()['healthy'] and agent_pid() > 1
     assert query("SELECT json_build_object('active',count(*)) FROM container_file_upload_operations WHERE completed_at_utc IS NULL;")['active'] == 0
     logout(base, session); session.close()

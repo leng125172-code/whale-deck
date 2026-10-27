@@ -82,7 +82,11 @@ public sealed class ContainerFileUploadDispatcher(IContainerFileUploadRepository
             { await repository.DeferAsync(row, cancellationToken); return true; }
             if (receipt.Upload.SizeBytes != row.SizeBytes || receipt.Upload.Sha256 != row.Sha256)
             { await Unknown("CONTAINER_UPLOAD_OUTPUT_INVALID"); return true; }
-            await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
+            // The Agent may have restarted/downgraded since staging. Do not
+            // acquire a publication barrier or sign a publish capability until
+            // the original, immutable attribute policy is still supported.
+            if (row.RestoreAttributes) await gateway.RequireContainerRestorationWorkflowAsync(cancellationToken);
+            else await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
             var started = await repository.StartedAsync(row, clock.GetUtcNow(), cancellationToken);
             if (started != ContainerFileUploadStartResult.Started)
             { await repository.DeferAsync(row, cancellationToken); return true; }
