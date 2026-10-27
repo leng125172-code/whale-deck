@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-27 真实浏览器进行中断通过，并修复只读清理竞态**：在实际Root已接收32KiB后，页面中止及跨页正常退出均有真实CDP ERR_ABORTED/canceled与独立SQL/Worker/Root终态，零目标发布；两页login、旧Cookie401/Authentik拒绝通过。门禁抓到只读/宿主--collect退出竞态，24确定性测试修复前10失败、修后全通过；helper已原子热修，无服务重启，程序集仍fab6e2e。最终25意图10成功/8取消/7失败、Unknown/活租约/屏障0、11核心healthy；失败输入精确核验清理。自然两小时仍观察，文本编辑未部署，下一次覆盖须包含helper修复。[浏览器证据](qa/CONTAINER_UPLOAD_BROWSER_INTERRUPTION.md)、[修复及安装摘要](qa/FILE_TRANSPORT_STOP_RACE.md)。
+
 - **2026-10-27 有发布保护的Unknown真实整链通过**：原fab6e2e上512MiB旧版本实际HDD partial写入后停止独占容器，Unknown保留RootStarted/全局屏障；另一正常容器上传两次被Worker推迟。原身份正常退出并删除后，不同管理员持久计划/二次确认永久封存及失败对账解除屏障，后者才成功发布。原件全SHA/inode、Root载荷与HDD未完成副本保留，测试源精确清理/11核心healthy；清理观察器首轮遗漏空私有目录已修正并完整重跑通过。22意图10成功/7取消/5失败，Unknown/活租约/屏障0。权限两小时仍观察，编辑候选未部署；发布交换故障/重启、真实编辑和历史恢复继续。[证据与边界](qa/CONTAINER_UPLOAD_PUBLISH_INTERRUPTION.md)。
 
 - **2026-10-27 容器文本编辑候选与部分接收中断门禁**：前端已支持独立容器位置、1MiB UTF-8/BOM/换行、打开时版本绑定、确认取消零字节/草稿返回与同步私有清理；469单元/46组合浏览器、检查和生产构建通过，候选尚未部署。实际fab6e2e三项先接收64KiB后取消/退出/RST，Worker终止及Root清理通过，无发布；18意图8成功/7取消/3失败、活租约/屏障0、11核心healthy。两小时自然权限降级仍在观察，不改时钟/缓存、不提前签通过；实机编辑、发布中故障/重启/有屏障Unknown及历史恢复继续。[编辑边界](qa/CONTAINER_TEXT_EDITOR.md)、[中断证据](qa/CONTAINER_UPLOAD_INTERRUPTION.md)。

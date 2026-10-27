@@ -40,6 +40,7 @@ jobs:
           python3 -m py_compile deploy/validation/validate_container_text_browser.py
           python3 -m py_compile deploy/validation/validate_container_upload_interruption_bff.py deploy/validation/validate_authentik_permission_expiry.py
           python3 -m py_compile deploy/validation/validate_container_upload_publish_interruption.py
+          python3 -m py_compile deploy/validation/validate_container_upload_browser_interruption.py
           python3 -m py_compile deploy/validation/validate_bff_session_valkey.py deploy/validation/validate_bff_login_liveness.py
           python3 -m py_compile deploy/validation/validate_bff_login_browser.py
           node --check deploy/validation/validate_container_upload_browser.mjs
@@ -214,10 +215,14 @@ jobs:
         run: bash ../deploy/ci/install-frontend-dependencies.sh
       - name: Verify bounded browser download evidence observer
         run: node --test ../deploy/validation/test_browser_download_probe.mjs
+      - name: Verify scoped browser upload transport evidence observer
+        run: node --test ../deploy/validation/test_browser_upload_probe.mjs
       - name: Check installed login browser gate syntax without production access
         run: node --check ../deploy/validation/validate_bff_login_browser.mjs
       - name: Check installed container editor browser gate syntax without production access
         run: node --check ../deploy/validation/validate_container_text_browser.mjs
+      - name: Check installed partial upload browser gate syntax without production access
+        run: node --check ../deploy/validation/validate_container_upload_browser_interruption.mjs
       - run: corepack pnpm lint
       - run: corepack pnpm format:check
       - run: corepack pnpm test:unit

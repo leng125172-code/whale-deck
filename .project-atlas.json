@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_TEXT_EDITOR.md；docs/qa/CONTAINER_UPLOAD_INTERRUPTION.md",
-  "nextStep": "真实旧版本捕获中断/全局屏障/不同管理员接管及第二上传恢复已通过；保留两小时自然权限观察。之后覆盖023f6d1文本编辑候选并真实SSO/UI/SQL/Root/HDD验收，继续浏览器进行中取消、原子交换故障/重启和历史恢复及其余59项。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_UPLOAD_BROWSER_INTERRUPTION.md；docs/qa/CONTAINER_UPLOAD_PUBLISH_INTERRUPTION.md",
+  "nextStep": "真实部分上传页面中止/跨页退出及全局屏障接管已通过；只读/宿主清理竞态helper已热修。保留两小时自然权限观察，结束后以包含72c72cc及文本编辑的最新HEAD完整覆盖，执行真实编辑/HDD门禁；继续发布交换故障、Worker/Agent重启、历史恢复和其余59项。"
 }
