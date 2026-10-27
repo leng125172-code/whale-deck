@@ -64,10 +64,13 @@ case "$action" in
     ;;
   file-transport-stop)
     [[ $# -eq 3 && "$2" =~ ^[a-f0-9]{32}$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
-    files_instance=$(/usr/bin/systemctl show "whaledeck-files-$2.service" -p InvocationID --value 2>/dev/null || true)
+    files_instance=$(/usr/bin/systemctl show "whaledeck-files-$2.service" -p InvocationID --value 2>/dev/null) || exit 2
     [[ -n "$files_instance" ]] || exit 0
     [[ "$files_instance" == "$3" ]] || exit 2
-    exec /usr/bin/systemctl stop "whaledeck-files-$2.service"
+    if /usr/bin/systemctl stop "whaledeck-files-$2.service" 2>/dev/null; then exit 0; fi
+    files_after=$(/usr/bin/systemctl show "whaledeck-files-$2.service" -p InvocationID --value 2>/dev/null) || exit 2
+    [[ -z "$files_after" ]] || exit 2
+    exit 0
     ;;
   container-file-transport)
     [[ $# -eq 3 && ( "$2" == list || "$2" == stat || "$2" == download ) && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
@@ -92,10 +95,15 @@ case "$action" in
     ;;
   container-file-transport-stop)
     [[ $# -eq 3 && "$2" =~ ^[a-f0-9]{32}$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
-    container_files_instance=$(/usr/bin/systemctl show "whaledeck-container-files-$2.service" -p InvocationID --value 2>/dev/null || true)
+    container_files_instance=$(/usr/bin/systemctl show "whaledeck-container-files-$2.service" -p InvocationID --value 2>/dev/null) || exit 2
     [[ -n "$container_files_instance" ]] || exit 0
     [[ "$container_files_instance" == "$3" ]] || exit 2
-    exec /usr/bin/systemctl stop "whaledeck-container-files-$2.service"
+    # Read-only not-found replies are still authoritative. A collected unit
+    # must not turn their cleanup into a different precondition failure.
+    if /usr/bin/systemctl stop "whaledeck-container-files-$2.service" 2>/dev/null; then exit 0; fi
+    container_files_after=$(/usr/bin/systemctl show "whaledeck-container-files-$2.service" -p InvocationID --value 2>/dev/null) || exit 2
+    [[ -z "$container_files_after" ]] || exit 2
+    exit 0
     ;;
   container-file-write)
     [[ $# -eq 3 && ( "$2" == target || "$2" == stage || "$2" == publish || "$2" == inspect || "$2" == discard || "$2" == recovery-observe || "$2" == recovery-seal ) && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2

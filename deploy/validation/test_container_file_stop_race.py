@@ -9,6 +9,8 @@ import unittest
 
 @unittest.skipUnless(os.name == 'posix' and hasattr(os, 'geteuid') and os.geteuid() == 0, 'requires Linux root helper guard')
 class ContainerWriterStopRaceTests(unittest.TestCase):
+    action = 'container-file-write-stop'
+    unit_prefix = 'whaledeck-container-file-write-'
     def run_helper(self, first, after, stop_exit, expected, expected_calls, show_exit=0):
         with tempfile.TemporaryDirectory() as temporary:
             directory=Path(temporary); calls=directory/'calls.json'
@@ -21,11 +23,11 @@ class ContainerWriterStopRaceTests(unittest.TestCase):
             fake.chmod(0o700)
             source=(Path(__file__).resolve().parents[1]/'host/whaledeck-privileged').read_text()
             helper.write_text(source.replace('/usr/bin/systemctl',str(fake)));helper.chmod(0o700)
-            result=subprocess.run(['bash',str(helper),'container-file-write-stop','a'*32,'b'*32],capture_output=True,timeout=10)
+            result=subprocess.run(['bash',str(helper),self.action,'a'*32,'b'*32],capture_output=True,timeout=10)
             self.assertEqual(expected,result.returncode)
             rows=json.loads(calls.read_text())
             self.assertEqual(expected_calls,[row[0] for row in rows])
-            self.assertTrue(all(row[1]=='whaledeck-container-file-write-'+('a'*32)+'.service' for row in rows))
+            self.assertTrue(all(row[1]==self.unit_prefix+('a'*32)+'.service' for row in rows))
 
     def test_collected_after_inspect_is_idempotent_success(self):
         self.run_helper('b'*32,'',5,0,['show','stop','show'])
@@ -50,6 +52,16 @@ class ContainerWriterStopRaceTests(unittest.TestCase):
 
     def test_bus_failure_after_stop_is_not_collection(self):
         self.run_helper('b'*32,'',5,2,['show','stop','show'],show_exit=1)
+
+
+class ContainerReaderStopRaceTests(ContainerWriterStopRaceTests):
+    action = 'container-file-transport-stop'
+    unit_prefix = 'whaledeck-container-files-'
+
+
+class HostFileStopRaceTests(ContainerWriterStopRaceTests):
+    action = 'file-transport-stop'
+    unit_prefix = 'whaledeck-files-'
 
 
 if __name__=='__main__': unittest.main()
