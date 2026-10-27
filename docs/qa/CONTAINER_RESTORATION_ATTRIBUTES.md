@@ -1,5 +1,8 @@
 # 容器历史属性恢复：固定发布引擎候选
 
+最新宿主安装态已更新到06b6eed/minor43并通过实际签名属性恢复，两次2097159字节及普通4属性/Root/HDD/原inode核验通过；API/Worker/Gateway仍5fd8d3b，业务属性策略与页面尚待。见[签名RPC实机记录](CONTAINER_RESTORATION_RPC.md)。下方“未安装”对应前序内部引擎候选。
+
+
 ## 最新冻结00f50b7复验通过，产品仍未安装属性能力
 
 20专项/251容器Linux-root联合测试通过，长路径读取及封存回执限额修正已包含；Python语法通过。冻结`00f50b724a6ec14cd453608ceab936fe42a16a5a`的9模块实际Docker/物理HDD再验通过，证据`deploy/artifacts/container-attributes-native-f9b298da017f4f22a3a57b9c7bff8f22/`，日志`/tmp/wd-container-restore-attributes-native-3.log`。真实普通属性恢复/实际测试容器重启/原路径及其他路径完整2097159字节/旧inode与HDD匹配，错误摘要拒绝；新进程独立核对全部冻结SHA、精确CID no-such-object、源/HDD沙箱/bundle均不存在。
