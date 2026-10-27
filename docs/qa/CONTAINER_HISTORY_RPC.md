@@ -19,3 +19,15 @@ Root 固定 helper 仅有 list/source 枚举，使用受限 systemd profile、�
 修正为可信内部显式只读 target/attest，禁止只读模式创建 namespace；挂载、UUID、HDD 和文件身份校验保持，默认写入遇只读仍拒绝。新增完整来源测试也验证错误 UUID 依然拒绝。231 项容器 Linux-root、22 备份安装测试及 Release 零警告错误通过；首轮新测试的 fixture 属性引用错误已修正并完整重跑，日志保留。修正尚待再次覆盖及真实 RPC 完整重跑。
 
 CI 安装器失败另由进度元数据漏写“17项移出不算完成”触发，已补回范围说明，8项范围检查通过；未删除或削弱检查，完整安装器本机重跑和新 CI 继续。
+
+## e6b5034 修复后真实安装门禁通过
+
+正常 dev 覆盖 `whaledeck-dev-e6b5034.service`，0/SUCCESS，3分27.168秒。当前 Agent/MaintenanceHost/API/Worker/Gateway/Migrator 与实际 HTTP 来源均为 `e6b50346a6de585fd3c0664d0a253323a0f32e34`，Agent minor42。宿主校验通过；安装的历史引擎、共用备份模块和固定 helper 全SHA与该源码匹配。沙箱保持 ProtectSystem=strict，HDD只读；未扩大 ReadWritePaths。
+
+独立冻结客户端来自 `terminal-probe.LJ1Can`。真实管理员 BFF 上传及 Worker 成功生成物理 HDD 旧捕获；直接签名 UDS List/ReadSource 首次读取完整2097159字节，随后实际停止/启动仅本次独占普通容器，以新当前实例读取同一旧实例捕获，再完整核对字节/摘要。缺 MAC、上传域 MAC、请求体变化、重复 nonce 及核心容器均拒绝。完整 RPC EOF 后才签成功，当前目标、被保留旧 inode 和 HDD 原件在两次读取前后均不变。
+
+私有证据 `deploy/artifacts/container-history-agent-c18138aedb04452b87bbfa54142319b6/`、日志 `/tmp/wd-container-history-agent-e6b5034.log`。准确验证后删除测试容器/源目录，永久 SQL/Root/HDD 历史保留。另在同一 e6b5034 再跑真实文本编辑：两次桌面/手机完整编辑、取消零内容、旧inode/HDD、正常双端跨页退出全部通过，证据 `container-text-browser-a137843b4a814127a549460685b4a33d`；没有用前版的网页结果替代本版。
+
+独立最终 SQL：31条永久上传意图（16 Succeeded、8 Canceled、7 Failed），活动/Unknown/租约/发布屏障均0；临时上传验收身份0，四轮源目录已缺失、四容器均明确 no-such-object，11核心healthy。额外只读清理核对起初严格匹配 Docker 英文大小写/空白失败，读取实际退出码1、空白stdout及明确 no-such-object 后重新准确检查；未为核对失败删除任何其他对象。
+
+原安装器完整36组866测试本机正常结束，另新增只读修复231容器/22备份安装通过；e6b5034 CI已确认后端/原生PG/原生Valkey/安装器success，前端完整浏览器组仍运行，尚未宣称全CI通过。完整恢复 SQL目录、来源绑定持久意图/二次确认、授权调度、发布旧目标HDD留存和API/UI仍待，当前只验收内部来源，不签P2整项。

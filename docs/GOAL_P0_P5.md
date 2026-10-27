@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-27 e6b5034/minor42已覆盖，编辑与历史来源实机通过**：两次正常dev覆盖0/SUCCESS，当前六组件/实际HTTP一致、宿主权限/UDS/动态入口及10.0.13校验通过。实际桌面明色/320暗色两次编辑，BOM/CRLF、取消零内容/单次确认发送、旧inode/HDD和跨页退出清空通过；真实BFF生成2MiB+7旧版本，独立签名List/ReadSource完整读回及实际测试容器重启后旧捕获读回、签名/重放/核心拒绝通过。真实只读沙箱误报可写要求已修且保留失败证据，写路径仍失败关闭。最终31意图16成功/8取消/7失败，Unknown/活租约/屏障0，临时身份0、11核心healthy；231容器Linux-root/22备份安装通过，CI后端/原生PG/原生Valkey/安装器success、前端尚运行。自然两小时撤权已完整通过；恢复永久目录/任务/计划/API/UI及其余59项继续active，17项移出不算完成。[真实协议与边界](qa/CONTAINER_HISTORY_RPC.md)、[编辑证据](qa/CONTAINER_TEXT_EDITOR.md)。
+
 - **2026-10-27 自然两小时撤权通过；历史 RPC 候选待部署**：原登录实际7203.941秒/246次观察，移组后原快照到期首次403、到期后成功授权0、未改时钟/SQL/缓存，独占身份清理。minor42独立List/ReadSource/固定只读helper/严格EOF SDK及原生门禁候选完成，Release零警告错误、2666 Unit/191 Integration通过（7原生夹具默认跳过）、230容器Linux-root/22备份安装测试通过。尚未部署，实际仍fab6e2e+72c72cc helper；下一步覆盖并执行真实编辑与HDD来源RPC，恢复意图/目录SQL/API/UI仍待，59项继续active。[协议与边界](qa/CONTAINER_HISTORY_RPC.md)、[两小时证据](qa/CONTAINER_UPLOAD_INTERRUPTION.md)。
 
 - **2026-10-27 容器HDD历史校验基础候选**：独立v2容器历史域、字段/游标预算、存在与完整内容校验区分、绑定当前实例的旧捕获只读来源已实现。20新增Linux-root及最终216容器组通过；冻结引擎在真实HDD完整2MiB+7读回/实际独占容器重启后读取旧捕获、错误UUID/旧当前范围拒绝通过，源/沙箱精确清理。尚未安装或接RPC/目录SQL/恢复意图/API/UI，不宣称已恢复文件。运行时fab6e2e+72c72cc helper不变，两小时仍观察；继续独立签名协议与完整恢复链。[证据与剩余](qa/CONTAINER_FILE_HISTORY_ENGINE.md)。

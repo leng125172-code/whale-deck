@@ -31,3 +31,5 @@
 `validate_container_text_browser.py` 实际管理员正常 Authentik 登录，在1440明色和320暗色分别编辑同一中文文本；两个确认取消均零登记/零内容，返回草稿保留，每次确认只发一次 octet-stream。实际完整文件、SQL/Worker/Root 发布、两份旧 inode/权限及 HDD 原文独立核对，BOM/CRLF 保持，第二次的原版本准确衔接第一次发布版本。未保存草稿及放弃对话框在另一页正常双端退出后清空，两页回登录、WD401/Authentik拒绝通过。
 
 私有证据 `deploy/artifacts/container-text-browser-b9a815b816db4583a951c917985c9423/`、日志 `/tmp/wd-container-text-browser-7b38c0f.log`；主代理查看两张实际编辑器截图，手机没有水平溢出、保存按钮可见。准确验证后清理独占容器及源目录；永久任务/审计/Root/HDD历史保留。这不代表已具备内容历史恢复或整个文件管理完成。
+
+2026-10-27 在修复只读历史校验后的当前 e6b5034 再次完整重跑上述真实网页/SQL/Root/HDD/跨页双端退出门禁，全部通过；日志 `/tmp/wd-container-text-browser-e6b5034.log`、私有证据 `deploy/artifacts/container-text-browser-a137843b4a814127a549460685b4a33d/`。精确数据与账号清理均独立核对，不能以此宣称内容历史恢复已实现。

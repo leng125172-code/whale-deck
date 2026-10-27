@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_HISTORY_ENGINE.md；docs/qa/CONTAINER_UPLOAD_BROWSER_INTERRUPTION.md",
-  "nextStep": "自然两小时权限撤销已真实通过；minor42历史List/ReadSource、固定只读helper与SDK候选测试通过。覆盖最新dev，验收真实文本编辑和实际HDD历史来源RPC；继续永久目录/恢复意图/API/UI，59项保持active。17项移出不算完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_HISTORY_RPC.md；docs/qa/CONTAINER_TEXT_EDITOR.md",
+  "nextStep": "当前e6b5034/minor42六组件/HTTP、真实文本编辑与HDD历史来源RPC/实际容器重启读取旧捕获通过，自然2h撤权通过。实现永久历史目录和恢复计划/确认、任务/来源到发布、API/UI，并补Worker/Agent重启/发布故障门禁；59项active，17项移出不算完成。"
 }
