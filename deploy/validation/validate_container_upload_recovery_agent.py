@@ -26,6 +26,7 @@ DOMAIN = b'whaledeck-container-upload-recovery-v1\n'
 PREFIX = '/whaledeck.agent.v1.ContainerFileWriteService/'
 STATE = Path('/var/lib/whaledeck-container-uploads')
 PHASE = 'startup'
+RPC_STATUS = None
 
 
 def digest(kind, value):
@@ -99,10 +100,13 @@ def main():
     context = message([(1, text('native-recovery-original-owned-validation')), (2, text('native-recovery-original-owned-validation')),
                        (3, text(operation)), (4, text(operation))])
     current = message([(1, text(trace)), (2, text(actor)), (3, text(recovery)), (4, text(recovery))])
+    evidence = Path(__file__).resolve().parents[1] / 'artifacts' / ('container-recovery-evidence-' + uuid.uuid4().hex)
+    evidence.mkdir(mode=0o700)
     with tempfile.TemporaryDirectory(prefix='wdv-recovery-wire-') as temporary, owned.fixture() as fixture:
         private = Path(temporary); sequence = 0
         def call(action, kind, body, expected=0, anonymous=False, signed_body=None):
             nonlocal sequence
+            global RPC_STATUS
             sequence += 1; payload = private / f'{sequence}.body'; headers = private / f'{sequence}.headers'
             payload.write_bytes(b'\0' + len(body).to_bytes(4, 'big') + body); payload.chmod(0o600)
             request_hash = hashlib.sha256(b'whaledeck-container-file-request-v1\nwhaledeck.agent.v1.' + kind.encode() + b'\n' +
@@ -116,7 +120,9 @@ def main():
             if not anonymous: config.extend([f'header = "x-whaledeck-capability: {capability}"', f'header = "x-whaledeck-request-sha256: {request_hash}"'])
             result = subprocess.run(['curl', '--config', '-'], input=('\n'.join(config)+'\n').encode(), capture_output=True, check=True, timeout=25)
             assert len(result.stdout) <= 65536 and len(result.stderr) <= 65536
-            statuses = re.findall(rb'(?im)^grpc-status:\s*([0-9]+)\s*$', headers.read_bytes()); assert statuses and int(statuses[-1]) == expected
+            statuses = re.findall(rb'(?im)^grpc-status:\s*([0-9]+)\s*$', headers.read_bytes())
+            RPC_STATUS = {'method': action, 'expected': expected, 'actual': None if not statuses else int(statuses[-1])}
+            assert statuses and int(statuses[-1]) == expected
             if expected: return None
             raw = result.stdout; assert len(raw) >= 5 and raw[0] == 0 and len(raw) == 5 + int.from_bytes(raw[1:5], 'big')
             return raw[5:]
@@ -128,6 +134,10 @@ def main():
         target = parse(call('InspectTarget', 'ContainerFileLocation', location)); proof = target[2].decode()
         scope = {'containerId': fixture['identifier'], 'instanceId': instance, 'operationId': operation,
                  'owner': 'B'*64, 'expectedTargetProof': proof}
+        baseline = evidence / 'baseline.json'
+        baseline.write_text(json.dumps({'scope': scope, 'recoveryId': recovery, 'actor': actor, 'trace': trace,
+                                       'hostRevision': revision, 'probeSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}))
+        baseline.chmod(0o600)
         original = message([(1, text(scope['containerId'])), (2, text(instance)), (3, text(operation)),
                             (4, text(scope['owner'])), (5, context), (6, text(proof))])
         PHASE = 'installed-historical-observation-and-method-binding'
@@ -176,6 +186,7 @@ def main():
             try: os.fsync(parent)
             finally: os.close(parent)
         finally: os.close(descriptor)
+        verified = evidence / 'verified.json'; verified.write_text(json.dumps({'sealed': sealed, 'ownedMissingSealCleaned': True})); verified.chmod(0o600)
     print(json.dumps({'installedContainerRecoveryRpc': 'passed', 'hostRevision': revision,
                       'independentlySignedObserveAndSeal': True, 'actualStoppedAndRestartedObservation': True,
                       'approvalAndRequestBinding': True, 'durableSameRequestReplay': True,
@@ -185,6 +196,9 @@ def main():
 if __name__ == '__main__':
     try: main()
     except BaseException as error:
+        import traceback
         print(json.dumps({'installedContainerRecoveryRpc': 'failed', 'phase': PHASE, 'failureType': type(error).__name__,
+                          'rpcStatus': RPC_STATUS,
+                          'locations': [{'file': Path(frame.filename).name, 'line': frame.lineno} for frame in traceback.extract_tb(error.__traceback__)],
                           'unverifiedDataPreserved': True}), file=sys.stderr)
         raise SystemExit(1) from None
