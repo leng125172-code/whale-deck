@@ -311,7 +311,7 @@ public sealed class FileTreeOverwriteRestoringPolicyTests
         var plan = await Assert.ThrowsAsync<RpcException>(() => service.Plan(new() { Context = new() { ActorSubject = "admin" }, Command = invalidTarget }, null!));
         Assert.Equal(StatusCode.InvalidArgument, plan.StatusCode);
         var capabilities = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
-        Assert.Equal(43U, capabilities.ProtocolMinor);
+        Assert.Equal(44U, capabilities.ProtocolMinor);
         Assert.Contains("files.tree-overwrite-restore-intents", capabilities.Capabilities);
         Assert.Contains("files.tree-overwrite-restore-content-proof", capabilities.Capabilities);
         Assert.Contains("files.tree-restore-intents", capabilities.Capabilities);

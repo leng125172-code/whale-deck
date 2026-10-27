@@ -661,6 +661,29 @@ service ContainerHistoryService {
   rpc ReadSource(ContainerHistorySourceRequest) returns (stream ContainerHistorySourceFrame);
 }
 
+// Independent content-bound authority. No host path, raw UID/GID input or Exec.
+// Owner IDs are derived by Root during Plan, then frozen in the signed intent.
+message ContainerDirectoryCommand { ContainerFileLocation location = 1; string mode = 2; }
+message ContainerDirectoryPlan {
+  uint32 schema_version = 1; ContainerDirectoryCommand command = 2; string target_proof = 3;
+  FileDirectoryIdentity parent_identity = 4; string parent_version = 5;
+  uint32 owner_uid = 6; uint32 owner_gid = 7; string fingerprint = 8;
+}
+message ContainerDirectoryPlanRequest { ContainerDirectoryCommand command = 1; RequestContext context = 2; }
+message ContainerDirectoryRequest {
+  string operation_id = 1; string owner = 2; ContainerDirectoryPlan plan = 3; RequestContext context = 4;
+}
+message ContainerDirectoryReceipt {
+  string operation_id = 1; string container_id = 2; string instance_id = 3; string fingerprint = 4;
+  string target_proof = 5; string state = 6; string version = 7; bool binding_current = 8; bool replayed = 9;
+}
+service ContainerDirectoryService {
+  rpc Plan(ContainerDirectoryPlanRequest) returns (ContainerDirectoryPlan);
+  rpc Apply(ContainerDirectoryRequest) returns (ContainerDirectoryReceipt);
+  rpc Inspect(ContainerDirectoryRequest) returns (ContainerDirectoryReceipt);
+  rpc Discard(ContainerDirectoryRequest) returns (ContainerDirectoryReceipt);
+}
+
 message FileLocation { string root_id = 1; string path = 2; }
 message FileRoot { string id = 1; string name = 2; repeated string actions = 3; }
 message FileRoots { repeated FileRoot roots = 1; }

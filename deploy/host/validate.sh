@@ -37,11 +37,13 @@ assert_metadata /usr/local/libexec/whaledeck-container-files.py '750:root:root'
 [[ ! -L /usr/local/libexec/whaledeck-container-files.py && $(stat -c %h /usr/local/libexec/whaledeck-container-files.py) == 1 ]]
 assert_metadata /var/lib/whaledeck-container-files '700:root:root'
 [[ ! -L /var/lib/whaledeck-container-files ]]
-for module in /usr/local/libexec/whaledeck-container-file-write.py /usr/local/libexec/whaledeck-container-upload.py /usr/local/libexec/whaledeck-container-backups.py /usr/local/libexec/whaledeck-container-publish.py /usr/local/libexec/whaledeck-container-history.py /usr/local/libexec/whaledeck-container-history-transport.py /usr/local/libexec/whaledeck-container-restore.py; do
+for module in /usr/local/libexec/whaledeck-container-directories.py /usr/local/libexec/whaledeck-container-directory-transport.py /usr/local/libexec/whaledeck-container-file-write.py /usr/local/libexec/whaledeck-container-upload.py /usr/local/libexec/whaledeck-container-backups.py /usr/local/libexec/whaledeck-container-publish.py /usr/local/libexec/whaledeck-container-history.py /usr/local/libexec/whaledeck-container-history-transport.py /usr/local/libexec/whaledeck-container-restore.py; do
   assert_metadata "$module" '750:root:root'
   [[ ! -L $module && $(stat -c %h "$module") == 1 ]]
 done
 assert_metadata /var/lib/whaledeck-container-uploads '700:root:root'
+assert_metadata /var/lib/whaledeck-container-directories '700:root:root'
+[[ ! -L /var/lib/whaledeck-container-directories ]]
 [[ ! -L /var/lib/whaledeck-container-uploads ]]
 assert_metadata /usr/local/libexec/whaledeck-files.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-operations.py '750:root:root'

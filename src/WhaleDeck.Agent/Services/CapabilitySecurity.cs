@@ -17,7 +17,8 @@ public sealed class CapabilityValidator(IConfiguration configuration)
     public bool Validate(string? token, string method)
     {
         if (method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) ||
-            method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal)) return false;
+            method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal) ||
+            method.StartsWith(ContainerDirectoryBinding.Service, StringComparison.Ordinal)) return false;
         if (method.EndsWith("/GetCapabilities", StringComparison.Ordinal) ||
             method.EndsWith("/GetHealth", StringComparison.Ordinal) ||
             method.EndsWith("/WatchHealth", StringComparison.Ordinal))
@@ -72,6 +73,11 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         return method is ContainerHistoryBinding.Service + "List" or ContainerHistoryBinding.Service + "ReadSource" &&
             ValidateContentBound(token, method, requestHash, ContainerHistoryBinding.Payload);
     }
+
+    public bool ValidateContainerDirectory(string? token, string method, string? requestHash) =>
+        method is ContainerDirectoryBinding.Service + "Plan" or ContainerDirectoryBinding.Service + "Apply" or
+            ContainerDirectoryBinding.Service + "Inspect" or ContainerDirectoryBinding.Service + "Discard" &&
+        ValidateContentBound(token, method, requestHash, ContainerDirectoryBinding.Payload);
 
     private bool ValidateContentBound(string? token, string method, string? requestHash,
         Func<string, string, string, string, string> payload)
@@ -137,7 +143,9 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     private void Authorize(ServerCallContext context)
     {
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");
-        var valid = context.Method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal)
+        var valid = context.Method.StartsWith(ContainerDirectoryBinding.Service, StringComparison.Ordinal)
+            ? validator.ValidateContainerDirectory(token, context.Method, context.RequestHeaders.GetValue(ContainerDirectoryBinding.Header))
+            : context.Method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerWrite(token, context.Method, context.RequestHeaders.GetValue(ContainerFileWriteBinding.Header))
             : context.Method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal)
                 ? validator.ValidateContainerHistory(token, context.Method, context.RequestHeaders.GetValue(ContainerHistoryBinding.Header))

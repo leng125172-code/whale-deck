@@ -26,7 +26,7 @@ public sealed partial class ContainerUploadGatewayTests
     public async Task ActualAgentAdvertisesIndependentAttributeAndExistingHistoryCapabilities()
     {
         var capabilities = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
-        Assert.Equal(1U, capabilities.ProtocolMajor); Assert.Equal(43U, capabilities.ProtocolMinor);
+        Assert.Equal(1U, capabilities.ProtocolMajor); Assert.Equal(44U, capabilities.ProtocolMinor);
         Assert.Contains("docker.files.restore-attributes", capabilities.Capabilities);
         Assert.Contains("docker.files.history-source", capabilities.Capabilities);
         Assert.Contains("docker.files.upload-recovery-seal", capabilities.Capabilities);
