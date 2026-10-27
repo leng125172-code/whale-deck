@@ -43,6 +43,7 @@ jobs:
           python3 -m py_compile deploy/validation/validate_container_restoration_restart.py
           python3 -m py_compile deploy/validation/validate_container_restoration_publication.py
           node --check deploy/validation/validate_container_restoration_publication.mjs
+          node --check deploy/validation/installed_ui_logout.mjs
           node --check deploy/validation/validate_container_restore_browser.mjs
           python3 -m py_compile deploy/validation/validate_container_upload_bff.py
           python3 -m py_compile deploy/validation/validate_container_upload_browser.py
