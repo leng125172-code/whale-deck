@@ -48,6 +48,17 @@ public sealed partial class ContainerUploadRecoveryMaterialTests
         Assert.Equal(Current.Subject,gateway.LastActor!.Subject); Assert.Equal("old-container-admin",gateway.OriginalSubject);
     }
     [Fact]
+    public async Task ASealRequestLostBeforeRootReceptionRetriesOnlyTheIdempotentSeal()
+    {
+        var row = RecoveryRow(); var repository = new RecoveryRepository(row); var gateway = new RecoveryGateway(this) { LoseBeforeSeal = true };
+        var registry = new RecoveryLogins(); var identity = new RecoveryIdentity();
+        Assert.True(await new FileRecoveryDispatcher(repository,gateway,identity,_protector,TimeProvider.System,registry).TickAsync(default));
+        Assert.Equal(1,gateway.Fences); Assert.Null(repository.Result); Assert.Equal(1,repository.Deferrals);
+        Assert.True(await new FileRecoveryDispatcher(repository,gateway,identity,_protector,TimeProvider.System,registry).TickAsync(default));
+        Assert.Equal(2,gateway.Fences); Assert.Equal("Disposed",repository.Finished);
+        Assert.True(ContainerUploadRecoveryValidation.Decode(FileRecoveryValidation.Snapshot(row),repository.Result!).Sealed);
+    }
+    [Fact]
     public async Task LogoutDuringSealDoesNotAcknowledgeOrReleaseTheOriginal()
     {
         var row = RecoveryRow(); var registry = new RecoveryLogins(); var repository = new RecoveryRepository(row);
@@ -92,14 +103,16 @@ public sealed partial class ContainerUploadRecoveryMaterialTests
     }
     private sealed class RecoveryGateway(ContainerUploadRecoveryMaterialTests fixture) : IFileRecoveryGateway
     {
-        public int Inspections { get; private set; } public int Fences { get; private set; } public bool LoseReply { get; set; }
+        public int Inspections { get; private set; } public int Fences { get; private set; } public bool LoseReply { get; set; } public bool LoseBeforeSeal { get; set; }
         public string RootState { get; init; } = "Published"; public Action? OnFence { get; init; } public TerminalActor? LastActor { get; private set; }
         public string? OriginalSubject { get; private set; } private Guid? _seal;
         public Task<FileRecoveryObservation> InspectForRecoveryAsync(FileRecoverySnapshot original,TerminalActor currentActor,CancellationToken cancellationToken)
         { Inspections++; return Task.FromResult(Observe(original)); }
         public Task<FileRecoveryObservation> FenceForRecoveryAsync(FileRecoverySnapshot original,TerminalActor currentActor,CancellationToken cancellationToken)
         {
-            Fences++; LastActor=currentActor; _seal=original.RecoveryExecutionId; OnFence?.Invoke(); var observation=Observe(original);
+            Fences++; LastActor=currentActor;
+            if (LoseBeforeSeal) { LoseBeforeSeal=false; throw new IOException("owned loss before Root receipt"); }
+            _seal=original.RecoveryExecutionId; OnFence?.Invoke(); var observation=Observe(original);
             if (LoseReply) { LoseReply=false; throw new IOException("owned lost seal reply"); }
             return Task.FromResult(observation);
         }

@@ -28,7 +28,8 @@ public sealed class FileRecoveryDispatcher(IFileRecoveryRepository repository, I
                 ContainerUploadRecoveryValidation.MatchesApprovedOrSealed(snapshot, receipt);
             if (receipt.ReceiptHash != row.ObservationHash && !(row.FenceStartedAtUtc is not null && row.RootState == "Missing" && receipt.State == "Aborted") && !containerSealed)
             { await Fail("FILES_RECOVERY_RECEIPT_CHANGED"); return true; }
-            if (row.FenceStartedAtUtc is not null && receipt.State != "Missing")
+            if (row.FenceStartedAtUtc is not null && receipt.State != "Missing" &&
+                (row.Kind != FileRecoveryKinds.ContainerUpload || containerSealed))
             { await repository.FinishAsync(row, receipt, "FILES_RECOVERY_DISPOSED", cancellationToken); return true; }
             if (!await repository.BeginFenceAsync(row, cancellationToken))
             { await Fail("FILES_RECOVERY_CANCELED_OR_EXPIRED"); return true; }

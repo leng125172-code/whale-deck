@@ -154,6 +154,18 @@ public sealed partial class NativeNotificationDispatchTests
             var discarded = new ContainerFileUploadReceiptDto(next.ContainerId,next.InstanceId,next.Id,next.TargetProof,new("Discarded",next.SizeBytes,next.Sha256,"",false,false,false),false);
             Assert.True(await uploads.FinishAsync(next,"Canceled","CONTAINER_UPLOAD_CANCELED",discarded,default));
             Assert.False(await db.ContainerFileUploadOperations.AnyAsync(item => ids.Contains(item.Id)&&item.PublishBarrier));
+            // Loss before Root receives the seal is a different recovery path:
+            // repeat only the same idempotent seal, never publish file bytes.
+            var unseen = await Original(); gateway.ResetBeforeReceptionLoss();
+            var unseenPlan = await service.QueueAsync(actor,new(FileRecoveryKinds.ContainerUpload,unseen.Id,unseen.Version,"AcknowledgeUnknown","IncidentReview"),Guid.NewGuid().ToString("D"),default);
+            Assert.True(await worker.TickAsync(default)); var unseenReady = await service.GetAsync(actor,unseenPlan.Id,default);
+            var unseenAccepted = await service.ConfirmAsync(actor,unseenReady.Id,new(unseenReady.Confirmation!.PlanHash,true,unseenReady.Version),default);
+            var fencesBefore = gateway.Fences; Assert.True(await worker.TickAsync(default));
+            Assert.Equal("Unknown",(await service.GetAsync(actor,unseenAccepted.Id,default)).State);
+            Assert.True((await uploads.OwnedAsync(oldActor,unseen.Id,default))!.PublishBarrier);
+            clock.Now = clock.Now.AddSeconds(7); Assert.True(await worker.TickAsync(default));
+            Assert.Equal("Disposed",(await service.GetAsync(actor,unseenAccepted.Id,default)).State); Assert.Equal(fencesBefore+2,gateway.Fences);
+            Assert.False((await uploads.OwnedAsync(oldActor,unseen.Id,default))!.PublishBarrier);
             var downgrade = await Assert.ThrowsAsync<PostgresException>(() => db.GetService<IMigrator>().MigrateAsync("20261027001436_ContainerFileUploadIntent"));
             Assert.Contains("container_upload_recovery_downgrade_requires_empty_kind",downgrade.MessageText,StringComparison.Ordinal);
             Assert.False(db.Database.HasPendingModelChanges());
@@ -177,12 +189,15 @@ public sealed partial class NativeNotificationDispatchTests
     {
         public int Inspections { get; private set; } public int Fences { get; private set; }
         public bool LoseFirstSealReply { get; set; } public TerminalActor? LastActor { get; private set; } public string? OriginalActor { get; private set; }
-        private Guid? _seal;
+        private Guid? _seal; private bool _loseBeforeSeal;
+        public void ResetBeforeReceptionLoss() { _seal=null; _loseBeforeSeal=true; }
         public Task<FileRecoveryObservation> InspectForRecoveryAsync(FileRecoverySnapshot original,TerminalActor currentActor,CancellationToken cancellationToken)
         { Inspections++; return Task.FromResult(Observe(original)); }
         public Task<FileRecoveryObservation> FenceForRecoveryAsync(FileRecoverySnapshot original,TerminalActor currentActor,CancellationToken cancellationToken)
         {
-            Fences++; LastActor=currentActor; _seal=original.RecoveryExecutionId??throw new InvalidOperationException("missing recovery identity");
+            Fences++; LastActor=currentActor;
+            if (_loseBeforeSeal) { _loseBeforeSeal=false; return Task.FromException<FileRecoveryObservation>(new IOException("owned loss before Root receipt")); }
+            _seal=original.RecoveryExecutionId??throw new InvalidOperationException("missing recovery identity");
             var observed=Observe(original);
             if (LoseFirstSealReply) { LoseFirstSealReply=false; return Task.FromException<FileRecoveryObservation>(new IOException("owned synthetic lost seal reply")); }
             return Task.FromResult(observed);
