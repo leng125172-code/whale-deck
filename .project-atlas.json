@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RESTORATION_RPC.md",
-  "nextStep": "宿主06b6eed/minor43已装并通过独立签名普通属性恢复；API/Worker/Gateway仍5fd8d3b。继续持久显式属性策略/计划/旧MAC兼容与迁移、页面及真实权限/故障；重建身份、长期清理和其余59项继续，17项移出不算完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RESTORATION_ATTRIBUTES.md",
+  "nextStep": "d8822c6六组件同源，显式普通4属性网页4次及默认内容4次真实链路通过；继续ACL/xattr/特殊位、进行中撤销与Worker/Agent重启故障、重建CID及长期清理和其余59项。17项移出不算完成。"
 }

@@ -1,5 +1,22 @@
 # 容器历史属性恢复：固定发布引擎候选
 
+## 当前安装态：d8822c6 的显式策略与真实网页属性恢复通过
+
+2026-10-27，正常 dev 覆盖 `whaledeck-dev-d8822c6.service` 成功退出，3分12.767秒；六组件及实际 HTTP 来源均为 `d8822c678a750b3eef64a4ebe100536e6d4158f7`，minor43与运行库/PKCS10.0.13，权限/UDS/动态入口与HDD策略检查通过。`20261027110751_ContainerRestorationAttributePolicy` 已实际应用。没有自动回滚。
+
+页面入口：容器详情 → 容器文件 → 历史版本。默认不勾选“同时恢复历史普通属性”，仅恢复内容；勾选后，确认框与任务展示“内容与历史普通属性”。计划显式回显 true，选项在确认、登记重试和活动任务中冻结；服务未回显或任务丢失该字段时拒绝继续，不静默退回内容恢复。
+
+真实临时管理员正常可见登录，在1440明色/320暗色各执行原路径与其他路径新建、覆盖，共4次属性恢复，每份2097159字节；真实BFF普通上传生成可信HDD来源，实际停止再启动独占测试容器后恢复原捕获。来源属性为UID1001/GID2002、0640、1700000000123456789纳秒mtime；当前文件先改为UID1000/GID1000、0600、1750000000987654321纳秒mtime，四次恢复分别使用两种不同历史属性。SQL不可变true策略/来源目录、Root schema4/签名来源/派生4属性、完整字节、旧inode与HDD捕获逐项匹配；最终两个路径内容及4属性独立核对。浏览器文件内容请求0；确认取消登记0；正常跨页双端退出和登录态拒绝通过。
+
+证据：`deploy/artifacts/container-restore-browser-5006a0203b434674a9defd6b3225cf87/`（baseline/results/verified/independent-final、8幅实际截图），日志 `/tmp/wd-container-restore-policy-live.log`。实际普通用户5条路由403、匿名401且零新增意图，临时身份精确清理。随后默认内容恢复另4次同等浏览器整链通过，Root仍schema1且无属性来源，证据 `deploy/artifacts/container-restore-browser-cc9f290d1cc84c4392c06c85cfee26fc/`，日志 `/tmp/wd-container-restore-policy-live-legacy.log`。
+
+独立新进程重核8恢复意图与Root/完整2097159字节暂存、精确CID明确不存在及源目录不存在；三类临时身份计数0、11核心healthy、两宿主服务active。永久业务现55意图/40成功/18恢复，其中属性4；活动/Unknown/租约/发布屏障均0。审计、Root与HDD历史保留。首轮独立清理检查只因Docker错误文字大小写不匹配失败，核对实际“no such object”后修观察断言重跑通过；没有改产品状态或弱化不存在性要求。
+
+本批Release零警告错误，2717 Unit、199 Integration（7原生默认跳过）、496前端单元/lint/构建、13历史浏览器夹具通过；冻结0b501f3真实PG1执行/1通过/0跳过，清理通过，下节详述。d8822c6 CI `40501605203` 后端/原生PG/原生Valkey/安装器四路success，完整前端尚运行；此前091e6c7与b9685da已全success，不据此冒称本版全部CI已通过。
+
+**仍未完成**：ACL/xattr/特殊位/历史atime、重建CID授权、长期历史清理及进行中Worker/Agent重启/发布故障等完整组合。此次仅完成普通4属性的显式业务策略/页面与实际链路；完整59项保持active，17项移出不算完成。下方“未部署/待页面”为前序候选历史。
+
+
 ## 冻结原生 PostgreSQL 候选通过，待覆盖部署
 
 冻结 `0b501f3160711c82372c2dc6f997a8d5607bda0e` 真实隔离 PostgreSQL 一项执行/一项通过/零跳过，临时数据库与SDK容器清理确认通过。状态 `deploy/artifacts/native-status/dispatch-7db6065b20264fc49cbb225eba066910.json`，日志 `/tmp/wd-container-restore-policy-native.log`。其中从旧恢复来源结构向前升级，实际旧列 INSERT 的恢复记录在新增 false 默认值后 JSON/MAC 不变；无来源 true 被数据库 check 拒绝；属性任务真实持久重取与内容任务取消均执行。此为真实库验证，不等同工作站 API/Worker/网页已部署。

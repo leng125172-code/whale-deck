@@ -1,5 +1,7 @@
 # 容器历史内容恢复：业务、Worker 与页面候选
 
+最新安装态为d8822c6/minor43：显式普通属性恢复已通过实际网页4次，默认内容恢复另4次兼容通过，六组件与HTTP同源；55意图/40成功/18恢复(属性4)，活动/Unknown/租约/屏障0。详见[属性策略实机证据](CONTAINER_RESTORATION_ATTRIBUTES.md)。下方“当前5fd8d3b/未接属性”属于前序历史。
+
 ## 当前安装态：5fd8d3b 已通过其他路径新建与覆盖恢复
 
 2026-10-27，正常 dev 覆盖 `whaledeck-dev-5fd8d3b.service`，0/SUCCESS，2分28.061秒；六组件与真实 HTTP 均为 `5fd8d3b8b16aa3217a58e313b43ab8a26b12a060`，minor42、运行库/PKCS10.0.13保持。宿主权限、UDS、固定 helper、动态入口检查通过。本批无需新 schema 或协议，不执行自动回滚。
