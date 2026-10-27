@@ -49,7 +49,7 @@ export async function installFileRecoveryFixture(page, options = {}) {
       if (row.state === 'Queued' && !options.holdPlan) {
         row.state = 'Ready'; row.rootState = row.disposition === 'ReconcileCompleted' ? 'Completed' : 'Unknown'
         row.readyExpiresAtUtc = new Date(Date.now() + (options.expiryMs || 300000)).toISOString(); row.version++
-        row.confirmation = { planHash: 'ui-recovery-plan-not-auth-token', expiresAtUtc: row.readyExpiresAtUtc, warning: row.disposition === 'ReconcileCompleted' ? '仅按完整可信回执对账，不重做原文件操作。' : containerUpload ? '即使历史记录可能已经发布，也只接受并封存不确定性；不表示上传成功，不重新发送文件字节。' : '只接受历史不确定性，不代表原文件操作成功；不重做、不删除留存对象。' }
+        row.confirmation = { planHash: 'ui-recovery-plan-not-auth-token', expiresAtUtc: row.readyExpiresAtUtc, warning: row.disposition === 'ReconcileCompleted' ? '仅按完整可信回执对账，不重做原文件操作。' : containerUpload ? '明确接受原文件任务的历史不确定性。只有原任务停止且迟到操作已封存后才解除原锁；不表示文件操作成功，不重做、不删除留存对象。' : '只接受历史不确定性，不代表原文件操作成功；不重做、不删除留存对象。' }
       } else if (row.state === 'DispositionQueued') {
         row.state = 'Disposed'; row.originalResolution = containerUpload ? 'Failed' : row.disposition === 'ReconcileCompleted' ? 'Succeeded' : 'Acknowledged'; row.resultCode = 'FILES_RECOVERY_DISPOSED'; row.version++
         if (row.purge) {

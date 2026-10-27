@@ -179,7 +179,7 @@ describe('current-administrator recovery presentation boundaries', () => {
   it('requires container upload metadata without pretending it is a host root location', () => {
     const item = containerCandidate()
     expect(assertRecoveryPage({ entries: [item], nextCursor: null }).entries[0]).toBe(item)
-    expect(recoveryKind(item.kind)).toBe('容器文件上传')
+    expect(recoveryKind(item.kind)).toBe('容器文件写入')
     for (const changed of [
       { ...item, container: undefined },
       { ...item, source: { rootId: 'files.shared', path: '伪造宿主机路径' } },

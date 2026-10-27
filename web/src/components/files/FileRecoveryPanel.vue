@@ -463,7 +463,7 @@ onBeforeUnmount(() => {
     />
     <el-alert
       v-if="intent?.kind === 'container-upload' || candidate?.kind === 'container-upload'"
-      title="容器上传接管只接受并封存历史不确定性，不会重新发送文件字节。即使历史记录显示文件可能已发布，也不表示上传成功。"
+      title="容器文件接管只封存历史不确定性，不会重新上传、编辑或恢复文件。历史回执显示可能已发布，也不代表操作成功。"
       type="warning"
       :closable="false"
     />
@@ -556,7 +556,7 @@ onBeforeUnmount(() => {
       >
         {{
           intent.kind === 'container-upload'
-            ? '已封存容器上传的历史不确定性；不表示上传成功，也不会重新发送文件字节。'
+            ? '已封存容器文件任务的历史不确定性；不表示操作成功，也不会重新上传、编辑或恢复文件。'
             : '已记录接受未知历史；没有证明原文件操作成功。请检查原路径和留存对象。'
         }}
       </p>

@@ -124,7 +124,7 @@ export function recoveryKind(kind: RecoveryKind) {
     'tree-restore': '目录恢复',
     'tree-overwrite-restore': '目录覆盖恢复',
     'tree-purge': '目录永久清理',
-    'container-upload': '容器文件上传',
+    'container-upload': '容器文件写入',
   }[kind]
 }
 export function recoveryState(state: string) {

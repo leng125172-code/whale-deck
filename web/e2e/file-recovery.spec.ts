@@ -98,7 +98,7 @@ test('container upload is the twelfth kind and only archives uncertainty without
   await page.goto('/files')
   await page.getByRole('button', { name: '异常任务接管', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '异常文件任务', exact: true })
-  await expect(dialog.getByText('容器文件上传', { exact: true }).first()).toBeVisible()
+  await expect(dialog.getByText('容器文件写入', { exact: true }).first()).toBeVisible()
   await expect(dialog).toContainText(control.candidate.container.containerId)
   await expect(dialog).toContainText(containerPath)
   await dialog.getByRole('button', { name: '核对该任务', exact: true }).click()
@@ -120,7 +120,7 @@ test('container upload is the twelfth kind and only archives uncertainty without
   expect(registration.headers['idempotency-key']).toMatch(/^[a-f0-9-]{36}$/)
   expect(confirms(control)).toHaveLength(0)
   await dialog.getByRole('button', { name: '接受未知结果', exact: true }).click()
-  await expect(page.getByText(/不表示上传成功，不重新发送文件字节/)).toBeVisible()
+  await expect(page.getByText(/不表示文件操作成功，不重做/)).toBeVisible()
   await page.getByRole('button', { name: '确认处置', exact: true }).click()
   expect(confirms(control)).toHaveLength(1)
   expect(confirms(control)[0].body).toEqual({
@@ -132,7 +132,7 @@ test('container upload is the twelfth kind and only archives uncertainty without
   await dialog.getByRole('button', { name: '查询原接管任务', exact: true }).click()
   await expect(
     dialog.getByText(
-      '已封存容器上传的历史不确定性；不表示上传成功，也不会重新发送文件字节。',
+      '已封存容器文件任务的历史不确定性；不表示操作成功，也不会重新上传、编辑或恢复文件。',
       { exact: true },
     ),
   ).toBeVisible()
