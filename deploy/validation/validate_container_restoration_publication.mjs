@@ -82,7 +82,10 @@ try{
     originalResolution:completed.originalResolution,registrations,confirms,contentRequests,fullSsoLogout:false}),{mode:0o600})
   phase='normal-logout-clears-private-recovery-page'
   await dialog.locator('.el-dialog__headerbtn').click()
-  if(!await page.getByRole('button',{name:'打开用户菜单',exact:true}).isVisible())await page.getByRole('button',{name:'打开导航',exact:true}).click()
+  // A transformed off-screen sidebar is still CSS-visible. Use its actual
+  // mobile-open state, not visibility, before normal pointer interaction.
+  if(!await page.locator('.sidebar').evaluate(element=>element.classList.contains('sidebar--mobile-open')))await page.getByRole('button',{name:'打开导航',exact:true}).click()
+  await expect(page.locator('.sidebar')).toHaveClass(/sidebar--mobile-open/)
   await page.getByRole('button',{name:'打开用户菜单',exact:true}).click();await page.getByRole('menuitem',{name:'退出登录',exact:true}).click()
   await expect(page).toHaveURL(base+'/login',{timeout:30_000});await expect(dialog).toHaveCount(0)
   assert.equal((await context.request.get(base+'/api/v1/auth/me')).status(),401)
