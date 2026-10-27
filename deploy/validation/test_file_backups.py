@@ -128,6 +128,17 @@ class FileBackupTests(unittest.TestCase):
         before = self.configuration.read_bytes(); inode = self.configuration.stat().st_ino
         self.install(); self.assertEqual(self.configuration.read_bytes(), before); self.assertEqual(self.configuration.stat().st_ino, inode)
 
+    def test_installer_provisions_only_fixed_private_container_history_namespace(self):
+        self.install(); namespace=self.target/'container-files-v1'
+        info=namespace.lstat()
+        self.assertEqual((info.st_uid,stat.S_IMODE(info.st_mode)),(0,0o700));self.assertEqual(list(namespace.iterdir()),[])
+        self.install();self.assertEqual(namespace.stat().st_ino,info.st_ino)
+
+    def test_installer_never_adopts_an_unsafe_container_history_namespace(self):
+        namespace=self.target/'container-files-v1';namespace.mkdir(mode=0o755);namespace.chmod(0o755)
+        with self.assertRaisesRegex(driver.Rejected,'FILES_BACKUP_DIRECTORY_UNSAFE'):self.install()
+        self.assertEqual(stat.S_IMODE(namespace.stat().st_mode),0o755)
+
     def test_installer_missing_mount_does_not_create_policy_or_fallback_directory(self):
         self.configuration.unlink(); self.target.rmdir(); self.mountinfo.write_bytes(b'')
         with self.assertRaisesRegex(driver.Rejected, 'FILES_BACKUP_MOUNT_MISMATCH'): self.install()

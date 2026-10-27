@@ -16,7 +16,8 @@ public sealed class CapabilityValidator(IConfiguration configuration)
 
     public bool Validate(string? token, string method)
     {
-        if (method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal)) return false;
+        if (method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) ||
+            method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal)) return false;
         if (method.EndsWith("/GetCapabilities", StringComparison.Ordinal) ||
             method.EndsWith("/GetHealth", StringComparison.Ordinal) ||
             method.EndsWith("/WatchHealth", StringComparison.Ordinal))
@@ -62,8 +63,20 @@ public sealed class CapabilityValidator(IConfiguration configuration)
 
     public bool ValidateContainerWrite(string? token, string method, string? requestHash)
     {
-        if (!method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) ||
-            requestHash is not { Length: 64 } || requestHash.Any(c => !(char.IsAsciiDigit(c) || c is >= 'A' and <= 'F')) ||
+        return method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) &&
+            ValidateContentBound(token, method, requestHash, ContainerFileWriteBinding.Payload);
+    }
+
+    public bool ValidateContainerHistory(string? token, string method, string? requestHash)
+    {
+        return method is ContainerHistoryBinding.Service + "List" or ContainerHistoryBinding.Service + "ReadSource" &&
+            ValidateContentBound(token, method, requestHash, ContainerHistoryBinding.Payload);
+    }
+
+    private bool ValidateContentBound(string? token, string method, string? requestHash,
+        Func<string, string, string, string, string> payload)
+    {
+        if (requestHash is not { Length: 64 } || requestHash.Any(c => !(char.IsAsciiDigit(c) || c is >= 'A' and <= 'F')) ||
             string.IsNullOrEmpty(token) || token.Length > 256) return false;
         var parts = token.Split('.', 3);
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -77,7 +90,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         try
         {
             if (key.Length < 32) return false;
-            var expected = HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(ContainerFileWriteBinding.Payload(parts[0], parts[1], method, requestHash)));
+            var expected = HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(payload(parts[0], parts[1], method, requestHash)));
             if (!CryptographicOperations.FixedTimeEquals(expected, Convert.FromHexString(parts[2]))) return false;
         }
         finally { CryptographicOperations.ZeroMemory(key); }
@@ -126,7 +139,9 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");
         var valid = context.Method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerWrite(token, context.Method, context.RequestHeaders.GetValue(ContainerFileWriteBinding.Header))
-            : validator.Validate(token, context.Method);
+            : context.Method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal)
+                ? validator.ValidateContainerHistory(token, context.Method, context.RequestHeaders.GetValue(ContainerHistoryBinding.Header))
+                : validator.Validate(token, context.Method);
         if (!valid)
         {
             throw new RpcException(new Status(StatusCode.PermissionDenied, "Agent capability is missing or invalid."));

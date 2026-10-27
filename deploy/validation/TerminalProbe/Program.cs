@@ -14,6 +14,7 @@ try
     if (args.Length == 1 && args[0] == "container") await ContainerTerminalProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "container-files") await ContainerFileReadProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "container-file-writes") await ContainerFileWriteProbe.RunAsync();
+    else if (args.Length == 1 && args[0] == "container-history") await ContainerHistoryProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "metrics") await HostMetricProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "files") await FileTransferProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "file-operations") await FileOperationProbe.RunAsync();
@@ -33,8 +34,8 @@ catch (Exception error)
     // No exception text, terminal transcript, credential or capability output.
     var rpc = error as RpcException;
     var detail = rpc?.Status.Detail;
-    var ownFileCode = detail is { Length: <= 80 } && (detail.StartsWith("FILES_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_UPLOAD_", StringComparison.Ordinal)) && detail.All(c => char.IsAsciiLetterUpper(c) || c == '_') ? detail : null;
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = args is ["container-file-writes"] ? ContainerFileWriteProbe.Phase : args is ["container-files"] ? ContainerFileReadProbe.Phase : args is ["files"] ? FileTransferProbe.Phase : args is ["file-operations"] ? FileOperationProbe.Phase : args is ["tree-copy"] ? FileTreeCopyProbe.Phase : args is ["tree-move"] ? FileTreeMoveProbe.Phase : args is ["tree-pack"] ? FileTreePackingProbe.Phase : args is ["tree-unpack"] ? FileTreeUnpackingProbe.Phase : args is ["tree-restore"] ? FileTreeRestoringProbe.Phase : args is ["tree-overwrite-restore"] ? FileTreeOverwriteRestoringProbe.Phase : args is ["tree-purge"] ? FileTreePurgingProbe.Phase : TerminalProbe.Phase,
+    var ownFileCode = detail is { Length: <= 80 } && (detail.StartsWith("FILES_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_UPLOAD_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_HISTORY_", StringComparison.Ordinal)) && detail.All(c => char.IsAsciiLetterUpper(c) || c == '_') ? detail : null;
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = args is ["container-file-writes"] ? ContainerFileWriteProbe.Phase : args is ["container-history"] ? ContainerHistoryProbe.Phase : args is ["container-files"] ? ContainerFileReadProbe.Phase : args is ["files"] ? FileTransferProbe.Phase : args is ["file-operations"] ? FileOperationProbe.Phase : args is ["tree-copy"] ? FileTreeCopyProbe.Phase : args is ["tree-move"] ? FileTreeMoveProbe.Phase : args is ["tree-pack"] ? FileTreePackingProbe.Phase : args is ["tree-unpack"] ? FileTreeUnpackingProbe.Phase : args is ["tree-restore"] ? FileTreeRestoringProbe.Phase : args is ["tree-overwrite-restore"] ? FileTreeOverwriteRestoringProbe.Phase : args is ["tree-purge"] ? FileTreePurgingProbe.Phase : TerminalProbe.Phase,
         code = args is ["tree-overwrite-restore"] ? FileTreeOverwriteRestoringProbe.FailureCode : TerminalProbe.FailureCode, failureType = error.GetType().Name, rpcStatus = rpc?.StatusCode.ToString(), fileCode = ownFileCode }));
     return 1;
 }

@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_HISTORY_ENGINE.md；docs/qa/CONTAINER_UPLOAD_BROWSER_INTERRUPTION.md",
-  "nextStep": "内部容器HDD历史校验20/216和真实HDD/重启旧捕获通过，尚无新RPC/API/UI。接独立签名List/ReadSource、固定helper/安装与永久目录/恢复计划。原自然2h权限继续观察，完成后用包含helper修复及文本编辑的最新HEAD覆盖并实机编辑/HDD验收；59项继续。"
+  "nextStep": "自然两小时权限撤销已真实通过；minor42历史List/ReadSource、固定只读helper与SDK候选测试通过。覆盖最新dev，验收真实文本编辑和实际HDD历史来源RPC；继续永久目录/恢复意图/API/UI，59项保持active。"
 }

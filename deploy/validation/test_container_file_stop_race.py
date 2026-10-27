@@ -64,4 +64,9 @@ class HostFileStopRaceTests(ContainerWriterStopRaceTests):
     unit_prefix = 'whaledeck-files-'
 
 
+class ContainerHistoryStopRaceTests(ContainerWriterStopRaceTests):
+    action = 'container-file-history-stop'
+    unit_prefix = 'whaledeck-container-history-'
+
+
 if __name__=='__main__': unittest.main()

@@ -630,6 +630,33 @@ service ContainerFileWriteService {
   rpc SealRecovery(ContainerUploadRecoveryRequest) returns (ContainerUploadRecoveryObservation);
 }
 
+// Historical content remains container-scoped even after that container restarts.
+// Presence in List is not full content verification; ReadSource is bounded and
+// acknowledges end only after complete Root validation and successful helper EOF.
+message ContainerHistoryListRequest {
+  ContainerFileLocation location = 1; string after = 2; uint32 take = 3; string expected_version = 4;
+}
+message ContainerHistoryEntry {
+  string capture_id = 1; string container_id = 2; string original_instance_id = 3;
+  string path = 4; string source_version = 5; int64 size_bytes = 6; string sha256 = 7;
+  int64 created_at_unix_ms = 8; bool different_source_device = 9; string availability = 10; string capture_hash = 11;
+}
+message ContainerHistoryPage {
+  ContainerFileLocation location = 1; string target_proof = 2; repeated ContainerHistoryEntry entries = 3;
+  string version = 4; string next_cursor = 5; uint32 scanned = 6; uint32 invalid_records = 7; bool complete = 8;
+}
+message ContainerHistorySourceRequest {
+  ContainerFileLocation location = 1; string capture_id = 2; string expected_capture_hash = 3;
+}
+message ContainerHistorySourceFrame {
+  string kind = 1; ContainerHistoryEntry metadata = 2; bytes data = 3;
+  int64 offset = 4; string sha256 = 5; int64 size_bytes = 6; string target_proof = 7; string capture_hash = 8;
+}
+service ContainerHistoryService {
+  rpc List(ContainerHistoryListRequest) returns (ContainerHistoryPage);
+  rpc ReadSource(ContainerHistorySourceRequest) returns (stream ContainerHistorySourceFrame);
+}
+
 message FileLocation { string root_id = 1; string path = 2; }
 message FileRoot { string id = 1; string name = 2; repeated string actions = 3; }
 message FileRoots { repeated FileRoot roots = 1; }

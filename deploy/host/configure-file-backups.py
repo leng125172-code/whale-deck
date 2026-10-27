@@ -95,6 +95,9 @@ def configure(check=False):
             os.close(mounted); mounted = child
     finally: os.close(mounted)
     with engine.target(): pass
+    # Provision the fixed container history domain during installation, never
+    # during an authenticated read or when HDD attestation has failed.
+    with backups.FileBackups(files, namespace='container-files-v1').target(): pass
     print('Verified pinned HDD file backup policy; existing configuration preserved.')
 
 

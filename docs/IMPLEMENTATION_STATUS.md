@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-27 自然两小时撤权通过；历史 RPC 候选待部署**：原登录实际7203.941秒/246次观察，移组后原快照到期首次403、到期后成功授权0、未改时钟/SQL/缓存，独占身份清理。minor42独立List/ReadSource/固定只读helper/严格EOF SDK及原生门禁候选完成，Release零警告错误、2666 Unit/191 Integration通过（7原生夹具默认跳过）、230容器Linux-root/22备份安装测试通过。尚未部署，实际仍fab6e2e+72c72cc helper；下一步覆盖并执行真实编辑与HDD来源RPC，恢复意图/目录SQL/API/UI仍待，59项继续active。[协议与边界](qa/CONTAINER_HISTORY_RPC.md)、[两小时证据](qa/CONTAINER_UPLOAD_INTERRUPTION.md)。
+
 - **2026-10-27 容器HDD历史校验基础候选**：独立v2容器历史域、字段/游标预算、存在与完整内容校验区分、绑定当前实例的旧捕获只读来源已实现。20新增Linux-root及最终216容器组通过；冻结引擎在真实HDD完整2MiB+7读回/实际独占容器重启后读取旧捕获、错误UUID/旧当前范围拒绝通过，源/沙箱精确清理。尚未安装或接RPC/目录SQL/恢复意图/API/UI，不宣称已恢复文件。运行时fab6e2e+72c72cc helper不变，两小时仍观察；继续独立签名协议与完整恢复链。[证据与剩余](qa/CONTAINER_FILE_HISTORY_ENGINE.md)。
 
 - **2026-10-27 真实浏览器进行中断通过，并修复只读清理竞态**：在实际Root已接收32KiB后，页面中止及跨页正常退出均有真实CDP ERR_ABORTED/canceled与独立SQL/Worker/Root终态，零目标发布；两页login、旧Cookie401/Authentik拒绝通过。门禁抓到只读/宿主--collect退出竞态，24确定性测试修复前10失败、修后全通过；helper已原子热修，无服务重启，程序集仍fab6e2e。最终25意图10成功/8取消/7失败、Unknown/活租约/屏障0、11核心healthy；失败输入精确核验清理。自然两小时仍观察，文本编辑未部署，下一次覆盖须包含helper修复。[浏览器证据](qa/CONTAINER_UPLOAD_BROWSER_INTERRUPTION.md)、[修复及安装摘要](qa/FILE_TRANSPORT_STOP_RACE.md)。
