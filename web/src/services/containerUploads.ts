@@ -67,6 +67,7 @@ export function validContainerUploadLocation(value: unknown): value is Container
   return (
     exactKeys(value, ['containerId', 'instanceId', 'path']) &&
     typeof value.containerId === 'string' &&
+    value.containerId.length === 64 &&
     /^[a-f0-9]{64}$/.test(value.containerId) &&
     validInstance(value.instanceId) &&
     validPath(value.path)
@@ -115,7 +116,7 @@ function validInstance(value: unknown): value is string {
     /^([1-9][0-9]{0,9}):[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?Z$/.exec(
       value,
     )
-  if (!match) return false
+  if (!match || match[0] !== value) return false
   const pid = Number(match[1])
   return Number.isSafeInteger(pid) && pid >= 2 && pid <= 2_147_483_647
 }

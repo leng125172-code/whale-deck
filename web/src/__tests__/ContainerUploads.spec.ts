@@ -103,6 +103,22 @@ describe('instance-bound container uploads', () => {
     ).toThrow(/无法核实/)
   })
 
+  it('rejects trailing newlines in otherwise plausible container and instance identifiers', () => {
+    const row = intent()
+    expect(() =>
+      assertContainerUploadIntent({
+        ...row,
+        location: { ...row.location, containerId: `${row.location.containerId}\n` },
+      }),
+    ).toThrow(/无法核实/)
+    expect(() =>
+      assertContainerUploadIntent({
+        ...row,
+        location: { ...row.location, instanceId: `${row.location.instanceId}\n` },
+      }),
+    ).toThrow(/无法核实/)
+  })
+
   it('matches Linux instance and UTF-8 path boundaries without normalizing nanoseconds', () => {
     const accepted = intent()
     accepted.location.instanceId = '2147483647:2026-10-22T01:02:03.123456789Z'

@@ -116,7 +116,12 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
             "Discard" => client.DiscardAsync(message, ContainerWriteHeaders(action, message), deadline: DateTime.UtcNow.AddSeconds(650), cancellationToken: cancellationToken),
             _ => throw new ArgumentException("CONTAINER_UPLOAD_ACTION_INVALID")
         };
-        var result = UploadReceipt(await call, request);
+        ContainerFileUploadReceiptDto result;
+        try { result = UploadReceipt(await call, request); }
+        catch (RpcException error) when (error.StatusCode == StatusCode.FailedPrecondition && error.Status.Detail is
+            "CONTAINER_NOT_RUNNING" or "CONTAINER_FILES_INSTANCE_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or
+            "CONTAINER_FILES_TARGET_CHANGED" or "CONTAINER_UPLOAD_TARGET_CHANGED" or "CONTAINER_UPLOAD_PUBLISH_PARENT_CHANGED")
+        { throw new ContainerFileUploadTargetUnavailableException(); }
         if (action == "Discard" && cancellationFence && result.Upload.State is not ("Prevented" or "Discarded" or "PublishDiscarded")) throw UploadOutput();
         return result;
     }

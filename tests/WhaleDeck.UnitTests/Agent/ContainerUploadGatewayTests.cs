@@ -101,6 +101,17 @@ public sealed partial class ContainerUploadGatewayTests
     }
 
     [Theory]
+    [InlineData("CONTAINER_NOT_RUNNING")][InlineData("CONTAINER_FILES_INSTANCE_CHANGED")]
+    [InlineData("CONTAINER_FILES_ROOT_CHANGED")][InlineData("CONTAINER_FILES_TARGET_CHANGED")]
+    [InlineData("CONTAINER_UPLOAD_TARGET_CHANGED")][InlineData("CONTAINER_UPLOAD_PUBLISH_PARENT_CHANGED")]
+    public async Task DefinitiveOriginalTargetFailuresUseAFixedBusinessMarker(string code)
+    {
+        await using var harness = await Harness.Start(); harness.InspectFailure = new(StatusCode.FailedPrecondition,code);
+        var error = await Assert.ThrowsAsync<App.ContainerFileUploadTargetUnavailableException>(() => harness.Gateway.InspectContainerUploadAsync(Reference,default));
+        Assert.Equal("CONTAINER_UPLOAD_TARGET_UNAVAILABLE",error.Message);
+    }
+
+    [Theory]
     [InlineData(1U, 38U, true)][InlineData(0U, 39U, true)]
     [InlineData(2U, 39U, true)][InlineData(1U, 39U, false)]
     public async Task OldMinorUnknownMajorOrMissingIndependentCapabilityRefusesBeforeWriteRequest(uint major, uint minor, bool capability)

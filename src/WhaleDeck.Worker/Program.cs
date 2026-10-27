@@ -27,6 +27,7 @@ builder.Services.AddHostedService<NotificationRetentionWorker>();
 builder.Services.AddHostedService<NotificationSenderWorker>();
 builder.Services.AddHostedService<NotificationPrivateWorker>();
 builder.Services.AddHostedService<FileUploadWorker>();
+builder.Services.AddHostedService<ContainerFileUploadWorker>();
 builder.Services.AddHostedService<FileMutationWorker>();
 builder.Services.AddHostedService<FileArchiveWorker>();
 builder.Services.AddHostedService<FileTreeCopyWorker>();

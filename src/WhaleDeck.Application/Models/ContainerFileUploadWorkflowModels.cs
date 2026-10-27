@@ -10,3 +10,9 @@ public sealed record ContainerFileUploadBinding(Guid Id, Guid IdempotencyKey, st
 public sealed record ContainerFileUploadIntentDto(Guid Id, Guid JobId, ContainerFileLocationDto Location, long SizeBytes, string Sha256,
     string State, DateTimeOffset ExpiresAtUtc, string? ResultCode, long Version, string? PublishedVersion, bool PreviousRetained);
 public enum ContainerFileUploadStartResult { Started, Busy, LeaseLost, Canceled, Expired }
+
+/// <summary>A fixed, definitive instance/target failure; never arbitrary transport text.</summary>
+public sealed class ContainerFileUploadTargetUnavailableException : InvalidOperationException
+{
+    public ContainerFileUploadTargetUnavailableException() : base("CONTAINER_UPLOAD_TARGET_UNAVAILABLE") { }
+}

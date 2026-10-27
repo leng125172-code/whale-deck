@@ -191,6 +191,7 @@ public sealed partial class ContainerUploadServiceTests
         public Action? AfterInspection { get; set; }
         public Action? AfterStage { get; set; }
         public int UploadInspections { get; private set; }
+        public Exception? InspectionFailure { get; set; }
         public int Publications { get; private set; }
         public int Preventions { get; private set; }
         public bool PreventUnavailable { get; set; }
@@ -219,7 +220,7 @@ public sealed partial class ContainerUploadServiceTests
             return Task.FromResult(Receipt);
         }
         public Task<ContainerFileUploadReceiptDto?> InspectContainerUploadAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken)
-        { UploadInspections++; return Task.FromResult(Receipt); }
+        { UploadInspections++; return InspectionFailure is null ? Task.FromResult(Receipt) : Task.FromException<ContainerFileUploadReceiptDto?>(InspectionFailure); }
         public Task<ContainerFileUploadReceiptDto> DiscardContainerUploadAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<ContainerFileUploadReceiptDto> PreventContainerUploadAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken)
         {

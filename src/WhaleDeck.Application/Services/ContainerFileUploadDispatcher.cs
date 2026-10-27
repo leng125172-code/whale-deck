@@ -99,10 +99,17 @@ public sealed class ContainerFileUploadDispatcher(IContainerFileUploadRepository
                 else await Unknown("CONTAINER_UPLOAD_RESULT_UNKNOWN");
             }
         }
+        catch (ContainerFileUploadTargetUnavailableException) when (!cancellationToken.IsCancellationRequested)
+        { await repository.FinishAsync(row, "Unknown", "CONTAINER_UPLOAD_TARGET_UNAVAILABLE", null, cancellationToken); return true; }
         catch (InvalidOperationException error) when (error.Message == "CONTAINER_UPLOAD_OUTPUT_INVALID")
         { await repository.FinishAsync(row, "Unknown", "CONTAINER_UPLOAD_OUTPUT_INVALID", null, cancellationToken); return true; }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
-        { await repository.DeferAsync(row, cancellationToken); return true; }
+        {
+            if (row.ExpiresAtUtc <= clock.GetUtcNow())
+                await repository.FinishAsync(row, "Unknown", "CONTAINER_UPLOAD_RESULT_UNKNOWN", null, cancellationToken);
+            else await repository.DeferAsync(row, cancellationToken);
+            return true;
+        }
     }
 
     private Task Authority(ContainerFileUploadOperation row, CancellationToken cancellationToken) =>

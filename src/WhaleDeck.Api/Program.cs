@@ -69,22 +69,7 @@ try
     // though Whale Deck itself exposes controller APIs rather than Razor views.
     builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
     builder.Services.AddProblemDetails();
-    builder.Services.AddOpenApi(options => options.AddOperationTransformer((operation, context, _) =>
-    {
-        if (context.Description.HttpMethod == "PUT" && context.Description.ActionDescriptor.RouteValues.TryGetValue("controller", out var controller) && controller == "Files" &&
-            context.Description.ActionDescriptor.RouteValues.TryGetValue("action", out var action) && action == "Content")
-        {
-            operation.RequestBody = new Microsoft.OpenApi.OpenApiRequestBody
-            {
-                Required = true,
-                Content = new Dictionary<string, Microsoft.OpenApi.OpenApiMediaType>
-                {
-                    ["application/octet-stream"] = new() { Schema = new Microsoft.OpenApi.OpenApiSchema { Type = Microsoft.OpenApi.JsonSchemaType.String, Format = "binary" } }
-                }
-            };
-        }
-        return Task.CompletedTask;
-    }));
+    builder.Services.AddOpenApi(options => options.AddOperationTransformer(WhaleDeck.Api.Files.FileUploadOpenApi.TransformAsync));
     builder.Services.AddHealthChecks();
     builder.Services.AddAntiforgery(options =>
     {

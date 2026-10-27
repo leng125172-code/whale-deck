@@ -34,6 +34,7 @@ builder.Services.AddReverseProxy()
             TerminalProxyConfiguration.CreateRoute(),
             FileProxyConfiguration.CreateRoute(),
             ContainerFileProxyConfiguration.CreateRoute(),
+            ContainerUploadProxyConfiguration.CreateRoute(),
             MetricProxyConfiguration.CreateRoute(),
             new Yarp.ReverseProxy.Configuration.RouteConfig
             {
@@ -59,6 +60,7 @@ builder.Services.AddReverseProxy()
         TerminalProxyConfiguration.CreateCluster(),
         FileProxyConfiguration.CreateCluster(),
         ContainerFileProxyConfiguration.CreateCluster(),
+        ContainerUploadProxyConfiguration.CreateCluster(),
         MetricProxyConfiguration.CreateCluster(),
         new Yarp.ReverseProxy.Configuration.ClusterConfig
         {

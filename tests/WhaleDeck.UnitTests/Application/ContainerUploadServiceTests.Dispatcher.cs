@@ -45,6 +45,31 @@ public sealed partial class ContainerUploadServiceTests
         Assert.Equal(0, fixture.Gateway.Publications); Assert.Equal(0, fixture.Gateway.Preventions);
         Assert.Empty(fixture.Repository.Results); Assert.Equal(1, fixture.Repository.Deferred);
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DefinitiveTargetLossBecomesRecoverableUnknownWithoutReleasingProtection(bool started)
+    {
+        using var fixture = new Fixture(); await fixture.Create(); if (started) PreviouslyStarted(fixture);
+        fixture.Gateway.InspectionFailure = new ContainerFileUploadTargetUnavailableException();
+        Assert.True(await Dispatcher(fixture).TickAsync(default));
+        Assert.Equal(("Unknown", "CONTAINER_UPLOAD_TARGET_UNAVAILABLE"),Assert.Single(fixture.Repository.Results));
+        Assert.Equal(started,fixture.Repository.Row!.PublishBarrier); Assert.Equal(0,fixture.Gateway.Publications); Assert.Equal(0,fixture.Gateway.Preventions);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExpiredUnobservableTaskBecomesUnknownWhileTemporaryFailureCanDefer(bool expired)
+    {
+        using var fixture = new Fixture(); await fixture.Create(); PreviouslyStarted(fixture);
+        if (expired) fixture.Clock.Now=fixture.Clock.Now.AddMinutes(16);
+        fixture.Gateway.InspectionFailure = new IOException("owned unavailable transport");
+        Assert.True(await Dispatcher(fixture).TickAsync(default));
+        Assert.True(fixture.Repository.Row!.PublishBarrier); Assert.Equal(0,fixture.Gateway.Publications); Assert.Equal(0,fixture.Gateway.Preventions);
+        if (expired) Assert.Equal(("Unknown","CONTAINER_UPLOAD_RESULT_UNKNOWN"),Assert.Single(fixture.Repository.Results));
+        else { Assert.Empty(fixture.Repository.Results); Assert.Equal(1,fixture.Repository.Deferred); }
+    }
+
     [Fact]
     public async Task DowngradedAgentCannotAcquirePublicationBarrier()
     {
