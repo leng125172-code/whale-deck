@@ -23,7 +23,15 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
         if (prior is not null)
         {
             Validate(prior);
-            if (prior.RequestHash != row.RequestHash) throw new InvalidOperationException("CONTAINER_UPLOAD_IDEMPOTENCY_CONFLICT");
+            // Concurrent HTTP retries can have a new trace and microsecond
+            // creation time. Reuse the winner's sealed context/lifetime rather
+            // than rejecting an identical plan or extending its validity.
+            var original = ContainerFileUploadIntentValidation.ReadBinding(prior);
+            var requested = ContainerFileUploadIntentValidation.ReadBinding(row);
+            if (original.Id != requested.Id || original.IdempotencyKey != requested.IdempotencyKey || original.Actor != requested.Actor ||
+                original.LoginBinding != requested.LoginBinding || original.PlanHash != requested.PlanHash || original.Target != requested.Target ||
+                original.SizeBytes != requested.SizeBytes || original.Sha256 != requested.Sha256)
+                throw new InvalidOperationException("CONTAINER_UPLOAD_IDEMPOTENCY_CONFLICT");
             return prior;
         }
         var key = row.IdempotencyKey.ToString("D");

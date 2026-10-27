@@ -26,11 +26,11 @@ public sealed partial class NativeNotificationDispatchTests
         var ids = new List<Guid>(); var hostIds = new List<Guid>();
         var actor = new TerminalActor("native-container-upload-admin", null, [], new('A',64), "native-container-upload-trace", null);
         var cid = new string('a',64); const string instance = "777:2026-10-27T01:02:03.123456789Z";
-        ContainerFileUploadOperation Row(string path, string? container = null, bool overwrite = false)
+        ContainerFileUploadOperation Row(string path, string? container = null, bool overwrite = false, Guid? fixedId = null, Guid? fixedKey = null)
         {
             var created = ContainerFileUploadIntentValidation.CanonicalTime(DateTimeOffset.UtcNow);
-            var id = Guid.NewGuid(); ids.Add(id);
-            var binding = new ContainerFileUploadBinding(id, Guid.NewGuid(), actor.Subject, actor.LoginBinding, actor.TraceId,
+            var id = fixedId ?? Guid.NewGuid(); ids.Add(id);
+            var binding = new ContainerFileUploadBinding(id, fixedKey ?? Guid.NewGuid(), actor.Subject, actor.LoginBinding, actor.TraceId,
                 new(new(container ?? cid, instance, path), new('B',64), new('C',64), overwrite ? new('A',64) : "ABSENT", overwrite ? 5 : 0), 3, new('D',64), new('E',64), created, created.AddMinutes(15));
             return new() { Id = id, IdempotencyKey = binding.IdempotencyKey, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding,
                 TraceId = actor.TraceId, OwnerHash = ContainerFileUploadIntentValidation.Owner(actor.Subject, actor.LoginBinding), ContainerId = binding.Target.Location.ContainerId,
@@ -49,6 +49,25 @@ public sealed partial class NativeNotificationDispatchTests
             $"SELECT * FROM outbox_messages WHERE payload_json->>'jobId'={id.ToString("D")}");
         try
         {
+            var duplicateId = Guid.NewGuid(); var duplicateKey = Guid.NewGuid();
+            var duplicateA = Row("资料/duplicate.bin", fixedId: duplicateId, fixedKey: duplicateKey);
+            await Task.Delay(1);
+            var duplicateB = Row("资料/duplicate.bin", fixedId: duplicateId, fixedKey: duplicateKey);
+            Assert.NotEqual(duplicateA.RequestHash, duplicateB.RequestHash);
+            await using (var leftDb = new PlatformDbContext(options))
+            await using (var rightDb = new PlatformDbContext(options))
+            {
+                var duplicates = await Task.WhenAll(new ContainerFileUploadRepository(leftDb, plans).EnqueueAsync(duplicateA, default),
+                    new ContainerFileUploadRepository(rightDb, plans).EnqueueAsync(duplicateB, default));
+                Assert.Equal(duplicates[0].Id, duplicates[1].Id); Assert.Equal(duplicates[0].RequestHash, duplicates[1].RequestHash);
+                Assert.Equal(duplicates[0].CreatedAtUtc, duplicates[1].CreatedAtUtc); Assert.Equal(duplicates[0].ExpiresAtUtc, duplicates[1].ExpiresAtUtc);
+            }
+            Assert.Equal(1, await db.ContainerFileUploadOperations.CountAsync(item => item.Id == duplicateId));
+            Assert.Equal(1, await db.OperationJobEvents.CountAsync(item => item.JobId == duplicateId));
+            Assert.Equal(1, await Messages(duplicateId).CountAsync());
+            var duplicateClaim = await Claim(duplicateId);
+            Assert.True(await repository.FinishAsync(duplicateClaim, "Canceled", "CONTAINER_UPLOAD_CANCELED", Proof(duplicateClaim, "Prevented"), default));
+
             var first = await repository.EnqueueAsync(Row("资料/first.bin"), default);
             Assert.Equal(first.Id, (await repository.EnqueueAsync(first, default)).Id);
             Assert.Equal(first.RequestHash, plans.FingerprintContainerUpload(ContainerFileUploadIntentValidation.ReadBinding((await repository.OwnedAsync(actor, first.Id, default))!)));
@@ -90,6 +109,23 @@ public sealed partial class NativeNotificationDispatchTests
                 Assert.Equal(overwrite, published.PreviousRetained); Assert.False(published.PublishBarrier); Assert.NotNull(published.CompletedAtUtc);
                 Assert.Equal("Succeeded", (await db.OperationJobs.AsNoTracking().SingleAsync(item => item.Id == publishing.Id)).State);
                 Assert.False(await Messages(publishing.Id).AnyAsync(item => item.ProcessedAtUtc == null));
+            }
+
+            var raceA = await repository.EnqueueAsync(Row("race-a.bin", new('c',64)), default);
+            var raceB = await repository.EnqueueAsync(Row("race-b.bin", new('d',64)), default);
+            Assert.True(await repository.ReadyAsync(await repository.BeginReceiveAsync(actor, raceA.Id, DateTimeOffset.UtcNow, default), default));
+            Assert.True(await repository.ReadyAsync(await repository.BeginReceiveAsync(actor, raceB.Id, DateTimeOffset.UtcNow, default), default));
+            var raceClaimA = await Claim(raceA.Id); var raceClaimB = await Claim(raceB.Id);
+            await using (var leftDb = new PlatformDbContext(options))
+            await using (var rightDb = new PlatformDbContext(options))
+            {
+                var left = new ContainerFileUploadRepository(leftDb, plans); var right = new ContainerFileUploadRepository(rightDb, plans);
+                var starts = await Task.WhenAll(left.StartedAsync(raceClaimA, DateTimeOffset.UtcNow, default), right.StartedAsync(raceClaimB, DateTimeOffset.UtcNow, default));
+                Assert.Equal(1, starts.Count(result => result == ContainerFileUploadStartResult.Started));
+                Assert.Equal(1, starts.Count(result => result == ContainerFileUploadStartResult.Busy));
+                Assert.Equal(1, await db.ContainerFileUploadOperations.CountAsync(item => item.PublishBarrier));
+                Assert.True(await left.FinishAsync(raceClaimA, "Canceled", "CONTAINER_UPLOAD_CANCELED", Proof(raceClaimA, "Discarded"), default));
+                Assert.True(await right.FinishAsync(raceClaimB, "Canceled", "CONTAINER_UPLOAD_CANCELED", Proof(raceClaimB, "Discarded"), default));
             }
 
             // A host path reservation blocks publication, not the container's
