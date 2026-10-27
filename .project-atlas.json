@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_UPLOAD_BFF_UI.md",
-  "nextStep": "实际fab6e2e六组件/HTTP已覆盖一致；真实容器上传新建/覆盖、取消/退出撤销、旧账号删除后不同管理员接管与桌面手机通过。继续进行中取消/撤权、重启和有发布保护的Unknown整链，再接编辑/HDD历史恢复及其余59项；17项移出不算完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_TEXT_EDITOR.md；docs/qa/CONTAINER_UPLOAD_INTERRUPTION.md",
+  "nextStep": "部分接收后的取消/退出/RST实机通过；文本编辑469单元/46组合浏览器通过、候选未部署。保留正在运行的两小时权限自然到期验收；随后覆盖候选并真实编辑/HDD验收，继续发布中故障/重启/有屏障Unknown及历史恢复和其余59项。17项移出不算完成。"
 }

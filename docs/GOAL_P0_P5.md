@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-27 容器文本编辑候选与部分接收中断门禁**：前端已支持独立容器位置、1MiB UTF-8/BOM/换行、打开时版本绑定、确认取消零字节/草稿返回与同步私有清理；469单元/46组合浏览器、检查和生产构建通过，候选尚未部署。实际fab6e2e三项先接收64KiB后取消/退出/RST，Worker终止及Root清理通过，无发布；18意图8成功/7取消/3失败、活租约/屏障0、11核心healthy。两小时自然权限降级仍在观察，不改时钟/缓存、不提前签通过；实机编辑、发布中故障/重启/有屏障Unknown及历史恢复继续。[编辑边界](qa/CONTAINER_TEXT_EDITOR.md)、[中断证据](qa/CONTAINER_UPLOAD_INTERRUPTION.md)。
+
 - **2026-10-27 容器上传常规BFF/UI已覆盖并实机通过**：fab6e2e六组件/HTTP一致、11核心healthy；真实2MiB+7新建/覆盖/全内容读回、旧inode/HDD，显式取消/退出后Worker撤销，原账号删除后不同管理员封存/失败对账通过。真实1440明色/320暗色各一次发送、确认取消零字节、目录刷新/无溢出、跨页正常双端退出与旧Cookie拒绝通过；14条永久意图/审计/Root历史保留、Unknown/活租约/发布保护均0，临时身份0，测试源精确清理。发布中故障/撤权及有屏障Unknown、编辑/历史恢复与其余59项继续。[真实证据与失败](qa/CONTAINER_UPLOAD_BFF_UI.md)。
 
 - **2026-10-27 minor41已安装并验证七RPC，业务入口未部署**：宿主Agent/MaintenanceHost实际b681e1d、10.0.13运行库/PKCS和权限/动态入口通过；真实签名五方法完整2MiB+7发布/读回/旧inode/HDD及取消通过，独立protobuf客户端验证历史Observe/Seal、实际停止重启、精确批准/范围拒绝与幂等。自有数据清理、两个失败验证留下的空锁保留，11核心healthy；API/Worker/Gateway仍f5a0029。下一步部署新业务并验收真实Cookie/SQL/Worker/HDD/UI，59项继续。[安装及失败证据](qa/CONTAINER_UPLOAD_HTTP_WORKER.md#b681e1d-宿主安装态验证)。

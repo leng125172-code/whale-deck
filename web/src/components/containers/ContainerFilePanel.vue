@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Document, Folder, Download, RefreshRight } from '@element-plus/icons-vue'
 import { ApiError } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
@@ -7,6 +7,9 @@ import { formatBytes } from '@/services/displayUnits'
 import { filePath } from '@/services/fileManagement'
 import type { FileEntry } from '@/services/fileManagement'
 import ContainerUploadPanel from '@/components/containers/ContainerUploadPanel.vue'
+import ContainerTextEditor from '@/components/containers/ContainerTextEditor.vue'
+import { textEligible } from '@/services/fileText'
+import type { PreparedContainerText } from '@/services/containerText'
 import {
   canDownloadContainerFile,
   downloadContainerFile,
@@ -27,6 +30,23 @@ const busy = ref(''),
   progress = ref(0),
   completed = ref('')
 const allowed = computed(() => authSession.user.value?.isAdministrator === true)
+const editor = ref<InstanceType<typeof ContainerTextEditor> | null>(null)
+const upload = ref<InstanceType<typeof ContainerUploadPanel> | null>(null)
+const editorLocked = ref(false),
+  uploadLocked = ref(false)
+async function prepareEdited(value: PreparedContainerText) {
+  const token = generation
+  await nextTick()
+  if (token !== generation) return
+  if (!allowed.value || !upload.value?.prepareEdited(value))
+    error.value = '编辑目标或上传状态已变化，请重新打开'
+}
+async function restoreDraft(value: PreparedContainerText) {
+  const token = generation
+  await nextTick()
+  if (token !== generation) return
+  if (allowed.value) editor.value?.restore(value)
+}
 const breadcrumbs = computed(() => (path.value ? path.value.split('/') : []))
 let request: AbortController | null = null
 let generation = 0
@@ -172,12 +192,12 @@ async function download(entry: FileEntry) {
   }
 }
 watch(
-  () => [props.containerId, authSession.user.value?.subject, allowed.value],
+  [() => props.containerId, () => authSession.user.value?.subject, allowed],
   () => {
     stop(true)
     if (allowed.value) void connect()
   },
-  { immediate: true },
+  { immediate: true, flush: 'sync' },
 )
 onBeforeUnmount(() => {
   stop(true)
@@ -228,10 +248,23 @@ onBeforeUnmount(() => {
     </div>
     <ContainerUploadPanel
       v-if="target"
+      ref="upload"
       :target="target"
       :path="path"
-      :disabled="!!busy"
+      :disabled="!!busy || editorLocked"
       @refresh="load(path)"
+      @locked="uploadLocked = $event"
+      @edit-draft="restoreDraft"
+    />
+    <ContainerTextEditor
+      v-if="target"
+      ref="editor"
+      :target="target"
+      :path="path"
+      :disabled="!!busy || uploadLocked"
+      @locked="editorLocked = $event"
+      @prepared="prepareEdited"
+      @failure="failure"
     />
     <div v-if="busy" class="container-files__status" role="status">
       {{ busy }}<span v-if="busy === '下载中'"> · {{ progress }}%</span>
@@ -265,14 +298,24 @@ onBeforeUnmount(() => {
                 ? '链接'
                 : '特殊'
         }}</span>
-        <el-button
-          :icon="Download"
-          link
-          :disabled="!!busy || !canDownloadContainerFile(entry)"
-          :aria-label="`下载 ${entry.name}`"
-          @click="download(entry)"
-          >下载</el-button
-        >
+        <div class="container-files__entry-actions">
+          <el-button
+            v-if="textEligible(entry)"
+            link
+            :disabled="!!busy || uploadLocked || editorLocked"
+            :aria-label="`编辑 ${entry.name}`"
+            @click="editor?.open(entry)"
+            >编辑</el-button
+          >
+          <el-button
+            :icon="Download"
+            link
+            :disabled="!!busy || !canDownloadContainerFile(entry)"
+            :aria-label="`下载 ${entry.name}`"
+            @click="download(entry)"
+            >下载</el-button
+          >
+        </div>
       </div>
     </div>
     <el-empty v-else-if="target && !busy && !error" description="当前目录为空" :image-size="56" />
@@ -351,7 +394,7 @@ onBeforeUnmount(() => {
 }
 .container-files__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 85px 64px;
+  grid-template-columns: minmax(0, 1fr) 85px auto;
   align-items: center;
   gap: 8px;
   padding: 9px 0;
@@ -379,6 +422,16 @@ onBeforeUnmount(() => {
 .container-files__name .el-tag {
   flex-shrink: 0;
 }
+.container-files__entry-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 90px;
+}
+.container-files__entry-actions .el-button + .el-button {
+  margin-left: 0;
+}
 .container-files__size {
   font-size: 12px;
   text-align: right;
@@ -393,7 +446,7 @@ onBeforeUnmount(() => {
     padding: 10px;
   }
   .container-files__row {
-    grid-template-columns: minmax(0, 1fr) 64px;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   .container-files__size {
     grid-column: 1;
@@ -401,7 +454,7 @@ onBeforeUnmount(() => {
     text-align: left;
     margin-left: 22px;
   }
-  .container-files__row > .el-button {
+  .container-files__entry-actions {
     grid-column: 2;
     grid-row: 1 / span 2;
   }

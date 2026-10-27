@@ -26,6 +26,11 @@ export async function installContainerFilesFixture(page, options = {}) {
     mode: '0640',
     isProtected: false,
   }
+  const downloadBody =
+    options.textContent === undefined
+      ? Buffer.from([1, 2, 3])
+      : Buffer.from(options.textContent, 'utf8')
+  file.sizeBytes = downloadBody.length
   const longName = 'a-' + '长文件名'.repeat(18) + '.bin'
   const state = {
     requests: [],
@@ -225,8 +230,8 @@ export async function installContainerFilesFixture(page, options = {}) {
         }
         return route.fulfill({
           contentType: 'application/octet-stream',
-          body: Buffer.from([1, 2, 3]),
-          headers: { 'Content-Length': '3' },
+          body: downloadBody,
+          headers: { 'Content-Length': String(downloadBody.length) },
         })
       }
     }

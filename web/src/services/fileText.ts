@@ -2,8 +2,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import type { FileEntry } from '@/services/fileManagement'
 
 export const maximumTextBytes = 1024 ** 2
-export interface FileTextSnapshot {
-  rootId: string
+export interface TextDocumentSnapshot {
   path: string
   version: string
   sizeBytes: number
@@ -12,10 +11,18 @@ export interface FileTextSnapshot {
   utf8Bom: boolean
   lineEnding: 'LF' | 'CRLF' | 'CR' | 'Mixed' | 'None'
 }
+export interface FileTextSnapshot extends TextDocumentSnapshot {
+  rootId: string
+}
 export type TextLineEnding = 'LF' | 'CRLF' | 'CR' | 'Keep'
 export interface PreparedFileText {
   file: File
   rootId: string
+  path: string
+  expectedVersion: string
+}
+export interface PreparedTextDocument {
+  file: File
   path: string
   expectedVersion: string
 }
@@ -59,11 +66,21 @@ export function validateTextSnapshot(
   path: string,
   version: string,
 ) {
+  if (!value || value.rootId !== rootId) throw new Error('文本预览元数据无效，请刷新后重试')
+  return validateTextDocument(value, path, version)
+}
+export function validateTextDocument<T extends TextDocumentSnapshot>(
+  value: T,
+  path: string,
+  version: string,
+): T {
   if (
     !value ||
-    value.rootId !== rootId ||
     value.path !== path ||
     value.version !== version ||
+    typeof value.version !== 'string' ||
+    value.version.length !== 64 ||
+    !/^[A-F0-9]{64}$/.test(value.version) ||
     typeof value.text !== 'string' ||
     typeof value.utf8Bom !== 'boolean' ||
     !Number.isSafeInteger(value.sizeBytes) ||
@@ -83,7 +100,7 @@ export function validateTextSnapshot(
   return value
 }
 export function textBytes(
-  snapshot: FileTextSnapshot,
+  snapshot: TextDocumentSnapshot,
   text: string,
   ending: TextLineEnding,
   bom: boolean,
@@ -107,12 +124,19 @@ export function prepareText(
   ending: TextLineEnding,
   bom: boolean,
 ): PreparedFileText {
+  return { ...prepareTextDocument(snapshot, text, ending, bom), rootId: snapshot.rootId }
+}
+export function prepareTextDocument(
+  snapshot: TextDocumentSnapshot,
+  text: string,
+  ending: TextLineEnding,
+  bom: boolean,
+): PreparedTextDocument {
   const content = textBytes(snapshot, text, ending, bom)
   const name = snapshot.path.split('/').pop()
   if (!name || name === '.' || name === '..') throw new Error('文本目标路径无效')
   return {
     file: new File([content], name, { type: 'text/plain;charset=utf-8' }),
-    rootId: snapshot.rootId,
     path: snapshot.path,
     expectedVersion: snapshot.version,
   }

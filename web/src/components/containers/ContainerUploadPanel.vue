@@ -5,6 +5,7 @@ import { authSession } from '@/services/authSession'
 import { formatBytes } from '@/services/displayUnits'
 import { filePath, hashFile, maximumFileBytes } from '@/services/fileManagement'
 import type { ContainerFileTarget } from '@/services/containerFiles'
+import type { PreparedContainerText } from '@/services/containerText'
 import {
   assertContainerUploadIntent,
   cancelContainerUpload,
@@ -28,10 +29,15 @@ const props = defineProps<{
   path: string
   disabled: boolean
 }>()
-const emit = defineEmits<{ refresh: [] }>()
+const emit = defineEmits<{
+  refresh: []
+  locked: [value: boolean]
+  editDraft: [value: PreparedContainerText]
+}>()
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const chosen = ref<File | null>(null)
+const edited = ref<PreparedContainerText | null>(null)
 const intent = ref<ContainerUploadIntent | null>(null)
 const frozen = ref<ContainerUploadRegistration | null>(null)
 const draft = ref<{ path: string; sizeBytes: number; sha256: string } | null>(null)
@@ -96,6 +102,7 @@ function abortWork() {
 function reset() {
   abortWork()
   chosen.value = null
+  edited.value = null
   intent.value = null
   frozen.value = null
   draft.value = null
@@ -124,6 +131,7 @@ function selectFile(event: Event) {
   contentAttempted.value = false
   confirmationUncertain.value = false
   chosen.value = file
+  edited.value = null
   if (file && file.size > maximumFileBytes) {
     error.value = '单文件最多 1 GiB'
     chosen.value = null
@@ -178,6 +186,7 @@ async function query(token = generation, manual = false) {
     }
     if (containerUploadTerminal(next.state)) {
       chosen.value = null
+      edited.value = null
       frozen.value = null
       if (next.state === 'Succeeded' && refreshedId !== next.id) {
         refreshedId = next.id
@@ -274,6 +283,15 @@ async function start(retry = false) {
       const destination = filePath(directory, file.name)
       const existing = await inspectContainerUploadEntry(target, destination, local.signal)
       if (token !== generation || local.signal.aborted) return
+      if (
+        edited.value &&
+        (edited.value.location.containerId !== target.containerId ||
+          edited.value.location.instanceId !== target.instanceId ||
+          edited.value.location.path !== destination ||
+          !existing ||
+          existing.version !== edited.value.expectedVersion)
+      )
+        throw new Error('文件自打开编辑器后已经变化；请重新打开并合并内容，未覆盖新版本')
       if (existing && (existing.kind !== 'File' || existing.isProtected))
         throw new Error('不能覆盖目录、链接、特殊文件或受保护文件')
       const plan = await planContainerUpload(
@@ -281,7 +299,7 @@ async function start(retry = false) {
         destination,
         file,
         digest,
-        existing?.version || 'ABSENT',
+        edited.value?.expectedVersion || existing?.version || 'ABSENT',
         local.signal,
       )
       phase.value = '等待确认'
@@ -322,6 +340,7 @@ async function cancel() {
   const row = intent.value
   if (!row) {
     chosen.value = null
+    edited.value = null
     frozen.value = null
     draft.value = null
     phase.value = ''
@@ -363,6 +382,46 @@ async function cancel() {
   }
 }
 
+function prepareEdited(value: PreparedContainerText) {
+  if (
+    !allowed.value ||
+    props.disabled ||
+    busy.value ||
+    active.value ||
+    frozen.value ||
+    chosen.value ||
+    value.location.containerId !== props.target.containerId ||
+    value.location.instanceId !== props.target.instanceId ||
+    value.location.path !== filePath(props.path, value.file.name) ||
+    !/^[A-F0-9]{64}$/.test(value.expectedVersion) ||
+    value.expectedVersion.length !== 64
+  )
+    return false
+  reset()
+  chosen.value = value.file
+  edited.value = {
+    file: value.file,
+    location: { ...value.location },
+    expectedVersion: value.expectedVersion,
+    draft: value.draft,
+  }
+  void start()
+  return true
+}
+function editAgain() {
+  const value = edited.value
+  if (!value || busy.value || active.value || frozen.value || props.disabled || !allowed.value)
+    return
+  reset()
+  emit('editDraft', value)
+}
+watch(
+  () => busy.value || active.value || !!frozen.value || !!chosen.value,
+  (value) => emit('locked', value),
+  { immediate: true },
+)
+defineExpose({ prepareEdited })
+
 watch(
   [
     () => props.target.containerId,
@@ -372,6 +431,7 @@ watch(
     allowed,
   ],
   reset,
+  { flush: 'sync' },
 )
 onBeforeUnmount(reset)
 </script>
@@ -405,6 +465,9 @@ onBeforeUnmount(reset)
       </el-button>
       <el-button v-if="intent" :disabled="busy" @click="query(generation, true)"
         >查询原任务</el-button
+      >
+      <el-button v-if="edited && chosen && !active && !busy && !frozen" @click="editAgain"
+        >返回编辑草稿</el-button
       >
     </div>
     <p v-if="chosen" class="container-upload__file">

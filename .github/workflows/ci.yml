@@ -37,6 +37,8 @@ jobs:
           python3 -m py_compile deploy/validation/validate_container_upload_recovery_agent.py
           python3 -m py_compile deploy/validation/validate_container_upload_bff.py
           python3 -m py_compile deploy/validation/validate_container_upload_browser.py
+          python3 -m py_compile deploy/validation/validate_container_text_browser.py
+          python3 -m py_compile deploy/validation/validate_container_upload_interruption_bff.py deploy/validation/validate_authentik_permission_expiry.py
           python3 -m py_compile deploy/validation/validate_bff_session_valkey.py deploy/validation/validate_bff_login_liveness.py
           python3 -m py_compile deploy/validation/validate_bff_login_browser.py
           node --check deploy/validation/validate_container_upload_browser.mjs
@@ -213,6 +215,8 @@ jobs:
         run: node --test ../deploy/validation/test_browser_download_probe.mjs
       - name: Check installed login browser gate syntax without production access
         run: node --check ../deploy/validation/validate_bff_login_browser.mjs
+      - name: Check installed container editor browser gate syntax without production access
+        run: node --check ../deploy/validation/validate_container_text_browser.mjs
       - run: corepack pnpm lint
       - run: corepack pnpm format:check
       - run: corepack pnpm test:unit
@@ -222,7 +226,7 @@ jobs:
       - name: Check bounded container detail and relationship layouts
         env:
           WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
-        run: corepack pnpm exec playwright test e2e/container-detail.spec.ts e2e/container-relationships.spec.ts e2e/container-files.spec.ts e2e/container-uploads.spec.ts --reporter=line
+        run: corepack pnpm exec playwright test e2e/container-detail.spec.ts e2e/container-relationships.spec.ts e2e/container-files.spec.ts e2e/container-uploads.spec.ts e2e/container-text.spec.ts --reporter=line
       - name: Check production authorization, file transfers and host/container terminal UI
         env:
           WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
