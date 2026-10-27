@@ -400,3 +400,5 @@ Agent 不提供“执行命令”“执行脚本”或任意 unit 名称接口�
 - 当前提供服务级配置变化摘要，不提供原文编辑或逐字段 diff；项目移除和数据卷选择继续使用现有应用卸载用例。Git 同步属于独立后续能力。
 
 2026-10-27 同容器其他路径恢复沿用minor42：ReadSource的location.Path必须为冻结历史来源Path，instance为当前实例；Stage的location.Path为独立目标。来源CID与目标CID必须一致，原只读RPC路径/摘要校验不放宽。两路径已进入既有恢复计划和永久MAC，未变更protobuf或Root schema。5fd8d3b已真实网页/Root/HDD验收，见[证据](qa/CONTAINER_FILE_RESTORATION.md)。
+
+2026-10-27 内部历史属性发布引擎6e088f4已通过真实Docker/HDD验证，但未安装、未增加protobuf或对外能力。未来签名Stage须将restoreSource(captureId/captureHash/path)整体入请求MAC；不允许浏览器或API提交原始UID/GID/mode。新恢复root journal schema4由旧reader拒绝，原1/2/3不变。产品仍minor42、仅内容恢复，见[属性引擎证据](qa/CONTAINER_RESTORATION_ATTRIBUTES.md)。

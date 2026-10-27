@@ -157,6 +157,32 @@ class LinuxContainerRestorationTests(unittest.TestCase):
         request = self.request(); request['restoreSource']['uid'] = 0
         with self.assertRaisesRegex(self.r.Rejected, 'REQUEST_INVALID'): self.u.upload_request(request)
 
+    def test_full_length_escaped_source_and_destination_paths_fit_bounded_recovery_journal(self):
+        scope = self.stage(); record = self.record(scope)
+        path = '/'.join(['"' * 255] * 16); self.assertEqual(len(path), 4095)
+        record['request']['path'] = path; record['request']['restoreSource']['path'] = path
+        record['fingerprint'] = self.u.upload_request(record['request'])
+        with self.u.locked(scope['operationId']) as state:
+            self.f.save_receipt(state, scope['operationId'], record)
+            self.assertGreater((self.state / (scope['operationId'] + '.json')).stat().st_size, 16384)
+            self.assertEqual(self.u.receipt(state, scope['operationId']), record)
+        request = {**scope, 'expectedTargetProof': self.u.target_proof(self.session)}
+        engine = self.u.recovery_engine(); observed = engine.observe(request)
+        result = engine.seal(request, uuid.uuid4().hex, 'current-admin', 'long-restore-paths', observed['observationHash'])
+        self.assertTrue(result['sealed']); self.assertEqual(engine.observe(request), result)
+        self.assertEqual(self.record(scope)['originalRecord'], record)
+
+    def test_larger_journal_budget_is_never_granted_to_legacy_or_unbounded_receipts(self):
+        _, scope = self.fixture.stage(); record = self.record(scope)
+        record['unexpectedPadding'] = 'x' * 16384
+        with self.u.locked(scope['operationId']) as state:
+            self.f.save_receipt(state, scope['operationId'], record)
+            with self.assertRaisesRegex(self.r.Rejected, 'RECEIPT_INVALID'): self.u.receipt(state, scope['operationId'])
+        scope = self.stage(); record = self.record(scope); record['unexpectedPadding'] = 'x' * 32768
+        with self.u.locked(scope['operationId']) as state:
+            self.f.save_receipt(state, scope['operationId'], record)
+            with self.assertRaisesRegex(self.r.Rejected, 'RECEIPT_INVALID'): self.u.receipt(state, scope['operationId'])
+
     def test_attributes_failure_leaves_target_unchanged_and_recovery_does_not_reapply(self):
         scope = self.stage()
         with patch.object(os, 'utime', side_effect=OSError('owned simulated utime failure')):

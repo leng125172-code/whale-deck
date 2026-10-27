@@ -67,6 +67,8 @@ def main():
     try:
         with owned_fixture.fixture() as owned:
             identifier, folder = owned['identifier'], owned['folder']; output = folder / 'original.bin'
+            save('baseline.json', {'sourceHashes': hashes, 'bundle': str(bundle), 'hddSandbox': str(target),
+                'containerId': identifier, 'sourceDirectory': str(folder)})
             desired = {'uid': 1001, 'gid': 2002, 'mode': 0o640, 'modifiedNs': 1700000000123456789}
             os.chown(output, desired['uid'], desired['gid']); output.chmod(desired['mode'])
             os.utime(output, ns=(desired['modifiedNs'], desired['modifiedNs']))

@@ -153,8 +153,32 @@ class ContainerUploads:
         except FileNotFoundError: return None
         if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600:
             self.reject('RECEIPT_INVALID')
-        value = self.f.read_receipt(state, operation)
+        value = self.read_journal(state, operation)
         return self.validate_receipt(value, operation)
+
+    def read_journal(self, state, operation):
+        # Two independently valid 4096-byte paths can exceed the legacy 16KiB
+        # limit after JSON escaping. Only restoration journals/seals receive a
+        # bounded 32KiB envelope; ordinary/host receipts keep their old budget.
+        try: descriptor = os.open(operation + '.json', os.O_RDONLY | os.O_NOFOLLOW, dir_fd=state)
+        except FileNotFoundError: return None
+        try:
+            before = os.fstat(descriptor)
+            if not stat.S_ISREG(before.st_mode) or before.st_uid != 0 or before.st_nlink != 1 or \
+                    stat.S_IMODE(before.st_mode) != 0o600 or before.st_size > 32768:
+                self.reject('RECEIPT_INVALID')
+            raw = bytearray()
+            while chunk := os.read(descriptor, 32769 - len(raw)):
+                raw.extend(chunk)
+                if len(raw) > 32768: self.reject('RECEIPT_INVALID')
+            if self.r.fingerprint(os.fstat(descriptor)) != self.r.fingerprint(before): self.reject('RECEIPT_INVALID')
+            value = json.loads(raw, object_pairs_hook=self.f.unique_object)
+            original = value.get('originalRecord') if type(value) is dict and value.get('schemaVersion') == 3 and \
+                value.get('resourceType') == 'ContainerUploadRecoverySeal' else value
+            restoration = type(original) is dict and original.get('schemaVersion') == 4 and original.get('resourceType') == 'ContainerFileRestoration'
+            if len(raw) > 16384 and not restoration: self.reject('RECEIPT_INVALID')
+            return value
+        finally: os.close(descriptor)
 
     def validate_receipt(self, value, operation):
         if value is None: return None
@@ -446,7 +470,7 @@ class ContainerUploadRecovery:
         except FileNotFoundError: return None, None
         if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600:
             self.u.reject('RECEIPT_INVALID')
-        value = self.f.read_receipt(state, operation)
+        value = self.u.read_journal(state, operation)
         if value is None: self.u.reject('RECEIPT_INVALID')
         seal = value if type(value) is dict and value.get('schemaVersion') == 3 else None
         if seal is not None:
@@ -516,7 +540,8 @@ class ContainerUploadRecovery:
                 'originalRecordHash': observation['originalRecordHash'], **material, 'requestHash': request_hash,
                 'sealedAtUnixMs': time.time_ns() // 1000000}
             # Match read_receipt's bound exactly, including escaped Unicode.
-            if len(json.dumps(value, separators=(',', ':')).encode()) > 16384: self.u.reject('RECOVERY_RECORD_LIMIT')
+            limit = 32768 if record is not None and record['schemaVersion'] == 4 else 16384
+            if len(json.dumps(value, separators=(',', ':')).encode()) > limit: self.u.reject('RECOVERY_RECORD_LIMIT')
             # Existing minor39/40 readers only admit schemas1/2. Replacing the
             # original journal under its lock therefore fences their delayed
             # stage/publish/capture calls too, without relying on a new sidecar
