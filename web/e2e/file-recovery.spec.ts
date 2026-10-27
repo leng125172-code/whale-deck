@@ -86,6 +86,99 @@ test('directory purge is the eleventh kind and accepting uncertainty never impli
   expect(confirms(control)).toHaveLength(1)
   expect(control.state.writes.every((item) => !item.path.endsWith('/apply'))).toBe(true)
 })
+test('container upload is the twelfth kind and only archives uncertainty without resending bytes', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 1000 })
+  const containerPath = `${Array.from({ length: 10 }, () => '很长目录abcdefghij').join('/')}/文件.bin`
+  const control = await installFileRecoveryFixture(page, {
+    kind: 'container-upload',
+    containerPath,
+  })
+  await page.goto('/files')
+  await page.getByRole('button', { name: '异常任务接管', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '异常文件任务', exact: true })
+  await expect(dialog.getByText('容器文件上传', { exact: true }).first()).toBeVisible()
+  await expect(dialog).toContainText(control.candidate.container.containerId)
+  await expect(dialog).toContainText(containerPath)
+  await dialog.getByRole('button', { name: '核对该任务', exact: true }).click()
+  await dialog.locator('.recovery-form .el-select').first().click()
+  await expect(page.getByRole('option', { name: '仅按完整可信回执对账' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await dialog.getByRole('button', { name: '生成接管计划', exact: true }).click()
+  await dialog.getByRole('button', { name: '查询原接管任务', exact: true }).click()
+  await expect(dialog.getByRole('button', { name: '确认对账', exact: true })).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: '接受未知结果', exact: true })).toBeEnabled()
+  const registration = creates(control)[0]
+  expect(registration.body).toEqual({
+    kind: 'container-upload',
+    intentId: control.candidate.intentId,
+    originalVersion: control.candidate.version,
+    disposition: 'AcknowledgeUnknown',
+    reasonCode: 'OriginalSessionLost',
+  })
+  expect(registration.headers['idempotency-key']).toMatch(/^[a-f0-9-]{36}$/)
+  expect(confirms(control)).toHaveLength(0)
+  await dialog.getByRole('button', { name: '接受未知结果', exact: true }).click()
+  await expect(page.getByText(/不表示上传成功，不重新发送文件字节/)).toBeVisible()
+  await page.getByRole('button', { name: '确认处置', exact: true }).click()
+  expect(confirms(control)).toHaveLength(1)
+  expect(confirms(control)[0].body).toEqual({
+    planHash: 'ui-recovery-plan-not-auth-token',
+    confirmed: true,
+    version: 1,
+  })
+  expect(confirms(control)[0].headers['idempotency-key']).toBe(control.row.id)
+  await dialog.getByRole('button', { name: '查询原接管任务', exact: true }).click()
+  await expect(
+    dialog.getByText(
+      '已封存容器上传的历史不确定性；不表示上传成功，也不会重新发送文件字节。',
+      { exact: true },
+    ),
+  ).toBeVisible()
+  expect(control.row.originalResolution).toBe('Failed')
+  expect(control.row.resultCode).toBe('FILES_RECOVERY_DISPOSED')
+  expect(control.files.state.bodyCount).toBe(0)
+  expect(control.state.writes.every((item) => item.path.startsWith('/operations'))).toBe(true)
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('container recovery late confirmation after leaving hides its path and performs no disposition', async ({
+  page,
+}) => {
+  const privatePath = '资料/仅管理员可见/容器密钥文件.bin'
+  const control = await installFileRecoveryFixture(page, {
+    kind: 'container-upload',
+    containerPath: privatePath,
+  })
+  await page.goto('/files')
+  const dialog = await plan(page)
+  await expect(dialog).toContainText(privatePath)
+  await dialog.getByRole('button', { name: '接受未知结果', exact: true }).click()
+  await page
+    .getByRole('menuitem', { name: '容器', exact: true })
+    .evaluate((element: HTMLElement) => element.click())
+  await expect(page).toHaveURL(/\/containers$/)
+  await expect(page.getByRole('dialog', { name: '异常文件任务', exact: true })).toHaveCount(0)
+  await expect(page.getByText(privatePath, { exact: false })).toHaveCount(0)
+  await page.getByRole('button', { name: '确认处置', exact: true }).click()
+  await page.waitForTimeout(100)
+  expect(confirms(control)).toHaveLength(0)
+  expect(control.files.state.bodyCount).toBe(0)
+})
+
+test('ordinary users never receive container-upload recovery controls or writes', async ({ page }) => {
+  const control = await installFileRecoveryFixture(page, {
+    kind: 'container-upload',
+    administrator: false,
+  })
+  await page.goto('/files')
+  await expect(page.getByTestId('file-recovery-entry')).toHaveCount(0)
+  expect(control.state.reads).toHaveLength(0)
+  expect(control.state.writes).toHaveLength(0)
+  expect(control.files.state.bodyCount).toBe(0)
+})
 for (const width of [320, 1440])
   for (const colorScheme of ['light', 'dark'] as const)
     for (const scope of ['Archive', 'Originals', 'All']) {

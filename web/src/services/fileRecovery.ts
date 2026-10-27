@@ -1,5 +1,7 @@
 import { treeUuid, validTreeLocation } from '@/services/fileTreeCopies'
 import type { TreeLocation } from '@/services/fileTreeCopies'
+import { validContainerUploadLocation } from '@/services/containerUploads'
+import type { ContainerUploadLocation } from '@/services/containerUploads'
 
 export const recoveryKinds = [
   'upload',
@@ -13,6 +15,7 @@ export const recoveryKinds = [
   'tree-restore',
   'tree-overwrite-restore',
   'tree-purge',
+  'container-upload',
 ] as const
 export type RecoveryKind = (typeof recoveryKinds)[number]
 export type RecoveryDisposition = 'AcknowledgeUnknown' | 'ReconcileCompleted'
@@ -40,6 +43,7 @@ export interface RecoveryCandidate {
   target: TreeLocation | null
   hasRetainedObjects: boolean | null
   purge?: RecoveryPurge
+  container?: ContainerUploadLocation
 }
 export interface RecoveryPage {
   entries: RecoveryCandidate[]
@@ -120,6 +124,7 @@ export function recoveryKind(kind: RecoveryKind) {
     'tree-restore': '目录恢复',
     'tree-overwrite-restore': '目录覆盖恢复',
     'tree-purge': '目录永久清理',
+    'container-upload': '容器文件上传',
   }[kind]
 }
 export function recoveryState(state: string) {
@@ -263,7 +268,16 @@ export function assertRecoveryPage(page: RecoveryPage) {
         (row.source !== null ||
           row.target !== null ||
           row.hasRetainedObjects !== null ||
-          row.purge !== undefined)) ||
+          row.purge !== undefined ||
+          row.container !== undefined)) ||
+      (row.kind === 'container-upload' && row.integrity === 'Verified'
+        ? row.source !== null ||
+          row.target !== null ||
+          row.executionJobId !== row.intentId ||
+          !validContainerUploadLocation(row.container) ||
+          row.hasRetainedObjects === false ||
+          row.purge !== undefined
+        : row.container !== undefined) ||
       (row.kind === 'tree-purge' && row.integrity === 'Verified'
         ? !validRecoveryPurge(row.purge) ||
           row.purge.version !== row.version ||
@@ -318,6 +332,12 @@ export function assertRecoveryIntent(
       'Expired',
     ].includes(row.state) ||
     !['AcknowledgeUnknown', 'ReconcileCompleted'].includes(row.disposition) ||
+    (row.kind === 'container-upload' &&
+      (row.disposition !== 'AcknowledgeUnknown' ||
+        (row.rootState !== null && row.rootState !== 'Unknown') ||
+        (row.state === 'Disposed' &&
+          (row.originalResolution !== 'Failed' || row.resultCode !== 'FILES_RECOVERY_DISPOSED')) ||
+        ['Acknowledged', 'Succeeded', 'Superseded'].includes(row.originalResolution || ''))) ||
     !['OriginalSessionLost', 'OperatorHandover', 'IncidentReview'].includes(row.reasonCode) ||
     (row.rootState !== null &&
       !['Missing', 'Aborted', 'Unknown', 'Completed'].includes(row.rootState)) ||

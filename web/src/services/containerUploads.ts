@@ -63,6 +63,16 @@ function exactKeys(value: unknown, fields: readonly string[]): value is Record<s
   )
 }
 
+export function validContainerUploadLocation(value: unknown): value is ContainerUploadLocation {
+  return (
+    exactKeys(value, ['containerId', 'instanceId', 'path']) &&
+    typeof value.containerId === 'string' &&
+    /^[a-f0-9]{64}$/.test(value.containerId) &&
+    validInstance(value.instanceId) &&
+    validPath(value.path)
+  )
+}
+
 function validPath(value: unknown): value is string {
   if (
     typeof value !== 'string' ||
@@ -172,11 +182,7 @@ export function assertContainerUploadIntent(
     value.id === emptyUuid ||
     !uuid.test(value.jobId) ||
     value.jobId !== value.id ||
-    !exactKeys(location, ['containerId', 'instanceId', 'path']) ||
-    typeof location.containerId !== 'string' ||
-    !/^[a-f0-9]{64}$/.test(location.containerId) ||
-    !validInstance(location.instanceId) ||
-    !validPath(location.path) ||
+    !validContainerUploadLocation(location) ||
     !Number.isSafeInteger(value.sizeBytes) ||
     value.sizeBytes < 0 ||
     value.sizeBytes > maximumFileBytes ||

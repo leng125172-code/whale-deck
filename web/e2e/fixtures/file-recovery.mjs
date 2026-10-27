@@ -6,12 +6,14 @@ export async function installFileRecoveryFixture(page, options = {}) {
   const state = { reads: [], writes: [], missing: false, status: 200, key: '', lostCreate: false, lostConfirm: false }
   const originalId = 'f28bc837-77ef-43c9-a0c9-617f790df336', originalExecution = '3c9c0737-999c-468d-817b-c4f9b6288210'
   const id = 'c47ae017-288b-445f-bae1-ef0ce9baa4dd', execution = '11c8ecb3-112e-4d6b-b26c-d63982ca941e'
-  const candidate = { kind: options.kind || 'tree-move', intentId: originalId, executionJobId: originalExecution, version: 17,
+  const kind = options.kind || 'tree-move', containerUpload = kind === 'container-upload'
+  const candidate = { kind, intentId: originalId, executionJobId: containerUpload ? originalId : originalExecution, version: 17,
     createdAtUtc: new Date().toISOString(), leaseExpiresAtUtc: null, rootStartRecorded: true,
     integrity: options.invalidBinding ? 'InvalidBinding' : 'Verified',
-    source: options.invalidBinding ? null : { rootId: 'files.shared', path: options.sourcePath || '很长的中文目录/abcdefghijklmnopqrstuvwxyz-0123456789/source' },
-    target: options.invalidBinding || options.kind === 'tree-trash' ? null : { rootId: 'files.shared', path: '资料/target' }, hasRetainedObjects: null }
-  const row = { id, planningJobId: id, executionJobId: null, kind: candidate.kind, originalIntentId: originalId, originalExecutionJobId: originalExecution, originalVersion: 17,
+    source: options.invalidBinding || containerUpload ? null : { rootId: 'files.shared', path: options.sourcePath || '很长的中文目录/abcdefghijklmnopqrstuvwxyz-0123456789/source' },
+    target: options.invalidBinding || containerUpload || kind === 'tree-trash' ? null : { rootId: 'files.shared', path: '资料/target' }, hasRetainedObjects: null }
+  if (containerUpload && !options.invalidBinding) candidate.container = { containerId: 'a'.repeat(64), instanceId: '2147483647:2026-10-22T01:02:03.123456789Z', path: options.containerPath || '资料/容器内文件.bin' }
+  const row = { id, planningJobId: id, executionJobId: null, kind: candidate.kind, originalIntentId: originalId, originalExecutionJobId: candidate.executionJobId, originalVersion: 17,
     state: 'Queued', disposition: 'AcknowledgeUnknown', reasonCode: 'OriginalSessionLost', rootState: null, readyExpiresAtUtc: null, version: 0,
     resultCode: null, originalResolution: null, confirmation: null }
   if (candidate.kind === 'tree-purge' && !options.invalidBinding) {
@@ -31,6 +33,7 @@ export async function installFileRecoveryFixture(page, options = {}) {
     if (request.method() === 'GET' && path === '/' + candidate.kind + '/' + originalId) return reply(candidate)
     if (path === '/operations' && request.method() === 'POST') {
       state.key = request.headers()['idempotency-key']; const command = request.postDataJSON()
+      if (containerUpload && command.disposition !== 'AcknowledgeUnknown') return reply({ status: 400 }, 400)
       row.disposition = command.disposition; row.reasonCode = command.reasonCode
       if (options.loseCreateResponse && !state.lostCreate) { state.lostCreate = true; return route.abort('failed') }
       return reply(row, 202)
@@ -46,9 +49,9 @@ export async function installFileRecoveryFixture(page, options = {}) {
       if (row.state === 'Queued' && !options.holdPlan) {
         row.state = 'Ready'; row.rootState = row.disposition === 'ReconcileCompleted' ? 'Completed' : 'Unknown'
         row.readyExpiresAtUtc = new Date(Date.now() + (options.expiryMs || 300000)).toISOString(); row.version++
-        row.confirmation = { planHash: 'ui-recovery-plan-not-auth-token', expiresAtUtc: row.readyExpiresAtUtc, warning: row.disposition === 'ReconcileCompleted' ? '仅按完整可信回执对账，不重做原文件操作。' : '只接受历史不确定性，不代表原文件操作成功；不重做、不删除留存对象。' }
+        row.confirmation = { planHash: 'ui-recovery-plan-not-auth-token', expiresAtUtc: row.readyExpiresAtUtc, warning: row.disposition === 'ReconcileCompleted' ? '仅按完整可信回执对账，不重做原文件操作。' : containerUpload ? '即使历史记录可能已经发布，也只接受并封存不确定性；不表示上传成功，不重新发送文件字节。' : '只接受历史不确定性，不代表原文件操作成功；不重做、不删除留存对象。' }
       } else if (row.state === 'DispositionQueued') {
-        row.state = 'Disposed'; row.originalResolution = row.disposition === 'ReconcileCompleted' ? 'Succeeded' : 'Acknowledged'; row.resultCode = 'FILES_RECOVERY_DISPOSED'; row.version++
+        row.state = 'Disposed'; row.originalResolution = containerUpload ? 'Failed' : row.disposition === 'ReconcileCompleted' ? 'Succeeded' : 'Acknowledged'; row.resultCode = 'FILES_RECOVERY_DISPOSED'; row.version++
         if (row.purge) {
           row.purge.version++; row.purge.state = row.originalResolution
           if (row.originalResolution === 'Succeeded') {

@@ -40,6 +40,27 @@ function candidate(): RecoveryCandidate {
     hasRetainedObjects: null,
   }
 }
+function containerCandidate(): RecoveryCandidate {
+  const id = 'f28bc837-77ef-43c9-a0c9-617f790df336'
+  return {
+    kind: 'container-upload',
+    intentId: id,
+    executionJobId: id,
+    version: 17,
+    createdAtUtc: new Date().toISOString(),
+    leaseExpiresAtUtc: null,
+    rootStartRecorded: true,
+    integrity: 'Verified',
+    source: null,
+    target: null,
+    hasRetainedObjects: true,
+    container: {
+      containerId: 'a'.repeat(64),
+      instanceId: '2147483647:2026-10-22T01:02:03.123456789Z',
+      path: '资料/容器内文件.bin',
+    },
+  }
+}
 function ready(): RecoveryIntent {
   const original = candidate(),
     id = 'c47ae017-288b-445f-bae1-ef0ce9baa4dd',
@@ -155,8 +176,73 @@ describe('current-administrator recovery presentation boundaries', () => {
       expect(assertRecoveryIntent({ ...ready(), kind: 'tree-purge', purge: p })).toBeTruthy()
     }
   })
-  it('keeps all eleven workflow kinds and does not turn unknown or planning into success', () => {
-    expect(recoveryKinds).toHaveLength(11)
+  it('requires container upload metadata without pretending it is a host root location', () => {
+    const item = containerCandidate()
+    expect(assertRecoveryPage({ entries: [item], nextCursor: null }).entries[0]).toBe(item)
+    expect(recoveryKind(item.kind)).toBe('容器文件上传')
+    for (const changed of [
+      { ...item, container: undefined },
+      { ...item, source: { rootId: 'files.shared', path: '伪造宿主机路径' } },
+      { ...item, target: { rootId: 'files.shared', path: '伪造宿主机路径' } },
+      { ...item, executionJobId: '3c9c0737-999c-468d-817b-c4f9b6288210' },
+      { ...item, hasRetainedObjects: false },
+      { ...item, container: { ...item.container!, containerId: 'A'.repeat(64) } },
+      { ...item, container: { ...item.container!, instanceId: '1:2026-10-22T01:02:03Z' } },
+      { ...item, container: { ...item.container!, path: '../escape' } },
+      { ...item, container: { ...item.container!, ownerHash: 'private' } },
+    ])
+      expect(() => assertRecoveryPage({ entries: [changed], nextCursor: null } as never)).toThrow(
+        '异常任务元数据无法核实',
+      )
+    expect(() =>
+      assertRecoveryPage({
+        entries: [{ ...candidate(), container: item.container }],
+        nextCursor: null,
+      }),
+    ).toThrow('异常任务元数据无法核实')
+  })
+  it('allows container upload acknowledgment only and never reconciles a historical publish as success', () => {
+    const original = containerCandidate()
+    const row = {
+      ...ready(),
+      kind: 'container-upload' as const,
+      originalIntentId: original.intentId,
+      originalExecutionJobId: original.executionJobId!,
+      disposition: 'AcknowledgeUnknown' as const,
+      rootState: 'Unknown',
+    }
+    expect(assertRecoveryIntent(row)).toBe(row)
+    expect(() =>
+      assertRecoveryIntent({
+        ...row,
+        disposition: 'ReconcileCompleted',
+        rootState: 'Completed',
+      }),
+    ).toThrow('接管任务响应无法核实')
+    const disposed = {
+      ...row,
+      state: 'Disposed',
+      executionJobId: '11c8ecb3-112e-4d6b-b26c-d63982ca941e',
+      confirmation: null,
+      originalResolution: 'Failed',
+      resultCode: 'FILES_RECOVERY_DISPOSED',
+    }
+    expect(assertRecoveryIntent(disposed)).toBe(disposed)
+    expect(() => assertRecoveryIntent({ ...disposed, originalResolution: 'Acknowledged' })).toThrow(
+      '接管任务响应无法核实',
+    )
+    expect(() => assertRecoveryIntent({ ...disposed, originalResolution: 'Succeeded' })).toThrow(
+      '接管任务响应无法核实',
+    )
+    expect(() => assertRecoveryIntent({ ...disposed, originalResolution: 'Superseded' })).toThrow(
+      '接管任务响应无法核实',
+    )
+    expect(() =>
+      assertRecoveryIntent({ ...disposed, resultCode: 'CONTAINER_UPLOAD_ADMIN_ACKNOWLEDGED' }),
+    ).toThrow('接管任务响应无法核实')
+  })
+  it('keeps all twelve workflow kinds and does not turn unknown or planning into success', () => {
+    expect(recoveryKinds).toHaveLength(12)
     expect(recoveryKind('tree-restore')).toBe('目录恢复')
     expect(recoveryKind('tree-overwrite-restore')).toBe('目录覆盖恢复')
     expect(recoveryKind('tree-trash')).toBe('目录回收')

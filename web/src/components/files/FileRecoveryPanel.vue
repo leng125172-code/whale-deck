@@ -64,6 +64,8 @@ const canConfirm = computed(() => {
     selected.executionJobId === row.originalExecutionJobId &&
     selected.kind === row.kind &&
     selected.intentId === row.originalIntentId &&
+    (row.kind !== 'container-upload' ||
+      (row.disposition === 'AcknowledgeUnknown' && !!selected.container)) &&
     (row.kind !== 'tree-purge' ||
       (!!row.purge &&
         !!selected.purge &&
@@ -154,6 +156,7 @@ function select(row: RecoveryCandidate) {
   if (busy.value || hasReference.value || row.integrity !== 'Verified' || !row.executionJobId)
     return
   candidate.value = row
+  if (row.kind === 'container-upload') disposition.value = 'AcknowledgeUnknown'
   error.value = ''
 }
 async function setReference(id: string) {
@@ -264,7 +267,8 @@ async function queue() {
     hasReference.value ||
     !selected ||
     selected.integrity !== 'Verified' ||
-    !selected.executionJobId
+    !selected.executionJobId ||
+    (selected.kind === 'container-upload' && disposition.value !== 'AcknowledgeUnknown')
   )
     return
   const command: RecoveryCommand = {
@@ -458,6 +462,12 @@ onBeforeUnmount(() => {
       :closable="false"
     />
     <el-alert
+      v-if="intent?.kind === 'container-upload' || candidate?.kind === 'container-upload'"
+      title="容器上传接管只接受并封存历史不确定性，不会重新发送文件字节。即使历史记录显示文件可能已发布，也不表示上传成功。"
+      type="warning"
+      :closable="false"
+    />
+    <el-alert
       title="接管是当前管理员的新操作，不冒充原登录。不重做文件操作、不删除留存对象；接受未知结果不代表操作成功。"
       type="warning"
       :closable="false"
@@ -514,6 +524,14 @@ onBeforeUnmount(() => {
           <dt>原任务目标</dt>
           <dd>{{ candidate.target.rootId }} / {{ candidate.target.path }}</dd>
         </template>
+        <template v-if="candidate?.container">
+          <dt>容器 ID</dt>
+          <dd>{{ candidate.container.containerId }}</dd>
+          <dt>容器实例</dt>
+          <dd>{{ candidate.container.instanceId }}</dd>
+          <dt>容器内路径</dt>
+          <dd>{{ candidate.container.path }}</dd>
+        </template>
         <dt>接管计划</dt>
         <dd>{{ intent.planningJobId }}</dd>
         <dt>接管执行</dt>
@@ -536,7 +554,11 @@ onBeforeUnmount(() => {
         v-if="intent?.state === 'Disposed' && intent.disposition === 'AcknowledgeUnknown'"
         class="recovery-warning"
       >
-        已记录接受未知历史；没有证明原文件操作成功。请检查原路径和留存对象。
+        {{
+          intent.kind === 'container-upload'
+            ? '已封存容器上传的历史不确定性；不表示上传成功，也不会重新发送文件字节。'
+            : '已记录接受未知历史；没有证明原文件操作成功。请检查原路径和留存对象。'
+        }}
       </p>
       <p v-if="intent?.state === 'Disposed' && intent.disposition === 'ReconcileCompleted'">
         {{
@@ -592,6 +614,11 @@ onBeforeUnmount(() => {
         <p class="recovery-id">{{ entry.executionJobId || entry.intentId }}</p>
         <p v-if="entry.source">源：{{ entry.source.rootId }} / {{ entry.source.path }}</p>
         <p v-if="entry.target">目标：{{ entry.target.rootId }} / {{ entry.target.path }}</p>
+        <template v-if="entry.container">
+          <p>容器：{{ entry.container.containerId }}</p>
+          <p>实例：{{ entry.container.instanceId }}</p>
+          <p>容器内路径：{{ entry.container.path }}</p>
+        </template>
         <template v-if="entry.purge">
           <p>
             捕获 ID：{{ entry.purge.captureId }} ·
@@ -631,6 +658,7 @@ onBeforeUnmount(() => {
             ><el-option
               value="AcknowledgeUnknown"
               label="明确接受历史不确定性（不表示成功）" /><el-option
+              v-if="candidate.kind !== 'container-upload'"
               value="ReconcileCompleted"
               label="仅按完整可信回执对账" /></el-select
         ></el-form-item>
