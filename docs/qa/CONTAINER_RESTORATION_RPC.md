@@ -1,5 +1,13 @@
 # 容器历史属性恢复：minor43签名Stage候选
 
+## 宿主升级后旧版内容恢复页面兼容与新CI核对
+
+宿主06b6eed/minor43连接API/Worker/Gateway 5fd8d3b，实际正常SSO网页回归4次各2097159字节恢复，含桌面明色/320暗色、原路径及其他路径新建/覆盖、确认取消零登记/浏览器内容0、正常跨页双端退出。独立核对四次Root均schema1、request没有restoreSource、journal没有restorationAttributes，原“仅内容”行为未被升级成属性恢复。最终全字节/目标属性/旧inode/HDD验证通过。证据`deploy/artifacts/container-restore-browser-e1e7ebde6d014ac28572f34c324de3a8/`及`/tmp/wd-container-restore-rpc-legacy-browser.log`，含独立最终记录。
+
+最终45业务意图30成功，恢复10；活动/Unknown/租约/屏障0，三类临时身份0，精确测试CID和源目录不存在、11核心healthy。此前两次原生属性发布仍为不带业务Job的协议验证；不得将旧页面回归计为属性页面完成。
+
+元数据范围说明补齐后，b9685da CI40489162360后端、真实PostgreSQL、Valkey和完整安装器均success，前端完整组仍运行；06b6eed原安装器失败保留，不将其误签通过。以下40意图及安装器待终态为对应早期记录；当前业务属性策略/迁移/新页面仍待，59项active、17项移出不算完成。
+
 ## 当前宿主安装态：06b6eed/minor43签名属性恢复已实测
 
 `whaledeck-host-06b6eed.service`正常0/SUCCESS，46.880秒。Agent及MaintenanceHost实际来源`06b6eed2387351561c56335fe6d145e7f3c76fcb`、运行库/PKCS10.0.13；新模块/固定helper逐字节匹配冻结提交，宿主权限/UDS/动态入口检查通过。API/Worker/Gateway仍5fd8d3b，不声称六组件同版或已开放业务属性恢复。
