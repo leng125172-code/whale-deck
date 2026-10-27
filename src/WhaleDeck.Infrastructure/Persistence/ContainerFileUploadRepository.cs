@@ -69,7 +69,8 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
             !db.OperationJobs.Any(job => job.Id == id && job.CancelRequestedAtUtc != null), cancellationToken);
 
     public async Task<bool> ReadyAsync(ContainerFileUploadOperation row, CancellationToken cancellationToken) => await db.ContainerFileUploadOperations
-        .Where(item => item.Id == row.Id && item.State == "Receiving" && item.ReceiveToken == row.ReceiveToken && item.CompletedAtUtc == null && item.RequestHash == row.RequestHash)
+        .Where(item => item.Id == row.Id && item.State == "Receiving" && item.ReceiveToken == row.ReceiveToken && item.CompletedAtUtc == null && item.RequestHash == row.RequestHash &&
+            item.ExpiresAtUtc > DateTimeOffset.UtcNow && !db.OperationJobs.Any(job => job.Id == row.Id && job.CancelRequestedAtUtc != null))
         .ExecuteUpdateAsync(update => update.SetProperty(item => item.State, "Ready").SetProperty(item => item.NextAttemptAtUtc, DateTimeOffset.UtcNow)
             .SetProperty(item => item.Version, item => item.Version + 1), cancellationToken) == 1;
 

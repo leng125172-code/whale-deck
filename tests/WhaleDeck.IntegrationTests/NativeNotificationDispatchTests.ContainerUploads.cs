@@ -45,6 +45,8 @@ public sealed partial class NativeNotificationDispatchTests
         static ContainerFileUploadReceiptDto Proof(ContainerFileUploadOperation row, string state) => new(row.ContainerId, row.InstanceId, row.Id, row.TargetProof,
             new(state, state == "Prevented" ? 0 : row.SizeBytes, state == "Prevented" ? Convert.ToHexString(SHA256.HashData([])) : row.Sha256,
                 state == "Published" ? new('F',64) : "", false, state == "Published", false), false);
+        IQueryable<OutboxMessage> Messages(Guid id) => db.OutboxMessages.FromSqlInterpolated(
+            $"SELECT * FROM outbox_messages WHERE payload_json->>'jobId'={id.ToString("D")}");
         try
         {
             var first = await repository.EnqueueAsync(Row("资料/first.bin"), default);
@@ -57,7 +59,7 @@ public sealed partial class NativeNotificationDispatchTests
             await Assert.ThrowsAsync<InvalidOperationException>(() => repository.BeginReceiveAsync(actor, first.Id, DateTimeOffset.UtcNow, default));
             await db.ContainerFileUploadOperations.Where(item => item.Id == first.Id).ExecuteUpdateAsync(update => update.SetProperty(item => item.Sha256, first.Sha256));
             await new JobRepository(db).RequestCancellationAsync(first.Id, actor.Subject, default);
-            Assert.True(await db.OutboxMessages.AnyAsync(item => item.MessageType == "ContainerFileUploadCancellationRequested" && item.PayloadJson.Contains(first.Id.ToString("D"))));
+            Assert.True(await Messages(first.Id).AnyAsync(item => item.MessageType == "ContainerFileUploadCancellationRequested"));
             var canceled = await Claim(first.Id);
             await Assert.ThrowsAsync<ArgumentException>(() => repository.FinishAsync(canceled, "Canceled", "CONTAINER_UPLOAD_CANCELED", null, default));
             Assert.True(await repository.FinishAsync(canceled, "Canceled", "CONTAINER_UPLOAD_CANCELED", Proof(canceled, "Prevented"), default));
@@ -87,7 +89,7 @@ public sealed partial class NativeNotificationDispatchTests
                 Assert.Equal("Succeeded", published.State); Assert.Equal(new string('F',64), published.PublishedVersion);
                 Assert.Equal(overwrite, published.PreviousRetained); Assert.False(published.PublishBarrier); Assert.NotNull(published.CompletedAtUtc);
                 Assert.Equal("Succeeded", (await db.OperationJobs.AsNoTracking().SingleAsync(item => item.Id == publishing.Id)).State);
-                Assert.False(await db.OutboxMessages.AnyAsync(item => item.ProcessedAtUtc == null && item.PayloadJson.Contains(publishing.Id.ToString("D"))));
+                Assert.False(await Messages(publishing.Id).AnyAsync(item => item.ProcessedAtUtc == null));
             }
 
             // A host path reservation blocks publication, not the container's
@@ -141,7 +143,7 @@ public sealed partial class NativeNotificationDispatchTests
             finally { await db.Database.ExecuteSqlRawAsync("ALTER TABLE audit_events DROP CONSTRAINT native_container_audit_failure"); }
             Assert.False(await db.ContainerFileUploadOperations.AnyAsync(item => item.Id == failed.Id));
             Assert.False(await db.OperationJobs.AnyAsync(item => item.Id == failed.Id));
-            Assert.False(await db.OutboxMessages.AnyAsync(item => item.PayloadJson.Contains(failed.Id.ToString("D"))));
+            Assert.False(await Messages(failed.Id).AnyAsync());
             Assert.False(await db.OperationJobEvents.AnyAsync(item => item.JobId == failed.Id));
             Console.WriteLine("INBOX_PHASE=container-upload-binding-transaction-lease-alias-barrier-unknown");
         }
