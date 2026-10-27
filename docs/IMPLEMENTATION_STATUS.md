@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-27 容器上传常规BFF/UI已覆盖并实机通过**：fab6e2e六组件/HTTP一致、11核心healthy；真实2MiB+7新建/覆盖/全内容读回、旧inode/HDD，显式取消/退出后Worker撤销，原账号删除后不同管理员封存/失败对账通过。真实1440明色/320暗色各一次发送、确认取消零字节、目录刷新/无溢出、跨页正常双端退出与旧Cookie拒绝通过；14条永久意图/审计/Root历史保留、Unknown/活租约/发布保护均0，临时身份0，测试源精确清理。发布中故障/撤权及有屏障Unknown、编辑/历史恢复与其余59项继续。[真实证据与失败](qa/CONTAINER_UPLOAD_BFF_UI.md)。
+
 - **2026-10-27 minor41已安装并验证七RPC，业务入口未部署**：宿主Agent/MaintenanceHost实际b681e1d、10.0.13运行库/PKCS和权限/动态入口通过；真实签名五方法完整2MiB+7发布/读回/旧inode/HDD及取消通过，独立protobuf客户端验证历史Observe/Seal、实际停止重启、精确批准/范围拒绝与幂等。自有数据清理、两个失败验证留下的空锁保留，11核心healthy；API/Worker/Gateway仍f5a0029。下一步部署新业务并验收真实Cookie/SQL/Worker/HDD/UI，59项继续。[安装及失败证据](qa/CONTAINER_UPLOAD_HTTP_WORKER.md#b681e1d-宿主安装态验证)。
 
 - **2026-10-27 容器上传HTTP/Worker/精确代理候选，未部署**：独立管理员计划/登记/原始暂存/状态/取消、真实SQL DI与专属HostedService已接通；minor41门禁保持，目标丢失或过期无法确认进入Unknown并保留保护。Release零警告错误、2604 Unit/191 Integration通过（7原生夹具默认跳过），17新HTTP/文档/边界、实际YARP 2MiB+7/6秒/Host与原生nginx精确额度通过；456前端单元/检查/构建通过。仍待minor41安装、真实Cookie→Worker/SQL→Root/HDD及页面整链，59项继续active。[证据与失败](qa/CONTAINER_UPLOAD_HTTP_WORKER.md)。
