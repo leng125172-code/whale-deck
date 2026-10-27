@@ -310,6 +310,8 @@ public sealed partial class ContainerUploadGatewayTests
         public bool Capability { get; private init; }
         public bool CancellationFence { get; private init; }
         public bool RecoverySeal { get; private init; }
+        public bool Restoration { get; private init; }
+        public bool HistorySources { get; private init; }
         public string? InvalidRecovery { get; set; }
         public ConcurrentQueue<Captured> Calls { get; } = new();
         public ConcurrentQueue<Rpc.ContainerUploadFrame> Frames { get; } = new();
@@ -321,9 +323,9 @@ public sealed partial class ContainerUploadGatewayTests
         public bool ReturnPrevented { get; set; }
         public string? InvalidFence { get; set; }
 
-        public static async Task<Harness> Start(uint major = 1, uint minor = 39, bool capability = true, bool cancellationFence = false, bool recoverySeal = false)
+        public static async Task<Harness> Start(uint major = 1, uint minor = 39, bool capability = true, bool cancellationFence = false, bool recoverySeal = false, bool restoration = false, bool historySources = false)
         {
-            var harness = new Harness { Major = major, Minor = minor, Capability = capability, CancellationFence = cancellationFence, RecoverySeal = recoverySeal };
+            var harness = new Harness { Major = major, Minor = minor, Capability = capability, CancellationFence = cancellationFence, RecoverySeal = recoverySeal, Restoration = restoration, HistorySources = historySources };
             if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Private UDS transport fixture requires Linux.");
             Directory.CreateDirectory(harness._directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             var socket = Path.Combine(harness._directory, "agent.sock");
@@ -404,6 +406,8 @@ public sealed partial class ContainerUploadGatewayTests
             if (harness.Capability) result.Capabilities.Add("docker.files.bound-uploads");
             if (harness.CancellationFence) result.Capabilities.Add("docker.files.upload-cancel-fence");
             if (harness.RecoverySeal) result.Capabilities.Add("docker.files.upload-recovery-seal");
+            if (harness.Restoration) result.Capabilities.Add("docker.files.restore-attributes");
+            if (harness.HistorySources) result.Capabilities.AddRange(["docker.files.history", "docker.files.history-source"]);
             return Task.FromResult(result);
         }
     }

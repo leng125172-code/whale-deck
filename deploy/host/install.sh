@@ -80,6 +80,7 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-upload.py" 
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-backups.py" /usr/local/libexec/whaledeck-container-backups.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-publish.py" /usr/local/libexec/whaledeck-container-publish.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-history.py" /usr/local/libexec/whaledeck-container-history.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-restore.py" /usr/local/libexec/whaledeck-container-restore.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-history-transport.py" /usr/local/libexec/whaledeck-container-history-transport.py
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-uploads
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-files.py" /usr/local/libexec/whaledeck-files.py

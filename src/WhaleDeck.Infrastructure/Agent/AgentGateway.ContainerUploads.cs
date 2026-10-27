@@ -16,13 +16,16 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
     public async Task RequireContainerUploadWorkflowAsync(CancellationToken cancellationToken) =>
         _ = await ContainerRecoveryClient(cancellationToken);
 
-    private async Task<ContainerFileWriteService.ContainerFileWriteServiceClient> ContainerWrites(CancellationToken cancellationToken, bool cancellationFence = false)
+    private async Task<ContainerFileWriteService.ContainerFileWriteServiceClient> ContainerWrites(CancellationToken cancellationToken, bool cancellationFence = false, bool restoration = false)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(TimeSpan.FromSeconds(5));
         var caps = await GetCapabilitiesAsync(timeout.Token);
         if (caps.ProtocolMajor != 1 || caps.ProtocolMinor < 39 || !caps.Capabilities.Contains("docker.files.bound-uploads") ||
             cancellationFence && (caps.ProtocolMinor < 40 || !caps.Capabilities.Contains("docker.files.upload-cancel-fence")))
             throw new RpcException(new(StatusCode.Unimplemented, "CONTAINER_UPLOAD_CAPABILITY_UNAVAILABLE"));
+        if (restoration && (caps.ProtocolMinor < 43 || !caps.Capabilities.Contains("docker.files.restore-attributes") ||
+            !caps.Capabilities.Contains("docker.files.history") || !caps.Capabilities.Contains("docker.files.history-source")))
+            throw new RpcException(new(StatusCode.Unimplemented, "CONTAINER_RESTORE_CAPABILITY_UNAVAILABLE"));
         return new(_channel);
     }
 
@@ -57,7 +60,9 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
         var header = new ContainerUploadHeader { Location = ContainerLocation(request.Location), OperationId = request.OperationId.ToString("N"),
             Owner = request.Owner, SizeBytes = request.SizeBytes, Sha256 = request.Sha256, ExpectedVersion = request.ExpectedVersion,
             ExpectedParentVersion = request.ExpectedParentVersion, ExpectedTargetProof = request.ExpectedTargetProof, Context = UploadContext(request.Context) };
-        var client = await ContainerWrites(cancellationToken, cancellationFence: true);
+        if (request.RestoreSource is { } source)
+            header.RestoreSource = new() { CaptureId = source.CaptureId, CaptureHash = source.CaptureHash, Path = source.Path };
+        var client = await ContainerWrites(cancellationToken, cancellationFence: true, restoration: request.RestoreSource is not null);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); lifetime.CancelAfter(TimeSpan.FromSeconds(325));
         using var call = client.StageUpload(ContainerWriteHeaders("StageUpload", header), deadline: DateTime.UtcNow.AddSeconds(330), cancellationToken: lifetime.Token);
         try

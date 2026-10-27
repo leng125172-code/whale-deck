@@ -596,7 +596,11 @@ message ContainerUploadHeader {
   ContainerFileLocation location = 1; string operation_id = 2; string owner = 3;
   int64 size_bytes = 4; string sha256 = 5; string expected_version = 6;
   string expected_parent_version = 7; string expected_target_proof = 8; RequestContext context = 9;
+  // Optional minor43 capability: attributes are derived by Root from this
+  // exact verified capture. No raw uid/gid/mode fields are accepted.
+  ContainerRestoreSource restore_source = 10;
 }
+message ContainerRestoreSource { string capture_id = 1; string capture_hash = 2; string path = 3; }
 message ContainerUploadFrame { ContainerUploadHeader header = 1; bytes data = 2; int64 offset = 3; bool commit = 4; }
 message ContainerUploadReference {
   string container_id = 1; string instance_id = 2; string operation_id = 3; string owner = 4; RequestContext context = 5;

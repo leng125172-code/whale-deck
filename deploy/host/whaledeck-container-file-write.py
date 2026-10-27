@@ -18,7 +18,8 @@ import sys
 
 STATE = Path('/var/lib/whaledeck-container-uploads')
 MODULES = frozenset(('whaledeck-files.py', 'whaledeck-container-terminal.py', 'whaledeck-container-files.py',
-    'whaledeck-container-upload.py', 'whaledeck-file-backups.py', 'whaledeck-container-backups.py', 'whaledeck-container-publish.py'))
+    'whaledeck-container-upload.py', 'whaledeck-file-backups.py', 'whaledeck-container-backups.py', 'whaledeck-container-publish.py',
+    'whaledeck-container-history.py', 'whaledeck-container-restore.py'))
 
 
 class Rejected(Exception): pass
@@ -134,6 +135,8 @@ def main():
     uploads = load('whaledeck-container-upload.py').ContainerUploads(reader, files, STATE)
     storage = load('whaledeck-file-backups.py').FileBackups(files, namespace='container-files-v1')
     captures = load('whaledeck-container-backups.py').ContainerBackups(uploads, storage)
+    history = load('whaledeck-container-history.py').ContainerHistory(uploads, storage)
+    uploads.restorations = load('whaledeck-container-restore.py').ContainerRestorations(uploads, history)
     publisher = load('whaledeck-container-publish.py').ContainerPublisher(uploads, captures)
     with lease(files):
         files.emit({'type': 'driver', 'invocationId': invocation})
@@ -150,6 +153,8 @@ def main():
 def error_code(error):
     # No exception message or arbitrary code suffix is ever emitted.
     codes = {'CONTAINER_UPLOAD_' + suffix for suffix in (
+        'RESTORE_ENGINE_REQUIRED', 'RESTORE_ENGINE_MISMATCH', 'RESTORE_CONTENT_MISMATCH', 'RESTORE_MODE_UNSUPPORTED',
+        'RESTORE_OWNER_UNMAPPED', 'RESTORE_ATTRIBUTES_INVALID', 'RESTORE_ATTRIBUTES_CHANGED',
         'RECOVERY_REQUEST_INVALID', 'RECOVERY_ACTOR_INVALID', 'RECOVERY_SCOPE_CHANGED', 'RECOVERY_SEAL_INVALID',
         'RECOVERY_IDEMPOTENCY_CONFLICT', 'RECOVERY_OBSERVATION_CHANGED', 'RECOVERY_RECORD_LIMIT',
         'MODULE_UNSAFE', 'STATE_UNSAFE', 'BUSY', 'REQUEST_INVALID', 'ACTION_INVALID', 'INVOCATION_INVALID', 'TIMEOUT', 'CANCELED',
@@ -161,6 +166,8 @@ def error_code(error):
         'PUBLISH_MOUNT_ROOT', 'PUBLISH_READ_ONLY', 'PUBLISH_OWNER_INVALID', 'PUBLISH_PRIVATE_UNSAFE',
         'PUBLISH_PRIVATE_CHANGED', 'PUBLISH_OBJECT_CHANGED', 'PUBLISH_OWNER_CHANGED', 'ALREADY_PUBLISHED', 'PUBLISHER_REQUIRED')}
     codes |= {'CONTAINER_PROTECTED', 'CONTAINER_UNSAFE_ISOLATION', 'CONTAINER_UNSAFE_MOUNT', 'CONTAINER_NOT_RUNNING'}
+    codes |= {'CONTAINER_HISTORY_' + suffix for suffix in ('REQUEST_INVALID', 'PROTECTED', 'SCOPE_MISMATCH',
+        'CAPTURE_CHANGED', 'CONTENT_CHANGED', 'CONTENT_INVALID', 'METADATA_INVALID', 'METADATA_CHANGED', 'INCOMPLETE')}
     codes |= {'CONTAINER_FILES_' + suffix for suffix in ('INSTANCE_CHANGED', 'ROOT_CHANGED', 'TARGET_CHANGED', 'PROTECTED',
         'SHARED_CORE_MOUNT', 'MOUNT_INVALID', 'MOUNT_IDENTITY_CHANGED', 'HOST_ROOT', 'PROCESS_TARGET_CHANGED', 'NAMESPACE_INVALID')}
     codes |= {'FILES_' + suffix for suffix in ('BACKUP_UNAVAILABLE', 'BACKUP_METADATA_UNSAFE', 'BACKUP_CONFIGURATION_INVALID',

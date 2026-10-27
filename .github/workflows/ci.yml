@@ -39,7 +39,7 @@ jobs:
           python3 -m py_compile deploy/validation/validate_container_upload_proxy.py
           python3 -m py_compile deploy/validation/validate_container_upload_recovery_agent.py
           python3 -m py_compile deploy/validation/validate_container_history_agent.py
-          python3 -m py_compile deploy/validation/validate_container_restore_browser.py
+          python3 -m py_compile deploy/validation/validate_container_restore_browser.py deploy/validation/validate_container_restoration_agent.py
           node --check deploy/validation/validate_container_restore_browser.mjs
           python3 -m py_compile deploy/validation/validate_container_upload_bff.py
           python3 -m py_compile deploy/validation/validate_container_upload_browser.py

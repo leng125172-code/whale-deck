@@ -12,10 +12,11 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = 42,
+            ProtocolMinor = 43,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
+            "docker.files.restore-attributes",
             "docker.files.history",
             "docker.files.history-source",
             "files.registered-streams",

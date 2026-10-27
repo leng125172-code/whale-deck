@@ -104,9 +104,17 @@ internal static class ContainerUploadPolicy
         FileTransferPolicy.Hash(h.Sha256); FileTransferPolicy.Hash(h.ExpectedParentVersion); FileTransferPolicy.Hash(h.ExpectedTargetProof);
         if (h.ExpectedVersion != "ABSENT") FileTransferPolicy.Hash(h.ExpectedVersion);
         Context(h.Context);
-        return JsonSerializer.Serialize(new { containerId = h.Location.ContainerId, instanceId = h.Location.InstanceId, path = h.Location.Path,
-            operationId = h.OperationId, owner = h.Owner, sizeBytes = h.SizeBytes, sha256 = h.Sha256, expectedVersion = h.ExpectedVersion,
-            expectedParentVersion = h.ExpectedParentVersion, expectedTargetProof = h.ExpectedTargetProof });
+        var input = new Dictionary<string, object> { ["containerId"] = h.Location.ContainerId, ["instanceId"] = h.Location.InstanceId,
+            ["path"] = h.Location.Path, ["operationId"] = h.OperationId, ["owner"] = h.Owner, ["sizeBytes"] = h.SizeBytes,
+            ["sha256"] = h.Sha256, ["expectedVersion"] = h.ExpectedVersion, ["expectedParentVersion"] = h.ExpectedParentVersion,
+            ["expectedTargetProof"] = h.ExpectedTargetProof };
+        if (h.RestoreSource is { } source)
+        {
+            FileTransferPolicy.Identity(source.CaptureId); FileTransferPolicy.Hash(source.CaptureHash);
+            ContainerFilePolicy.Location(new() { ContainerId = h.Location.ContainerId, InstanceId = h.Location.InstanceId, Path = source.Path });
+            input["restoreSource"] = new { captureId = source.CaptureId, captureHash = source.CaptureHash, path = source.Path };
+        }
+        return JsonSerializer.Serialize(input);
     }
 
     public static string Input(ContainerUploadFrame frame, ref long offset, long size)
@@ -174,6 +182,13 @@ internal static class ContainerUploadPolicy
     {
         var status = code switch
         {
+            "CONTAINER_UPLOAD_RESTORE_ATTRIBUTES_INVALID" or "CONTAINER_HISTORY_REQUEST_INVALID" => StatusCode.InvalidArgument,
+            "CONTAINER_UPLOAD_RESTORE_OWNER_UNMAPPED" or "CONTAINER_HISTORY_PROTECTED" or "CONTAINER_HISTORY_SCOPE_MISMATCH" => StatusCode.PermissionDenied,
+            "CONTAINER_HISTORY_CAPTURE_CHANGED" or "CONTAINER_HISTORY_CONTENT_CHANGED" => StatusCode.Aborted,
+            "CONTAINER_UPLOAD_RESTORE_ENGINE_REQUIRED" or "CONTAINER_UPLOAD_RESTORE_ENGINE_MISMATCH" or
+                "CONTAINER_UPLOAD_RESTORE_CONTENT_MISMATCH" or "CONTAINER_UPLOAD_RESTORE_MODE_UNSUPPORTED" or
+                "CONTAINER_UPLOAD_RESTORE_ATTRIBUTES_CHANGED" or "CONTAINER_HISTORY_CONTENT_INVALID" or
+                "CONTAINER_HISTORY_METADATA_INVALID" or "CONTAINER_HISTORY_METADATA_CHANGED" or "CONTAINER_HISTORY_INCOMPLETE" => StatusCode.FailedPrecondition,
             "CONTAINER_UPLOAD_RECOVERY_REQUEST_INVALID" or "CONTAINER_UPLOAD_RECOVERY_ACTOR_INVALID" => StatusCode.InvalidArgument,
             "CONTAINER_UPLOAD_PROTECTED" or "CONTAINER_PROTECTED" or "CONTAINER_UNSAFE_ISOLATION" or "CONTAINER_UNSAFE_MOUNT" or
                 "CONTAINER_FILES_PROTECTED" or "CONTAINER_FILES_SHARED_CORE_MOUNT" or "CONTAINER_UPLOAD_SCOPE_MISMATCH" or

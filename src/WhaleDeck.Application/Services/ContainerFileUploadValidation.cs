@@ -11,6 +11,11 @@ public static class ContainerFileUploadValidation
         ContainerFileValidation.Hash(request.Owner); ContainerFileValidation.Hash(request.Sha256);
         ContainerFileValidation.Hash(request.ExpectedParentVersion); ContainerFileValidation.Hash(request.ExpectedTargetProof);
         if (request.ExpectedVersion != "ABSENT") ContainerFileValidation.Hash(request.ExpectedVersion);
+        if (request.RestoreSource is { } source)
+        {
+            ContainerFileHistoryValidation.CaptureId(source.CaptureId); ContainerFileValidation.Hash(source.CaptureHash);
+            ContainerFileValidation.Location(request.Location with { Path = source.Path });
+        }
         Context(request.Context);
     }
     public static void Reference(ContainerFileUploadReferenceDto request)
