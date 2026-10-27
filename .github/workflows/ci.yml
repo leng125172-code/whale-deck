@@ -39,6 +39,7 @@ jobs:
           python3 -m py_compile deploy/validation/validate_container_upload_browser.py
           python3 -m py_compile deploy/validation/validate_container_text_browser.py
           python3 -m py_compile deploy/validation/validate_container_upload_interruption_bff.py deploy/validation/validate_authentik_permission_expiry.py
+          python3 -m py_compile deploy/validation/validate_container_upload_publish_interruption.py
           python3 -m py_compile deploy/validation/validate_bff_session_valkey.py deploy/validation/validate_bff_login_liveness.py
           python3 -m py_compile deploy/validation/validate_bff_login_browser.py
           node --check deploy/validation/validate_container_upload_browser.mjs

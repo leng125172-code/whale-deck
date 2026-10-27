@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_TEXT_EDITOR.md；docs/qa/CONTAINER_UPLOAD_INTERRUPTION.md",
-  "nextStep": "部分接收后的取消/退出/RST实机通过；文本编辑469单元/46组合浏览器通过、候选未部署。保留正在运行的两小时权限自然到期验收；随后覆盖候选并真实编辑/HDD验收，继续发布中故障/重启/有屏障Unknown及历史恢复和其余59项。17项移出不算完成。"
+  "nextStep": "真实旧版本捕获中断/全局屏障/不同管理员接管及第二上传恢复已通过；保留两小时自然权限观察。之后覆盖023f6d1文本编辑候选并真实SSO/UI/SQL/Root/HDD验收，继续浏览器进行中取消、原子交换故障/重启和历史恢复及其余59项。"
 }
