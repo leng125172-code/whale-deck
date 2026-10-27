@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-27 minor41已安装并验证七RPC，业务入口未部署**：宿主Agent/MaintenanceHost实际b681e1d、10.0.13运行库/PKCS和权限/动态入口通过；真实签名五方法完整2MiB+7发布/读回/旧inode/HDD及取消通过，独立protobuf客户端验证历史Observe/Seal、实际停止重启、精确批准/范围拒绝与幂等。自有数据清理、两个失败验证留下的空锁保留，11核心healthy；API/Worker/Gateway仍f5a0029。下一步部署新业务并验收真实Cookie/SQL/Worker/HDD/UI，59项继续。[安装及失败证据](qa/CONTAINER_UPLOAD_HTTP_WORKER.md#b681e1d-宿主安装态验证)。
+
 - **2026-10-27 容器上传HTTP/Worker/精确代理候选，未部署**：独立管理员计划/登记/原始暂存/状态/取消、真实SQL DI与专属HostedService已接通；minor41门禁保持，目标丢失或过期无法确认进入Unknown并保留保护。Release零警告错误、2604 Unit/191 Integration通过（7原生夹具默认跳过），17新HTTP/文档/边界、实际YARP 2MiB+7/6秒/Host与原生nginx精确额度通过；456前端单元/检查/构建通过。仍待minor41安装、真实Cookie→Worker/SQL→Root/HDD及页面整链，59项继续active。[证据与失败](qa/CONTAINER_UPLOAD_HTTP_WORKER.md)。
 
 - **2026-10-27 容器上传管理员接管候选，未部署**：第12类container-upload的永久计划/确认、当前登录与权限复核、独立容器定位/观察验证、不可变审计及共享屏障原子解除已接通。丢封存回执只观察，收包前丢请求只重试幂等Seal，绝不重发文件或Publish；历史Published不伪成功。2593 Unit/174 Integration（7默认原生跳过）、冻结34ffb2e真实PG1执行/1通过/0跳过及清理通过；前端455单元/检查/构建、最终3浏览器合成流程通过。前两轮降级断言/永久意图清理失败均保留并修正，两个真实降级保护及所有历史保留。HTTP/专属上传Worker/代理/安装态整链仍待，59项继续active。[证据与边界](qa/CONTAINER_UPLOAD_ADMINISTRATOR_RECOVERY.md)。

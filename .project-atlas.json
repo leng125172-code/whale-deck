@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_UPLOAD_HTTP_WORKER.md",
-  "nextStep": "按59项继续，17项移出不算完成。容器上传HTTP/SQL DI/专属Worker与精确YARP/nginx候选已接通，2604单元/191集成（7默认原生跳过）、456前端单元及检查构建通过。冻结安装minor41，覆盖发布并验收真实Cookie→Worker/SQL→UDS→Root/HDD和桌面手机；候选未部署。"
+  "nextStep": "宿主b681e1d/minor41七RPC与动态入口已实测，API/Worker/Gateway仍f5a0029。将已验证的容器永久上传HTTP/专属Worker/代理与恢复界面覆盖部署，验收真实Cookie→SQL/Worker→UDS→Root/HDD及桌面手机；继续编辑/历史恢复和其余59项，17项移出不算完成。"
 }

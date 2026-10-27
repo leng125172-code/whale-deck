@@ -1,6 +1,6 @@
 # 容器上传 HTTP、专属 Worker 与精确代理候选
 
-日期：2026-10-27。单工作站59项中的容器文件子范围。候选已接通业务入口，尚未部署；当前安装态仍为f5a0029/minor40。本文不以本地HTTP、SDK或合成页面替代真实Authentik、安装态Agent、SQL/Worker、HDD及实际网页整链。
+日期：2026-10-27。单工作站59项中的容器文件子范围。候选已接通业务入口；随后宿主Agent与MaintenanceHost已安装b681e1d/minor41，API/Worker/Gateway仍为f5a0029，新的业务入口尚未部署。本文不以本地HTTP、SDK或合成页面替代真实Authentik、安装态Agent、SQL/Worker、HDD及实际网页整链。
 
 ## 实现
 
@@ -31,3 +31,15 @@ nginx首轮直接绑定0600源码给容器服务用户，校验被文件权限�
 ## 后续验收
 
 冻结源码、安装minor41并验证新历史观察/封存签名RPC，覆盖发布后完成真实Cookie→SQL/专属Worker→UDS→Root/HDD的完整覆盖与新建、取消/撤权、停止/重启和Unknown接管，以及桌面/手机页面验收。编辑、历史恢复和其余59项继续，17项明确移出不计完成。当前不签完整文件管理或整个项目。
+
+## b681e1d 宿主安装态验证
+
+冻结b681e1d6abe26999bcdb47a86f62a190c2b0abdc构建自包含宿主包并覆盖安装。两宿主实际build-info一致，运行库与PKCS均10.0.13；systemd active/零自动重启、UDS/只读密钥/受限helper/固定HDD策略及当前动态网卡入口校验通过。真实UDS GetCapabilities独立解码确认major1/minor41及三项上传能力。没有重建、更新API/Worker/Gateway或基础数据库容器。
+
+同源码冻结TerminalProbe真实签名五方法完整通过：完整2,097,159字节发布/原只读RPC全字节读回、原inode/HDD原件、主体/方法/请求体/MAC/重放拒绝、显式暂存取消、首字节前Prevented及迟到首帧拒收。独立观察器核验全部字节、文件元数据、HDD捕获与根回执后精确清理这次自有资源。
+
+新增独立Python protobuf与MAC客户端71e2005验证另外两个安装态RPC，不调用产品C#签名工具制造预期：真实自有容器取得目标证明，ObserveRecovery=Missing；实际停止、重新启动后原实例仍观察同一完整摘要，而普通Inspect拒绝旧实例。错误批准摘要精确Aborted/CONTAINER_UPLOAD_RECOVERY_OBSERVATION_CHANGED，正确Seal永久保存schema3；同一固定请求重放与再次Observe完全一致，修改范围精确PermissionDenied/CONTAINER_UPLOAD_RECOVERY_SCOPE_CHANGED。匿名及改请求体的旧MAC被拒绝。最后独立复算原记录、主体/Trace/请求和观察摘要，检查根所有/0600/单链接、原操作锁及零payload，仅清理这次已证明的Missing封存；不能将此清理用于任何有数据、Published或Unknown的生产封存。自有容器/原件与测试封存均精确清理，11核心healthy。
+
+前两次恢复RPC验证失败为验证脚本错误预期：将已有契约中ObservationChanged的Aborted和ScopeChanged的PermissionDenied猜为FailedPrecondition。第二次已保存固定状态诊断，按源码/契约改为精确状态及错误码后完整第三次通过；没有改产品映射或放松权限。失败时未发生封存或写入文件，留下的两个空锁保留，未凭时间猜测删除；私有状态目录最终只有五个零字节lock，其中三个为运行前已有。后续客户端已在执行前保留私有范围/源码SHA基线和验证记录。
+
+以上是受信root QA调用方证据，当前管理员的人类身份/SQL恢复审批、真实Worker和网页仍待，不签完整容器文件模块。CI b681e1d的backend/native-postgres/native-valkey/installer已success，frontend最后观察仍in_progress，不宣称整条CI成功。
