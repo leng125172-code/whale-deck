@@ -92,6 +92,15 @@ public sealed partial class NativeNotificationDispatchTests
             var disposition = await Assert.ThrowsAsync<PostgresException>(() => db.FileRecoveryOperations.Where(item => item.Id==ready.Id)
                 .ExecuteUpdateAsync(update => update.SetProperty(item => item.Disposition,"ReconcileCompleted")));
             Assert.Equal("23514",disposition.SqlState);
+            var probeId = Guid.NewGuid();
+            var forbiddenInsert = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO file_recovery_operations
+                SELECT (jsonb_populate_record(NULL::file_recovery_operations,to_jsonb(f) ||
+                  jsonb_build_object('id',{probeId},'idempotency_key',{probeId.ToString("D")},'disposition','ReconcileCompleted'))).*
+                FROM file_recovery_operations f WHERE f.id={ready.Id}
+                """));
+            Assert.Equal("23514",forbiddenInsert.SqlState); Assert.Equal("ck_file_recovery_kind",forbiddenInsert.ConstraintName);
+
             var competitor = await Ready(Row("private/other.bin",new('b',64)));
             Assert.Equal(ContainerFileUploadStartResult.Busy,await uploads.StartedAsync(competitor,clock.GetUtcNow(),default));
             await uploads.DeferAsync(competitor,default);
@@ -153,11 +162,9 @@ public sealed partial class NativeNotificationDispatchTests
         }
         finally
         {
-            db.ChangeTracker.Clear();
-            // Exact fixture records in this disposable database only. Product
-            // history is never deleted to permit a schema downgrade.
-            await db.FileRecoveryOperations.Where(item => item.Kind==FileRecoveryKinds.ContainerUpload&&ids.Contains(item.OriginalIntentId)).ExecuteDeleteAsync();
-            await db.ContainerFileUploadOperations.Where(item => ids.Contains(item.Id)).ExecuteDeleteAsync(); File.Delete(keyFile);
+            // Permanent intent/audit history stays intact, even in this native
+            // fixture. The wrapper drops the whole exact disposable database.
+            db.ChangeTracker.Clear(); File.Delete(keyFile);
         }
     }
     private sealed class NativeContainerRecoveryLogins : ILoginSessionRegistry

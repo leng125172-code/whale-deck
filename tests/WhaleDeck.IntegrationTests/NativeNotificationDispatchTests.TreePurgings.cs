@@ -188,7 +188,14 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal("FILES_OPERATION_BUDGET_EXHAUSTED", (await Assert.ThrowsAsync<InvalidOperationException>(() => service.QueueAsync(actor, new(canceledCapture, "All"), Guid.NewGuid().ToString("D"), default))).Message);
             foreach (var item in waiting) await service.CancelAsync(actor, item.Id, default);
             var downgrade = await Assert.ThrowsAsync<PostgresException>(() => db.GetService<IMigrator>().MigrateAsync("20261020112522_FileTreeOverwriteRestoringWorkflow"));
-            Assert.Contains("tree_purging_recovery_downgrade_requires_empty_kind", downgrade.MessageText, StringComparison.Ordinal);
+            // The newest permanent container kind must block the complete
+            // downgrade first. Independently execute the older migration's
+            // actual guard to preserve its original safety evidence too.
+            Assert.Contains("container_upload_recovery_downgrade_requires_empty_kind",downgrade.MessageText,StringComparison.Ordinal);
+            var olderGuard = new WhaleDeck.Infrastructure.Persistence.Migrations.FileTreePurgingAdministratorRecovery().DownOperations
+                .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>().First();
+            var purgeDowngrade = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(olderGuard.Sql));
+            Assert.Contains("tree_purging_recovery_downgrade_requires_empty_kind",purgeDowngrade.MessageText,StringComparison.Ordinal);
             Assert.Contains("20261027015755_ContainerUploadAdministratorRecovery",await db.Database.GetAppliedMigrationsAsync());
             var latestKind = await db.Database.SqlQueryRaw<string>("""SELECT pg_get_constraintdef(oid) AS "Value" FROM pg_constraint WHERE conname='ck_file_recovery_kind' AND conrelid='file_recovery_operations'::regclass""").SingleAsync();
             Assert.Contains("container-upload",latestKind,StringComparison.Ordinal);
