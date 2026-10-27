@@ -21,6 +21,30 @@ public sealed partial class ContainerUploadServiceTests
         Assert.Equal(0, fixture.Gateway.Inspections); Assert.Equal(0, fixture.Repository.Enqueued);
     }
     [Fact]
+    public async Task MissingWorkflowCannotInspectPlanCreateNewIntentOrBeginReceiving()
+    {
+        using var fixture = new Fixture(); fixture.Gateway.WorkflowUnavailable = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Plan());
+        Assert.Equal(0, fixture.Gateway.Inspections); Assert.Equal(0, fixture.Repository.Enqueued);
+        fixture.Gateway.WorkflowUnavailable = false; var plan = await fixture.Plan();
+        fixture.Gateway.WorkflowUnavailable = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Service.SubmitAsync(fixture.Actor, fixture.Command.Location.ContainerId,
+            new(plan.PlanHash, true, Guid.NewGuid().ToString("D")), default));
+        Assert.Equal(1, fixture.Gateway.Inspections); Assert.Equal(0, fixture.Repository.Enqueued);
+        fixture.Gateway.WorkflowUnavailable = false; var intent = await fixture.Create();
+        fixture.Gateway.WorkflowUnavailable = true; using var bytes = new MemoryStream(Fixture.Bytes);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Service.ReceiveAsync(fixture.Actor, fixture.Command.Location.ContainerId,
+            intent.Id, bytes, Fixture.Bytes.Length, _ => Task.CompletedTask, default));
+        Assert.Equal("AwaitingUpload", fixture.Repository.Row!.State);
+        Assert.Equal(0, bytes.Position); Assert.Equal(0, fixture.Gateway.Stages); Assert.Equal(0, fixture.Repository.ReadyCalls);
+        // Read/cancel remain available after a downgrade; existing intents
+        // must not disappear just because no new bytes may be accepted.
+        Assert.Equal(intent, await fixture.Service.GetAsync(fixture.Actor, fixture.Command.Location.ContainerId, intent.Id, default));
+        await fixture.Service.CancelAsync(fixture.Actor, fixture.Command.Location.ContainerId, intent.Id, default);
+        Assert.True(fixture.Repository.CancelRequested);
+    }
+
+    [Fact]
     public async Task PlanIsBoundToOriginalLoginAndAChangedTargetNeedsANewPlan()
     {
         using var fixture = new Fixture(); var plan = await fixture.Plan();
@@ -157,6 +181,9 @@ public sealed partial class ContainerUploadServiceTests
     }
     private sealed class Gateway : IContainerFileWriteGateway
     {
+        public bool WorkflowUnavailable { get; set; }
+        public Task RequireContainerUploadWorkflowAsync(CancellationToken cancellationToken) => WorkflowUnavailable
+            ? Task.FromException(new InvalidOperationException("CONTAINER_UPLOAD_CAPABILITY_UNAVAILABLE")) : Task.CompletedTask;
         public int Inspections { get; private set; }
         public int Stages { get; private set; }
         public byte[] Received { get; private set; } = [];
@@ -226,7 +253,8 @@ public sealed partial class ContainerUploadServiceTests
         { Row!.State = "Receiving"; Row.ReceiveToken = Guid.NewGuid(); return Task.FromResult(Row); }
         public Task<bool> MayReceiveAsync(Guid id, Guid token, DateTimeOffset now, CancellationToken cancellationToken) => Task.FromResult(Row!.State == "Receiving");
         public Task<bool> ReadyAsync(ContainerFileUploadOperation row, CancellationToken cancellationToken) { ReadyCalls++; Row!.State = "Ready"; return Task.FromResult(true); }
-        public Task CancelAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task CancelAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken)
+        { Assert.Equal(Row!.Id, id); Assert.Equal(Row.ActorSubject, actor.Subject); Assert.Equal(Row.LoginBinding, actor.LoginBinding); CancelRequested = true; return Task.CompletedTask; }
         public Task<ContainerFileUploadOperation?> ClaimAsync(DateTimeOffset now, CancellationToken cancellationToken)
         {
             if (Claimed || Row is null || Row.CompletedAtUtc is not null || Row.State == "Unknown") return Task.FromResult<ContainerFileUploadOperation?>(null);

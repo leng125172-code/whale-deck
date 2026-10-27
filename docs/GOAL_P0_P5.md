@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-27 容器永久上传业务与界面候选，未部署**：SQL意图/Job/Outbox/共享发布保护、原登录接收、单次发布/持久取消调度及Vue上传确认生命周期已实现；minimum Agent40完整能力预检拒绝低版本新写。Release零警告错误，2501 Unit/174 Integration通过（7原生夹具明确跳过）；前端453单元/lint/格式/类型/生产构建通过。6fbca7b冻结隔离真实PG1执行/1通过/0跳过，包含双连接幂等及发布互斥；后续预检/WebUI不以该结果冒充整链验证。HTTP/Worker注册、独立容器Unknown管理员恢复、精确代理和真实BFF/Root/HDD/页面验收仍待，59项继续active。[证据与边界](qa/CONTAINER_FILE_UPLOAD_INTENTS.md)。
+
 > **2026-10-27 登录撤销已覆盖并真实Worker签收**：f5a0029六组件/HTTP来源一致、11核心healthy；原登录退出后18次旧Cookie401，同主体第二登录仍管理员，Worker取消其未收字节上传，锁释放/审计/root拒收凭据通过。修复实际Valkey缺TIME权限；b764741生产类别ACL冻结原生1执行/1通过/0跳过，两提交CI五路success；完整OIDC双端退出、33MiB+7宿主上传/下载/HDD、容器大文件中断/普通拒绝及宿主终端通过。真实320暗色/1440明色跨页正常退出及旧Cookie拒绝通过；进行中撤销、永久容器上传/共享写屏障/业务权限审计与BFF/UI继续，59项不签完成。[证据与失败](qa/BFF_LOGIN_LIVENESS.md)。
 
 > **2026-10-26 首字节前取消已安装签收**：136b8a0/minor40保存独立Prevented拒收标记；a58a489真实签名UDS先取消/查询/重放，再发送合法首帧，精确CONTAINER_UPLOAD_CANCELED且零暂存载荷。完整2MiB+7发布读回/HDD旧原件仍通过，2441 Unit/160 Integration（6原生夹具跳过）、166容器Linux-root通过；本批载荷精确清理、11核心healthy。永久容器任务/共享写屏障、登录撤销/权限审计及BFF/UI仍待，59项继续。[证据和后续约束](qa/CONTAINER_FILE_CANCEL_FENCE.md)。

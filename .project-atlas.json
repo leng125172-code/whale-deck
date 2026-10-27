@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/BFF_LOGIN_LIVENESS.md",
-  "nextStep": "按59项继续，17项移出不算完成。f5a0029已覆盖且六组件一致：原登录退出旧Cookie401，第二登录仍管理员，真实Worker取消原上传并释放锁/保留审计；Valkey TIME最小补权，b764741生产类别原生和两CI五路通过，OIDC/宿主文件/容器读取中断/终端回归通过，11核心healthy。真实320暗色/1440明色跨页退出已通过；继续进行中撤销与永久容器上传意图/迁移、Job/Outbox/租约/共享写屏障、当前权限/审计和BFF上传编辑/历史恢复/Unknown；未开放容器业务写入。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_UPLOAD_INTENTS.md",
+  "nextStep": "按59项继续，17项移出不算完成。容器永久上传SQL/原登录接收/单次发布调度与Vue候选及minimum Agent40预检已实现；2501单元/174集成及453前端单元通过，真实PG冻结并发门禁已有证据。容器Unknown独立管理员恢复、精确代理/API/Worker注册及真实整链仍待；当前不开放候选写入口，未以模拟页面算完整交付。"
 }

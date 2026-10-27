@@ -40,6 +40,34 @@ public sealed class ContainerUploadGatewayTests
         Assert.Equal(StatusCode.Unimplemented, error.StatusCode); Assert.Empty(harness.Calls);
     }
 
+    [Theory]
+    [InlineData(1U, 39U, true, true)]
+    [InlineData(1U, 40U, true, false)]
+    [InlineData(1U, 40U, false, true)]
+    [InlineData(2U, 40U, true, true)]
+    public async Task IncompleteWorkflowCannotNegotiateStageOrPublish(uint major, uint minor, bool capability, bool fence)
+    {
+        await using var harness = await Harness.Start(major, minor, capability, fence);
+        var enumerated = false;
+        async IAsyncEnumerable<ReadOnlyMemory<byte>> UnreadBytes()
+        { enumerated = true; await Task.CompletedTask; yield return new byte[] { 42 }; }
+        var negotiation = await Assert.ThrowsAsync<RpcException>(() => harness.Gateway.RequireContainerUploadWorkflowAsync(default));
+        var stage = await Assert.ThrowsAsync<RpcException>(() => harness.Gateway.StageContainerFileAsync(Stage([42]), UnreadBytes(), default));
+        var publish = await Assert.ThrowsAsync<RpcException>(() => harness.Gateway.PublishContainerFileAsync(Reference, default));
+        Assert.Equal(StatusCode.Unimplemented, negotiation.StatusCode);
+        Assert.Equal(StatusCode.Unimplemented, stage.StatusCode);
+        Assert.Equal(StatusCode.Unimplemented, publish.StatusCode);
+        Assert.False(enumerated); Assert.Empty(harness.Calls); Assert.Empty(harness.Frames);
+    }
+
+    [Fact]
+    public async Task FullWorkflowNegotiationIsReadOnly()
+    {
+        await using var harness = await Harness.Start(minor: 40, cancellationFence: true);
+        await harness.Gateway.RequireContainerUploadWorkflowAsync(default);
+        Assert.Empty(harness.Calls); Assert.Empty(harness.Frames);
+    }
+
     [Fact]
     public async Task PreventedReceiptUsesTheSameBodyBoundDiscardMethodWithoutClaimingUploadedBytes()
     {
@@ -92,7 +120,7 @@ public sealed class ContainerUploadGatewayTests
     [InlineData("Publish")][InlineData("Inspect")][InlineData("Discard")]
     public async Task FiveMethodsPreserveExactRequestAndUseIndependentBodyHashHmac(string action)
     {
-        await using var harness = await Harness.Start();
+        await using var harness = await Harness.Start(minor: 40, cancellationFence: true);
         var content = RandomNumberGenerator.GetBytes(2 * 32768 + 7);
         var stage = Stage(content);
         App.ContainerFileUploadReceiptDto? receipt = null;
@@ -177,7 +205,7 @@ public sealed class ContainerUploadGatewayTests
     [InlineData("short")][InlineData("long")][InlineData("digest")]
     public async Task InvalidLocalBodyNeverSendsCommitOrReportsStaged(string variant)
     {
-        await using var harness = await Harness.Start();
+        await using var harness = await Harness.Start(minor: 40, cancellationFence: true);
         var content = RandomNumberGenerator.GetBytes(32768 + 7);
         var request = Stage(content);
         request = variant switch
@@ -201,7 +229,7 @@ public sealed class ContainerUploadGatewayTests
     [InlineData(StatusCode.FailedPrecondition, "FILES_BACKUP_INCOMPLETE", false)]
     public async Task OnlyExplicitUploadNotFoundMapsToNull(StatusCode status, string detail, bool missing)
     {
-        await using var harness = await Harness.Start();
+        await using var harness = await Harness.Start(minor: 40, cancellationFence: true);
         harness.InspectFailure = new(status, detail);
         if (missing) Assert.Null(await harness.Gateway.InspectContainerUploadAsync(Reference, default));
         else
@@ -215,7 +243,7 @@ public sealed class ContainerUploadGatewayTests
     [Fact]
     public async Task PublishedReceiptClaimingPreviousRetentionWithoutHddProofIsInvalidRatherThanMissing()
     {
-        await using var harness = await Harness.Start();
+        await using var harness = await Harness.Start(minor: 40, cancellationFence: true);
         harness.InspectWithoutBackup = true;
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Gateway.InspectContainerUploadAsync(Reference, default));
         Assert.Equal("CONTAINER_UPLOAD_OUTPUT_INVALID", error.Message);

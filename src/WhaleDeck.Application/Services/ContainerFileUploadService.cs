@@ -18,6 +18,7 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
     public async Task<FileUploadPlanDto> PlanAsync(TerminalActor actor, ContainerFileUploadCommand command, CancellationToken cancellationToken)
     {
         await AuthorizeAsync(actor, cancellationToken); ContainerFileUploadIntentValidation.Command(command);
+        await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
         var target = await gateway.InspectContainerUploadTargetAsync(command.Location, cancellationToken);
         ContainerFileUploadIntentValidation.Target(target);
         if (target.Location != command.Location) throw new InvalidOperationException("CONTAINER_UPLOAD_TARGET_INVALID");
@@ -47,6 +48,7 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
         }
         var now = clock.GetUtcNow();
         if (claims.ExpiresAtUtc <= now || claims.CreatedAtUtc > now) throw new InvalidOperationException("CONTAINER_UPLOAD_PLAN_EXPIRED");
+        await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
         var current = await gateway.InspectContainerUploadTargetAsync(claims.Target.Location, cancellationToken);
         ContainerFileUploadIntentValidation.Target(current);
         if (current != claims.Target) throw new InvalidOperationException("CONTAINER_UPLOAD_VERSION_CONFLICT");
@@ -75,6 +77,7 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
         await validateLogin(cancellationToken); await AuthorizeAsync(actor, cancellationToken);
         var owned = await Owned(actor, containerId, id, cancellationToken);
         if (declaredLength != owned.SizeBytes) throw new ArgumentException("CONTAINER_UPLOAD_CONTENT_LENGTH_REQUIRED");
+        await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
         var row = await repository.BeginReceiveAsync(actor, id, clock.GetUtcNow(), cancellationToken);
         if (row.ContainerId != containerId || !HasValidBinding(row, plans)) throw new InvalidOperationException("CONTAINER_UPLOAD_INTENT_BINDING_CHANGED");
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

@@ -13,6 +13,9 @@ namespace WhaleDeck.Infrastructure.Agent;
 
 public sealed partial class AgentGateway : IContainerFileWriteGateway
 {
+    public async Task RequireContainerUploadWorkflowAsync(CancellationToken cancellationToken) =>
+        _ = await ContainerWrites(cancellationToken, cancellationFence: true);
+
     private async Task<ContainerFileWriteService.ContainerFileWriteServiceClient> ContainerWrites(CancellationToken cancellationToken, bool cancellationFence = false)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(TimeSpan.FromSeconds(5));
@@ -54,7 +57,7 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
         var header = new ContainerUploadHeader { Location = ContainerLocation(request.Location), OperationId = request.OperationId.ToString("N"),
             Owner = request.Owner, SizeBytes = request.SizeBytes, Sha256 = request.Sha256, ExpectedVersion = request.ExpectedVersion,
             ExpectedParentVersion = request.ExpectedParentVersion, ExpectedTargetProof = request.ExpectedTargetProof, Context = UploadContext(request.Context) };
-        var client = await ContainerWrites(cancellationToken);
+        var client = await ContainerWrites(cancellationToken, cancellationFence: true);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); lifetime.CancelAfter(TimeSpan.FromSeconds(325));
         using var call = client.StageUpload(ContainerWriteHeaders("StageUpload", header), deadline: DateTime.UtcNow.AddSeconds(330), cancellationToken: lifetime.Token);
         try
@@ -92,7 +95,7 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
         return receipt;
     }
 
-    public Task<ContainerFileUploadReceiptDto> PublishContainerFileAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken) => ContainerUploadAction("Publish", request, cancellationToken);
+    public Task<ContainerFileUploadReceiptDto> PublishContainerFileAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken) => ContainerUploadAction("Publish", request, cancellationToken, cancellationFence: true);
     public Task<ContainerFileUploadReceiptDto> DiscardContainerUploadAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken) => ContainerUploadAction("Discard", request, cancellationToken);
     public Task<ContainerFileUploadReceiptDto> PreventContainerUploadAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken) => ContainerUploadAction("Discard", request, cancellationToken, cancellationFence: true);
     public async Task<ContainerFileUploadReceiptDto?> InspectContainerUploadAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken)
@@ -114,7 +117,7 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
             _ => throw new ArgumentException("CONTAINER_UPLOAD_ACTION_INVALID")
         };
         var result = UploadReceipt(await call, request);
-        if (cancellationFence && result.Upload.State is not ("Prevented" or "Discarded" or "PublishDiscarded")) throw UploadOutput();
+        if (action == "Discard" && cancellationFence && result.Upload.State is not ("Prevented" or "Discarded" or "PublishDiscarded")) throw UploadOutput();
         return result;
     }
 

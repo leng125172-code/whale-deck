@@ -46,6 +46,17 @@ public sealed partial class ContainerUploadServiceTests
         Assert.Empty(fixture.Repository.Results); Assert.Equal(1, fixture.Repository.Deferred);
     }
     [Fact]
+    public async Task DowngradedAgentCannotAcquirePublicationBarrier()
+    {
+        using var fixture = new Fixture(); await fixture.Create();
+        fixture.Repository.Row!.State = "Ready"; fixture.Gateway.Receipt = Receipt(fixture, "Staged");
+        fixture.Gateway.WorkflowUnavailable = true;
+        Assert.True(await Dispatcher(fixture).TickAsync(default));
+        Assert.Null(fixture.Repository.Row.RootStartedAtUtc); Assert.False(fixture.Repository.Row.PublishBarrier);
+        Assert.Equal(0, fixture.Gateway.Publications); Assert.Equal(1, fixture.Repository.Deferred); Assert.Empty(fixture.Repository.Results);
+    }
+
+    [Fact]
     public async Task FailedFenceDoesNotBecomeSuccessfulCancellation()
     {
         using var fixture = new Fixture(); await fixture.Create(); fixture.Logins.Active = false; fixture.Gateway.PreventUnavailable = true;
