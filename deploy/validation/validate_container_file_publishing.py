@@ -39,7 +39,10 @@ def verify_container(value, identifier, name, folder):
 
 
 @contextlib.contextmanager
-def fixture():
+def fixture(*, restartable_core=()):
+    # Explicit opt-in for the installed Worker restart gate. All older callers
+    # keep the exact ID/image/status/StartedAt invariant; no resource recreation.
+    assert restartable_core in ((), ('whaledeck-worker',))
     common.verify_apps_directory(common.APPS, pwd.getpwnam('whaledeck-agent').pw_uid)
     baseline = common.core_snapshot()
     image = json.loads(common.command(['docker', 'image', 'inspect', common.IMAGE]))[0]
@@ -69,7 +72,13 @@ def fixture():
             for leaf, (identity, digest) in owned['privateProofs'].items():
                 path = private / leaf
                 assert not path.is_symlink() and common.fingerprint(path) == identity and path.stat().st_nlink == 1 and common.file_digest(path) == digest
-        assert common.core_snapshot() == baseline
+        current_core = common.core_snapshot()
+        assert current_core.keys() == baseline.keys()
+        for name, original in baseline.items():
+            observed = current_core[name]
+            if name.lstrip('/') in restartable_core:
+                assert observed[:3] == original[:3] and observed[2] == 'running'
+            else: assert observed == original
     try:
         identifier = common.command(['docker', 'run', '--detach', '--name', name, '--network', 'none', '--read-only',
             '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--user', '1000:1000', '--pids-limit', '16',
