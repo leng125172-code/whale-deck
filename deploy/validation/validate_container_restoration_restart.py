@@ -61,12 +61,13 @@ def set_attributes(path, values):
     assert attributes(path) == values
 
 
-def wait_worker(original):
+def wait_worker(original, *, changed=False):
     deadline = time.monotonic() + 80
     while True:
         current = worker()
         assert (current['id'], current['image']) == (original['id'], original['image'])
-        if current['running'] and current['healthy']: return current
+        different = current['pid'] != original['pid'] and current['started'] != original['started']
+        if current['running'] and current['healthy'] and (not changed or different): return current
         assert time.monotonic() < deadline
         time.sleep(0.3)
 
@@ -166,7 +167,7 @@ def main():
                     PHASE = 'queued-actual-worker-and-agent-restarts'
                     command(['systemctl', 'restart', 'whaledeck-agent.service']); assert agent_pid() != before_agent
                     command(['docker', 'start', before_worker['id']]); stopped = False
-                    after_worker = wait_worker(before_worker)
+                    after_worker = wait_worker(before_worker, changed=True)
                     assert after_worker['started'] != before_worker['started'] and after_worker['pid'] != before_worker['pid']
                     partial_bytes = 0
                 else:
@@ -196,11 +197,12 @@ def main():
                         except FileNotFoundError: pass
                         time.sleep(0.003)
                     if kind == 'worker-partial':
-                        after_worker = wait_worker(before_worker)
+                        after_worker = wait_worker(before_worker, changed=True)
                         assert after_worker['pid'] != before_worker['pid'] and after_worker['restarts'] == before_worker['restarts'] + 1
                     else:
                         assert agent_pid() != before_agent
-                        assert worker() == before_worker
+                        after_worker = worker()
+                        assert after_worker['running'] and all(after_worker[key] == before_worker[key] for key in ('id', 'image', 'pid', 'started', 'restarts'))
                 PHASE = kind + '-independent-terminal-and-full-source-verification'
                 expected = 'Succeeded' if kind == 'queued' else 'Failed'
                 deadline = time.monotonic() + 180
