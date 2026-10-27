@@ -143,7 +143,7 @@ def main():
             try:
                 core_target = {'containerId': core['Id'], 'instanceId': str(core['State']['Pid']) + ':' + core['State']['StartedAt']}
                 with reader.ContainerRoot(core_target, files, docker): pass
-            except docker.Rejected as error: assert str(error) == 'CONTAINER_PROTECTED'
+            except PermissionError as error: assert str(error) == 'CONTAINER_PROTECTED'
             else: raise AssertionError('core container file entry accepted')
     assert owned.common.core_snapshot() == core_before
     result = {'revision': revision, 'sourceSha256': {name: hashlib.sha256(content).hexdigest() for name, content in frozen.items()},
