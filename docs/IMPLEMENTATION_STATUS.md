@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-27 容器目录Agent minor44已安装验收**：82850b2宿主/固定helper与SDK独立签名四RPC已完成，API/Worker/Gateway保持852ca6f。实际UDS中文目录/内核所有者/不重复创建、永久取消拒绝迟到写入、篡改/错误域/nonce重放/核心/只读根拒绝通过；独立Root回执/源码/运行PID、准确资源清理、11核心healthy与原活动/Unknown/屏障0通过。Release零警告错误、2784 Unit/199 Integration（7原生默认跳过）、287容器Linux-root/12宿主检查通过。更新整unit尾部探针权限失败已准确记录，安装与host validate成功，剩余探针发布独立0/SUCCESS；不重复安装或自动回滚。永久目录业务SQL/Worker/API/UI及实际身份页面仍待，59项active，17项移出不算完成。[证据与剩余](qa/CONTAINER_DIRECTORIES.md)。
+
 - **2026-10-27 容器新建目录底层候选b43fedf，未安装**：精确实例/父版本/普通模式/内核所有者计划、私有准备与原子不覆盖发布、永久回执和只观察恢复已实现。23新增/279容器Linux-root、8范围检查通过；真实独占Docker容器正常创建及四个实际SIGKILL切点均通过，准确资源清理、独立回执/精确CID/源不存在和11核心healthy通过。已安装852ca6f/minor43不变，RPC/持久任务/Worker/API/UI尚待，59项继续active，17项移出不算完成。[证据及后续](qa/CONTAINER_DIRECTORIES.md)。
 
 - **2026-10-27 852ca6f 发布准备故障和明确目标消失已实机通过**：正常dev覆盖0/SUCCESS、3分18.741秒，六组件/HTTP同源与宿主检查通过。Root私有副本实际8617984字节且覆盖前HDD已Verified后强制重启Worker，原任务Unknown保留全局屏障，另一应用Ready真实延后两次；原身份删除后不同管理员真实手机UI一次计划/取消确认/再确认、schema4封存，只有解除保护后原等待任务才发布成功，目标/属性与128MiB+7来源及2MiB+7备份完整核对。明确Docker404修复在真实删除容器后10.448秒进入TargetUnavailable/Unknown，零接收/发布、独立管理员UI封存；两整链正常退出与准确清理通过。独立79意图56成功30恢复(属性16)、活动/Unknown/租约/屏障0、三类身份0、11核心健康。2720 Unit/199 Integration(7默认原生跳过)、256 Linux-root/496前端/41接管浏览器/8范围检查通过；CI40518574767四路success、前端运行。首次失败均保留并正常收尾，全部59项继续active，17项移出不算完成。[证据及边界](qa/CONTAINER_RESTORATION_PUBLICATION.md)。

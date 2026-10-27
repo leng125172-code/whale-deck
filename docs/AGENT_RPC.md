@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-10-27 当前安装Agent minor44 / 82850b2：新增独立请求体签名ContainerDirectoryService四方法、固定目录helper/SDK，实际UDS不覆盖创建与永久取消、签名/核心/只读根拒绝及准确资源清理通过。API/Worker/Gateway仍852ca6f；目录业务永久任务/API/UI未接，不签整个目录功能完成。[安装态证据](qa/CONTAINER_DIRECTORIES.md)。
+
 2026-10-27最新安装852ca6f/minor43：精确Docker inspect的受信404新增固定TARGET_MISSING前置条件，SDK映射既有TargetUnavailable，不当作丢失操作回执；线协议字段未变。发布准备故障与真实管理员UI封存/全局保护解除、删除目标10.448秒识别均通过。[证据及兼容边界](qa/CONTAINER_RESTORATION_PUBLICATION.md)。下方为前序批次。
 
 2026-10-27最新实际安装2e13376/minor43：API/Worker在申请发布屏障前重新协商完整属性能力；线协议未变。真实排队重启成功，Root接收64KiB后Worker强制重启和32KiB后Agent重启均明确失败/Discarded、无发布；当前网页4次恢复及六组件/HTTP同源通过。[证据与限制](qa/CONTAINER_RESTORATION_RESTARTS.md)。下方其他“当前版本”为各前序批次。
