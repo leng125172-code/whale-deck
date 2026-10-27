@@ -212,7 +212,8 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
     private async Task<ContainerFileUploadOperation?> Lock(ContainerFileUploadOperation row, CancellationToken cancellationToken)
     {
         var current = await db.ContainerFileUploadOperations.FromSqlInterpolated($"SELECT * FROM container_file_upload_operations WHERE id={row.Id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken);
-        return row.LeaseToken is not null && current?.LeaseToken == row.LeaseToken && current.LeaseExpiresAtUtc > DateTimeOffset.UtcNow && current.CompletedAtUtc is null ? current : null;
+        return row.LeaseToken is not null && current?.LeaseToken == row.LeaseToken && current.RequestHash == row.RequestHash &&
+            current.LeaseExpiresAtUtc > DateTimeOffset.UtcNow && current.CompletedAtUtc is null ? current : null;
     }
     private async Task Event(OperationJob job, string code, CancellationToken cancellationToken)
     {
