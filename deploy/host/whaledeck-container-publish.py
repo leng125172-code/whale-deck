@@ -156,9 +156,19 @@ class ContainerPublisher:
             if count != request['sizeBytes'] or digest.hexdigest().upper() != request['sha256'] or \
                     self.r.fingerprint(before) != self.r.fingerprint(self.f.regular(source)):
                 self.u.reject('PAYLOAD_CHANGED')
-            uid, gid = (original.st_uid, original.st_gid) if original else publication['owner']
-            os.fchown(output, uid, gid)
-            os.fchmod(output, stat.S_IMODE(original.st_mode) & 0o777 if original else 0o600)
+            if 'restoreSource' in request:
+                if self.u.restorations is None: self.u.reject('RESTORE_ENGINE_REQUIRED')
+                # Full private content is durable before ownership can change.
+                # A crash between chown/chmod/utime and the final proof must
+                # remain explicitly discardable using this inode/content proof.
+                os.fsync(output); os.fsync(private)
+                publication['attributePreparationProof'] = self.f.publication_identity(os.fstat(output))
+                self.f.save_receipt(state, operation, record)
+                self.u.restorations.apply(output, record['restorationAttributes'], session)
+            else:
+                uid, gid = (original.st_uid, original.st_gid) if original else publication['owner']
+                os.fchown(output, uid, gid)
+                os.fchmod(output, stat.S_IMODE(original.st_mode) & 0o777 if original else 0o600)
             os.fsync(output); os.fsync(private)
             publication['pendingProof'] = self.f.publication_identity(os.fstat(output))
             self.f.save_receipt(state, operation, record)
@@ -223,6 +233,9 @@ class ContainerPublisher:
             if record['state'] == 'Prevented': self.u.reject('CANCELED')
             fresh = record['state'] == 'Staged'
             if fresh:
+                if 'restoreSource' in record['request']:
+                    if self.u.restorations is None: self.u.reject('RESTORE_ENGINE_REQUIRED')
+                    self.u.restorations.permitted(record['restorationAttributes'], session)
                 with self.parent(record, session) as parent: self.writable(record, session, parent)
         if fresh and record['request']['expectedVersion'] != 'ABSENT': self.b.capture(request, session)
         deadline = time.monotonic() + 300
@@ -260,6 +273,9 @@ class ContainerPublisher:
                     if original is not None: self.b.verify_capture(record, session)
                     session.revalidate(); self.recheck(parent, record, session, deadline)
                     self.original(parent, record, session, deadline)
+                    if 'restoreSource' in record['request']:
+                        if self.u.restorations is None: self.u.reject('RESTORE_ENGINE_REQUIRED')
+                        self.u.restorations.permitted(record['restorationAttributes'], session)
                     record['state'] = 'PublishApplying'
                     self.f.save_receipt(state, record['operationId'], record)
                     self.f.exchange(private, record['operationId'] + '.upload', parent,
@@ -299,6 +315,14 @@ class ContainerPublisher:
         try: os.stat(name, dir_fd=parent, follow_symlinks=False); return True
         except FileNotFoundError: return False
 
+    def attribute_preparation(self, record, pending, digest):
+        proof = record['publication'].get('attributePreparationProof')
+        return record['schemaVersion'] == 4 and 'restoreSource' in record['request'] and \
+            type(proof) is list and len(proof) == 8 and all(type(value) is int for value in proof) and \
+            stat.S_ISREG(proof[2]) and proof[3] == 0 and stat.S_IMODE(proof[2]) == 0o600 and proof[5] == 1 and \
+            [pending.st_dev, pending.st_ino] == proof[:2] and pending.st_nlink == 1 and \
+            pending.st_size == proof[6] == record['request']['sizeBytes'] and digest == record['request']['sha256']
+
     def discard(self, request, session):
         self.guard(request, session)
         with self.u.locked(request['operationId']) as state:
@@ -327,6 +351,8 @@ class ContainerPublisher:
                             valid = [pending.st_dev, pending.st_ino] == publication.get('pendingIdentity')
                             if publication.get('pendingProof'):
                                 valid = valid and self.f.publication_identity(pending) == publication['pendingProof'] and digest == record['request']['sha256']
+                            elif publication.get('attributePreparationProof') is not None:
+                                valid = valid and self.attribute_preparation(record, pending, digest)
                             else:
                                 valid = valid and pending.st_uid == 0 and stat.S_IMODE(pending.st_mode) == 0o600 and pending.st_size <= record['request']['sizeBytes']
                             if not valid: self.u.reject('PUBLISH_OBJECT_CHANGED')

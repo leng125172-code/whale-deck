@@ -21,6 +21,7 @@ class ContainerUploads:
     MAX_RECEIPTS = 10000
     def __init__(self, read_engine, files, state_path):
         self.r, self.f, self.state_path = read_engine, files, Path(state_path)
+        self.restorations = None
 
     def recovery_engine(self): return ContainerUploadRecovery(self)
 
@@ -54,8 +55,18 @@ class ContainerUploads:
     def upload_request(self, request):
         required = {'containerId', 'instanceId', 'path', 'expectedVersion', 'expectedParentVersion',
                     'operationId', 'owner', 'sizeBytes', 'sha256'}
-        if type(request) is not dict or set(request) not in (required, required | {'expectedTargetProof'}):
+        if type(request) is not dict or set(request) not in (required, required | {'expectedTargetProof'},
+                required | {'restoreSource'}, required | {'expectedTargetProof', 'restoreSource'}):
             self.reject('REQUEST_INVALID')
+        if 'restoreSource' in request:
+            source = request['restoreSource']
+            if type(source) is not dict or set(source) != {'captureId', 'captureHash', 'path'}:
+                self.reject('REQUEST_INVALID')
+            self.f.identity(source['captureId'])
+            self.r.canonical_path(source['path'], empty=False)
+            if self.r.protected(source['path'], self.f): self.reject('PROTECTED')
+            if type(source['captureHash']) is not str or not re.fullmatch('[A-F0-9]{64}', source['captureHash']):
+                self.reject('REQUEST_INVALID')
         if 'expectedTargetProof' in request and (type(request['expectedTargetProof']) is not str or not re.fullmatch('[A-F0-9]{64}', request['expectedTargetProof'])):
             self.reject('REQUEST_INVALID')
         self.r.target_binding(request['containerId'], request['instanceId'])
@@ -70,8 +81,16 @@ class ContainerUploads:
         if request['expectedVersion'] != 'ABSENT' and (type(request['expectedVersion']) is not str or
                 not re.fullmatch('[A-F0-9]{64}', request['expectedVersion'])):
             self.reject('VERSION_INVALID')
-        return hashlib.sha256(b'whaledeck-container-upload-stage-v1\n' + json.dumps(request,
+        domain = b'whaledeck-container-restore-stage-v1\n' if 'restoreSource' in request else b'whaledeck-container-upload-stage-v1\n'
+        return hashlib.sha256(domain + json.dumps(request,
             sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest().upper()
+
+    def restoration_attributes(self, attributes):
+        if type(attributes) is not dict or set(attributes) != {'uid', 'gid', 'mode', 'modifiedNs'} or \
+                any(type(value) is not int for value in attributes.values()) or \
+                not 0 <= attributes['uid'] < 4294967295 or not 0 <= attributes['gid'] < 4294967295 or \
+                not 0 <= attributes['mode'] <= 0o777 or not -9223372036854775808 <= attributes['modifiedNs'] <= 9223372036854775807:
+            self.reject('RESTORE_ATTRIBUTES_INVALID')
 
     def scope_request(self, request):
         if type(request) is not dict or set(request) != {'containerId', 'instanceId', 'operationId', 'owner'}:
@@ -148,11 +167,17 @@ class ContainerUploads:
                     type(value['createdAtUnixMs']) is not int or not 0 <= value['createdAtUnixMs'] <= 253402300799999:
                 self.reject('RECEIPT_INVALID')
             return value
-        if type(value) is not dict or type(value.get('schemaVersion')) is not int or value['schemaVersion'] != 1:
+        if type(value) is not dict or type(value.get('schemaVersion')) is not int or value['schemaVersion'] not in (1, 4):
             self.reject('RECEIPT_INVALID')
         request = value.get('request')
         if self.upload_request(request) != value.get('fingerprint') or any(value.get(key) != request[key]
                 for key in ('operationId', 'owner', 'containerId', 'instanceId')) or value['operationId'] != operation:
+            self.reject('RECEIPT_INVALID')
+        if value['schemaVersion'] == 4:
+            if value.get('resourceType') != 'ContainerFileRestoration' or 'restoreSource' not in request:
+                self.reject('RECEIPT_INVALID')
+            self.restoration_attributes(value.get('restorationAttributes'))
+        elif 'restoreSource' in request or 'restorationAttributes' in value:
             self.reject('RECEIPT_INVALID')
         if value.get('state') not in ('Receiving', 'Verified', 'Staged', 'Interrupted', 'Aborted', 'Discarded', 'Unknown',
                 'PublishPreparing', 'PublishApplying', 'PublishInterrupted', 'Published', 'PublishDiscarding', 'PublishDiscarded'):
@@ -264,6 +289,10 @@ class ContainerUploads:
                     if record['state'] not in ('Verified', 'Staged'): self.reject('PREVIOUS_OPERATION_INCOMPLETE')
                     self.payload(state, record, complete=True)
                 else:
+                    attributes = None
+                    if 'restoreSource' in request:
+                        if self.restorations is None: self.reject('RESTORE_ENGINE_REQUIRED')
+                        attributes = self.restorations.capture(request, session)
                     capacity = os.fstatvfs(state)
                     reserve = max(128 * 1024**2, capacity.f_blocks * capacity.f_frsize // 20)
                     if capacity.f_bavail * capacity.f_frsize < request['sizeBytes'] + reserve:
@@ -276,6 +305,8 @@ class ContainerUploads:
                               'request': dict(request), 'fingerprint': fingerprint, 'state': 'Receiving',
                               'targetProof': proof,
                               'payloadIdentity': [info.st_dev, info.st_ino], 'createdAtUnixMs': time.time_ns() // 1000000}
+                    if attributes is not None:
+                        record.update(schemaVersion=4, resourceType='ContainerFileRestoration', restorationAttributes=attributes)
                     self.f.save_receipt(state, operation, record)
                 digest, offset, deadline = hashlib.sha256(), 0, time.monotonic() + 300
                 while True:
