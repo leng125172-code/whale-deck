@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import signal
 import stat
 import subprocess
 import sys
@@ -74,8 +73,9 @@ def wait_worker(original, *, changed=False):
 
 def main():
     global PHASE
-    assert os.geteuid() == 0 and len(sys.argv) == 2; os.umask(0o077)
-    assert hasattr(os, 'pidfd_open') and hasattr(signal, 'pidfd_send_signal')
+    assert os.geteuid() == 0 and len(sys.argv) in (2,3); os.umask(0o077)
+    remaining = len(sys.argv) == 3
+    if remaining: assert sys.argv[2] == '--remaining'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     base = os.environ.get('WHALEDECK_URL', 'http://192.168.100.13:8080').rstrip('/')
     repository = Path(__file__).resolve().parents[2]
@@ -105,7 +105,8 @@ def main():
     assert shutil.disk_usage(history).free > 8 * 1024**3 and shutil.disk_usage(owned.common.APPS).free > 8 * 1024**3
     save('baseline.json', {'revision': revision, 'validatorRevision': validator_revision, 'worker': original_worker, 'agentPid': original_agent, 'maintenancePid': int(maintenance)})
     outcomes = []
-    for kind in ('queued', 'worker-partial', 'agent-partial'):
+    kinds = ('worker-partial', 'agent-partial') if remaining else ('queued', 'worker-partial', 'agent-partial')
+    for kind in kinds:
         PHASE = kind + '-prepare-real-hdd-history'
         with owned.fixture(restartable_core=('whaledeck-worker',) if kind != 'agent-partial' else ()) as fixture:
             output = fixture['folder'] / 'original.bin'
@@ -182,23 +183,21 @@ def main():
                                 assert record['schemaVersion'] == 4 and record['state'] == 'Receiving' and record['request']['restoreSource']['captureId'] == capture
                                 partial_bytes = info.st_size
                                 if kind == 'worker-partial':
-                                    # Docker's kill endpoint marks a manual stop
-                                    # and suppresses its restart policy. Kill the
-                                    # independently verified container init PID
-                                    # instead, modelling an actual process crash.
-                                    assert before_worker['pid'] > 1
-                                    descriptor = os.pidfd_open(before_worker['pid'])
-                                    try:
-                                        assert worker() == before_worker
-                                        signal.pidfd_send_signal(descriptor, signal.SIGKILL)
-                                    finally: os.close(descriptor)
+                                    # The host rejects direct pidfd signals.
+                                    # Its authorized Docker API performs the
+                                    # actual abrupt SIGKILL. Explicitly restart
+                                    # the same object; do not claim automatic
+                                    # Docker restart-policy evidence.
+                                    assert worker() == before_worker
+                                    command(['docker', 'kill', '--signal', 'KILL', before_worker['id']]); stopped = True
+                                    command(['docker', 'start', before_worker['id']]); stopped = False
                                 else: command(['systemctl', 'restart', 'whaledeck-agent.service'])
                                 break
                         except FileNotFoundError: pass
                         time.sleep(0.003)
                     if kind == 'worker-partial':
                         after_worker = wait_worker(before_worker, changed=True)
-                        assert after_worker['pid'] != before_worker['pid'] and after_worker['restarts'] == before_worker['restarts'] + 1
+                        assert after_worker['pid'] != before_worker['pid'] and after_worker['restarts'] == before_worker['restarts']
                     else:
                         assert agent_pid() != before_agent
                         after_worker = worker()
@@ -248,6 +247,7 @@ def main():
                     'workerBefore': before_worker, 'agentBefore': before_agent,
                     'fullHistoricalBytesVerified': SIZE, 'immutablePolicyUnchanged': True, 'targetAndHistoryVerified': True,
                     'maintenancePidUnchanged': True, 'newWorkerPid': worker()['pid'], 'newAgentPid': agent_pid()}
+                if kind == 'worker-partial': outcome['restartMethod'] = 'docker-sigkill-explicit-start-not-automatic-restart'
                 outcomes.append(outcome); save(kind + '.json', outcome)
                 finished = True
                 print(json.dumps({'restorationRestartCase': kind, 'state': expected, 'partialBytesBeforeRestart': partial_bytes}), flush=True)
@@ -269,7 +269,7 @@ def main():
     assert worker()['healthy'] and agent_pid() > 1
     assert query("SELECT json_build_object('active',count(*)) FROM container_file_upload_operations WHERE completed_at_utc IS NULL;")['active'] == 0
     logout(base, session); session.close()
-    save('verified.json', {'revision': revision, 'cases': outcomes, 'actualQueuedAndPositivePartialRestarts': True,
+    save('verified.json', {'revision': revision, 'cases': outcomes, 'verifiedKinds': list(kinds),
         'sqlCacheTimeAndReceiptsUnmodified': True, 'noBrowserClaim': True, 'permanentEvidenceRetained': True})
     print(json.dumps({'installedRestorationRestart': 'passed', 'cases': len(outcomes), 'evidence': str(evidence)}), flush=True)
 
