@@ -14,10 +14,11 @@ import stat
 import subprocess
 import sys
 import uuid
+import requests
 
 import validate_container_file_publishing as owned
 from validate_container_file_staging import load
-from validate_container_upload_bff import login,logout,request,snapshot,terminal,root_receipt,wait_sql,query
+from validate_container_upload_bff import login,logout,request,snapshot,terminal,root_receipt,wait_sql,query,temporary_user
 from validate_container_upload_recovery_agent import trusted
 from validate_databases import Api
 from validate_oidc import required_environment
@@ -143,8 +144,27 @@ def main():
         if attributes:assert actual(recovered)==current
         else:assert (recovered.stat().st_uid,recovered.stat().st_gid,stat.S_IMODE(recovered.stat().st_mode))==(1000,1000,0o600)
         fixture['proofs']['recovered.bin']=owned.common.fingerprint(recovered),sha
+        PHASE='actual-ordinary-and-anonymous-restoration-denial'
+        inventory="SELECT json_build_object('count',count(*)) FROM container_file_upload_operations;"
+        before_denial=query(inventory)
+        with requests.Session() as anonymous:
+            anonymous.trust_env=False
+            request(anonymous,'GET',endpoint+f'restores/{initial_id}',401)
+        with temporary_user(False) as (username,password):
+            ordinary,profile=login(base,username,password,False);assert not profile['isAdministrator']
+            try:
+                ordinary_headers=Api(base,ordinary).headers
+                request(ordinary,'GET',endpoint+'history',403,params={'instanceId':target['instanceId'],'path':'work/original.bin'})
+                request(ordinary,'GET',endpoint+f'restores/{initial_id}',403)
+                request(ordinary,'POST',endpoint+'restores/plan',403,headers=ordinary_headers,json={'instanceId':target['instanceId'],
+                    'path':'work/original.bin','captureId':initial_capture,'expectedCaptureHash':actual_hash,'expectedVersion':'ABSENT','restoreAttributes':attributes})
+                request(ordinary,'POST',endpoint+'restores',403,headers={**ordinary_headers,'Idempotency-Key':initial_id},json={'planHash':'unused','confirmed':True,'idempotencyKey':initial_id})
+                request(ordinary,'POST',endpoint+f'restores/{initial_id}/cancel',403,headers={**ordinary_headers,'Idempotency-Key':initial_id})
+                logout(base,ordinary)
+            finally:ordinary.close()
+        assert query(inventory)==before_denial
         save('verified.json',{'revision':revision,'actualBrowserRestores':4,'alternateDestinationCreateAndOverwrite':True,'fullBytesEach':owned.common.SIZE,'oldCaptureAfterActualRestart':True,
-            'sourceCatalogSqlRootHddAndOldInodesVerified':True,'restoreAttributes':attributes,'zeroBrowserBodies':True,'normalTwoPageLogout':True,'permanentEvidenceRetained':True})
+            'sourceCatalogSqlRootHddAndOldInodesVerified':True,'restoreAttributes':attributes,'ordinaryFive403Anonymous401ZeroRegistrations':True,'zeroBrowserBodies':True,'normalTwoPageLogout':True,'permanentEvidenceRetained':True})
     logout(base,session);session.close()
     print(json.dumps({'installedContainerRestoreBrowser':'passed','revision':revision,'restores':4,'fullBytesEach':owned.common.SIZE,
         'desktopLightMobileDark':True,'sourceAfterActualRestart':True,'ownedContainerAndSourceCleaned':True,'permanentEvidenceRetained':True,'evidence':str(evidence)}),flush=True)

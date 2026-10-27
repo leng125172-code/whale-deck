@@ -1,5 +1,9 @@
 # 容器历史属性恢复：固定发布引擎候选
 
+## 冻结原生 PostgreSQL 候选通过，待覆盖部署
+
+冻结 `0b501f3160711c82372c2dc6f997a8d5607bda0e` 真实隔离 PostgreSQL 一项执行/一项通过/零跳过，临时数据库与SDK容器清理确认通过。状态 `deploy/artifacts/native-status/dispatch-7db6065b20264fc49cbb225eba066910.json`，日志 `/tmp/wd-container-restore-policy-native.log`。其中从旧恢复来源结构向前升级，实际旧列 INSERT 的恢复记录在新增 false 默认值后 JSON/MAC 不变；无来源 true 被数据库 check 拒绝；属性任务真实持久重取与内容任务取消均执行。此为真实库验证，不等同工作站 API/Worker/网页已部署。
+
 ## 显式属性策略与页面候选（尚未部署）
 
 已加入不可变 `RestoreAttributes` 策略：默认只恢复内容，勾选才在短时计划、永久意图/MAC、任务查询与签名 Stage 中冻结历史普通属性。新计划显式回显 true，旧服务忽略该选项时前端拒绝继续；登记重试与轮询不得改变或丢失策略。普通旧记录的 false 字段不参与原 JSON/MAC，新增 EF 迁移默认 false，并约束属性恢复必须具有可信历史来源。计划、登记、Worker 接收前均检查完整 minor43 能力，浏览器没有内容或任意 UID/GID 输入入口。
