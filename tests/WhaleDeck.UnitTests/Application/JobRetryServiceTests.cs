@@ -10,6 +10,17 @@ namespace WhaleDeck.UnitTests.Application;
 public sealed class JobRetryServiceTests
 {
     [Theory]
+    [InlineData("files.upload")]
+    [InlineData("containers.files.upload")]
+    public async Task ByteUploadsRequireNewFileSelectionAndCannotUseGenericRetry(string jobType)
+    {
+        var repository = new Repository(CreateSource("Failed", jobType)); var service = Service(repository);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.GetContextAsync(repository.Source.Id, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.PlanAsync(repository.Source.Id, null, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.RetryAsync(repository.Source.Id, "admin", "trace", "new-key", null, null, true, default));
+        Assert.Null(repository.Enqueued); Assert.Null(repository.Outbox); Assert.Null(repository.Audit);
+    }
+    [Theory]
     [InlineData("Queued")]
     [InlineData("Running")]
     [InlineData("Succeeded")]

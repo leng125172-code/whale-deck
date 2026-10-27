@@ -55,7 +55,7 @@ public sealed class JobRetryService(IJobRepository jobs, IAgentGateway agent, Op
         Guid id, CancellationToken cancellationToken)
     {
         var source = await jobs.FindAsync(id, cancellationToken) ?? throw new KeyNotFoundException("Job was not found.");
-        if (source.JobType == "files.upload") throw new InvalidOperationException("File uploads require a new version-bound plan and explicitly selected file; generic retry cannot resend bytes.");
+        if (source.JobType is "files.upload" or "containers.files.upload") throw new InvalidOperationException("File uploads require a new version-bound plan and explicitly selected file; generic retry cannot resend bytes.");
         if (source.State is not ("Failed" or "Canceled" or "RolledBack"))
             throw new InvalidOperationException("Only failed, canceled or rolled-back jobs can be retried.");
         var kind = source.JobType.Split('.', 2);

@@ -417,6 +417,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             .Where(item => item.MessageType != "FileTreePurgingRequested" && item.MessageType != "FileTreePurgingCancellationRequested")
             .Where(item => item.MessageType != "FileTreeRecyclingRequested" && item.MessageType != "FileTreeRecyclingCancellationRequested")
             .Where(item => item.MessageType != "FileRecoveryRequested" && item.MessageType != "FileRecoveryCancellationRequested")
+            .Where(item => item.MessageType != "ContainerFileUploadRequested" && item.MessageType != "ContainerFileUploadCancellationRequested")
             .OrderBy(item => item.OccurredAtUtc).Take(10).ToArrayAsync(cancellationToken);
         foreach (var message in messages)
         {

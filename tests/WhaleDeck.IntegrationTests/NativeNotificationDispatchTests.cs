@@ -149,6 +149,7 @@ public sealed partial class NativeNotificationDispatchTests
         await PrivateBoundaries(options, db);
         await JobEventBoundaries(options);
         await TerminalSessionBoundaries(options);
+        await ContainerFileUploadBoundaries(options);
         await FileUploadBoundaries(options);
         await ContainerFileAuditBoundaries(options);
         await FileMutationBoundaries(options);
