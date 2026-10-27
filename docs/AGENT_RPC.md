@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-10-27 当前安装3bac49d/minor42：恢复Worker以既有签名ReadSource→Stage→单次Publish组成持久内容恢复，不扩大Root命令或公开文件字节入口。实际网页两份2097159字节、重启前来源、SQL/Root/HDD/inode全链及双端退出通过；属性/跨路径/重建与故障门禁继续。[证据](qa/CONTAINER_FILE_RESTORATION.md)。
+
 2026-10-27 当前安装 Agent minor42：e6b5034六组件/HTTP来源一致、实际签名 List/ReadSource 与 Root/HDD完整2097159字节、实际独占容器重启后的旧捕获、MAC/重放/核心拒绝已通过。历史来源 RPC 只有内部读取，无公网恢复/发布入口；完整恢复任务继续。[实机证据](qa/CONTAINER_HISTORY_RPC.md)。下方“未安装/两小时观察”为各历史批次的记录。
 
 - **2026-10-27 容器HDD历史校验基础候选**：独立v2容器历史域、字段/游标预算、存在与完整内容校验区分、绑定当前实例的旧捕获只读来源已实现。20新增Linux-root及最终216容器组通过；冻结引擎在真实HDD完整2MiB+7读回/实际独占容器重启后读取旧捕获、错误UUID/旧当前范围拒绝通过，源/沙箱精确清理。尚未安装或接RPC/目录SQL/恢复意图/API/UI，不宣称已恢复文件。运行时fab6e2e+72c72cc helper不变，两小时仍观察；继续独立签名协议与完整恢复链。[证据与剩余](qa/CONTAINER_FILE_HISTORY_ENGINE.md)。

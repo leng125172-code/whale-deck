@@ -1,5 +1,20 @@
 # 容器历史内容恢复：业务、Worker 与页面候选
 
+## 当前安装态：3bac49d 已通过原路径内容恢复实机门禁
+
+2026-10-27 正常 dev 覆盖 `whaledeck-dev-3bac49d.service`，0/SUCCESS，4分9.686秒；Agent/MaintenanceHost/API/Worker/Gateway/Migrator及实际HTTP均为 `3bac49dc734f2510ac12fbc93ceb4bbb34faa393`，minor42不变。运行库/PKCS10.0.13、systemd/权限/UDS/固定helper/动态入口校验通过；生产实际迁移为 `20261027074344_ContainerFileRestorationSources`，没有自动回滚。
+
+同提交冻结 SDK 在隔离真实PG完整运行1执行/1通过/0跳过，状态 `dispatch-0c0cf9c4d58742a188a9ad95b5d94976` 及 `/tmp/wd-container-restore-native-3bac49d.log` 保存；临时库与容器清理确认。先前0632200测试查询失败保留，未计通过。
+
+实际正常管理员BFF先上传生成HDD旧捕获，随后仅停止/启动独占普通容器。真实1440明色/320暗色网页分别恢复原始内容和替换内容，每份2097159字节；确认为每次一个Job，确认取消零登记，所有恢复无浏览器PUT/文件字节。原捕获来自重启前实例，恢复使用新的当前实例。独立检查永久SQL目录及canonical来源、job type、完整Root暂存、发布回执、实际文件、两份被覆盖inode与完整HDD内容链，原捕获元数据和HDD数据指纹始终不变。
+
+另一页面正常退出后，两页回登录，待确认恢复及历史窗口消失，WD401/Authentik拒绝；没有额外恢复。主代理查看实际手机暗色历史窗口和桌面明色确认截图：无水平溢出、状态与按钮可见。证据 `deploy/artifacts/container-restore-browser-37e063c3cbd14ce3abcd51dfb8a55247/`，最终日志 `/tmp/wd-container-restore-browser-3bac49d.log`。
+
+独立最终核对：34上传/恢复意图，19 Succeeded/8 Canceled/7 Failed，恢复2；活动/Unknown/租约/发布屏障0。三类临时身份均0，测试源缺失且精确容器明确no-such-object，隔离dispatch库0，11核心healthy。永久Job/审计/Root/HDD保留。
+
+3bac49d CI后端/原生PG/原生Valkey/安装器已success，前端完整浏览器组仍运行，不能称全CI通过。本次仅签同一当前容器、原路径的内容版本恢复常规链；完整历史权限/所有者/时间属性、跨路径和容器重建身份迁移、历史清理/长期保留、普通真人身份及更广撤权/Worker与Agent中断/发布故障仍继续，P2文件管理及总59项保持active。下方候选/未部署是历史记录。
+
+
 2026-10-27。本批尚未部署，当前安装态仍为 e6b5034/minor42；不得把候选测试当成真实恢复成功。
 
 新增容器独立永久历史目录和 EF migration。实时 Root 分页观察只登记可信元数据，不将未返回的捕获当作缺失或删除；Present 仅为外形可读。计划固定当前管理员登录、目标实例/路径/父与叶版本、完整来源元数据摘要。独立恢复计划签名不能与上传计划互换。

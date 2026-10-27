@@ -288,3 +288,9 @@ Valkey 清空后系统必须能从 PostgreSQL、Agent 和外部服务重建，�
 - 新版 `notification_read_snapshots` / `notification_read_snapshot_items`：每主体最多一份 IsCurrent 的权限范围绑定短期固定 ID 集合，部分唯一索引、bigint ItemCount、成员处理标记与完成时刻。替换仅使旧头失效并过期，不同步级联删除旧成员；后台按成员总预算清理，再删空头。只保存主体/状态/关联 ID，不复制用户资料或正文；源事实到期仍级联读状态/成员。状态见 [专项证据](qa/NOTIFICATION_READ_SNAPSHOTS.md)。
 - 新的投递基础 migration：`notification_channels`/`notification_routes` 版本化策略、`notification_dispatch_receipts` 逐事件同事务回执、`notification_deliveries` 事件/渠道唯一意图及 token 租约/终态。保存私有目标/凭据引用而非实际 Secret，不包含传输正文。基础源码已原生验证，未接传输 Worker；断线前发布启动、最终结果未知，不冒称已上线。见 [投递记录](NOTIFICATION_DELIVERY.md)。
 - 默认 180 天有效，独立每分钟清理最多 1000 条过期事实；读状态随事件级联清理。详见 [消息模型与验收](NOTIFICATIONS.md)。
+
+## 2026-10-27 容器历史与内容恢复模型
+
+迁移 `20261027074344_ContainerFileRestorationSources` 增加 `container_file_versions`：捕获UUID、container_id/original_instance_id/relative_path、source_version/sha256/capture_hash、size_bytes/captured_at_unix_ms/different_source_device、availability/last_observed_at_utc/version。当前容器与捕获索引、字段/预算约束、并发版本；分页未返回不表示缺失，历史元数据不自动删除。没有文件字节、原Owner或宿主存储路径，Present不代表全量内容校验。
+
+`container_file_upload_operations.history_source_json` nullable text保存严格canonical已批准来源并进入不可变MAC；不使用会规范化文本的jsonb。null在普通上传绑定及旧冻结快照中省略，旧MAC格式不变；非null为恢复工作流，HTTP接收入口拒绝。现有Job/Outbox/租约/Unknown/发布屏障复用，恢复job type与审计prefix独立。真实PG迁移及精确文本/MAC/事务、租约/Ready/取消测试已通过，Root与页面证据另见恢复QA。

@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_HISTORY_RPC.md；docs/qa/CONTAINER_TEXT_EDITOR.md",
-  "nextStep": "同容器原路径内容恢复业务/Worker/API/UI候选通过本地门禁，尚未部署；冻结真实PG与实际网页/SQL/Root/HDD验收，然后补真实中断、完整历史属性/跨路径和重建身份迁移等缺口。当前e6b5034保持，59项active，17项移出不算完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_RESTORATION.md",
+  "nextStep": "当前3bac49d已通过同容器原路径内容恢复真实PG/网页/SQL/Root/HDD，34意图零活动/Unknown/租约/屏障、11核心healthy。继续完整历史属性、跨路径/重建身份、长期历史清理及真人权限/撤销、Worker/Agent重启与发布故障；59项active，17项移出不算完成。"
 }

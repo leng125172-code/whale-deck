@@ -209,3 +209,17 @@ Worker 批量保存 `container.cpu.utilization`、`container.memory.used/limit/u
 事件来源和保留、前端状态及外部投递后续范围见 [消息中心](NOTIFICATIONS.md)。不支持客户端发送任意消息正文或修改消息事实。
 
 全部已读契约修订：先 POST `/api/v1/notifications/read-all-snapshot`，再以服务端 `snapshotId` 调用原 read-all 路径，固定成员/当前主体权限绑定、5 分钟闲置与绝对 1 小时有效期、逐批 1000 与 ProcessedCount、旧序号写入失败关闭。接口/API/UI 已写入，签收状态见 [专项记录](qa/NOTIFICATION_READ_SNAPSHOTS.md)。
+
+## 2026-10-27 容器历史内容恢复
+
+当前3bac49d，完整实机边界见[验收](qa/CONTAINER_FILE_RESTORATION.md)。下列前缀为 `/api/v1/containers/{containerId}/files`：
+
+| 方法/路径 | 用例与结果 |
+|---|---|
+| GET `/history` | 当前instanceId和可选精确path，最多50项，after须带原expectedVersion；Root实时观察并登记永久元数据，Present不代表已完整校验 |
+| POST `/restores/plan` | instanceId/path/captureId/expectedCaptureHash/expectedVersion，五分钟来源/目标/原登录绑定计划 |
+| POST `/restores` | confirmed/planHash/UUID幂等键，202+原Job；只登记，Worker从HDD读取，不接受浏览器字节 |
+| GET `/restores/{id}` | 原登录读取原任务，逐次版本/不可变来源/发布事实 |
+| POST `/restores/{id}/cancel` | 原登录和原任务幂等键请求取消；已发布事实不改称取消 |
+
+恢复type为 `containers.files.restore`，使用共享发布屏障，禁止通用重试。Unknown仍由现任管理员的既有container-upload接管只观察/封存，不重新读取来源或重发发布。同容器原路径内容恢复已实测；原属性、其他路径和重建容器迁移仍未签。
