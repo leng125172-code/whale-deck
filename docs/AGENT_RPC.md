@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-10-27最新实际安装2e13376/minor43：API/Worker在申请发布屏障前重新协商完整属性能力；线协议未变。真实排队重启成功，Root接收64KiB后Worker强制重启和32KiB后Agent重启均明确失败/Discarded、无发布；当前网页4次恢复及六组件/HTTP同源通过。[证据与限制](qa/CONTAINER_RESTORATION_RESTARTS.md)。下方其他“当前版本”为各前序批次。
+
 2026-10-27最新实际安装d8822c6/minor43：普通属性来源使用独立签名restoreSource，持久业务策略/计划和页面勾选已部署，实际BFF→Worker→Agent→Root→HDD/网页4次及默认内容4次通过；旧false MAC/回执兼容，无任意UID/GID入口。ACL/xattr等与更多故障仍待。[实机证据与边界](qa/CONTAINER_RESTORATION_ATTRIBUTES.md)。下方其他“当前版本”为各批次历史。
 
 2026-10-27 当前安装3bac49d/minor42：恢复Worker以既有签名ReadSource→Stage→单次Publish组成持久内容恢复，不扩大Root命令或公开文件字节入口。实际网页两份2097159字节、重启前来源、SQL/Root/HDD/inode全链及双端退出通过；属性/跨路径/重建与故障门禁继续。[证据](qa/CONTAINER_FILE_RESTORATION.md)。
