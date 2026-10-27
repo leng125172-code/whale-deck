@@ -22,6 +22,8 @@ class ContainerUploads:
     def __init__(self, read_engine, files, state_path):
         self.r, self.f, self.state_path = read_engine, files, Path(state_path)
 
+    def recovery_engine(self): return ContainerUploadRecovery(self)
+
     def reject(self, suffix):
         raise self.r.Rejected('CONTAINER_UPLOAD_' + suffix)
 
@@ -133,6 +135,9 @@ class ContainerUploads:
         if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600:
             self.reject('RECEIPT_INVALID')
         value = self.f.read_receipt(state, operation)
+        return self.validate_receipt(value, operation)
+
+    def validate_receipt(self, value, operation):
         if value is None: return None
         if type(value) is dict and value.get('schemaVersion') == 2:
             expected = {'schemaVersion', 'resourceType', 'state', 'operationId', 'owner', 'containerId', 'instanceId', 'targetProof', 'createdAtUnixMs'}
@@ -372,3 +377,118 @@ class ContainerUploads:
             record['state'] = 'Discarded'
             self.f.save_receipt(state, record['operationId'], record)
             return self.public(record)
+
+
+class ContainerUploadRecovery:
+    """Internal receipt-only observation and irreversible late-writer sealing.
+
+    No Docker/process/target path access and no CLI surface. The business layer
+    must separately validate current administrator authority, a permanent plan
+    and the original immutable intent. A seal never proves publication success
+    or deletes any payload, HDD capture or displaced object.
+    """
+    DOMAIN = b'whaledeck-container-upload-recovery-v1\n'
+    SCOPE = frozenset(('containerId', 'instanceId', 'operationId', 'owner', 'expectedTargetProof'))
+    SEAL = frozenset(('schemaVersion', 'resourceType', 'state', 'containerId', 'instanceId', 'operationId',
+        'owner', 'targetProof', 'originalRecord', 'originalRecordHash', 'recoveryId', 'actorHash', 'traceHash',
+        'requestHash', 'expectedObservationHash', 'sealedAtUnixMs'))
+
+    def __init__(self, uploads): self.u, self.f = uploads, uploads.f
+
+    @classmethod
+    def digest(cls, name, value):
+        return hashlib.sha256(cls.DOMAIN + name.encode('ascii') + b'\n' +
+            json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest().upper()
+
+    def scope(self, request):
+        if type(request) is not dict or set(request) != self.SCOPE: self.u.reject('RECOVERY_REQUEST_INVALID')
+        scope = {key: request[key] for key in ('containerId', 'instanceId', 'operationId', 'owner')}
+        self.u.scope_request(scope)
+        if type(request['expectedTargetProof']) is not str or not re.fullmatch('[A-F0-9]{64}', request['expectedTargetProof']):
+            self.u.reject('RECOVERY_REQUEST_INVALID')
+        return scope
+
+    def read(self, state, scope, expected_proof):
+        operation = scope['operationId']
+        # Preserve the same strict owner/mode/link checks as the normal reader.
+        try: info = os.stat(operation + '.json', dir_fd=state, follow_symlinks=False)
+        except FileNotFoundError: return None, None
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600:
+            self.u.reject('RECEIPT_INVALID')
+        value = self.f.read_receipt(state, operation)
+        if value is None: self.u.reject('RECEIPT_INVALID')
+        seal = value if type(value) is dict and value.get('schemaVersion') == 3 else None
+        if seal is not None:
+            if set(seal) != self.SEAL or type(seal['schemaVersion']) is not int or seal['resourceType'] != 'ContainerUploadRecoverySeal' or seal['state'] != 'Sealed':
+                self.u.reject('RECOVERY_SEAL_INVALID')
+            self.f.identity(seal['recoveryId'])
+            if seal['recoveryId'] == operation: self.u.reject('RECOVERY_SEAL_INVALID')
+            for key in ('originalRecordHash', 'actorHash', 'traceHash', 'requestHash', 'expectedObservationHash'):
+                if type(seal[key]) is not str or not re.fullmatch('[A-F0-9]{64}', seal[key]): self.u.reject('RECOVERY_SEAL_INVALID')
+            if type(seal['sealedAtUnixMs']) is not int or not 0 <= seal['sealedAtUnixMs'] <= 253402300799999:
+                self.u.reject('RECOVERY_SEAL_INVALID')
+            if self.digest('original', seal['originalRecord']) != seal['originalRecordHash']:
+                self.u.reject('RECOVERY_SEAL_INVALID')
+            value = seal['originalRecord']
+        record = self.u.validate_receipt(value, operation)
+        for bound in (record, seal):
+            if bound is not None and (any(bound.get(key) != scope[key] for key in self.SCOPE - {'expectedTargetProof'}) or bound.get('targetProof') != expected_proof):
+                self.u.reject('RECOVERY_SCOPE_CHANGED')
+        if seal is not None:
+            before = self.public(scope, expected_proof, record, None)
+            if before['observationHash'] != seal['expectedObservationHash']:
+                self.u.reject('RECOVERY_SEAL_INVALID')
+            material = {key: seal[key] for key in ('recoveryId', 'actorHash', 'traceHash', 'expectedObservationHash')}
+            if self.digest('seal-request', {**scope, 'expectedTargetProof': expected_proof, **material}) != seal['requestHash']:
+                self.u.reject('RECOVERY_SEAL_INVALID')
+        return record, seal
+
+    def public(self, scope, expected_proof, record, seal):
+        # These are retained journal facts, never a current target/version proof.
+        facts = {'containerId': scope['containerId'], 'instanceId': scope['instanceId'], 'operationId': scope['operationId'],
+            'targetProof': expected_proof, 'rootState': 'Missing' if record is None else record['state'],
+            'originalRecordHash': self.digest('original', record), 'sealed': seal is not None,
+            'sealId': None if seal is None else seal['recoveryId'], 'bindingCurrent': False,
+            'mayHavePublished': record is not None and ('publication' in record or record['state'] == 'Unknown'),
+            'retainedObjects': record is not None and record['state'] != 'Prevented'}
+        # The opaque owner stays inside the digest; it never enters public output.
+        return {**facts, 'observationHash': self.digest('observation', {**facts, 'owner': scope['owner']})}
+
+    def observe(self, request):
+        scope = self.scope(request)
+        with self.u.locked(scope['operationId'], allow_new=True) as state:
+            record, seal = self.read(state, scope, request['expectedTargetProof'])
+            return self.public(scope, request['expectedTargetProof'], record, seal)
+
+    def seal(self, request, recovery_id, actor, trace, expected_observation):
+        scope = self.scope(request); self.f.identity(recovery_id)
+        if recovery_id == scope['operationId']: self.u.reject('RECOVERY_REQUEST_INVALID')
+        for value, maximum in ((actor, 256), (trace, 128)):
+            if type(value) is not str or not value.strip() or len(value) > maximum or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in value):
+                self.u.reject('RECOVERY_ACTOR_INVALID')
+            try: value.encode('utf-8', 'strict')
+            except UnicodeError: self.u.reject('RECOVERY_ACTOR_INVALID')
+        if type(expected_observation) is not str or not re.fullmatch('[A-F0-9]{64}', expected_observation):
+            self.u.reject('RECOVERY_REQUEST_INVALID')
+        material = {'recoveryId': recovery_id, 'actorHash': self.digest('actor', actor), 'traceHash': self.digest('trace', trace),
+            'expectedObservationHash': expected_observation}
+        request_hash = self.digest('seal-request', {**request, **material})
+        with self.u.locked(scope['operationId'], allow_new=True) as state:
+            record, previous = self.read(state, scope, request['expectedTargetProof'])
+            if previous is not None:
+                if previous['requestHash'] != request_hash: self.u.reject('RECOVERY_IDEMPOTENCY_CONFLICT')
+                return self.public(scope, request['expectedTargetProof'], record, previous)
+            observation = self.public(scope, request['expectedTargetProof'], record, None)
+            if observation['observationHash'] != expected_observation: self.u.reject('RECOVERY_OBSERVATION_CHANGED')
+            value = {'schemaVersion': 3, 'resourceType': 'ContainerUploadRecoverySeal', 'state': 'Sealed', **scope,
+                'targetProof': request['expectedTargetProof'], 'originalRecord': record,
+                'originalRecordHash': observation['originalRecordHash'], **material, 'requestHash': request_hash,
+                'sealedAtUnixMs': time.time_ns() // 1000000}
+            # Match read_receipt's bound exactly, including escaped Unicode.
+            if len(json.dumps(value, separators=(',', ':')).encode()) > 16384: self.u.reject('RECOVERY_RECORD_LIMIT')
+            # Existing minor39/40 readers only admit schemas1/2. Replacing the
+            # original journal under its lock therefore fences their delayed
+            # stage/publish/capture calls too, without relying on a new sidecar
+            # that an old in-memory writer would not know to check.
+            self.f.save_receipt(state, scope['operationId'], value)
+            return self.public(scope, request['expectedTargetProof'], record, value)

@@ -17,7 +17,7 @@ using Rpc = WhaleDeck.Contracts.Agent.V1;
 namespace WhaleDeck.UnitTests.Agent;
 
 /// <summary>SDK/HTTP2 over a private local UDS to a synthetic Agent; no helper or installed Agent evidence.</summary>
-public sealed class ContainerUploadGatewayTests
+public sealed partial class ContainerUploadGatewayTests
 {
     private const string Service = "/whaledeck.agent.v1.ContainerFileWriteService/";
     private static readonly int[] ChunkSizes = [32768, 32768, 7];
@@ -288,6 +288,8 @@ public sealed class ContainerUploadGatewayTests
         public uint Minor { get; private init; }
         public bool Capability { get; private init; }
         public bool CancellationFence { get; private init; }
+        public bool RecoverySeal { get; private init; }
+        public string? InvalidRecovery { get; set; }
         public ConcurrentQueue<Captured> Calls { get; } = new();
         public ConcurrentQueue<Rpc.ContainerUploadFrame> Frames { get; } = new();
         public TaskCompletionSource<bool> HeaderSeen { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -298,9 +300,9 @@ public sealed class ContainerUploadGatewayTests
         public bool ReturnPrevented { get; set; }
         public string? InvalidFence { get; set; }
 
-        public static async Task<Harness> Start(uint major = 1, uint minor = 39, bool capability = true, bool cancellationFence = false)
+        public static async Task<Harness> Start(uint major = 1, uint minor = 39, bool capability = true, bool cancellationFence = false, bool recoverySeal = false)
         {
-            var harness = new Harness { Major = major, Minor = minor, Capability = capability, CancellationFence = cancellationFence };
+            var harness = new Harness { Major = major, Minor = minor, Capability = capability, CancellationFence = cancellationFence, RecoverySeal = recoverySeal };
             if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Private UDS transport fixture requires Linux.");
             Directory.CreateDirectory(harness._directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             var socket = Path.Combine(harness._directory, "agent.sock");
@@ -380,12 +382,41 @@ public sealed class ContainerUploadGatewayTests
             var result = new Rpc.CapabilitiesResponse { ProtocolMajor = harness.Major, ProtocolMinor = harness.Minor };
             if (harness.Capability) result.Capabilities.Add("docker.files.bound-uploads");
             if (harness.CancellationFence) result.Capabilities.Add("docker.files.upload-cancel-fence");
+            if (harness.RecoverySeal) result.Capabilities.Add("docker.files.upload-recovery-seal");
             return Task.FromResult(result);
         }
     }
 
     public sealed class FakeWrites(Harness harness) : Rpc.ContainerFileWriteService.ContainerFileWriteServiceBase
     {
+        public override Task<Rpc.ContainerUploadRecoveryObservation> ObserveRecovery(Rpc.ContainerUploadReference request, ServerCallContext context)
+        { harness.Capture("ObserveRecovery", request.Clone(), context); return Task.FromResult(Recovery(request, "")); }
+        public override Task<Rpc.ContainerUploadRecoveryObservation> SealRecovery(Rpc.ContainerUploadRecoveryRequest request, ServerCallContext context)
+        { harness.Capture("SealRecovery", request.Clone(), context); return Task.FromResult(Recovery(request.Original, request.RecoveryId)); }
+        private Rpc.ContainerUploadRecoveryObservation Recovery(Rpc.ContainerUploadReference original, string seal)
+        {
+            var result = new Rpc.ContainerUploadRecoveryObservation { ContainerId = original.ContainerId, InstanceId = original.InstanceId,
+                OperationId = original.OperationId, TargetProof = original.ExpectedTargetProof, RootState = "Missing",
+                OriginalRecordHash = "B73B451CAC7D3B4D6CD095A4CB10A7F062D17ACA014FD693F2C99DD5F542441A", Sealed = seal.Length != 0, SealId = seal };
+            switch (harness.InvalidRecovery)
+            {
+                case "cid": result.ContainerId = new('b',64); break;
+                case "instance": result.InstanceId = result.InstanceId.Replace("777:", "778:", StringComparison.Ordinal); break;
+                case "operation": result.OperationId = Guid.NewGuid().ToString("N"); break;
+                case "proof": result.TargetProof = new('F',64); break;
+                case "current": result.BindingCurrent = true; break;
+                case "state": result.RootState = "Completed"; break;
+                case "retained": result.RetainedObjects = true; break;
+                case "published": result.MayHavePublished = true; break;
+                case "seal": result.Sealed = true; break;
+                case "record": result.OriginalRecordHash = "bad"; break;
+                case "wrong-seal": result.SealId = Guid.NewGuid().ToString("N"); break;
+            }
+            result.ObservationHash = WhaleDeck.Contracts.ContainerUploadRecoveryBinding.ObservationHash(original, result);
+            if (harness.InvalidRecovery == "digest") result.ObservationHash = new('F',64);
+            return result;
+        }
+
         public override Task<Rpc.ContainerUploadTarget> InspectTarget(Rpc.ContainerFileLocation request, ServerCallContext context)
         {
             harness.Capture("InspectTarget", request.Clone(), context);

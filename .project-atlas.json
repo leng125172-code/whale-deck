@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_FILE_UPLOAD_INTENTS.md",
-  "nextStep": "按59项继续，17项移出不算完成。容器永久上传SQL/原登录接收/单次发布调度与Vue候选及minimum Agent40预检已实现；2501单元/174集成及453前端单元通过，真实PG冻结并发门禁已有证据。容器Unknown独立管理员恢复、精确代理/API/Worker注册及真实整链仍待；当前不开放候选写入口，未以模拟页面算完整交付。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_UPLOAD_RECOVERY_SEAL.md",
+  "nextStep": "按59项继续，17项移出不算完成。容器历史Observe/Seal minor41、原journal永久封存及SDK候选已实现；2561单元/174集成与180容器Linux-root、真实停止重启的systemd profile通过。尚未安装；继续独立容器Unknown恢复SQL/计划确认/新管理员审计与共享保护解除，再接API/Worker/代理和真实登录整链。"
 }

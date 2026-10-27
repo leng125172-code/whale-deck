@@ -172,12 +172,60 @@ def main():
                     if process.poll() is None:
                         if invocation: owned.common.command([str(helper), 'container-file-write-stop', transport, invocation])
                         process.communicate(timeout=15)
+                # The retained journal must remain inspectable after a genuine
+                # stop/restart, without following the new process namespace.
+                journal = state / (binding['operationId'] + '.json')
+                original_record = json.loads(journal.read_bytes())
+                observed = call('recovery-observe', binding)
+                assert observed['rootState'] == 'Published' and not observed['bindingCurrent'] and not observed['sealed']
+                assert observed['mayHavePublished'] and observed['retainedObjects']
+                owned.common.command(['docker', 'stop', '--time', '1', fixture['identifier']])
+                assert json.loads(owned.common.command(['docker', 'inspect', fixture['identifier']]))[0]['State']['Running'] is False
+                call('inspect', binding, expected_error='CONTAINER_NOT_RUNNING')
+                assert call('recovery-observe', binding) == observed
+                owned.common.command(['docker', 'start', fixture['identifier']])
+                restarted = json.loads(owned.common.command(['docker', 'inspect', fixture['identifier']]))[0]
+                new_instance = str(restarted['State']['Pid']) + ':' + restarted['State']['StartedAt']
+                assert restarted['State']['Running'] and new_instance != instance
+                call('inspect', binding, expected_error='CONTAINER_FILES_INSTANCE_CHANGED')
+                assert call('recovery-observe', binding) == observed
+                recovery = {**binding, 'recoveryId': uuid.uuid4().hex, 'actorSubject': 'owned-profile-recovery-admin',
+                    'traceId': 'owned-profile-recovery-trace', 'expectedObservationHash': observed['observationHash']}
+                sealed = call('recovery-seal', recovery)
+                assert sealed['sealed'] and sealed['sealId'] == recovery['recoveryId'] and not sealed['bindingCurrent']
+                assert sealed['rootState'] == 'Published' and sealed['originalRecordHash'] == observed['originalRecordHash']
+                sealed_bytes = journal.read_bytes()
+                assert json.loads(sealed_bytes)['originalRecord'] == original_record
+                assert call('recovery-seal', recovery) == sealed and journal.read_bytes() == sealed_bytes
+                assert call('recovery-observe', binding) == sealed
+                call('recovery-observe', {**binding, 'owner': 'C'*64}, expected_error='CONTAINER_UPLOAD_RECOVERY_SCOPE_CHANGED')
+                assert output.read_bytes() == replacement and retained.read_bytes() == fixture['old'] and retained.stat().st_ino == before.st_ino
+                assert (target / 'container-files-v1' / (binding['operationId'] + '.data')).read_bytes() == fixture['old']
+                # A missing operation for the current real instance can be
+                # sealed before its sender arrives. Even a fully valid delayed
+                # body must be rejected by the original receipt admission path.
+                current_location = {**cancel_path, 'instanceId': new_instance}
+                current_plan = call('target', current_location)
+                delayed = {**request, **current_location, 'operationId': uuid.uuid4().hex, 'expectedVersion': 'ABSENT',
+                    'expectedParentVersion': current_plan['expectedParentVersion'], 'expectedTargetProof': current_plan['targetProof']}
+                delayed_ref = {key: delayed[key] for key in ('containerId','instanceId','operationId','owner','expectedTargetProof')}
+                missing_observation = call('recovery-observe', delayed_ref)
+                assert missing_observation['rootState'] == 'Missing' and not missing_observation['retainedObjects']
+                missing_recovery = {**delayed_ref, 'recoveryId': uuid.uuid4().hex, 'actorSubject': 'owned-profile-recovery-admin',
+                    'traceId': 'owned-profile-missing-trace', 'expectedObservationHash': missing_observation['observationHash']}
+                assert call('recovery-seal', missing_recovery)['sealed']
+                call('stage', delayed, replacement, expected_error='CONTAINER_UPLOAD_RECEIPT_INVALID')
+                call('publish', delayed_ref, expected_error='CONTAINER_UPLOAD_RECEIPT_INVALID')
+                assert not (state / (delayed['operationId']+'.data')).exists() and not (state / (delayed['operationId']+'.partial')).exists()
+                assert not (fixture['folder']/'canceled.bin').exists()
             completed = True
             assert all((host / name).read_bytes() == content for name, content in frozen.items())
             print(json.dumps({'actualContainerWriteSystemdProfile': 'passed', 'fullBytes': owned.common.SIZE,
                 'targetStagePublishInspectDiscardAndFixedErrors': 'passed', 'stdoutExactReadyAndReceipt': True,
                 'exactInvocationStop': True, 'liveWrongInvocationRefusedAndExactCancellationCleaned': True,
                 'preReceiveFenceAndDelayedStageRefusal': True,
+                'actualStoppedAndRestartedHistoricalObservation': True, 'permanentRecoverySealRetainsAllObjects': True,
+                'currentInstanceDelayedSenderAndPublisherRefusedAfterSeal': True,
                 'installedAgentRpcOrSsoUi': False, 'sourceSha256': hashes}), flush=True)
         finally:
             for transport in active:

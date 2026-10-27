@@ -35,6 +35,27 @@ public sealed class ContainerFileWriteGrpcService(FileTransferRunner runner)
     public override Task<ContainerUploadReceipt> Inspect(ContainerUploadReference request, ServerCallContext context) => Action("inspect", request, context);
     public override Task<ContainerUploadReceipt> Discard(ContainerUploadReference request, ServerCallContext context) => Action("discard", request, context);
 
+    public override async Task<ContainerUploadRecoveryObservation> ObserveRecovery(ContainerUploadReference request, ServerCallContext context)
+    {
+        ContainerUploadPolicy.Reference(request); ContainerUploadPolicy.RequireBinding(request, context);
+        using var result = await runner.ContainerWriteOnceAsync("recovery-observe", JsonSerializer.Serialize(new
+            { containerId = request.ContainerId, instanceId = request.InstanceId, operationId = request.OperationId,
+                owner = request.Owner, expectedTargetProof = request.ExpectedTargetProof }), context.CancellationToken);
+        return ContainerUploadRecoveryPolicy.Observation(result.RootElement, request);
+    }
+
+    public override async Task<ContainerUploadRecoveryObservation> SealRecovery(ContainerUploadRecoveryRequest request, ServerCallContext context)
+    {
+        ContainerUploadRecoveryPolicy.Request(request); ContainerUploadPolicy.RequireBinding(request, context);
+        var original = request.Original;
+        using var result = await runner.ContainerWriteOnceAsync("recovery-seal", JsonSerializer.Serialize(new
+            { containerId = original.ContainerId, instanceId = original.InstanceId, operationId = original.OperationId,
+                owner = original.Owner, expectedTargetProof = original.ExpectedTargetProof, recoveryId = request.RecoveryId,
+                actorSubject = request.Context.ActorSubject, traceId = request.Context.TraceId,
+                expectedObservationHash = request.ExpectedObservationHash }), context.CancellationToken);
+        return ContainerUploadRecoveryPolicy.Observation(result.RootElement, original, request.RecoveryId);
+    }
+
     private async Task<ContainerUploadReceipt> Action(string action, ContainerUploadReference request, ServerCallContext context)
     {
         ContainerUploadPolicy.Reference(request);
@@ -153,13 +174,15 @@ internal static class ContainerUploadPolicy
     {
         var status = code switch
         {
+            "CONTAINER_UPLOAD_RECOVERY_REQUEST_INVALID" or "CONTAINER_UPLOAD_RECOVERY_ACTOR_INVALID" => StatusCode.InvalidArgument,
             "CONTAINER_UPLOAD_PROTECTED" or "CONTAINER_PROTECTED" or "CONTAINER_UNSAFE_ISOLATION" or "CONTAINER_UNSAFE_MOUNT" or
                 "CONTAINER_FILES_PROTECTED" or "CONTAINER_FILES_SHARED_CORE_MOUNT" or "CONTAINER_UPLOAD_SCOPE_MISMATCH" or
-                "CONTAINER_UPLOAD_PUBLISH_READ_ONLY" or "CONTAINER_UPLOAD_PUBLISH_MOUNT_ROOT" or "FILES_REGULAR_SINGLE_LINK_REQUIRED" => StatusCode.PermissionDenied,
+                "CONTAINER_UPLOAD_RECOVERY_SCOPE_CHANGED" or "CONTAINER_UPLOAD_PUBLISH_READ_ONLY" or "CONTAINER_UPLOAD_PUBLISH_MOUNT_ROOT" or "FILES_REGULAR_SINGLE_LINK_REQUIRED" => StatusCode.PermissionDenied,
             "CONTAINER_UPLOAD_VERSION_CONFLICT" or "CONTAINER_UPLOAD_PARENT_VERSION_CONFLICT" or "FILES_VERSION_CONFLICT" or
-                "CONTAINER_UPLOAD_IDEMPOTENCY_CONFLICT" => StatusCode.Aborted,
+                "CONTAINER_UPLOAD_IDEMPOTENCY_CONFLICT" or "CONTAINER_UPLOAD_RECOVERY_IDEMPOTENCY_CONFLICT" or
+                "CONTAINER_UPLOAD_RECOVERY_OBSERVATION_CHANGED" => StatusCode.Aborted,
             "CONTAINER_UPLOAD_BUSY" or "CONTAINER_UPLOAD_CAPACITY_LOW" or "CONTAINER_UPLOAD_RECEIPT_LIMIT" or "CONTAINER_UPLOAD_SIZE_LIMIT" or
-                "FILES_BACKUP_CAPACITY_REQUIRED" or "FILES_BACKUP_HISTORY_LIMIT" => StatusCode.ResourceExhausted,
+                "FILES_BACKUP_CAPACITY_REQUIRED" or "FILES_BACKUP_HISTORY_LIMIT" or "CONTAINER_UPLOAD_RECOVERY_RECORD_LIMIT" => StatusCode.ResourceExhausted,
             "CONTAINER_UPLOAD_TIMEOUT" or "CONTAINER_UPLOAD_PUBLISH_TIMEOUT" or "FILES_INPUT_TIMEOUT" => StatusCode.DeadlineExceeded,
             "CONTAINER_UPLOAD_NOT_FOUND" or "CONTAINER_UPLOAD_PATH_NOT_FOUND" => StatusCode.NotFound,
             "CONTAINER_UPLOAD_TARGET_CHANGED" or "CONTAINER_FILES_INSTANCE_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or "CONTAINER_FILES_TARGET_CHANGED" or
@@ -171,7 +194,7 @@ internal static class ContainerUploadPolicy
             "FILES_BACKUP_METADATA_UNSAFE" or "FILES_BACKUP_CONFIGURATION_INVALID" or "FILES_BACKUP_MOUNT_MISMATCH" or
                 "FILES_BACKUP_FILESYSTEM_UNSUPPORTED" or "FILES_BACKUP_DEVICE_METADATA_UNSAFE" or "FILES_BACKUP_DEVICE_MISMATCH" or
                 "FILES_BACKUP_HDD_REQUIRED" or "FILES_BACKUP_READ_ONLY" or "FILES_BACKUP_DIRECTORY_UNSAFE" or "FILES_BACKUP_IDEMPOTENCY_CONFLICT" or
-                "CONTAINER_UPLOAD_STATE_UNSAFE" or "CONTAINER_UPLOAD_MODULE_UNSAFE" or "CONTAINER_UPLOAD_RECEIPT_INVALID" => StatusCode.FailedPrecondition,
+                "CONTAINER_UPLOAD_RECOVERY_SEAL_INVALID" or "CONTAINER_UPLOAD_STATE_UNSAFE" or "CONTAINER_UPLOAD_MODULE_UNSAFE" or "CONTAINER_UPLOAD_RECEIPT_INVALID" => StatusCode.FailedPrecondition,
             _ => StatusCode.Unavailable
         };
         return new(new(status, status == StatusCode.Unavailable ? "CONTAINER_UPLOAD_UNAVAILABLE" : code!));

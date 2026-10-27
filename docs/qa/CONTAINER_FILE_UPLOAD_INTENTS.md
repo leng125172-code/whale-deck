@@ -41,3 +41,5 @@ CI历史：5853716的原生PG失败对应上述jsonb验收代码问题；6fbca7b
 0325098冻结补验已结束：原生PostgreSQL1执行/1通过/0跳过，迁移、双连接幂等/互斥、旧持久业务完整通过；native status为Passed/cleanupConfirmed=true（01:19:34Z–01:22:04Z），临时容器再查不存在。核心11容器逐项healthy，本批没有更新运行时。该夹具Root仍为合成回执，不代替新功能的安装态整链。
 
 阶段同步补记：项目图谱首次连接403，保留本地pending后重试update_phase成功（eventId whale-deck-container-upload-intents-0325098-20261027），记录已移入synced；没有把整个项目或文件模块标记完成。该目录按仓库规则忽略，不强制加入Git。
+
+后续历史观察/封存Root、Agent minor41和SDK候选已实现：2561 Unit/174 Integration（7默认原生跳过）、180容器Linux-root及真实停止/重启的固定systemd profile通过；线上minor40未变，独立恢复SQL/API/UI仍待。[新协议证据与边界](CONTAINER_UPLOAD_RECOVERY_SEAL.md)。

@@ -609,12 +609,25 @@ message ContainerUploadReceipt {
   string container_id = 1; string instance_id = 2; FileUploadReceipt upload = 3;
   ContainerUploadBackup backup = 4; string target_proof = 5;
 }
+// Receipt-only recovery never re-enters a stopped/restarted target namespace.
+// Context is the current recovery actor; Original.Context stays immutable.
+message ContainerUploadRecoveryRequest {
+  ContainerUploadReference original = 1; string recovery_id = 2;
+  string expected_observation_hash = 3; RequestContext context = 4;
+}
+message ContainerUploadRecoveryObservation {
+  string container_id = 1; string instance_id = 2; string operation_id = 3; string target_proof = 4;
+  string root_state = 5; string original_record_hash = 6; bool sealed = 7; string seal_id = 8;
+  bool binding_current = 9; bool may_have_published = 10; bool retained_objects = 11; string observation_hash = 12;
+}
 service ContainerFileWriteService {
   rpc InspectTarget(ContainerFileLocation) returns (ContainerUploadTarget);
   rpc StageUpload(stream ContainerUploadFrame) returns (ContainerUploadReceipt);
   rpc Publish(ContainerUploadReference) returns (ContainerUploadReceipt);
   rpc Inspect(ContainerUploadReference) returns (ContainerUploadReceipt);
   rpc Discard(ContainerUploadReference) returns (ContainerUploadReceipt);
+  rpc ObserveRecovery(ContainerUploadReference) returns (ContainerUploadRecoveryObservation);
+  rpc SealRecovery(ContainerUploadRecoveryRequest) returns (ContainerUploadRecoveryObservation);
 }
 
 message FileLocation { string root_id = 1; string path = 2; }

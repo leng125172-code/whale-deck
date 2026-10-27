@@ -95,6 +95,7 @@ public sealed class ContainerUploadPolicyTests
     }
 
     [Theory]
+    [InlineData("recovery-observe")][InlineData("recovery-seal")]
     [InlineData("target")][InlineData("stage")][InlineData("publish")][InlineData("inspect")][InlineData("discard")]
     public void NewActionsUseTheirOwnFixedHelperFamilyAndExactInvocationStop(string action)
     {
@@ -155,6 +156,12 @@ public sealed class ContainerUploadPolicyTests
     }
 
     [Theory]
+    [InlineData("CONTAINER_UPLOAD_RECOVERY_REQUEST_INVALID", StatusCode.InvalidArgument)]
+    [InlineData("CONTAINER_UPLOAD_RECOVERY_SCOPE_CHANGED", StatusCode.PermissionDenied)]
+    [InlineData("CONTAINER_UPLOAD_RECOVERY_OBSERVATION_CHANGED", StatusCode.Aborted)]
+    [InlineData("CONTAINER_UPLOAD_RECOVERY_IDEMPOTENCY_CONFLICT", StatusCode.Aborted)]
+    [InlineData("CONTAINER_UPLOAD_RECOVERY_SEAL_INVALID", StatusCode.FailedPrecondition)]
+    [InlineData("CONTAINER_UPLOAD_RECOVERY_RECORD_LIMIT", StatusCode.ResourceExhausted)]
     [InlineData("CONTAINER_UPLOAD_NOT_FOUND", StatusCode.NotFound)]
     [InlineData("CONTAINER_UPLOAD_SCOPE_MISMATCH", StatusCode.PermissionDenied)]
     [InlineData("CONTAINER_UPLOAD_VERSION_CONFLICT", StatusCode.Aborted)]

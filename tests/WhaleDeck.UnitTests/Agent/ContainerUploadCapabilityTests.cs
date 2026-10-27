@@ -12,7 +12,7 @@ namespace WhaleDeck.UnitTests.Agent;
 
 public sealed class ContainerUploadCapabilityTests : IDisposable
 {
-    private static readonly string[] Actions = ["InspectTarget", "StageUpload", "Publish", "Inspect", "Discard"];
+    private static readonly string[] Actions = ["InspectTarget", "StageUpload", "Publish", "Inspect", "Discard", "ObserveRecovery", "SealRecovery"];
     private readonly string _keyFile = Path.GetTempFileName();
     private readonly byte[] _key = RandomNumberGenerator.GetBytes(32);
     private readonly CapabilityValidator _validator;
@@ -26,7 +26,7 @@ public sealed class ContainerUploadCapabilityTests : IDisposable
     }
 
     [Fact]
-    public void ProtocolExposesFiveDistinctMethodsAndOnlyUploadIsClientStreaming()
+    public void ProtocolExposesSevenDistinctMethodsAndOnlyUploadIsClientStreaming()
     {
         var methods = ContainerFileWriteService.Descriptor.Methods;
         Assert.Equal(Actions.Order(), methods.Select(method => method.Name).Order());
@@ -39,7 +39,7 @@ public sealed class ContainerUploadCapabilityTests : IDisposable
 
     [Theory]
     [InlineData("InspectTarget")][InlineData("StageUpload")]
-    [InlineData("Publish")][InlineData("Inspect")][InlineData("Discard")]
+    [InlineData("Publish")][InlineData("Inspect")][InlineData("Discard")][InlineData("ObserveRecovery")][InlineData("SealRecovery")]
     public void EachMethodRequiresItsOwnContentBoundSingleUseSignature(string action)
     {
         var method = ContainerFileWriteBinding.Service + action;
@@ -55,7 +55,7 @@ public sealed class ContainerUploadCapabilityTests : IDisposable
 
     [Theory]
     [InlineData("InspectTarget")][InlineData("StageUpload")]
-    [InlineData("Publish")][InlineData("Inspect")][InlineData("Discard")]
+    [InlineData("Publish")][InlineData("Inspect")][InlineData("Discard")][InlineData("ObserveRecovery")][InlineData("SealRecovery")]
     public void ExpiredOverlongAndLegacyMethodOnlySignaturesCannotAuthorizeWrites(string action)
     {
         var method = ContainerFileWriteBinding.Service + action;
@@ -133,7 +133,7 @@ public sealed class ContainerUploadCapabilityTests : IDisposable
     }
 
     [Theory]
-    [InlineData("InspectTarget")][InlineData("Publish")][InlineData("Inspect")][InlineData("Discard")]
+    [InlineData("InspectTarget")][InlineData("Publish")][InlineData("Inspect")][InlineData("Discard")][InlineData("ObserveRecovery")][InlineData("SealRecovery")]
     public async Task UnaryServiceRejectsChangedRequestBeforePrivilegedRunner(string action)
     {
         var original = Request(action);
@@ -143,6 +143,10 @@ public sealed class ContainerUploadCapabilityTests : IDisposable
             var copy = location.Clone();
             copy.Path = "changed.bin";
             changed = copy;
+        }
+        else if (original is ContainerUploadRecoveryRequest recovery)
+        {
+            var copy = recovery.Clone(); copy.Context.ActorSubject = "another-current-admin"; changed = copy;
         }
         else
         {
@@ -162,7 +166,7 @@ public sealed class ContainerUploadCapabilityTests : IDisposable
 
     [Theory]
     [InlineData("InspectTarget")][InlineData("StageUpload")]
-    [InlineData("Publish")][InlineData("Inspect")][InlineData("Discard")]
+    [InlineData("Publish")][InlineData("Inspect")][InlineData("Discard")][InlineData("ObserveRecovery")][InlineData("SealRecovery")]
     public async Task InterceptorAcceptsNewSignatureOnceAndRejectsLegacySignatureBeforeContinuation(string action)
     {
         var method = ContainerFileWriteBinding.Service + action;
@@ -203,6 +207,8 @@ public sealed class ContainerUploadCapabilityTests : IDisposable
             "Publish" => await service.Publish((ContainerUploadReference)request, context),
             "Inspect" => await service.Inspect((ContainerUploadReference)request, context),
             "Discard" => await service.Discard((ContainerUploadReference)request, context),
+            "ObserveRecovery" => await service.ObserveRecovery((ContainerUploadReference)request, context),
+            "SealRecovery" => await service.SealRecovery((ContainerUploadRecoveryRequest)request, context),
             _ => throw new ArgumentOutOfRangeException(nameof(action))
         };
     }
@@ -246,9 +252,41 @@ public sealed class ContainerUploadCapabilityTests : IDisposable
         OperationId = Header().OperationId, Owner = Header().Owner, Context = ActorContext(), ExpectedTargetProof = new('A', 64)
     };
 
+    private static ContainerUploadRecoveryRequest Recovery()
+    {
+        var id = "bb0a8865343e49bdb01a72680131bf39";
+        return new() { Original = Reference(),RecoveryId = id,ExpectedObservationHash = new('D',64),
+            Context = new() { ActorSubject = "current-recovery-admin",TraceId = "current-trace",JobId = id,IdempotencyKey = id } };
+    }
+
+    [Theory]
+    [InlineData("actor")][InlineData("trace")][InlineData("recovery")][InlineData("observation")]
+    [InlineData("owner")][InlineData("instance")][InlineData("container")][InlineData("proof")][InlineData("original-actor")]
+    public async Task RecoveryBodyCannotBorrowCapabilityForAnotherActorPlanOrOriginal(string field)
+    {
+        var original = Recovery(); var changed = original.Clone();
+        switch (field)
+        {
+            case "actor": changed.Context.ActorSubject = "another-current-admin"; break;
+            case "trace": changed.Context.TraceId = "another-current-trace"; break;
+            case "recovery": changed.RecoveryId = Guid.NewGuid().ToString("N"); changed.Context.JobId = changed.RecoveryId; changed.Context.IdempotencyKey = changed.RecoveryId; break;
+            case "observation": changed.ExpectedObservationHash = new('F',64); break;
+            case "owner": changed.Original.Owner = new('F',64); break;
+            case "instance": changed.Original.InstanceId = changed.Original.InstanceId.Replace("777:","778:",StringComparison.Ordinal); break;
+            case "container": changed.Original.ContainerId = new('b',64); break;
+            case "proof": changed.Original.ExpectedTargetProof = new('F',64); break;
+            case "original-actor": changed.Original.Context.ActorSubject = "another-original-admin"; break;
+        }
+        var method = ContainerFileWriteBinding.Service+"SealRecovery"; var hash = ContainerFileWriteBinding.Hash(original);
+        var context = new Context(method,Sign(method,hash),hash);
+        var error = await Assert.ThrowsAsync<RpcException>(() => new CapabilityInterceptor(_validator).UnaryServerHandler<IMessage,IMessage>(
+            changed,context,(request,call) => Invoke("SealRecovery",request,call)));
+        Assert.Equal(StatusCode.PermissionDenied,error.StatusCode); Assert.Equal("CONTAINER_UPLOAD_BINDING_INVALID",error.Status.Detail);
+    }
+
     private static IMessage Request(string action) => action switch
     {
-        "InspectTarget" => Location(), "StageUpload" => Header(), _ => Reference()
+        "InspectTarget" => Location(), "StageUpload" => Header(), "SealRecovery" => Recovery(), _ => Reference()
     };
 
     private static void Change(ContainerUploadHeader header, string field)

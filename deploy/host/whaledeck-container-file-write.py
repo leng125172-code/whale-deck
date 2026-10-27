@@ -84,6 +84,17 @@ def snapshot(request, session, uploads, publisher):
 
 
 def execute(action, request, source, reader, files, docker, uploads, publisher):
+    if action in ('recovery-observe', 'recovery-seal'):
+        # The class comes from the same root-owned fixed upload module.
+        engine = uploads.recovery_engine()
+        if action == 'recovery-observe':
+            source.finish(); return engine.observe(request)
+        fields = {'containerId', 'instanceId', 'operationId', 'owner', 'expectedTargetProof',
+            'recoveryId', 'actorSubject', 'traceId', 'expectedObservationHash'}
+        if type(request) is not dict or set(request) != fields: raise Rejected('CONTAINER_UPLOAD_RECOVERY_REQUEST_INVALID')
+        source.finish()
+        scope = {key: request[key] for key in engine.SCOPE}
+        return engine.seal(scope, request['recoveryId'], request['actorSubject'], request['traceId'], request['expectedObservationHash'])
     if action == 'target': reader.request_fields(request, 'stat')
     elif action == 'stage':
         if type(request) is not dict or 'expectedTargetProof' not in request: raise Rejected('CONTAINER_UPLOAD_REQUEST_INVALID')
@@ -114,7 +125,7 @@ def execute(action, request, source, reader, files, docker, uploads, publisher):
 
 
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('target', 'stage', 'publish', 'inspect', 'discard'):
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('target', 'stage', 'publish', 'inspect', 'discard', 'recovery-observe', 'recovery-seal'):
         raise Rejected('CONTAINER_UPLOAD_ACTION_INVALID')
     invocation = os.environ.get('INVOCATION_ID', '')
     if not re.fullmatch('[a-f0-9]{32}', invocation): raise Rejected('CONTAINER_UPLOAD_INVOCATION_INVALID')
@@ -139,6 +150,8 @@ def main():
 def error_code(error):
     # No exception message or arbitrary code suffix is ever emitted.
     codes = {'CONTAINER_UPLOAD_' + suffix for suffix in (
+        'RECOVERY_REQUEST_INVALID', 'RECOVERY_ACTOR_INVALID', 'RECOVERY_SCOPE_CHANGED', 'RECOVERY_SEAL_INVALID',
+        'RECOVERY_IDEMPOTENCY_CONFLICT', 'RECOVERY_OBSERVATION_CHANGED', 'RECOVERY_RECORD_LIMIT',
         'MODULE_UNSAFE', 'STATE_UNSAFE', 'BUSY', 'REQUEST_INVALID', 'ACTION_INVALID', 'INVOCATION_INVALID', 'TIMEOUT', 'CANCELED',
         'SESSION_SCOPE_MISMATCH', 'SESSION_PROOF_INVALID', 'TARGET_CHANGED', 'PROTECTED', 'SIZE_LIMIT', 'VERSION_INVALID',
         'NOT_FOUND', 'PATH_NOT_FOUND', 'RECEIPT_LIMIT', 'RECEIPT_INVALID', 'SCOPE_MISMATCH', 'PARENT_VERSION_CONFLICT', 'VERSION_CONFLICT',

@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-27 容器历史观察/永久封存候选，未安装**：minor41新增独立签名ObserveRecovery/SealRecovery，历史观察不进原namespace；原journal原子封存并完整保留原件/HDD，冻结minor40 reader与迟到writer也拒绝。2561 Unit/174 Integration通过（7原生夹具跳过）、180容器Linux-root通过；实际固定systemd profile完整2MiB+7、真实停止/重启、历史摘要/封存与当前实例迟到发送拒绝通过，临时资源清理/11核心healthy。没有安装候选或开放恢复SQL/API/UI；59项继续active。[证据与剩余](qa/CONTAINER_UPLOAD_RECOVERY_SEAL.md)。
+
 - **2026-10-27 容器永久上传业务与界面候选，未部署**：SQL意图/Job/Outbox/共享发布保护、原登录接收、单次发布/持久取消调度及Vue上传确认生命周期已实现；minimum Agent40完整能力预检拒绝低版本新写。Release零警告错误，2501 Unit/174 Integration通过（7原生夹具明确跳过）；前端453单元/lint/格式/类型/生产构建通过。6fbca7b冻结隔离真实PG1执行/1通过/0跳过，包含双连接幂等及发布互斥；后续预检/WebUI不以该结果冒充整链验证。HTTP/Worker注册、独立容器Unknown管理员恢复、精确代理和真实BFF/Root/HDD/页面验收仍待，59项继续active。[证据与边界](qa/CONTAINER_FILE_UPLOAD_INTENTS.md)。
 
 - **2026-10-27 登录撤销安装及真实Worker门禁**：当前f5a0029六组件/HTTP一致、11核心healthy；双管理员登录中退出原会话后18次旧Cookie401，第二登录仍管理员，Worker自动取消原上传，无显式取消/无目标写入，锁/Outbox释放且审计/root拒收凭据保留。真实Valkey ACL缺TIME已最小补权并持久化；b764741生产类别原生1执行/1通过/0跳过，两CI五路success；OIDC双端退出、33MiB+7宿主完整上传/下载/留存、容器读取/中断/普通拒绝和PTY通过。真实320暗色/1440明色跨页退出已通过，进行中撤销、容器永久上传/共享写屏障/BFF/UI及全部59项继续。[完整边界](qa/BFF_LOGIN_LIVENESS.md)。

@@ -9,14 +9,14 @@ public sealed partial class FileTransferRunner
 {
     private static bool ContainerWriteAction(string action)
     {
-        if (action is "container-write:target" or "container-write:stage" or "container-write:publish" or "container-write:inspect" or "container-write:discard") return true;
+        if (action is "container-write:target" or "container-write:stage" or "container-write:publish" or "container-write:inspect" or "container-write:discard" or "container-write:recovery-observe" or "container-write:recovery-seal") return true;
         if (action.StartsWith("container-write:", StringComparison.Ordinal)) throw new ArgumentException("CONTAINER_UPLOAD_ACTION_INVALID");
         return false;
     }
 
     public async Task<JsonDocument> ContainerWriteOnceAsync(string action, string input, CancellationToken cancellationToken)
     {
-        if (action is not ("target" or "publish" or "inspect" or "discard")) throw new ArgumentException("CONTAINER_UPLOAD_ACTION_INVALID");
+        if (action is not ("target" or "publish" or "inspect" or "discard" or "recovery-observe" or "recovery-seal")) throw new ArgumentException("CONTAINER_UPLOAD_ACTION_INVALID");
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         lifetime.CancelAfter(TimeSpan.FromSeconds(action == "target" ? 30 : 650));
         using var driver = await StartAsync("container-write:" + action, input, lifetime.Token);
