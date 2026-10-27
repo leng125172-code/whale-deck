@@ -18,6 +18,7 @@ import sys
 import tempfile
 import time
 import uuid
+from urllib.parse import unquote
 
 import validate_container_file_publishing as owned
 from validate_container_file_write_agent import trusted
@@ -104,7 +105,7 @@ def main():
     evidence.mkdir(mode=0o700)
     with tempfile.TemporaryDirectory(prefix='wdv-recovery-wire-') as temporary, owned.fixture() as fixture:
         private = Path(temporary); sequence = 0
-        def call(action, kind, body, expected=0, anonymous=False, signed_body=None):
+        def call(action, kind, body, expected=0, anonymous=False, signed_body=None, expected_detail=None):
             nonlocal sequence
             global RPC_STATUS
             sequence += 1; payload = private / f'{sequence}.body'; headers = private / f'{sequence}.headers'
@@ -123,6 +124,9 @@ def main():
             statuses = re.findall(rb'(?im)^grpc-status:\s*([0-9]+)\s*$', headers.read_bytes())
             RPC_STATUS = {'method': action, 'expected': expected, 'actual': None if not statuses else int(statuses[-1])}
             assert statuses and int(statuses[-1]) == expected
+            if expected_detail is not None:
+                details = re.findall(rb'(?im)^grpc-message:[ \t]*(.*?)\r?$', headers.read_bytes())
+                assert details and unquote(details[-1].decode()).strip() == expected_detail
             if expected: return None
             raw = result.stdout; assert len(raw) >= 5 and raw[0] == 0 and len(raw) == 5 + int.from_bytes(raw[1:5], 'big')
             return raw[5:]
@@ -156,13 +160,15 @@ def main():
         PHASE = 'installed-seal-approval-and-durable-replay'
         def seal_body(expected_hash):
             return message([(1, original), (2, text(recovery)), (3, text(expected_hash)), (4, current)])
-        call('SealRecovery', 'ContainerUploadRecoveryRequest', seal_body('F'*64), expected=9)
+        call('SealRecovery', 'ContainerUploadRecoveryRequest', seal_body('F'*64), expected=10,
+             expected_detail='CONTAINER_UPLOAD_RECOVERY_OBSERVATION_CHANGED')
         assert not (STATE / (operation+'.json')).exists()
         sealed = observation(call('SealRecovery', 'ContainerUploadRecoveryRequest', seal_body(before['observationHash'])), scope)
         assert sealed['sealed'] and sealed['sealId'] == recovery
         assert observation(call('SealRecovery', 'ContainerUploadRecoveryRequest', seal_body(before['observationHash'])), scope) == sealed
         assert observation(call('ObserveRecovery', 'ContainerUploadReference', original), scope) == sealed
-        call('ObserveRecovery', 'ContainerUploadReference', changed, expected=9)
+        call('ObserveRecovery', 'ContainerUploadReference', changed, expected=7,
+             expected_detail='CONTAINER_UPLOAD_RECOVERY_SCOPE_CHANGED')
         PHASE = 'independent-quiescent-owned-missing-seal-proof-and-cleanup'
         lock = STATE / (operation+'.lock'); metadata = STATE / (operation+'.json')
         for path in (lock, metadata): assert stat.S_IMODE(trusted(path).st_mode) == 0o600
