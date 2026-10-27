@@ -102,6 +102,7 @@ public sealed partial class ContainerUploadGatewayTests
 
     [Theory]
     [InlineData("CONTAINER_NOT_RUNNING")][InlineData("CONTAINER_FILES_INSTANCE_CHANGED")]
+    [InlineData("CONTAINER_FILES_TARGET_MISSING")]
     [InlineData("CONTAINER_FILES_ROOT_CHANGED")][InlineData("CONTAINER_FILES_TARGET_CHANGED")]
     [InlineData("CONTAINER_UPLOAD_TARGET_CHANGED")][InlineData("CONTAINER_UPLOAD_PUBLISH_PARENT_CHANGED")]
     public async Task DefinitiveOriginalTargetFailuresUseAFixedBusinessMarker(string code)

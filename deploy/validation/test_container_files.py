@@ -36,6 +36,43 @@ def request(path='', **extra):
 
 
 class PolicyTests(unittest.TestCase):
+    def test_authoritative_docker_404_is_missing_target_before_any_root_descriptor(self):
+        class DockerFailure(Exception):
+            def __init__(self, status): self.status = status
+        docker = SimpleNamespace(DockerFailure=DockerFailure, registry=Mock(return_value=[]), api=Mock(side_effect=DockerFailure(404)))
+        scope = engine.ContainerRoot(request(), None, docker)
+        with patch.object(engine.os, 'pidfd_open', side_effect=AssertionError('must not open another process')):
+            with self.assertRaisesRegex(engine.Rejected, '^CONTAINER_FILES_TARGET_MISSING$'): scope.__enter__()
+        docker.api.assert_called_once_with('GET', '/containers/' + ID + '/json')
+        self.assertIsNone(scope.root); self.assertIsNone(scope.pidfd)
+
+    def test_authoritative_missing_target_is_also_detected_during_revalidation(self):
+        class DockerFailure(Exception):
+            def __init__(self, status): self.status = status
+        docker = SimpleNamespace(DockerFailure=DockerFailure, registry=Mock(return_value=[]), api=Mock(side_effect=DockerFailure(404)))
+        scope = engine.ContainerRoot(request(), None, docker); scope.current = Mock()
+        with self.assertRaisesRegex(engine.Rejected, '^CONTAINER_FILES_TARGET_MISSING$'): scope.revalidate()
+        scope.current.assert_called_once()
+
+    def test_other_docker_responses_are_not_evidence_the_target_or_operation_is_missing(self):
+        class DockerFailure(Exception):
+            def __init__(self, status): self.status = status
+        for status in (400, 401, 403, 409, 429, 500, 503):
+            failure = DockerFailure(status)
+            docker = SimpleNamespace(DockerFailure=DockerFailure, registry=Mock(return_value=[]), api=Mock(side_effect=failure))
+            with self.subTest(status=status), self.assertRaises(DockerFailure) as caught:
+                engine.ContainerRoot(request(), None, docker).__enter__()
+            self.assertIs(caught.exception, failure)
+
+    def test_unrelated_files_sockets_and_status_shaped_errors_stay_unclassified(self):
+        class DockerFailure(Exception): pass
+        class Untrusted(Exception): status = 404
+        for failure in (FileNotFoundError(errno.ENOENT, 'missing socket'), OSError(errno.EIO, 'read failure'), Untrusted(), ValueError('DOCKER_REQUEST_FAILED')):
+            docker = SimpleNamespace(DockerFailure=DockerFailure, registry=Mock(return_value=[]), api=Mock(side_effect=failure))
+            with self.subTest(kind=type(failure).__name__), self.assertRaises(type(failure)) as caught:
+                engine.ContainerRoot(request(), None, docker).__enter__()
+            self.assertIs(caught.exception, failure)
+
     def test_transport_errors_are_stable_and_do_not_echo_paths_or_exception_text(self):
         for number, code in ((errno.ELOOP, 'PATH_REJECTED'), (errno.EXDEV, 'PATH_REJECTED'), (errno.ENOTDIR, 'PATH_REJECTED'),
                 (errno.EACCES, 'ACCESS_DENIED'), (errno.EPERM, 'ACCESS_DENIED'), (errno.ENOENT, 'NOT_FOUND'),

@@ -63,7 +63,7 @@ try{
   await dialog.screenshot({path:join(fixture.evidence,'mobile-dark-seal-ready.png')})
   await dialog.getByRole('button',{name:'接受未知结果',exact:true}).click()
   const confirm=page.getByRole('dialog',{name:'明确接受历史不确定性',exact:true});await expect(confirm).toBeVisible()
-  await confirm.getByRole('button',{name:'取消',exact:true}).click();assert.equal(confirms,0)
+  await confirm.getByRole('button',{name:'暂不处置',exact:true}).click();assert.equal(confirms,0)
   await dialog.getByRole('button',{name:'接受未知结果',exact:true}).click()
   await confirm.getByRole('button',{name:'确认处置',exact:true}).click()
   let completed
@@ -78,8 +78,11 @@ try{
   assert.equal(registrations,1);assert.equal(confirms,1);assert.equal(contentRequests,0)
   assert.ok(await dialog.evaluate(element=>element.scrollWidth<=element.clientWidth+1));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))
   await dialog.screenshot({path:join(fixture.evidence,'mobile-dark-seal-completed.png')})
+  await writeFile(join(fixture.evidence,'browser-result.json'),JSON.stringify({revision,recoveryId,executionJobId:completed.executionJobId,
+    originalResolution:completed.originalResolution,registrations,confirms,contentRequests,fullSsoLogout:false}),{mode:0o600})
   phase='normal-logout-clears-private-recovery-page'
-  await dialog.getByRole('button',{name:'Close this dialog',exact:true}).click()
+  await dialog.locator('.el-dialog__headerbtn').click()
+  if(!await page.getByRole('button',{name:'打开用户菜单',exact:true}).isVisible())await page.getByRole('button',{name:'打开导航',exact:true}).click()
   await page.getByRole('button',{name:'打开用户菜单',exact:true}).click();await page.getByRole('menuitem',{name:'退出登录',exact:true}).click()
   await expect(page).toHaveURL(base+'/login',{timeout:30_000});await expect(dialog).toHaveCount(0)
   assert.equal((await context.request.get(base+'/api/v1/auth/me')).status(),401)

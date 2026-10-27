@@ -207,10 +207,22 @@ class ContainerRoot:
         self.request, self.files, self.docker = request, files, docker
         self.root = self.pidfd = None
 
+    def inspect_container(self):
+        try:
+            return self.docker.api('GET', '/containers/' + self.request['containerId'] + '/json')
+        except Exception as error:
+            # Only an authoritative 404 from this exact immutable Docker
+            # lookup proves the container disappeared. Missing HDD data, files,
+            # sockets and unrelated errors must never become "no operation".
+            failure = getattr(self.docker, 'DockerFailure', None)
+            if isinstance(failure, type) and isinstance(error, failure) and getattr(error, 'status', None) == 404:
+                raise Rejected('CONTAINER_FILES_TARGET_MISSING') from None
+            raise
+
     def __enter__(self):
         try:
             self.resources = self.docker.registry()
-            self.container = self.docker.api('GET', '/containers/' + self.request['containerId'] + '/json')
+            self.container = self.inspect_container()
             self.target = self.docker.target(self.container, self.request['containerId'], self.resources)
             if self.target['instanceId'] != self.request['instanceId']:
                 raise Rejected('CONTAINER_FILES_INSTANCE_CHANGED')
@@ -240,7 +252,7 @@ class ContainerRoot:
     def revalidate(self):
         self.current()
         resources = self.docker.registry()
-        container = self.docker.api('GET', '/containers/' + self.request['containerId'] + '/json')
+        container = self.inspect_container()
         target = self.docker.target(container, self.request['containerId'], resources)
         if resources != self.resources or target != self.target or mount_fingerprint(container) != self.mounts:
             raise Rejected('CONTAINER_FILES_TARGET_CHANGED')

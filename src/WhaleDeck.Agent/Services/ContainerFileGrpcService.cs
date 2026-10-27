@@ -133,7 +133,7 @@ internal static partial class ContainerFilePolicy
             "CONTAINER_FILES_TIMEOUT" or "CONTAINER_FILES_INPUT_TIMEOUT" => StatusCode.DeadlineExceeded,
             "CONTAINER_FILES_CLIENT_DISCONNECTED" => StatusCode.Cancelled,
             "CONTAINER_FILES_NOT_FOUND" => StatusCode.NotFound,
-            "CONTAINER_FILES_INSTANCE_CHANGED" or "CONTAINER_FILES_TARGET_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or "CONTAINER_NOT_RUNNING" => StatusCode.FailedPrecondition,
+            "CONTAINER_FILES_INSTANCE_CHANGED" or "CONTAINER_FILES_TARGET_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or "CONTAINER_FILES_TARGET_MISSING" or "CONTAINER_NOT_RUNNING" => StatusCode.FailedPrecondition,
             _ => StatusCode.Unavailable
         };
         var known = status != StatusCode.Unavailable;

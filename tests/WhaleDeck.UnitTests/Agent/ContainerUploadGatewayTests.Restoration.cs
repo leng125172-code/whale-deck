@@ -9,6 +9,16 @@ namespace WhaleDeck.UnitTests.Agent;
 
 public sealed partial class ContainerUploadGatewayTests
 {
+    [Fact]
+    public void MissingContainerIsAFixedPreconditionAcrossReadWriteAndHistoryPolicies()
+    {
+        const string code = "CONTAINER_FILES_TARGET_MISSING";
+        foreach (var error in new[] { ContainerFilePolicy.Failure(code), ContainerUploadPolicy.Failure(code), ContainerHistoryPolicy.Failure(code) })
+        {
+            Assert.Equal(StatusCode.FailedPrecondition, error.StatusCode);
+            Assert.Equal(code, error.Status.Detail);
+        }
+    }
     private static WhaleDeck.Application.Models.ContainerFileRestoreSourceDto RestorationSource =>
         new("dd0a8865343e49bdb01a72680131bf39", new('C', 64), "历史/原始.bin");
 

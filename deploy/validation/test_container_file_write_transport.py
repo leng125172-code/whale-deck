@@ -22,6 +22,9 @@ publishing = staging.load('whaledeck-container-publish.py', 'container_write_tra
 
 
 class ContainerWriteErrorTests(unittest.TestCase):
+    def test_missing_container_is_not_missing_durable_receipt_or_hdd_content(self):
+        self.assertEqual(driver.error_code(driver.Rejected('CONTAINER_FILES_TARGET_MISSING')), 'CONTAINER_FILES_TARGET_MISSING')
+        self.assertEqual(driver.error_code(FileNotFoundError(errno.ENOENT, 'missing historical storage')), 'CONTAINER_UPLOAD_UNAVAILABLE')
     def test_missing_storage_is_not_evidence_that_the_operation_never_existed(self):
         self.assertEqual(driver.error_code(FileNotFoundError(errno.ENOENT, 'private source or HDD path')), 'CONTAINER_UPLOAD_UNAVAILABLE')
         self.assertEqual(driver.error_code(driver.Rejected('CONTAINER_UPLOAD_NOT_FOUND')), 'CONTAINER_UPLOAD_NOT_FOUND')

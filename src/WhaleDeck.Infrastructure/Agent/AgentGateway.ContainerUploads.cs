@@ -130,7 +130,7 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
         ContainerFileUploadReceiptDto result;
         try { result = UploadReceipt(await call, request); }
         catch (RpcException error) when (error.StatusCode == StatusCode.FailedPrecondition && error.Status.Detail is
-            "CONTAINER_NOT_RUNNING" or "CONTAINER_FILES_INSTANCE_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or
+            "CONTAINER_NOT_RUNNING" or "CONTAINER_FILES_INSTANCE_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or "CONTAINER_FILES_TARGET_MISSING" or
             "CONTAINER_FILES_TARGET_CHANGED" or "CONTAINER_UPLOAD_TARGET_CHANGED" or "CONTAINER_UPLOAD_PUBLISH_PARENT_CHANGED")
         { throw new ContainerFileUploadTargetUnavailableException(); }
         if (action == "Discard" && cancellationFence && result.Upload.State is not ("Prevented" or "Discarded" or "PublishDiscarded")) throw UploadOutput();
