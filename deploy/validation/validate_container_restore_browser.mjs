@@ -54,27 +54,38 @@ try {
   const history=page.getByRole('dialog',{name:'容器文件历史版本',exact:true});await expect(history).toBeVisible()
   let capture=fixture.initialCapture
   const restores=[]
-  for(let index=0;index<2;index++){
+  for(let index=0;index<4;index++){
     phase=index===0?'desktop-light-full-hdd-restoration':'mobile-dark-replacement-version-restoration'
     if(index===1){await page.setViewportSize({width:320,height:1000});await page.emulateMedia({colorScheme:'dark'});await history.getByRole('button',{name:'刷新历史',exact:true}).click()}
-    const restore=history.getByRole('button',{name:`恢复 work/original.bin ${capture.slice(0,12)}`,exact:true})
+    if(index===2)capture=fixture.initialCapture
+    if(index===3)capture=restores[0].id.replaceAll('-','')
+    const destination=index<2?'work/original.bin':'work/recovered.bin'
+    const restore=history.getByRole('button',{name:`${index<2?'恢复':'恢复到其他路径'} work/original.bin ${capture.slice(0,12)}`,exact:true})
+    async function prepare(){
+      await restore.click()
+      if(index>=2){
+        const choice=page.getByRole('dialog',{name:'选择恢复目标',exact:true})
+        await choice.getByRole('textbox',{name:'恢复目标相对路径',exact:true}).fill(destination)
+        await choice.getByRole('button',{name:'核对恢复目标',exact:true}).click()
+      }
+    }
     const planning=page.waitForRequest(request=>request.method()==='POST'&&new URL(request.url()).pathname===endpoint+'/plan')
-    await restore.click();const requested=(await planning).postDataJSON();assert.equal(requested.captureId,capture);assert.match(requested.expectedCaptureHash,/^[A-F0-9]{64}$/);assert.match(requested.expectedVersion,/^[A-F0-9]{64}$/)
+    await prepare();const requested=(await planning).postDataJSON();assert.equal(requested.path,destination);assert.equal(requested.captureId,capture);assert.match(requested.expectedCaptureHash,/^[A-F0-9]{64}$/);if(index===2)assert.equal(requested.expectedVersion,'ABSENT');else assert.match(requested.expectedVersion,/^[A-F0-9]{64}$/)
     const confirmation=page.getByRole('dialog',{name:'确认恢复容器文件',exact:true});await expect(confirmation).toBeVisible()
     assert.ok(await confirmation.evaluate(element=>element.scrollWidth<=element.clientWidth+1))
-    await confirmation.screenshot({path:join(fixture.evidence,index===0?'desktop-light-confirm.png':'mobile-dark-confirm.png')})
+    await confirmation.screenshot({path:join(fixture.evidence,index===0?'desktop-light-confirm.png':index===1?'mobile-dark-confirm.png':`alternate-${index}-confirm.png`)})
     await confirmation.getByRole('button',{name:'取消',exact:true}).click();assert.equal(registrations,index);assert.equal(bodies,0)
-    await restore.click();await expect(confirmation).toBeVisible()
+    await prepare();await expect(confirmation).toBeVisible()
     const accepted=page.waitForResponse(response=>response.request().method()==='POST'&&new URL(response.url()).pathname===endpoint&&response.status()===202)
     await confirmation.getByRole('button',{name:'确认并恢复',exact:true}).click()
     const intent=await(await accepted).json();assert.match(intent.id,/^[a-f0-9-]{36}$/)
     await expect(history.getByText('已恢复',{exact:true})).toBeVisible({timeout:120_000})
     const completed=await(await context.request.get(base+endpoint+'/'+intent.id)).json()
-    assert.equal(completed.state,'Succeeded');assert.equal(completed.previousRetained,true)
-    restores.push({id:intent.id,sourceCapture:capture,originalVersion:requested.expectedVersion,publishedVersion:completed.publishedVersion})
+    assert.equal(completed.state,'Succeeded');assert.equal(completed.previousRetained,index!==2)
+    restores.push({id:intent.id,sourceCapture:capture,destination,originalVersion:requested.expectedVersion,publishedVersion:completed.publishedVersion})
     assert.equal(registrations,index+1);assert.equal(bodies,0);assert.ok((await Promise.all(headers)).every(Boolean))
     assert.ok(await history.evaluate(element=>element.scrollWidth<=element.clientWidth+1));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))
-    await history.screenshot({path:join(fixture.evidence,index===0?'desktop-light-history.png':'mobile-dark-history.png')})
+    await history.screenshot({path:join(fixture.evidence,index===0?'desktop-light-history.png':index===1?'mobile-dark-history.png':`alternate-${index}-history.png`)})
     await writeFile(join(fixture.evidence,'results.json'),JSON.stringify({revision,restores,bodyRequests:bodies,fullSsoLogout:false}),{mode:0o600})
     capture=intent.id.replaceAll('-','')
   }
@@ -84,11 +95,11 @@ try {
   const confirmation=page.getByRole('dialog',{name:'确认恢复容器文件',exact:true});await expect(confirmation).toBeVisible()
   const other=await context.newPage();await other.goto(base+'/');await other.getByRole('button',{name:'打开用户菜单',exact:true}).click();await other.getByRole('menuitem',{name:'退出登录',exact:true}).click()
   await expect(other).toHaveURL(base+'/login',{timeout:30_000});await expect(page).toHaveURL(base+'/login?returnUrl=/containers',{timeout:30_000})
-  await expect(confirmation).toHaveCount(0);await expect(history).toHaveCount(0);assert.equal(registrations,2);assert.equal(bodies,0)
+  await expect(confirmation).toHaveCount(0);await expect(history).toHaveCount(0);assert.equal(registrations,4);assert.equal(bodies,0)
   assert.equal((await context.request.get(base+'/api/v1/auth/me')).status(),401)
   assert.ok([401,403].includes((await context.request.get(origin.origin.replace(':8080',':8081')+'/api/v3/core/users/me/')).status()))
   await writeFile(join(fixture.evidence,'results.json'),JSON.stringify({revision,restores,bodyRequests:bodies,fullSsoLogout:true}),{mode:0o600})
-  await context.close();console.log(JSON.stringify({installedContainerRestoreBrowser:'passed',revision,restores:2,bodyRequests:0,fullSsoLogout:true}))
+  await context.close();console.log(JSON.stringify({installedContainerRestoreBrowser:'passed',revision,restores:4,bodyRequests:0,fullSsoLogout:true}))
 }catch(error){
   const locations=[...(error?.stack??'').matchAll(/validate_container_restore_browser\.mjs:([0-9]+):([0-9]+)/g)].map(match=>({line:Number(match[1]),column:Number(match[2])}))
   console.error(JSON.stringify({installedContainerRestoreBrowser:'failed',phase,failureType:error?.constructor?.name??'Error',locations}));process.exitCode=1

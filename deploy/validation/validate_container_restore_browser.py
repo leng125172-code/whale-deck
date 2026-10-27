@@ -75,16 +75,20 @@ def main():
                 except ValueError:pass
             raise AssertionError('RESTORE_BROWSER_NOT_VERIFIED')
         results=evidence/'results.json';assert stat.S_IMODE(trusted(results).st_mode)==0o600
-        observed=json.loads(results.read_bytes());assert observed['revision']==revision and observed['fullSsoLogout'] and observed['bodyRequests']==0 and len(observed['restores'])==2
+        observed=json.loads(results.read_bytes());assert observed['revision']==revision and observed['fullSsoLogout'] and observed['bodyRequests']==0 and len(observed['restores'])==4
         PHASE='independent-immutable-source-sql-root-inode-and-full-hdd'
         previous_identity=initial_record['publication']['pendingProof'];expected_source=initial_capture
         for index,restored in enumerate(observed['restores']):
             value=snapshot(restored['id'],'restore');terminal(value,'Succeeded','CONTAINER_UPLOAD_PUBLISHED','Succeeded');row=value['row']
-            expected=fixture['old'] if index==0 else replacement;displaced=replacement if index==0 else fixture['old']
-            assert row['container_id']==fixture['identifier'] and row['instance_id']==target['instanceId'] and row['relative_path']=='work/original.bin'
+            if index==2:expected_source=initial_capture
+            if index==3:expected_source=uuid.UUID(observed['restores'][0]['id']).hex
+            expected=fixture['old'] if index%2==0 else replacement;displaced=replacement if index==0 else fixture['old']
+            destination='work/original.bin' if index<2 else 'work/recovered.bin'
+            assert row['container_id']==fixture['identifier'] and row['instance_id']==target['instanceId'] and row['relative_path']==destination and restored['destination']==destination
             assert row['size_bytes']==len(expected) and row['sha256']==hashlib.sha256(expected).hexdigest().upper() and row['expected_version']==restored['originalVersion'] and row['published_version']==restored['publishedVersion']
-            if index:assert restored['originalVersion']==observed['restores'][index-1]['publishedVersion']
-            source=json.loads(row['history_source_json']);assert source['CaptureId']==expected_source and source['Sha256']==row['sha256'] and source['Path']==row['relative_path'] and source['ContainerId']==row['container_id']
+            if index in (1,3):assert restored['originalVersion']==observed['restores'][index-1]['publishedVersion']
+            if index==2:assert restored['originalVersion']=='ABSENT'
+            source=json.loads(row['history_source_json']);assert source['CaptureId']==expected_source and source['Sha256']==row['sha256'] and source['Path']=='work/original.bin' and source['ContainerId']==row['container_id']
             if index==0:assert source['OriginalInstanceId']==original_instance and source['OriginalInstanceId']!=row['instance_id']
             capture_json=json.loads((history/(expected_source+'.json')).read_bytes())
             actual_hash=hashlib.sha256(b'whaledeck-container-history-v1\ncapture\n'+json.dumps(capture_json,sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False).encode()).hexdigest().upper()
@@ -92,21 +96,27 @@ def main():
             catalog=query("SELECT to_jsonb(v) FROM container_file_versions v WHERE id=:'id'::uuid;",id=str(uuid.UUID(expected_source)))
             assert catalog['container_id']==row['container_id'] and catalog['capture_hash']==source['CaptureHash'] and catalog['sha256']==source['Sha256']
             job=query("SELECT json_build_object('type',job_type) FROM operation_jobs WHERE id=:'id'::uuid;",id=row['id']);assert job['type']=='containers.files.restore'
-            record=root_receipt(row);assert record['state']=='Published' and record['originalCapture']['originalIdentity']==previous_identity
+            record=root_receipt(row);assert record['state']=='Published'
+            if index==2:assert record.get('originalCapture') is None
+            else:assert record['originalCapture']['originalIdentity']==previous_identity
             previous_identity=record['publication']['pendingProof'];capture=uuid.UUID(row['id']).hex
             staged=Path('/var/lib/whaledeck-container-uploads')/(capture+'.data');assert stat.S_IMODE(trusted(staged).st_mode)==0o600 and staged.read_bytes()==expected
-            retained=fixture['folder']/fixture['private']/(capture+'.upload');assert retained.read_bytes()==displaced and retained.stat().st_nlink==1
-            assert (retained.stat().st_uid,retained.stat().st_gid,stat.S_IMODE(retained.stat().st_mode))==(1000,1000,0o640)
-            fixture['privateProofs'][retained.name]=owned.common.fingerprint(retained),hashlib.sha256(displaced).hexdigest().upper()
-            metadata=json.loads((history/(capture+'.json')).read_bytes());assert metadata['sha256']==hashlib.sha256(displaced).hexdigest().upper() and (history/(capture+'.data')).read_bytes()==displaced
+            if index!=2:
+                retained=fixture['folder']/fixture['private']/(capture+'.upload');assert retained.read_bytes()==displaced and retained.stat().st_nlink==1
+                assert (retained.stat().st_uid,retained.stat().st_gid,stat.S_IMODE(retained.stat().st_mode))==(1000,1000,0o640 if index<2 else 0o600)
+                fixture['privateProofs'][retained.name]=owned.common.fingerprint(retained),hashlib.sha256(displaced).hexdigest().upper()
+                metadata=json.loads((history/(capture+'.json')).read_bytes());assert metadata['sha256']==hashlib.sha256(displaced).hexdigest().upper() and (history/(capture+'.data')).read_bytes()==displaced
             expected_source=capture
         assert output.read_bytes()==replacement and (history/(initial_capture+'.json')).read_bytes()==source_meta and owned.common.fingerprint(history/(initial_capture+'.data'))==source_data
         assert output.stat().st_nlink==1 and (output.stat().st_uid,output.stat().st_gid,stat.S_IMODE(output.stat().st_mode))==(1000,1000,0o640)
         fixture['proofs']['original.bin']=owned.common.fingerprint(output),sha
-        save('verified.json',{'revision':revision,'actualBrowserRestores':2,'fullBytesEach':owned.common.SIZE,'oldCaptureAfterActualRestart':True,
+        recovered=fixture['folder']/'recovered.bin'
+        assert recovered.read_bytes()==replacement and (recovered.stat().st_uid,recovered.stat().st_gid,stat.S_IMODE(recovered.stat().st_mode))==(1000,1000,0o600)
+        fixture['proofs']['recovered.bin']=owned.common.fingerprint(recovered),sha
+        save('verified.json',{'revision':revision,'actualBrowserRestores':4,'alternateDestinationCreateAndOverwrite':True,'fullBytesEach':owned.common.SIZE,'oldCaptureAfterActualRestart':True,
             'sourceCatalogSqlRootHddAndOldInodesVerified':True,'zeroBrowserBodies':True,'normalTwoPageLogout':True,'permanentEvidenceRetained':True})
     logout(base,session);session.close()
-    print(json.dumps({'installedContainerRestoreBrowser':'passed','revision':revision,'restores':2,'fullBytesEach':owned.common.SIZE,
+    print(json.dumps({'installedContainerRestoreBrowser':'passed','revision':revision,'restores':4,'fullBytesEach':owned.common.SIZE,
         'desktopLightMobileDark':True,'sourceAfterActualRestart':True,'ownedContainerAndSourceCleaned':True,'permanentEvidenceRetained':True,'evidence':str(evidence)}),flush=True)
 
 

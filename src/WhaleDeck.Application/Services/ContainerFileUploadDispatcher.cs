@@ -56,7 +56,7 @@ public sealed class ContainerFileUploadDispatcher(IContainerFileUploadRepository
                     if (!await repository.BeginRestoreReceiveAsync(row, clock.GetUtcNow(), cancellationToken))
                     { await repository.DeferAsync(row, cancellationToken); return true; }
                     var source = ContainerFileRestoreValidation.Read(row.HistorySourceJson);
-                    var location = new ContainerFileLocationDto(row.ContainerId, row.InstanceId, row.RelativePath);
+                    var location = ContainerFileRestoreValidation.SourceLocation(new(row.ContainerId, row.InstanceId, row.RelativePath), source);
                     receipt = await TransferWithLease(row, token => gateway.StageContainerFileAsync(ContainerFileUploadIntentValidation.Stage(row),
                         history.ReadContainerHistorySourceAsync(location, source, token), token), cancellationToken);
                     Identity(receipt);

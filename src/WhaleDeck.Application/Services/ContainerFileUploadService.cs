@@ -49,7 +49,7 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
         if (historySourceJson is not null)
         {
             var source = ContainerFileRestoreValidation.Read(historySourceJson);
-            ContainerFileHistoryValidation.Source(claims.Target.Location, source);
+            _ = ContainerFileRestoreValidation.SourceLocation(claims.Target.Location, source);
             if (source.SizeBytes != claims.SizeBytes || source.Sha256 != claims.Sha256) throw ContainerFileRestoreValidation.Invalid();
         }
         if (claims.Actor != actor.Subject || claims.LoginBinding != actor.LoginBinding || claims.Target.Location.ContainerId != containerId)

@@ -36,8 +36,17 @@ public static class ContainerFileRestoreValidation
         if (claims is null || claims.Source is null || claims.Target is null) throw Invalid();
         ContainerFileUploadIntentValidation.Claims(new(claims.Actor, claims.LoginBinding, claims.Target, claims.Source.SizeBytes,
             claims.Source.Sha256, claims.CreatedAtUtc, claims.ExpiresAtUtc));
-        ContainerFileHistoryValidation.Source(claims.Target.Location, claims.Source);
+        _ = SourceLocation(claims.Target.Location, claims.Source);
         _ = Snapshot(claims.Source);
+    }
+    // The live instance authorizes access to this container's history. Its
+    // source path stays immutable even when publication targets another path.
+    public static ContainerFileLocationDto SourceLocation(ContainerFileLocationDto target, ContainerHistoryEntryDto source)
+    {
+        ContainerFileValidation.Location(target);
+        var location = target with { Path = source.Path };
+        ContainerFileHistoryValidation.Source(location, source);
+        return location;
     }
     public static void Exact(JsonElement value, IReadOnlySet<string> fields)
     {

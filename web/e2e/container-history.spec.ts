@@ -67,6 +67,7 @@ async function setup(
       path = new URL(request.url()).pathname
     if (path === base + '/restores/plan') {
       state.plans.push(request.postDataJSON())
+      intent.location.path = String(request.postDataJSON().path)
       return route.fulfill({
         json: {
           planHash: 'signed-hdd-plan',
@@ -260,3 +261,31 @@ test('a history record from another container cannot become a source', async ({ 
   expect(state.plans).toHaveLength(0)
   expect(state.creates).toHaveLength(0)
 })
+
+for (const width of [320, 1440])
+  test(`${width}: alternate destination is inspected, confirmed and frozen through a lost registration response`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const { state, source, history, control } = await setup(page, { lost: true })
+    await history.getByRole('button', { name: `恢复到其他路径 ${source.path} ${source.captureId.slice(0,12)}`, exact: true }).click()
+    const destination = page.getByRole('dialog', { name: '选择恢复目标', exact: true })
+    await destination.getByRole('textbox', { name: '恢复目标相对路径', exact: true }).fill('../escape.bin')
+    await destination.getByRole('button', { name: '核对恢复目标', exact: true }).click()
+    await expect(destination.getByText(/请输入容器内有效的相对文件路径/)).toBeVisible()
+    expect(state.plans).toHaveLength(0)
+    const path = '恢复副本/另一份中文.bin'
+    await destination.getByRole('textbox', { name: '恢复目标相对路径', exact: true }).fill(path)
+    await destination.getByRole('button', { name: '核对恢复目标', exact: true }).click()
+    const confirmation = page.getByRole('dialog', { name: '确认恢复容器文件', exact: true })
+    await expect(confirmation.getByText(`历史来源：${source.path}`, { exact: true })).toBeVisible()
+    await expect(confirmation.getByText(`恢复目标：${path}`, { exact: true })).toBeVisible()
+    expect(state.plans[0]?.path).toBe(path)
+    expect(control.state.requests.some(request => request.path.endsWith('/files/entry') && request.query.path === path)).toBe(true)
+    await confirmation.getByRole('button', { name: '确认并恢复', exact: true }).click()
+    await history.getByRole('button', { name: '重试登记原任务', exact: true }).click()
+    await expect(history.getByText('已恢复', { exact: true })).toBeVisible()
+    expect(state.creates).toHaveLength(2)
+    expect(state.creates[0]).toEqual(state.creates[1])
+    expect(state.plans).toHaveLength(1)
+    expect(control.state.contentBodies).toHaveLength(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
+  })

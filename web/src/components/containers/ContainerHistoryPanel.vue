@@ -17,6 +17,7 @@ import {
   containerUploadTerminal,
   inspectContainerUploadEntry,
   newContainerUploadRegistration,
+  validContainerUploadLocation,
 } from '@/services/containerUploads'
 import type {
   ContainerUploadIntent,
@@ -35,6 +36,10 @@ const visible = ref(false),
   version = ref('')
 const entries = ref<ContainerHistoryEntry[]>([])
 const incomplete = ref(0)
+const destinationVisible = ref(false),
+  destination = ref(''),
+  restorePath = ref('')
+const destinationSource = ref<ContainerHistoryEntry | null>(null)
 const selected = ref<ContainerHistoryEntry | null>(null),
   plan = ref<FilePlan | null>(null)
 const frozen = ref<ContainerUploadRegistration | null>(null),
@@ -78,6 +83,10 @@ function clear() {
   version.value = ''
   incomplete.value = 0
   selected.value = null
+  destinationSource.value = null
+  destinationVisible.value = false
+  destination.value = ''
+  restorePath.value = ''
   plan.value = null
   frozen.value = null
   intent.value = null
@@ -157,7 +166,13 @@ async function query() {
   if (timer !== null) window.clearTimeout(timer)
   timer = null
   try {
-    const next = await getContainerRestore(props.target, source, row.id, local.signal)
+    const next = await getContainerRestore(
+      props.target,
+      source,
+      restorePath.value,
+      row.id,
+      local.signal,
+    )
     if (token !== generation || local.signal.aborted) return
     accept(next)
     if (next.state === 'Succeeded' && refreshed !== next.id) {
@@ -175,7 +190,7 @@ async function query() {
     }
   }
 }
-async function prepare(source: ContainerHistoryEntry) {
+async function prepare(source: ContainerHistoryEntry, path = source.path) {
   if (
     !allowed.value ||
     props.disabled ||
@@ -186,6 +201,16 @@ async function prepare(source: ContainerHistoryEntry) {
   )
     return
   const target = { ...props.target }
+  if (
+    !validContainerUploadLocation({
+      containerId: target.containerId,
+      instanceId: target.instanceId,
+      path,
+    })
+  ) {
+    error.value = '请输入容器内有效的相对文件路径；目标目录必须已存在'
+    return
+  }
   source = { ...source }
   stop()
   const token = generation,
@@ -195,18 +220,22 @@ async function prepare(source: ContainerHistoryEntry) {
   error.value = ''
   intent.value = null
   try {
-    const current = await inspectContainerUploadEntry(target, source.path, local.signal)
+    const current = await inspectContainerUploadEntry(target, path, local.signal)
     if (token !== generation || local.signal.aborted) return
     if (current && (current.kind !== 'File' || current.isProtected))
       throw new Error('当前目标是目录、链接或受保护文件，无法恢复')
     const result = await planContainerRestore(
       target,
       source,
+      path,
       current?.version ?? 'ABSENT',
       local.signal,
     )
     if (token !== generation || local.signal.aborted) return
     selected.value = { ...source }
+    restorePath.value = path
+    destinationVisible.value = false
+    destinationSource.value = null
     plan.value = result
     confirming.value = true
   } catch (reason) {
@@ -242,7 +271,13 @@ async function submit() {
   busy.value = true
   error.value = ''
   try {
-    const row = await createContainerRestore(props.target, source, frozen.value, local.signal)
+    const row = await createContainerRestore(
+      props.target,
+      source,
+      restorePath.value,
+      frozen.value,
+      local.signal,
+    )
     if (token !== generation || local.signal.aborted) return
     accept(row)
     frozen.value = null
@@ -277,6 +312,16 @@ async function cancel() {
   }
   if (token === generation) await query()
 }
+function chooseDestination(source: ContainerHistoryEntry) {
+  if (!allowed.value || props.disabled || busy.value || active.value || frozen.value) return
+  destinationSource.value = { ...source }
+  destination.value = source.path
+  error.value = ''
+  destinationVisible.value = true
+}
+function prepareDestination() {
+  if (destinationSource.value) void prepare(destinationSource.value, destination.value)
+}
 function dismissConfirmation() {
   confirming.value = false
   plan.value = null
@@ -294,7 +339,8 @@ watch(
   { flush: 'sync' },
 )
 watch(
-  () => busy.value || confirming.value || !!frozen.value || active.value,
+  () =>
+    busy.value || destinationVisible.value || confirming.value || !!frozen.value || active.value,
   (value) => emit('locked', value),
   { immediate: true },
 )
@@ -312,7 +358,9 @@ defineExpose({ open })
     :close-on-click-modal="false"
   >
     <section class="container-history" aria-label="容器历史版本">
-      <p>仅恢复到同一容器的原路径；备份内容会在任务中完整校验。关闭窗口不会取消已登记任务。</p>
+      <p>
+        可恢复到同一容器的原路径或其他已存在目录中的文件路径；内容会在任务中完整校验。关闭窗口不会取消已登记任务。
+      </p>
       <p v-if="scope" class="container-history__path">{{ scope }}</p>
       <el-alert v-if="error" :title="error" type="error" :closable="false" />
       <div class="container-history__actions">
@@ -344,11 +392,16 @@ defineExpose({ open })
           :aria-label="`恢复 ${entry.path} ${entry.captureId.slice(0, 12)}`"
           @click="prepare(entry)"
           >恢复</el-button
+        ><el-button
+          :disabled="disabled || busy || active || !!frozen || entry.availability !== 'Present'"
+          :aria-label="`恢复到其他路径 ${entry.path} ${entry.captureId.slice(0, 12)}`"
+          @click="chooseDestination(entry)"
+          >恢复到…</el-button
         >
       </div>
       <el-empty
         v-if="!entries.length && !busy && !error"
-        description="暂无历史版本"
+        :description="cursor ? '本页暂无匹配版本，可继续加载历史' : '暂无历史版本'"
         :image-size="48"
       />
       <el-button
@@ -382,6 +435,31 @@ defineExpose({ open })
   </el-dialog>
   <el-dialog
     v-if="allowed"
+    v-model="destinationVisible"
+    title="选择恢复目标"
+    width="min(520px, calc(100vw - 24px))"
+    append-to-body
+    :close-on-click-modal="false"
+    :close-on-press-escape="false"
+  >
+    <p class="container-history__path">历史来源：{{ destinationSource?.path }}</p>
+    <p>填写同一容器内的相对文件路径。目标目录须已存在；下一步核对目标版本并确认覆盖。</p>
+    <el-input
+      v-model="destination"
+      aria-label="恢复目标相对路径"
+      :disabled="busy"
+      @keyup.enter="prepareDestination"
+    />
+    <el-alert v-if="error" :title="error" type="error" :closable="false" />
+    <template #footer>
+      <el-button :disabled="busy" @click="destinationVisible = false">取消</el-button>
+      <el-button type="primary" :disabled="busy || disabled" @click="prepareDestination"
+        >核对恢复目标</el-button
+      >
+    </template>
+  </el-dialog>
+  <el-dialog
+    v-if="allowed"
     v-model="confirming"
     title="确认恢复容器文件"
     width="min(520px, calc(100vw - 24px))"
@@ -389,7 +467,8 @@ defineExpose({ open })
     :close-on-click-modal="false"
     :close-on-press-escape="false"
   >
-    <p class="container-history__path">{{ selected?.path }}</p>
+    <p class="container-history__path">历史来源：{{ selected?.path }}</p>
+    <p class="container-history__path">恢复目标：{{ restorePath }}</p>
     <p v-if="selected">
       {{ formatBytes(selected.sizeBytes) }} ·
       {{ new Date(selected.createdAtUnixMs).toLocaleString() }}

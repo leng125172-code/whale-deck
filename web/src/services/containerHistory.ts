@@ -181,10 +181,19 @@ function source(target: ContainerFileTarget, entry: ContainerHistoryEntry) {
 export async function planContainerRestore(
   target: ContainerFileTarget,
   entry: ContainerHistoryEntry,
+  destination: string,
   expectedVersion: string,
   signal: AbortSignal,
 ) {
   source(target, entry)
+  if (
+    !validContainerUploadLocation({
+      containerId: target.containerId,
+      instanceId: target.instanceId,
+      path: destination,
+    })
+  )
+    throw new Error('恢复目标路径无效')
   if (expectedVersion !== 'ABSENT' && !hash.test(expectedVersion))
     throw new Error('当前文件版本无法核实')
   return assertContainerUploadPlan(
@@ -193,7 +202,7 @@ export async function planContainerRestore(
       signal,
       body: JSON.stringify({
         instanceId: target.instanceId,
-        path: entry.path,
+        path: destination,
         captureId: entry.captureId,
         expectedCaptureHash: entry.captureHash,
         expectedVersion,
@@ -204,6 +213,7 @@ export async function planContainerRestore(
 export async function createContainerRestore(
   target: ContainerFileTarget,
   entry: ContainerHistoryEntry,
+  destination: string,
   registration: ContainerUploadRegistration,
   signal: AbortSignal,
 ) {
@@ -215,12 +225,13 @@ export async function createContainerRestore(
       headers: { 'Idempotency-Key': registration.idempotencyKey },
       body: JSON.stringify(registration),
     }),
-    { target, path: entry.path, sizeBytes: entry.sizeBytes, sha256: entry.sha256 },
+    { target, path: destination, sizeBytes: entry.sizeBytes, sha256: entry.sha256 },
   )
 }
 export async function getContainerRestore(
   target: ContainerFileTarget,
   entry: ContainerHistoryEntry,
+  destination: string,
   id: string,
   signal: AbortSignal,
 ) {
@@ -232,7 +243,7 @@ export async function getContainerRestore(
       `${containerFileBase(target.containerId)}/restores/${id}`,
       { signal },
     ),
-    { target, path: entry.path, sizeBytes: entry.sizeBytes, sha256: entry.sha256 },
+    { target, path: destination, sizeBytes: entry.sizeBytes, sha256: entry.sha256 },
   )
 }
 export async function cancelContainerRestore(

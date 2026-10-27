@@ -18,7 +18,7 @@ public sealed class ContainerHistoryController(ContainerFileHistoryService histo
         [FromQuery] string after = "", [FromQuery] int take = 50, [FromQuery] string expectedVersion = "", CancellationToken cancellationToken = default) =>
         Ok(await history.ListAsync((await identity.ReadAsync(HttpContext)).Actor, new(containerId, instanceId, path), after, take, expectedVersion, cancellationToken));
 
-    /// <summary>Five-minute restoration plan binding current target, original login and exact HDD source metadata. Full source bytes are verified by Worker before staging can commit.</summary>
+    /// <summary>Five-minute restoration plan binding an independently selected same-container destination, original login and exact HDD source metadata. Full source bytes are verified by Worker before staging can commit.</summary>
     [HttpPost("restores/plan")]
     public async Task<ActionResult<FileUploadPlanDto>> Plan(string containerId, ContainerRestorePlanBody command, CancellationToken cancellationToken) =>
         Ok(await restores.PlanAsync((await identity.ReadAsync(HttpContext)).Actor,

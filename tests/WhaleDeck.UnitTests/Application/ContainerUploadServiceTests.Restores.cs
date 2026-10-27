@@ -48,14 +48,64 @@ public sealed partial class ContainerUploadServiceTests
         Assert.Equal(0,fixture.Gateway.Inspections); Assert.Equal(0,fixture.Repository.Enqueued);
     }
     [Fact]
-    public async Task CrossPathCaptureAndChangedCaptureHashAreRejectedBeforeTargetInspection()
+    public async Task CrossContainerCaptureAndChangedCaptureHashAreRejectedBeforeTargetInspection()
     {
         using var fixture = new Fixture(); var source = Source(fixture); var command = RestoreCommand(fixture,source);
-        var catalog = new Catalog { Entry = source with { Path = "another/file.bin" } }; var service = Restores(fixture,catalog);
+        var catalog = new Catalog { Entry = source with { ContainerId = new('b',64) } }; var service = Restores(fixture,catalog);
         await Assert.ThrowsAnyAsync<Exception>(()=>service.PlanAsync(fixture.Actor,command,default));
         catalog.Entry = source with { CaptureHash = new('E',64) };
         await Assert.ThrowsAsync<InvalidOperationException>(()=>service.PlanAsync(fixture.Actor,command,default));
+        catalog.Entry = source with { CaptureId = Guid.NewGuid().ToString("N") };
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>service.PlanAsync(fixture.Actor,command,default));
         Assert.Equal(0,fixture.Gateway.Inspections);
+    }
+    [Fact]
+    public async Task AlternateDestinationUsesOriginalSourcePathAndSeparatelyBoundPublicationTarget()
+    {
+        using var fixture = new Fixture();
+        var source = Source(fixture);
+        fixture.Gateway.Target = fixture.Gateway.Target with { Location = fixture.Command.Location with { Path = "recovered/历史副本.bin" } };
+        fixture.Gateway.RecordStageReceipt = true;
+        var service = Restores(fixture, new() { Entry = source });
+        var plan = await service.PlanAsync(fixture.Actor, RestoreCommand(fixture, source), default);
+        var claims = fixture.Protector.VerifyContainerRestore(plan.PlanHash);
+        Assert.Equal(source.Path, claims.Source.Path);
+        Assert.Equal("recovered/历史副本.bin", claims.Target.Location.Path);
+        var row = await service.SubmitAsync(fixture.Actor, source.ContainerId, new(plan.PlanHash, true, Guid.NewGuid().ToString("D")), default);
+        Assert.Equal(claims.Target.Location, row.Location);
+        Assert.True(ContainerFileUploadService.HasValidBinding(fixture.Repository.Row!, fixture.Protector));
+        Assert.True(await RestoreDispatcher(fixture).TickAsync(default));
+        Assert.Equal("Succeeded", Assert.Single(fixture.Repository.Results).State);
+        Assert.Equal(source.Path, fixture.History.ReadLocation!.Path);
+        Assert.Equal(claims.Target.Location.InstanceId, fixture.History.ReadLocation.InstanceId);
+        Assert.Equal(claims.Target.Location, fixture.Gateway.StageLocation);
+        Assert.Equal(1, fixture.History.Reads); Assert.Equal(1, fixture.Gateway.Publications);
+        typeof(WhaleDeck.Domain.Entities.ContainerFileUploadOperation).GetProperty("RelativePath")!.SetValue(fixture.Repository.Row, "recovered/tampered.bin");
+        Assert.False(ContainerFileUploadService.HasValidBinding(fixture.Repository.Row!, fixture.Protector));
+    }
+    [Theory]
+    [InlineData("../escape.bin")]
+    [InlineData("/absolute.bin")]
+    [InlineData("folder/../escape.bin")]
+    [InlineData("")]
+    public async Task AlternateDestinationCannotBypassPathValidation(string path)
+    {
+        using var fixture = new Fixture(); var source = Source(fixture); var catalog = new Catalog { Entry = source };
+        var command = RestoreCommand(fixture, source) with { Location = fixture.Command.Location with { Path = path } };
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => Restores(fixture, catalog).PlanAsync(fixture.Actor, command, default));
+        Assert.Equal(0, catalog.Finds); Assert.Equal(0, fixture.Gateway.Inspections);
+    }
+    [Fact]
+    public async Task ChangedDestinationParentAfterPlanningCannotEnqueueRestoration()
+    {
+        using var fixture = new Fixture(); var source = Source(fixture);
+        fixture.Gateway.Target = fixture.Gateway.Target with { Location = fixture.Command.Location with { Path = "recovered/copy.bin" } };
+        var service = Restores(fixture, new() { Entry = source });
+        var plan = await service.PlanAsync(fixture.Actor, RestoreCommand(fixture, source), default);
+        fixture.Gateway.Target = fixture.Gateway.Target with { ExpectedParentVersion = new('F', 64) };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SubmitAsync(fixture.Actor, source.ContainerId,
+            new(plan.PlanHash, true, Guid.NewGuid().ToString("D")), default));
+        Assert.Equal(0, fixture.Repository.Enqueued); Assert.Equal(0, fixture.History.Reads);
     }
     [Fact]
     public async Task MissingHistoryCapabilityCannotReserveAnIntent()
@@ -149,6 +199,7 @@ public sealed partial class ContainerUploadServiceTests
     }
     private sealed class HistoryGateway : IContainerFileHistoryGateway
     {
+        public ContainerFileLocationDto? ReadLocation {get;private set;}
         public int Reads {get;private set;}
         public bool Complete {get;private set;}
         public bool FailAfterBytes {get;set;}
@@ -158,6 +209,7 @@ public sealed partial class ContainerUploadServiceTests
         public Task<ContainerHistoryPageDto> ListContainerHistoryAsync(ContainerFileLocationDto location,string after,int take,string expectedVersion,CancellationToken cancellationToken)=>throw new NotSupportedException();
         public async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadContainerHistorySourceAsync(ContainerFileLocationDto location,ContainerHistoryEntryDto expected,[EnumeratorCancellation]CancellationToken cancellationToken)
         {
+            ContainerFileHistoryValidation.Source(location, expected); ReadLocation = location;
             Reads++;await Task.Yield();cancellationToken.ThrowIfCancellationRequested();yield return Fixture.Bytes;
             AfterBytes?.Invoke();if(FailAfterBytes)throw new IOException("owned-source-validation-failure-after-last-chunk");Complete=true;
         }

@@ -256,6 +256,7 @@ public sealed partial class ContainerUploadHttpTests
     }
     private sealed class Repository : IContainerFileUploadRepository
     {
+        public ContainerFileUploadOperation? Row => _row;
         private ContainerFileUploadOperation? _row; public bool Canceled { get; private set; } public int Enqueued { get; private set; } public int ReadyCalls { get; private set; }
         public Task<ContainerFileUploadOperation?> OwnedAsync(TerminalActor actor,Guid id,CancellationToken cancellationToken)=>
             Task.FromResult(_row is { } row&&row.Id==id&&row.ActorSubject==actor.Subject&&row.LoginBinding==actor.LoginBinding?row:null);

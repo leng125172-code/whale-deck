@@ -44,7 +44,7 @@ public static class ContainerFileUploadIntentValidation
         if (binding.HistorySourceJson is not null)
         {
             var source = ContainerFileRestoreValidation.Read(binding.HistorySourceJson);
-            ContainerFileHistoryValidation.Source(binding.Target.Location, source);
+            _ = ContainerFileRestoreValidation.SourceLocation(binding.Target.Location, source);
             if (source.SizeBytes != binding.SizeBytes || source.Sha256 != binding.Sha256)
                 throw new ArgumentException("CONTAINER_HISTORY_SOURCE_INVALID");
         }

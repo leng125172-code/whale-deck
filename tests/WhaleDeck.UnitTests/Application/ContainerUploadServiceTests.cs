@@ -187,6 +187,7 @@ public sealed partial class ContainerUploadServiceTests
         public Task RequireContainerUploadWorkflowAsync(CancellationToken cancellationToken) => WorkflowUnavailable
             ? Task.FromException(new InvalidOperationException("CONTAINER_UPLOAD_CAPABILITY_UNAVAILABLE")) : Task.CompletedTask;
         public int Inspections { get; private set; }
+        public ContainerFileLocationDto? StageLocation { get; private set; }
         public int Stages { get; private set; }
         public byte[] Received { get; private set; } = [];
         public string? Output { get; set; }
@@ -206,6 +207,7 @@ public sealed partial class ContainerUploadServiceTests
         { Inspections++; AfterInspection?.Invoke(); return Task.FromResult(Target); }
         public async Task<ContainerFileUploadReceiptDto> StageContainerFileAsync(ContainerFileStageDto request, IAsyncEnumerable<ReadOnlyMemory<byte>> bytes, CancellationToken cancellationToken)
         {
+            StageLocation = request.Location;
             Stages++; using var body = new MemoryStream();
             await foreach (var part in bytes.WithCancellation(cancellationToken)) await body.WriteAsync(part, cancellationToken);
             Received = body.ToArray(); Assert.Equal(request.Sha256, Convert.ToHexString(SHA256.HashData(Received)));
