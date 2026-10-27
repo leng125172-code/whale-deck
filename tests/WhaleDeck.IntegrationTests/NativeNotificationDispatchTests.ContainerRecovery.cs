@@ -1,6 +1,9 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql;
 using Microsoft.Extensions.Configuration;
 using WhaleDeck.Application.Abstractions;
 using WhaleDeck.Application.Models;
@@ -74,10 +77,21 @@ public sealed partial class NativeNotificationDispatchTests
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.QueueAsync(actor,command with { OriginalVersion=original.Version+1 },Guid.NewGuid().ToString("D"),default));
             var key = Guid.NewGuid().ToString("D"); var intent = await service.QueueAsync(actor,command,key,default);
             Assert.Equal(intent,await service.QueueAsync(actor,command,key,default));
+            // Even a queued current-admin plan cannot reach Root after logout
+            // or when the liveness dependency has not been registered.
+            logins.Active = false; Assert.True(await worker.TickAsync(default)); logins.Active = true;
+            Assert.Equal("Failed",(await service.GetAsync(actor,intent.Id,default)).State); Assert.Equal(0,gateway.Inspections);
+            intent = await service.QueueAsync(actor,command,Guid.NewGuid().ToString("D"),default);
+            Assert.True(await new FileRecoveryDispatcher(repository,gateway,identity,protector,clock).TickAsync(default));
+            Assert.Equal("Failed",(await service.GetAsync(actor,intent.Id,default)).State); Assert.Equal(0,gateway.Inspections);
+            intent = await service.QueueAsync(actor,command,Guid.NewGuid().ToString("D"),default);
             await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(actor with { LoginBinding=new('E',64) },intent.Id,default));
             Assert.True(await worker.TickAsync(default)); var ready = await service.GetAsync(actor,intent.Id,default);
             Assert.Equal("Ready",ready.State); Assert.Equal("Unknown",ready.RootState); Assert.Equal(1,gateway.Inspections); Assert.Equal(0,gateway.Fences);
             Assert.True((await uploads.OwnedAsync(oldActor,original.Id,default))!.PublishBarrier);
+            var disposition = await Assert.ThrowsAsync<PostgresException>(() => db.FileRecoveryOperations.Where(item => item.Id==ready.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(item => item.Disposition,"ReconcileCompleted")));
+            Assert.Equal("23514",disposition.SqlState);
             var competitor = await Ready(Row("private/other.bin",new('b',64)));
             Assert.Equal(ContainerFileUploadStartResult.Busy,await uploads.StartedAsync(competitor,clock.GetUtcNow(),default));
             await uploads.DeferAsync(competitor,default);
@@ -131,11 +145,19 @@ public sealed partial class NativeNotificationDispatchTests
             var discarded = new ContainerFileUploadReceiptDto(next.ContainerId,next.InstanceId,next.Id,next.TargetProof,new("Discarded",next.SizeBytes,next.Sha256,"",false,false,false),false);
             Assert.True(await uploads.FinishAsync(next,"Canceled","CONTAINER_UPLOAD_CANCELED",discarded,default));
             Assert.False(await db.ContainerFileUploadOperations.AnyAsync(item => ids.Contains(item.Id)&&item.PublishBarrier));
+            var downgrade = await Assert.ThrowsAsync<PostgresException>(() => db.GetService<IMigrator>().MigrateAsync("20261027001436_ContainerFileUploadIntent"));
+            Assert.Contains("container_upload_recovery_downgrade_requires_empty_kind",downgrade.MessageText,StringComparison.Ordinal);
+            Assert.False(db.Database.HasPendingModelChanges());
+            Assert.Contains("20261027015755_ContainerUploadAdministratorRecovery",await db.Database.GetAppliedMigrationsAsync());
             Console.WriteLine("INBOX_PHASE=container-recovery-current-login-seal-replay-atomic-audit-barrier");
         }
         finally
         {
-            db.ChangeTracker.Clear(); await db.ContainerFileUploadOperations.Where(item => ids.Contains(item.Id)).ExecuteDeleteAsync(); File.Delete(keyFile);
+            db.ChangeTracker.Clear();
+            // Exact fixture records in this disposable database only. Product
+            // history is never deleted to permit a schema downgrade.
+            await db.FileRecoveryOperations.Where(item => item.Kind==FileRecoveryKinds.ContainerUpload&&ids.Contains(item.OriginalIntentId)).ExecuteDeleteAsync();
+            await db.ContainerFileUploadOperations.Where(item => ids.Contains(item.Id)).ExecuteDeleteAsync(); File.Delete(keyFile);
         }
     }
     private sealed class NativeContainerRecoveryLogins : ILoginSessionRegistry

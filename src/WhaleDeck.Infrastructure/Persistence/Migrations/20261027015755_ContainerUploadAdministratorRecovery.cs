@@ -23,6 +23,15 @@ public partial class ContainerUploadAdministratorRecovery : Migration
     /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
+        // Never erase historical recoveries or reinterpret them as a host kind.
+        migrationBuilder.Sql("""
+            DO $$ BEGIN
+              IF EXISTS (SELECT 1 FROM file_recovery_operations WHERE kind='container-upload') THEN
+                RAISE EXCEPTION 'container_upload_recovery_downgrade_requires_empty_kind';
+              END IF;
+            END $$;
+            """);
+
         migrationBuilder.DropCheckConstraint(
             name: "ck_file_recovery_kind",
             table: "file_recovery_operations");

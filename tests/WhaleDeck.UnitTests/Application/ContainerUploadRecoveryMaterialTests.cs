@@ -11,7 +11,7 @@ using Rpc = WhaleDeck.Contracts.Agent.V1;
 namespace WhaleDeck.UnitTests.Application;
 
 /// <summary>Signed material with synthetic Root metadata, not physical container or authority evidence.</summary>
-public sealed class ContainerUploadRecoveryMaterialTests : IDisposable
+public sealed partial class ContainerUploadRecoveryMaterialTests : IDisposable
 {
     private readonly string _key = Path.GetTempFileName();
     private readonly FilePlanProtector _protector;

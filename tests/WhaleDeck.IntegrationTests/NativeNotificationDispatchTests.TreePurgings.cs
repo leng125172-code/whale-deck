@@ -189,6 +189,9 @@ public sealed partial class NativeNotificationDispatchTests
             foreach (var item in waiting) await service.CancelAsync(actor, item.Id, default);
             var downgrade = await Assert.ThrowsAsync<PostgresException>(() => db.GetService<IMigrator>().MigrateAsync("20261020112522_FileTreeOverwriteRestoringWorkflow"));
             Assert.Contains("tree_purging_recovery_downgrade_requires_empty_kind", downgrade.MessageText, StringComparison.Ordinal);
+            Assert.Contains("20261027015755_ContainerUploadAdministratorRecovery",await db.Database.GetAppliedMigrationsAsync());
+            var latestKind = await db.Database.SqlQueryRaw<string>("""SELECT pg_get_constraintdef(oid) AS "Value" FROM pg_constraint WHERE conname='ck_file_recovery_kind' AND conrelid='file_recovery_operations'::regclass""").SingleAsync();
+            Assert.Contains("container-upload",latestKind,StringComparison.Ordinal);
             Assert.False(db.Database.HasPendingModelChanges()); Assert.Equal(0, await db.FileTreePurgingOperations.CountAsync(item => item.CompletedAtUtc == null));
             var details = string.Join(' ', await db.AuditEvents.Where(item => item.Action.StartsWith("files.tree-purge.")).Select(item => item.DetailJson).ToArrayAsync());
             Assert.DoesNotContain("CaptureOwner", details, StringComparison.Ordinal); Assert.DoesNotContain("lost-response", details, StringComparison.Ordinal);
