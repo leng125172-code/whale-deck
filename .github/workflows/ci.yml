@@ -34,6 +34,7 @@ jobs:
           python3 -m py_compile deploy/host/whaledeck-container-publish.py deploy/validation/validate_container_file_publishing.py
           python3 -m py_compile deploy/host/whaledeck-container-file-write.py deploy/validation/validate_container_file_write_profile.py deploy/validation/validate_container_file_write_agent.py
           python3 -m py_compile deploy/validation/validate_bff_session_valkey.py deploy/validation/validate_bff_login_liveness.py
+          python3 -m py_compile deploy/validation/validate_bff_login_browser.py
           python3 -m py_compile deploy/validation/validate_container_file_bff_extended.py
           python3 -m unittest discover -s deploy/validation -p test_metric_continuity.py
           python3 -m unittest discover -s deploy/validation -p test_scope_baseline.py
@@ -205,6 +206,8 @@ jobs:
         run: bash ../deploy/ci/install-frontend-dependencies.sh
       - name: Verify bounded browser download evidence observer
         run: node --test ../deploy/validation/test_browser_download_probe.mjs
+      - name: Check installed login browser gate syntax without production access
+        run: node --check ../deploy/validation/validate_bff_login_browser.mjs
       - run: corepack pnpm lint
       - run: corepack pnpm format:check
       - run: corepack pnpm test:unit

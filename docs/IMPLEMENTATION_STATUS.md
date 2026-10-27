@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-27 登录撤销安装及真实Worker门禁**：当前f5a0029六组件/HTTP一致、11核心healthy；双管理员登录中退出原会话后18次旧Cookie401，第二登录仍管理员，Worker自动取消原上传，无显式取消/无目标写入，锁/Outbox释放且审计/root拒收凭据保留。真实Valkey ACL缺TIME已最小补权并持久化；b764741生产类别原生1执行/1通过/0跳过，两CI五路success；OIDC双端退出、33MiB+7宿主完整上传/下载/留存、容器读取/中断/普通拒绝和PTY通过。真实320暗色/1440明色跨页退出已通过，进行中撤销、容器永久上传/共享写屏障/BFF/UI及全部59项继续。[完整边界](qa/BFF_LOGIN_LIVENESS.md)。
+
 - **2026-10-26 首字节前取消已安装签收**：136b8a0/minor40保存独立Prevented拒收标记；a58a489真实签名UDS先取消/查询/重放，再发送合法首帧，精确CONTAINER_UPLOAD_CANCELED且零暂存载荷。完整2MiB+7发布读回/HDD旧原件仍通过，2441 Unit/160 Integration（6原生夹具跳过）、166容器Linux-root通过；本批载荷精确清理、11核心healthy。永久容器任务/共享写屏障、登录撤销/权限审计及BFF/UI仍待，59项继续。[证据和后续约束](qa/CONTAINER_FILE_CANCEL_FENCE.md)。
 
 - **2026-10-26 容器写入Agent已安装签收**：ac72b41/minor39与维护入口已覆盖，真实签名UDS五方法、完整2MiB+7发布/原只读RPC逐字节读回、旧inode/HDD原件、owner/请求体/MAC/重放拒绝与显式暂存取消通过。修复collect卸载竞态掩盖权限拒绝，8故障注入通过；Release零警告错误、2411 Unit/160 Integration通过（6原生夹具跳过）、154容器Linux-root通过。成功与两次失败现场精确核验清理，11核心healthy，应用容器未更新。永久任务/当前权限审计、BFF上传编辑/历史恢复/Unknown及真实UI仍待，59项继续。[完整证据和失败](qa/CONTAINER_FILE_WRITE_RPC.md)。

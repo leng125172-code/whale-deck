@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+> **2026-10-27 登录撤销已覆盖并真实Worker签收**：f5a0029六组件/HTTP来源一致、11核心healthy；原登录退出后18次旧Cookie401，同主体第二登录仍管理员，Worker取消其未收字节上传，锁释放/审计/root拒收凭据通过。修复实际Valkey缺TIME权限；b764741生产类别ACL冻结原生1执行/1通过/0跳过，两提交CI五路success；完整OIDC双端退出、33MiB+7宿主上传/下载/HDD、容器大文件中断/普通拒绝及宿主终端通过。真实320暗色/1440明色跨页正常退出及旧Cookie拒绝通过；进行中撤销、永久容器上传/共享写屏障/业务权限审计与BFF/UI继续，59项不签完成。[证据与失败](qa/BFF_LOGIN_LIVENESS.md)。
+
 > **2026-10-26 首字节前取消已安装签收**：136b8a0/minor40保存独立Prevented拒收标记；a58a489真实签名UDS先取消/查询/重放，再发送合法首帧，精确CONTAINER_UPLOAD_CANCELED且零暂存载荷。完整2MiB+7发布读回/HDD旧原件仍通过，2441 Unit/160 Integration（6原生夹具跳过）、166容器Linux-root通过；本批载荷精确清理、11核心healthy。永久容器任务/共享写屏障、登录撤销/权限审计及BFF/UI仍待，59项继续。[证据和后续约束](qa/CONTAINER_FILE_CANCEL_FENCE.md)。
 
 > **2026-10-26 容器写入Agent已安装签收**：ac72b41/minor39与维护入口已覆盖，真实签名UDS五方法、完整2MiB+7发布/原只读RPC逐字节读回、旧inode/HDD原件、owner/请求体/MAC/重放拒绝与显式暂存取消通过。修复collect卸载竞态掩盖权限拒绝，8故障注入通过；Release零警告错误、2411 Unit/160 Integration通过（6原生夹具跳过）、154容器Linux-root通过。成功与两次失败现场精确核验清理，11核心healthy，应用容器未更新。永久任务/当前权限审计、BFF上传编辑/历史恢复/Unknown及真实UI仍待，59项继续。[完整证据和失败](qa/CONTAINER_FILE_WRITE_RPC.md)。
