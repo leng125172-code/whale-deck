@@ -30,7 +30,7 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
             var requested = ContainerFileUploadIntentValidation.ReadBinding(row);
             if (original.Id != requested.Id || original.IdempotencyKey != requested.IdempotencyKey || original.Actor != requested.Actor ||
                 original.LoginBinding != requested.LoginBinding || original.PlanHash != requested.PlanHash || original.Target != requested.Target ||
-                original.SizeBytes != requested.SizeBytes || original.Sha256 != requested.Sha256 || original.HistorySourceJson != requested.HistorySourceJson)
+                original.SizeBytes != requested.SizeBytes || original.Sha256 != requested.Sha256 || original.HistorySourceJson != requested.HistorySourceJson || original.RestoreAttributes != requested.RestoreAttributes)
                 throw new InvalidOperationException("CONTAINER_UPLOAD_IDEMPOTENCY_CONFLICT");
             return prior;
         }
@@ -48,7 +48,7 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
         db.OperationJobs.Add(new() { Id = row.Id, JobType = row.HistorySourceJson is null ? "containers.files.upload" : "containers.files.restore", ActorSubject = row.ActorSubject, ResourceId = resource,
             IdempotencyKey = key, Phase = row.HistorySourceJson is null ? "AwaitingContainerFileUpload" : "AwaitingContainerFileRestore", RequestJson = JsonSerializer.Serialize(new {
                 containerId = row.ContainerId, pathHash = FileManagementService.Hash(row.RelativePath),
-                instanceHash = FileManagementService.Hash(row.InstanceId), sizeBytes = row.SizeBytes, sha256 = row.Sha256 }) });
+                instanceHash = FileManagementService.Hash(row.InstanceId), sizeBytes = row.SizeBytes, sha256 = row.Sha256, restoreAttributes = row.RestoreAttributes }) });
         db.ContainerFileUploadOperations.Add(row);
         db.OutboxMessages.Add(new() { MessageType = "ContainerFileUploadRequested", PayloadJson = JsonSerializer.Serialize(new { jobId = row.Id }) });
         var job = db.OperationJobs.Local.Single(item => item.Id == row.Id);
@@ -242,7 +242,7 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
     private void Audit(ContainerFileUploadOperation row, string action, string result) => db.AuditEvents.Add(new() {
         ActorSubject = row.ActorSubject, Action = (row.HistorySourceJson is null ? "containers.files.upload." : "containers.files.restore.") + action, TargetType = "container", TargetId = row.ContainerId,
         JobId = row.Id, TraceId = row.TraceId, Result = result, DetailJson = JsonSerializer.Serialize(new {
-            pathHash = FileManagementService.Hash(row.RelativePath), instanceHash = FileManagementService.Hash(row.InstanceId) }) });
+            pathHash = FileManagementService.Hash(row.RelativePath), instanceHash = FileManagementService.Hash(row.InstanceId), restoreAttributes = row.RestoreAttributes }) });
     private Task<T> Transaction<T>(Func<Task<T>> action, CancellationToken cancellationToken) => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
     {
         db.ChangeTracker.Clear(); await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);

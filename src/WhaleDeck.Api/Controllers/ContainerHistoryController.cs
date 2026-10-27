@@ -20,9 +20,9 @@ public sealed class ContainerHistoryController(ContainerFileHistoryService histo
 
     /// <summary>Five-minute restoration plan binding an independently selected same-container destination, original login and exact HDD source metadata. Full source bytes are verified by Worker before staging can commit.</summary>
     [HttpPost("restores/plan")]
-    public async Task<ActionResult<FileUploadPlanDto>> Plan(string containerId, ContainerRestorePlanBody command, CancellationToken cancellationToken) =>
+    public async Task<ActionResult<ContainerFileRestorePlanDto>> Plan(string containerId, ContainerRestorePlanBody command, CancellationToken cancellationToken) =>
         Ok(await restores.PlanAsync((await identity.ReadAsync(HttpContext)).Actor,
-            new(new(containerId, command.InstanceId, command.Path), command.CaptureId, command.ExpectedCaptureHash, command.ExpectedVersion), cancellationToken));
+            new(new(containerId, command.InstanceId, command.Path), command.CaptureId, command.ExpectedCaptureHash, command.ExpectedVersion, command.RestoreAttributes), cancellationToken));
 
     /// <summary>Confirmed permanent Job/Outbox and immutable source. No browser body upload; Worker pulls only the approved HDD capture through signed Agent RPC.</summary>
     [HttpPost("restores"), ProducesResponseType<ContainerFileUploadIntentDto>(StatusCodes.Status202Accepted)]
@@ -46,4 +46,4 @@ public sealed class ContainerHistoryController(ContainerFileHistoryService histo
     private bool KeyMatches(string key) => Request.Headers["Idempotency-Key"].Count == 1 && Request.Headers["Idempotency-Key"].ToString() == key;
 }
 
-public sealed record ContainerRestorePlanBody(string InstanceId, string Path, string CaptureId, string ExpectedCaptureHash, string ExpectedVersion);
+public sealed record ContainerRestorePlanBody(string InstanceId, string Path, string CaptureId, string ExpectedCaptureHash, string ExpectedVersion, bool RestoreAttributes = false);

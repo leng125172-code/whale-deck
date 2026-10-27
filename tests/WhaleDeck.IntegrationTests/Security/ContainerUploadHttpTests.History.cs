@@ -26,9 +26,9 @@ public sealed partial class ContainerUploadHttpTests
         Assert.Equal(0,fixture.History.Lists);Assert.Equal(0,fixture.Repository.Enqueued);Assert.Equal(0,fixture.Gateway.Stages);
     }
     [Theory]
-    [InlineData("private/file.bin")]
-    [InlineData("recovered/历史副本.bin")]
-    public async Task HistoryIsObservedAndRestorationRegistersWithoutAnyBrowserByteSurface(string destination)
+    [InlineData("private/file.bin", false)]
+    [InlineData("recovered/历史副本.bin", true)]
+    public async Task HistoryIsObservedAndRestorationRegistersWithoutAnyBrowserByteSurface(string destination, bool attributes)
     {
         await using var fixture=await Fixture.Start();using var client=await fixture.Client("admin-subject",true);var csrf=await Csrf(client);
         using(var response=await client.GetAsync(FilesBase+"/history?instanceId="+Uri.EscapeDataString(Instance)))
@@ -37,14 +37,14 @@ public sealed partial class ContainerUploadHttpTests
             Assert.Single((await response.Content.ReadFromJsonAsync<ContainerHistoryPageDto>())!.Entries);Assert.True(fixture.History.Observed);
         }
         var source=fixture.History.Source;
-        using var planning=Write(client,HttpMethod.Post,FilesBase+"/restores/plan",csrf,JsonContent.Create(new{instanceId=Instance,path=destination,captureId=source.CaptureId,expectedCaptureHash=source.CaptureHash,expectedVersion="ABSENT"}));
+        using var planning=Write(client,HttpMethod.Post,FilesBase+"/restores/plan",csrf,JsonContent.Create(new{instanceId=Instance,path=destination,captureId=source.CaptureId,expectedCaptureHash=source.CaptureHash,expectedVersion="ABSENT",restoreAttributes=attributes}));
         using var planned=await client.SendAsync(planning);Assert.Equal(HttpStatusCode.OK,planned.StatusCode);
-        var plan=(await planned.Content.ReadFromJsonAsync<FileUploadPlanDto>())!;var key=Guid.NewGuid().ToString("D");
+        var plan=(await planned.Content.ReadFromJsonAsync<ContainerFileRestorePlanDto>())!;Assert.Equal(attributes,plan.RestoreAttributes);var key=Guid.NewGuid().ToString("D");
         using var create=Write(client,HttpMethod.Post,FilesBase+"/restores",csrf,JsonContent.Create(new SubmitFileUploadCommand(plan.PlanHash,true,key)),key);
         using var accepted=await client.SendAsync(create);Assert.Equal(HttpStatusCode.Accepted,accepted.StatusCode);
         var intent=(await accepted.Content.ReadFromJsonAsync<ContainerFileUploadIntentDto>())!;
         Assert.Equal(FilesBase+"/restores/"+intent.Id.ToString("D"),accepted.Headers.Location!.OriginalString);
-        Assert.Equal(destination,intent.Location.Path);
+        Assert.Equal(destination,intent.Location.Path);Assert.Equal(attributes,intent.RestoreAttributes);
         Assert.Equal(source.Path,WhaleDeck.Application.Services.ContainerFileRestoreValidation.Read(fixture.Repository.Row!.HistorySourceJson!).Path);
         Assert.Equal("AwaitingUpload",intent.State);Assert.Equal(0,fixture.Gateway.Stages);
         using var content=new ByteArrayContent(Data);content.Headers.ContentType=new("application/octet-stream");

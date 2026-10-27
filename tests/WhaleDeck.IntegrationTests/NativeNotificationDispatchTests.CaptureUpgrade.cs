@@ -44,7 +44,7 @@ public sealed partial class NativeNotificationDispatchTests
             db.FileTreeRecyclingOperations.Add(row); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
             // Deliberately omit both new columns: this is an actual old-schema INSERT.
             await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO file_tree_captures (id,intent_id,owner_hash,source_hash,source_json,manifest_sha256,entry_count,total_bytes,archive_bytes,archive_sha256,proof_hash,created_at_utc) VALUES ({execution},{id},{owner},{sourceHash},{sourceJson}::jsonb,{capture.ManifestSha256},{capture.EntryCount},{capture.TotalBytes},{capture.ArchiveBytes},{capture.ArchiveSha256},{proof},{now})");
-            await db.Database.MigrateAsync();
+            await ContainerRestorationAttributeUpgrade(db);
             var upgraded = await db.FileTreeCaptures.AsNoTracking().SingleAsync(item => item.Id == execution);
             Assert.Equal("Trash", upgraded.Kind); Assert.Null(upgraded.ContentSha256); Assert.Equal(proof, upgraded.ProofHash);
             Assert.Equal(capture, FileTreeRecyclingValidation.CaptureBinding(upgraded));

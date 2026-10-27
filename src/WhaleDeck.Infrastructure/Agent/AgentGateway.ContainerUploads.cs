@@ -16,6 +16,12 @@ public sealed partial class AgentGateway : IContainerFileWriteGateway
     public async Task RequireContainerUploadWorkflowAsync(CancellationToken cancellationToken) =>
         _ = await ContainerRecoveryClient(cancellationToken);
 
+    public async Task RequireContainerRestorationWorkflowAsync(CancellationToken cancellationToken)
+    {
+        await RequireContainerUploadWorkflowAsync(cancellationToken);
+        _ = await ContainerWrites(cancellationToken, cancellationFence: true, restoration: true);
+    }
+
     private async Task<ContainerFileWriteService.ContainerFileWriteServiceClient> ContainerWrites(CancellationToken cancellationToken, bool cancellationFence = false, bool restoration = false)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(TimeSpan.FromSeconds(5));

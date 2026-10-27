@@ -829,6 +829,12 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("request_hash");
 
+                    b.Property<bool>("RestoreAttributes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("restore_attributes");
+
                     b.Property<string>("ResultCode")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
@@ -898,6 +904,8 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_container_upload_lease", "(lease_token IS NULL) = (lease_expires_at_utc IS NULL) AND (state <> 'Receiving' OR receive_token IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_container_upload_limits", "size_bytes BETWEEN 0 AND 1073741824 AND previous_size_bytes BETWEEN 0 AND 1073741824 AND version >= 0 AND expires_at_utc = created_at_utc + INTERVAL '15 minutes' AND created_at_utc > TIMESTAMPTZ '1970-01-01 00:00:00+00'");
+
+                            t.HasCheckConstraint("ck_container_upload_restore_attributes", "NOT restore_attributes OR history_source_json IS NOT NULL");
 
                             t.HasCheckConstraint("ck_container_upload_state", "state IN ('AwaitingUpload','Receiving','Ready','Publishing','Unknown','Succeeded','Superseded','Canceled','Failed')");
 

@@ -183,3 +183,23 @@ describe('instance-bound container uploads', () => {
     expect(containerUploadState('Unknown')).toContain('停止自动操作')
   })
 })
+
+it('attribute task policy cannot disappear, appear unexpectedly or change during polling', () => {
+  const row = intent()
+  expect(
+    assertContainerUploadIntent(
+      { ...row, restoreAttributes: true },
+      { ...binding, restoreAttributes: true },
+    ).restoreAttributes,
+  ).toBe(true)
+  expect(() => assertContainerUploadIntent(row, { ...binding, restoreAttributes: true })).toThrow(
+    /容器上传任务或实例绑定无法核实/,
+  )
+  expect(() => assertContainerUploadIntent({ ...row, restoreAttributes: true }, binding)).toThrow(
+    /容器上传任务或实例绑定无法核实/,
+  )
+  expect(containerUploadFollows(row, { ...row, restoreAttributes: true, version: 1 })).toBe(false)
+  expect(containerUploadFollows({ ...row, restoreAttributes: true }, { ...row, version: 1 })).toBe(
+    false,
+  )
+})

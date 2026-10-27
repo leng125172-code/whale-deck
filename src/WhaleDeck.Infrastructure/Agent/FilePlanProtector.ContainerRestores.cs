@@ -26,7 +26,13 @@ public sealed partial class FilePlanProtector : IContainerFileRestoreProtector
         try
         {
             using var document = JsonDocument.Parse(Convert.FromBase64String(parts[0]), new() { MaxDepth = 8 });
-            ContainerFileRestoreValidation.Exact(document.RootElement, new HashSet<string> { "Actor", "LoginBinding", "Target", "Source", "CreatedAtUtc", "ExpiresAtUtc" });
+            var fields = new HashSet<string> { "Actor", "LoginBinding", "Target", "Source", "CreatedAtUtc", "ExpiresAtUtc" };
+            if (document.RootElement.TryGetProperty("RestoreAttributes", out var attributes))
+            {
+                if (attributes.ValueKind != JsonValueKind.True) throw ContainerFileRestoreValidation.Invalid();
+                fields.Add("RestoreAttributes");
+            }
+            ContainerFileRestoreValidation.Exact(document.RootElement, fields);
             var target = document.RootElement.GetProperty("Target");
             ContainerUploadFields(target, ContainerUploadTargetFields); ContainerUploadFields(target.GetProperty("Location"), ContainerUploadLocationFields);
             var source = document.RootElement.GetProperty("Source");

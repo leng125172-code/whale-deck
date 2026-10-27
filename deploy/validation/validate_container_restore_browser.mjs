@@ -9,6 +9,7 @@ try {
   const revision=process.argv[2];assert.match(revision,/^[a-f0-9]{40}$/)
   const fixture=JSON.parse(await readFile('/dev/stdin','utf8'));assert.equal(fixture.revision,revision)
   assert.match(fixture.containerId,/^[a-f0-9]{64}$/);assert.match(fixture.containerName,/^wdv-container-publish-[a-f0-9]{32}$/);assert.match(fixture.initialCapture,/^[a-f0-9]{32}$/)
+  assert.equal(typeof fixture.restoreAttributes,'boolean')
   const base=process.env.WHALEDECK_URL??'http://192.168.100.13:8080',origin=new URL(base)
   assert.equal(origin.protocol,'http:');assert.equal(origin.port,'8080');assert.ok(['127.0.0.1','192.168.100.13','192.168.22.19'].includes(origin.hostname))
   const username=process.env.VALIDATION_USERNAME,password=process.env.VALIDATION_PASSWORD;assert.ok(username&&password)
@@ -57,6 +58,9 @@ try {
   for(let index=0;index<4;index++){
     phase=index===0?'desktop-light-full-hdd-restoration':'mobile-dark-replacement-version-restoration'
     if(index===1){await page.setViewportSize({width:320,height:1000});await page.emulateMedia({colorScheme:'dark'});await history.getByRole('button',{name:'刷新历史',exact:true}).click()}
+    const policy=history.getByRole('checkbox',{name:'同时恢复历史普通属性',exact:true})
+    if(await policy.isChecked()!==fixture.restoreAttributes)await history.getByText('同时恢复历史普通属性',{exact:true}).click()
+    assert.equal(await policy.isChecked(),fixture.restoreAttributes)
     if(index===2)capture=fixture.initialCapture
     if(index===3)capture=restores[0].id.replaceAll('-','')
     const destination=index<2?'work/original.bin':'work/recovered.bin'
@@ -70,8 +74,10 @@ try {
       }
     }
     const planning=page.waitForRequest(request=>request.method()==='POST'&&new URL(request.url()).pathname===endpoint+'/plan')
-    await prepare();const requested=(await planning).postDataJSON();assert.equal(requested.path,destination);assert.equal(requested.captureId,capture);assert.match(requested.expectedCaptureHash,/^[A-F0-9]{64}$/);if(index===2)assert.equal(requested.expectedVersion,'ABSENT');else assert.match(requested.expectedVersion,/^[A-F0-9]{64}$/)
+    await prepare();const requested=(await planning).postDataJSON();assert.equal(requested.restoreAttributes===true,fixture.restoreAttributes);assert.equal(requested.path,destination);assert.equal(requested.captureId,capture);assert.match(requested.expectedCaptureHash,/^[A-F0-9]{64}$/);if(index===2)assert.equal(requested.expectedVersion,'ABSENT');else assert.match(requested.expectedVersion,/^[A-F0-9]{64}$/)
     const confirmation=page.getByRole('dialog',{name:'确认恢复容器文件',exact:true});await expect(confirmation).toBeVisible()
+    await expect(confirmation.getByText(fixture.restoreAttributes?'恢复方式：内容与历史普通属性':'恢复方式：仅内容',{exact:true})).toBeVisible()
+    await expect(policy).toBeDisabled()
     assert.ok(await confirmation.evaluate(element=>element.scrollWidth<=element.clientWidth+1))
     await confirmation.screenshot({path:join(fixture.evidence,index===0?'desktop-light-confirm.png':index===1?'mobile-dark-confirm.png':`alternate-${index}-confirm.png`)})
     await confirmation.getByRole('button',{name:'取消',exact:true}).click();assert.equal(registrations,index);assert.equal(bodies,0)
@@ -82,7 +88,8 @@ try {
     await expect(history.getByText('已恢复',{exact:true})).toBeVisible({timeout:120_000})
     const completed=await(await context.request.get(base+endpoint+'/'+intent.id)).json()
     assert.equal(completed.state,'Succeeded');assert.equal(completed.previousRetained,index!==2)
-    restores.push({id:intent.id,sourceCapture:capture,destination,originalVersion:requested.expectedVersion,publishedVersion:completed.publishedVersion})
+    assert.equal(intent.restoreAttributes===true,fixture.restoreAttributes);assert.equal(completed.restoreAttributes===true,fixture.restoreAttributes)
+    restores.push({id:intent.id,sourceCapture:capture,destination,originalVersion:requested.expectedVersion,publishedVersion:completed.publishedVersion,restoreAttributes:fixture.restoreAttributes})
     assert.equal(registrations,index+1);assert.equal(bodies,0);assert.ok((await Promise.all(headers)).every(Boolean))
     assert.ok(await history.evaluate(element=>element.scrollWidth<=element.clientWidth+1));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))
     await history.screenshot({path:join(fixture.evidence,index===0?'desktop-light-history.png':index===1?'mobile-dark-history.png':`alternate-${index}-history.png`)})

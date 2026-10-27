@@ -5,7 +5,7 @@ import { installContainerFilesFixture } from './fixtures/container-files.mjs'
 test.use({ baseURL: process.env.WHALEDECK_PRODUCTION_PREVIEW_URL || 'http://127.0.0.1:5174' })
 async function setup(
   page: Page,
-  options: { lost?: boolean; unknown?: boolean; pending?: boolean; tamper?: boolean } = {},
+  options: { lost?: boolean; unknown?: boolean; pending?: boolean; tamper?: boolean; dropAttributes?: boolean; oldPlan?: boolean } = {},
 ) {
   const control = await installContainerFilesFixture(page, { overwrite: true })
   const target = control.state.target
@@ -42,6 +42,7 @@ async function setup(
     version: 0,
     publishedVersion: null as string | null,
     previousRetained: false,
+    restoreAttributes: undefined as true | undefined,
   }
   await page.route('**/files/history?**', async (route) => {
     const url = new URL(route.request().url())
@@ -68,12 +69,14 @@ async function setup(
     if (path === base + '/restores/plan') {
       state.plans.push(request.postDataJSON())
       intent.location.path = String(request.postDataJSON().path)
+      intent.restoreAttributes = request.postDataJSON().restoreAttributes === true ? true : undefined
       return route.fulfill({
         json: {
           planHash: 'signed-hdd-plan',
           expiresAtUtc: new Date(Date.now() + 300000).toISOString(),
           overwrites: true,
           warning: '校验HDD来源并在覆盖前保留当前旧版本。',
+          ...(!options.oldPlan && intent.restoreAttributes ? { restoreAttributes: true } : {}),
         },
       })
     }
@@ -101,6 +104,7 @@ async function setup(
     return route.fulfill({
       json: {
         ...intent,
+        ...(options.dropAttributes ? { restoreAttributes: undefined } : {}),
         state: status,
         version: state.canceled ? 3 : 2,
         resultCode:
@@ -289,3 +293,52 @@ for (const width of [320, 1440])
     expect(control.state.contentBodies).toHaveLength(0)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
   })
+
+for (const width of [320, 1440])
+  test(`${width}: historical attributes are explicitly confirmed and stay frozen after a lost reply`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const { state, source, history, restore, control } = await setup(page, { lost: true })
+    const policy = history.getByRole('checkbox', { name: '同时恢复历史普通属性', exact: true })
+    await expect(policy).not.toBeChecked()
+    await history.getByText('同时恢复历史普通属性', { exact: true }).click()
+    await expect(policy).toBeChecked()
+    await restore.click()
+    const confirmation = page.getByRole('dialog', { name: '确认恢复容器文件', exact: true })
+    await expect(confirmation.getByText('恢复方式：内容与历史普通属性', { exact: true })).toBeVisible()
+    await expect(policy).toBeDisabled()
+    await confirmation.getByRole('button', { name: '确认并恢复', exact: true }).click()
+    await expect(history.getByRole('button', { name: '重试登记原任务', exact: true })).toBeVisible()
+    await expect(policy).toBeDisabled()
+    await history.getByRole('button', { name: '重试登记原任务', exact: true }).click()
+    await expect(history.getByText('已恢复', { exact: true })).toBeVisible()
+    expect(state.plans[0]?.restoreAttributes).toBe(true)
+    expect(state.plans[0]?.captureId).toBe(source.captureId)
+    expect(state.creates).toHaveLength(2)
+    expect(state.creates[1]).toEqual(state.creates[0])
+    expect(Object.keys(state.creates[0]!).sort()).toEqual(['confirmed','idempotencyKey','planHash'])
+    await history.getByText('同时恢复历史普通属性', { exact: true }).click()
+    await expect(policy).not.toBeChecked()
+    await history.getByRole('button', { name: '核对恢复任务', exact: true }).click()
+    await expect(history.getByText('恢复方式：内容与历史普通属性', { exact: true })).toBeVisible()
+    expect(control.state.contentBodies).toHaveLength(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
+  })
+test('older backend cannot silently downgrade an attribute plan before registration', async ({ page }) => {
+  const { state, history, restore } = await setup(page, { oldPlan: true })
+  await history.getByText('同时恢复历史普通属性', { exact: true }).click()
+  await expect(history.getByRole('checkbox', { name: '同时恢复历史普通属性', exact: true })).toBeChecked()
+  await restore.click()
+  await expect(history.getByText(/恢复计划未确认属性策略/)).toBeVisible()
+  expect(state.creates).toHaveLength(0)
+  await expect(page.getByRole('dialog', { name: '确认恢复容器文件', exact: true })).toHaveCount(0)
+})
+test('a task response cannot drop the frozen attribute policy or trigger another publication', async ({ page }) => {
+  const { state, history, restore } = await setup(page, { dropAttributes: true })
+  await history.getByText('同时恢复历史普通属性', { exact: true }).click()
+  await expect(history.getByRole('checkbox', { name: '同时恢复历史普通属性', exact: true })).toBeChecked()
+  await restore.click()
+  await page.getByRole('dialog', { name: '确认恢复容器文件', exact: true }).getByRole('button', { name: '确认并恢复', exact: true }).click()
+  await expect(history.getByText(/容器上传任务或实例绑定无法核实/)).toBeVisible()
+  expect(state.creates).toHaveLength(1)
+  expect(state.plans).toHaveLength(1)
+})

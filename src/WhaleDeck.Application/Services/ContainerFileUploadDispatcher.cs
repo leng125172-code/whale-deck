@@ -52,7 +52,8 @@ public sealed class ContainerFileUploadDispatcher(IContainerFileUploadRepository
                 if (row.State == "AwaitingUpload" && receipt is null)
                 {
                     await history.RequireContainerHistoryWorkflowAsync(cancellationToken);
-                    await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
+                    if (row.RestoreAttributes) await gateway.RequireContainerRestorationWorkflowAsync(cancellationToken);
+                    else await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
                     if (!await repository.BeginRestoreReceiveAsync(row, clock.GetUtcNow(), cancellationToken))
                     { await repository.DeferAsync(row, cancellationToken); return true; }
                     var source = ContainerFileRestoreValidation.Read(row.HistorySourceJson);

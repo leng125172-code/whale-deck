@@ -29,6 +29,7 @@ export interface ContainerUploadIntent {
   version: number
   publishedVersion: string | null
   previousRetained: boolean
+  restoreAttributes?: true
 }
 
 export interface ContainerUploadRegistration {
@@ -162,7 +163,13 @@ export function assertContainerUploadPlan(value: FilePlan) {
 
 export function assertContainerUploadIntent(
   value: ContainerUploadIntent,
-  expected?: { target: ContainerFileTarget; path: string; sizeBytes: number; sha256: string },
+  expected?: {
+    target: ContainerFileTarget
+    path: string
+    sizeBytes: number
+    sha256: string
+    restoreAttributes?: boolean
+  },
 ) {
   const location = value?.location
   if (
@@ -178,6 +185,7 @@ export function assertContainerUploadIntent(
       'version',
       'publishedVersion',
       'previousRetained',
+      ...(expected?.restoreAttributes === true ? ['restoreAttributes'] : []),
     ]) ||
     !uuid.test(value.id) ||
     value.id === emptyUuid ||
@@ -199,6 +207,7 @@ export function assertContainerUploadIntent(
     value.version < 0 ||
     (value.publishedVersion !== null && !hash.test(value.publishedVersion)) ||
     typeof value.previousRetained !== 'boolean' ||
+    (expected?.restoreAttributes === true && value.restoreAttributes !== true) ||
     (['Succeeded', 'Superseded'].includes(value.state) && value.publishedVersion === null) ||
     (expected !== undefined &&
       (location.containerId !== expected.target.containerId ||
@@ -223,7 +232,8 @@ export function containerUploadFollows(
     previous.location.path === current.location.path &&
     previous.sizeBytes === current.sizeBytes &&
     previous.sha256 === current.sha256 &&
-    previous.expiresAtUtc === current.expiresAtUtc
+    previous.expiresAtUtc === current.expiresAtUtc &&
+    previous.restoreAttributes === current.restoreAttributes
   if (!bindingUnchanged || current.version < previous.version) return false
   const unchanged =
     previous.state === current.state &&

@@ -37,6 +37,28 @@ public sealed partial class ContainerUploadGatewayTests
         Assert.Equal(StatusCode.Unimplemented, error.StatusCode); Assert.False(read); Assert.Empty(harness.Calls); Assert.Empty(harness.Frames);
     }
 
+    [Theory]
+    [InlineData(1U, 42U, true, true, true, true)]
+    [InlineData(1U, 43U, false, true, true, true)]
+    [InlineData(1U, 43U, true, false, true, true)]
+    [InlineData(1U, 43U, true, true, false, true)]
+    [InlineData(1U, 43U, true, true, true, false)]
+    [InlineData(2U, 43U, true, true, true, true)]
+    public async Task BusinessAttributesRequireWholeWorkflowBeforeAnyWrite(uint major, uint minor, bool attributes, bool history, bool seal, bool fence)
+    {
+        await using var harness = await Harness.Start(major, minor, cancellationFence: fence, recoverySeal: seal, restoration: attributes, historySources: history);
+        var error = await Assert.ThrowsAsync<RpcException>(() => harness.Gateway.RequireContainerRestorationWorkflowAsync(default));
+        Assert.Equal(StatusCode.Unimplemented, error.StatusCode); Assert.Empty(harness.Calls); Assert.Empty(harness.Frames);
+    }
+
+    [Fact]
+    public async Task BusinessAttributeNegotiationIsReadOnlyAndRequiresNoSourceBytes()
+    {
+        await using var harness = await Harness.Start(minor: 43, cancellationFence: true, recoverySeal: true, restoration: true, historySources: true);
+        await harness.Gateway.RequireContainerRestorationWorkflowAsync(default);
+        Assert.Empty(harness.Calls); Assert.Empty(harness.Frames);
+    }
+
     [Fact]
     public async Task RestorationHeaderBindsExactSourceWhileKeepingIndependentDestinationAndBody()
     {

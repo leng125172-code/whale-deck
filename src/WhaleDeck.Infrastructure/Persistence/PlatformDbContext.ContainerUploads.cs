@@ -19,6 +19,7 @@ public sealed partial class PlatformDbContext
                 table.HasCheckConstraint("ck_container_upload_barrier", "(NOT publish_barrier OR completed_at_utc IS NULL) AND (root_started_at_utc IS NULL OR publish_barrier OR completed_at_utc IS NOT NULL) AND (state <> 'Publishing' OR (publish_barrier AND root_started_at_utc IS NOT NULL))");
                 table.HasCheckConstraint("ck_container_upload_lease", "(lease_token IS NULL) = (lease_expires_at_utc IS NULL) AND (state <> 'Receiving' OR receive_token IS NOT NULL)");
                 table.HasCheckConstraint("ck_container_upload_history_source", "history_source_json IS NULL OR octet_length(history_source_json) BETWEEN 1 AND 32768");
+                table.HasCheckConstraint("ck_container_upload_restore_attributes", "NOT restore_attributes OR history_source_json IS NOT NULL");
             });
             entity.HasKey(item => item.Id);
             entity.Property(item => item.ActorSubject).HasMaxLength(256); entity.Property(item => item.TraceId).HasMaxLength(128);
@@ -28,6 +29,7 @@ public sealed partial class PlatformDbContext
             // Text preserves exact authenticated canonical JSON; jsonb would
             // normalize whitespace/order and invalidate the immutable MAC.
             entity.Property(item => item.HistorySourceJson).HasColumnType("text");
+            entity.Property(item => item.RestoreAttributes).HasDefaultValue(false);
             foreach (var name in new[] { nameof(ContainerFileUploadOperation.LoginBinding), nameof(ContainerFileUploadOperation.OwnerHash),
                 nameof(ContainerFileUploadOperation.TargetProof), nameof(ContainerFileUploadOperation.ExpectedParentVersion),
                 nameof(ContainerFileUploadOperation.ExpectedVersion), nameof(ContainerFileUploadOperation.PlanHash),

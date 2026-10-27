@@ -27,17 +27,17 @@ public sealed partial class NativeNotificationDispatchTests
         var page=new ContainerHistoryPageDto(location,new('B',64),[source],new('F',64),"",1,0,true);
         var destination = location with { Path = "recovered/另一份恢复.txt" };
         var ids=new List<Guid>();
-        ContainerFileUploadOperation Row()
+        ContainerFileUploadOperation Row(bool attributes = false)
         {
             var id=Guid.NewGuid();ids.Add(id);var now=ContainerFileUploadIntentValidation.CanonicalTime(DateTimeOffset.UtcNow);
             var sourceJson=ContainerFileRestoreValidation.Snapshot(source);
             var binding=new ContainerFileUploadBinding(id,Guid.NewGuid(),actor.Subject,actor.LoginBinding,actor.TraceId,
-                new(destination,new('B',64),new('C',64),"ABSENT",0),source.SizeBytes,source.Sha256,new('F',64),now,now.AddMinutes(15),sourceJson);
+                new(destination,new('B',64),new('C',64),"ABSENT",0),source.SizeBytes,source.Sha256,new('F',64),now,now.AddMinutes(15),sourceJson,attributes);
             return new() {Id=id,IdempotencyKey=binding.IdempotencyKey,ActorSubject=actor.Subject,LoginBinding=actor.LoginBinding,TraceId=actor.TraceId,
                 OwnerHash=ContainerFileUploadIntentValidation.Owner(actor.Subject,actor.LoginBinding),ContainerId=location.ContainerId,InstanceId=location.InstanceId,
                 RelativePath=destination.Path,TargetProof=binding.Target.TargetProof,ExpectedParentVersion=binding.Target.ExpectedParentVersion,ExpectedVersion="ABSENT",
                 PlanHash=binding.PlanHash,RequestHash=protector.FingerprintContainerUpload(binding),Sha256=source.Sha256,SizeBytes=source.SizeBytes,
-                HistorySourceJson=sourceJson,CreatedAtUtc=now,ExpiresAtUtc=binding.ExpiresAtUtc,NextAttemptAtUtc=now};
+                HistorySourceJson=sourceJson,RestoreAttributes=attributes,CreatedAtUtc=now,ExpiresAtUtc=binding.ExpiresAtUtc,NextAttemptAtUtc=now};
         }
         try
         {
@@ -48,10 +48,10 @@ public sealed partial class NativeNotificationDispatchTests
             await Assert.ThrowsAsync<InvalidOperationException>(()=>catalog.ObserveAsync(actor,changed,default));
             Assert.Equal(source,await catalog.FindAsync(location.ContainerId,source.CaptureId,default));
 
-            var row=Row();await repository.EnqueueAsync(row,default);
+            var row=Row(true);await repository.EnqueueAsync(row,default);
             Assert.Equal("containers.files.restore",(await db.OperationJobs.AsNoTracking().SingleAsync(item=>item.Id==row.Id)).JobType);
             var loaded=(await repository.OwnedAsync(actor,row.Id,default))!;
-            Assert.Equal(destination.Path, loaded.RelativePath);
+            Assert.True(loaded.RestoreAttributes); Assert.Equal(destination.Path, loaded.RelativePath);
             Assert.Equal(source.Path, ContainerFileRestoreValidation.Read(loaded.HistorySourceJson!).Path);
             Assert.Equal(row.HistorySourceJson,loaded.HistorySourceJson);Assert.True(ContainerFileUploadService.HasValidBinding(loaded,protector));
             await Assert.ThrowsAsync<InvalidOperationException>(()=>repository.BeginReceiveAsync(actor,row.Id,DateTimeOffset.UtcNow,default));

@@ -1,5 +1,12 @@
 # 容器历史属性恢复：固定发布引擎候选
 
+## 显式属性策略与页面候选（尚未部署）
+
+已加入不可变 `RestoreAttributes` 策略：默认只恢复内容，勾选才在短时计划、永久意图/MAC、任务查询与签名 Stage 中冻结历史普通属性。新计划显式回显 true，旧服务忽略该选项时前端拒绝继续；登记重试与轮询不得改变或丢失策略。普通旧记录的 false 字段不参与原 JSON/MAC，新增 EF 迁移默认 false，并约束属性恢复必须具有可信历史来源。计划、登记、Worker 接收前均检查完整 minor43 能力，浏览器没有内容或任意 UID/GID 输入入口。
+
+本机 Release 零警告错误，2717 Unit、199 Integration 通过（7 真实依赖默认跳过）；496 前端单元、lint、生产构建及 13 历史恢复浏览器夹具通过。首轮新增 4 浏览器用例误点 Element Plus 隐藏原生 input，改用用户可见标签点击并核对 checkbox，保留首次失败日志。实际旧库升级/原生 PostgreSQL、工作站覆盖部署及普通属性 UI→SQL→Worker→Root→HDD 整链尚待，本节不能证明安装态已交付。
+
+
 最新宿主安装态已更新到06b6eed/minor43并通过实际签名属性恢复，两次2097159字节及普通4属性/Root/HDD/原inode核验通过；API/Worker/Gateway仍5fd8d3b，业务属性策略与页面尚待。见[签名RPC实机记录](CONTAINER_RESTORATION_RPC.md)。下方“未安装”对应前序内部引擎候选。
 
 

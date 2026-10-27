@@ -238,6 +238,12 @@ public sealed partial class ContainerUploadHttpTests
     {
         public int Inspections { get; private set; } public int Stages { get; private set; } public int Publications { get; private set; }
         public byte[] Bytes { get; private set; }=[]; public Func<Task>? AfterStage { get; set; }
+        public bool RestorationUnavailable { get; set; }
+        public async Task RequireContainerRestorationWorkflowAsync(CancellationToken cancellationToken)
+        {
+            await RequireContainerUploadWorkflowAsync(cancellationToken);
+            if (RestorationUnavailable) throw new InvalidOperationException("CONTAINER_RESTORE_CAPABILITY_UNAVAILABLE");
+        }
         public Task RequireContainerUploadWorkflowAsync(CancellationToken cancellationToken)=>Task.CompletedTask;
         public Task<ContainerFileUploadTargetDto> InspectContainerUploadTargetAsync(ContainerFileLocationDto location,CancellationToken cancellationToken)
         { Inspections++; return Task.FromResult(new ContainerFileUploadTargetDto(location,new('B',64),new('C',64),"ABSENT",0)); }

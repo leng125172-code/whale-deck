@@ -23,7 +23,7 @@ public sealed class ContainerFileHistoryService(ContainerFileUploadService autho
 public sealed class ContainerFileRestoreService(ContainerFileUploadService uploads, IContainerFileWriteGateway gateway, IContainerFileHistoryGateway history,
     IContainerFileHistoryRepository catalog, IContainerFileRestoreProtector plans, IContainerFileUploadRepository repository, TimeProvider clock)
 {
-    public async Task<FileUploadPlanDto> PlanAsync(TerminalActor actor, ContainerFileRestoreCommand command, CancellationToken cancellationToken)
+    public async Task<ContainerFileRestorePlanDto> PlanAsync(TerminalActor actor, ContainerFileRestoreCommand command, CancellationToken cancellationToken)
     {
         await uploads.AuthorizeAsync(actor, cancellationToken);
         ContainerFileValidation.Location(command.Location); ContainerFileHistoryValidation.CaptureId(command.CaptureId);
@@ -34,16 +34,19 @@ public sealed class ContainerFileRestoreService(ContainerFileUploadService uploa
         _ = ContainerFileRestoreValidation.SourceLocation(command.Location, source);
         if (source.CaptureId != command.CaptureId || source.CaptureHash != command.ExpectedCaptureHash) throw new InvalidOperationException("CONTAINER_HISTORY_CAPTURE_CHANGED");
         await history.RequireContainerHistoryWorkflowAsync(cancellationToken);
-        await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
+        if (command.RestoreAttributes) await gateway.RequireContainerRestorationWorkflowAsync(cancellationToken);
+        else await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
         var target = await gateway.InspectContainerUploadTargetAsync(command.Location, cancellationToken);
         ContainerFileUploadIntentValidation.Target(target);
         if (target.Location != command.Location || target.ExpectedVersion != command.ExpectedVersion)
             throw new InvalidOperationException("CONTAINER_UPLOAD_VERSION_CONFLICT");
         await uploads.AuthorizeAsync(actor, cancellationToken);
         var now = ContainerFileUploadIntentValidation.CanonicalTime(clock.GetUtcNow());
-        var claims = new ContainerFileRestorePlanClaims(actor.Subject, actor.LoginBinding, target, source, now, now.Add(ContainerFileUploadIntentValidation.PlanLifetime));
+        var claims = new ContainerFileRestorePlanClaims(actor.Subject, actor.LoginBinding, target, source, now, now.Add(ContainerFileUploadIntentValidation.PlanLifetime), command.RestoreAttributes);
         return new(plans.SignContainerRestore(claims), claims.ExpiresAtUtc, target.ExpectedVersion != "ABSENT",
-            "恢复任务会从HDD完整校验旧版本后暂存，再发布到已确认的目标路径。覆盖前会另存当前文件；同盘副本只属于版本留存。此操作恢复内容，文件属性遵循目标的发布策略。备份、容器或目标变化会拒绝，不会重新发送或重复发布结果未知的任务。");
+            "恢复任务会从HDD完整校验旧版本后暂存，再发布到已确认的目标路径。覆盖前会另存当前文件；同盘副本只属于版本留存。" +
+            (command.RestoreAttributes ? "同时恢复历史所有者、所属组、普通权限和修改时间；特殊权限位、ACL及扩展属性不支持，所有者无法映射或精度不足时拒绝发布。" : "此操作仅恢复内容，文件属性遵循目标的发布策略。") +
+            "备份、容器或目标变化会拒绝，不会重新发送或重复发布结果未知的任务。", command.RestoreAttributes);
     }
     public async Task<ContainerFileUploadIntentDto> SubmitAsync(TerminalActor actor, string containerId, SubmitFileUploadCommand command, CancellationToken cancellationToken)
     {
@@ -51,7 +54,7 @@ public sealed class ContainerFileRestoreService(ContainerFileUploadService uploa
         var claims = plans.VerifyContainerRestore(command.PlanHash); ContainerFileRestoreValidation.Claims(claims);
         return await uploads.SubmitBoundAsync(actor, containerId, command,
             new(claims.Actor, claims.LoginBinding, claims.Target, claims.Source.SizeBytes, claims.Source.Sha256, claims.CreatedAtUtc, claims.ExpiresAtUtc),
-            ContainerFileRestoreValidation.Snapshot(claims.Source), cancellationToken);
+            ContainerFileRestoreValidation.Snapshot(claims.Source), cancellationToken, claims.RestoreAttributes);
     }
     public async Task<ContainerFileUploadIntentDto> GetAsync(TerminalActor actor, string containerId, Guid id, CancellationToken cancellationToken)
     {

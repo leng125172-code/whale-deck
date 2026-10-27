@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { assertContainerHistoryPage, validContainerHistoryEntry } from '@/services/containerHistory'
+import {
+  assertContainerHistoryPage,
+  validContainerHistoryEntry,
+  assertContainerRestorePlan,
+} from '@/services/containerHistory'
 
 const target = {
   containerId: 'a'.repeat(64),
@@ -82,5 +86,28 @@ describe('container-only HDD history scope and inventory', () => {
     for (const availability of ['Present', 'Incomplete', 'Missing', 'Invalid'])
       expect(validContainerHistoryEntry({ ...entry, availability })).toBe(true)
     expect(() => assertContainerHistoryPage(page, target, 'work/different.txt')).toThrow(/容器历史/)
+  })
+})
+
+describe('explicit restore policy confirmation', () => {
+  const plan = {
+    planHash: 'signed-plan',
+    expiresAtUtc: '2099-01-01T00:00:00Z',
+    overwrites: false,
+    warning: 'owned plan',
+  }
+  it('accepts legacy content-only plans and requires an explicit true echo for attributes', () => {
+    expect(assertContainerRestorePlan(plan, false)).toEqual(plan)
+    expect(assertContainerRestorePlan({ ...plan, restoreAttributes: true }, true)).toEqual(plan)
+    expect(() => assertContainerRestorePlan(plan, true)).toThrow(/未确认属性策略/)
+    expect(() => assertContainerRestorePlan({ ...plan, restoreAttributes: false }, true)).toThrow(
+      /未确认属性策略/,
+    )
+    expect(() =>
+      assertContainerRestorePlan({ ...plan, restoreAttributes: true, uid: 0 }, true),
+    ).toThrow(/未确认属性策略/)
+    expect(() => assertContainerRestorePlan({ ...plan, restoreAttributes: true }, false)).toThrow(
+      /容器上传计划无法核实/,
+    )
   })
 })

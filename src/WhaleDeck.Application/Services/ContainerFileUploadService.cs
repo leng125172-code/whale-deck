@@ -40,12 +40,13 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
     // Only signed Application plans call this shared immutable publication
     // workflow. The HTTP body is never a restoration source.
     internal async Task<ContainerFileUploadIntentDto> SubmitBoundAsync(TerminalActor actor, string containerId, SubmitFileUploadCommand command,
-        ContainerFileUploadPlanClaims claims, string? historySourceJson, CancellationToken cancellationToken)
+        ContainerFileUploadPlanClaims claims, string? historySourceJson, CancellationToken cancellationToken, bool restoreAttributes = false)
     {
         await AuthorizeAsync(actor, cancellationToken); ContainerFileValidation.Id(containerId);
         if (!command.Confirmed || !Guid.TryParseExact(command.IdempotencyKey, "D", out var key) || key == Guid.Empty || key.ToString("D") != command.IdempotencyKey)
             throw new ArgumentException("CONTAINER_UPLOAD_CONFIRMATION_REQUIRED");
         ContainerFileUploadIntentValidation.Claims(claims);
+        if (restoreAttributes && historySourceJson is null) throw ContainerFileRestoreValidation.Invalid();
         if (historySourceJson is not null)
         {
             var source = ContainerFileRestoreValidation.Read(historySourceJson);
@@ -59,7 +60,7 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
         var prior = await repository.OwnedAsync(actor, id, cancellationToken);
         if (prior is not null)
         {
-            if (!HasValidBinding(prior, plans) || prior.PlanHash != planHash || prior.IdempotencyKey != key || prior.HistorySourceJson != historySourceJson)
+            if (!HasValidBinding(prior, plans) || prior.PlanHash != planHash || prior.IdempotencyKey != key || prior.HistorySourceJson != historySourceJson || prior.RestoreAttributes != restoreAttributes)
                 throw new InvalidOperationException("CONTAINER_UPLOAD_IDEMPOTENCY_CONFLICT");
             return Map(prior);
         }
@@ -70,7 +71,8 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
             if (history is null) throw new InvalidOperationException("CONTAINER_HISTORY_CAPABILITY_UNAVAILABLE");
             await history.RequireContainerHistoryWorkflowAsync(cancellationToken);
         }
-        await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
+        if (restoreAttributes) await gateway.RequireContainerRestorationWorkflowAsync(cancellationToken);
+        else await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
         var current = await gateway.InspectContainerUploadTargetAsync(claims.Target.Location, cancellationToken);
         ContainerFileUploadIntentValidation.Target(current);
         if (current != claims.Target) throw new InvalidOperationException("CONTAINER_UPLOAD_VERSION_CONFLICT");
@@ -80,12 +82,12 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
         // must not acquire a fresh permanent intent through a slow dependency.
         if (claims.ExpiresAtUtc <= created) throw new InvalidOperationException("CONTAINER_UPLOAD_PLAN_EXPIRED");
         var binding = new ContainerFileUploadBinding(id, key, actor.Subject, actor.LoginBinding, actor.TraceId, current,
-            claims.SizeBytes, claims.Sha256, planHash, created, expires, historySourceJson);
+            claims.SizeBytes, claims.Sha256, planHash, created, expires, historySourceJson, restoreAttributes);
         var row = new ContainerFileUploadOperation { Id = id, IdempotencyKey = key, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding,
             TraceId = actor.TraceId, OwnerHash = ContainerFileUploadIntentValidation.Owner(actor.Subject, actor.LoginBinding), ContainerId = current.Location.ContainerId,
             InstanceId = current.Location.InstanceId, RelativePath = current.Location.Path, TargetProof = current.TargetProof, ExpectedParentVersion = current.ExpectedParentVersion,
             ExpectedVersion = current.ExpectedVersion, PreviousSizeBytes = current.CurrentSizeBytes, PlanHash = planHash, RequestHash = plans.FingerprintContainerUpload(binding),
-            Sha256 = claims.Sha256, SizeBytes = claims.SizeBytes, HistorySourceJson = historySourceJson,
+            Sha256 = claims.Sha256, SizeBytes = claims.SizeBytes, HistorySourceJson = historySourceJson, RestoreAttributes = restoreAttributes,
             CreatedAtUtc = created, ExpiresAtUtc = expires, NextAttemptAtUtc = created.AddSeconds(6) };
         return Map(await repository.EnqueueAsync(row, cancellationToken));
     }
@@ -164,5 +166,5 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
         catch (ArgumentException) { return false; }
     }
     public static ContainerFileUploadIntentDto Map(ContainerFileUploadOperation row) => new(row.Id, row.Id,
-        new(row.ContainerId, row.InstanceId, row.RelativePath), row.SizeBytes, row.Sha256, row.State, row.ExpiresAtUtc, row.ResultCode, row.Version, row.PublishedVersion, row.PreviousRetained);
+        new(row.ContainerId, row.InstanceId, row.RelativePath), row.SizeBytes, row.Sha256, row.State, row.ExpiresAtUtc, row.ResultCode, row.Version, row.PublishedVersion, row.PreviousRetained, row.RestoreAttributes);
 }

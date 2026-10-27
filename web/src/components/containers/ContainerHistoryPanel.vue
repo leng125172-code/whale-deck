@@ -36,6 +36,8 @@ const visible = ref(false),
   version = ref('')
 const entries = ref<ContainerHistoryEntry[]>([])
 const incomplete = ref(0)
+const restoreAttributes = ref(false),
+  approvedAttributes = ref(false)
 const destinationVisible = ref(false),
   destination = ref(''),
   restorePath = ref('')
@@ -82,6 +84,8 @@ function clear() {
   cursor.value = ''
   version.value = ''
   incomplete.value = 0
+  restoreAttributes.value = false
+  approvedAttributes.value = false
   selected.value = null
   destinationSource.value = null
   destinationVisible.value = false
@@ -172,6 +176,7 @@ async function query() {
       restorePath.value,
       row.id,
       local.signal,
+      approvedAttributes.value,
     )
     if (token !== generation || local.signal.aborted) return
     accept(next)
@@ -200,7 +205,8 @@ async function prepare(source: ContainerHistoryEntry, path = source.path) {
     source.availability !== 'Present'
   )
     return
-  const target = { ...props.target }
+  const target = { ...props.target },
+    attributes = restoreAttributes.value
   if (
     !validContainerUploadLocation({
       containerId: target.containerId,
@@ -230,10 +236,12 @@ async function prepare(source: ContainerHistoryEntry, path = source.path) {
       path,
       current?.version ?? 'ABSENT',
       local.signal,
+      attributes,
     )
     if (token !== generation || local.signal.aborted) return
     selected.value = { ...source }
     restorePath.value = path
+    approvedAttributes.value = attributes
     destinationVisible.value = false
     destinationSource.value = null
     plan.value = result
@@ -277,6 +285,7 @@ async function submit() {
       restorePath.value,
       frozen.value,
       local.signal,
+      approvedAttributes.value,
     )
     if (token !== generation || local.signal.aborted) return
     accept(row)
@@ -328,6 +337,15 @@ function dismissConfirmation() {
   selected.value = null
 }
 watch(
+  restoreAttributes,
+  () => {
+    if (active.value || frozen.value) return
+    plan.value = null
+    confirming.value = false
+  },
+  { flush: 'sync' },
+)
+watch(
   [
     () => props.target.containerId,
     () => props.target.instanceId,
@@ -367,6 +385,15 @@ defineExpose({ open })
         <el-button :disabled="busy || active || !!frozen" @click="load()">刷新历史</el-button
         ><span v-if="busy" role="status">正在核对…</span>
       </div>
+      <el-checkbox
+        v-model="restoreAttributes"
+        :disabled="disabled || busy || active || !!frozen || confirming || destinationVisible"
+      >
+        同时恢复历史普通属性
+      </el-checkbox>
+      <p>
+        普通属性包含所有者、所属组、权限和修改时间；特殊权限位、ACL及扩展属性暂不支持。不勾选则仅恢复内容。
+      </p>
       <p v-if="incomplete">{{ incomplete }} 条损坏元数据未展示，不会用于恢复。</p>
       <div v-for="entry in entries" :key="entry.captureId" class="container-history__entry">
         <div class="container-history__details">
@@ -416,7 +443,8 @@ defineExpose({ open })
         ><el-button :disabled="busy || disabled" @click="submit">重试登记原任务</el-button>
       </div>
       <div v-if="intent" class="container-history__task" role="status">
-        <strong>{{ status }}</strong
+        <strong>{{ status }}</strong>
+        <span>恢复方式：{{ approvedAttributes ? '内容与历史普通属性' : '仅内容' }}</span
         ><code>{{ intent.id }}</code>
         <p v-if="intent.state === 'Unknown'">
           已保留现场与发布保护；请在文件管理的管理员接管中核对，不要重复恢复。
@@ -469,6 +497,7 @@ defineExpose({ open })
   >
     <p class="container-history__path">历史来源：{{ selected?.path }}</p>
     <p class="container-history__path">恢复目标：{{ restorePath }}</p>
+    <p>恢复方式：{{ approvedAttributes ? '内容与历史普通属性' : '仅内容' }}</p>
     <p v-if="selected">
       {{ formatBytes(selected.sizeBytes) }} ·
       {{ new Date(selected.createdAtUnixMs).toLocaleString() }}

@@ -178,12 +178,27 @@ function source(target: ContainerFileTarget, entry: ContainerHistoryEntry) {
   )
     throw new Error('该历史版本不可恢复')
 }
+export function assertContainerRestorePlan(value: unknown, restoreAttributes: boolean): FilePlan {
+  if (!restoreAttributes) return assertContainerUploadPlan(value as FilePlan)
+  if (
+    !exact(value, ['planHash', 'expiresAtUtc', 'overwrites', 'warning', 'restoreAttributes']) ||
+    value.restoreAttributes !== true
+  )
+    throw new Error('恢复计划未确认属性策略，请升级服务或重新核对')
+  return assertContainerUploadPlan({
+    planHash: value.planHash,
+    expiresAtUtc: value.expiresAtUtc,
+    overwrites: value.overwrites,
+    warning: value.warning,
+  } as FilePlan)
+}
 export async function planContainerRestore(
   target: ContainerFileTarget,
   entry: ContainerHistoryEntry,
   destination: string,
   expectedVersion: string,
   signal: AbortSignal,
+  restoreAttributes = false,
 ) {
   source(target, entry)
   if (
@@ -196,7 +211,7 @@ export async function planContainerRestore(
     throw new Error('恢复目标路径无效')
   if (expectedVersion !== 'ABSENT' && !hash.test(expectedVersion))
     throw new Error('当前文件版本无法核实')
-  return assertContainerUploadPlan(
+  return assertContainerRestorePlan(
     await apiRequest<FilePlan>(`${containerFileBase(target.containerId)}/restores/plan`, {
       method: 'POST',
       signal,
@@ -206,8 +221,10 @@ export async function planContainerRestore(
         captureId: entry.captureId,
         expectedCaptureHash: entry.captureHash,
         expectedVersion,
+        ...(restoreAttributes ? { restoreAttributes: true } : {}),
       }),
     }),
+    restoreAttributes,
   )
 }
 export async function createContainerRestore(
@@ -216,6 +233,7 @@ export async function createContainerRestore(
   destination: string,
   registration: ContainerUploadRegistration,
   signal: AbortSignal,
+  restoreAttributes = false,
 ) {
   source(target, entry)
   return assertContainerUploadIntent(
@@ -225,7 +243,13 @@ export async function createContainerRestore(
       headers: { 'Idempotency-Key': registration.idempotencyKey },
       body: JSON.stringify(registration),
     }),
-    { target, path: destination, sizeBytes: entry.sizeBytes, sha256: entry.sha256 },
+    {
+      target,
+      path: destination,
+      sizeBytes: entry.sizeBytes,
+      sha256: entry.sha256,
+      restoreAttributes,
+    },
   )
 }
 export async function getContainerRestore(
@@ -234,6 +258,7 @@ export async function getContainerRestore(
   destination: string,
   id: string,
   signal: AbortSignal,
+  restoreAttributes = false,
 ) {
   source(target, entry)
   if (!uuid.test(id) || id === '00000000-0000-0000-0000-000000000000')
@@ -243,7 +268,13 @@ export async function getContainerRestore(
       `${containerFileBase(target.containerId)}/restores/${id}`,
       { signal },
     ),
-    { target, path: destination, sizeBytes: entry.sizeBytes, sha256: entry.sha256 },
+    {
+      target,
+      path: destination,
+      sizeBytes: entry.sizeBytes,
+      sha256: entry.sha256,
+      restoreAttributes,
+    },
   )
 }
 export async function cancelContainerRestore(

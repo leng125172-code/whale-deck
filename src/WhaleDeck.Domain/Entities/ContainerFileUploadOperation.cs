@@ -23,6 +23,8 @@ public sealed class ContainerFileUploadOperation
     // Restore sources are canonical, authenticated metadata, never file bytes.
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? HistorySourceJson { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RestoreAttributes { get; init; }
     public long SizeBytes { get; init; }
     public string State { get; set; } = "AwaitingUpload";
     public Guid? ReceiveToken { get; set; }

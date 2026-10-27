@@ -184,9 +184,16 @@ public sealed partial class ContainerUploadServiceTests
     {
         public bool WorkflowUnavailable { get; set; }
         public bool RecordStageReceipt { get; set; }
+        public bool RestorationUnavailable { get; set; }
+        public async Task RequireContainerRestorationWorkflowAsync(CancellationToken cancellationToken)
+        {
+            await RequireContainerUploadWorkflowAsync(cancellationToken);
+            if (RestorationUnavailable) throw new InvalidOperationException("CONTAINER_RESTORE_CAPABILITY_UNAVAILABLE");
+        }
         public Task RequireContainerUploadWorkflowAsync(CancellationToken cancellationToken) => WorkflowUnavailable
             ? Task.FromException(new InvalidOperationException("CONTAINER_UPLOAD_CAPABILITY_UNAVAILABLE")) : Task.CompletedTask;
         public int Inspections { get; private set; }
+        public ContainerFileRestoreSourceDto? StageSource { get; private set; }
         public ContainerFileLocationDto? StageLocation { get; private set; }
         public int Stages { get; private set; }
         public byte[] Received { get; private set; } = [];
@@ -207,7 +214,7 @@ public sealed partial class ContainerUploadServiceTests
         { Inspections++; AfterInspection?.Invoke(); return Task.FromResult(Target); }
         public async Task<ContainerFileUploadReceiptDto> StageContainerFileAsync(ContainerFileStageDto request, IAsyncEnumerable<ReadOnlyMemory<byte>> bytes, CancellationToken cancellationToken)
         {
-            StageLocation = request.Location;
+            StageLocation = request.Location; StageSource = request.RestoreSource;
             Stages++; using var body = new MemoryStream();
             await foreach (var part in bytes.WithCancellation(cancellationToken)) await body.WriteAsync(part, cancellationToken);
             Received = body.ToArray(); Assert.Equal(request.Sha256, Convert.ToHexString(SHA256.HashData(Received)));

@@ -41,6 +41,7 @@ public static class ContainerFileUploadIntentValidation
             throw new ArgumentException("CONTAINER_UPLOAD_BINDING_INVALID");
         Actor(binding.Actor, binding.LoginBinding); Target(binding.Target); Payload(binding.SizeBytes, binding.Sha256);
         ContainerFileValidation.Hash(binding.PlanHash); Times(binding.CreatedAtUtc, binding.ExpiresAtUtc, IntentLifetime);
+        if (binding.RestoreAttributes && binding.HistorySourceJson is null) throw ContainerFileRestoreValidation.Invalid();
         if (binding.HistorySourceJson is not null)
         {
             var source = ContainerFileRestoreValidation.Read(binding.HistorySourceJson);
@@ -59,7 +60,7 @@ public static class ContainerFileUploadIntentValidation
         var target = new ContainerFileUploadTargetDto(new(row.ContainerId, row.InstanceId, row.RelativePath), row.TargetProof,
             row.ExpectedParentVersion, row.ExpectedVersion, row.PreviousSizeBytes);
         var binding = new ContainerFileUploadBinding(row.Id, row.IdempotencyKey, row.ActorSubject, row.LoginBinding, row.TraceId,
-            target, row.SizeBytes, row.Sha256, row.PlanHash, row.CreatedAtUtc, row.ExpiresAtUtc, row.HistorySourceJson);
+            target, row.SizeBytes, row.Sha256, row.PlanHash, row.CreatedAtUtc, row.ExpiresAtUtc, row.HistorySourceJson, row.RestoreAttributes);
         Binding(binding); return binding;
     }
     public static string Owner(string actor, string login)
@@ -70,8 +71,9 @@ public static class ContainerFileUploadIntentValidation
     public static ContainerFileStageDto Stage(ContainerFileUploadOperation row)
     {
         _ = ReadBinding(row);
+        var source = row.RestoreAttributes ? ContainerFileRestoreValidation.Read(row.HistorySourceJson!) : null;
         return new(new(row.ContainerId, row.InstanceId, row.RelativePath), row.Id, row.OwnerHash, row.SizeBytes, row.Sha256,
-            row.ExpectedVersion, row.ExpectedParentVersion, row.TargetProof, Context(row));
+            row.ExpectedVersion, row.ExpectedParentVersion, row.TargetProof, Context(row), source is null ? null : new(source.CaptureId, source.CaptureHash, source.Path));
     }
     public static ContainerFileUploadReferenceDto Reference(ContainerFileUploadOperation row)
     {
