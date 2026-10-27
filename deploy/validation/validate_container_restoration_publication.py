@@ -35,6 +35,8 @@ def main():
     assert os.geteuid() == 0 and len(sys.argv) == 2; os.umask(0o077)
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     repository = Path(__file__).resolve().parents[2]
+    validator_revision = owned.common.command(['git', '-C', str(repository), 'rev-parse', 'HEAD']).decode().strip()
+    assert re.fullmatch('[a-f0-9]{40}', validator_revision)
     for name in ('whaledeck-container-file-write.py', 'whaledeck-container-upload.py', 'whaledeck-container-publish.py',
             'whaledeck-container-history.py', 'whaledeck-container-restore.py', 'whaledeck-container-backups.py'):
         assert Path('/usr/local/libexec', name).read_bytes() == owned.common.command(['git', '-C', str(repository), 'show', revision + ':deploy/host/' + name])
@@ -93,7 +95,7 @@ def main():
                 intent = request(owner, 'POST', endpoint + 'restores', 202, headers={**owner_api.headers, 'Idempotency-Key': key},
                     json={'planHash': plan['planHash'], 'confirmed': True, 'idempotencyKey': key}).json()
                 assert intent['restoreAttributes'] is True; identifier = intent['id']; operation = uuid.UUID(identifier).hex
-                baseline = {'revision': revision, 'intent': identifier, 'containerId': first['identifier'], 'source': str(first['folder']),
+                baseline = {'revision': revision, 'validatorRevision': validator_revision, 'intent': identifier, 'containerId': first['identifier'], 'source': str(first['folder']),
                     'secondContainerId': second['identifier'], 'secondSource': str(second['folder']), 'sourceCapture': source_capture,
                     'sourceSha256': source_sha, 'sourceBytes': SIZE, 'currentSha256': current_sha, 'currentFingerprint': current_identity,
                     'evidence': str(evidence), 'workerBefore': initial_worker}
@@ -115,6 +117,7 @@ def main():
                             assert live['state'] == 'Publishing' and live['root_started_at_utc'] and live['publish_barrier'] and live['restore_attributes']
                             assert owned.common.fingerprint(output) == current_identity and output.read_bytes() == body
                             before_worker = worker(); assert before_worker['running']
+                            assert (before_worker['id'], before_worker['image']) == (initial_worker['id'], initial_worker['image'])
                             # Recheck after SQL and target verification: never
                             # call an earlier observation the actual cut point.
                             info = trusted(pending); record = json.loads((STATE / (operation + '.json')).read_bytes())
