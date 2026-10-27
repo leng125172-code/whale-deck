@@ -6,7 +6,7 @@ namespace WhaleDeck.Application.Services;
 
 /// <summary>Only Inspect and idempotent Discard: an original Apply is not part of this contract.</summary>
 public sealed class FileRecoveryDispatcher(IFileRecoveryRepository repository, IFileRecoveryGateway gateway,
-    IIdentityDirectory identity, IFileRecoveryProtector protector, TimeProvider clock)
+    IIdentityDirectory identity, IFileRecoveryProtector protector, TimeProvider clock, ILoginSessionRegistry? logins = null)
 {
     public async Task<bool> TickAsync(CancellationToken cancellationToken)
     {
@@ -24,7 +24,9 @@ public sealed class FileRecoveryDispatcher(IFileRecoveryRepository repository, I
             { await repository.FinishPlanningAsync(row, receipt, "FILES_RECOVERY_READY", cancellationToken); return true; }
             // A changed observation needs a new human-approved plan. Never
             // fence newly discovered facts under an older confirmation.
-            if (receipt.ReceiptHash != row.ObservationHash && !(row.FenceStartedAtUtc is not null && row.RootState == "Missing" && receipt.State == "Aborted"))
+            var containerSealed = row.Kind == FileRecoveryKinds.ContainerUpload && row.FenceStartedAtUtc is not null &&
+                ContainerUploadRecoveryValidation.MatchesApprovedOrSealed(snapshot, receipt);
+            if (receipt.ReceiptHash != row.ObservationHash && !(row.FenceStartedAtUtc is not null && row.RootState == "Missing" && receipt.State == "Aborted") && !containerSealed)
             { await Fail("FILES_RECOVERY_RECEIPT_CHANGED"); return true; }
             if (row.FenceStartedAtUtc is not null && receipt.State != "Missing")
             { await repository.FinishAsync(row, receipt, "FILES_RECOVERY_DISPOSED", cancellationToken); return true; }
@@ -53,6 +55,8 @@ public sealed class FileRecoveryDispatcher(IFileRecoveryRepository repository, I
     {
         try
         {
+            if (row.Kind == FileRecoveryKinds.ContainerUpload && (logins is null ||
+                !await logins.IsActiveAsync(row.ActorSubject, row.LoginBinding, cancellationToken))) return false;
             var user = await identity.ResolveCurrentAsync(row.ActorSubject, null, [], cancellationToken);
             return user.Subject == row.ActorSubject && user.IsAdministrator && user.PermissionExpiresAtUtc > clock.GetUtcNow();
         }

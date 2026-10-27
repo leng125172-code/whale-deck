@@ -10,7 +10,7 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
     IFileMutationProtector mutations, IFileArchiveProtector archives,
     IFileTreeCopyProtector copies, IFileTreeMoveProtector moves, IFileTreePackingProtector packings, IFileTreeUnpackingProtector unpackings,
     IFileTreeRecyclingProtector? recyclings = null, IFileTreeRestoringProtector? restorings = null, IFileTreeOverwriteRestoringProtector? overwrites = null,
-    IFileTreePurgingProtector? purgings = null) : IFileRecoveryInventory
+    IFileTreePurgingProtector? purgings = null, IContainerFileUploadProtector? containerUploads = null) : IFileRecoveryInventory
 {
     private sealed class Header
     {
@@ -48,6 +48,8 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
             .Select(row => new Header { Kind = FileRecoveryKinds.TreeOverwriteRestoring, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.TreeOverwriteRestoring);
         await Add(db.FileTreePurgingOperations.AsNoTracking().Where(row => row.State == "Unknown" && row.CompletedAtUtc == null)
             .Select(row => new Header { Kind = FileRecoveryKinds.TreePurging, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.TreePurging);
+        await Add(db.ContainerFileUploadOperations.AsNoTracking().Where(row => row.State == "Unknown" && row.CompletedAtUtc == null)
+            .Select(row => new Header { Kind = FileRecoveryKinds.ContainerUpload, Id = row.Id, CreatedAtUtc = row.CreatedAtUtc }), FileRecoveryKinds.ContainerUpload);
         var ordered = headers.OrderBy(row => row.CreatedAtUtc).ThenBy(row => FileRecoveryValidation.Rank(row.Kind)).ThenBy(row => row.Id).Take(take + 1).ToArray();
         List<FileRecoveryCandidateDto> entries = [];
         foreach (var header in ordered.Take(take))
@@ -76,6 +78,14 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
         FileRecoveryValidation.Kind(kind); if (id == Guid.Empty) throw new ArgumentException("FILES_RECOVERY_ID_INVALID");
         switch (kind)
         {
+            case FileRecoveryKinds.ContainerUpload:
+            {
+                var row = await db.ContainerFileUploadOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.State == "Unknown" && x.CompletedAtUtc == null, cancellationToken);
+                if (row is null) return null;
+                var valid = containerUploads is not null && ContainerFileUploadService.HasValidBinding(row, containerUploads);
+                return Candidate(row.Id, row.Id, row.Version, row.CreatedAtUtc, row.LeaseExpiresAtUtc, row.RootStartedAtUtc, valid,
+                    null, null, row.PreviousRetained) with { Container = valid ? new(row.ContainerId, row.InstanceId, row.RelativePath) : null };
+            }
             case FileRecoveryKinds.Upload:
             {
                 var row = await db.FileUploadOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.State == "Unknown" && x.CompletedAtUtc == null, cancellationToken);
@@ -164,7 +174,7 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
                 return Candidate(row.Id, row.ExecutionJobId, row.Version, row.CreatedAtUtc, row.LeaseExpiresAtUtc, row.RootStartedAtUtc, valid,
                     command?.Source, null, false) with { Purge = valid ? FileTreePurgingValidation.RecoverySummary(row, purgings!) : null };
             }
-            default:
+            case FileRecoveryKinds.TreeMove:
             {
                 var row = await db.FileTreeMoveOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.State == "Unknown" && x.CompletedAtUtc == null, cancellationToken);
                 if (row is null) return null;
@@ -173,6 +183,7 @@ public sealed class FileRecoveryInventory(PlatformDbContext db, IFilePlanProtect
                 return Candidate(row.Id, row.ExecutionJobId, row.Version, row.CreatedAtUtc, row.LeaseExpiresAtUtc, row.RootStartedAtUtc, valid,
                     command?.Source, command?.Target, row.PartialRetained || row.SourceRetained == true);
             }
+            default: throw new ArgumentException("FILES_RECOVERY_KIND_INVALID");
         }
         FileRecoveryCandidateDto Candidate(Guid intentId, Guid? execution, long version, DateTimeOffset created,
             DateTimeOffset? lease, DateTimeOffset? started, bool valid, FileLocationDto? source, FileLocationDto? target, bool retained) =>

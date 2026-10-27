@@ -153,7 +153,9 @@ public sealed partial class FileRecoveryRepository(PlatformDbContext db, FileRec
             if (row.FenceStartedAtUtc is null) throw new InvalidOperationException("FILES_RECOVERY_FENCE_REQUIRED");
             material.ValidateObservation(FileRecoveryValidation.Snapshot(row), observation);
             var same = observation.ReceiptHash == row.ObservationHash;
-            if (!same && !(row.RootState == "Missing" && observation.State == "Aborted" && row.Disposition == "AcknowledgeUnknown"))
+            var containerSealed = row.Kind == FileRecoveryKinds.ContainerUpload &&
+                ContainerUploadRecoveryValidation.MatchesApprovedOrSealed(FileRecoveryValidation.Snapshot(row), observation);
+            if (!same && !(row.RootState == "Missing" && observation.State == "Aborted" && row.Disposition == "AcknowledgeUnknown") && !containerSealed)
                 await End(row, "Failed", "FILES_RECOVERY_RECEIPT_CHANGED", cancellationToken);
             else
             {

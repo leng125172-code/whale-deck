@@ -48,7 +48,7 @@ public sealed partial class NativeNotificationDispatchTests
             // not the original actor retained in the signed historical intent.
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.QueueAsync(actor with { Subject = overwriteBefore.ActorSubject, LoginBinding = overwriteBefore.LoginBinding },
                 command, Guid.NewGuid().ToString("D"), default));
-            Assert.Equal(11, FileRecoveryKinds.All.Count); Assert.True(kind.Length > 16);
+            Assert.Equal(12, FileRecoveryKinds.All.Count); Assert.True(kind.Length > 16);
         }
         var queued = await service.QueueAsync(actor, command, key, default);
         if (kind == FileRecoveryKinds.TreePurging)

@@ -15,11 +15,17 @@ public static class FileRecoveryValidation
     public static void Command(QueueFileRecoveryCommand command)
     {
         Kind(command.Kind);
-        if (command.IntentId == Guid.Empty || command.OriginalVersion < 0 || command.Disposition is not ("AcknowledgeUnknown" or "ReconcileCompleted") ||
+        if (command.Kind == FileRecoveryKinds.ContainerUpload && command.Disposition != "AcknowledgeUnknown" ||
+            command.IntentId == Guid.Empty || command.OriginalVersion < 0 || command.Disposition is not ("AcknowledgeUnknown" or "ReconcileCompleted") ||
             command.ReasonCode is not ("OriginalSessionLost" or "OperatorHandover" or "IncidentReview")) throw new ArgumentException("FILES_RECOVERY_COMMAND_INVALID");
     }
     public static FileRecoveryTargetBinding Target(FileRecoveryOperation row) => new(row.Kind, row.OriginalIntentId, row.OriginalExecutionJobId, row.OriginalVersion, row.OriginalBindingHash);
-    public static FileRecoverySnapshot Snapshot(FileRecoveryOperation row) => new(row.Kind, row.OriginalJson, Target(row));
+    public static FileRecoverySnapshot Snapshot(FileRecoveryOperation row) => new(row.Kind, row.OriginalJson, Target(row))
+    {
+        RecoveryExecutionId = row.ExecutionJobId,
+        ApprovedObservation = row.ObservationHash is not null && row.RootState is not null && row.ObservationJson is not null && row.ObservationBindingCurrent is not null
+            ? new(row.RootState, row.ObservationHash, row.ObservationBindingCurrent.Value) { ReceiptJson = row.ObservationJson } : null
+    };
     public static FileRecoveryRequestBinding Request(FileRecoveryOperation row) => new(row.Id, row.ActorSubject, row.LoginBinding, row.IdempotencyKey,
         Target(row), row.Disposition, row.ReasonCode, row.CreatedAtUtc, row.PlanningExpiresAtUtc);
     public static FileRecoveryPlanClaims Ready(FileRecoveryOperation row) => new(row.Id, row.ActorSubject, row.LoginBinding, Target(row),
@@ -50,7 +56,7 @@ public static class FileRecoveryValidation
     {
         FileRecoveryKinds.Archive => 0, FileRecoveryKinds.Mutation => 1, FileRecoveryKinds.TreeCopy => 2,
         FileRecoveryKinds.TreeMove => 3, FileRecoveryKinds.Upload => 4, FileRecoveryKinds.TreePacking => 5, FileRecoveryKinds.TreeUnpacking => 6, FileRecoveryKinds.TreeRecycling => 7,
-        FileRecoveryKinds.TreeRestoring => 8, FileRecoveryKinds.TreeOverwriteRestoring => 9, FileRecoveryKinds.TreePurging => 10, _ => throw new ArgumentException("FILES_RECOVERY_KIND_INVALID")
+        FileRecoveryKinds.TreeRestoring => 8, FileRecoveryKinds.TreeOverwriteRestoring => 9, FileRecoveryKinds.TreePurging => 10, FileRecoveryKinds.ContainerUpload => 11, _ => throw new ArgumentException("FILES_RECOVERY_KIND_INVALID")
     };
     public static void Target(FileRecoveryTargetBinding target)
     {
@@ -77,7 +83,8 @@ public static class FileRecoveryValidation
             claims.Actor.Any(char.IsControl) || !FileManagementService.Hex(claims.LoginBinding) || !FileManagementService.Hex(claims.ObservationHash))
             throw new ArgumentException("FILES_RECOVERY_PLAN_INVALID");
         Target(claims.Target);
-        if (claims.ReasonCode is not ("OriginalSessionLost" or "OperatorHandover" or "IncidentReview") ||
+        if (claims.Target.Kind == FileRecoveryKinds.ContainerUpload && (claims.RootState != "Unknown" || claims.Disposition != "AcknowledgeUnknown") ||
+            claims.ReasonCode is not ("OriginalSessionLost" or "OperatorHandover" or "IncidentReview") ||
             claims.RootState is not ("Missing" or "Aborted" or "Unknown" or "Completed") ||
             claims.Disposition is not ("AcknowledgeUnknown" or "ReconcileCompleted") ||
             (claims.RootState == "Completed") != (claims.Disposition == "ReconcileCompleted") ||

@@ -216,7 +216,7 @@ public sealed class FileTreeOverwriteRecoveryMaterialTests : IDisposable
     [Fact]
     public void OverwriteKindRankCursorAndTargetExecutionRemainIndependent()
     {
-        Assert.Equal(11, FileRecoveryKinds.All.Count);
+        Assert.Equal(12, FileRecoveryKinds.All.Count);
         Assert.Equal(9, FileRecoveryValidation.Rank(FileRecoveryKinds.TreeOverwriteRestoring));
         Assert.Equal(8, FileRecoveryValidation.Rank(FileRecoveryKinds.TreeRestoring));
         var row = Original(); var target = Material().Capture(row).Binding;

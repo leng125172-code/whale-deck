@@ -12,13 +12,18 @@ namespace WhaleDeck.Infrastructure.Agent;
 public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutationProtector mutations,
     IFileArchiveProtector archives, IFileTreeCopyProtector copies, IFileTreeMoveProtector moves, IFileTreePackingProtector packings, IFileTreeUnpackingProtector unpackings,
     IFileTreeRecyclingProtector? recyclings = null, IFileTreeRestoringProtector? restorings = null, IFileTreeOverwriteRestoringProtector? overwrites = null,
-    IFileTreePurgingProtector? purgings = null)
+    IFileTreePurgingProtector? purgings = null, IContainerFileUploadProtector? containerUploads = null)
 {
     public const int MaximumBytes = 262144;
     public object? ValidateObservation(FileRecoverySnapshot original, FileRecoveryObservation observation)
     {
         if (observation.State is not ("Missing" or "Unknown" or "Aborted" or "Completed") || Encoding.UTF8.GetByteCount(observation.ReceiptJson) > 16384)
             throw new FileTransferRejectedException();
+        if (original.Kind == FileRecoveryKinds.ContainerUpload)
+        {
+            _ = Read<ContainerFileUploadOperation>(original);
+            return ContainerUploadRecoveryValidation.Decode(original, observation);
+        }
         if (observation.State == "Missing")
         {
             // Missing root evidence does not make the signed historical snapshot optional.
@@ -93,6 +98,8 @@ public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutati
         return value;
         T Decode<T>() => JsonSerializer.Deserialize<T>(observation.ReceiptJson, FileTreeCopyValidation.JsonOptions) ?? throw new FileTransferRejectedException();
     }
+    public FileRecoverySnapshot Capture(ContainerFileUploadOperation row) => Freeze(FileRecoveryKinds.ContainerUpload, row.Id, row.Id, row.Version,
+        containerUploads is not null && ContainerFileUploadService.HasValidBinding(row, containerUploads), row.State, row.CompletedAtUtc, row);
     public FileRecoverySnapshot Capture(FileUploadOperation row) => Freeze(FileRecoveryKinds.Upload, row.Id, row.Id, row.Version,
         FileManagementService.HasValidBinding(row, uploads), row.State, row.CompletedAtUtc, row);
     public FileRecoverySnapshot Capture(FileMutationOperation row) => Freeze(FileRecoveryKinds.Mutation, row.Id, row.Id, row.Version,
@@ -123,6 +130,7 @@ public sealed class FileRecoveryMaterial(IFilePlanProtector uploads, IFileMutati
         object row; FileRecoverySnapshot verified;
         switch (snapshot.Kind)
         {
+            case FileRecoveryKinds.ContainerUpload: var container = Decode<ContainerFileUploadOperation>(); row = container; verified = Capture(container); break;
             case FileRecoveryKinds.Upload: var upload = Decode<FileUploadOperation>(); row = upload; verified = Capture(upload); break;
             case FileRecoveryKinds.Mutation: var mutation = Decode<FileMutationOperation>(); row = mutation; verified = Capture(mutation); break;
             case FileRecoveryKinds.Archive: var archive = Decode<FileArchiveOperation>(); row = archive; verified = Capture(archive); break;

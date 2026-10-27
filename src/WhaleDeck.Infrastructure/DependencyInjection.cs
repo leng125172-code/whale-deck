@@ -72,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<ITerminalSessionRepository, TerminalSessionRepository>();
         services.AddScoped<IFileUploadRepository, FileUploadRepository>();
         services.AddSingleton<IFilePlanProtector, FilePlanProtector>();
+        services.AddSingleton<IContainerFileUploadProtector, FilePlanProtector>();
         services.AddSingleton<IFileGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<FileManagementService>();
         services.AddScoped<ContainerFileReadService>();

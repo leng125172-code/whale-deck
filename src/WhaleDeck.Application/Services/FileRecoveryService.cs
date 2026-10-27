@@ -6,12 +6,13 @@ namespace WhaleDeck.Application.Services;
 
 /// <summary>A new administrator's own plan and audit, never a substitute original login.</summary>
 public sealed class FileRecoveryService(FileManagementService authorization, IFileRecoveryRepository repository,
-    IFileRecoveryProtector protector, TimeProvider clock)
+    IFileRecoveryProtector protector, TimeProvider clock, ILoginSessionRegistry? logins = null)
 {
     public async Task<FileRecoveryIntentDto> QueueAsync(TerminalActor actor, QueueFileRecoveryCommand command, string key, CancellationToken cancellationToken)
     {
         await authorization.AuthorizeAsync(actor, cancellationToken);
-        FileRecoveryValidation.Command(command); _ = FileRecoveryValidation.RegistrationId(actor, key);
+        FileRecoveryValidation.Command(command); await RequireLogin(actor, command.Kind, cancellationToken);
+        _ = FileRecoveryValidation.RegistrationId(actor, key);
         var row = await repository.QueueAsync(actor, key, command, cancellationToken);
         return await Map(row, actor, cancellationToken);
     }
@@ -30,16 +31,23 @@ public sealed class FileRecoveryService(FileManagementService authorization, IFi
         var claims = protector.VerifyRecovery(command.PlanHash);
         if (claims.Id != id || claims.Actor != actor.Subject || claims.LoginBinding != actor.LoginBinding)
             throw new UnauthorizedAccessException("FILES_RECOVERY_CURRENT_LOGIN_REQUIRED");
-        await Owned(actor, id, cancellationToken);
+        var owned = await Owned(actor, id, cancellationToken);
+        await RequireLogin(actor, owned.Kind, cancellationToken);
         await authorization.AuthorizeAsync(actor, cancellationToken);
         var row = await repository.ConfirmAsync(actor, claims, command.Version, cancellationToken);
         return await Map(row, actor, cancellationToken);
     }
     public async Task<FileRecoveryIntentDto> CancelAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken)
     {
-        await authorization.AuthorizeAsync(actor, cancellationToken); await Owned(actor, id, cancellationToken);
+        await authorization.AuthorizeAsync(actor, cancellationToken); var owned = await Owned(actor, id, cancellationToken);
+        await RequireLogin(actor, owned.Kind, cancellationToken);
         await repository.CancelAsync(actor, id, cancellationToken);
         return await Map(await Owned(actor, id, cancellationToken), actor, cancellationToken);
+    }
+    private async Task RequireLogin(TerminalActor actor, string kind, CancellationToken cancellationToken)
+    {
+        if (kind == FileRecoveryKinds.ContainerUpload && (logins is null || !await logins.IsActiveAsync(actor.Subject, actor.LoginBinding, cancellationToken)))
+            throw new UnauthorizedAccessException("FILES_RECOVERY_CURRENT_LOGIN_REQUIRED");
     }
     private async Task<FileRecoveryOperation> Owned(TerminalActor actor, Guid id, CancellationToken cancellationToken)
     {
@@ -53,7 +61,7 @@ public sealed class FileRecoveryService(FileManagementService authorization, IFi
         if (!FileRecoveryValidation.Bound(row, protector)) throw new InvalidOperationException("FILES_RECOVERY_BINDING_CHANGED");
         var purge = await repository.PurgeSummaryAsync(row, cancellationToken);
         if ((row.Kind == FileRecoveryKinds.TreePurging) != (purge is not null)) throw new InvalidOperationException("FILES_RECOVERY_BINDING_CHANGED");
-        await authorization.AuthorizeAsync(actor, cancellationToken);
+        await authorization.AuthorizeAsync(actor, cancellationToken); await RequireLogin(actor, row.Kind, cancellationToken);
         var ready = row.State == "Ready" && row.CancelRequestedAtUtc is null && row.ReadyExpiresAtUtc > clock.GetUtcNow();
         var confirmation = ready ? new FileRecoveryConfirmationDto(protector.SignRecovery(FileRecoveryValidation.Ready(row)), row.ReadyExpiresAtUtc!.Value,
             row.Disposition == "ReconcileCompleted" ? "仅按原任务的完整可信回执对账，不重新执行文件操作。完整回执是历史事实，不保证当前目标未变化；对账不会覆盖当前文件。原主体和永久回执保留，当前管理员另行审计。" :

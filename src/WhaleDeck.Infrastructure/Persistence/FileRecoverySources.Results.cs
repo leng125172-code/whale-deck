@@ -21,6 +21,16 @@ public sealed partial class FileRecoverySources
         const string code = "FILES_ADMINISTRATOR_RECOVERY_DISPOSED";
         switch (recovery.Kind)
         {
+            case FileRecoveryKinds.ContainerUpload:
+                if (complete || receipt is not ContainerUploadRecoveryObservationDto { Sealed: true } ||
+                    !ContainerUploadRecoveryValidation.MatchesApprovedOrSealed(FileRecoveryValidation.Snapshot(recovery), observation))
+                    throw new InvalidOperationException("FILES_RECOVERY_RECEIPT_CHANGED");
+                var container = material.Read<ContainerFileUploadOperation>(snapshot); db.Attach(container);
+                // The result remains a failed original upload, independently
+                // explained by the current administrator's acknowledgment.
+                state = "Failed"; container.State = state; container.CompletedAtUtc = now;
+                container.ResultCode = "CONTAINER_UPLOAD_ADMIN_ACKNOWLEDGED"; container.PublishBarrier = false;
+                container.LeaseToken = null; container.LeaseExpiresAtUtc = null; container.Version++; break;
             case FileRecoveryKinds.Upload:
                 var upload = material.Read<FileUploadOperation>(snapshot); db.Attach(upload); var uploaded = receipt as FileUploadReceiptDto;
                 // The old upload state machine has no Acknowledged state. Its
@@ -87,6 +97,7 @@ public sealed partial class FileRecoverySources
                 var purging = material.Read<FileTreePurgingOperation>(snapshot); db.Attach(purging);
                 if (purgingCatalog is null || receipt is not FileTreePurgingReceipt purged) throw new InvalidOperationException("FILES_CAPTURE_CATALOGUE_REQUIRED");
                 purgingCatalog.DisposeRecovery(purging, purged, now, complete); state = purging.State; break;
+            default: throw new ArgumentException("FILES_RECOVERY_KIND_INVALID");
         }
         var job = await db.OperationJobs.FromSqlInterpolated($"SELECT * FROM operation_jobs WHERE id={recovery.OriginalExecutionJobId} FOR UPDATE").SingleAsync(cancellationToken);
         job.State = state == "Succeeded" ? "Succeeded" : "Failed"; job.Phase = "AdministratorRecovery"; job.ErrorCode = state == "Succeeded" ? null : code;
@@ -94,7 +105,7 @@ public sealed partial class FileRecoverySources
         var sequence = (await db.OperationJobEvents.Where(row => row.JobId == job.Id).MaxAsync(row => (long?)row.Sequence, cancellationToken) ?? 0) + 1;
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
         await FilePathLocks.Release(db, job.Id, cancellationToken);
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('FileUploadRequested','FileUploadCancellationRequested','FileMutationRequested','FileMutationCancellationRequested','FileArchiveRequested','FileArchiveCancellationRequested','FileTreeCopyRequested','FileTreeCopyCancellationRequested','FileTreeMoveRequested','FileTreeMoveCancellationRequested','FileTreePackingRequested','FileTreePackingCancellationRequested','FileTreeUnpackingRequested','FileTreeUnpackingCancellationRequested','FileTreeRecyclingRequested','FileTreeRecyclingCancellationRequested','FileTreeRestoringRequested','FileTreeRestoringCancellationRequested','FileTreeOverwriteRestoringRequested','FileTreeOverwriteRestoringCancellationRequested','FileTreePurgingRequested','FileTreePurgingCancellationRequested') AND payload_json->>'jobId'={job.Id.ToString("D")}", cancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('ContainerFileUploadRequested','ContainerFileUploadCancellationRequested','FileUploadRequested','FileUploadCancellationRequested','FileMutationRequested','FileMutationCancellationRequested','FileArchiveRequested','FileArchiveCancellationRequested','FileTreeCopyRequested','FileTreeCopyCancellationRequested','FileTreeMoveRequested','FileTreeMoveCancellationRequested','FileTreePackingRequested','FileTreePackingCancellationRequested','FileTreeUnpackingRequested','FileTreeUnpackingCancellationRequested','FileTreeRecyclingRequested','FileTreeRecyclingCancellationRequested','FileTreeRestoringRequested','FileTreeRestoringCancellationRequested','FileTreeOverwriteRestoringRequested','FileTreeOverwriteRestoringCancellationRequested','FileTreePurgingRequested','FileTreePurgingCancellationRequested') AND payload_json->>'jobId'={job.Id.ToString("D")}", cancellationToken);
         return state;
     }
 }

@@ -16,14 +16,16 @@ public static class FileRecoveryKinds
     public const string TreeOverwriteRestoring = "tree-overwrite-restore";
     public const string TreePurging = "tree-purge";
     public const string Upload = "upload";
-    public static IReadOnlyList<string> All { get; } = Array.AsReadOnly(new[] { Archive, Mutation, TreeCopy, TreeMove, Upload, TreePacking, TreeUnpacking, TreeRecycling, TreeRestoring, TreeOverwriteRestoring, TreePurging });
+    public const string ContainerUpload = "container-upload";
+    public static IReadOnlyList<string> All { get; } = Array.AsReadOnly(new[] { Archive, Mutation, TreeCopy, TreeMove, Upload, TreePacking, TreeUnpacking, TreeRecycling, TreeRestoring, TreeOverwriteRestoring, TreePurging, ContainerUpload });
 }
 
 /// <summary>Safe inventory only: no original login, owner key, signed plan or private receipt.</summary>
 public sealed record FileRecoveryCandidateDto(string Kind, Guid IntentId, Guid? ExecutionJobId,
     long Version, DateTimeOffset CreatedAtUtc, DateTimeOffset? LeaseExpiresAtUtc, bool RootStartRecorded,
     string Integrity, FileLocationDto? Source, FileLocationDto? Target, bool? HasRetainedObjects,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FileRecoveryPurgeDto? Purge = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FileRecoveryPurgeDto? Purge = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ContainerFileLocationDto? Container = null);
 /// <summary>Current signed original facts only; null never means that deletion did not happen.</summary>
 public sealed record FileRecoveryPurgeDto(Guid CaptureId, string CaptureKind, string Scope, long Version, string State,
     bool? DeletionStarted, bool? ArchiveRemoved, bool? OriginalsRemoved);

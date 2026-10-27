@@ -14,7 +14,7 @@ public sealed class FileTreePurgingRecoveryModelTests
     public void EleventhKindExpandsConstraintWithoutReplacingAnyHistoricalEvidence()
     {
         using var db = new PlatformDbContext(new DbContextOptionsBuilder<PlatformDbContext>().UseNpgsql("Host=127.0.0.1;Database=offline_model_only").Options);
-        Assert.False(db.Database.HasPendingModelChanges()); Assert.Equal(11, FileRecoveryKinds.All.Count);
+        Assert.False(db.Database.HasPendingModelChanges()); Assert.Equal(12, FileRecoveryKinds.All.Count);
         var model = db.GetService<Microsoft.EntityFrameworkCore.Metadata.IDesignTimeModel>().Model.FindEntityType(typeof(FileRecoveryOperation))!;
         Assert.Contains(FileRecoveryKinds.TreePurging, Assert.Single(model.GetCheckConstraints(), constraint => constraint.Name == "ck_file_recovery_kind").Sql, StringComparison.Ordinal);
         var assembly = db.GetService<IMigrationsAssembly>(); var entry = Assert.Single(assembly.Migrations, row => row.Key.EndsWith("_FileTreePurgingAdministratorRecovery", StringComparison.Ordinal));

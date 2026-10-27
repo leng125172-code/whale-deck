@@ -1610,7 +1610,7 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_file_recovery_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND original_binding_hash ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$' AND (plan_hash IS NULL OR plan_hash ~ '^[A-F0-9]{64}$') AND (observation_hash IS NULL OR observation_hash ~ '^[A-F0-9]{64}$')");
 
-                            t.HasCheckConstraint("ck_file_recovery_kind", "kind IN ('upload','mutation','archive','tree-copy','tree-move','tree-pack','tree-unpack','tree-trash','tree-restore','tree-overwrite-restore','tree-purge') AND disposition IN ('AcknowledgeUnknown','ReconcileCompleted') AND reason_code IN ('OriginalSessionLost','OperatorHandover','IncidentReview')");
+                            t.HasCheckConstraint("ck_file_recovery_kind", "kind IN ('upload','mutation','archive','tree-copy','tree-move','tree-pack','tree-unpack','tree-trash','tree-restore','tree-overwrite-restore','tree-purge','container-upload') AND (kind<>'container-upload' OR disposition='AcknowledgeUnknown') AND disposition IN ('AcknowledgeUnknown','ReconcileCompleted') AND reason_code IN ('OriginalSessionLost','OperatorHandover','IncidentReview')");
 
                             t.HasCheckConstraint("ck_file_recovery_limits", "version>=0 AND original_version>=0 AND planning_expires_at_utc=created_at_utc+INTERVAL '15 minutes' AND octet_length(original_json::text)<=262144 AND jsonb_typeof(original_json)='object' AND idempotency_key ~ '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' AND (observation_json IS NULL OR octet_length(observation_json::text)<=16384)");
 

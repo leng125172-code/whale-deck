@@ -8,6 +8,8 @@ public sealed class FileRecoverySnapshot(string kind, string originalJson, FileR
     public string Kind { get; } = kind;
     [JsonIgnore] public string OriginalJson { get; } = originalJson;
     public FileRecoveryTargetBinding Binding { get; } = binding;
+    public Guid? RecoveryExecutionId { get; init; }
+    [JsonIgnore] public FileRecoveryObservation? ApprovedObservation { get; init; }
     public override string ToString() => $"FileRecoverySnapshot({Kind},{Binding.IntentId:D})";
 }
 /// <summary>Only a validated original receipt can support reconciliation; no file Apply is exposed.</summary>

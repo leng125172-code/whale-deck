@@ -20,6 +20,26 @@ public sealed partial class AgentGateway : IFileRecoveryGateway
             throw new ArgumentException("FILES_RECOVERY_CURRENT_ACTOR_INVALID");
         switch (original.Kind)
         {
+            case FileRecoveryKinds.ContainerUpload:
+            {
+                var row = _recoveryMaterial.Read<ContainerFileUploadOperation>(original);
+                var reference = ContainerFileUploadIntentValidation.Reference(row);
+                var observed = await ObserveContainerUploadRecoveryAsync(reference, cancellationToken);
+                var mapped = ContainerUploadRecoveryValidation.Wrap(original, row, observed);
+                if (!fence) return mapped;
+                if (original.RecoveryExecutionId is not { } recovery || original.ApprovedObservation is null)
+                    throw new InvalidOperationException("FILES_RECOVERY_FENCE_REQUIRED");
+                var approved = (ContainerUploadRecoveryObservationDto)_recoveryMaterial.ValidateObservation(original, original.ApprovedObservation)!;
+                if (observed.Sealed)
+                {
+                    if (!ContainerUploadRecoveryValidation.MatchesApprovedOrSealed(original, mapped))
+                        throw new InvalidOperationException("FILES_RECOVERY_RECEIPT_CHANGED");
+                    return mapped;
+                }
+                if (approved != observed) throw new InvalidOperationException("FILES_RECOVERY_RECEIPT_CHANGED");
+                var sealedObservation = await SealContainerUploadRecoveryAsync(reference, recovery, currentActor, approved.ObservationHash, cancellationToken);
+                return ContainerUploadRecoveryValidation.Wrap(original, row, sealedObservation);
+            }
             case FileRecoveryKinds.Upload:
             {
                 var row = _recoveryMaterial.Read<FileUploadOperation>(original);
