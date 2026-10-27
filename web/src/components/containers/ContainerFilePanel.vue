@@ -6,6 +6,7 @@ import { authSession } from '@/services/authSession'
 import { formatBytes } from '@/services/displayUnits'
 import { filePath } from '@/services/fileManagement'
 import type { FileEntry } from '@/services/fileManagement'
+import ContainerUploadPanel from '@/components/containers/ContainerUploadPanel.vue'
 import {
   canDownloadContainerFile,
   downloadContainerFile,
@@ -188,7 +189,7 @@ onBeforeUnmount(() => {
 <template>
   <section v-if="allowed" class="container-files" aria-label="容器文件">
     <div class="container-files__heading">
-      <h3>容器文件 <el-tag size="small" effect="plain">只读</el-tag></h3>
+      <h3>容器文件 <el-tag size="small" effect="plain">受控读写</el-tag></h3>
       <div class="container-files__buttons">
         <el-button v-if="target" :icon="RefreshRight" :disabled="!!busy" @click="load()"
           >刷新</el-button
@@ -198,7 +199,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <p class="container-files__note">
-      绑定当前运行实例；敏感文件、符号链接和核心共享资源不可读取。单文件上限 1 GiB。
+      绑定当前运行实例；敏感文件、符号链接和核心共享资源不可读写。上传须先校验、规划并确认。
     </p>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <div v-if="target" class="container-files__location">
@@ -225,6 +226,13 @@ onBeforeUnmount(() => {
         <el-button native-type="submit" :disabled="!!busy">前往</el-button>
       </form>
     </div>
+    <ContainerUploadPanel
+      v-if="target"
+      :target="target"
+      :path="path"
+      :disabled="!!busy"
+      @refresh="load(path)"
+    />
     <div v-if="busy" class="container-files__status" role="status">
       {{ busy }}<span v-if="busy === '下载中'"> · {{ progress }}%</span>
     </div>

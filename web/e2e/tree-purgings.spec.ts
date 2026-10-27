@@ -170,7 +170,12 @@ test('lost create response reloads by the original key without registering anoth
   await dialog(page).getByRole('button', { name: '生成清理计划', exact: true }).click()
   await expect(page).toHaveURL(/treePurgeKey=/)
   const originalKey = new URL(page.url()).searchParams.get('treePurgeKey')
+  // The product persists the recovery key before sending POST. Wait for the
+  // fixture to receive that request and actually lose its response before
+  // reloading; observing the earlier URL alone does not prove it arrived.
+  await expect.poll(() => control.state.lostCreate).toBe(true)
   expect(originalKey).toBe(control.state.key)
+  expect(creates(control)).toHaveLength(1)
   await page.reload()
   await expect(dialog(page).getByText('等待确认', { exact: true })).toBeVisible()
   expect(control.state.reads).toContain(`/by-key/${originalKey}`)

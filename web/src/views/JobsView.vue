@@ -17,8 +17,16 @@ let unsubscribe: (() => void) | undefined
 let openVersion = 0
 const terminalStates = new Set(['Succeeded', 'Failed', 'Canceled', 'RolledBack'])
 const canCancel = computed(() => selected.value && !terminalStates.has(selected.value.state))
+const byteUpload = computed(
+  () =>
+    !!selected.value &&
+    ['files.upload', 'containers.files.upload'].includes(selected.value.jobType),
+)
 const canRetry = computed(
-  () => selected.value && ['Failed', 'Canceled', 'RolledBack'].includes(selected.value.state),
+  () =>
+    selected.value &&
+    !byteUpload.value &&
+    ['Failed', 'Canceled', 'RolledBack'].includes(selected.value.state),
 )
 interface RetryContext {
   jobId: string
@@ -120,7 +128,7 @@ async function cancelJob() {
 }
 
 async function openRetry() {
-  if (!selected.value) return
+  if (!selected.value || !canRetry.value) return
   try {
     retryContext.value = await apiRequest<RetryContext>(`jobs/${selected.value.id}/retry-context`)
     retryInput.value = ''
@@ -277,6 +285,12 @@ onBeforeUnmount(() => {
             >
           </el-descriptions-item>
         </el-descriptions>
+        <el-alert
+          v-if="byteUpload"
+          title="重新上传请回到文件页面选择文件，并确认基于当前版本的新计划。原任务不会自动重传文件。"
+          type="info"
+          :closable="false"
+        />
         <h3 class="job-events-title">实时事件</h3>
         <el-alert
           v-if="eventsTruncated"

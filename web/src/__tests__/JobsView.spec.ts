@@ -78,6 +78,27 @@ afterEach(() => {
 })
 
 describe('Job retry', () => {
+  it.each(['files.upload', 'containers.files.upload'])(
+    '%s requires a selected file and never exposes generic retry',
+    async (jobType) => {
+      const upload = { ...source, jobType }
+      request.mockImplementation(async (path: string) => {
+        if (path === 'jobs?take=100') return [upload]
+        if (path === `jobs/${source.id}`) return upload
+        throw new Error(`Unexpected request: ${path}`)
+      })
+      const wrapper = mount(JobsView, { global: { plugins: [ElementPlus], stubs } })
+      wrappers.push(wrapper)
+      await flushPromises()
+      await wrapper.get('.el-table__body tr').trigger('click')
+      await flushPromises()
+      expect(wrapper.findAll('button').some((button) => button.text() === '重新预检并重试')).toBe(
+        false,
+      )
+      expect(wrapper.text()).toContain('原任务不会自动重传文件')
+      expect(request.mock.calls.some(([path]) => path.includes('/retry'))).toBe(false)
+    },
+  )
   it('loads persisted events even for a finished job and closes the subscription on unmount', async () => {
     const close = vi.fn<() => void>()
     subscribe.mockReturnValue(close)
