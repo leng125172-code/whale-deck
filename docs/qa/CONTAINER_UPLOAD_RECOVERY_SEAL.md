@@ -13,7 +13,7 @@
 
 ## 验证
 
-- Release零警告错误；全量2561 Unit/174 Integration通过，默认7原生夹具明确跳过。新增SDK/Agent/内容签名检查包括旧minor/缺能力拒绝、原身份与新管理员分离、修改请求体/方法/重放拒绝、输出摘要/状态/范围不一致拒绝。首轮精确七方法与五处旧协议版本预期失败，按新契约更新到精确7方法/minor41并保留全部旧方法/能力检查后重验通过，没有移除测试。
+- Release零警告错误；全量2563 Unit/174 Integration通过，默认7原生夹具明确跳过。新增SDK/Agent/内容签名检查包括旧minor/缺能力拒绝、原身份与新管理员分离、修改请求体/方法/重放拒绝、输出摘要/状态/范围不一致拒绝。首轮精确七方法与五处旧协议版本预期失败，按新契约更新到精确7方法/minor41并保留全部旧方法/能力检查后重验通过，没有移除测试。
 - 14项新真实Linux-root测试通过，含原实例不可用时历史读取、owner/实例/目标证明隔离、观察变化拒绝、保留完整journal/字节、重复/不安全JSON与链接拒绝、16KiB封装边界、真实跨进程Stage持锁，以及封存前/后实际SIGKILL。新/冻结minor40 reader及迟到Stage、Publish、Capture、Discard均拒绝封存；当前文件与HDD字节/inode保持。全体容器文件原生180项通过。容器会话是明确的合成夹具，不算产品授权或安装态证据。
 - 扩展实际systemd profile验收通过：冻结根所有模块/固定helper、生产同款沙箱与能力配置，使用有标签且无网络的独立QA容器/独立state/HDD命名空间；完整2097159字节发布、旧inode/HDD全内容、精确InvocationID取消和原取消栅栏通过。真实停止/重启该容器后，普通旧实例Inspect拒绝而历史Observe保持同摘要；Seal完整保留原回执及所有文件，重复请求不变；当前新实例Missing先封存后合法完整Stage/Publish均精确RECEIPT_INVALID且零新payload。
 - profile正常结束，临时容器/目标目录/历史与活helper精确清理通过，独立标签查询无残留，11核心容器逐项healthy。没有安装候选Agent、没有更新API/Worker/Gateway，也没有跑新功能真实SSO/UI。
@@ -22,3 +22,5 @@
 ## 下一步
 
 独立容器recovery kind/永久计划与二次确认、新管理员授权/租约/审计、同事务确认原Unknown版本及sealed证据后解除共享发布保护；不能落入宿主move分支或把schema3拒绝当普通失败续发。接入后再完成HTTP/Worker/精确代理及真实Cookie→SQL→Agent→Root→HDD/桌面手机验收，最后覆盖部署。当前不把已有原生PG旧提交证据冒充新恢复SQL通过，不签安装态RPC或页面。
+
+补充输出类型门禁：错误布尔类型与空字符串字段统一拒绝为固定CONTAINER_UPLOAD_RECOVERY_OUTPUT_INVALID，不泄漏解析器异常；新增2项并重新Release/全量测试，最终2563 Unit/174 Integration通过（7原生夹具跳过）。Root模块未改，实际profile源SHA逐一再次匹配；不重复运行无改动的Root或前端套件。0626194 CI 40434475963已运行，尚未签终态；上游fa6faf1 CI四路成功、前端仍运行。阶段同步403，稳定事件已保存pending，不声称网站更新成功。

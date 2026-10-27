@@ -32,6 +32,7 @@ public sealed class ContainerUploadRecoveryPolicyTests
     [Theory]
     [InlineData("unknown")][InlineData("duplicate")][InlineData("current")][InlineData("missing-objects")]
     [InlineData("seal")][InlineData("digest")][InlineData("scope")][InlineData("state")]
+    [InlineData("type")][InlineData("null-text")]
     public void MalformedOrContradictoryHistoricalFactsFailClosed(string variant)
     {
         var facts = Facts();
@@ -44,6 +45,8 @@ public sealed class ContainerUploadRecoveryPolicyTests
             case "digest": facts["observationHash"] = new string('F',64); break;
             case "scope": facts["containerId"] = new string('b',64); break;
             case "state": facts["rootState"] = "Completed"; break;
+            case "type": facts["sealed"] = "private-invalid-boolean"; break;
+            case "null-text": facts["originalRecordHash"] = null; break;
         }
         var text = JsonSerializer.Serialize(facts);
         if (variant == "duplicate") text = text[..^1]+",\"sealed\":false}";

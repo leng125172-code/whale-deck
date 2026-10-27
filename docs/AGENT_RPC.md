@@ -1,6 +1,6 @@
 # WhaleDeck Agent RPC 契约
 
-- **2026-10-27 容器历史观察/永久封存候选，未安装**：minor41新增独立签名ObserveRecovery/SealRecovery，历史观察不进原namespace；原journal原子封存并完整保留原件/HDD，冻结minor40 reader与迟到writer也拒绝。2561 Unit/174 Integration通过（7原生夹具跳过）、180容器Linux-root通过；实际固定systemd profile完整2MiB+7、真实停止/重启、历史摘要/封存与当前实例迟到发送拒绝通过，临时资源清理/11核心healthy。没有安装候选或开放恢复SQL/API/UI；59项继续active。[证据与剩余](qa/CONTAINER_UPLOAD_RECOVERY_SEAL.md)。
+- **2026-10-27 容器历史观察/永久封存候选，未安装**：minor41新增独立签名ObserveRecovery/SealRecovery，历史观察不进原namespace；原journal原子封存并完整保留原件/HDD，冻结minor40 reader与迟到writer也拒绝。2563 Unit/174 Integration通过（7原生夹具跳过）、180容器Linux-root通过；实际固定systemd profile完整2MiB+7、真实停止/重启、历史摘要/封存与当前实例迟到发送拒绝通过，临时资源清理/11核心healthy。没有安装候选或开放恢复SQL/API/UI；59项继续active。[证据与剩余](qa/CONTAINER_UPLOAD_RECOVERY_SEAL.md)。
 
 **2026-10-26 首字节前取消已安装签收**：136b8a0/minor40保存独立Prevented拒收标记；a58a489真实签名UDS先取消/查询/重放，再发送合法首帧，精确CONTAINER_UPLOAD_CANCELED且零暂存载荷。完整2MiB+7发布读回/HDD旧原件仍通过，2441 Unit/160 Integration（6原生夹具跳过）、166容器Linux-root通过；本批载荷精确清理、11核心healthy。永久容器任务/共享写屏障、登录撤销/权限审计及BFF/UI仍待，59项继续。[证据和后续约束](qa/CONTAINER_FILE_CANCEL_FENCE.md)。
 

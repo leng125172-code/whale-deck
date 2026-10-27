@@ -42,4 +42,4 @@ CI历史：5853716的原生PG失败对应上述jsonb验收代码问题；6fbca7b
 
 阶段同步补记：项目图谱首次连接403，保留本地pending后重试update_phase成功（eventId whale-deck-container-upload-intents-0325098-20261027），记录已移入synced；没有把整个项目或文件模块标记完成。该目录按仓库规则忽略，不强制加入Git。
 
-后续历史观察/封存Root、Agent minor41和SDK候选已实现：2561 Unit/174 Integration（7默认原生跳过）、180容器Linux-root及真实停止/重启的固定systemd profile通过；线上minor40未变，独立恢复SQL/API/UI仍待。[新协议证据与边界](CONTAINER_UPLOAD_RECOVERY_SEAL.md)。
+后续历史观察/封存Root、Agent minor41和SDK候选已实现：2563 Unit/174 Integration（7默认原生跳过）、180容器Linux-root及真实停止/重启的固定systemd profile通过；线上minor40未变，独立恢复SQL/API/UI仍待。[新协议证据与边界](CONTAINER_UPLOAD_RECOVERY_SEAL.md)。

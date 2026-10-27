@@ -30,9 +30,9 @@ internal static class ContainerUploadRecoveryPolicy
         {
             ContainerId = Text(value, "containerId"), InstanceId = Text(value, "instanceId"), OperationId = Text(value, "operationId"),
             TargetProof = Text(value, "targetProof"), RootState = Text(value, "rootState"), OriginalRecordHash = Text(value, "originalRecordHash"),
-            Sealed = value.GetProperty("sealed").GetBoolean(), SealId = value.GetProperty("sealId").ValueKind == JsonValueKind.Null ? "" : Text(value, "sealId"),
-            BindingCurrent = value.GetProperty("bindingCurrent").GetBoolean(), MayHavePublished = value.GetProperty("mayHavePublished").GetBoolean(),
-            RetainedObjects = value.GetProperty("retainedObjects").GetBoolean(), ObservationHash = Text(value, "observationHash")
+            Sealed = Boolean(value, "sealed"), SealId = value.GetProperty("sealId").ValueKind == JsonValueKind.Null ? "" : Text(value, "sealId"),
+            BindingCurrent = Boolean(value, "bindingCurrent"), MayHavePublished = Boolean(value, "mayHavePublished"),
+            RetainedObjects = Boolean(value, "retainedObjects"), ObservationHash = Text(value, "observationHash")
         };
         if (result.ContainerId != original.ContainerId || result.InstanceId != original.InstanceId || result.OperationId != original.OperationId ||
             result.TargetProof != original.ExpectedTargetProof || !States.Contains(result.RootState) || result.BindingCurrent ||
@@ -50,6 +50,9 @@ internal static class ContainerUploadRecoveryPolicy
         if (ContainerUploadRecoveryBinding.ObservationHash(original, result) != result.ObservationHash) throw Invalid();
         return result;
     }
-    private static string Text(JsonElement value, string key) => value.GetProperty(key).GetString() ?? throw Invalid();
+    private static string Text(JsonElement value, string key) => value.GetProperty(key).ValueKind == JsonValueKind.String
+        ? value.GetProperty(key).GetString() ?? throw Invalid() : throw Invalid();
+    private static bool Boolean(JsonElement value, string key) => value.GetProperty(key).ValueKind is JsonValueKind.True or JsonValueKind.False
+        ? value.GetProperty(key).GetBoolean() : throw Invalid();
     private static InvalidOperationException Invalid() => new("CONTAINER_UPLOAD_RECOVERY_OUTPUT_INVALID");
 }

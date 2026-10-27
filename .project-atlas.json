@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_UPLOAD_RECOVERY_SEAL.md",
-  "nextStep": "按59项继续，17项移出不算完成。容器历史Observe/Seal minor41、原journal永久封存及SDK候选已实现；2561单元/174集成与180容器Linux-root、真实停止重启的systemd profile通过。尚未安装；继续独立容器Unknown恢复SQL/计划确认/新管理员审计与共享保护解除，再接API/Worker/代理和真实登录整链。"
+  "nextStep": "按59项继续，17项移出不算完成。容器历史Observe/Seal minor41、原journal永久封存及SDK候选已实现；2563单元/174集成与180容器Linux-root、真实停止重启的systemd profile通过。尚未安装；继续独立容器Unknown恢复SQL/计划确认/新管理员审计与共享保护解除，再接API/Worker/代理和真实登录整链。"
 }
