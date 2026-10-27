@@ -18,4 +18,6 @@ Worker 只从已批准 HDD 来源读取。SDK 要求末帧与正常 EOF 才能�
 
 新增真实数据库门禁在 NativeNotificationDispatchTests.ContainerRestores：实际迁移/目录/精确JSON-MAC/Job与事务、合法租约接收/Ready/发布屏障与取消；其中Root回执明确为合成，不冒充真实Root。尚待冻结Git源执行。
 
+首轮冻结0632200实际PG在Outbox检查处失败，SQLSTATE42883：新测试把CLR字符串Contains用于jsonb列，产生不支持的SQL函数。此前同轮迁移/目录/来源MAC/租约/Ready/发布步骤已执行，但整轮不计通过；已改为参数化jsonb jobId字段查询并等待完整重跑。隔离容器与临时库清理已确认，生产未部署，失败状态及日志保留。
+
 真实工作站门禁 validate_container_restore_browser.py/.mjs 已准备：BFF先生成2MiB+7旧版本，实际仅重启独占容器，以1440明色/320暗色网页分别恢复两个历史内容版本，确认取消零Job/零浏览器内容、正常跨页双端退出；独立完整字节/SQL目录/不可变来源/Root/HDD与旧inode链核对，永久证据保留、仅精确清理自有测试数据。目前未执行，不能签收。Worker/Agent实际中断与发布故障、普通真实身份/更广恢复边界和其余59项继续。

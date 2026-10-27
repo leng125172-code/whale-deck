@@ -64,7 +64,8 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.True(await repository.FinishAsync(claim,"Succeeded","CONTAINER_UPLOAD_PUBLISHED",receipt,default));
             Assert.False((await repository.OwnedAsync(actor,row.Id,default))!.PublishBarrier);
             Assert.True(await db.AuditEvents.AnyAsync(item=>item.JobId==row.Id&&item.Action=="containers.files.restore.result"));
-            Assert.False(await db.OutboxMessages.AnyAsync(item=>item.PayloadJson.Contains(row.Id.ToString("D"))&&item.ProcessedAtUtc==null));
+            var pendingMessages=await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM outbox_messages WHERE payload_json->>'jobId'={row.Id.ToString("D")} AND processed_at_utc IS NULL").SingleAsync();
+            Assert.Equal(0,pendingMessages);
 
             var canceled=Row();await repository.EnqueueAsync(canceled,default);var pending=await repository.ClaimAsync(DateTimeOffset.UtcNow,default);
             Assert.NotNull(pending);Assert.Equal(canceled.Id,pending.Id);Assert.True(await repository.BeginRestoreReceiveAsync(pending,DateTimeOffset.UtcNow,default));
