@@ -294,3 +294,5 @@ Valkey 清空后系统必须能从 PostgreSQL、Agent 和外部服务重建，�
 迁移 `20261027074344_ContainerFileRestorationSources` 增加 `container_file_versions`：捕获UUID、container_id/original_instance_id/relative_path、source_version/sha256/capture_hash、size_bytes/captured_at_unix_ms/different_source_device、availability/last_observed_at_utc/version。当前容器与捕获索引、字段/预算约束、并发版本；分页未返回不表示缺失，历史元数据不自动删除。没有文件字节、原Owner或宿主存储路径，Present不代表全量内容校验。
 
 `container_file_upload_operations.history_source_json` nullable text保存严格canonical已批准来源并进入不可变MAC；不使用会规范化文本的jsonb。null在普通上传绑定及旧冻结快照中省略，旧MAC格式不变；非null为恢复工作流，HTTP接收入口拒绝。现有Job/Outbox/租约/Unknown/发布屏障复用，恢复job type与审计prefix独立。真实PG迁移及精确文本/MAC/事务、租约/Ready/取消测试已通过，Root与页面证据另见恢复QA。
+
+2026-10-27：容器恢复的HistorySourceJson.Path记录原来源；ContainerFileUploadOperation.RelativePath记录发布目标，两者允许不同，但CID一致且均入MAC。旧原路径记录和普通上传序列化不变，本批没有schema变化。

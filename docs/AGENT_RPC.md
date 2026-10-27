@@ -398,3 +398,5 @@ Agent 不提供“执行命令”“执行脚本”或任意 unit 名称接口�
 - RunComposeAction 执行前再次验证指纹、项目名称和受保护容器名称；启停/重启、拉取与重部署全部要求计划和管理员确认。与应用生命周期共享资源锁。
 - pull 不重启服务；redeploy 不隐式拉取或构建镜像。孤立服务、配置和数据卷不自动删除；启动/重启/重部署等待所有目标服务健康。
 - 当前提供服务级配置变化摘要，不提供原文编辑或逐字段 diff；项目移除和数据卷选择继续使用现有应用卸载用例。Git 同步属于独立后续能力。
+
+2026-10-27 同容器其他路径恢复沿用minor42：ReadSource的location.Path必须为冻结历史来源Path，instance为当前实例；Stage的location.Path为独立目标。来源CID与目标CID必须一致，原只读RPC路径/摘要校验不放宽。两路径已进入既有恢复计划和永久MAC，未变更protobuf或Root schema。5fd8d3b已真实网页/Root/HDD验收，见[证据](qa/CONTAINER_FILE_RESTORATION.md)。

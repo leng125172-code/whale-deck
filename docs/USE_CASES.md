@@ -223,3 +223,5 @@ Worker 批量保存 `container.cpu.utilization`、`container.memory.used/limit/u
 | POST `/restores/{id}/cancel` | 原登录和原任务幂等键请求取消；已发布事实不改称取消 |
 
 恢复type为 `containers.files.restore`，使用共享发布屏障，禁止通用重试。Unknown仍由现任管理员的既有container-upload接管只观察/封存，不重新读取来源或重发发布。同容器原路径内容恢复已实测；原属性、其他路径和重建容器迁移仍未签。
+
+2026-10-27：恢复计划请求的path为恢复目标，可与历史来源Path不同；目标父目录须存在，仍限同一容器。来源CaptureId/Hash与目标父叶版本共同冻结；提交只有签名计划/确认/幂等键，不能另传目标或内容。5fd8d3b已验证其他路径新建与覆盖，完整历史属性及重建身份迁移仍待。
