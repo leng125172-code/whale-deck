@@ -1,5 +1,7 @@
 # 容器历史属性恢复：固定发布引擎候选
 
+最新安装态2e13376：发布前重新检查完整属性能力，实际排队/Worker进行中/Agent进行中重启三场景及当前网页4次回归通过。完整证据、两次观察器失败和权限拒绝收尾见[进程重启验收](CONTAINER_RESTORATION_RESTARTS.md)。下方其他“当前版本”为各前序批次。
+
 ## 当前安装态：d8822c6 的显式策略与真实网页属性恢复通过
 
 2026-10-27，正常 dev 覆盖 `whaledeck-dev-d8822c6.service` 成功退出，3分12.767秒；六组件及实际 HTTP 来源均为 `d8822c678a750b3eef64a4ebe100536e6d4158f7`，minor43与运行库/PKCS10.0.13，权限/UDS/动态入口与HDD策略检查通过。`20261027110751_ContainerRestorationAttributePolicy` 已实际应用。没有自动回滚。
