@@ -7,7 +7,8 @@ using WhaleDeck.Domain.Entities;
 namespace WhaleDeck.Application.Services;
 
 public sealed class ContainerFileUploadService(FileManagementService authorization, ILoginSessionRegistry logins,
-    IContainerFileWriteGateway gateway, IContainerFileUploadRepository repository, IContainerFileUploadProtector plans, TimeProvider clock)
+    IContainerFileWriteGateway gateway, IContainerFileUploadRepository repository, IContainerFileUploadProtector plans, TimeProvider clock,
+    IContainerFileHistoryGateway? history = null)
 {
     public async Task AuthorizeAsync(TerminalActor actor, CancellationToken cancellationToken)
     {
@@ -32,9 +33,25 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
     public async Task<ContainerFileUploadIntentDto> SubmitAsync(TerminalActor actor, string containerId, SubmitFileUploadCommand command, CancellationToken cancellationToken)
     {
         await AuthorizeAsync(actor, cancellationToken); ContainerFileValidation.Id(containerId);
+        var claims = plans.VerifyContainerUpload(command.PlanHash);
+        return await SubmitBoundAsync(actor, containerId, command, claims, null, cancellationToken);
+    }
+
+    // Only signed Application plans call this shared immutable publication
+    // workflow. The HTTP body is never a restoration source.
+    internal async Task<ContainerFileUploadIntentDto> SubmitBoundAsync(TerminalActor actor, string containerId, SubmitFileUploadCommand command,
+        ContainerFileUploadPlanClaims claims, string? historySourceJson, CancellationToken cancellationToken)
+    {
+        await AuthorizeAsync(actor, cancellationToken); ContainerFileValidation.Id(containerId);
         if (!command.Confirmed || !Guid.TryParseExact(command.IdempotencyKey, "D", out var key) || key == Guid.Empty || key.ToString("D") != command.IdempotencyKey)
             throw new ArgumentException("CONTAINER_UPLOAD_CONFIRMATION_REQUIRED");
-        var claims = plans.VerifyContainerUpload(command.PlanHash); ContainerFileUploadIntentValidation.Claims(claims);
+        ContainerFileUploadIntentValidation.Claims(claims);
+        if (historySourceJson is not null)
+        {
+            var source = ContainerFileRestoreValidation.Read(historySourceJson);
+            ContainerFileHistoryValidation.Source(claims.Target.Location, source);
+            if (source.SizeBytes != claims.SizeBytes || source.Sha256 != claims.Sha256) throw ContainerFileRestoreValidation.Invalid();
+        }
         if (claims.Actor != actor.Subject || claims.LoginBinding != actor.LoginBinding || claims.Target.Location.ContainerId != containerId)
             throw new UnauthorizedAccessException("CONTAINER_UPLOAD_PLAN_OWNER_REQUIRED");
         var id = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes("whaledeck-container-upload-id-v1:" + BffSessionValidation.SubjectHash(actor.Subject) + ":" + actor.LoginBinding + ":" + key.ToString("N"))).AsSpan(0, 16));
@@ -42,12 +59,17 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
         var prior = await repository.OwnedAsync(actor, id, cancellationToken);
         if (prior is not null)
         {
-            if (!HasValidBinding(prior, plans) || prior.PlanHash != planHash || prior.IdempotencyKey != key)
+            if (!HasValidBinding(prior, plans) || prior.PlanHash != planHash || prior.IdempotencyKey != key || prior.HistorySourceJson != historySourceJson)
                 throw new InvalidOperationException("CONTAINER_UPLOAD_IDEMPOTENCY_CONFLICT");
             return Map(prior);
         }
         var now = clock.GetUtcNow();
         if (claims.ExpiresAtUtc <= now || claims.CreatedAtUtc > now) throw new InvalidOperationException("CONTAINER_UPLOAD_PLAN_EXPIRED");
+        if (historySourceJson is not null)
+        {
+            if (history is null) throw new InvalidOperationException("CONTAINER_HISTORY_CAPABILITY_UNAVAILABLE");
+            await history.RequireContainerHistoryWorkflowAsync(cancellationToken);
+        }
         await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
         var current = await gateway.InspectContainerUploadTargetAsync(claims.Target.Location, cancellationToken);
         ContainerFileUploadIntentValidation.Target(current);
@@ -58,12 +80,13 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
         // must not acquire a fresh permanent intent through a slow dependency.
         if (claims.ExpiresAtUtc <= created) throw new InvalidOperationException("CONTAINER_UPLOAD_PLAN_EXPIRED");
         var binding = new ContainerFileUploadBinding(id, key, actor.Subject, actor.LoginBinding, actor.TraceId, current,
-            claims.SizeBytes, claims.Sha256, planHash, created, expires);
+            claims.SizeBytes, claims.Sha256, planHash, created, expires, historySourceJson);
         var row = new ContainerFileUploadOperation { Id = id, IdempotencyKey = key, ActorSubject = actor.Subject, LoginBinding = actor.LoginBinding,
             TraceId = actor.TraceId, OwnerHash = ContainerFileUploadIntentValidation.Owner(actor.Subject, actor.LoginBinding), ContainerId = current.Location.ContainerId,
             InstanceId = current.Location.InstanceId, RelativePath = current.Location.Path, TargetProof = current.TargetProof, ExpectedParentVersion = current.ExpectedParentVersion,
             ExpectedVersion = current.ExpectedVersion, PreviousSizeBytes = current.CurrentSizeBytes, PlanHash = planHash, RequestHash = plans.FingerprintContainerUpload(binding),
-            Sha256 = claims.Sha256, SizeBytes = claims.SizeBytes, CreatedAtUtc = created, ExpiresAtUtc = expires, NextAttemptAtUtc = created.AddSeconds(6) };
+            Sha256 = claims.Sha256, SizeBytes = claims.SizeBytes, HistorySourceJson = historySourceJson,
+            CreatedAtUtc = created, ExpiresAtUtc = expires, NextAttemptAtUtc = created.AddSeconds(6) };
         return Map(await repository.EnqueueAsync(row, cancellationToken));
     }
     public async Task<ContainerFileUploadIntentDto> GetAsync(TerminalActor actor, string containerId, Guid id, CancellationToken cancellationToken)
@@ -76,6 +99,7 @@ public sealed class ContainerFileUploadService(FileManagementService authorizati
     {
         await validateLogin(cancellationToken); await AuthorizeAsync(actor, cancellationToken);
         var owned = await Owned(actor, containerId, id, cancellationToken);
+        if (owned.HistorySourceJson is not null) throw new InvalidOperationException("CONTAINER_UPLOAD_HTTP_SOURCE_FORBIDDEN");
         if (declaredLength != owned.SizeBytes) throw new ArgumentException("CONTAINER_UPLOAD_CONTENT_LENGTH_REQUIRED");
         await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
         var row = await repository.BeginReceiveAsync(actor, id, clock.GetUtcNow(), cancellationToken);

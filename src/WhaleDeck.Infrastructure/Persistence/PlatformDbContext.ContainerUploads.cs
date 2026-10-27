@@ -18,12 +18,16 @@ public sealed partial class PlatformDbContext
                 table.HasCheckConstraint("ck_container_upload_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND owner_hash ~ '^[A-F0-9]{64}$' AND target_proof ~ '^[A-F0-9]{64}$' AND expected_parent_version ~ '^[A-F0-9]{64}$' AND plan_hash ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$' AND sha256 ~ '^[A-F0-9]{64}$' AND (expected_version ~ '^[A-F0-9]{64}$' OR (expected_version='ABSENT' AND previous_size_bytes=0)) AND (published_version IS NULL OR published_version ~ '^[A-F0-9]{64}$')");
                 table.HasCheckConstraint("ck_container_upload_barrier", "(NOT publish_barrier OR completed_at_utc IS NULL) AND (root_started_at_utc IS NULL OR publish_barrier OR completed_at_utc IS NOT NULL) AND (state <> 'Publishing' OR (publish_barrier AND root_started_at_utc IS NOT NULL))");
                 table.HasCheckConstraint("ck_container_upload_lease", "(lease_token IS NULL) = (lease_expires_at_utc IS NULL) AND (state <> 'Receiving' OR receive_token IS NOT NULL)");
+                table.HasCheckConstraint("ck_container_upload_history_source", "history_source_json IS NULL OR octet_length(history_source_json) BETWEEN 1 AND 32768");
             });
             entity.HasKey(item => item.Id);
             entity.Property(item => item.ActorSubject).HasMaxLength(256); entity.Property(item => item.TraceId).HasMaxLength(128);
             entity.Property(item => item.ContainerId).HasMaxLength(64); entity.Property(item => item.InstanceId).HasMaxLength(64);
             entity.Property(item => item.RelativePath).HasMaxLength(4096); entity.Property(item => item.State).HasMaxLength(16);
             entity.Property(item => item.ResultCode).HasMaxLength(64);
+            // Text preserves exact authenticated canonical JSON; jsonb would
+            // normalize whitespace/order and invalidate the immutable MAC.
+            entity.Property(item => item.HistorySourceJson).HasColumnType("text");
             foreach (var name in new[] { nameof(ContainerFileUploadOperation.LoginBinding), nameof(ContainerFileUploadOperation.OwnerHash),
                 nameof(ContainerFileUploadOperation.TargetProof), nameof(ContainerFileUploadOperation.ExpectedParentVersion),
                 nameof(ContainerFileUploadOperation.ExpectedVersion), nameof(ContainerFileUploadOperation.PlanHash),

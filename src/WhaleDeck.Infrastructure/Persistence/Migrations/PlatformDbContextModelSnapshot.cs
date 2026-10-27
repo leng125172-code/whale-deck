@@ -752,6 +752,10 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at_utc");
 
+                    b.Property<string>("HistorySourceJson")
+                        .HasColumnType("text")
+                        .HasColumnName("history_source_json");
+
                     b.Property<Guid>("IdempotencyKey")
                         .HasColumnType("uuid")
                         .HasColumnName("idempotency_key");
@@ -887,6 +891,8 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_container_upload_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND owner_hash ~ '^[A-F0-9]{64}$' AND target_proof ~ '^[A-F0-9]{64}$' AND expected_parent_version ~ '^[A-F0-9]{64}$' AND plan_hash ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$' AND sha256 ~ '^[A-F0-9]{64}$' AND (expected_version ~ '^[A-F0-9]{64}$' OR (expected_version='ABSENT' AND previous_size_bytes=0)) AND (published_version IS NULL OR published_version ~ '^[A-F0-9]{64}$')");
 
+                            t.HasCheckConstraint("ck_container_upload_history_source", "history_source_json IS NULL OR octet_length(history_source_json) BETWEEN 1 AND 32768");
+
                             t.HasCheckConstraint("ck_container_upload_identity", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND idempotency_key <> '00000000-0000-0000-0000-000000000000'::uuid AND container_id ~ '^[a-f0-9]{64}$' AND octet_length(relative_path) BETWEEN 1 AND 4096 AND length(actor_subject) BETWEEN 1 AND 256 AND length(trace_id) BETWEEN 1 AND 128");
 
                             t.HasCheckConstraint("ck_container_upload_lease", "(lease_token IS NULL) = (lease_expires_at_utc IS NULL) AND (state <> 'Receiving' OR receive_token IS NOT NULL)");
@@ -896,6 +902,94 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_container_upload_state", "state IN ('AwaitingUpload','Receiving','Ready','Publishing','Unknown','Succeeded','Superseded','Canceled','Failed')");
 
                             t.HasCheckConstraint("ck_container_upload_terminal", "(completed_at_utc IS NULL) = (state IN ('AwaitingUpload','Receiving','Ready','Publishing','Unknown'))");
+                        });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerFileVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Availability")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("availability");
+
+                    b.Property<string>("CaptureHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("capture_hash");
+
+                    b.Property<long>("CapturedAtUnixMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("captured_at_unix_ms");
+
+                    b.Property<string>("ContainerId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("container_id");
+
+                    b.Property<bool>("DifferentSourceDevice")
+                        .HasColumnType("boolean")
+                        .HasColumnName("different_source_device");
+
+                    b.Property<DateTimeOffset>("LastObservedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_observed_at_utc");
+
+                    b.Property<string>("OriginalInstanceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("original_instance_id");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("relative_path");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("SourceVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_version");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContainerId", "Id");
+
+                    b.HasIndex("ContainerId", "CapturedAtUnixMs", "Id");
+
+                    b.ToTable("container_file_versions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_container_history_availability", "availability IN ('Present','Incomplete','Missing','Invalid')");
+
+                            t.HasCheckConstraint("ck_container_history_hashes", "source_version ~ '^[A-F0-9]{64}$' AND sha256 ~ '^[A-F0-9]{64}$' AND capture_hash ~ '^[A-F0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_container_history_identity", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND container_id ~ '^[a-f0-9]{64}$' AND octet_length(relative_path) BETWEEN 1 AND 4096 AND length(original_instance_id) BETWEEN 22 AND 64");
+
+                            t.HasCheckConstraint("ck_container_history_limits", "size_bytes BETWEEN 0 AND 1073741824 AND captured_at_unix_ms BETWEEN 0 AND 253402300799999 AND version>=0");
                         });
                 });
 

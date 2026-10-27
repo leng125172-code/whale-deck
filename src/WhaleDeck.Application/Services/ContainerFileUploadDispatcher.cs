@@ -6,7 +6,7 @@ namespace WhaleDeck.Application.Services;
 
 /// <summary>A publication is invoked once; subsequent claims observe or fence it, never resend it.</summary>
 public sealed class ContainerFileUploadDispatcher(IContainerFileUploadRepository repository, IContainerFileWriteGateway gateway,
-    ContainerFileUploadService authorization, IContainerFileUploadProtector plans, TimeProvider clock)
+    ContainerFileUploadService authorization, IContainerFileUploadProtector plans, TimeProvider clock, IContainerFileHistoryGateway? history = null)
 {
     public async Task<bool> TickAsync(CancellationToken cancellationToken)
     {
@@ -46,6 +46,35 @@ public sealed class ContainerFileUploadDispatcher(IContainerFileUploadRepository
             }
             if (receipt?.Upload.State is "Interrupted" or "Aborted" or "Discarded" or "Prevented" or "PublishDiscarded")
             { await Prevent("Failed", "CONTAINER_UPLOAD_INTERRUPTED"); return true; }
+            if (row.HistorySourceJson is not null && row.State is "AwaitingUpload" or "Receiving")
+            {
+                if (history is null) throw new InvalidOperationException("CONTAINER_HISTORY_CAPABILITY_UNAVAILABLE");
+                if (row.State == "AwaitingUpload" && receipt is null)
+                {
+                    await history.RequireContainerHistoryWorkflowAsync(cancellationToken);
+                    await gateway.RequireContainerUploadWorkflowAsync(cancellationToken);
+                    if (!await repository.BeginRestoreReceiveAsync(row, clock.GetUtcNow(), cancellationToken))
+                    { await repository.DeferAsync(row, cancellationToken); return true; }
+                    var source = ContainerFileRestoreValidation.Read(row.HistorySourceJson);
+                    var location = new ContainerFileLocationDto(row.ContainerId, row.InstanceId, row.RelativePath);
+                    receipt = await TransferWithLease(row, token => gateway.StageContainerFileAsync(ContainerFileUploadIntentValidation.Stage(row),
+                        history.ReadContainerHistorySourceAsync(location, source, token), token), cancellationToken);
+                    Identity(receipt);
+                }
+                // Only a positive full Stage receipt can advance a restored
+                // source, including after a Worker crash just after commit.
+                // Missing/partial source is fenced; it is never read a second
+                // time into the same durable operation.
+                if (row.State != "Receiving" || receipt?.Upload.State != "Staged")
+                { await Prevent("Failed", "CONTAINER_UPLOAD_INTERRUPTED"); return true; }
+                if (receipt.Upload.SizeBytes != row.SizeBytes || receipt.Upload.Sha256 != row.Sha256 || receipt.Upload.HddBackup is not null ||
+                    receipt.Upload.PreviousRetained || receipt.Upload.BindingCurrent || receipt.Upload.IsInProgress || receipt.Upload.Version.Length != 0)
+                { await Unknown("CONTAINER_UPLOAD_OUTPUT_INVALID"); return true; }
+                await Authority(row, cancellationToken);
+                if (!await repository.ReadyAsync(row, cancellationToken))
+                { await repository.DeferAsync(row, cancellationToken); return true; }
+                row.State = "Ready";
+            }
             if (receipt is null && row.State == "Ready")
             { await Unknown("CONTAINER_UPLOAD_STAGING_LOST"); return true; }
             if (receipt?.Upload.State != "Staged" || row.State != "Ready")
@@ -115,14 +144,18 @@ public sealed class ContainerFileUploadDispatcher(IContainerFileUploadRepository
     private Task Authority(ContainerFileUploadOperation row, CancellationToken cancellationToken) =>
         authorization.AuthorizeAsync(new(row.ActorSubject, null, [], row.LoginBinding, row.TraceId, null), cancellationToken);
 
-    private async Task<ContainerFileUploadReceiptDto> PublishWithLease(ContainerFileUploadOperation row, ContainerFileUploadReferenceDto reference, CancellationToken cancellationToken)
+    private Task<ContainerFileUploadReceiptDto> PublishWithLease(ContainerFileUploadOperation row, ContainerFileUploadReferenceDto reference, CancellationToken cancellationToken) =>
+        TransferWithLease(row, token => gateway.PublishContainerFileAsync(reference, token), cancellationToken);
+
+    private async Task<ContainerFileUploadReceiptDto> TransferWithLease(ContainerFileUploadOperation row,
+        Func<CancellationToken, Task<ContainerFileUploadReceiptDto>> transfer, CancellationToken cancellationToken)
     {
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var remaining = row.ExpiresAtUtc - clock.GetUtcNow();
         if (remaining <= TimeSpan.Zero) throw new FileTransferRejectedException();
         lifetime.CancelAfter(remaining < TimeSpan.FromMinutes(10) ? remaining : TimeSpan.FromMinutes(10));
         await Guard();
-        var publish = gateway.PublishContainerFileAsync(reference, lifetime.Token);
+        var publish = transfer(lifetime.Token);
         try
         {
             while (!publish.IsCompleted)

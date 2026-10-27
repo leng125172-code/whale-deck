@@ -13,6 +13,7 @@ namespace WhaleDeck.Infrastructure.Agent;
 
 public sealed partial class AgentGateway : IContainerFileHistoryGateway
 {
+    public async Task RequireContainerHistoryWorkflowAsync(CancellationToken cancellationToken) => _ = await ContainerHistoryClient(cancellationToken);
     private async Task<ContainerHistoryService.ContainerHistoryServiceClient> ContainerHistoryClient(CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(TimeSpan.FromSeconds(5));

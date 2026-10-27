@@ -73,6 +73,10 @@ public static class DependencyInjection
         services.AddScoped<IFileUploadRepository, FileUploadRepository>();
         services.AddSingleton<IFilePlanProtector, FilePlanProtector>();
         services.AddSingleton<IContainerFileUploadProtector, FilePlanProtector>();
+        services.AddSingleton<IContainerFileRestoreProtector, FilePlanProtector>();
+        services.AddScoped<IContainerFileHistoryRepository, ContainerFileHistoryRepository>();
+        services.AddScoped<ContainerFileHistoryService>();
+        services.AddScoped<ContainerFileRestoreService>();
         services.AddSingleton<IFileGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<FileManagementService>();
         services.AddScoped<ContainerFileReadService>();

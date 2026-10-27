@@ -13,11 +13,12 @@ public sealed partial class FileRecoverySources(PlatformDbContext db, FileRecove
     {
         if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("FILES_RECOVERY_TRANSACTION_REQUIRED");
         FileRecoveryValidation.Kind(kind);
-        FileRecoverySnapshot snapshot; DateTimeOffset? lease; string originalActor;
+        FileRecoverySnapshot snapshot; DateTimeOffset? lease; string originalActor; string? containerJobType = null;
         switch (kind)
         {
             case FileRecoveryKinds.ContainerUpload:
                 var container = await db.ContainerFileUploadOperations.FromSqlInterpolated($"SELECT * FROM container_file_upload_operations WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw Missing();
+                containerJobType = container.HistorySourceJson is null ? "containers.files.upload" : "containers.files.restore";
                 snapshot = material.Capture(container); lease = container.LeaseExpiresAtUtc; originalActor = container.ActorSubject; break;
             case FileRecoveryKinds.Upload:
                 var upload = await db.FileUploadOperations.FromSqlInterpolated($"SELECT * FROM file_upload_operations WHERE id={id} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? throw Missing();
@@ -56,7 +57,7 @@ public sealed partial class FileRecoverySources(PlatformDbContext db, FileRecove
         }
         if (lease > clock.GetUtcNow()) throw new InvalidOperationException("FILES_RECOVERY_ORIGINAL_BUSY");
         var job = await db.OperationJobs.AsNoTracking().SingleOrDefaultAsync(row => row.Id == snapshot.Binding.ExecutionJobId, cancellationToken);
-        var expectedType = kind == FileRecoveryKinds.ContainerUpload ? "containers.files.upload" : kind == FileRecoveryKinds.Upload ? "files.upload" : kind == FileRecoveryKinds.Mutation ? "files.mutation" :
+        var expectedType = kind == FileRecoveryKinds.ContainerUpload ? containerJobType : kind == FileRecoveryKinds.Upload ? "files.upload" : kind == FileRecoveryKinds.Mutation ? "files.mutation" :
             kind == FileRecoveryKinds.Archive ? "files.archive" : kind == FileRecoveryKinds.TreeCopy ? "files.tree-copy" : kind == FileRecoveryKinds.TreePacking ? "files.tree-pack" : kind == FileRecoveryKinds.TreeUnpacking ? "files.tree-unpack" : kind == FileRecoveryKinds.TreeRecycling ? "files.tree-trash" : kind == FileRecoveryKinds.TreeRestoring ? "files.tree-restore" : kind == FileRecoveryKinds.TreeOverwriteRestoring ? "files.tree-overwrite-restore" : kind == FileRecoveryKinds.TreePurging ? "files.tree-purge" : "files.tree-move";
         if (job is null || job.ActorSubject != originalActor || job.JobType != expectedType || job.CompletedAtUtc is not null)
             throw new InvalidOperationException("FILES_RECOVERY_ORIGINAL_CHANGED");

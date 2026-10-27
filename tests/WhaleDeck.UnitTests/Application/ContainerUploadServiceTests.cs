@@ -141,6 +141,7 @@ public sealed partial class ContainerUploadServiceTests
         public Registry Logins { get; } = new();
         public Directory Identity { get; }
         public Gateway Gateway { get; } = new();
+        public HistoryGateway History { get; } = new();
         public Repository Repository { get; } = new();
         public FilePlanProtector Protector { get; }
         public ContainerFileUploadService Service { get; }
@@ -153,7 +154,7 @@ public sealed partial class ContainerUploadServiceTests
             Protector = new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["Agent:CapabilityKeyFile"] = _key }).Build());
             Identity = new(Clock);
             var authorization = new FileManagementService(DispatchProxy.Create<IFileGateway, Unused>(), DispatchProxy.Create<IFileUploadRepository, Unused>(), Protector, Identity, Clock);
-            Service = new(authorization, Logins, Gateway, Repository, Protector, Clock);
+            Service = new(authorization, Logins, Gateway, Repository, Protector, Clock, History);
         }
         public Task<FileUploadPlanDto> Plan() => Service.PlanAsync(Actor, Command, default);
         public async Task<ContainerFileUploadIntentDto> Create() => await Service.SubmitAsync(Actor, Command.Location.ContainerId, new((await Plan()).PlanHash, true, Guid.NewGuid().ToString("D")), default);
@@ -182,6 +183,7 @@ public sealed partial class ContainerUploadServiceTests
     private sealed class Gateway : IContainerFileWriteGateway
     {
         public bool WorkflowUnavailable { get; set; }
+        public bool RecordStageReceipt { get; set; }
         public Task RequireContainerUploadWorkflowAsync(CancellationToken cancellationToken) => WorkflowUnavailable
             ? Task.FromException(new InvalidOperationException("CONTAINER_UPLOAD_CAPABILITY_UNAVAILABLE")) : Task.CompletedTask;
         public int Inspections { get; private set; }
@@ -208,8 +210,10 @@ public sealed partial class ContainerUploadServiceTests
             await foreach (var part in bytes.WithCancellation(cancellationToken)) await body.WriteAsync(part, cancellationToken);
             Received = body.ToArray(); Assert.Equal(request.Sha256, Convert.ToHexString(SHA256.HashData(Received)));
             AfterStage?.Invoke();
-            return new(request.Location.ContainerId, request.Location.InstanceId, Output == "wrong-id" ? Guid.NewGuid() : request.OperationId, request.ExpectedTargetProof,
+            var result = new ContainerFileUploadReceiptDto(request.Location.ContainerId, request.Location.InstanceId, Output == "wrong-id" ? Guid.NewGuid() : request.OperationId, request.ExpectedTargetProof,
                 new(Output is "Published" or "Unknown" ? Output : "Staged", request.SizeBytes, Output == "wrong-digest" ? new('F',64) : request.Sha256, "", false, false, false), false);
+            if (RecordStageReceipt) Receipt = result;
+            return result;
         }
         public Task<ContainerFileUploadReceiptDto> PublishContainerFileAsync(ContainerFileUploadReferenceDto request, CancellationToken cancellationToken)
         {
@@ -252,6 +256,8 @@ public sealed partial class ContainerUploadServiceTests
         public Task<ContainerFileUploadOperation> EnqueueAsync(ContainerFileUploadOperation row, CancellationToken cancellationToken) { Enqueued++; Row = row; return Task.FromResult(row); }
         public Task<ContainerFileUploadOperation> BeginReceiveAsync(TerminalActor actor, Guid id, DateTimeOffset now, CancellationToken cancellationToken)
         { Row!.State = "Receiving"; Row.ReceiveToken = Guid.NewGuid(); return Task.FromResult(Row); }
+        public Task<bool> BeginRestoreReceiveAsync(ContainerFileUploadOperation row, DateTimeOffset now, CancellationToken cancellationToken)
+        { row.State = "Receiving"; row.ReceiveToken = Guid.NewGuid(); return Task.FromResult(true); }
         public Task<bool> MayReceiveAsync(Guid id, Guid token, DateTimeOffset now, CancellationToken cancellationToken) => Task.FromResult(Row!.State == "Receiving");
         public Task<bool> ReadyAsync(ContainerFileUploadOperation row, CancellationToken cancellationToken) { ReadyCalls++; Row!.State = "Ready"; return Task.FromResult(true); }
         public Task CancelAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken)

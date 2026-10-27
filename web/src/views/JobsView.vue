@@ -20,7 +20,9 @@ const canCancel = computed(() => selected.value && !terminalStates.has(selected.
 const byteUpload = computed(
   () =>
     !!selected.value &&
-    ['files.upload', 'containers.files.upload'].includes(selected.value.jobType),
+    ['files.upload', 'containers.files.upload', 'containers.files.restore'].includes(
+      selected.value.jobType,
+    ),
 )
 const canRetry = computed(
   () =>
@@ -287,7 +289,7 @@ onBeforeUnmount(() => {
         </el-descriptions>
         <el-alert
           v-if="byteUpload"
-          title="重新上传请回到文件页面选择文件，并确认基于当前版本的新计划。原任务不会自动重传文件。"
+          title="重新上传或恢复请回到文件页面，重新选择来源并确认基于当前版本的新计划。原任务不会自动重传或重复发布。"
           type="info"
           :closable="false"
         />

@@ -99,6 +99,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigureContainerFileUploads(modelBuilder);
+        ConfigureContainerFileHistory(modelBuilder);
         ConfigureFileArchives(modelBuilder);
         ConfigureTreeCopies(modelBuilder);
         ConfigureTreePackings(modelBuilder);

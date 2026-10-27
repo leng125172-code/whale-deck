@@ -19,6 +19,10 @@ public sealed class ContainerFileUploadOperation
     public required string PlanHash { get; init; }
     public required string RequestHash { get; init; }
     public required string Sha256 { get; init; }
+    // Null remains omitted from legacy recovery snapshots and fingerprints.
+    // Restore sources are canonical, authenticated metadata, never file bytes.
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? HistorySourceJson { get; init; }
     public long SizeBytes { get; init; }
     public string State { get; set; } = "AwaitingUpload";
     public Guid? ReceiveToken { get; set; }

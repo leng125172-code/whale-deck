@@ -29,7 +29,7 @@ using WhaleDeck.Infrastructure.Identity;
 namespace WhaleDeck.IntegrationTests.Security;
 
 /// <summary>Real MVC, protected opaque Cookie and CSRF over loopback; synthetic directory/Agent/SQL, not installed SSO evidence.</summary>
-public sealed class ContainerUploadHttpTests
+public sealed partial class ContainerUploadHttpTests
 {
     private const string Cid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string Instance = "777:2026-10-27T01:02:03.123456789Z";
@@ -177,6 +177,7 @@ public sealed class ContainerUploadHttpTests
         private WebApplication _app=null!; private readonly string _key=Path.GetTempFileName();
         public ServerSideTicketStore Store { get; private set; }=null!; public string? AdminKey { get; private set; }
         public Gateway Gateway { get; }=new(); public Repository Repository { get; }=new(); public Directory Directory { get; }=new();
+        public HistoryFixture History { get; }=new();
         public static async Task<Fixture> Start()
         {
             var fixture=new Fixture(); await File.WriteAllBytesAsync(fixture._key,RandomNumberGenerator.GetBytes(32));
@@ -199,7 +200,10 @@ public sealed class ContainerUploadHttpTests
             builder.Services.AddSingleton<TerminalCookieIdentity>();
             var protector=new FilePlanProtector(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["Agent:CapabilityKeyFile"]=fixture._key }).Build());
             var authorization=new FileManagementService(null!,null!,protector,fixture.Directory,TimeProvider.System);
-            builder.Services.AddSingleton(new ContainerFileUploadService(authorization,sessions,fixture.Gateway,fixture.Repository,protector,TimeProvider.System));
+            var uploads=new ContainerFileUploadService(authorization,sessions,fixture.Gateway,fixture.Repository,protector,TimeProvider.System,fixture.History);
+            builder.Services.AddSingleton(uploads);
+            builder.Services.AddSingleton(new ContainerFileHistoryService(uploads,fixture.History,fixture.History,fixture.History));
+            builder.Services.AddSingleton(new ContainerFileRestoreService(uploads,fixture.Gateway,fixture.History,fixture.History,protector,fixture.Repository,TimeProvider.System));
             fixture._app=builder.Build(); fixture._app.UseExceptionHandler(error=>error.Run(TraceAndErrors.WriteProblemAsync));
             fixture._app.UseAuthentication(); fixture._app.Use(SameOriginWriteProtection.InvokeAsync); fixture._app.UseAuthorization(); fixture._app.UseAntiforgery();
             fixture._app.MapControllers(); fixture._app.MapOpenApi(); fixture._app.MapGet("/test/csrf",(HttpContext context,IAntiforgery antiforgery)=>new Token(antiforgery.GetAndStoreTokens(context).RequestToken!));
@@ -259,6 +263,7 @@ public sealed class ContainerUploadHttpTests
         { Enqueued++; _row=row; return Task.FromResult(row); }
         public Task<ContainerFileUploadOperation> BeginReceiveAsync(TerminalActor actor,Guid id,DateTimeOffset now,CancellationToken cancellationToken)
         { Assert.Equal("AwaitingUpload",_row!.State); _row.State="Receiving"; _row.ReceiveToken=Guid.NewGuid(); return Task.FromResult(_row); }
+        public Task<bool> BeginRestoreReceiveAsync(ContainerFileUploadOperation row, DateTimeOffset now, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> MayReceiveAsync(Guid id,Guid token,DateTimeOffset now,CancellationToken cancellationToken)=>Task.FromResult(!Canceled);
         public Task<bool> ReadyAsync(ContainerFileUploadOperation row,CancellationToken cancellationToken)
         { ReadyCalls++; _row!.State="Ready"; return Task.FromResult(true); }

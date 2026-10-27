@@ -8,6 +8,7 @@ import { filePath } from '@/services/fileManagement'
 import type { FileEntry } from '@/services/fileManagement'
 import ContainerUploadPanel from '@/components/containers/ContainerUploadPanel.vue'
 import ContainerTextEditor from '@/components/containers/ContainerTextEditor.vue'
+import ContainerHistoryPanel from '@/components/containers/ContainerHistoryPanel.vue'
 import { textEligible } from '@/services/fileText'
 import type { PreparedContainerText } from '@/services/containerText'
 import {
@@ -32,8 +33,10 @@ const busy = ref(''),
 const allowed = computed(() => authSession.user.value?.isAdministrator === true)
 const editor = ref<InstanceType<typeof ContainerTextEditor> | null>(null)
 const upload = ref<InstanceType<typeof ContainerUploadPanel> | null>(null)
+const history = ref<InstanceType<typeof ContainerHistoryPanel> | null>(null)
 const editorLocked = ref(false),
-  uploadLocked = ref(false)
+  uploadLocked = ref(false),
+  historyLocked = ref(false)
 async function prepareEdited(value: PreparedContainerText) {
   const token = generation
   await nextTick()
@@ -211,6 +214,12 @@ onBeforeUnmount(() => {
     <div class="container-files__heading">
       <h3>容器文件 <el-tag size="small" effect="plain">受控读写</el-tag></h3>
       <div class="container-files__buttons">
+        <el-button
+          v-if="target"
+          :disabled="!!busy || uploadLocked || editorLocked"
+          @click="history?.open()"
+          >历史版本</el-button
+        >
         <el-button v-if="target" :icon="RefreshRight" :disabled="!!busy" @click="load()"
           >刷新</el-button
         >
@@ -251,7 +260,7 @@ onBeforeUnmount(() => {
       ref="upload"
       :target="target"
       :path="path"
-      :disabled="!!busy || editorLocked"
+      :disabled="!!busy || editorLocked || historyLocked"
       @refresh="load(path)"
       @locked="uploadLocked = $event"
       @edit-draft="restoreDraft"
@@ -261,10 +270,19 @@ onBeforeUnmount(() => {
       ref="editor"
       :target="target"
       :path="path"
-      :disabled="!!busy || uploadLocked"
+      :disabled="!!busy || uploadLocked || historyLocked"
       @locked="editorLocked = $event"
       @prepared="prepareEdited"
       @failure="failure"
+    />
+    <ContainerHistoryPanel
+      v-if="target"
+      ref="history"
+      :target="target"
+      :path="path"
+      :disabled="!!busy || uploadLocked || editorLocked"
+      @locked="historyLocked = $event"
+      @refresh="load(path)"
     />
     <div v-if="busy" class="container-files__status" role="status">
       {{ busy }}<span v-if="busy === '下载中'"> · {{ progress }}%</span>
@@ -302,10 +320,18 @@ onBeforeUnmount(() => {
           <el-button
             v-if="textEligible(entry)"
             link
-            :disabled="!!busy || uploadLocked || editorLocked"
+            :disabled="!!busy || uploadLocked || editorLocked || historyLocked"
             :aria-label="`编辑 ${entry.name}`"
             @click="editor?.open(entry)"
             >编辑</el-button
+          >
+          <el-button
+            v-if="entry.kind === 'File' && !entry.isProtected"
+            link
+            :disabled="!!busy || uploadLocked || editorLocked"
+            :aria-label="`历史版本 ${entry.name}`"
+            @click="history?.open(filePath(path, entry.name))"
+            >历史</el-button
           >
           <el-button
             :icon="Download"
@@ -450,13 +476,19 @@ onBeforeUnmount(() => {
   }
   .container-files__size {
     grid-column: 1;
-    grid-row: auto;
+    grid-row: 2;
     text-align: left;
     margin-left: 22px;
   }
   .container-files__entry-actions {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 2;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 6px;
+  }
+  .container-files__name {
+    grid-column: 1 / -1;
   }
 }
 </style>

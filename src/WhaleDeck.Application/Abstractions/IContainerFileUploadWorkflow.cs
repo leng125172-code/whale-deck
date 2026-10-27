@@ -15,6 +15,7 @@ public interface IContainerFileUploadRepository
     Task<ContainerFileUploadOperation?> OwnedAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken);
     Task<ContainerFileUploadOperation> EnqueueAsync(ContainerFileUploadOperation row, CancellationToken cancellationToken);
     Task<ContainerFileUploadOperation> BeginReceiveAsync(TerminalActor actor, Guid id, DateTimeOffset now, CancellationToken cancellationToken);
+    Task<bool> BeginRestoreReceiveAsync(ContainerFileUploadOperation row, DateTimeOffset now, CancellationToken cancellationToken);
     Task<bool> MayReceiveAsync(Guid id, Guid token, DateTimeOffset now, CancellationToken cancellationToken);
     Task<bool> ReadyAsync(ContainerFileUploadOperation row, CancellationToken cancellationToken);
     Task CancelAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken);

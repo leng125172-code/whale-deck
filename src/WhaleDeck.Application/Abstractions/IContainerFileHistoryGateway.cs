@@ -4,6 +4,7 @@ namespace WhaleDeck.Application.Abstractions;
 
 public interface IContainerFileHistoryGateway
 {
+    Task RequireContainerHistoryWorkflowAsync(CancellationToken cancellationToken);
     Task<ContainerHistoryPageDto> ListContainerHistoryAsync(ContainerFileLocationDto location, string after,
         int take, string expectedVersion, CancellationToken cancellationToken);
 

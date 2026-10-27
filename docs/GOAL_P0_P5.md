@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-27 容器历史内容恢复候选，尚未部署**：永久目录/迁移、独立来源绑定计划、现有发布任务/保护复用、Worker从HDD完整校验到暂存、API与原路径内容恢复页面已接。普通上传null字段保持旧MAC/快照，恢复拒绝浏览器内容与通用重试，原Unknown接管保留。Release零警告错误、2682 Unit/198 Integration（7原生默认跳过）、494前端/检查/构建通过；组合浏览器首轮34/35，修取消夹具版本后历史7/7通过。冻结真实PG与实际BFF/Root/HDD/网页尚待；原属性完整恢复/跨路径/跨容器重建及其他文件功能仍缺，当前e6b5034不变，59项active、17项移出不算完成。[边界和门禁](qa/CONTAINER_FILE_RESTORATION.md)。
+
 - **2026-10-27 e6b5034/minor42已覆盖，编辑与历史来源实机通过**：两次正常dev覆盖0/SUCCESS，当前六组件/实际HTTP一致、宿主权限/UDS/动态入口及10.0.13校验通过。实际桌面明色/320暗色两次编辑，BOM/CRLF、取消零内容/单次确认发送、旧inode/HDD和跨页退出清空通过；真实BFF生成2MiB+7旧版本，独立签名List/ReadSource完整读回及实际测试容器重启后旧捕获读回、签名/重放/核心拒绝通过。真实只读沙箱误报可写要求已修且保留失败证据，写路径仍失败关闭。最终31意图16成功/8取消/7失败，Unknown/活租约/屏障0，临时身份0、11核心healthy；231容器Linux-root/22备份安装通过，CI后端/原生PG/原生Valkey/安装器success、前端尚运行。自然两小时撤权已完整通过；恢复永久目录/任务/计划/API/UI及其余59项继续active，17项移出不算完成。[真实协议与边界](qa/CONTAINER_HISTORY_RPC.md)、[编辑证据](qa/CONTAINER_TEXT_EDITOR.md)。
 
 - **2026-10-27 自然两小时撤权通过；历史 RPC 候选待部署**：原登录实际7203.941秒/246次观察，移组后原快照到期首次403、到期后成功授权0、未改时钟/SQL/缓存，独占身份清理。minor42独立List/ReadSource/固定只读helper/严格EOF SDK及原生门禁候选完成，Release零警告错误、2666 Unit/191 Integration通过（7原生夹具默认跳过）、230容器Linux-root/22备份安装测试通过。尚未部署，实际仍fab6e2e+72c72cc helper；下一步覆盖并执行真实编辑与HDD来源RPC，恢复意图/目录SQL/API/UI仍待，59项继续active。[协议与边界](qa/CONTAINER_HISTORY_RPC.md)、[两小时证据](qa/CONTAINER_UPLOAD_INTERRUPTION.md)。

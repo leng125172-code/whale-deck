@@ -41,6 +41,13 @@ public static class ContainerFileUploadIntentValidation
             throw new ArgumentException("CONTAINER_UPLOAD_BINDING_INVALID");
         Actor(binding.Actor, binding.LoginBinding); Target(binding.Target); Payload(binding.SizeBytes, binding.Sha256);
         ContainerFileValidation.Hash(binding.PlanHash); Times(binding.CreatedAtUtc, binding.ExpiresAtUtc, IntentLifetime);
+        if (binding.HistorySourceJson is not null)
+        {
+            var source = ContainerFileRestoreValidation.Read(binding.HistorySourceJson);
+            ContainerFileHistoryValidation.Source(binding.Target.Location, source);
+            if (source.SizeBytes != binding.SizeBytes || source.Sha256 != binding.Sha256)
+                throw new ArgumentException("CONTAINER_HISTORY_SOURCE_INVALID");
+        }
         if (string.IsNullOrWhiteSpace(binding.TraceId) || binding.TraceId.Length > 128 || binding.TraceId.Any(char.IsControl))
             throw new ArgumentException("CONTAINER_UPLOAD_TRACE_INVALID");
         try { _ = new UTF8Encoding(false, true).GetByteCount(binding.TraceId); }
@@ -52,7 +59,7 @@ public static class ContainerFileUploadIntentValidation
         var target = new ContainerFileUploadTargetDto(new(row.ContainerId, row.InstanceId, row.RelativePath), row.TargetProof,
             row.ExpectedParentVersion, row.ExpectedVersion, row.PreviousSizeBytes);
         var binding = new ContainerFileUploadBinding(row.Id, row.IdempotencyKey, row.ActorSubject, row.LoginBinding, row.TraceId,
-            target, row.SizeBytes, row.Sha256, row.PlanHash, row.CreatedAtUtc, row.ExpiresAtUtc);
+            target, row.SizeBytes, row.Sha256, row.PlanHash, row.CreatedAtUtc, row.ExpiresAtUtc, row.HistorySourceJson);
         Binding(binding); return binding;
     }
     public static string Owner(string actor, string login)

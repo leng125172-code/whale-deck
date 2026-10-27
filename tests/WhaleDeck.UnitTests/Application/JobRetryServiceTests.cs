@@ -12,6 +12,7 @@ public sealed class JobRetryServiceTests
     [Theory]
     [InlineData("files.upload")]
     [InlineData("containers.files.upload")]
+    [InlineData("containers.files.restore")]
     public async Task ByteUploadsRequireNewFileSelectionAndCannotUseGenericRetry(string jobType)
     {
         var repository = new Repository(CreateSource("Failed", jobType)); var service = Service(repository);

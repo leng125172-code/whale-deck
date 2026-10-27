@@ -12,7 +12,7 @@ public sealed class ContainerFileReadAudit(PlatformDbContext db) : IContainerFil
         string? version, long? sizeBytes, string? sha256, CancellationToken cancellationToken)
     {
         ContainerFileValidation.Location(location, true);
-        if (action is not ("target" or "list" or "inspect" or "download") || result is not ("Started" or "Validated" or "Incomplete") ||
+        if (action is not ("target" or "list" or "inspect" or "download" or "history") || result is not ("Started" or "Validated" or "Incomplete") ||
             sizeBytes is < 0 or > FileManagementService.MaximumBytes || version is not null && !FileManagementService.Hex(version) ||
             sha256 is not null && !FileManagementService.Hex(sha256)) throw new ArgumentException("CONTAINER_FILES_AUDIT_INVALID");
         db.AuditEvents.Add(new AuditEvent { ActorSubject = actor.Subject, Action = "containers.files." + action, TargetType = "container",

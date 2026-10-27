@@ -30,7 +30,7 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
             var requested = ContainerFileUploadIntentValidation.ReadBinding(row);
             if (original.Id != requested.Id || original.IdempotencyKey != requested.IdempotencyKey || original.Actor != requested.Actor ||
                 original.LoginBinding != requested.LoginBinding || original.PlanHash != requested.PlanHash || original.Target != requested.Target ||
-                original.SizeBytes != requested.SizeBytes || original.Sha256 != requested.Sha256)
+                original.SizeBytes != requested.SizeBytes || original.Sha256 != requested.Sha256 || original.HistorySourceJson != requested.HistorySourceJson)
                 throw new InvalidOperationException("CONTAINER_UPLOAD_IDEMPOTENCY_CONFLICT");
             return prior;
         }
@@ -45,8 +45,8 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
             throw new InvalidOperationException("CONTAINER_UPLOAD_TARGET_BUSY");
         var resource = await db.ManagedResources.Where(item => item.ResourceType == "Container" && item.ExternalId == row.ContainerId)
             .Select(item => (Guid?)item.Id).SingleOrDefaultAsync(cancellationToken);
-        db.OperationJobs.Add(new() { Id = row.Id, JobType = "containers.files.upload", ActorSubject = row.ActorSubject, ResourceId = resource,
-            IdempotencyKey = key, Phase = "AwaitingContainerFileUpload", RequestJson = JsonSerializer.Serialize(new {
+        db.OperationJobs.Add(new() { Id = row.Id, JobType = row.HistorySourceJson is null ? "containers.files.upload" : "containers.files.restore", ActorSubject = row.ActorSubject, ResourceId = resource,
+            IdempotencyKey = key, Phase = row.HistorySourceJson is null ? "AwaitingContainerFileUpload" : "AwaitingContainerFileRestore", RequestJson = JsonSerializer.Serialize(new {
                 containerId = row.ContainerId, pathHash = FileManagementService.Hash(row.RelativePath),
                 instanceHash = FileManagementService.Hash(row.InstanceId), sizeBytes = row.SizeBytes, sha256 = row.Sha256 }) });
         db.ContainerFileUploadOperations.Add(row);
@@ -63,6 +63,7 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
             ?? throw new KeyNotFoundException("CONTAINER_UPLOAD_NOT_FOUND");
         if (row.ActorSubject != actor.Subject || row.LoginBinding != actor.LoginBinding) throw new KeyNotFoundException("CONTAINER_UPLOAD_NOT_FOUND");
         Validate(row);
+        if (row.HistorySourceJson is not null) throw new InvalidOperationException("CONTAINER_UPLOAD_HTTP_SOURCE_FORBIDDEN");
         var job = await db.OperationJobs.SingleAsync(item => item.Id == id, cancellationToken);
         if (row.State != "AwaitingUpload" || row.CompletedAtUtc is not null || row.ExpiresAtUtc <= now || job.CancelRequestedAtUtc is not null)
             throw new InvalidOperationException("CONTAINER_UPLOAD_CANNOT_RECEIVE");
@@ -72,13 +73,31 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
         await db.SaveChangesAsync(cancellationToken); return row;
     }, cancellationToken);
 
+    public Task<bool> BeginRestoreReceiveAsync(ContainerFileUploadOperation row, DateTimeOffset now, CancellationToken cancellationToken) => Transaction(async () =>
+    {
+        var current = await Lock(row, cancellationToken);
+        if (current is null || current.HistorySourceJson is null || current.State != "AwaitingUpload" ||
+            current.ExpiresAtUtc <= now || await CancellationRequestedAsync(row.Id, cancellationToken)) return false;
+        Validate(current);
+        var token = Guid.NewGuid();
+        await db.ContainerFileUploadOperations.Where(item => item.Id == row.Id).ExecuteUpdateAsync(update => update
+            .SetProperty(item => item.State, "Receiving").SetProperty(item => item.ReceiveToken, token)
+            .SetProperty(item => item.Version, item => item.Version + 1), cancellationToken);
+        var job = await db.OperationJobs.SingleAsync(item => item.Id == row.Id, cancellationToken);
+        job.State = "Running"; job.Phase = "ReadingContainerHistory"; job.StartedAtUtc ??= now; job.Version++;
+        await Event(job, "CONTAINER_UPLOAD_RECEIVING", cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        row.State = "Receiving"; row.ReceiveToken = token; return true;
+    }, cancellationToken);
+
     public Task<bool> MayReceiveAsync(Guid id, Guid token, DateTimeOffset now, CancellationToken cancellationToken) => db.ContainerFileUploadOperations.AsNoTracking()
         .AnyAsync(item => item.Id == id && item.ReceiveToken == token && item.State == "Receiving" && item.CompletedAtUtc == null && item.ExpiresAtUtc > now &&
             !db.OperationJobs.Any(job => job.Id == id && job.CancelRequestedAtUtc != null), cancellationToken);
 
     public async Task<bool> ReadyAsync(ContainerFileUploadOperation row, CancellationToken cancellationToken) => await db.ContainerFileUploadOperations
         .Where(item => item.Id == row.Id && item.State == "Receiving" && item.ReceiveToken == row.ReceiveToken && item.CompletedAtUtc == null && item.RequestHash == row.RequestHash &&
-            item.ExpiresAtUtc > DateTimeOffset.UtcNow && !db.OperationJobs.Any(job => job.Id == row.Id && job.CancelRequestedAtUtc != null))
+            item.ExpiresAtUtc > DateTimeOffset.UtcNow && (row.HistorySourceJson == null || item.LeaseToken == row.LeaseToken && item.LeaseExpiresAtUtc > DateTimeOffset.UtcNow) &&
+            !db.OperationJobs.Any(job => job.Id == row.Id && job.CancelRequestedAtUtc != null))
         .ExecuteUpdateAsync(update => update.SetProperty(item => item.State, "Ready").SetProperty(item => item.NextAttemptAtUtc, DateTimeOffset.UtcNow)
             .SetProperty(item => item.Version, item => item.Version + 1), cancellationToken) == 1;
 
@@ -221,7 +240,7 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
     }
     private void Audit(ContainerFileUploadOperation row, string action, string result) => db.AuditEvents.Add(new() {
-        ActorSubject = row.ActorSubject, Action = "containers.files.upload." + action, TargetType = "container", TargetId = row.ContainerId,
+        ActorSubject = row.ActorSubject, Action = (row.HistorySourceJson is null ? "containers.files.upload." : "containers.files.restore.") + action, TargetType = "container", TargetId = row.ContainerId,
         JobId = row.Id, TraceId = row.TraceId, Result = result, DetailJson = JsonSerializer.Serialize(new {
             pathHash = FileManagementService.Hash(row.RelativePath), instanceHash = FileManagementService.Hash(row.InstanceId) }) });
     private Task<T> Transaction<T>(Func<Task<T>> action, CancellationToken cancellationToken) => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>

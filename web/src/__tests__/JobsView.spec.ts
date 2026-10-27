@@ -78,7 +78,7 @@ afterEach(() => {
 })
 
 describe('Job retry', () => {
-  it.each(['files.upload', 'containers.files.upload'])(
+  it.each(['files.upload', 'containers.files.upload', 'containers.files.restore'])(
     '%s requires a selected file and never exposes generic retry',
     async (jobType) => {
       const upload = { ...source, jobType }
@@ -95,7 +95,7 @@ describe('Job retry', () => {
       expect(wrapper.findAll('button').some((button) => button.text() === '重新预检并重试')).toBe(
         false,
       )
-      expect(wrapper.text()).toContain('原任务不会自动重传文件')
+      expect(wrapper.text()).toContain('原任务不会自动重传或重复发布')
       expect(request.mock.calls.some(([path]) => path.includes('/retry'))).toBe(false)
     },
   )

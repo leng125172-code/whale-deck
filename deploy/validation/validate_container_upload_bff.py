@@ -87,13 +87,14 @@ def temporary_user(administrator):
         session.close()
 
 
-def snapshot(identifier):
+def snapshot(identifier, action='upload'):
     assert str(uuid.UUID(identifier)) == identifier
+    assert action in ('upload','restore')
     return query('''SELECT json_build_object('row',to_jsonb(u),'job',json_build_object('state',j.state,'code',j.error_code),
       'pending',(SELECT count(*) FROM outbox_messages o WHERE o.message_type IN
         ('ContainerFileUploadRequested','ContainerFileUploadCancellationRequested') AND o.payload_json->>'jobId'=u.id::text AND o.processed_at_utc IS NULL),
-      'audits',(SELECT count(*) FROM audit_events a WHERE a.job_id=u.id AND a.action LIKE 'containers.files.upload.%'))
-      FROM container_file_upload_operations u JOIN operation_jobs j ON j.id=u.id WHERE u.id=:'id'::uuid;''', id=identifier)
+      'audits',(SELECT count(*) FROM audit_events a WHERE a.job_id=u.id AND a.action LIKE :'action'))
+      FROM container_file_upload_operations u JOIN operation_jobs j ON j.id=u.id WHERE u.id=:'id'::uuid;''', id=identifier, action='containers.files.'+action+'.%')
 
 
 def wait_sql(identifier, state):

@@ -5,7 +5,8 @@ public sealed record ContainerFileUploadPlanClaims(string Actor, string LoginBin
     long SizeBytes, string Sha256, DateTimeOffset CreatedAtUtc, DateTimeOffset ExpiresAtUtc)
 { public override string ToString() => nameof(ContainerFileUploadPlanClaims); }
 public sealed record ContainerFileUploadBinding(Guid Id, Guid IdempotencyKey, string Actor, string LoginBinding, string TraceId,
-    ContainerFileUploadTargetDto Target, long SizeBytes, string Sha256, string PlanHash, DateTimeOffset CreatedAtUtc, DateTimeOffset ExpiresAtUtc)
+    ContainerFileUploadTargetDto Target, long SizeBytes, string Sha256, string PlanHash, DateTimeOffset CreatedAtUtc, DateTimeOffset ExpiresAtUtc,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? HistorySourceJson = null)
 { public override string ToString() => nameof(ContainerFileUploadBinding); }
 public sealed record ContainerFileUploadIntentDto(Guid Id, Guid JobId, ContainerFileLocationDto Location, long SizeBytes, string Sha256,
     string State, DateTimeOffset ExpiresAtUtc, string? ResultCode, long Version, string? PublishedVersion, bool PreviousRetained);
