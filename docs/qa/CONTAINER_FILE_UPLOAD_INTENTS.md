@@ -33,3 +33,11 @@ CI历史：5853716的原生PG失败对应上述jsonb验收代码问题；6fbca7b
 下一步：完成当前管理员Unknown观察/接管（明确新kind，不能落入宿主move默认分支；不能仅凭租约到期或容器退出释放保护），核对停止/重启实例的Root元数据观察和迟到请求栅栏。再接API/Worker注册、minimum Agent40能力预检、精确代理上传预算与完整Cookie/Origin/CSRF/路由回归；按真实Cookie→BFF→SQL/Worker→UDS→Root→HDD/完整读回及桌面手机验收后覆盖发布。当前不开放容器业务写入，不签完整功能或59项交付。
 
 2026-10-27本批复验：前端453单元、Oxlint/ESLint、Prettier、类型和生产构建重新通过。项目图谱与GitHub连接工具均返回HTTP403，阶段更新保留本地待同步；这不证明网站/CI当前成功，也不阻止本地实现。后续优先补容器Unknown的独立管理员恢复及停止/重启实例的Root观察能力，尚不注册公开写入口。
+
+本批Root代码复核定位：`whaledeck-container-file-write.py` 的所有动作均先进入 `reader.ContainerRoot`；发布观察还调用 `ContainerPublisher.guard/session.revalidate` 与目标证明校验。因此目前不能把原实例停止后的观察失败当成“没有发布”，也不能只凭Docker已停止释放SQL发布保护。需要增加受限、只读且绑定原永久身份的历史回执/封存协议；新管理员的授权与审计应另行记录，不改写原owner/Trace/Job。此处为源码定位，尚未以停止容器实测签收，也未开放绕过原保护的入口。
+
+本批生产构建的本地浏览器复验22/22通过（11既有读取/下载+11上传与确认生命周期）；仅本地合成API，未运行新业务真实写入口。候选源码已提交并推送dev：0325098（完整上传能力门禁）与fa6faf1（Vue确认/一次发送与旧清理测试竞态修正）。fa6faf1 CI 40431938240已创建，尚未取得终态；6fbca7b CI 40427539317当前后端/原生PG/原生Valkey/安装器成功，前端仍运行。GitHub连接403后只读CLI查询成功；没有取消或重启原作业。
+
+0325098冻结补验已结束：原生PostgreSQL1执行/1通过/0跳过，迁移、双连接幂等/互斥、旧持久业务完整通过；native status为Passed/cleanupConfirmed=true（01:19:34Z–01:22:04Z），临时容器再查不存在。核心11容器逐项healthy，本批没有更新运行时。该夹具Root仍为合成回执，不代替新功能的安装态整链。
+
+阶段同步补记：项目图谱首次连接403，保留本地pending后重试update_phase成功（eventId whale-deck-container-upload-intents-0325098-20261027），记录已移入synced；没有把整个项目或文件模块标记完成。该目录按仓库规则忽略，不强制加入Git。
