@@ -14,7 +14,7 @@ namespace WhaleDeck.Infrastructure.Agent;
 public sealed partial class AgentGateway : IContainerFileWriteGateway
 {
     public async Task RequireContainerUploadWorkflowAsync(CancellationToken cancellationToken) =>
-        _ = await ContainerWrites(cancellationToken, cancellationFence: true);
+        _ = await ContainerRecoveryClient(cancellationToken);
 
     private async Task<ContainerFileWriteService.ContainerFileWriteServiceClient> ContainerWrites(CancellationToken cancellationToken, bool cancellationFence = false)
     {

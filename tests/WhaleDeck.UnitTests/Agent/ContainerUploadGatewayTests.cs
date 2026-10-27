@@ -63,9 +63,19 @@ public sealed partial class ContainerUploadGatewayTests
     [Fact]
     public async Task FullWorkflowNegotiationIsReadOnly()
     {
-        await using var harness = await Harness.Start(minor: 40, cancellationFence: true);
+        await using var harness = await Harness.Start(minor: 41, cancellationFence: true, recoverySeal: true);
         await harness.Gateway.RequireContainerUploadWorkflowAsync(default);
         Assert.Empty(harness.Calls); Assert.Empty(harness.Frames);
+    }
+
+    [Theory]
+    [InlineData(40U, true)]
+    [InlineData(41U, false)]
+    public async Task BusinessUploadRequiresRecoveryEvenWhenPrimitiveWritesAreSupported(uint minor, bool recovery)
+    {
+        await using var harness = await Harness.Start(minor: minor, cancellationFence: true, recoverySeal: recovery);
+        var error = await Assert.ThrowsAsync<RpcException>(() => harness.Gateway.RequireContainerUploadWorkflowAsync(default));
+        Assert.Equal(StatusCode.Unimplemented, error.StatusCode); Assert.Empty(harness.Calls); Assert.Empty(harness.Frames);
     }
 
     [Fact]
