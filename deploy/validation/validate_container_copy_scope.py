@@ -138,6 +138,44 @@ def main():
                     else: raise AssertionError('read-only target accepted')
                 assert private.stat().st_uid == 0 and stat.S_IMODE(private.stat().st_mode) == 0o700 and not list(private.iterdir()); private.rmdir()
                 assert owned.common.fingerprint(folder / 'original.bin') == original
+        # Real target disappearance after private content is durable, before
+        # the publication syscall. Only the fixture's exact owned CID may be
+        # removed. The candidate engine, not injected receipts, seals Unknown.
+        with owned.fixture(removable=True) as fixture:
+            folder, identifier = fixture['folder'], fixture['identifier']
+            target = docker.target(docker.api('GET', '/containers/' + identifier + '/json'), identifier, docker.registry())
+            location = {'containerId': identifier, 'instanceId': target['instanceId'], 'path': 'work'}
+            (evidence / 'missing-baseline.json').write_text(json.dumps({'containerId': identifier,
+                'source': str(folder), 'instanceId': target['instanceId'], 'revision': revision}))
+            with reader.ContainerRoot(location, files, docker) as session:
+                command = {k: v for k, v in location.items() if k != 'path'}
+                command.update(sourcePath='work/original.bin', targetPath='work/not-published.bin',
+                    expectedVersion=reader.version(location, 'work/original.bin', (folder / 'original.bin').stat()))
+                scope = scope_type(upload, publisher, session, command, state); engine = operations(scope)
+                request = {'operationId': uuid.uuid4().hex, 'owner': 'B' * 64, 'plan': engine.plan(scope.file_command())}
+                save = engine.save; removed_at_publication = False
+                def save_then_remove(directory, record):
+                    nonlocal removed_at_publication
+                    save(directory, record)
+                    if record['state'] == 'DestinationApplying':
+                        assert not removed_at_publication; fixture['remove_owned'](); removed_at_publication = True
+                engine.save = save_then_remove
+                try: engine.apply(request)
+                except files.Rejected as error: assert str(error) in ('CONTAINER_FILES_TARGET_MISSING', 'CONTAINER_FILES_INSTANCE_CHANGED')
+                else: raise AssertionError('target disappearance accepted as completed')
+                assert removed_at_publication and not (folder / 'not-published.bin').exists()
+                record_path = state / 'operations' / (request['operationId'] + '.json'); raw = record_path.read_bytes(); record = json.loads(raw)
+                assert record['state'] == 'Unknown'
+                private = folder / scope.PRIVATE; name = request['operationId'] + '.mutation'; pending = private / name
+                assert files.publication_identity(pending.lstat()) == record['newMetadata']
+                assert pending.read_bytes() == fixture['old'] and pending.stat().st_nlink == 1
+                assert engine.apply(request)['state'] == 'Unknown' and record_path.read_bytes() == raw
+                fixture['private'] = scope.PRIVATE
+                fixture['privateProofs'][name] = (owned.common.fingerprint(pending), owned.common.file_digest(pending))
+                results.append({'kind': 'real-target-missing-before-publication', 'operationId': request['operationId'],
+                    'state': 'Unknown', 'bytes': len(fixture['old']), 'fullPrivateContentVerified': True,
+                    'targetAbsent': True, 'noPublicationReplay': True, 'rootRecordUnchanged': True})
+                (evidence / 'results.json').write_text(json.dumps(results))
     assert owned.common.core_snapshot() == before
     result = {'revision': revision, 'engineOnly': True, 'installedOrRpcOrUi': False, 'checks': results,
         'sourceSha256': {name: hashlib.sha256(content).hexdigest() for name, content in frozen.items()},
