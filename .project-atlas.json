@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_COPY_INTENTS.md",
-  "nextStep": "容器复制独立计划/永久回执和固定传输候选通过真实Docker九项，继续Agent独立签名RPC/版本、固定helper及可信安装，再接共享屏障/业务任务/Worker/API/真实身份UI；目录剩余交换故障与其余59项继续。17项移出不算完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_COPY_AGENT_RPC.md",
+  "nextStep": "容器复制Agent1.45强类型签名四RPC/SDK/固定helper候选已实现；当前NoNewPrivs限制下未安装，待正常宿主权限完成实际UDS验证；继续永久业务任务/共享屏障/Worker/API/真实身份UI及其余59项。17项移出不算完成。"
 }

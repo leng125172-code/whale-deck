@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-28 容器复制 Agent 1.45 候选已接通，未安装**：`6be0751` 新增独立强类型四 RPC、完整请求体签名、版本/能力门禁、SDK 及固定受限 helper/安装源。Release 零警告错误，2882 Unit/201 Integration 通过（7 原生默认跳过），TerminalProbe 编译通过。当前复制 Python 42 项仅 2 通过/40 非 root 跳过；进程 NoNewPrivs=1 阻止 sudo，未覆盖运行服务。前序 CI 四路成功、前端 408/1 的抽屉入场测量已修，开发/生产预览各 18 项通过，新整条 CI 待终态。实际安装态 UDS、永久业务任务/共享屏障/Worker/API/真实 UI 仍待，59 项 active，17项移出不算完成。[证据与边界](qa/CONTAINER_COPY_AGENT_RPC.md)。
+
 - **2026-10-28 容器复制独立回执候选实机通过**：f1edb43新增容器独立计划/永久回执、元数据观察、固定传输和不重做的恢复。40复制专项与294原容器文件Linux-root均全执行通过；真实Docker九项、七次自有候选子进程SIGKILL，4 Completed/3 Aborted/2 Unknown，完整字节/树摘要、属性、容器ETag及Root原件匹配。两个准确CID/来源清理，11核心healthy；尚未安装/RPC/业务SQL/Worker/API/UI。继续Agent签名协议、固定helper及完整业务链路，59项active，17项移出不算完成。[证据及边界](qa/CONTAINER_COPY_INTENTS.md)。上一轮元数据原文CI失败已修，3d7db9f五作业全success；不代表本候选CI已通过。
 
 - **2026-10-28 Prepared真实进程中断与容器复制基础推进**：安装态仍5f3622d/minor44；Worker SIGKILL/同CID显式启动及自然90秒租约、Agent实际重启分别通过，helper由产品0.674/0.165秒退出，维护PID不变，原任务均Failed/Interrupted、Root Aborted。独立SQL/Root/准确清理：24任务13成功/3取消/4失败/4Acknowledged，活动/租约/屏障0、11核心healthy。[过程与失败保留](qa/CONTAINER_DIRECTORY_PROCESS_RESTARTS.md)。容器复制新增固定root FD适配器，19专项/292关联及CI原294容器Linux-root全执行通过，冻结b8466a7在真实独占Docker容器完成两类全量复制/属性/重试，以及发布前实际目标消失Unknown/不重做，两个精确容器与来源清理；两轮验证器失败残留已私有转存未删除。复制尚未安装/RPC/业务/UI，继续原59项；17项移出不计完成。[候选证据与后续](qa/CONTAINER_COPY_SCOPE.md)。
