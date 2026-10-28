@@ -225,3 +225,13 @@ Worker 批量保存 `container.cpu.utilization`、`container.memory.used/limit/u
 恢复type为 `containers.files.restore`，使用共享发布屏障，禁止通用重试。Unknown仍由现任管理员的既有container-upload接管只观察/封存，不重新读取来源或重发发布。同容器原路径内容恢复已实测；原属性、其他路径和重建容器迁移仍未签。
 
 2026-10-27：恢复计划请求的path为恢复目标，可与历史来源Path不同；目标父目录须存在，仍限同一容器。来源CaptureId/Hash与目标父叶版本共同冻结；提交只有签名计划/确认/幂等键，不能另传目标或内容。5fd8d3b已验证其他路径新建与覆盖，完整历史属性及重建身份迁移仍待。
+
+## 容器复制异步用例（2026-10-28 候选，未发布）
+
+`POST /api/v1/containers/{containerId}/files/copies` 以唯一规范 `Idempotency-Key` 登记预检，body 为 `instanceId/sourcePath/targetPath/expectedVersion`；返回 202 和规划任务，不在 HTTP 内扫描或复制。
+`GET .../copies/{id}`、`GET .../copies/by-key/{key}` 只恢复原意图，不重发登记。Ready 提供五分钟确认；`POST .../{id}/confirm` 使用原 intent ID Header、`planHash/confirmed/version`，返回同一独立执行任务。
+`POST .../{id}/cancel` 使用原 intent ID Header。两阶段通过现有 Job/SSE 查询，202 不表示文件复制成功。
+
+`GET /api/v1/files/container-copies/recovery`、`GET .../{id}` 供现任管理员读取 Unknown 元数据；`POST .../{id}/acknowledge` 必须版本/显式确认与原 ID Header，并先取得原 Root 永久栅栏。
+所有业务操作复核 Authentik 管理员与当前登录；Root Inspect/Discard 使用原 actor/owner/执行 ID。丢回复只查询/封闭，不能通用重试、重发 Apply 或延长原期限。
+SQL 与源代码验证状态见 [真实 PG 候选](qa/CONTAINER_COPY_PERSISTENCE.md)；实际 Agent/BFF/页面整链仍待。

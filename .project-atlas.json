@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_COPY_WORKFLOW.md",
-  "nextStep": "容器复制异步业务三层绑定/六秒调度候选已实现；继续SQL事务仓储/EF迁移和全部写入共享保护，再接Worker/API/真实身份UI。Agent1.45尚待正常宿主权限安装验证。59项继续，17项移出不算完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_COPY_PERSISTENCE.md",
+  "nextStep": "容器复制SQL事务/双任务/共享保护/Worker/API候选通过冻结真实PG；继续复制WebUI及正常宿主权限下Agent1.45安装门禁，再做真实身份/实际字节/重启故障整链。59项继续，17项移出不算完成。"
 }

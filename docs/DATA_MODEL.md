@@ -296,3 +296,13 @@ Valkey 清空后系统必须能从 PostgreSQL、Agent 和外部服务重建，�
 `container_file_upload_operations.history_source_json` nullable text保存严格canonical已批准来源并进入不可变MAC；不使用会规范化文本的jsonb。null在普通上传绑定及旧冻结快照中省略，旧MAC格式不变；非null为恢复工作流，HTTP接收入口拒绝。现有Job/Outbox/租约/Unknown/发布屏障复用，恢复job type与审计prefix独立。真实PG迁移及精确文本/MAC/事务、租约/Ready/取消测试已通过，Root与页面证据另见恢复QA。
 
 2026-10-27：容器恢复的HistorySourceJson.Path记录原来源；ContainerFileUploadOperation.RelativePath记录发布目标，两者允许不同，但CID一致且均入MAC。旧原路径记录和普通上传序列化不变，本批没有schema变化。
+
+## 容器复制永久意图（2026-10-28 候选）
+
+`20261028083811_ContainerCopyIntents` 新建 `container_copy_intents`，规划 ID 同时作为原意图主键，确认后的 execution_job_id 独立绑定第二个 OperationJob；两外键均 Restrict。
+原 subject/login/trace/key/owner、精确容器实例与源目标路径、规范 command_json、created/planning expiry 和 request_hash 不可变；完整 plan_json/plan_hash/Ready 期限生成后不可变；确认时间、执行 ID/期限/execution_hash 再以独立 MAC 冻结。
+lease_token/lease_expires、Root 开始标记、publish_barrier、取消、结果、私有内容可能存在、接管原件和并发 version 组成状态机。原始字节、密码和登录 token 不进入本表。
+
+状态为 Queued/Planning/Ready/Pending/Applying/Unknown/Succeeded/Superseded/Canceled/Failed/Expired/Acknowledged。十二项约束、唯一 actor/key、执行 ID、活动租约与发布保护索引，配合共享事务 gate 和四方发布触发器。
+Unknown 不释放保护；永久意图不可删除，终态不可重写，包含历史的表不得降级删除。普通数据库备份自然包含该表。
+参见 [SQL/恢复测试与未部署边界](qa/CONTAINER_COPY_PERSISTENCE.md)。
