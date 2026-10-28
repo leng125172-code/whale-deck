@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-28 容器复制独立回执候选实机通过**：f1edb43新增容器独立计划/永久回执、元数据观察、固定传输和不重做的恢复。40复制专项与294原容器文件Linux-root均全执行通过；真实Docker九项、七次自有候选子进程SIGKILL，4 Completed/3 Aborted/2 Unknown，完整字节/树摘要、属性、容器ETag及Root原件匹配。两个准确CID/来源清理，11核心healthy；尚未安装/RPC/业务SQL/Worker/API/UI。继续Agent签名协议、固定helper及完整业务链路，59项active，17项移出不算完成。[证据及边界](qa/CONTAINER_COPY_INTENTS.md)。上一轮元数据原文CI失败已修，3d7db9f五作业全success；不代表本候选CI已通过。
+
 - **2026-10-28 Prepared真实进程中断与容器复制基础推进**：安装态仍5f3622d/minor44；Worker SIGKILL/同CID显式启动及自然90秒租约、Agent实际重启分别通过，helper由产品0.674/0.165秒退出，维护PID不变，原任务均Failed/Interrupted、Root Aborted。独立SQL/Root/准确清理：24任务13成功/3取消/4失败/4Acknowledged，活动/租约/屏障0、11核心healthy。[过程与失败保留](qa/CONTAINER_DIRECTORY_PROCESS_RESTARTS.md)。容器复制新增固定root FD适配器，19专项/292关联及CI原294容器Linux-root全执行通过，冻结b8466a7在真实独占Docker容器完成两类全量复制/属性/重试，以及发布前实际目标消失Unknown/不重做，两个精确容器与来源清理；两轮验证器失败残留已私有转存未删除。复制尚未安装/RPC/业务/UI，继续原59项；17项移出不计完成。[候选证据与后续](qa/CONTAINER_COPY_SCOPE.md)。
 
 - **2026-10-28 目录发布准备故障/Unknown真实页面与进行中撤销通过**：运行仍5f3622d/minor44，产品源码无差异，未重复构建部署。pidfd同时绑定准确容器root FD/原操作锁FD，实际Preparing目标消失与Prepared非空对象均自然Unknown保留屏障；另一容器两次延后。原身份删除后不同管理员真实320暗色页面取消再确认，旧Job Failed、原绑定/Root原件保留，只有解除屏障后等待任务才创建；存活原容器的固定Root helper迟到Apply仍Unknown。Prepared中明确取消5.312秒、正常退出5.387秒由产品主动终止helper，Root Aborted/目标不存在；分别Canceled和Failed/Interrupted，不冒报同一终态。294 Linux-root/零跳过及独立SQL/Root/准确清理通过，20总任务12成功/3取消/1中断/4Acknowledged，活动/Unknown/租约/屏障0、临时身份/unit0、11核心healthy。保留报文缺换行那轮失败，不把Root固定入口冒称新增签名RPC。交换/Worker/Agent进行中组合及其余59项继续，17项移出不计完成。[证据与边界](qa/CONTAINER_DIRECTORY_UNKNOWN.md)。
