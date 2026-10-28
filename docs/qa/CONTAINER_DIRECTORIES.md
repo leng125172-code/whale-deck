@@ -25,7 +25,7 @@
 
 前两次原生失败保留：旧测试的迁移降级虽然最终被历史保护拒绝，但已逐个提交了更晚空类型的降级，导致后续缺表；测试在验证原保护后恢复最新 schema。审计失败注入的 CHECK 初次扫描到合法历史审计，改为 NOT VALID，仅拒绝新写入而保留旧事实。均修正测试，不绕过产品约束。
 
-日志 `/tmp/wd-directory-business-build-final.log`、`/tmp/wd-directory-{unit,integration}-final.log`、`/tmp/wd-directory-web-{unit,build}-final.log`、`/tmp/wd-directory-browser-final-10.log`、`/tmp/wd-directory-native-postgres-{2,3}.log`；真实 PostgreSQL 状态 `deploy/artifacts/native-status/dispatch-8a490556905f44ebabbd083d4fc501d1.json`。50项容器文件联合页面通过；补权限选择控件后目录10项通过。CI40611513488 backend/native-postgres/native-valkey/installer已success，frontend仍运行，不能记整条CI通过。
+日志 `/tmp/wd-directory-business-build-final.log`、`/tmp/wd-directory-{unit,integration}-final.log`、`/tmp/wd-directory-web-{unit,build}-final.log`、`/tmp/wd-directory-browser-final-10.log`、`/tmp/wd-directory-native-postgres-{2,3}.log`；真实 PostgreSQL 状态 `deploy/artifacts/native-status/dispatch-8a490556905f44ebabbd083d4fc501d1.json`。50项容器文件联合页面通过；补权限选择控件后目录10项通过。CI40611513488最终backend/frontend/native-postgres/native-valkey/installer五作业全部success；新增QA提交的后续CI另行跟踪。
 
 ## 实际覆盖与人类身份页面签收
 
