@@ -206,8 +206,10 @@ def main():
                 # This proves the installed fixed Root helper fence. It is
                 # deliberately not described as a new signed Agent RPC test.
                 replay = subprocess.run(['/usr/local/libexec/whaledeck-privileged', 'container-file-directories', 'apply', uuid.uuid4().hex],
-                    input=json.dumps({'operationId': frozen['operationId'], 'owner': frozen['owner'], 'plan': frozen['plan']}),
+                    input=json.dumps({'operationId': frozen['operationId'], 'owner': frozen['owner'], 'plan': frozen['plan']}) + '\n',
                     capture_output=True, text=True, timeout=40)
+                (evidence / 'late-root.stdout').write_text(replay.stdout)
+                (evidence / 'late-root.stderr').write_text(replay.stderr)
                 assert replay.returncode == 0 and len(replay.stdout.encode()) <= 32768
                 lines = [json.loads(line) for line in replay.stdout.splitlines()]
                 assert lines[-1]['state'] == 'Unknown' and lines[-1]['operationId'] == frozen['operationId']
