@@ -58,7 +58,7 @@ public sealed class ContainerUploadRecoveryPolicyTests
     public async Task ActualAgentAdvertisesRecoveryIndependentlyAndPreservesOriginalFileCapabilities()
     {
         var capabilities = await new AgentGrpcService(null!).GetCapabilities(new(),null!);
-        Assert.Equal(1U,capabilities.ProtocolMajor); Assert.Equal(44U,capabilities.ProtocolMinor);
+        Assert.Equal(1U,capabilities.ProtocolMajor); Assert.Equal(45U,capabilities.ProtocolMinor);
         Assert.Contains("docker.files.read",capabilities.Capabilities); Assert.Contains("docker.files.bound-uploads",capabilities.Capabilities);
         Assert.Contains("docker.files.upload-cancel-fence",capabilities.Capabilities); Assert.Contains("docker.files.upload-recovery-seal",capabilities.Capabilities);
     }
