@@ -46,13 +46,13 @@ def execute(action, request, reader, files, docker, engine):
     if action == 'plan': engine.command(request); command = request
     else: engine.request(request); command = request['plan']['command']
     try:
-        session = reader.ContainerRoot(command, files, docker); session.__enter__()
+        manager = reader.ContainerRoot(command, files, docker); session = manager.__enter__()
     except (reader.Rejected, PermissionError, ValueError) as error:
         # No generic filesystem/socket exception is evidence of target loss.
         if action == 'plan' or str(error) not in TARGET_LOSS: raise
         return getattr(engine, action)(request, None)
     try: return getattr(engine, action)(request, session)
-    finally: session.__exit__(None, None, None)
+    finally: manager.__exit__(None, None, None)
 
 
 def main():
