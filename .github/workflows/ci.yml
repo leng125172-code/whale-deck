@@ -37,6 +37,7 @@ jobs:
           python3 -m py_compile deploy/host/whaledeck-container-directories.py deploy/host/whaledeck-container-directory-transport.py deploy/validation/validate_container_file_directories.py
           python3 -m py_compile deploy/validation/validate_container_directory_agent.py
           python3 -m py_compile deploy/validation/validate_container_directory_browser.py
+          python3 -m py_compile deploy/validation/validate_container_directory_restart.py
           node --check deploy/validation/validate_container_directory_browser.mjs
           python3 -m py_compile deploy/host/whaledeck-container-restore.py deploy/validation/validate_container_file_restoration.py
           python3 -m py_compile deploy/host/whaledeck-container-file-write.py deploy/validation/validate_container_file_write_profile.py deploy/validation/validate_container_file_write_agent.py
