@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-28 容器复制异步业务候选已生成，未持久化/部署**：`24238fb` 新增请求/完整计划/确认执行三层独立签名、永久意图实体与事务仓储契约、异步服务和六秒复核调度。HTTP 不扫描/复制，Ready 明确确认后独立执行；原 ID 丢回复只观察或封闭，Unknown 不释放保护。新增 86 项，2968 Unit/201 Integration 通过（7 原生默认跳过）；进行中取消与租约丢失各真实等待一次六秒并取消夹具 RPC。SQL/EF、跨写入排斥、Worker/API/真实 UI 与安装态尚待，不把内存测试算落库。59 项 active，17项移出不算完成。[证据及下一步](qa/CONTAINER_COPY_WORKFLOW.md)。
+
 - **2026-10-28 容器复制 Agent 1.45 候选已接通，未安装**：`6be0751` 新增独立强类型四 RPC、完整请求体签名、版本/能力门禁、SDK 及固定受限 helper/安装源。Release 零警告错误，2882 Unit/201 Integration 通过（7 原生默认跳过），TerminalProbe 编译通过。当前复制 Python 42 项仅 2 通过/40 非 root 跳过；进程 NoNewPrivs=1 阻止 sudo，未覆盖运行服务。前序 CI 四路成功、前端 408/1 的抽屉入场测量已修，开发/生产预览各 18 项通过，新整条 CI 待终态。实际安装态 UDS、永久业务任务/共享屏障/Worker/API/真实 UI 仍待，59 项 active，17项移出不算完成。[证据与边界](qa/CONTAINER_COPY_AGENT_RPC.md)。
 
 - **2026-10-28 容器复制独立回执候选实机通过**：f1edb43新增容器独立计划/永久回执、元数据观察、固定传输和不重做的恢复。40复制专项与294原容器文件Linux-root均全执行通过；真实Docker九项、七次自有候选子进程SIGKILL，4 Completed/3 Aborted/2 Unknown，完整字节/树摘要、属性、容器ETag及Root原件匹配。两个准确CID/来源清理，11核心healthy；尚未安装/RPC/业务SQL/Worker/API/UI。继续Agent签名协议、固定helper及完整业务链路，59项active，17项移出不算完成。[证据及边界](qa/CONTAINER_COPY_INTENTS.md)。上一轮元数据原文CI失败已修，3d7db9f五作业全success；不代表本候选CI已通过。
