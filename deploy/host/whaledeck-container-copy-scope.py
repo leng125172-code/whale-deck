@@ -21,7 +21,7 @@ class ContainerCopyScope:
     TARGET = 'container-copy-target'
     PRIVATE = '.whaledeck-container-copies-v1'
 
-    def __init__(self, uploads, publisher, session, command, state_path, *, target_parent=None):
+    def __init__(self, uploads, publisher, session, command, state_path, *, target_parent=None, expected_binding=None):
         if publisher.u is not uploads: raise ValueError('CONTAINER_COPY_ENGINE_MISMATCH')
         self.u, self.p, self.r, self.f = uploads, publisher, uploads.r, uploads.f
         self.Rejected, self.CHUNK, self.MAX_BYTES = self.f.Rejected, self.f.CHUNK, self.f.MAX_BYTES
@@ -43,12 +43,26 @@ class ContainerCopyScope:
         # read-only plan, capture it on the first target open and retain it for
         # every subsequent open, including the host engine's recovery observer.
         self.target_parent = None if target_parent is None else tuple(target_parent)
-        self.u.session_scope(command, session); session.revalidate()
-        self.proof = self.u.target_proof(session)
-        self.owner = tuple(self.p.owner(session))
+        if expected_binding is not None and (type(expected_binding) is not dict or set(expected_binding) != {'targetProof', 'uid', 'gid'} or
+                type(expected_binding['targetProof']) is not str or not re.fullmatch('[A-F0-9]{64}', expected_binding['targetProof']) or
+                any(type(expected_binding[k]) is not int or not 0 <= expected_binding[k] < 4294967295 for k in ('uid', 'gid'))):
+            self.reject('BINDING_INVALID')
+        if session is None:
+            # Only the outer engine's already validated frozen plan may supply
+            # this metadata-only scope. It cannot open any container directory;
+            # it permits durable observation/tombstones after target loss.
+            if expected_binding is None or target_parent is None: self.reject('BINDING_INVALID')
+            self.proof = expected_binding['targetProof']
+            self.owner = (expected_binding['uid'], expected_binding['gid'])
+        else:
+            self.u.session_scope(command, session); session.revalidate()
+            self.proof = self.u.target_proof(session)
+            self.owner = tuple(self.p.owner(session))
+            if expected_binding is not None and (self.proof != expected_binding['targetProof'] or self.owner != (expected_binding['uid'], expected_binding['gid'])):
+                self.reject('TARGET_CHANGED')
         self.STATE = Path(state_path)
         with self.state_directory(): pass
-        self.guard()
+        if session is not None: self.guard()
         # Explicit primitives only. Never delegate roots/directory/staging or
         # namespace_lock to the host module's global registry/state namespace.
         for name in ('identity', 'save_receipt', 'unique_object'):
@@ -57,6 +71,7 @@ class ContainerCopyScope:
     def reject(self, suffix): raise self.f.Rejected('CONTAINER_COPY_' + suffix)
 
     def guard(self):
+        if self.session is None: self.reject('TARGET_UNAVAILABLE')
         try:
             self.u.session_scope(self.command, self.session); self.session.revalidate()
             if self.u.target_proof(self.session) != self.proof: self.reject('TARGET_CHANGED')
