@@ -40,6 +40,7 @@ jobs:
           python3 -m py_compile deploy/validation/validate_container_directory_restart.py
           python3 -W error::SyntaxWarning -m py_compile deploy/validation/bound_container_directory_cut.py deploy/validation/validate_container_directory_unknown.py
           node --check deploy/validation/validate_container_directory_unknown.mjs
+          python3 -W error::SyntaxWarning -m py_compile deploy/validation/validate_container_directory_inflight.py
           node --check deploy/validation/validate_container_directory_browser.mjs
           python3 -m py_compile deploy/host/whaledeck-container-restore.py deploy/validation/validate_container_file_restoration.py
           python3 -m py_compile deploy/host/whaledeck-container-file-write.py deploy/validation/validate_container_file_write_profile.py deploy/validation/validate_container_file_write_agent.py
