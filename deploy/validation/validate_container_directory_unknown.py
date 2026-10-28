@@ -129,7 +129,7 @@ def main():
                 PHASE = 'pidfd-bound-real-root-prepublication-cut'
                 with ThreadPoolExecutor(max_workers=1) as observers:
                     watch = observers.submit(freeze_prepublication, row, original['folder'], baseline['containerPid'])
-                    worker.start(); held = watch.result(timeout=25)
+                    worker.start(wait_ready=False); held = watch.result(timeout=25)
                 if held is None: raise AssertionError('REAL_PREPUBLICATION_CUT_MISSED_NOT_COUNTED')
                 applying = snapshot(intent['id'])['row']
                 assert applying['state'] == 'Applying' and applying['publish_barrier'] and applying['root_started_at_utc'] is not None

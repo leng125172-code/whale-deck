@@ -65,9 +65,14 @@ class Worker:
         command('docker', 'stop', '--time', '5', self.id)
         assert not self.current()['State']['Running']
 
-    def start(self):
+    def start(self, wait_ready=True):
+        assert type(wait_ready) is bool
         if not self.stopped: return
         if not self.current()['State']['Running']: command('docker', 'start', self.id)
+        # A publication-cut observer must act while the short-lived Root
+        # helper is paused, not wait for the next 30-second health probe.
+        # Keep the restoration flag until a normal finally waits for health.
+        if not wait_ready: return
         deadline = time.monotonic() + 90
         while True:
             value = self.current()
