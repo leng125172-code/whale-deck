@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-28 目录发布准备故障/Unknown真实页面与进行中撤销通过**：运行仍5f3622d/minor44，产品源码无差异，未重复构建部署。pidfd同时绑定准确容器root FD/原操作锁FD，实际Preparing目标消失与Prepared非空对象均自然Unknown保留屏障；另一容器两次延后。原身份删除后不同管理员真实320暗色页面取消再确认，旧Job Failed、原绑定/Root原件保留，只有解除屏障后等待任务才创建；存活原容器的固定Root helper迟到Apply仍Unknown。Prepared中明确取消5.312秒、正常退出5.387秒由产品主动终止helper，Root Aborted/目标不存在；分别Canceled和Failed/Interrupted，不冒报同一终态。294 Linux-root/零跳过及独立SQL/Root/准确清理通过，20总任务12成功/3取消/1中断/4Acknowledged，活动/Unknown/租约/屏障0、临时身份/unit0、11核心healthy。保留报文缺换行那轮失败，不把Root固定入口冒称新增签名RPC。交换/Worker/Agent进行中组合及其余59项继续，17项移出不计完成。[证据与边界](qa/CONTAINER_DIRECTORY_UNKNOWN.md)。
+
 - **2026-10-28 目录排队重启/取消/正常退出实机通过**：产品运行时仍5f3622d/minor44，未重复构建部署。b7dc949验证实际4次Worker停止启动与1次Agent重启，维护入口PID不变；API持续可访问，永久原任务两成功/两取消，Root Completed/Aborted、SQL/实际目录inode属性匹配。成功轮次准确源/CID/临时身份清理，独立10总任务8成功2取消、活动/Unknown/租约/屏障0、11核心healthy。第一次Agent观察exec时序错误已修，原任务成功且无生产服务故障；未冻结原inode的唯一原始测试文件转存root私有证据，未放宽删除门禁。Root发布中强杀/撤权/Unknown真实页面及其余59项仍待，17项移出不计完成。[证据与边界](qa/CONTAINER_DIRECTORY_RESTARTS.md)。 运行时5f3622d的CI40611513488已最终五作业全部success；不代表之后QA提交的CI也已执行。
 
 - **2026-10-28 容器新建目录已覆盖并通过真实页面常规链路**：实际5f3622d六组件/HTTP同源，更新0/SUCCESS、3分35.989秒，新永久目录迁移入库。真实管理员1440/320明暗共4次中文目录、0750/0700/0755、取消零登记/同HTTP重试原任务/刷新只查/两页完整注销通过；独立SQL/Worker/Root计划指纹、实际空目录inode/1000:1000/权限匹配，普通8路403/匿名401、缺CSRF400/错误Origin403通过。精确测试源/容器/临时身份清理、永久历史保留；4成功、活动/租约/屏障0、11核心healthy。2802 Unit/201 Integration（7默认跳过）、522前端、50联合页面及补充目录10项、冻结真实PG1执行通过并清理。CI40611513488四路success、frontend仍运行。实际业务重启/进行中取消/Unknown跨管理员页面及其他容器写入/隔离/留存仍需继续；59项active，17项移出不算完成。[证据及失败记录](qa/CONTAINER_DIRECTORIES.md)。

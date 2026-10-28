@@ -2,6 +2,8 @@
 
 ## 当前状态
 
+2026-10-28最新：Preparing目标消失、Prepared非空对象、原身份删除后另一管理员真实手机处置/跨应用等待，以及Prepared期间产品主动取消/正常退出均已实机通过。Root固定helper迟到Apply仍Unknown，证据和对象不变；最终20任务12成功/3取消/1中断/4Acknowledged，活动/Unknown/租约/屏障0、11核心healthy。产品仍5f3622d，没有重复构建部署。[故障证据及明确剩余](CONTAINER_DIRECTORY_UNKNOWN.md)。
+
 2026-10-28增量：已安装5f3622d的目录排队Worker/Agent真实重启、排队取消与正常退出撤销四项通过，完整SQL/Root/目录inode与准确清理有独立复核。只签执行前排队范围，Root发布准备中断与Unknown跨管理员页面仍待。[重启证据与初次观察失败](CONTAINER_DIRECTORY_RESTARTS.md)。
 
 2026-10-28，永久业务及 Vue 源码 `4341167` 已实现，`5f3622d` 已正常 dev 覆盖并通过真实 Authentik 身份的四组目录页面验收。新增 EF 迁移 `20261027153646_ContainerDirectoryIntents`、独立目录任务/Job/Outbox/事务审计、共享发布保护、Worker、管理员 API、页面计划确认/原登记找回与当前管理员 Unknown 处置。目录业务的实际重启/进行中取消/Unknown 跨管理员页面故障组合仍待，不把底层 SIGKILL 或合成页面证据替代它们。
