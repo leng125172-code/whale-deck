@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_DIRECTORY_PROCESS_RESTARTS.md；docs/qa/CONTAINER_COPY_SCOPE.md",
-  "nextStep": "容器复制固定root FD基础与实际Docker两类复制通过，继续独立容器计划/回执、进程故障、Agent签名RPC、业务共享屏障/Worker/API及真实身份UI；目录剩余交换故障及其余59项继续。17项移出不计完成。"
+  "nextStep": "容器复制固定root FD基础与实际Docker两类复制通过，继续独立容器计划/回执、进程故障、Agent签名RPC、业务共享屏障/Worker/API及真实身份UI；目录剩余交换故障及其余59项继续。17项移出不算完成。"
 }
