@@ -120,7 +120,9 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.True(await repository.FinishAsync(aliasClaim, "Canceled", "CONTAINER_DIRECTORY_CANCELED", Receipt(aliasClaim, "Aborted"), default));
 
             var fail = Row("work/audit-failure");
-            await db.Database.ExecuteSqlRawAsync("ALTER TABLE audit_events ADD CONSTRAINT native_directory_audit_failure CHECK (action <> 'containers.files.mkdir.accepted')");
+            // Keep existing immutable acceptance facts. NOT VALID skips
+            // historical rows, while PostgreSQL still checks each new write.
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE audit_events ADD CONSTRAINT native_directory_audit_failure CHECK (action <> 'containers.files.mkdir.accepted') NOT VALID");
             try { await Assert.ThrowsAsync<DbUpdateException>(() => repository.EnqueueAsync(fail, fail.CreatedAtUtc.AddMinutes(5), default)); }
             finally { await db.Database.ExecuteSqlRawAsync("ALTER TABLE audit_events DROP CONSTRAINT native_directory_audit_failure"); }
             Assert.False(await db.ContainerDirectoryOperations.AnyAsync(r => r.Id == fail.Id)); Assert.False(await db.OperationJobs.AnyAsync(r => r.Id == fail.Id));
