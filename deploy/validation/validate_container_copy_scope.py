@@ -118,11 +118,20 @@ def main():
                             current = reader.fingerprint(base.lstat())
                             assert current[:5] == proofs[''][:5] and current[5] == 2 and not list(base.iterdir())
                             base.rmdir()
+                # Use an ordinary lower-image source so the mount-root target
+                # is not also an ancestor of the source (overlap is rejected
+                # earlier, before evaluating the independent mount policy).
+                lower_source = None
+                for candidate in ('etc/issue', 'etc/alpine-release', 'etc/debian_version'):
+                    try: info = reader.inspect({**location, 'path': candidate}, session, files)
+                    except (OSError, reader.Rejected): continue
+                    if info['kind'] == 'File' and not info['isProtected']:
+                        lower_source = candidate; break
+                assert lower_source is not None
                 # Real Docker read-only root and bind mount root guards.
                 for destination in ('tmp/forbidden', 'work'):
                     cmd = {k: v for k, v in location.items() if k != 'path'}
-                    cmd.update(sourcePath='work/original.bin', targetPath=destination,
-                        expectedVersion=reader.version(location, 'work/original.bin', (folder / 'original.bin').stat()))
+                    cmd.update(sourcePath=lower_source, targetPath=destination, expectedVersion=info['version'])
                     scope = scope_type(upload, publisher, session, cmd, state)
                     try: operations(scope).plan(scope.file_command())
                     except reader.Rejected as error: assert str(error) in ('CONTAINER_UPLOAD_PUBLISH_READ_ONLY', 'CONTAINER_UPLOAD_PUBLISH_MOUNT_ROOT')
