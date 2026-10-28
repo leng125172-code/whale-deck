@@ -134,7 +134,7 @@ def main():
                     cmd.update(sourcePath=lower_source, targetPath=destination, expectedVersion=info['version'])
                     scope = scope_type(upload, publisher, session, cmd, state)
                     try: operations(scope).plan(scope.file_command())
-                    except reader.Rejected as error: assert str(error) in ('CONTAINER_UPLOAD_PUBLISH_READ_ONLY', 'CONTAINER_UPLOAD_PUBLISH_MOUNT_ROOT')
+                    except files.Rejected as error: assert str(error) in ('CONTAINER_UPLOAD_PUBLISH_READ_ONLY', 'CONTAINER_UPLOAD_PUBLISH_MOUNT_ROOT')
                     else: raise AssertionError('read-only target accepted')
                 assert private.stat().st_uid == 0 and stat.S_IMODE(private.stat().st_mode) == 0o700 and not list(private.iterdir()); private.rmdir()
                 assert owned.common.fingerprint(folder / 'original.bin') == original

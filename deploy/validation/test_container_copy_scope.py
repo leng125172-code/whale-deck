@@ -101,7 +101,7 @@ class LinuxContainerCopyScopeTests(unittest.TestCase):
         self.assertEqual('Completed', engine.apply(self.request(engine.plan(scope.file_command())))['state'])
         for destination in ('read/new', 'write'):
             scope = self.scope(self.command('read/data', destination))
-            with self.assertRaisesRegex(self.fixture.r.Rejected, 'PUBLISH_(READ_ONLY|MOUNT_ROOT)'):
+            with self.assertRaisesRegex(self.fixture.f.Rejected, 'PUBLISH_(READ_ONLY|MOUNT_ROOT)'):
                 operations.FileOperations(scope).plan(scope.file_command())
 
     def test_protected_noncanonical_and_ancestor_paths_are_rejected_before_state(self):
@@ -129,7 +129,7 @@ class LinuxContainerCopyScopeTests(unittest.TestCase):
         with patch.object(self.fixture.publisher, 'owner', return_value=[123, 456]):
             with self.assertRaisesRegex(self.fixture.f.Rejected, 'OWNER_CHANGED'): scope.file_command()
         self.session.request['instanceId'] = '777:2026-10-27T01:02:03Z'
-        with self.assertRaisesRegex(self.fixture.r.Rejected, 'SESSION_SCOPE_MISMATCH'): scope.file_command()
+        with self.assertRaisesRegex(self.fixture.f.Rejected, 'SESSION_SCOPE_MISMATCH'): scope.file_command()
 
     def test_symlink_parents_and_source_hardlinks_or_special_bits_are_refused(self):
         outside = self.fixture.fixture.base / 'outside'; outside.mkdir()
@@ -202,6 +202,20 @@ class LinuxContainerCopyScopeTests(unittest.TestCase):
         self.assertEqual([], list(work.iterdir())); self.assertFalse((self.root / 'old-work' / 'copy').exists())
         self.assertTrue((self.root / 'old-work' / scope.PRIVATE / (request['operationId'] + '.mutation')).is_file())
 
+    def test_container_loss_during_publication_seals_unknown_without_replay(self):
+        scope = self.scope(); engine = operations.FileOperations(scope); request = self.request(engine.plan(scope.file_command()))
+        save = engine.save
+        def disappear(state, record):
+            save(state, record)
+            if record['state'] == 'DestinationApplying':
+                self.session.revalidate.side_effect = self.fixture.r.Rejected('CONTAINER_FILES_TARGET_MISSING')
+        with patch.object(engine, 'save', side_effect=disappear):
+            with self.assertRaises((self.fixture.f.Rejected, self.fixture.r.Rejected)): engine.apply(request)
+        record = json.loads((self.state / 'operations' / (request['operationId'] + '.json')).read_text())
+        self.assertEqual('Unknown', record['state']); self.assertFalse((self.root / '复制.bin').exists())
+        with patch.object(self.fixture.f, 'exchange', side_effect=AssertionError('no replay')):
+            self.assertEqual('Unknown', engine.apply(request)['state'])
+
     def test_directory_partial_stage_recovery_does_not_repeat_copy_or_delete_evidence(self):
         self.tree(); scope = self.scope(self.command('项目', '项目副本')); engine = copies.FileTreeCopies(scope, trees.FileTreeManifest)
         request = self.request(engine.plan(scope.tree_command()))
@@ -235,7 +249,7 @@ class LinuxContainerCopyScopeTests(unittest.TestCase):
                 with scope.namespace_lock(): pass
         self.session.revalidate.side_effect = self.fixture.r.Rejected('CONTAINER_FILES_TARGET_UNAVAILABLE')
         with scope.namespace_lock(): pass
-        with self.assertRaises(self.fixture.r.Rejected): scope.file_command()
+        with self.assertRaises(self.fixture.f.Rejected): scope.file_command()
         self.assertEqual(0o600, stat.S_IMODE((self.state / 'namespace.lock').stat().st_mode))
 
     def test_symlink_state_and_unsafe_private_directory_preserve_foreign_content(self):

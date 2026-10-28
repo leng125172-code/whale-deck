@@ -57,9 +57,15 @@ class ContainerCopyScope:
     def reject(self, suffix): raise self.f.Rejected('CONTAINER_COPY_' + suffix)
 
     def guard(self):
-        self.u.session_scope(self.command, self.session); self.session.revalidate()
-        if self.u.target_proof(self.session) != self.proof: self.reject('TARGET_CHANGED')
-        if tuple(self.p.owner(self.session)) != self.owner: self.reject('OWNER_CHANGED')
+        try:
+            self.u.session_scope(self.command, self.session); self.session.revalidate()
+            if self.u.target_proof(self.session) != self.proof: self.reject('TARGET_CHANGED')
+            if tuple(self.p.owner(self.session)) != self.owner: self.reject('OWNER_CHANGED')
+        except self.r.Rejected as error:
+            # The reused engines catch their own primitive exception type to
+            # persist an honest Unknown. Preserve the container error code but
+            # bridge exception classes; otherwise target loss bypasses recovery.
+            raise self.f.Rejected(str(error)) from None
 
     def relative(self, value, empty=False): return self.r.canonical_path(value, empty=empty)
     def protected(self, path): return self.r.protected(path, self.f)
@@ -105,6 +111,8 @@ class ContainerCopyScope:
                 self.p.writable({'request': {**self.command, 'path': path}}, self.session, parent)
             yield root, parent, leaf
             self.guard()
+        except self.r.Rejected as error:
+            raise self.f.Rejected(str(error)) from None
         finally:
             if parent is not None: os.close(parent)
             os.close(root)
