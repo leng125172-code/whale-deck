@@ -95,6 +95,36 @@ def wait_terminal(identifier, expected):
         time.sleep(1)
 
 
+def agent_identity(before, revision):
+    # Type=simple may report MainPID before exec. Observe that exact new
+    # process until it really is the installed apphost; do not execute systemd
+    # itself through the transient /proc/<pid>/exe link.
+    deadline = time.monotonic() + 20; selected = None
+    while True:
+        pid = command('systemctl', 'show', 'whaledeck-agent.service', '-p', 'MainPID', '--value')
+        if pid.isdigit() and int(pid) > 0 and pid != before:
+            if selected is not None: assert pid == selected, 'AGENT_RESTARTED_AGAIN_DURING_PROBE'
+            selected = pid
+            try:
+                if Path('/proc/' + pid + '/exe').readlink().name == 'WhaleDeck.Agent':
+                    identity = json.loads(command('/proc/' + pid + '/exe', '--build-info'))
+                    assert identity['sourceRevision'] == revision
+                    return pid
+            except (OSError, subprocess.CalledProcessError): pass
+        assert time.monotonic() < deadline, 'AGENT_EXEC_IDENTITY_DEADLINE'
+        time.sleep(0.1)
+
+
+def clean_success(intent, baseline, profile, evidence, fixture):
+    row = snapshot(intent['id'])['row']
+    output, inode, private_inode = verify_directory({'id': intent['id'], 'path': baseline['path'],
+        'publishedVersion': row['published_version']}, baseline, profile['subject'], evidence)
+    private = fixture['folder'] / '.whaledeck-container-directories-v1'; private_info = trusted(private, True)
+    assert [private_info.st_dev, private_info.st_ino] == private_inode and not list(private.iterdir())
+    info = output.lstat(); assert (info.st_dev, info.st_ino, info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == inode
+    assert not list(output.iterdir()); output.rmdir(); private.rmdir()
+
+
 def main():
     global PHASE
     assert os.geteuid() == 0 and len(sys.argv) == 2; os.umask(0o077)
@@ -116,9 +146,10 @@ def main():
             planned = request(session, 'POST', endpoint + '/plan', 200, headers=api.headers,
                 json={'instanceId': instance, 'path': path, 'mode': '0750'}).json()
             baseline = {'revision': revision, 'containerId': fixture['identifier'], 'instanceId': instance,
-                'source': str(fixture['folder']), 'kind': kind, 'preflight': baseline_checks}
+                'source': str(fixture['folder']), 'path': path, 'kind': kind, 'preflight': baseline_checks,
+                'sourceIdentity': list(owned.common.fingerprint(fixture['folder'])), 'originalProof': fixture['proofs']['original.bin']}
             key = str(uuid.uuid4()); parameters = {'planHash': planned['planHash'], 'confirmed': True, 'idempotencyKey': key}
-            headers = {**api.headers, 'Idempotency-Key': key}; intent = None; agent_pids = None
+            headers = {**api.headers, 'Idempotency-Key': key}; intent = None; agent_pids = None; cleaned = False
             try:
                 PHASE = 'stopped-worker-durable-registration-' + kind; worker.stop()
                 intent = request(session, 'POST', endpoint, 202, headers=headers, json=parameters).json()
@@ -140,9 +171,7 @@ def main():
                     before = command('systemctl', 'show', 'whaledeck-agent.service', '-p', 'MainPID', '--value')
                     assert before.isdigit() and int(before) > 0
                     command('systemctl', 'restart', 'whaledeck-agent.service')
-                    after = command('systemctl', 'show', 'whaledeck-agent.service', '-p', 'MainPID', '--value')
-                    assert after.isdigit() and int(after) > 0 and before != after
-                    identity = json.loads(command('/proc/' + after + '/exe', '--build-info')); assert identity['sourceRevision'] == revision
+                    after = agent_identity(before, revision)
                     assert command('systemctl', 'show', 'whaledeck-maintenance.service', '-p', 'MainPID', '--value') == maintenance
                     agent_pids = {'before': int(before), 'after': int(after), 'maintenancePidUnchanged': True}
                 elif kind == 'cancel-while-queued':
@@ -157,12 +186,7 @@ def main():
                 assert row['lease_token'] is None and row['lease_expires_at_utc'] is None and not row['publish_barrier']
                 receipt_path, receipt = root_record(intent['id'])
                 if expected == 'Succeeded':
-                    output, inode, private_inode = verify_directory({'id': intent['id'], 'path': path,
-                        'publishedVersion': row['published_version']}, baseline, profile['subject'], evidence)
-                    private = fixture['folder'] / '.whaledeck-container-directories-v1'; private_info = trusted(private, True)
-                    assert [private_info.st_dev, private_info.st_ino] == private_inode and not list(private.iterdir())
-                    info = output.lstat(); assert (info.st_dev, info.st_ino, info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == inode
-                    assert not list(output.iterdir()); output.rmdir(); private.rmdir()
+                    clean_success(intent, baseline, profile, evidence, fixture)
                 else:
                     assert row['root_started_at_utc'] is None and row['published_version'] is None
                     assert row['result_code'] == 'CONTAINER_DIRECTORY_CANCELED' and receipt['state'] == 'Aborted'
@@ -170,12 +194,23 @@ def main():
                     assert receipt['plan']['fingerprint'] == json.loads(row['plan_json'])['Fingerprint']
                     assert not (fixture['folder'] / path.removeprefix('work/')).exists()
                     (evidence / (uuid.UUID(intent['id']).hex + '.root.json')).write_bytes(receipt_path.read_bytes())
+                cleaned = True
                 assert request(anonymous, 'GET', base + '/api/v1/system/status', 200).json()['build']['sourceRevision'] == revision
                 cases.append({'kind': kind, 'id': intent['id'], 'state': expected, 'rootState': receipt['state'],
                     'workerContainerIdUnchanged': True, 'agentRestart': agent_pids})
                 (evidence / 'results.json').write_text(json.dumps({'revision': revision, 'cases': cases}))
             finally:
                 worker.start()  # Never leave the real Worker manually stopped.
+                if intent is not None and not cleaned:
+                    # An observer failure must not race fixture teardown with
+                    # the already accepted task. Query it; never submit again.
+                    deadline = time.monotonic() + 100
+                    while True:
+                        value = snapshot(intent['id']); state = value['row']['state']
+                        if state not in ('Pending', 'Applying'): break
+                        assert time.monotonic() < deadline, 'FAILED_GATE_ORIGINAL_TASK_STILL_ACTIVE'
+                        time.sleep(1)
+                    if state == 'Succeeded': clean_success(intent, baseline, profile, evidence, fixture)
     session.close(); anonymous.close(); preflight()
     (evidence / 'verified.json').write_text(json.dumps({'revision': revision, 'cases': cases, 'pendingOnly': True,
         'realWorkerRestarts': 4, 'realAgentRestarts': 1, 'businessAndRootHistoryRetained': True}))
