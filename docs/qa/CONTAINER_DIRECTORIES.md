@@ -1,12 +1,43 @@
-# 容器新建目录：内部引擎及真实容器验收
+# 容器新建目录：持久业务、页面与安装态验收
 
 ## 当前状态
 
-2026-10-27，`82850b22d3cb7a18ddc4a89af966d60dbc7e1197` 的宿主Agent/MaintenanceHost和固定helper已覆盖并通过安装态签名UDS验证，协议minor44。API/Worker实际程序集与Gateway标签仍为 `852ca6f`，没有公开目录写入API或Vue入口，也没有目录业务SQL/Worker任务。此阶段没有数据库schema改动，不生成空迁移。
+2026-10-28，永久业务及 Vue 源码 `4341167` 已实现，`5f3622d` 已正常 dev 覆盖并通过真实 Authentik 身份的四组目录页面验收。新增 EF 迁移 `20261027153646_ContainerDirectoryIntents`、独立目录任务/Job/Outbox/事务审计、共享发布保护、Worker、管理员 API、页面计划确认/原登记找回与当前管理员 Unknown 处置。目录业务的实际重启/进行中取消/Unknown 跨管理员页面故障组合仍待，不把底层 SIGKILL 或合成页面证据替代它们。
+
+当前六组件实际程序集、镜像及 HTTP 对应 `5f3622d07f7e265762785be56712323fde1b5405`，Agent 协议仍 minor44。宿主运行 PID 的 `/proc/<pid>/exe --build-info` 也已独立核对。下方 `82850b2` Agent 引擎证据属于前一子阶段，当时没有目录业务 schema/API/UI。
 
 前序 `f7a7731` 内部引擎、`b43fedf` 冻结原生验证已完成真实独占Docker容器普通创建及四个强杀切点；其证据仍保留，下方说明分开标识引擎门禁和新安装态协议门禁。
 
-这是 P1-11 / P2-03 中容器目录创建的底层实现，不是完整“新建目录”产品功能验收，更不等于59项完成；17项移出不算完成。文件复制、移动、删除、权限和所有者管理继续保留在原目标。
+这是 P1-11 / P2-03 中的容器目录创建增量，不是完整文件管理或59项完成；17项移出不算完成。文件复制、移动、删除、权限和所有者管理继续保留在原目标。
+
+## 永久业务与页面候选
+
+- 五分钟业务确认计划绑定真实主体、原登录、完整容器实例、路径、父版本、普通权限及内核派生所有者。十五分钟永久意图冻结首次登记，Job/Outbox/审计同事务提交，同一登记重试不延长寿命或重做目录。业务 HMAC 与 Root 计划域独立。
+- 数据库共享 advisory gate、发布屏障及三条数据库触发器保护旧版滚动写入。宿主文件锁、容器上传及新目录发布不能交叉运行；Unknown 保留保护，普通 Job 重试明确拒绝此任务类型。
+- Worker 先查询永久 Root 回执，执行前再次复核原登录/当前管理权/取消/有效期；RootStarted 后不再次 Apply，只查询或封存。当前管理员处置保留原签名、Root 证据及当前处置审计，以失败结束历史任务，不能假报目录创建成功。
+- Vue 从实际容器目录新建单层目录，先计划后明确确认；关闭未确认窗口不登记。响应丢失保留同一登记，刷新仅查询原任务；退出、降权和换主体清空本地提示。文件页有独立 Unknown 调查与二次确认，确认回包丢失可以只读查询原处置。
+
+本地 Release 零警告/错误、2802 Unit、201 Integration 通过（7项默认原生依赖跳过）；前端522单元、类型/生产构建、lint/format通过。9项生产预览浏览器测试通过，包含320/1440、明暗、取消零登记、登记响应丢失、原任务取消、当前管理员处置响应丢失与401/403清空、普通用户无管理请求；这是合成接口测试。
+
+冻结 `7c4df06` 在独立真实 PostgreSQL 数据库执行1/通过1/跳过0，准确临时容器/数据库清理通过。目录子场景验证双连接幂等/租约、跨类发布互斥和旧版原始 SQL 触发器、Unknown/跨管理员事务处置及审计失败原子性。没有改生产数据库来制造这些场景。
+
+前两次原生失败保留：旧测试的迁移降级虽然最终被历史保护拒绝，但已逐个提交了更晚空类型的降级，导致后续缺表；测试在验证原保护后恢复最新 schema。审计失败注入的 CHECK 初次扫描到合法历史审计，改为 NOT VALID，仅拒绝新写入而保留旧事实。均修正测试，不绕过产品约束。
+
+日志 `/tmp/wd-directory-business-build-final.log`、`/tmp/wd-directory-{unit,integration}-final.log`、`/tmp/wd-directory-web-{unit,build}-final.log`、`/tmp/wd-directory-browser-final-10.log`、`/tmp/wd-directory-native-postgres-{2,3}.log`；真实 PostgreSQL 状态 `deploy/artifacts/native-status/dispatch-8a490556905f44ebabbd083d4fc501d1.json`。50项容器文件联合页面通过；补权限选择控件后目录10项通过。CI40611513488 backend/native-postgres/native-valkey/installer已success，frontend仍运行，不能记整条CI通过。
+
+## 实际覆盖与人类身份页面签收
+
+正常开发更新服务 InvocationID `3d27ab362ee146f8a54ec35830b398c9` 成功终态0/SUCCESS，用时3分35.989秒；新迁移入库，6组件/HTTP来源及宿主PID执行文件对应5f3622d。宿主检查通过10.0.13/PKCS、UDS/helper权限、HDD策略及动态入口。没有自动回滚。
+
+`deploy/validation/validate_container_directory_browser.py/.mjs` 通过真实正常 Authentik 登录：1440明/暗、320明/暗各新建一个中文目录，普通权限0750/0700/0755。每次取消确认零登记，再明确确认恰好一个业务任务；额外4次相同 HTTP 登记重试返回同任务和原寿命。真实缺CSRF400、错误Origin403，刷新仅找回原任务，浏览器文件内容请求0。两页正常注销后WD/旧Cookie401、Authentik拒绝，普通真实用户8路403与匿名查询401通过。
+
+独立观察SQL永久计划/原主体/目标实例、同Job成功/事件/单条接受审计、Outbox终态、Root永久完整计划指纹与回执、实际空目录inode/1000:1000/普通权限及版本；四项全部匹配。320和1440截图主代理目视检查无水平溢出。精确空目录与私有目录核验后清理，严格fixture证明容器和原测试源准确清理；Root和业务历史保留。新进程再次核对4任务全部成功、接受审计各1、活动/租约/屏障0、Root归档与当前原件逐字节相同、精确CID/源不存在、两类临时身份均0、11核心healthy。
+
+私有证据 `deploy/artifacts/container-directory-browser-c52a54f51ef442379be1d19420d9b0ed/`：baseline/results/verified/independent-final、四份Root永久记录归档、四张实际页面截图和浏览器输出。日志 `/tmp/wd-directory-installed-browser-4.log`、`/tmp/wd-directory-provenance.log`、`/tmp/wd-directory-host-validate-final.log`。
+
+首次发布前置Git TLS失败，未执行安装；临时HTTP/1.1/TLS1.2参数那次拉取成功后进入唯一一次发布。观察时曾准备切换到普通用户，但复核发现该次已调度，未重复发布。sudo确实清除代理，但不把首次TLS错误全归因于它。root Git刷新产生的index/ORIG_HEAD所有者已按准确清单恢复user，只改归属不改内容/模式，Git工作树干净。
+
+页面验收第一次从部署checkout运行缺Playwright依赖，在任何目录登记前失败且准确清理；改从同产品源码且已装依赖的测试工作树运行。非筛选Element Plus Select内部input被选中标签覆盖，原验证器点击超时，真实/本地均复现且目录登记0；改点可见wrapper、不force，补回归10项后通过。保留失败日志，未改产品或放宽权限。
 
 ## 实现
 

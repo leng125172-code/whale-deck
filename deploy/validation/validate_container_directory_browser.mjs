@@ -4,12 +4,13 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { chromium, expect } from '../../web/node_modules/@playwright/test/index.mjs'
 
-let phase = 'startup', browser
+let phase = 'startup', browser, activePage, evidence
 try {
   const revision = process.argv[2], fixture = JSON.parse(await readFile('/dev/stdin', 'utf8'))
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
   assert.match(fixture.containerId, /^[a-f0-9]{64}$/)
   assert.match(fixture.containerName, /^wdv-container-publish-[a-f0-9]{32}$/)
+  evidence = fixture.evidence
   const base = process.env.WHALEDECK_URL ?? 'http://192.168.100.13:8080', origin = new URL(base)
   assert.equal(origin.protocol, 'http:'); assert.equal(origin.port, '8080')
   assert.ok(['127.0.0.1', '192.168.100.13', '192.168.22.19'].includes(origin.hostname))
@@ -19,6 +20,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1050 }, colorScheme: 'light', reducedMotion: 'reduce' })
   context.setDefaultTimeout(20_000)
   const page = await context.newPage()
+  activePage = page
   assert.equal((await (await context.request.get(base + '/api/v1/system/status')).json()).build.sourceRevision, revision)
   phase = 'normal-visible-authentik-login'
   await page.goto(base + '/login?returnUrl=/containers')
@@ -86,7 +88,10 @@ try {
       await panel.getByRole('button', { name: '新建目录', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: '新建容器目录', exact: true })
       await dialog.getByLabel('目录名称', { exact: true }).fill(name)
-      await dialog.getByRole('combobox', { name: '目录权限', exact: true }).click()
+      // Non-filterable Element Plus Select has an internal input covered by
+      // its selected label. Click the visible wrapper, without force.
+      await expect(dialog.getByRole('combobox', { name: '目录权限', exact: true })).toHaveCount(1)
+      await dialog.locator('.el-select__wrapper').click()
       await page.getByRole('option', { name: new RegExp('^' + view.mode) }).click()
       await dialog.getByRole('button', { name: '生成目录计划', exact: true }).click()
       await expect(dialog.getByText('/' + path, { exact: true })).toBeVisible()
@@ -142,6 +147,15 @@ try {
   await context.close()
   console.log(JSON.stringify({ installedContainerDirectoryBrowser: 'passed', revision, directories: 4, fullSsoLogout: true }))
 } catch (error) {
+  if (activePage && evidence && !activePage.isClosed() && new URL(activePage.url()).pathname === '/containers') {
+    const dialog = activePage.getByRole('dialog', { name: '新建容器目录', exact: true })
+    if (await dialog.count() === 1 && await dialog.isVisible()) {
+      // Only the owned directory form, never an Authentik page or input value.
+      const controls = await dialog.evaluate(node => [...node.querySelectorAll('input,[role="combobox"]')].map(element => ({ tag: element.tagName, role: element.getAttribute('role'), label: element.getAttribute('aria-label'), labelledBy: element.getAttribute('aria-labelledby'), disabled: element.hasAttribute('disabled'), width: element.getBoundingClientRect().width })))
+      await writeFile(join(evidence, 'failed-directory-controls.json'), JSON.stringify(controls), { mode: 0o600 })
+      await dialog.screenshot({ path: join(evidence, 'failed-directory-form.png') }).catch(() => {})
+    }
+  }
   const locations = [...(error?.stack ?? '').matchAll(/validate_container_directory_browser\.mjs:([0-9]+):([0-9]+)/g)].map(match => ({ line: Number(match[1]), column: Number(match[2]) }))
   console.error(JSON.stringify({ installedContainerDirectoryBrowser: 'failed', phase, failureType: error?.constructor?.name ?? 'Error', locations }))
   process.exitCode = 1

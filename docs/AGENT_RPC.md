@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-10-28 容器新建目录已覆盖并通过真实页面常规链路**：实际5f3622d六组件/HTTP同源，更新0/SUCCESS、3分35.989秒，新永久目录迁移入库。真实管理员1440/320明暗共4次中文目录、0750/0700/0755、取消零登记/同HTTP重试原任务/刷新只查/两页完整注销通过；独立SQL/Worker/Root计划指纹、实际空目录inode/1000:1000/权限匹配，普通8路403/匿名401、缺CSRF400/错误Origin403通过。精确测试源/容器/临时身份清理、永久历史保留；4成功、活动/租约/屏障0、11核心healthy。2802 Unit/201 Integration（7默认跳过）、522前端、50联合页面及补充目录10项、冻结真实PG1执行通过并清理。CI40611513488四路success、frontend仍运行。实际业务重启/进行中取消/Unknown跨管理员页面及其他容器写入/隔离/留存仍需继续；59项active，17项移出不算完成。[证据及失败记录](qa/CONTAINER_DIRECTORIES.md)。
+
 2026-10-27 当前安装Agent minor44 / 82850b2：新增独立请求体签名ContainerDirectoryService四方法、固定目录helper/SDK，实际UDS不覆盖创建与永久取消、签名/核心/只读根拒绝及准确资源清理通过。API/Worker/Gateway仍852ca6f；目录业务永久任务/API/UI未接，不签整个目录功能完成。[安装态证据](qa/CONTAINER_DIRECTORIES.md)。
 
 2026-10-27最新安装852ca6f/minor43：精确Docker inspect的受信404新增固定TARGET_MISSING前置条件，SDK映射既有TargetUnavailable，不当作丢失操作回执；线协议字段未变。发布准备故障与真实管理员UI封存/全局保护解除、删除目标10.448秒识别均通过。[证据及兼容边界](qa/CONTAINER_RESTORATION_PUBLICATION.md)。下方为前序批次。

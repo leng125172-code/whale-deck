@@ -176,6 +176,23 @@ test('cancel requests only the existing task and never creates another directory
   )
 })
 
+test('directory permission control is labelled and freezes the selected ordinary mode', async ({
+  page,
+}) => {
+  const control = await fixture(page)
+  const panel = await open(page)
+  await panel.getByRole('button', { name: '新建目录', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '新建容器目录', exact: true })
+  await dialog.getByLabel('目录名称', { exact: true }).fill('页面新目录')
+  await expect(dialog.getByRole('combobox', { name: '目录权限', exact: true })).toHaveCount(1)
+  await dialog.locator('.el-select__wrapper').click()
+  await page.getByRole('option', { name: /^0700/ }).click()
+  await dialog.getByRole('button', { name: '生成目录计划', exact: true }).click()
+  await expect(dialog.getByText('仅新建，不覆盖当前目录', { exact: true })).toBeVisible()
+  expect(control.directory.writes[0]?.body.mode).toBe('0700')
+  expect(control.directory.writes.filter((write) => write.path === '')).toHaveLength(0)
+})
+
 async function recoveryFixture(
   page: Page,
   options: { lost?: boolean; denied?: number; administrator?: boolean } = {},
