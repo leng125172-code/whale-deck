@@ -24,7 +24,7 @@ public sealed class ContainerCopyGatewayTests
     private static App.TerminalActor Actor => new("synthetic-admin", null, [], new('F', 64), "synthetic-trace", null);
     private static App.FileObjectIdentityDto Identity(Rpc.FileObjectIdentity v) => new(v.Device, v.Inode, v.Mode, v.OwnerUid, v.OwnerGid, v.LinkCount, v.SizeBytes, v.ModifiedAtUnixNs);
     private static App.FileParentIdentity Parent(Rpc.FileDirectoryIdentity v) => new(v.Device, v.Inode);
-    private static App.ContainerCopyPlanDto Plan(bool directory = false)
+    internal static App.ContainerCopyPlanDto Plan(bool directory = false)
     {
         var p = ContainerCopyPolicyTests.Plan(directory); var c = p.Command; App.FileMutationPlan? file = null; App.FileTreeCopyPlan? tree = null;
         if (directory)
