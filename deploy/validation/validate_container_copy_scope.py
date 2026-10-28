@@ -52,7 +52,8 @@ def main():
             folder, identifier = fixture['folder'], fixture['identifier']
             target = docker.target(docker.api('GET', '/containers/' + identifier + '/json'), identifier, docker.registry())
             location = {'containerId': identifier, 'instanceId': target['instanceId'], 'path': 'work'}
-            baseline = {'containerId': identifier, 'source': str(folder), 'instanceId': target['instanceId'], 'revision': revision}
+            baseline = {'containerId': identifier, 'source': str(folder), 'instanceId': target['instanceId'], 'revision': revision,
+                'sourceDirectoryProof': reader.fingerprint(folder.stat()), 'originalFileProof': fixture['proofs']['original.bin']}
             (evidence / 'baseline.json').write_text(json.dumps(baseline))
             original = owned.common.fingerprint(folder / 'original.bin')
             with reader.ContainerRoot(location, files, docker) as session:
@@ -99,6 +100,9 @@ def main():
                     results.append({'kind': kind, 'operationId': request['operationId'], 'state': result['state'],
                         'bytes': len(fixture['old']), 'fullContentVerified': True, 'owner': [1000, 1000], 'replayedSameInode': True,
                         'recordSha256': hashlib.sha256(record_path.read_bytes()).hexdigest()})
+                    (evidence / (kind + '-proofs.json')).write_text(json.dumps({'source': source,
+                        'destination': destination, 'sourceProofs': source_expected, 'destinationProofs': expected}))
+                    (evidence / 'results.json').write_text(json.dumps(results))
                     # Prove all entries before changing membership. A parent
                     # mtime changes after known child removal, so final rmdir
                     # binds its original inode/type/mode/owner and emptiness.
@@ -111,7 +115,8 @@ def main():
                         if kind == 'file': base.unlink()
                         else:
                             (base / '代码.bin').unlink(); (base / '空目录').rmdir()
-                            assert reader.fingerprint(base.lstat())[:6] == proofs[''][:6] and not list(base.iterdir())
+                            current = reader.fingerprint(base.lstat())
+                            assert current[:5] == proofs[''][:5] and current[5] == 2 and not list(base.iterdir())
                             base.rmdir()
                 # Real Docker read-only root and bind mount root guards.
                 for destination in ('tmp/forbidden', 'work'):
