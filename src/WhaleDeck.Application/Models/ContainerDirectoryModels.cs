@@ -8,3 +8,13 @@ public sealed record ContainerDirectoryOperationDto(Guid Id, string Owner, Conta
 { public override string ToString() => nameof(ContainerDirectoryOperationDto); }
 public sealed record ContainerDirectoryReceiptDto(Guid Id, string ContainerId, string InstanceId, string Fingerprint,
     string TargetProof, string State, string Version, bool BindingCurrent, bool Replayed);
+public sealed record ContainerDirectoryPlanClaims(string Actor, string LoginBinding, ContainerDirectoryPlanDto Plan, DateTimeOffset CreatedAtUtc, DateTimeOffset ExpiresAtUtc)
+{ public override string ToString() => nameof(ContainerDirectoryPlanClaims); }
+public sealed record ContainerDirectoryBindingDto(Guid Id, Guid IdempotencyKey, string Actor, string LoginBinding, string TraceId,
+    string Owner, ContainerDirectoryPlanDto Plan, string PlanHash, DateTimeOffset CreatedAtUtc, DateTimeOffset ExpiresAtUtc)
+{ public override string ToString() => nameof(ContainerDirectoryBindingDto); }
+public sealed record ContainerDirectoryPlanResponse(string PlanHash, DateTimeOffset ExpiresAtUtc, ContainerDirectoryCommandDto Command, string Warning);
+public sealed record SubmitContainerDirectoryCommand(string PlanHash, bool Confirmed, string IdempotencyKey);
+public sealed record ContainerDirectoryIntentDto(Guid Id, Guid JobId, ContainerDirectoryCommandDto Command, string State,
+    DateTimeOffset ExpiresAtUtc, string? ResultCode, long Version, string? PublishedVersion);
+public sealed record AcknowledgeContainerDirectoryCommand(long Version, bool Confirmed);

@@ -41,7 +41,8 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
         // Same container/path hierarchy is reserved from acceptance. Different
         // containers can alias one bind: the global publish barrier handles that.
         var held = await db.ContainerFileUploadOperations.AsNoTracking().Where(item => item.ContainerId == row.ContainerId && item.CompletedAtUtc == null).Take(65).ToArrayAsync(cancellationToken);
-        if (held.Length > 64 || held.Any(item => Conflicts(item.RelativePath, row.RelativePath)))
+        var directories = await db.ContainerDirectoryOperations.Where(item => item.ContainerId == row.ContainerId && item.CompletedAtUtc == null).Select(item => item.RelativePath).Take(65).ToArrayAsync(cancellationToken);
+        if (held.Length + directories.Length > 64 || held.Any(item => Conflicts(item.RelativePath, row.RelativePath)) || directories.Any(path => Conflicts(path, row.RelativePath)))
             throw new InvalidOperationException("CONTAINER_UPLOAD_TARGET_BUSY");
         var resource = await db.ManagedResources.Where(item => item.ResourceType == "Container" && item.ExternalId == row.ContainerId)
             .Select(item => (Guid?)item.Id).SingleOrDefaultAsync(cancellationToken);
@@ -151,7 +152,8 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
         if (await CancellationRequestedAsync(row.Id, cancellationToken)) return ContainerFileUploadStartResult.Canceled;
         if (current.ExpiresAtUtc <= now) return ContainerFileUploadStartResult.Expired;
         if (await db.FilePathLocks.AnyAsync(cancellationToken) ||
-            await db.ContainerFileUploadOperations.AnyAsync(item => item.PublishBarrier && item.Id != row.Id, cancellationToken)) return ContainerFileUploadStartResult.Busy;
+            await db.ContainerFileUploadOperations.AnyAsync(item => item.PublishBarrier && item.Id != row.Id, cancellationToken) ||
+            await db.ContainerDirectoryOperations.AnyAsync(item => item.PublishBarrier, cancellationToken)) return ContainerFileUploadStartResult.Busy;
         var started = ContainerFileUploadIntentValidation.CanonicalTime(now);
         await db.ContainerFileUploadOperations.Where(item => item.Id == row.Id).ExecuteUpdateAsync(update =>
             update.SetProperty(item => item.State, "Publishing").SetProperty(item => item.RootStartedAtUtc, started)

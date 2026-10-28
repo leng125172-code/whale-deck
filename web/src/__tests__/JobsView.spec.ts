@@ -78,7 +78,7 @@ afterEach(() => {
 })
 
 describe('Job retry', () => {
-  it.each(['files.upload', 'containers.files.upload', 'containers.files.restore'])(
+  it.each(['files.upload', 'containers.files.upload', 'containers.files.restore', 'containers.files.mkdir'])(
     '%s requires a selected file and never exposes generic retry',
     async (jobType) => {
       const upload = { ...source, jobType }

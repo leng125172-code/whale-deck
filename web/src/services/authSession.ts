@@ -2,6 +2,7 @@ import { readonly, ref } from 'vue'
 import { runtimeConfig } from '@/config/runtime'
 import { ApiError, apiRequest } from '@/services/apiClient'
 import { navigateToLogout } from '@/services/logoutNavigation'
+import { clearDirectoryHints, reconcileDirectoryHints } from '@/services/containerDirectoryHints'
 import type { CurrentUser } from '@/services/contracts'
 import {
   onSessionExpired,
@@ -33,6 +34,7 @@ function expireSession() {
   initialized.value = true
   initialization = undefined
   clearFileBrowserLocation()
+  clearDirectoryHints()
   if (import.meta.env.DEV) sessionStorage.removeItem(previewStorageKey)
   if (hadIdentity) expiredAction?.()
 }
@@ -108,6 +110,7 @@ async function loadAuthSession() {
     window.clearTimeout(timeout)
     if (current === generation) {
       reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
+      reconcileDirectoryHints(user.value?.subject, user.value?.isAdministrator === true)
       initialized.value = true
     }
   }
@@ -143,6 +146,7 @@ function redirectToAuthentik(returnUrl = '/') {
 
 async function logout() {
   clearFileBrowserLocation()
+  clearDirectoryHints()
   if (import.meta.env.DEV) {
     generation++
     sessionStorage.removeItem(previewStorageKey)
@@ -168,6 +172,7 @@ async function refresh() {
     authenticated.value = true
     unavailable.value = false
     reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
+    reconcileDirectoryHints(user.value?.subject, user.value?.isAdministrator === true)
   } catch (reason) {
     if (current === generation) {
       if (reason instanceof ApiError && [401, 403].includes(reason.status)) expireSession()

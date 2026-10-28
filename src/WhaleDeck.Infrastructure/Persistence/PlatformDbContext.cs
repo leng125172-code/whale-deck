@@ -11,6 +11,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
     public DbSet<TerminalSession> TerminalSessions => Set<TerminalSession>();
     public DbSet<FileUploadOperation> FileUploadOperations => Set<FileUploadOperation>();
     public DbSet<ContainerFileUploadOperation> ContainerFileUploadOperations => Set<ContainerFileUploadOperation>();
+    public DbSet<ContainerDirectoryOperation> ContainerDirectoryOperations => Set<ContainerDirectoryOperation>();
     public DbSet<FileMutationOperation> FileMutationOperations => Set<FileMutationOperation>();
     public DbSet<FilePathLock> FilePathLocks => Set<FilePathLock>();
     public DbSet<FileVersion> FileVersions => Set<FileVersion>();
@@ -99,6 +100,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigureContainerFileUploads(modelBuilder);
+        ConfigureContainerDirectories(modelBuilder);
         ConfigureContainerFileHistory(modelBuilder);
         ConfigureFileArchives(modelBuilder);
         ConfigureTreeCopies(modelBuilder);

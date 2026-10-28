@@ -83,6 +83,10 @@ public static class DependencyInjection
         services.AddScoped<IContainerFileUploadRepository, ContainerFileUploadRepository>();
         services.AddScoped<ContainerFileUploadService>();
         services.AddScoped<ContainerFileUploadDispatcher>();
+        services.AddSingleton<IContainerDirectoryProtector, FilePlanProtector>();
+        services.AddScoped<IContainerDirectoryRepository, ContainerDirectoryRepository>();
+        services.AddScoped<ContainerDirectoryWorkflowService>();
+        services.AddScoped<ContainerDirectoryDispatcher>();
         services.AddScoped<IContainerFileReadAudit, ContainerFileReadAudit>();
         services.AddSingleton<IFileBrowserGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<FileBrowserService>();

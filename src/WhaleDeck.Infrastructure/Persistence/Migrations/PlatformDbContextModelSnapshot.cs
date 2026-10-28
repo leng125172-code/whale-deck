@@ -710,6 +710,171 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.ToTable("config_sync_runs", (string)null);
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerDirectoryOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AcknowledgedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("acknowledged_by");
+
+                    b.Property<string>("AcknowledgementJson")
+                        .HasColumnType("text")
+                        .HasColumnName("acknowledgement_json");
+
+                    b.Property<string>("ActorSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("actor_subject");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<string>("ContainerId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("container_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("InstanceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("instance_id");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_expires_at_utc");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at_utc");
+
+                    b.Property<string>("OwnerHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("owner_hash");
+
+                    b.Property<string>("PlanHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("plan_hash");
+
+                    b.Property<string>("PlanJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("plan_json");
+
+                    b.Property<bool>("PublishBarrier")
+                        .HasColumnType("boolean")
+                        .HasColumnName("publish_barrier");
+
+                    b.Property<string>("PublishedVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("published_version");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("relative_path");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_hash");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("result_code");
+
+                    b.Property<DateTimeOffset?>("RootStartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("root_started_at_utc");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("state");
+
+                    b.Property<string>("TraceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("trace_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublishBarrier")
+                        .IsUnique()
+                        .HasFilter("publish_barrier");
+
+                    b.HasIndex("ActorSubject", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("ContainerId", "CompletedAtUtc");
+
+                    b.HasIndex("NextAttemptAtUtc", "Id")
+                        .HasFilter("completed_at_utc IS NULL");
+
+                    b.ToTable("container_directory_operations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_container_directory_acknowledgement", "(state = 'Acknowledged') = (acknowledged_by IS NOT NULL AND acknowledgement_json IS NOT NULL) AND (acknowledged_by IS NULL) = (acknowledgement_json IS NULL) AND (acknowledgement_json IS NULL OR octet_length(acknowledgement_json) BETWEEN 1 AND 32768)");
+
+                            t.HasCheckConstraint("ck_container_directory_barrier", "(NOT publish_barrier OR completed_at_utc IS NULL) AND (root_started_at_utc IS NULL OR publish_barrier OR completed_at_utc IS NOT NULL) AND (state <> 'Applying' OR (publish_barrier AND root_started_at_utc IS NOT NULL))");
+
+                            t.HasCheckConstraint("ck_container_directory_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND owner_hash ~ '^[A-F0-9]{64}$' AND plan_hash ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$' AND (published_version IS NULL OR published_version ~ '^[A-F0-9]{64}$')");
+
+                            t.HasCheckConstraint("ck_container_directory_identity", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND idempotency_key <> '00000000-0000-0000-0000-000000000000'::uuid AND container_id ~ '^[a-f0-9]{64}$' AND octet_length(relative_path) BETWEEN 1 AND 4096 AND length(actor_subject) BETWEEN 1 AND 256 AND length(trace_id) BETWEEN 1 AND 128 AND octet_length(plan_json) BETWEEN 1 AND 32768");
+
+                            t.HasCheckConstraint("ck_container_directory_lease", "(lease_token IS NULL) = (lease_expires_at_utc IS NULL)");
+
+                            t.HasCheckConstraint("ck_container_directory_lifetime", "expires_at_utc = created_at_utc + INTERVAL '15 minutes' AND created_at_utc > TIMESTAMPTZ '1970-01-01 00:00:00+00' AND version >= 0");
+
+                            t.HasCheckConstraint("ck_container_directory_state", "state IN ('Pending','Applying','Unknown','Succeeded','Superseded','Canceled','Failed','Acknowledged')");
+
+                            t.HasCheckConstraint("ck_container_directory_terminal", "(completed_at_utc IS NULL) = (state IN ('Pending','Applying','Unknown'))");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerFileUploadOperation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5112,6 +5277,15 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_terminal_target", "(target_kind = 'Host' AND target_id = 'whaledeck.host' AND instance_id IS NULL AND shell IS NULL) OR (target_kind = 'Container' AND target_id ~ '^[a-f0-9]{64}$' AND instance_id IS NOT NULL AND length(instance_id) BETWEEN 1 AND 80 AND shell IS NOT NULL AND shell IN ('sh','bash','ash'))");
                         });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerDirectoryOperation", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithMany()
+                        .HasForeignKey("Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerFileUploadOperation", b =>

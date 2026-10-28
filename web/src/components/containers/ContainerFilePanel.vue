@@ -7,6 +7,7 @@ import { formatBytes } from '@/services/displayUnits'
 import { filePath } from '@/services/fileManagement'
 import type { FileEntry } from '@/services/fileManagement'
 import ContainerUploadPanel from '@/components/containers/ContainerUploadPanel.vue'
+import ContainerDirectoryPanel from '@/components/containers/ContainerDirectoryPanel.vue'
 import ContainerTextEditor from '@/components/containers/ContainerTextEditor.vue'
 import ContainerHistoryPanel from '@/components/containers/ContainerHistoryPanel.vue'
 import { textEligible } from '@/services/fileText'
@@ -35,6 +36,7 @@ const editor = ref<InstanceType<typeof ContainerTextEditor> | null>(null)
 const upload = ref<InstanceType<typeof ContainerUploadPanel> | null>(null)
 const history = ref<InstanceType<typeof ContainerHistoryPanel> | null>(null)
 const editorLocked = ref(false),
+  directoryLocked = ref(false),
   uploadLocked = ref(false),
   historyLocked = ref(false)
 async function prepareEdited(value: PreparedContainerText) {
@@ -255,12 +257,20 @@ onBeforeUnmount(() => {
         <el-button native-type="submit" :disabled="!!busy">前往</el-button>
       </form>
     </div>
+    <ContainerDirectoryPanel
+      v-if="target"
+      :target="target"
+      :path="path"
+      :disabled="!!busy || editorLocked || historyLocked || uploadLocked"
+      @refresh="load(path)"
+      @locked="directoryLocked = $event"
+    />
     <ContainerUploadPanel
       v-if="target"
       ref="upload"
       :target="target"
       :path="path"
-      :disabled="!!busy || editorLocked || historyLocked"
+      :disabled="!!busy || editorLocked || historyLocked || directoryLocked"
       @refresh="load(path)"
       @locked="uploadLocked = $event"
       @edit-draft="restoreDraft"
@@ -270,7 +280,7 @@ onBeforeUnmount(() => {
       ref="editor"
       :target="target"
       :path="path"
-      :disabled="!!busy || uploadLocked || historyLocked"
+      :disabled="!!busy || uploadLocked || historyLocked || directoryLocked"
       @locked="editorLocked = $event"
       @prepared="prepareEdited"
       @failure="failure"
@@ -280,7 +290,7 @@ onBeforeUnmount(() => {
       ref="history"
       :target="target"
       :path="path"
-      :disabled="!!busy || uploadLocked || editorLocked"
+      :disabled="!!busy || uploadLocked || editorLocked || directoryLocked"
       @locked="historyLocked = $event"
       @refresh="load(path)"
     />
@@ -320,7 +330,7 @@ onBeforeUnmount(() => {
           <el-button
             v-if="textEligible(entry)"
             link
-            :disabled="!!busy || uploadLocked || editorLocked || historyLocked"
+            :disabled="!!busy || uploadLocked || editorLocked || historyLocked || directoryLocked"
             :aria-label="`编辑 ${entry.name}`"
             @click="editor?.open(entry)"
             >编辑</el-button

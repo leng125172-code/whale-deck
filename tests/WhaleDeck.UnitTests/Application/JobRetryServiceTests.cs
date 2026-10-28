@@ -13,7 +13,8 @@ public sealed class JobRetryServiceTests
     [InlineData("files.upload")]
     [InlineData("containers.files.upload")]
     [InlineData("containers.files.restore")]
-    public async Task ByteUploadsRequireNewFileSelectionAndCannotUseGenericRetry(string jobType)
+    [InlineData("containers.files.mkdir")]
+    public async Task BoundFileWritesRequireANewDedicatedPlanAndCannotUseGenericRetry(string jobType)
     {
         var repository = new Repository(CreateSource("Failed", jobType)); var service = Service(repository);
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.GetContextAsync(repository.Source.Id, default));
