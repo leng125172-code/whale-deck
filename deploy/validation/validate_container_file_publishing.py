@@ -39,10 +39,11 @@ def verify_container(value, identifier, name, folder):
 
 
 @contextlib.contextmanager
-def fixture(*, restartable_core=()):
+def fixture(*, restartable_core=(), removable=False):
     # Explicit opt-in for the installed Worker restart gate. All older callers
     # keep the exact ID/image/status/StartedAt invariant; no resource recreation.
     assert restartable_core in ((), ('whaledeck-worker',))
+    assert type(removable) is bool
     common.verify_apps_directory(common.APPS, pwd.getpwnam('whaledeck-agent').pw_uid)
     baseline = common.core_snapshot()
     image = json.loads(common.command(['docker', 'image', 'inspect', common.IMAGE]))[0]
@@ -50,11 +51,21 @@ def fixture(*, restartable_core=()):
     name = 'wdv-container-publish-' + uuid.uuid4().hex
     folder = common.APPS / name
     folder.mkdir(mode=0o755); folder.chmod(0o755)
-    directory = folder.stat(); identifier = None
+    directory = folder.stat(); identifier = None; removed = None
     old = hashlib.shake_256(('owned-container-original:' + name).encode()).digest(common.SIZE)
     source = folder / 'original.bin'; source.write_bytes(old); os.chown(source, 1000, 1000); source.chmod(0o640)
     owned = {'folder': folder, 'old': old, 'proofs': {'original.bin': (common.fingerprint(source), hashlib.sha256(old).hexdigest().upper())},
         'private': None, 'privateProofs': {}}
+    def remove_owned():
+        nonlocal removed
+        assert removable and identifier is not None and removed is None
+        actual = json.loads(common.command(['docker', 'inspect', identifier]))[0]
+        verify_container(actual, identifier, name, folder)
+        common.command(['docker', 'rm', '--force', identifier])
+        missing = subprocess.run(['docker', 'inspect', identifier], capture_output=True, timeout=10)
+        assert missing.returncode != 0 and b'no such' in missing.stderr.lower()
+        removed = identifier
+    owned['remove_owned'] = remove_owned
     def verify_files():
         current = folder.lstat()
         assert folder.resolve(strict=True) == folder and (current.st_dev, current.st_ino, current.st_uid, stat.S_IMODE(current.st_mode)) == \
@@ -97,7 +108,7 @@ def fixture(*, restartable_core=()):
             verify_container(actual, exact, name, folder)
             common.command(['docker', 'rm', '--force', exact])
             assert subprocess.run(['docker', 'inspect', exact], capture_output=True, timeout=10).returncode != 0
-        else: assert identifier is None, 'owned container disappeared'
+        else: assert identifier is None or removable and removed == identifier, 'owned container disappeared without bound removal'
         verified = False
         try: verify_files(); verified = True
         except (AssertionError, OSError, subprocess.SubprocessError): pass
