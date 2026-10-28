@@ -75,7 +75,7 @@ def main():
                 (evidence / (kind + '-prepared-root.json')).write_text(json.dumps(held.record))
                 (evidence / (kind + '-bound-driver.json')).write_text(json.dumps({'pid': held.pid, 'unit': held.cgroup, 'twoKernelFdProofs': True}))
                 began = time.monotonic(); PHASE = 'product-must-stop-prepared-helper-' + kind
-                service_proof = None; original_lease = None
+                service_proof = None; original_lease = None; observed_agent_exit = None
                 if kind == 'cancel':
                     request(client, 'POST', base + f'/api/v1/containers/{fixture["identifier"]}/files/directories/{intent["id"]}/cancel',
                         202, headers={**api.headers, 'Idempotency-Key': intent['id']})
@@ -115,14 +115,26 @@ def main():
                     assert set(transient) <= {held.cgroup}, 'OTHER_TRANSIENT_WORK_AGENT_RESTART_REFUSED'
                     before = command('systemctl', 'show', 'whaledeck-agent.service', '-p', 'MainPID', '--value')
                     maintenance = command('systemctl', 'show', 'whaledeck-maintenance.service', '-p', 'MainPID', '--value')
-                    command('systemctl', 'restart', 'whaledeck-agent.service')
+                    # systemctl waits for the whole graceful service restart.
+                    # Time the old helper's actual exit concurrently, not the
+                    # later point when the new Agent is ready.
+                    def observe_helper_exit():
+                        ready, _, _ = select.select([held.descriptor], [], [], max(0.01, 15 - (time.monotonic() - began)))
+                        return bool(ready), time.monotonic() - began
+                    with ThreadPoolExecutor(max_workers=1) as exits:
+                        observing = exits.submit(observe_helper_exit)
+                        command('systemctl', 'restart', 'whaledeck-agent.service')
+                        observed_agent_exit = observing.result(timeout=1)
                     after = agent_identity(before, revision)
                     assert command('systemctl', 'show', 'whaledeck-maintenance.service', '-p', 'MainPID', '--value') == maintenance
                     service_proof = {'oldAgentPid': int(before), 'newAgentPid': int(after), 'maintenancePidUnchanged': True,
-                        'otherActiveWork': isolated, 'onlyOwnedPreparedHelper': True}
-                readable, _, _ = select.select([held.descriptor], [], [], max(0.01, 15 - (time.monotonic() - began)))
+                        'otherActiveWork': isolated, 'onlyOwnedPreparedHelper': True, 'totalRestartSeconds': round(time.monotonic() - began, 3)}
+                if observed_agent_exit is None:
+                    readable, _, _ = select.select([held.descriptor], [], [], max(0.01, 15 - (time.monotonic() - began)))
+                    elapsed = time.monotonic() - began
+                else: readable, elapsed = observed_agent_exit
                 assert readable, 'PRODUCT_DID_NOT_STOP_BOUND_HELPER_WITHIN_REVOCATION_WINDOW'
-                elapsed = time.monotonic() - began; assert elapsed < 15
+                assert elapsed < 15
                 held.release(); held = None
                 if kind == 'worker-crash':
                     PHASE = 'restarted-worker-must-respect-original-natural-lease'
