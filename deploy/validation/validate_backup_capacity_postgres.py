@@ -125,7 +125,8 @@ def run_native(suite, report):
                 raise RuntimeError('Isolated native ' + suite + ' test failed: ' + ('\n'.join(diagnostics) if diagnostics else
                     'native failure types=' + ','.join(error_types) + ' sdkMutexStartupFailed=' + str(startup_failed) + ' SQLSTATE=' + ','.join(sql_states) +
                     ' inboxSourceLines=' + ','.join(source_lines[:8]) + ' assertions=' + ','.join(assertions) +
-                    ' sourceLocations=' + ','.join(name + ':' + line for name, line in source_locations[:8]) + '; private output withheld'))
+                    ' sourceLocations=' + ','.join(name + ':' + line for name, line in source_locations[:8]) +
+                    ' publicPhases=' + ','.join(re.findall(r'INBOX_PHASE=([a-z-]{1,160})', output)[-5:]) + '; private output withheld'))
             results = ET.parse(scratch_path / 'results/native.trx').getroot()
             namespace = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
             counters = results.find('t:ResultSummary/t:Counters', namespace)

@@ -91,6 +91,9 @@ public sealed partial class NativeNotificationDispatchTests
         try
         {
             Assert.False(db.Database.HasPendingModelChanges());
+            Assert.Empty(await db.FilePathLocks.ToArrayAsync());
+            Assert.False(await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier));
+            Assert.False(await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier));
             var original = Row(); var duplicate = await Task.WhenAll(repo.EnqueueAsync(original, default), other.EnqueueAsync(original, default));
             Assert.All(duplicate, r => Assert.Equal(original.Id, r.Id)); Assert.Equal(1, await db.ContainerCopyIntents.CountAsync(r => r.Id == original.Id));
             Assert.Equal(1, await db.AuditEvents.CountAsync(r => r.JobId == original.Id && r.Action == "containers.files.copy.plan-accepted"));
