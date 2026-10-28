@@ -91,8 +91,9 @@ def disposable_private(record, source):
     return list(identity(pending)) == record['pendingIdentity'] and not list(pending.iterdir())
 
 
-def freeze_prepublication(row, source, container_pid):
+def freeze_prepublication(row, source, container_pid, phase='Any'):
     assert os.geteuid() == 0 and re.fullmatch('[a-f0-9]{64}', row['container_id'])
+    assert phase in ('Any', 'Prepared')
     source = Path(source)
     assert source.parent == Path('/data/WhaleDeck/apps') and re.fullmatch('wdv-container-publish-[a-f0-9]{32}', source.name)
     assert not source.is_symlink()
@@ -121,7 +122,7 @@ def freeze_prepublication(row, source, container_pid):
             try: value = record_for(row)
             except FileNotFoundError: value = None
             if value is not None and value['state'] in ('Completed', 'Aborted', 'Unknown'): return None
-            if descriptor is not None and value is not None:
+            if descriptor is not None and value is not None and (phase == 'Any' or value['state'] == phase):
                 if not bound_fds(pid, root_identity, identity(lock)): return None
                 try: signal.pidfd_send_signal(descriptor, signal.SIGSTOP)
                 except ProcessLookupError: return None
@@ -133,7 +134,7 @@ def freeze_prepublication(row, source, container_pid):
                     assert time.monotonic() < stopped_deadline, 'DIRECTORY_STOP_NOT_OBSERVED'
                     time.sleep(0.0005)
                 frozen = record_for(row)
-                if disposable_private(frozen, source):
+                if disposable_private(frozen, source) and (phase == 'Any' or frozen['state'] == phase):
                     held = HeldDirectory(pid, descriptor, group, frozen); descriptor = None; return held
                 signal.pidfd_send_signal(descriptor, signal.SIGCONT); return None
             time.sleep(0.0005)

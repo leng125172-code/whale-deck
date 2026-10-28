@@ -10,6 +10,7 @@ never SQL edits or deletion of unproved private objects.
 """
 from concurrent.futures import ThreadPoolExecutor
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -85,6 +86,12 @@ def clean_private(fixture, record, proof):
     if proof['pending'] is not None:
         assert {path.name for path in private.iterdir()} == {pending.name}
         assert owned.common.fingerprint(pending) == tuple(proof['pending']) and pending.is_dir() and not pending.is_symlink()
+        if proof.get('ownedFault') is not None:
+            fault = proof['ownedFault']; sample = pending / 'owned-fault.bin'
+            assert {path.name for path in pending.iterdir()} == {sample.name}
+            assert owned.common.fingerprint(sample) == tuple(fault['identity']) and not sample.is_symlink()
+            assert hashlib.sha256(sample.read_bytes()).hexdigest() == fault['sha256']
+            sample.unlink()
         assert not list(pending.iterdir()); pending.rmdir()
     assert not list(private.iterdir()); private.rmdir()
 
@@ -104,8 +111,9 @@ def acknowledge_if_unknown(base, session, api, identifier):
 
 def main():
     global PHASE
-    assert os.geteuid() == 0 and len(sys.argv) == 2; os.umask(0o077)
+    assert os.geteuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] == '--prepared-nonempty'); os.umask(0o077)
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
+    prepared = len(sys.argv) == 3
     base = os.environ.get('WHALEDECK_URL', 'http://192.168.100.13:8080').rstrip('/')
     anonymous = requests.Session(); anonymous.trust_env = False
     assert request(anonymous, 'GET', base + '/api/v1/system/status', 200).json()['build']['sourceRevision'] == revision
@@ -123,22 +131,33 @@ def main():
                 PHASE = 'real-confirmed-original-with-worker-stopped'; worker.stop()
                 intent, baseline = register(base, owner, owner_api, original, 'work/发布中断未知目录')
                 baseline.update(revision=revision, intent=intent['id'], originalSubject=original_profile['subject'], evidence=str(evidence),
-                    originalFileProof=original['proofs']['original.bin'])
+                    originalFileProof=original['proofs']['original.bin'], fault='prepared-nonempty' if prepared else 'target-missing')
                 (evidence / 'baseline.json').write_text(json.dumps(baseline))
                 row = snapshot(intent['id'])['row']; assert row['state'] == 'Pending' and row['root_started_at_utc'] is None
                 PHASE = 'pidfd-bound-real-root-prepublication-cut'
                 with ThreadPoolExecutor(max_workers=1) as observers:
-                    watch = observers.submit(freeze_prepublication, row, original['folder'], baseline['containerPid'])
+                    watch = observers.submit(freeze_prepublication, row, original['folder'], baseline['containerPid'], 'Prepared' if prepared else 'Any')
                     worker.start(wait_ready=False); held = watch.result(timeout=25)
                 if held is None: raise AssertionError('REAL_PREPUBLICATION_CUT_MISSED_NOT_COUNTED')
                 applying = snapshot(intent['id'])['row']
                 assert applying['state'] == 'Applying' and applying['publish_barrier'] and applying['root_started_at_utc'] is not None
-                frozen = held.record; physical = private_snapshot(original, frozen)
+                frozen = held.record
+                if prepared:
+                    assert frozen['state'] == 'Prepared'
+                    pending = original['folder'] / '.whaledeck-container-directories-v1' / (frozen['operationId'] + '.directory')
+                    assert list((pending.stat().st_dev, pending.stat().st_ino)) == frozen['pendingIdentity'] and not list(pending.iterdir())
+                    sample = pending / 'owned-fault.bin'; payload = b'owned-directory-fault-v1\n'
+                    descriptor = os.open(sample, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                    with os.fdopen(descriptor, 'wb') as stream: stream.write(payload); stream.flush(); os.fsync(stream.fileno())
+                    physical = private_snapshot(original, frozen)
+                    physical['ownedFault'] = {'identity': owned.common.fingerprint(sample), 'sha256': hashlib.sha256(payload).hexdigest()}
+                else: physical = private_snapshot(original, frozen)
                 (evidence / 'frozen-root.json').write_text(json.dumps(frozen))
                 (evidence / 'physical-before.json').write_text(json.dumps(physical))
                 (evidence / 'bound-driver.json').write_text(json.dumps({'pid': held.pid, 'unit': held.cgroup,
                     'twoKernelFdProofs': True, 'rootState': frozen['state'], 'targetAbsent': True}))
-                original['remove_owned'](); held.kill(); held = None
+                if not prepared: original['remove_owned']()
+                held.kill(); held = None
                 PHASE = 'natural-worker-observation-keeps-unknown-barrier'
                 unknown = wait_unknown(intent['id']); root_unknown = record_for(unknown['row'])
                 assert root_unknown['state'] == 'Unknown' and root_unknown['operationId'] == frozen['operationId']
@@ -182,6 +201,21 @@ def main():
             assert {key: row[key] for key in immutable} == immutable and row['acknowledged_by'] == profile['subject']
             assert row['published_version'] is None and final['pending'] == 0 and final['accepted'] == 1
             assert (ROOT / (uuid.UUID(intent['id']).hex + '.json')).read_bytes() == raw_unknown
+            if prepared:
+                PHASE = 'late-fixed-root-apply-remains-fenced-with-live-original-container'
+                # This proves the installed fixed Root helper fence. It is
+                # deliberately not described as a new signed Agent RPC test.
+                replay = subprocess.run(['/usr/local/libexec/whaledeck-privileged', 'container-file-directories', 'apply', uuid.uuid4().hex],
+                    input=json.dumps({'operationId': frozen['operationId'], 'owner': frozen['owner'], 'plan': frozen['plan']}),
+                    capture_output=True, text=True, timeout=40)
+                assert replay.returncode == 0 and len(replay.stdout.encode()) <= 32768
+                lines = [json.loads(line) for line in replay.stdout.splitlines()]
+                assert lines[-1]['state'] == 'Unknown' and lines[-1]['operationId'] == frozen['operationId']
+                assert (ROOT / (uuid.UUID(intent['id']).hex + '.json')).read_bytes() == raw_unknown
+                assert not os.path.lexists(original['folder'] / '发布中断未知目录')
+                assert owned.common.fingerprint(sample) == tuple(physical['ownedFault']['identity'])
+                (evidence / 'late-root-apply.json').write_text(json.dumps({'installedFixedHelperOnly': True, 'state': lines[-1]['state'],
+                    'rootEvidenceUnchanged': True, 'ownedPrivatePayloadUnchanged': True, 'targetAbsent': True}))
             (evidence / 'acknowledged.json').write_text(json.dumps({'id': intent['id'], 'state': row['state'], 'jobState': final['job']['state'],
                 'newAdministrator': row['acknowledged_by'], 'originalBindingUnchanged': True, 'rootEvidenceUnchanged': True}))
             clean_success(waiting, wait_baseline, profile, evidence, other); waiting_clean = True
@@ -215,7 +249,8 @@ def main():
                 finally: logout(base, fallback); fallback.close()
     administrator.close(); anonymous.close(); preflight()
     (evidence / 'verified.json').write_text(json.dumps({'revision': revision, 'intent': intent['id'], 'waitingIntent': waiting['id'],
-        'realPidfdCutAndDeletedTarget': True, 'originalAccountDeleted': True, 'otherApplicationWaited': True,
+        'realPidfdCut': True, 'targetRemoved': not prepared, 'rootCutState': frozen['state'], 'ownedNonemptyPrivateFault': prepared,
+        'originalAccountDeleted': True, 'otherApplicationWaited': True,
         'differentAdministratorUi': True, 'oldJobFailedNotCreated': True, 'rootAndBusinessEvidenceRetained': True}))
     print(json.dumps({'installedContainerDirectoryUnknown': 'passed', 'revision': revision, 'intent': intent['id'],
         'waitingIntent': waiting['id'], 'ownedSourcesAndContainersCleaned': True, 'evidence': str(evidence)}), flush=True)
