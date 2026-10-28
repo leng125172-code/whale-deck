@@ -134,7 +134,9 @@ test('lost registration and confirmation responses recover by readonly original 
   await dialog(page).getByRole('button', { name: '生成回收计划', exact: true }).click()
   await expect(page).toHaveURL(/treeTrashKey=/)
   const originalKey = new URL(page.url()).searchParams.get('treeTrashKey')
-  expect(originalKey).toBe(control.state.key)
+  // The original key is deliberately retained before sending the POST.
+  // Exercise a lost response AFTER registration, not a reload before receipt.
+  await expect.poll(() => control.state.key).toBe(originalKey)
   await page.reload()
   await expect(dialog(page).getByText('计划已生成，尚未回收', { exact: true })).toBeVisible()
   await dialog(page).getByRole('button', { name: '确认回收目录', exact: true }).click()
