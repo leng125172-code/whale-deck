@@ -2,6 +2,8 @@
 
 ## 当前状态
 
+2026-10-28后续：Prepared期间业务Worker SIGKILL/自然租约到期与Agent实际重启均通过，独立重核24任务、零活动/租约/屏障、11核心healthy。维护入口PID不变；两次验证器失败保留，[完整证据及未完成边界](CONTAINER_DIRECTORY_PROCESS_RESTARTS.md)。容器复制已进入[内部适配层/真实Docker候选验证](CONTAINER_COPY_SCOPE.md)，尚无复制RPC/BFF/UI。
+
 2026-10-28最新：Preparing目标消失、Prepared非空对象、原身份删除后另一管理员真实手机处置/跨应用等待，以及Prepared期间产品主动取消/正常退出均已实机通过。Root固定helper迟到Apply仍Unknown，证据和对象不变；最终20任务12成功/3取消/1中断/4Acknowledged，活动/Unknown/租约/屏障0、11核心healthy。产品仍5f3622d，没有重复构建部署。[故障证据及明确剩余](CONTAINER_DIRECTORY_UNKNOWN.md)。
 
 2026-10-28增量：已安装5f3622d的目录排队Worker/Agent真实重启、排队取消与正常退出撤销四项通过，完整SQL/Root/目录inode与准确清理有独立复核。只签执行前排队范围，Root发布准备中断与Unknown跨管理员页面仍待。[重启证据与初次观察失败](CONTAINER_DIRECTORY_RESTARTS.md)。
