@@ -20,9 +20,12 @@ const canCancel = computed(() => selected.value && !terminalStates.has(selected.
 const byteUpload = computed(
   () =>
     !!selected.value &&
-    ['files.upload', 'containers.files.upload', 'containers.files.restore', 'containers.files.mkdir'].includes(
-      selected.value.jobType,
-    ),
+    [
+      'files.upload',
+      'containers.files.upload',
+      'containers.files.restore',
+      'containers.files.mkdir',
+    ].includes(selected.value.jobType),
 )
 const canRetry = computed(
   () =>

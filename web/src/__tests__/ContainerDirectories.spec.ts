@@ -18,7 +18,7 @@ import {
 
 vi.mock('@/services/apiClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/services/apiClient')>()),
-  apiRequest: vi.fn(),
+  apiRequest: vi.fn<typeof apiRequest>(),
 }))
 const target = {
   containerId: 'a'.repeat(64),
@@ -108,7 +108,7 @@ describe('container directory task identity and truthful outcomes', () => {
     async (path) => {
       await expect(
         planDirectory(target, path, '0750', new AbortController().signal),
-      ).rejects.toThrow()
+      ).rejects.toThrow('目录路径或权限无效')
       expect(apiRequest).not.toHaveBeenCalled()
     },
   )
@@ -133,11 +133,11 @@ describe('container directory task identity and truthful outcomes', () => {
     ]) {
       expect(() =>
         assertDirectoryIntent({ ...intent, command: { ...command, ...change } }, command, id),
-      ).toThrow()
+      ).toThrow('目录任务或目标无法核实')
     }
     expect(() =>
       assertDirectoryIntent(intent, command, 'bb12ab12-ab12-4b12-ab12-ab12ab12ab12'),
-    ).toThrow()
+    ).toThrow('目录任务或目标无法核实')
   })
 })
 describe('directory refresh hints are account-bound and never execute', () => {
@@ -174,6 +174,6 @@ describe('directory refresh hints are account-bound and never execute', () => {
         registration: { planHash: 'opaque', confirmed: true, idempotencyKey: '-'.repeat(36) },
         id,
       }),
-    ).toThrow()
+    ).toThrow('目录任务提示无效')
   })
 })
