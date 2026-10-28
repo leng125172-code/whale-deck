@@ -42,6 +42,13 @@ for (const width of [320, 390, 1045, 1440]) for (const colorScheme of ['light', 
     await expect(drawer.getByRole('button', { name: '校验并保存', exact: true })).toBeDisabled()
     await input.fill('console.log("编辑 中文 O0Il")\n')
     await expect(drawer.getByText('未保存', { exact: true })).toBeVisible()
+    // Content may be ready before Vue's enter frame, even with reduced motion.
+    // Wait for the settled layout; retain the original strict viewport bounds.
+    await expect.poll(async () => {
+      const box = await drawer.boundingBox()
+      const width = await page.evaluate(() => document.documentElement.clientWidth)
+      return box !== null && box.x >= 0 && box.x + box.width <= width
+    }).toBe(true)
     const button = await drawer.getByRole('button', { name: '校验并保存', exact: true }).boundingBox()
     const content = await page.evaluate(() => ({ width: document.documentElement.clientWidth, height: innerHeight }))
     const panel = await drawer.boundingBox()
