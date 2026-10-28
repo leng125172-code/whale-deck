@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-28 目录排队重启/取消/正常退出实机通过**：产品运行时仍5f3622d/minor44，未重复构建部署。b7dc949验证实际4次Worker停止启动与1次Agent重启，维护入口PID不变；API持续可访问，永久原任务两成功/两取消，Root Completed/Aborted、SQL/实际目录inode属性匹配。成功轮次准确源/CID/临时身份清理，独立10总任务8成功2取消、活动/Unknown/租约/屏障0、11核心healthy。第一次Agent观察exec时序错误已修，原任务成功且无生产服务故障；未冻结原inode的唯一原始测试文件转存root私有证据，未放宽删除门禁。Root发布中强杀/撤权/Unknown真实页面及其余59项仍待，17项移出不计完成。[证据与边界](qa/CONTAINER_DIRECTORY_RESTARTS.md)。
+
 - **2026-10-28 容器新建目录已覆盖并通过真实页面常规链路**：实际5f3622d六组件/HTTP同源，更新0/SUCCESS、3分35.989秒，新永久目录迁移入库。真实管理员1440/320明暗共4次中文目录、0750/0700/0755、取消零登记/同HTTP重试原任务/刷新只查/两页完整注销通过；独立SQL/Worker/Root计划指纹、实际空目录inode/1000:1000/权限匹配，普通8路403/匿名401、缺CSRF400/错误Origin403通过。精确测试源/容器/临时身份清理、永久历史保留；4成功、活动/租约/屏障0、11核心healthy。2802 Unit/201 Integration（7默认跳过）、522前端、50联合页面及补充目录10项、冻结真实PG1执行通过并清理。CI40611513488四路success、frontend仍运行。实际业务重启/进行中取消/Unknown跨管理员页面及其他容器写入/隔离/留存仍需继续；59项active，17项移出不算完成。[证据及失败记录](qa/CONTAINER_DIRECTORIES.md)。
 
 - **2026-10-27 容器目录Agent minor44已安装验收**：82850b2宿主/固定helper与SDK独立签名四RPC已完成，API/Worker/Gateway保持852ca6f。实际UDS中文目录/内核所有者/不重复创建、永久取消拒绝迟到写入、篡改/错误域/nonce重放/核心/只读根拒绝通过；独立Root回执/源码/运行PID、准确资源清理、11核心healthy与原活动/Unknown/屏障0通过。Release零警告错误、2784 Unit/199 Integration（7原生默认跳过）、287容器Linux-root/12宿主检查通过。更新整unit尾部探针权限失败已准确记录，安装与host validate成功，剩余探针发布独立0/SUCCESS；不重复安装或自动回滚。永久目录业务SQL/Worker/API/UI及实际身份页面仍待，59项active，17项移出不算完成。[证据与剩余](qa/CONTAINER_DIRECTORIES.md)。
