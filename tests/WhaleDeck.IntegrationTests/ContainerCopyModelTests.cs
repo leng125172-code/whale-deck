@@ -51,13 +51,17 @@ public sealed class ContainerCopyModelTests
         foreach (var key in new[] { "", Guid.Empty.ToString("D"), id.ToString("D").ToUpperInvariant(), id.ToString("N") })
         {
             controller.Request.Headers["Idempotency-Key"] = key;
-            Assert.IsType<BadRequestResult>((await controller.Queue(cid, null!, default)).Result);
-            Assert.IsType<BadRequestResult>((await controller.Confirm(cid, id, null!, default)).Result);
-            Assert.IsType<BadRequestResult>((await controller.Cancel(cid, id, default)).Result);
+            var result = Assert.IsType<BadRequestObjectResult>((await controller.Queue(cid, null!, default)).Result);
+            var problem = Assert.IsType<ProblemDetails>(result.Value);
+            Assert.Equal(StatusCodes.Status400BadRequest, problem.Status);
+            Assert.Equal("CONTAINER_COPY_IDEMPOTENCY_KEY_REQUIRED", problem.Extensions["code"]);
+            Assert.Equal(controller.HttpContext.TraceIdentifier, problem.Extensions["traceId"]);
+            Assert.IsType<BadRequestObjectResult>((await controller.Confirm(cid, id, null!, default)).Result);
+            Assert.IsType<BadRequestObjectResult>((await controller.Cancel(cid, id, default)).Result);
         }
         controller.Request.Headers["Idempotency-Key"] = new StringValues([id.ToString("D"), id.ToString("D")]);
-        Assert.IsType<BadRequestResult>((await controller.Queue(cid, null!, default)).Result);
-        Assert.IsType<BadRequestResult>((await controller.Cancel(cid, id, default)).Result);
-        Assert.IsType<BadRequestResult>(await recovery.Acknowledge(id, null!, default));
+        Assert.IsType<BadRequestObjectResult>((await controller.Queue(cid, null!, default)).Result);
+        Assert.IsType<BadRequestObjectResult>((await controller.Cancel(cid, id, default)).Result);
+        Assert.IsType<BadRequestObjectResult>(await recovery.Acknowledge(id, null!, default));
     }
 }

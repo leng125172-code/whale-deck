@@ -16,7 +16,7 @@ public sealed class ContainerCopiesController(ContainerCopyWorkflowService copie
     [HttpPost, ProducesResponseType<ContainerCopyIntentDto>(StatusCodes.Status202Accepted)]
     public async Task<ActionResult<ContainerCopyIntentDto>> Queue(string containerId, ContainerCopyPlanBody command, CancellationToken cancellationToken)
     {
-        if (!Key(out var key)) return BadRequest();
+        if (!Key(out var key)) return ContainerCopyHttp.BadKey(HttpContext);
         var result = await copies.QueueAsync((await identity.ReadAsync(HttpContext)).Actor,
             new(new(containerId, command.InstanceId, command.SourcePath), command.TargetPath, command.ExpectedVersion), key, cancellationToken);
         return Accepted(Location(containerId, result.Id), result);
@@ -32,14 +32,14 @@ public sealed class ContainerCopiesController(ContainerCopyWorkflowService copie
     [HttpPost(Intent + "/confirm"), ProducesResponseType<ContainerCopyIntentDto>(StatusCodes.Status202Accepted)]
     public async Task<ActionResult<ContainerCopyIntentDto>> Confirm(string containerId, Guid id, ConfirmContainerCopyCommand command, CancellationToken cancellationToken)
     {
-        if (!Matches(id)) return BadRequest();
+        if (!Matches(id)) return ContainerCopyHttp.BadKey(HttpContext);
         var result = await copies.ConfirmAsync((await identity.ReadAsync(HttpContext)).Actor, containerId, id, command, cancellationToken);
         return Accepted(Location(containerId, id), result);
     }
     [HttpPost(Intent + "/cancel"), ProducesResponseType<ContainerCopyIntentDto>(StatusCodes.Status202Accepted)]
     public async Task<ActionResult<ContainerCopyIntentDto>> Cancel(string containerId, Guid id, CancellationToken cancellationToken)
     {
-        if (!Matches(id)) return BadRequest();
+        if (!Matches(id)) return ContainerCopyHttp.BadKey(HttpContext);
         return Accepted(Location(containerId, id), await copies.CancelAsync((await identity.ReadAsync(HttpContext)).Actor, containerId, id, cancellationToken));
     }
     private bool Key(out string key)
@@ -67,8 +67,18 @@ public sealed class ContainerCopyRecoveryController(ContainerCopyWorkflowService
     [HttpPost("{id:guid}/acknowledge"), ProducesResponseType<FileCancelDto>(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Acknowledge(Guid id, AcknowledgeContainerCopyCommand command, CancellationToken cancellationToken)
     {
-        if (id == Guid.Empty || Request.Headers["Idempotency-Key"].Count != 1 || Request.Headers["Idempotency-Key"].ToString() != id.ToString("D")) return BadRequest();
+        if (id == Guid.Empty || Request.Headers["Idempotency-Key"].Count != 1 || Request.Headers["Idempotency-Key"].ToString() != id.ToString("D")) return ContainerCopyHttp.BadKey(HttpContext);
         await copies.AcknowledgeAsync((await identity.ReadAsync(HttpContext)).Actor, id, command, cancellationToken);
         return Accepted(new FileCancelDto(id, "Acknowledged"));
     }
+}
+
+internal static class ContainerCopyHttp
+{
+    internal static BadRequestObjectResult BadKey(HttpContext context) => new(new ProblemDetails
+    {
+        Status = StatusCodes.Status400BadRequest,
+        Title = "A single canonical idempotency key matching this operation is required.",
+        Extensions = { ["code"] = "CONTAINER_COPY_IDEMPOTENCY_KEY_REQUIRED", ["traceId"] = context.TraceIdentifier }
+    });
 }
