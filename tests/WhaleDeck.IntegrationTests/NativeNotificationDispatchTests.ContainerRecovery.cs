@@ -168,6 +168,12 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.False((await uploads.OwnedAsync(oldActor,unseen.Id,default))!.PublishBarrier);
             var downgrade = await Assert.ThrowsAsync<PostgresException>(() => db.GetService<IMigrator>().MigrateAsync("20261027001436_ContainerFileUploadIntent"));
             Assert.Contains("container_upload_recovery_downgrade_requires_empty_kind",downgrade.MessageText,StringComparison.Ordinal);
+            // EF commits each migration separately. Empty newer kinds can
+            // already have been removed before this older history guard
+            // rejects the downgrade. Restore the current schema before the
+            // remaining native scenarios use current repositories.
+            await db.Database.MigrateAsync();
+            Assert.Contains("20261027153646_ContainerDirectoryIntents",await db.Database.GetAppliedMigrationsAsync());
             Assert.False(db.Database.HasPendingModelChanges());
             Assert.Contains("20261027015755_ContainerUploadAdministratorRecovery",await db.Database.GetAppliedMigrationsAsync());
             Console.WriteLine("INBOX_PHASE=container-recovery-current-login-seal-replay-atomic-audit-barrier");

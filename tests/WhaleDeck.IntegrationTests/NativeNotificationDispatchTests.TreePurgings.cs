@@ -196,6 +196,8 @@ public sealed partial class NativeNotificationDispatchTests
                 .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>().First();
             var purgeDowngrade = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(olderGuard.Sql));
             Assert.Contains("tree_purging_recovery_downgrade_requires_empty_kind",purgeDowngrade.MessageText,StringComparison.Ordinal);
+            await db.Database.MigrateAsync();
+            Assert.Contains("20261027153646_ContainerDirectoryIntents",await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261027015755_ContainerUploadAdministratorRecovery",await db.Database.GetAppliedMigrationsAsync());
             var latestKind = await db.Database.SqlQueryRaw<string>("""SELECT pg_get_constraintdef(oid) AS "Value" FROM pg_constraint WHERE conname='ck_file_recovery_kind' AND conrelid='file_recovery_operations'::regclass""").SingleAsync();
             Assert.Contains("container-upload",latestKind,StringComparison.Ordinal);
