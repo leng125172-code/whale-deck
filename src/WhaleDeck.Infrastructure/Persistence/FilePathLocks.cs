@@ -16,7 +16,8 @@ internal static class FilePathLocks
         // opened a transaction but forgot the shared gate before checking.
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(41307341);", cancellationToken);
         if (await db.ContainerFileUploadOperations.AnyAsync(item => item.PublishBarrier, cancellationToken) ||
-            await db.ContainerDirectoryOperations.AnyAsync(item => item.PublishBarrier, cancellationToken))
+            await db.ContainerDirectoryOperations.AnyAsync(item => item.PublishBarrier, cancellationToken) ||
+            await db.ContainerCopyIntents.AnyAsync(item => item.PublishBarrier, cancellationToken))
             throw new InvalidOperationException("FILES_TARGET_BUSY");
         await EnsureBudget(db, actor, existingTreeId, cancellationToken);
         var paths = locations.Select(item => new FilePathScope(item)).Distinct().ToArray();
@@ -199,11 +200,13 @@ internal static class FilePathLocks
         var restorings = db.FileTreeRestoringOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         var overwrites = db.FileTreeOverwriteRestoringOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         var purges = db.FileTreePurgingOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
-        if (await db.ContainerDirectoryOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
+        if (await db.ContainerCopyIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
+            await db.ContainerDirectoryOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.ContainerFileUploadOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) + await trees.CountAsync(cancellationToken) + await moves.CountAsync(cancellationToken) + await packings.CountAsync(cancellationToken) + await unpackings.CountAsync(cancellationToken) + await recyclings.CountAsync(cancellationToken) + await restorings.CountAsync(cancellationToken) + await overwrites.CountAsync(cancellationToken) + await purges.CountAsync(cancellationToken) >= 64 ||
+            await db.ContainerCopyIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerDirectoryOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
             await db.ContainerFileUploadOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +
             await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor, cancellationToken) +

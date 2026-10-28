@@ -23,11 +23,11 @@ public interface IContainerCopyRepository
     Task CancelAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken);
     Task<ContainerCopyIntent?> ClaimAsync(DateTimeOffset now, CancellationToken cancellationToken);
     Task<bool> CancellationRequestedAsync(Guid id, CancellationToken cancellationToken);
-    Task<bool> MarkPlanningAsync(ContainerCopyIntent row, CancellationToken cancellationToken);
-    Task FinishPlanningAsync(ContainerCopyIntent row, ContainerCopyPlanDto? plan, string code, CancellationToken cancellationToken);
-    Task<ContainerFileUploadStartResult> StartedAsync(ContainerCopyIntent row, DateTimeOffset now, CancellationToken cancellationToken);
-    Task<bool> RenewAsync(ContainerCopyIntent row, DateTimeOffset now, CancellationToken cancellationToken);
-    Task<bool> FinishAsync(ContainerCopyIntent row, string state, string code, ContainerCopyReceiptDto? receipt, CancellationToken cancellationToken);
-    Task DeferAsync(ContainerCopyIntent row, CancellationToken cancellationToken);
+    Task<bool> MarkPlanningAsync(ContainerCopyIntent claimed, CancellationToken cancellationToken);
+    Task FinishPlanningAsync(ContainerCopyIntent claimed, ContainerCopyPlanDto? plan, string code, CancellationToken cancellationToken);
+    Task<ContainerFileUploadStartResult> StartedAsync(ContainerCopyIntent claimed, DateTimeOffset now, CancellationToken cancellationToken);
+    Task<bool> RenewAsync(ContainerCopyIntent claimed, DateTimeOffset now, CancellationToken cancellationToken);
+    Task<bool> FinishAsync(ContainerCopyIntent claimed, string state, string code, ContainerCopyReceiptDto? receipt, CancellationToken cancellationToken);
+    Task DeferAsync(ContainerCopyIntent claimed, CancellationToken cancellationToken);
     Task AcknowledgeAsync(TerminalActor actor, Guid id, long version, ContainerCopyReceiptDto receipt, CancellationToken cancellationToken);
 }

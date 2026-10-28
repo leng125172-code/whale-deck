@@ -41,7 +41,9 @@ public sealed class ContainerDirectoryRepository(PlatformDbContext db, IContaine
         await FilePathLocks.EnsureBudget(db, row.ActorSubject, null, cancellationToken);
         var directories = await db.ContainerDirectoryOperations.Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var uploads = await db.ContainerFileUploadOperations.Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
-        if (directories.Length + uploads.Length > 64 || directories.Concat(uploads).Any(p => Conflicts(p, row.RelativePath))) throw new InvalidOperationException("CONTAINER_DIRECTORY_TARGET_BUSY");
+        var copies = await db.ContainerCopyIntents.Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
+        if (directories.Length + uploads.Length + copies.Length > 64 || directories.Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
+            copies.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath))) throw new InvalidOperationException("CONTAINER_DIRECTORY_TARGET_BUSY");
         db.ContainerDirectoryOperations.Add(row);
         var job = new OperationJob { Id = row.Id, JobType = "containers.files.mkdir", ActorSubject = row.ActorSubject, IdempotencyKey = key,
             Phase = "AwaitingContainerDirectory", RequestJson = JsonSerializer.Serialize(new { containerId = row.ContainerId, pathHash = FileManagementService.Hash(row.RelativePath),
@@ -86,7 +88,8 @@ public sealed class ContainerDirectoryRepository(PlatformDbContext db, IContaine
         if (await CancellationRequestedAsync(row.Id, cancellationToken)) return ContainerFileUploadStartResult.Canceled;
         if (current.ExpiresAtUtc <= now) return ContainerFileUploadStartResult.Expired;
         if (await db.FilePathLocks.AnyAsync(cancellationToken) || await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
-            await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier && r.Id != row.Id, cancellationToken)) return ContainerFileUploadStartResult.Busy;
+            await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier && r.Id != row.Id, cancellationToken) ||
+            await db.ContainerCopyIntents.AnyAsync(r => r.PublishBarrier, cancellationToken)) return ContainerFileUploadStartResult.Busy;
         current.State = "Applying"; current.RootStartedAtUtc = ContainerDirectoryWorkflowValidation.Time(now); current.PublishBarrier = true; current.Version++;
         var job = await Job(row.Id, cancellationToken); job.State = "Running"; job.Phase = "CreatingContainerDirectory"; job.StartedAtUtc ??= now; job.Version++;
         await Event(job, "CONTAINER_DIRECTORY_APPLYING", cancellationToken); await db.SaveChangesAsync(cancellationToken);
