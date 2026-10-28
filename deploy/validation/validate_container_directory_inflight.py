@@ -44,14 +44,15 @@ def clean_aborted(fixture, row):
 
 def main():
     global PHASE
-    assert os.geteuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] == '--restarts'); os.umask(0o077)
+    assert os.geteuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('--restarts', '--agent-only')); os.umask(0o077)
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     restarts = len(sys.argv) == 3
     base = os.environ.get('WHALEDECK_URL', 'http://192.168.100.13:8080').rstrip('/')
     username, password = required_environment('VALIDATION_USERNAME'), required_environment('VALIDATION_PASSWORD')
     evidence = Path(__file__).resolve().parents[1] / 'artifacts' / ('container-directory-inflight-' + uuid.uuid4().hex)
     evidence.mkdir(mode=0o700); results = []
-    for kind in (('worker-crash', 'agent-restart') if restarts else ('cancel', 'logout')):
+    kinds = ('agent-restart',) if len(sys.argv) == 3 and sys.argv[2] == '--agent-only' else ('worker-crash', 'agent-restart') if restarts else ('cancel', 'logout')
+    for kind in kinds:
         PHASE = 'preflight-' + kind; preflight(); worker = Worker()
         client, profile = login(base, username, password); api = Api(base, client)
         assert request(client, 'GET', base + '/api/v1/system/status', 200).json()['build']['sourceRevision'] == revision
@@ -98,7 +99,19 @@ def main():
                       'otherDirectoryBarriers',(SELECT count(*) FROM container_directory_operations WHERE publish_barrier AND id<>:'id'::uuid),
                       'uploadBarriers',(SELECT count(*) FROM container_file_upload_operations WHERE publish_barrier));''', id=intent['id'])
                     assert all(count == 0 for count in isolated.values())
-                    transient = [path.name for path in Path('/run/systemd/transient').glob('whaledeck-*.service')]
+                    transient = []
+                    for path in Path('/run/systemd/transient').glob('whaledeck-*.service'):
+                        properties = dict(line.split('=', 1) for line in command('systemctl', 'show', path.name,
+                            '-p', 'ActiveState', '-p', 'MainPID', '-p', 'ControlPID', '-p', 'ControlGroup').splitlines())
+                        state = properties['ActiveState']
+                        assert state in ('active', 'activating', 'deactivating', 'reloading', 'inactive', 'failed')
+                        if state in ('inactive', 'failed'):
+                            assert properties['MainPID'] == properties['ControlPID'] == '0'
+                            group = properties['ControlGroup']
+                            if group:
+                                processes = Path('/sys/fs/cgroup') / group.lstrip('/') / 'cgroup.procs'
+                                assert not processes.exists() or not processes.read_text().split()
+                        else: transient.append(path.name)
                     assert set(transient) <= {held.cgroup}, 'OTHER_TRANSIENT_WORK_AGENT_RESTART_REFUSED'
                     before = command('systemctl', 'show', 'whaledeck-agent.service', '-p', 'MainPID', '--value')
                     maintenance = command('systemctl', 'show', 'whaledeck-maintenance.service', '-p', 'MainPID', '--value')
@@ -158,7 +171,7 @@ def main():
                 if not logged_out: logout(base, client)
                 client.close()
     preflight()
-    (evidence / 'verified.json').write_text(json.dumps({'revision': revision, 'cases': results, 'realPreparedCuts': 2,
+    (evidence / 'verified.json').write_text(json.dumps({'revision': revision, 'cases': results, 'realPreparedCuts': len(results),
         'noValidatorHelperKill': True, 'naturalRecoveryNotDatabaseOrClockEdits': True, 'restarts': restarts}))
     print(json.dumps({'installedContainerDirectoryInflight': 'passed', 'revision': revision, 'cases': results,
         'exactSourcesAndContainersCleaned': True, 'evidence': str(evidence)}), flush=True)
