@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-29 容器移动内部FD候选d48aaae：独立源/目标/私有原件与操作ID绑定、两端可写、父inode及固定FD校验已实现；17专项/368关联Linux-root零跳过，冻结真实非root独占容器完成HDD→NVMe文件/目录和NVMe→HDD文件3次完整2MiB+7、原件inode/普通属性/重试验证，准确CID/命名卷/源清理及独立复核通过、11核心保持。未安装/RPC/永久业务任务/Worker/API/UI，运行时仍7b3f44e；继续外层容器域协议与整链，59项active、17项移出不计完成。** [证据与边界](qa/CONTAINER_MOVE_SCOPE.md)。
+
 - **2026-10-29 容器复制部分文件中断通过：真实BFF取消/退出、Worker SIGKILL/自然租约及Agent systemd重启共4例，原SQL任务/Root原件及准确清理独立复核，零活动/租约/屏障、临时身份0、11核心healthy；12项root观察器测试通过。验证器15秒退出时钟与30秒服务drain已分开，原子回执读取改为固定FD，失败轮保留。上午属主事故定点修复546对象及Agent应用根，六类数据库临时生命周期复验通过；六类实际HDD备份与校验也通过。产品仍7b3f44e，CI五作业最终success；目录树故障/Unknown可见页面/其余59项继续，17项移出不算完成。** [中断与失败证据](qa/CONTAINER_COPY_INFLIGHT.md)，[属主事故](qa/RUNTIME_OWNERSHIP_REPAIR.md)。
 
 - **2026-10-29 7b3f44e真实容器复制常规整链通过，并修复动态入口双端退出**：实际浏览器正常Authentik登录，1440/320明暗四次文件/目录复制、刷新原意图、四次原登记HTTP重试、Ready明确取消、普通8路403/匿名4路401通过；独立SQL双任务/Root原件/完整2MiB+7/属性与准确清理匹配，5意图4成功1取消，零活动/租约/屏障，临时身份0、11核心healthy。首轮退出Authentik400仍200，修复精确批准issuer虚拟Host后，伪造hint400保持会话、正常双页退出WD401/Authentik拒绝通过；2996 Unit/205 Integration（7默认原生跳过）及真实YARP回环通过。进行中取消/撤权/Worker或Agent重启/Unknown真实故障整链与其余59项继续，17项移出不算完成。[证据与失败](qa/OIDC_DYNAMIC_LOGOUT.md)。
