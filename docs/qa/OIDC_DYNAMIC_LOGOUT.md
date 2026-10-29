@@ -36,3 +36,7 @@ MaintenanceHost 只对 authentik 固定上游、GET、精确的两个 WD `end-se
 私有证据 `deploy/artifacts/container-copy-browser-86e2b2d5009b4ce19809f12927f1cfdc/` 的baseline/results/verified/independent-final、4份Root归档与8张实际截图。日志 `/tmp/wd-copy-real-browser-final.log`、`/tmp/wd-logout-provenance-final.log`、`/tmp/wd-logout-host-validate-final.log`。前序CI40801153829最后已读到四作业success、frontend运行，后续GitHub API多次EOF，未签终态；7b3f44e普通快进推送已成功，不将本地成功冒充新CI全绿。
 
 这证明常规复制和动态入口完整退出，不代表正在复制时取消/撤权、Worker/Agent重启或Unknown跨管理员实际页面都已完成。当前59项继续active，17项移出不算完成。
+
+## Authentik INFO URL follow-up
+
+Bounded privacy checks then found JWT-shaped values in Authentik INFO access events (`event/path/spans[].path`), while Maintenance/API/Worker samples had zero matches. Classification without printing token text identified temporary validation tokens, a forged fixture and signed media tokens; no claim was made about all older logs. The dependency repository changed Authentik server/worker to WARNING, recreated only those exact containers and verified unchanged images/mounts/labels/rotation plus old-object absence. Fresh visible login/full logout passed again, and all new server/worker log bytes through that check contained zero JWT-shaped matches. Database/audit storage was retained. See database-platform `docs/qa/AUTHENTIK_LOG_PRIVACY.md` and private `deploy/artifacts/authentik-log-privacy-20261029/verified.json`. This does not claim forensic erasure or universal future-log sanitization.
