@@ -19,7 +19,8 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         if (method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerDirectoryBinding.Service, StringComparison.Ordinal) ||
-            method.StartsWith(ContainerCopyBinding.Service, StringComparison.Ordinal)) return false;
+            method.StartsWith(ContainerCopyBinding.Service, StringComparison.Ordinal) ||
+            method.StartsWith(ContainerMoveBinding.Service, StringComparison.Ordinal)) return false;
         if (method.EndsWith("/GetCapabilities", StringComparison.Ordinal) ||
             method.EndsWith("/GetHealth", StringComparison.Ordinal) ||
             method.EndsWith("/WatchHealth", StringComparison.Ordinal))
@@ -85,6 +86,11 @@ public sealed class CapabilityValidator(IConfiguration configuration)
             ContainerCopyBinding.Service + "Inspect" or ContainerCopyBinding.Service + "Discard" &&
         ValidateContentBound(token, method, requestHash, ContainerCopyBinding.Payload);
 
+    public bool ValidateContainerMove(string? token, string method, string? requestHash) =>
+        method is ContainerMoveBinding.Service + "Plan" or ContainerMoveBinding.Service + "Apply" or
+            ContainerMoveBinding.Service + "Inspect" or ContainerMoveBinding.Service + "Discard" &&
+        ValidateContentBound(token, method, requestHash, ContainerMoveBinding.Payload);
+
     private bool ValidateContentBound(string? token, string method, string? requestHash,
         Func<string, string, string, string, string> payload)
     {
@@ -149,7 +155,9 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     private void Authorize(ServerCallContext context)
     {
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");
-        var valid = context.Method.StartsWith(ContainerCopyBinding.Service, StringComparison.Ordinal)
+        var valid = context.Method.StartsWith(ContainerMoveBinding.Service, StringComparison.Ordinal)
+            ? validator.ValidateContainerMove(token, context.Method, context.RequestHeaders.GetValue(ContainerMoveBinding.Header))
+            : context.Method.StartsWith(ContainerCopyBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerCopy(token, context.Method, context.RequestHeaders.GetValue(ContainerCopyBinding.Header))
             : context.Method.StartsWith(ContainerDirectoryBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerDirectory(token, context.Method, context.RequestHeaders.GetValue(ContainerDirectoryBinding.Header))

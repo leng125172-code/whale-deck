@@ -50,6 +50,12 @@ for module in /usr/local/libexec/whaledeck-container-copy-scope.py /usr/local/li
   assert_metadata "$module" '750:root:root'
   [[ ! -L "$module" && $(stat -c %h "$module") == 1 ]]
 done
+assert_metadata /var/lib/whaledeck-container-moves '700:root:root'
+[[ ! -L /var/lib/whaledeck-container-moves ]]
+for module in /usr/local/libexec/whaledeck-container-move-scope.py /usr/local/libexec/whaledeck-container-moves.py /usr/local/libexec/whaledeck-container-move-transport.py; do
+  assert_metadata "$module" '750:root:root'
+  [[ ! -L "$module" && $(stat -c %h "$module") == 1 ]]
+done
 [[ ! -L /var/lib/whaledeck-container-uploads ]]
 assert_metadata /usr/local/libexec/whaledeck-files.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-operations.py '750:root:root'

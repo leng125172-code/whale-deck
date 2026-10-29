@@ -84,6 +84,11 @@ install -d -o root -g root -m 0700 /var/lib/whaledeck-container-copies
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-copy-scope.py" /usr/local/libexec/whaledeck-container-copy-scope.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-copies.py" /usr/local/libexec/whaledeck-container-copies.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-copy-transport.py" /usr/local/libexec/whaledeck-container-copy-transport.py
+[[ ! -L /var/lib/whaledeck-container-moves ]] || exit 1
+install -d -o root -g root -m 0700 /var/lib/whaledeck-container-moves
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-move-scope.py" /usr/local/libexec/whaledeck-container-move-scope.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-moves.py" /usr/local/libexec/whaledeck-container-moves.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-move-transport.py" /usr/local/libexec/whaledeck-container-move-transport.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-file-write.py" /usr/local/libexec/whaledeck-container-file-write.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-upload.py" /usr/local/libexec/whaledeck-container-upload.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-backups.py" /usr/local/libexec/whaledeck-container-backups.py

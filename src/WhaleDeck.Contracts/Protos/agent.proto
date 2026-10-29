@@ -714,6 +714,37 @@ service ContainerCopyService {
   rpc Discard(ContainerCopyRequest) returns (ContainerCopyReceipt);
 }
 
+// Move is a separate authority and receipt domain. Nullable facts preserve unknown.
+message ContainerMoveCommand {
+  ContainerFileLocation source = 1; string target_path = 2; string expected_version = 3;
+}
+message ContainerMovePlan {
+  uint32 schema_version = 1; ContainerMoveCommand command = 2; string kind = 3;
+  string target_proof = 4; FileObjectIdentity source_identity = 5;
+  int64 source_changed_at_unix_ns = 6; FileDirectoryIdentity source_parent = 7;
+  FileDirectoryIdentity target_parent = 8; string target_parent_version = 9;
+  uint32 owner_uid = 10; uint32 owner_gid = 11; string fingerprint = 12;
+  oneof inner_plan { FileOperationPlan file_plan = 13; FileTreeMovePlan tree_plan = 14; }
+  string operation_kind = 15;
+}
+message ContainerMovePlanRequest { ContainerMoveCommand command = 1; RequestContext context = 2; }
+message ContainerMoveRequest {
+  string operation_id = 1; string owner = 2; ContainerMovePlan plan = 3; RequestContext context = 4;
+}
+message ContainerMoveReceipt {
+  string operation_id = 1; string container_id = 2; string instance_id = 3;
+  string kind = 4; string fingerprint = 5; string target_proof = 6; string state = 7;
+  string version = 8; bool binding_current = 9; bool private_may_exist = 10; bool replayed = 11;
+  optional bool destination_published = 12; optional bool source_removed = 13; optional bool source_retained = 14;
+  string operation_kind = 15;
+}
+service ContainerMoveService {
+  rpc Plan(ContainerMovePlanRequest) returns (ContainerMovePlan);
+  rpc Apply(ContainerMoveRequest) returns (ContainerMoveReceipt);
+  rpc Inspect(ContainerMoveRequest) returns (ContainerMoveReceipt);
+  rpc Discard(ContainerMoveRequest) returns (ContainerMoveReceipt);
+}
+
 message FileLocation { string root_id = 1; string path = 2; }
 message FileRoot { string id = 1; string name = 2; repeated string actions = 3; }
 message FileRoots { repeated FileRoot roots = 1; }

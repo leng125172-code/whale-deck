@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-10-29 容器移动minor46候选（尚未安装）**：独立`ContainerMoveService.Plan/Apply/Inspect/Discard`、`docker.files.move-intents`、完整protobuf/消息类型/方法/45秒期限/单次nonce签名及旧版拒绝已接通。Plan有显式OperationKind=Move及文件/目录移动内层oneof；Receipt三项optional bool保留null/false/true，不把Unknown改写成false。固定受限helper、安装源、SDK及原生探针已生成；Release零警告错误，3091 Unit/205 Integration（7原生默认跳过）、399容器Linux-root/12宿主/8范围通过。安装态签名UDS尚待，不算永久业务任务/权限审计或UI完成；59项继续、17项移出不算完成。
+
 - **2026-10-28 容器复制 SQL/Worker/API 候选通过隔离真实 PG**：`e911452` 实现永久意图/EF migration、双 Job/Outbox/审计、共享发布排斥、不可变历史、专用 Worker 与管理员 API。2970 Unit/205 Integration 通过（7 默认原生跳过）；`a6156a0` 冻结真实 PG 1 执行/1 通过/0 跳过，包含并发确认、四方双向触发器、取消/租约/Unknown/保留，独立清理复核及11核心healthy。首轮夹具保留锁导致 Started 断言失败，修正顺序并保留全部新旧保护；未放宽锁。Agent1.45、API/Worker 尚未部署，复制 UI/真实身份与实际文件整链仍待。59 项 active，17项移出不算完成。[证据与失败记录](qa/CONTAINER_COPY_PERSISTENCE.md)。
 
 - **2026-10-28 容器复制 Agent 1.45 候选已接通，未安装**：`6be0751` 新增独立强类型四 RPC、完整请求体签名、版本/能力门禁、SDK 及固定受限 helper/安装源。Release 零警告错误，2882 Unit/201 Integration 通过（7 原生默认跳过），TerminalProbe 编译通过。当前复制 Python 42 项仅 2 通过/40 非 root 跳过；进程 NoNewPrivs=1 阻止 sudo，未覆盖运行服务。前序 CI 四路成功、前端 408/1 的抽屉入场测量已修，开发/生产预览各 18 项通过，新整条 CI 待终态。实际安装态 UDS、永久业务任务/共享屏障/Worker/API/真实 UI 仍待，59 项 active，17项移出不算完成。[证据与边界](qa/CONTAINER_COPY_AGENT_RPC.md)。
