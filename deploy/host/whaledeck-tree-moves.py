@@ -33,6 +33,10 @@ class FileTreeMoves:
             TARGET_ACTIONS = frozenset(('files-mutate', 'files-upload', 'files-tree-move'))
             def save(self, folder, record):
                 engine.write_json(folder, record['operationId'] + '.json', record, 32768)
+            def destination_owner(self, row, policy):
+                # Move preserves each original identity, including mixed-owner
+                # trees. This is fixed engine behavior, never a request flag.
+                return tuple(row['sourceIdentity'][3:5])
         self.copy = MoveCopy(files, manifest_type, cancelled=cancelled)
 
     def reject(self, code): raise self.f.Rejected(code)

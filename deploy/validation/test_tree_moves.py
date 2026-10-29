@@ -44,6 +44,19 @@ class FileTreeMoveTests(unittest.TestCase):
 
     def lookup(self, request): return self.engine.lookup({key: request[key] for key in ('operationId', 'owner')})
 
+    def test_mixed_source_owners_are_preserved_for_host_directory_moves(self):
+        expected={}
+        for index,relative in enumerate(('', '空目录', '代码', '代码/run.bin')):
+            path=self.source/relative if relative else self.source
+            os.chown(path,2100+index,3100+index)
+            expected[relative]=(path.stat().st_uid,path.stat().st_gid)
+        request=self.request();result=self.engine.move(request)
+        self.assertEqual('Completed',result['state'])
+        for relative,owner in expected.items():
+            info=(self.root/'target'/relative).stat();self.assertEqual(owner,(info.st_uid,info.st_gid))
+        info=(self.retained(request)/'代码/run.bin').stat();self.assertEqual(expected['代码/run.bin'],(info.st_uid,info.st_gid))
+        self.assertEqual(self.content,(self.retained(request)/'代码/run.bin').read_bytes())
+
     def test_renamed_private_base_during_retention_is_unknown_and_preserves_published_and_original_bytes(self):
         request = self.request(); moved = self.root / 'private-relocated'; fired = False
         def rename(phase):
@@ -215,7 +228,15 @@ class FileTreeMoveTests(unittest.TestCase):
             command = self.command(); command['target']['rootId'] = 'test.other'; request = {'operationId': uuid.uuid4().hex, 'owner': 'A' * 64, 'plan': self.engine.plan(command)}
             self.assertNotEqual(self.source.stat().st_dev, target.stat().st_dev); result = self.engine.move(request)
             self.assertEqual(result['state'], 'Completed'); self.assertFalse(self.source.exists()); self.assertEqual((target / 'target/代码/run.bin').read_bytes(), self.content)
-            self.assertEqual((target / 'target/代码/run.bin').stat().st_uid, 1000); self.assertEqual((self.retained(request) / '代码/run.bin').read_bytes(), self.content)
+            # Unlike a copy, move retains the original file identity even when
+            # the target root's normal upload/copy owner is different.
+            source_identity = request['plan']['copyPlan']['command']['source']
+            self.assertEqual('source', source_identity['path'])
+            original = (self.retained(request) / '代码/run.bin').stat()
+            actual = (target / 'target/代码/run.bin').stat()
+            self.assertEqual((original.st_uid, original.st_gid), (actual.st_uid, actual.st_gid))
+            self.assertEqual((0, 0), (actual.st_uid, actual.st_gid))
+            self.assertEqual((self.retained(request) / '代码/run.bin').read_bytes(), self.content)
         finally: subprocess.run(['umount', str(target)], check=True)
 
     def test_private_manifest_corruption_after_kill_is_unknown_and_never_executes_more(self):

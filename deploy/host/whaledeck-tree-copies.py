@@ -156,6 +156,11 @@ class FileTreeCopies:
         if len(self.encode(record)) > 32768: self.reject('FILES_RECEIPT_LIMIT')
         self.f.save_receipt(state, record['operationId'], record)
 
+    def destination_owner(self, row, policy):
+        # Copies belong to the registered destination identity. Move's trusted
+        # subclass overrides this with the already verified source metadata.
+        return policy.get('ownerUid', 0), policy.get('ownerGid', 0)
+
     def snapshot(self, folder, command, policy, check, expected=None):
         inventory = self.manifest_type(self.f, cancelled=check)._scan_descriptor(
             {**command['target'], 'expectedVersion': self.f.version(os.fstat(folder))}, folder, policy)
@@ -165,7 +170,7 @@ class FileTreeCopies:
             for actual, original in zip(inventory['entries'], expected['entries']):
                 metadata = actual['sourceIdentity']; before = original['sourceIdentity']
                 if (actual['path'], actual['kind'], actual['sizeBytes'], actual['sha256']) != (original['path'], original['kind'], original['sizeBytes'], original['sha256']) or \
-                        metadata[2] & 0o7777 != before[2] & 0o777 or metadata[3:5] != [policy.get('ownerUid', 0), policy.get('ownerGid', 0)] or metadata[7] != before[7]:
+                        metadata[2] & 0o7777 != before[2] & 0o777 or metadata[3:5] != list(self.destination_owner(original, policy)) or metadata[7] != before[7]:
                     self.reject('FILES_TREE_CHANGED')
         # rename changes ctime only. Everything else, including inode, mode,
         # owner, mtime, full byte hashes and complete membership remains bound.
@@ -252,7 +257,6 @@ class FileTreeCopies:
                 os.close(private)
 
     def populate(self, source, target, manifest, policy, check):
-        uid, gid = policy.get('ownerUid', 0), policy.get('ownerGid', 0)
         for row in manifest['entries']:
             check(); path = row['path']
             if not path: continue
@@ -279,7 +283,7 @@ class FileTreeCopies:
                                 remaining = remaining[written:]
                         if os.read(original, 1) or self.f.version(os.fstat(original)) != row['sourceVersion'] or digest.hexdigest().upper() != row['sha256']:
                             self.reject('FILES_READ_CHANGED')
-                        os.fchown(destination, uid, gid); os.fchmod(destination, row['sourceIdentity'][2] & 0o777)
+                        os.fchown(destination, *self.destination_owner(row, policy)); os.fchmod(destination, row['sourceIdentity'][2] & 0o777)
                         os.utime(destination, ns=(before.st_atime_ns, before.st_mtime_ns)); os.fsync(destination)
                     finally:
                         if destination is not None: os.close(destination)
@@ -292,7 +296,7 @@ class FileTreeCopies:
             if row['kind'] != 'Directory': continue
             directory = self.f.open_at(target, row['path'] or '.', os.O_RDONLY | os.O_DIRECTORY)
             try:
-                os.fchown(directory, uid, gid); os.fchmod(directory, row['sourceIdentity'][2] & 0o777)
+                os.fchown(directory, *self.destination_owner(row, policy)); os.fchmod(directory, row['sourceIdentity'][2] & 0o777)
                 os.utime(directory, ns=(row['sourceIdentity'][7], row['sourceIdentity'][7])); os.fsync(directory)
             finally: os.close(directory)
 

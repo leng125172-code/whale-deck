@@ -196,5 +196,22 @@ class LinuxContainerMoveScopeTests(unittest.TestCase):
             finally:child.unlink()
         self.assertFalse((self.root/'项目副本').exists());self.assertEqual(self.base.content,self.base.source.read_bytes())
 
+    def test_directory_move_preserves_each_mixed_owner_instead_of_normalizing_to_container_user(self):
+        source=self.base.tree();expected={}
+        for index,relative in enumerate(('', 'empty', '模块', '模块/代码.txt')):
+            path=source/relative if relative else source
+            os.chown(path,2100+index,3100+index)
+            expected[relative]=(path.stat().st_uid,path.stat().st_gid,stat.S_IMODE(path.stat().st_mode),path.stat().st_mtime_ns)
+        scope=self.scope(self.base.command('项目','项目副本'))
+        engine=moves.FileTreeMoves(scope,copied.trees.FileTreeManifest,copied.copies.FileTreeCopies)
+        request=self.request(engine.plan(scope.tree_command()));result=engine.move(request)
+        self.assertEqual('Completed',result['state'])
+        for relative,metadata in expected.items():
+            info=(self.root/'项目副本'/relative).stat()
+            self.assertEqual(metadata,(info.st_uid,info.st_gid,stat.S_IMODE(info.st_mode),info.st_mtime_ns))
+        kept=self.root/scope.PRIVATE/(self.operation+'.tree-move')/'模块/代码.txt'
+        self.assertEqual(expected['模块/代码.txt'][:2],(kept.stat().st_uid,kept.stat().st_gid))
+        self.assertEqual(self.base.content,kept.read_bytes())
+
 
 if __name__=='__main__':unittest.main()

@@ -333,7 +333,8 @@ class ContainerCopies:
         if record['state'] == 'Completed' and session is not None:
             try:
                 scope = self.adapter(plan, session); inner = self.observe_inner(record, scope)
-                current = inner['state'] == 'Completed' and self.published(plan, scope, inner) == record['publicationIdentity']
+                current = inner['state'] == 'Completed' and hashlib.sha256(self.encode(inner)).hexdigest().upper() == record['innerReceiptHash'] and \
+                    self.published(plan, scope, inner) == record['publicationIdentity']
             except (OSError, self.r.Rejected, self.f.Rejected): pass
         return {'operationId': record['operationId'], 'containerId': command['containerId'], 'instanceId': command['instanceId'],
             'kind': plan['kind'], 'fingerprint': plan['fingerprint'], 'targetProof': plan['targetProof'], 'state': record['state'],

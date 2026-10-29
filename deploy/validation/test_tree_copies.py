@@ -43,6 +43,15 @@ class FileTreeCopyTests(unittest.TestCase):
 
     def pending(self, request): return self.root / driver.STAGING / (request['operationId'] + '.tree-copy')
 
+    def test_copy_still_uses_registered_target_owner_for_a_mixed_owner_source(self):
+        for index,relative in enumerate(('', '空目录', '代码', '代码/run.bin')):
+            os.chown(self.source/relative,2100+index,3100+index)
+        request=self.request();self.assertEqual('Completed',self.engine.copy(request)['state'])
+        policy=driver.roots()['test.shared'];owner=(policy.get('ownerUid',0),policy.get('ownerGid',0))
+        for relative in ('', '空目录', '代码', '代码/run.bin'):
+            info=(self.root/'target'/relative).stat();self.assertEqual(owner,(info.st_uid,info.st_gid))
+        self.assertEqual((2103,3103),((self.source/'代码/run.bin').stat().st_uid,(self.source/'代码/run.bin').stat().st_gid))
+
     def test_complete_binary_unicode_empty_directories_modes_and_source_preserved(self):
         request = self.request(); before = (self.source / '代码' / 'run.bin').stat()
         result = self.engine.copy(request); target = self.root / 'target'

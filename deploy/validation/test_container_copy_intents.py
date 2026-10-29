@@ -76,6 +76,14 @@ class LinuxContainerCopyIntentsTests(unittest.TestCase):
         self.assertEqual('Completed', current['state']); self.assertFalse(current['bindingCurrent'])
         self.assertEqual(result['version'], current['version'])
 
+    def test_completed_binding_rejects_inner_receipt_drift_without_rewriting_outer_history(self):
+        request=self.request();self.engine.apply(request,self.session);raw=self.record_path(request).read_bytes()
+        path=self.inner_path(request);value=json.loads(path.read_bytes());value['unexpectedField']=True
+        path.write_text(json.dumps(value));path.chmod(0o600)
+        result=self.engine.inspect(request,self.session)
+        self.assertEqual('Completed',result['state']);self.assertFalse(result['bindingCurrent'])
+        self.assertEqual(raw,self.record_path(request).read_bytes())
+
     def test_discard_before_apply_fences_late_requests_after_source_and_container_loss(self):
         request = self.request(); self.fixture.source.write_bytes(b'new source')
         self.assertEqual('Aborted', self.engine.discard(request, None)['state'])
