@@ -183,7 +183,11 @@ def main():
                         for relative,old in tree_originals.items():
                             new=(target/relative).lstat();kept=(retained/relative).lstat()
                             assert (stat.S_IFMT(new.st_mode),new.st_uid,new.st_gid,stat.S_IMODE(new.st_mode),new.st_mtime_ns)==(stat.S_IFMT(old[2]),old[3],old[4],old[2]&0o777,old[7])
-                            assert (kept.st_dev,kept.st_ino)==tuple(old[:2])
+                            # Retention rebuilds root-owned private directories;
+                            # original regular-file inodes are moved into them.
+                            # Published directories still preserve source attrs.
+                            if stat.S_ISREG(old[2]): assert (kept.st_dev,kept.st_ino)==tuple(old[:2])
+                            else: assert stat.S_ISDIR(kept.st_mode) and (kept.st_uid,kept.st_gid,stat.S_IMODE(kept.st_mode))==(0,0,0o700)
                     if intents:
                         receipt=state/(operation+'.json');raw=receipt.read_bytes();record=json.loads(raw)
                         assert record['operationId']==operation and record['owner']=='B'*64 and record['plan']==request['plan'] and record['state']=='Completed'
