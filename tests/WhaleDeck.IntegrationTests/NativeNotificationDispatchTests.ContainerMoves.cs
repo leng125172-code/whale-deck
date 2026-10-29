@@ -260,7 +260,8 @@ public sealed partial class NativeNotificationDispatchTests
                 Assert.Equal("wdv_container_move_audit_failed", Assert.IsType<PostgresException>(failure.InnerException).MessageText);
                 Assert.False(await second.ContainerMoveIntents.AnyAsync(r => r.Id == rejected.Id));
                 Assert.False(await second.OperationJobs.AnyAsync(r => r.Id == rejected.Id));
-                Assert.False(await second.OutboxMessages.AnyAsync(r => r.PayloadJson.Contains(rejected.Id.ToString("D"))));
+                var outboxCount = await second.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM outbox_messages WHERE payload_json->>'jobId'={rejected.Id.ToString("D")}").SingleAsync();
+                Assert.Equal(0, outboxCount);
                 Assert.False(await second.OperationJobEvents.AnyAsync(r => r.JobId == rejected.Id));
             }
             finally
