@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_MOVE_PERSISTENCE.md；docs/qa/CONTAINER_MOVE_WEB_UI.md",
-  "nextStep": "移动永久SQL/五方屏障与Worker/API/Vue候选已生成；73fa4dd真实隔离PG及清理通过，3189 Unit/209 Integration、655前端/78浏览器通过。继续正常dev覆盖及真实身份/实际文件/重启故障整链，59项保持active，17项移出不算完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_MOVE_DEPLOYMENT.md",
+  "nextStep": "a59ec97移动永久SQL/Worker/API/Vue已正常覆盖，六组件/HTTP/实际宿主进程来源及11核心健康通过；3189 Unit/209 Integration、真实隔离PG、655前端/78浏览器通过。继续真实管理员/普通用户、实际文件与页面、取消/重启/Unknown故障整链。59项active，17项移出不算完成。"
 }

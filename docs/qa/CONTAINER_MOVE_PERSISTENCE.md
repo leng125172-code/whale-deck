@@ -1,5 +1,7 @@
 # 容器移动：永久SQL、双任务与五方发布保护
 
+> 最新：a59ec97已正常覆盖，迁移及六组件来源/健康核对通过；真实身份与实际文件业务整链仍待，见[发布记录](CONTAINER_MOVE_DEPLOYMENT.md)。下方未部署措辞保留为对应候选阶段。
+
 2026-10-29。持久化实现30cfcb8，原生门禁最终冻结73fa4dd。仍为未部署业务候选；生产数据库未执行新迁移，安装态Agent/MaintenanceHost仍53701f8/minor46，API/Worker/Gateway仍7b3f44e。59项继续active，17项移出不计完成。
 
 ## 实现

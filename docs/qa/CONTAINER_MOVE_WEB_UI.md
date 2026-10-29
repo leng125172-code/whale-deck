@@ -1,5 +1,7 @@
 # 容器移动页面候选
 
+> 最新：a59ec97已正常覆盖，迁移及六组件来源/健康核对通过；真实身份与实际文件业务整链仍待，见[发布记录](CONTAINER_MOVE_DEPLOYMENT.md)。下方未部署措辞保留为对应候选阶段。
+
 2026-10-29，尚未覆盖生产API/Worker/Gateway。真实Agent签名/跨盘固定helper见[安装态](CONTAINER_MOVE_AGENT_RPC.md)，SQL门禁见[持久化](CONTAINER_MOVE_PERSISTENCE.md)。页面协议测试不能替代实际身份与真实文件整链。59项保持active，17项移出不计完成。
 
 ## 页面行为
