@@ -16,6 +16,8 @@ public sealed class JobRetryServiceTests
     [InlineData("containers.files.mkdir")]
     [InlineData("containers.files.copy-plan")]
     [InlineData("containers.files.copy")]
+    [InlineData("containers.files.move-plan")]
+    [InlineData("containers.files.move")]
     public async Task BoundFileWritesRequireANewDedicatedPlanAndCannotUseGenericRetry(string jobType)
     {
         var repository = new Repository(CreateSource("Failed", jobType)); var service = Service(repository);
