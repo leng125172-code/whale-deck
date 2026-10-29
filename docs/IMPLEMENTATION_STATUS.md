@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-29 a59ec97容器移动真实常规整链通过**：真实Authentik用户名/密码登录，1440/320明暗四次文件/目录移动、四次原登记HTTP重试与刷新原意图、Ready明确取消通过；独立SQL双任务/Root原件、完整2097159字节、混合UID/GID/普通属性与原文件inode匹配。普通8路403/匿名4路401、CSRF/Origin拒绝及双端退出通过。准确测试容器/源和临时身份清理，4 Succeeded/1 Canceled永久历史保留，活动/屏障/租约0、11核心healthy；只读第三进程重核通过。此次实际业务同HDD，不冒称跨盘；进行中取消/撤权/重启/Unknown等仍待，59项active、17项移出不计完成。[实际证据与边界](qa/CONTAINER_MOVE_REAL_UI.md)。
+
 - **2026-10-29 容器移动a59ec97已正常dev覆盖，真实身份整链待验收**：同一发布Invocation的journal成功结束，六组件/镜像/HTTP来源一致；宿主实际可执行文件与DLL映射也为当前安装，新增移动迁移/表已入库。11核心healthy、database-platform未重建，活动移动/屏障/租约0，两个新增GET匿名401；托管容器运行库及PKCS来源分别核验10.0.13。3189 Unit/209 Integration（7默认原生跳过）、冻结实际PG1执行通过及独立清理、655前端和生产预览78/78保持。尚未真实管理员/普通用户、实际业务移动/页面与故障验收；59项active、17项移出不计完成。[发布与边界](qa/CONTAINER_MOVE_DEPLOYMENT.md)。
 
 - **2026-10-29 容器移动永久SQL/Worker/API/Vue候选已生成，尚未覆盖**：迁移与不可变三态事实、Job/Outbox/审计、五方双向发布屏障、专属Worker和禁止通用重试已接通。冻结73fa4dd真实隔离PG1执行/1通过/0跳过及独立准确清理、11核心不变；首三轮测试问题保留并修正。Release零警告错误、3189 Unit/209 Integration通过（7默认原生跳过）；655前端单元及生产预览78/78、类型/构建/lint/格式通过，320明色/1440暗色目视复核。待冻结覆盖与真实身份/实际磁盘/故障整链；宿主仍53701f8/minor46，API/Worker/Gateway仍7b3f44e。59项active、17项移出不算完成。[SQL证据](qa/CONTAINER_MOVE_PERSISTENCE.md)、[页面证据](qa/CONTAINER_MOVE_WEB_UI.md)。
