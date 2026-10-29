@@ -15,8 +15,12 @@
 
 MaintenanceHost 只对 authentik 固定上游、GET、精确的两个 WD `end-session/` 地址，恢复提示令牌 issuer 的虚拟 Host；同时一致设置 X-Forwarded-Host。字节、URI、nonce/state、回调参数及固定网络目的地均不改动。
 
-提示令牌仍是不可信输入：上限32KiB，payload16KiB/深度8；要求三段规范编码、唯一字符串 issuer、同协议/8081、相同 provider 路径、IP或已批准mDNS主机，拒绝用户信息/查询/片段。它仅提供虚拟主机，不参与授权；Authentik继续完整校验签名、audience与issuer。无有效输入时保持原转发行为；不读取POST正文，不增加外连目的地，不修改登录/流执行/其他应用请求。
+提示令牌仍是不可信输入，issuer 必须与维护服务中批准的完整 `Maintenance:Oidc:InternalIssuer/ExternalIssuer` 逐字相同，不能自选信任锚；缺失配置失败关闭。默认值与API现有固定Authority一致，二者是稳定身份issuer，不是监听地址或网卡绑定。若调整API Authority，须同时由管理员配置对应Maintenance issuer（systemd drop-in环境变量 `Maintenance__Oidc__InternalIssuer`/`Maintenance__Oidc__ExternalIssuer`）；不随请求Host自动增加信任。
 
-24项针对性测试通过，含真实Kestrel/YARP回环：固定本地目的地收到正确Host与转发Host，路径/query原样，其他API仍保持浏览器Host；覆盖不同provider、IPv4/IPv6/mDNS、错误端口/域名/协议/重复issuer/重复参数/格式/预算/POST。首轮23通过1失败揭示默认转发器在自定义处理后覆盖X-Forwarded-Host；显式先加标准转发器再覆盖后全24通过，未放宽断言。
+其余边界：上限32KiB，payload16KiB/深度8；要求三段规范编码、唯一字符串 issuer、同协议/8081、相同 provider 路径、IP或已批准mDNS主机，拒绝用户信息/查询/片段。它仅提供虚拟主机，不参与授权；Authentik继续完整校验签名、audience与issuer。无有效输入时保持原转发行为；不读取POST正文，不增加外连目的地，不修改登录/流执行/其他应用请求。
 
-全量 Release 0警告错误，2994 Unit通过、205 Integration通过/7默认原生跳过。日志 `/tmp/wd-oidc-logout-unit{,-2}.log`、`/tmp/wd-logout-{build,all-unit,integration}.log`。这些不是安装态成功；仍需实际覆盖后，验证伪造提示令牌继续400、原身份不被伪造请求退出，以及正常双端退出与四次真实复制整轮。
+最终26项针对性测试通过，含真实Kestrel/YARP回环：固定本地目的地收到正确Host与转发Host，路径/query原样，其他API仍保持浏览器Host；覆盖不同provider、IPv4/IPv6/mDNS、错误端口/域名/协议/重复issuer/重复参数/格式/预算/POST。首轮23通过1失败揭示默认转发器在自定义处理后覆盖X-Forwarded-Host；显式先加标准转发器再覆盖后全24通过，随后增加批准issuer不匹配与缺配置门禁，最终26项通过，未放宽断言。
+
+全量 Release 0警告错误，2996 Unit通过、205 Integration通过/7默认原生跳过。日志 `/tmp/wd-oidc-logout-unit{,-2}.log`、`/tmp/wd-logout-{build,all-unit,integration}.log`。这些不是安装态成功；仍需实际覆盖后，验证伪造提示令牌继续400、原身份不被伪造请求退出，以及正常双端退出与四次真实复制整轮。
+
+中间开发覆盖5b8e177已完成，单独新真实身份再次正常退出返回 `/login`，WD401、Authentik403；随后收紧到批准issuer精确匹配的最终候选待覆盖/整轮验收。首轮失败数据在四份Root与完整内容、原父/源身份全部复核后已准确清理，原失败与永久历史保留，见 `cleanup-final.json`；不把清理改记为首轮退出通过。

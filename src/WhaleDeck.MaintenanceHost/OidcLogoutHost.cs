@@ -13,7 +13,7 @@ namespace WhaleDeck.MaintenanceHost;
 /// </summary>
 public static class OidcLogoutHost
 {
-    public static void Configure(TransformBuilderContext context)
+    public static void Configure(TransformBuilderContext context, IConfiguration configuration)
     {
         if (context.Route.ClusterId != "authentik") return;
         // Default forwarders are normally appended after custom transforms.
@@ -23,7 +23,10 @@ public static class OidcLogoutHost
         context.AddXForwarded(ForwardedTransformActions.Append, true);
         context.AddRequestTransform(transform =>
         {
-            var host = Resolve(transform.HttpContext.Request);
+            var request = transform.HttpContext.Request;
+            var approved = request.Path == "/application/o/whaledeck-internal/end-session/"
+                ? configuration["Maintenance:Oidc:InternalIssuer"] : configuration["Maintenance:Oidc:ExternalIssuer"];
+            var host = Resolve(request, approved);
             if (host is not null)
             {
                 transform.ProxyRequest.Headers.Host = host;
@@ -34,7 +37,7 @@ public static class OidcLogoutHost
         });
     }
 
-    public static string? Resolve(HttpRequest request)
+    public static string? Resolve(HttpRequest request, string? approvedIssuer)
     {
         var provider = request.Path.Value switch
         {
@@ -56,7 +59,7 @@ public static class OidcLogoutHost
             var claims = json.RootElement.EnumerateObject().Where(p => p.NameEquals("iss")).ToArray();
             if (claims.Length != 1 || claims[0].Value.ValueKind != JsonValueKind.String) return null;
             var issuer = claims[0].Value.GetString();
-            if (issuer is null || issuer.Length > 512 || !Uri.TryCreate(issuer, UriKind.Absolute, out var uri) ||
+            if (issuer is null || issuer != approvedIssuer || issuer.Length > 512 || !Uri.TryCreate(issuer, UriKind.Absolute, out var uri) ||
                 uri.Scheme != request.Scheme || uri.Scheme is not ("http" or "https") || uri.Port != 8081 ||
                 uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0 ||
                 uri.AbsolutePath != "/application/o/" + provider + "/") return null;

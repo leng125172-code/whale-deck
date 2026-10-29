@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using WhaleDeck.MaintenanceHost;
 using Yarp.ReverseProxy.Configuration;
 
@@ -14,6 +15,8 @@ namespace WhaleDeck.UnitTests.Maintenance;
 
 public sealed class OidcLogoutHostTests
 {
+    private const string Canonical = "http://192.168.100.13:8081/application/o/whaledeck-external/";
+    private static string? Resolve(HttpRequest request) => OidcLogoutHost.Resolve(request, Canonical);
     private const string End = "/application/o/whaledeck-external/end-session/";
     private static string Hint(string json) => "e30." + WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(json)) + ".c2ln";
     private static DefaultHttpContext Request(string issuer, string path = End)
@@ -32,7 +35,7 @@ public sealed class OidcLogoutHostTests
     public void CanonicalVirtualHostDoesNotDependOnBrowserNic(string host, string provider)
     {
         var request = Request("http://" + host + ":8081/application/o/" + provider + "/", "/application/o/" + provider + "/end-session/").Request;
-        Assert.Equal(host + ":8081", OidcLogoutHost.Resolve(request));
+        Assert.Equal(host + ":8081", OidcLogoutHost.Resolve(request, "http://" + host + ":8081/application/o/" + provider + "/"));
         Assert.Equal("127.0.0.1:8081", request.Host.Value);
     }
 
@@ -41,19 +44,20 @@ public sealed class OidcLogoutHostTests
     [InlineData("http://192.168.100.13:9000/application/o/whaledeck-external/")]
     [InlineData("http://user@192.168.100.13:8081/application/o/whaledeck-external/")]
     [InlineData("http://192.168.100.13:8081/application/o/whaledeck-internal/")]
+    [InlineData("http://127.0.0.1:8081/application/o/whaledeck-external/")]
     [InlineData("http://example.com:8081/application/o/whaledeck-external/")]
     [InlineData("http://0.0.0.0:8081/application/o/whaledeck-external/")]
     [InlineData("http://[::]:8081/application/o/whaledeck-external/")]
     [InlineData("http://192.168.100.13:8081/application/o/whaledeck-external/?x=1")]
     [InlineData("http://192.168.100.13:8081/application/o/whaledeck-external/#x")]
-    public void OtherAuthoritiesProvidersAndUriComponentsCannotChangeVirtualHost(string issuer) => Assert.Null(OidcLogoutHost.Resolve(Request(issuer).Request));
+    public void OtherAuthoritiesProvidersAndUriComponentsCannotChangeVirtualHost(string issuer) => Assert.Null(Resolve(Request(issuer).Request));
 
     [Theory]
     [InlineData("/application/o/other/end-session/")]
     [InlineData("/application/o/whaledeck-external/end-session")]
     [InlineData("/application/o/whaledeck-external/authorize/")]
     [InlineData("/api/v3/flows/executor/default-authentication-flow/")]
-    public void OtherEndpointsRemainUnchanged(string path) => Assert.Null(OidcLogoutHost.Resolve(Request("http://127.0.0.1:8081/application/o/whaledeck-external/", path).Request));
+    public void OtherEndpointsRemainUnchanged(string path) => Assert.Null(Resolve(Request("http://127.0.0.1:8081/application/o/whaledeck-external/", path).Request));
 
     [Theory]
     [InlineData("null")]
@@ -64,7 +68,16 @@ public sealed class OidcLogoutHostTests
     public void MalformedAndAmbiguousPayloadsStayUnchanged(string json)
     {
         var context = Request("unused"); context.Request.QueryString = QueryString.Create("id_token_hint", Hint(json));
-        Assert.Null(OidcLogoutHost.Resolve(context.Request));
+        Assert.Null(Resolve(context.Request));
+    }
+
+    [Fact]
+    public void MissingOrDifferentConfiguredIssuerCannotSupplyItsOwnTrustAnchor()
+    {
+        var request = Request(Canonical).Request;
+        Assert.Null(OidcLogoutHost.Resolve(request, null));
+        Assert.Null(OidcLogoutHost.Resolve(request, "http://127.0.0.1:8081/application/o/whaledeck-external/"));
+        Assert.Null(OidcLogoutHost.Resolve(request, Canonical + "?x=1"));
     }
 
     [Fact]
@@ -72,10 +85,10 @@ public sealed class OidcLogoutHostTests
     {
         var context = Request("http://127.0.0.1:8081/application/o/whaledeck-external/");
         var original = context.Request.QueryString;
-        context.Request.Method = "POST"; Assert.Null(OidcLogoutHost.Resolve(context.Request));
-        context.Request.Method = "GET"; context.Request.QueryString = original.Add(original); Assert.Null(OidcLogoutHost.Resolve(context.Request));
+        context.Request.Method = "POST"; Assert.Null(Resolve(context.Request));
+        context.Request.Method = "GET"; context.Request.QueryString = original.Add(original); Assert.Null(Resolve(context.Request));
         foreach (var value in new[] { "", "a.b", "a.b.c.d", "e30.%%.c2ln", "e30.Zg=.c2ln", "e30.e30.", new string('A', 32769), Hint(new string('x', 16385)) })
-        { context.Request.QueryString = QueryString.Create("id_token_hint", value); Assert.Null(OidcLogoutHost.Resolve(context.Request)); }
+        { context.Request.QueryString = QueryString.Create("id_token_hint", value); Assert.Null(Resolve(context.Request)); }
     }
 
     [Fact]
@@ -86,7 +99,7 @@ public sealed class OidcLogoutHostTests
         await upstream.StartAsync();
         var builder = Builder();
         builder.Services.AddReverseProxy().LoadFromMemory([new RouteConfig { RouteId = "fixture", ClusterId = "authentik", Match = new() { Path = "{**path}" }, Transforms = [new Dictionary<string,string> { ["RequestHeaderOriginalHost"] = "true" }] }],
-            [new ClusterConfig { ClusterId = "authentik", Destinations = new Dictionary<string,DestinationConfig> { ["fixed"] = new() { Address = Assert.Single(upstream.Urls) } } }]).AddTransforms(OidcLogoutHost.Configure);
+            [new ClusterConfig { ClusterId = "authentik", Destinations = new Dictionary<string,DestinationConfig> { ["fixed"] = new() { Address = Assert.Single(upstream.Urls) } } }]).AddTransforms(context => OidcLogoutHost.Configure(context, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["Maintenance:Oidc:ExternalIssuer"] = Canonical }).Build()));
         await using var proxy = builder.Build(); proxy.MapReverseProxy(); await proxy.StartAsync();
         using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { BaseAddress = new Uri(Assert.Single(proxy.Urls)) };
         var hint = Hint("{\"iss\":\"http://192.168.100.13:8081/application/o/whaledeck-external/\"}");

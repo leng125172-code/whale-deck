@@ -86,7 +86,7 @@ builder.Services.AddReverseProxy()
                 ["authentik"] = new() { Address = "http://127.0.0.1:18081/" }
             }
         }])
-    .AddTransforms(OidcLogoutHost.Configure);
+    .AddTransforms(context => OidcLogoutHost.Configure(context, builder.Configuration));
 
 var app = builder.Build();
 var statusPath = builder.Configuration["Maintenance:StatusPath"]
