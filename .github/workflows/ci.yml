@@ -37,6 +37,8 @@ jobs:
           python3 -m py_compile deploy/validation/bound_container_copy_cut.py deploy/validation/validate_container_copy_inflight.py deploy/validation/verify_container_copy_inflight.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_copy_inflight_probe_scope.py
           node --check deploy/validation/validate_container_copy_browser.mjs
+          node --check deploy/validation/validate_container_move_browser.mjs
+          python3 -m py_compile deploy/validation/validate_container_move_browser.py
           python3 -m py_compile deploy/validation/validate_container_file_reads.py
           python3 -m py_compile deploy/host/whaledeck-container-upload.py deploy/validation/validate_container_file_staging.py
           python3 -m py_compile deploy/host/whaledeck-container-backups.py deploy/validation/validate_container_file_backups.py
