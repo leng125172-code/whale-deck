@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-10-29 容器移动实际部分文件中断四例通过**：运行a59ec97不重部署；真实BFF明确取消/正常退出、Worker SIGKILL与原自然租约、Agent systemd重启均在已登记部分私有inode时通过，产品结束helper分别4.008/4.041/0.116/0.268秒。完整134218176字节源SHA及9项原指纹不变、目标未发布、SQL/Root三事实false，原任务/回执/审计保留；第三进程独立核对四例与准确清理，活动/屏障/租约/临时身份0、11核心healthy。14项root观察器测试接CI；不冒称可见页面中断、目录树发布/源留存/Unknown或跨盘业务已验。59项active、17项移出不计完成。[证据与边界](qa/CONTAINER_MOVE_INFLIGHT.md)。
+
 - **2026-10-29 a59ec97容器移动真实常规整链通过**：真实Authentik用户名/密码登录，1440/320明暗四次文件/目录移动、四次原登记HTTP重试与刷新原意图、Ready明确取消通过；独立SQL双任务/Root原件、完整2097159字节、混合UID/GID/普通属性与原文件inode匹配。普通8路403/匿名4路401、CSRF/Origin拒绝及双端退出通过。准确测试容器/源和临时身份清理，4 Succeeded/1 Canceled永久历史保留，活动/屏障/租约0、11核心healthy；只读第三进程重核通过。此次实际业务同HDD，不冒称跨盘；进行中取消/撤权/重启/Unknown等仍待，59项active、17项移出不计完成。[实际证据与边界](qa/CONTAINER_MOVE_REAL_UI.md)。
 
 - **2026-10-29 容器移动a59ec97已正常dev覆盖，真实身份整链待验收**：同一发布Invocation的journal成功结束，六组件/镜像/HTTP来源一致；宿主实际可执行文件与DLL映射也为当前安装，新增移动迁移/表已入库。11核心healthy、database-platform未重建，活动移动/屏障/租约0，两个新增GET匿名401；托管容器运行库及PKCS来源分别核验10.0.13。3189 Unit/209 Integration（7默认原生跳过）、冻结实际PG1执行通过及独立清理、655前端和生产预览78/78保持。尚未真实管理员/普通用户、实际业务移动/页面与故障验收；59项active、17项移出不计完成。[发布与边界](qa/CONTAINER_MOVE_DEPLOYMENT.md)。
