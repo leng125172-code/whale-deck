@@ -24,3 +24,15 @@ MaintenanceHost 只对 authentik 固定上游、GET、精确的两个 WD `end-se
 全量 Release 0警告错误，2996 Unit通过、205 Integration通过/7默认原生跳过。日志 `/tmp/wd-oidc-logout-unit{,-2}.log`、`/tmp/wd-logout-{build,all-unit,integration}.log`。这些不是安装态成功；仍需实际覆盖后，验证伪造提示令牌继续400、原身份不被伪造请求退出，以及正常双端退出与四次真实复制整轮。
 
 中间开发覆盖5b8e177已完成，单独新真实身份再次正常退出返回 `/login`，WD401、Authentik403；随后收紧到批准issuer精确匹配的最终候选待覆盖/整轮验收。首轮失败数据在四份Root与完整内容、原父/源身份全部复核后已准确清理，原失败与永久历史保留，见 `cleanup-final.json`；不把清理改记为首轮退出通过。
+
+## 最终安装与真实常规整链
+
+`7b3f44e58750ec4eba58df4b135da36085e5a84d` 正常开发覆盖完成，无自动回滚。发布单元 `whaledeck-dev-publish-7b3f44e.service`，InvocationID `11dfe6f5cf5f41688ed61fab0b9f824d`，终态inactive/MainPID0/success/退出0。六组件及实际HTTP build-info同源，宿主UDS/权限/动态入口/HDD/运行时10.0.13校验通过。
+
+全新临时管理员通过实际可见Authentik登录；伪造提示令牌返回400，原Authentik会话仍200。1440明色文件/暗色目录、320明色目录/暗色文件共四次明确确认复制，每次确认前取消新表单零登记，再实际登记/完整预检/确认；四次准确HTTP登记重试返回同意图，刷新原执行不重发确认。源保留、目标列表可见、浏览器文件正文0；新增一项Ready明确取消，没有执行ID或Root开始。两页正常退出回登录页、原WD Cookie401、Authentik拒绝通过。实际观察退出请求的浏览器Host与令牌issuerHost不同，未输出或保存令牌原文。
+
+独立SQL双Job/Outbox/审计、Root永久原件、完整2MiB+7字节及UID/GID/普通权限/纳秒时间/ETag匹配；普通真实用户8路403、匿名4路401，缺CSRF400/错误Origin403。准确测试源与CID已清理，Root/业务历史保留。新独立进程重核4份Root原件逐字节一致、5意图4成功1取消、活动/租约/屏障0、临时身份0、11核心healthy。主代理已实际目视320明色预检和1440暗色完成截图，无水平溢出，按钮完整；第一轮另外目视1440明色完成和320暗色完成。
+
+私有证据 `deploy/artifacts/container-copy-browser-86e2b2d5009b4ce19809f12927f1cfdc/` 的baseline/results/verified/independent-final、4份Root归档与8张实际截图。日志 `/tmp/wd-copy-real-browser-final.log`、`/tmp/wd-logout-provenance-final.log`、`/tmp/wd-logout-host-validate-final.log`。前序CI40801153829最后已读到四作业success、frontend运行，后续GitHub API多次EOF，未签终态；7b3f44e普通快进推送已成功，不将本地成功冒充新CI全绿。
+
+这证明常规复制和动态入口完整退出，不代表正在复制时取消/撤权、Worker/Agent重启或Unknown跨管理员实际页面都已完成。当前59项继续active，17项移出不算完成。

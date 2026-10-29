@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_COPY_WEB_UI.md",
-  "nextStep": "7c3facd复制页面/API/Worker已开发覆盖，六组件/HTTP同源，新迁移和11核心healthy；继续真实Cookie/SQL/Worker/实际字节/UI及撤权/重启/Unknown整链，跟踪CI40801153829。59项继续，17项移出不算完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/OIDC_DYNAMIC_LOGOUT.md",
+  "nextStep": "7b3f44e真实页面复制/SQL双任务/Worker/Root/全字节及动态入口双端退出已通过；继续进行中取消/撤权、Worker/Agent重启及Unknown跨管理员实机故障链，核对CI终态。59项继续，17项移出不算完成。"
 }

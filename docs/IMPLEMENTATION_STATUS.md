@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-29 7b3f44e真实容器复制常规整链通过，并修复动态入口双端退出**：实际浏览器正常Authentik登录，1440/320明暗四次文件/目录复制、刷新原意图、四次原登记HTTP重试、Ready明确取消、普通8路403/匿名4路401通过；独立SQL双任务/Root原件/完整2MiB+7/属性与准确清理匹配，5意图4成功1取消，零活动/租约/屏障，临时身份0、11核心healthy。首轮退出Authentik400仍200，修复精确批准issuer虚拟Host后，伪造hint400保持会话、正常双页退出WD401/Authentik拒绝通过；2996 Unit/205 Integration（7默认原生跳过）及真实YARP回环通过。进行中取消/撤权/Worker或Agent重启/Unknown真实故障整链与其余59项继续，17项移出不算完成。[证据与失败](qa/OIDC_DYNAMIC_LOGOUT.md)。
+
 - **2026-10-29 容器复制页面/API/Worker已覆盖7c3facd，真实业务整链待验收**：584前端单元、28复制及77关联生产预览页面通过；42复制/294关联Linux-root零跳过。发布单元成功0，六组件及HTTP同源，新复制迁移入库、11核心healthy。Agent独立实际签名UDS已通过全字节/属性/永久取消与准确清理；真实登录页面到SQL/Worker/Root的复制及撤权/重启/Unknown整链仍待，CI40801153829未签终态。59项active，17项移出不算完成。[实际证据](qa/CONTAINER_COPY_WEB_UI.md)。
 
 - **2026-10-29 容器复制页面候选与 Agent1.45 安装态通过**：新增两阶段复制/原引用恢复/显式取消/Unknown管理员处置页面，584前端单元、28生产预览浏览器及检查构建通过；42复制专项与294关联容器Linux-root全部执行零跳过。冻结ab406eb已安装Agent/MaintenanceHost，实际签名UDS两次完整文件/目录复制与永久取消通过，独立Root原件/属性/准确清理及11核心healthy。验证器相对模块路径失败已修；关联77页面回归通过；API/Worker/前端覆盖、真实身份SQL/Worker/UI整链仍待。59项active，17项移出不算完成。[证据与边界](qa/CONTAINER_COPY_WEB_UI.md)。

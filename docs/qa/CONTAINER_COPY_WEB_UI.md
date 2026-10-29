@@ -42,6 +42,10 @@
 实际 Agent/API/Worker/Gateway/MaintenanceHost/Migrator 六组件及 HTTP build-info 均匹配，宿主安装校验再次通过；复制迁移 `20261028083811_ContainerCopyIntents` 已入库，`container_copy_intents` 表存在、目前意图0，11核心容器全部healthy。
 日志 `/tmp/wd-copy-installed-provenance.log`、`/tmp/wd-copy-host-validate-7c3facd.log`。GitHub CI `40801153829` 已启动，尚未确认完整终态；不能把本地测试和发布成功算作CI全绿。页面仍待真实身份/实际数据业务整链签收。
 
+## 真实常规整链后续
+
+7b3f44e已通过真实身份/页面/SQL双任务/Worker/Root/完整内容与属性、普通/匿名拒绝、Ready取消及双端退出；首轮发现动态入口issuer退出400并修复，失败原始证据与最终独立清理核对见[动态退出与真实常规整链](OIDC_DYNAMIC_LOGOUT.md)。
+
 ## 剩余门禁
 
-CI终态，以及真实 Authentik Cookie → SQL/Worker → Agent/实际字节 → UI、进行中撤权/重启/未知结果处置整链仍需独立验收。Agent 独立协议通过不算完整复制业务已部署，也不代表整个文件管理或全部 59 项完成。
+CI终态，以及进行中取消/撤权/重启/未知结果处置整链仍需独立验收。Agent 独立协议通过不算完整复制业务已部署，也不代表整个文件管理或全部 59 项完成。
