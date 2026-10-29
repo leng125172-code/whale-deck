@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-29 容器复制页面/API/Worker已覆盖7c3facd，真实业务整链待验收**：584前端单元、28复制及77关联生产预览页面通过；42复制/294关联Linux-root零跳过。发布单元成功0，六组件及HTTP同源，新复制迁移入库、11核心healthy。Agent独立实际签名UDS已通过全字节/属性/永久取消与准确清理；真实登录页面到SQL/Worker/Root的复制及撤权/重启/Unknown整链仍待，CI40801153829未签终态。59项active，17项移出不算完成。[实际证据](qa/CONTAINER_COPY_WEB_UI.md)。
+
 - **2026-10-29 容器复制页面候选与 Agent1.45 安装态通过**：新增两阶段复制/原引用恢复/显式取消/Unknown管理员处置页面，584前端单元、28生产预览浏览器及检查构建通过；42复制专项与294关联容器Linux-root全部执行零跳过。冻结ab406eb已安装Agent/MaintenanceHost，实际签名UDS两次完整文件/目录复制与永久取消通过，独立Root原件/属性/准确清理及11核心healthy。验证器相对模块路径失败已修；关联77页面回归通过；API/Worker/前端覆盖、真实身份SQL/Worker/UI整链仍待。59项active，17项移出不算完成。[证据与边界](qa/CONTAINER_COPY_WEB_UI.md)。
 
 - **2026-10-28 容器复制 SQL/Worker/API 候选通过隔离真实 PG**：`e911452` 实现永久意图/EF migration、双 Job/Outbox/审计、共享发布排斥、不可变历史、专用 Worker 与管理员 API。2970 Unit/205 Integration 通过（7 默认原生跳过）；`a6156a0` 冻结真实 PG 1 执行/1 通过/0 跳过，包含并发确认、四方双向触发器、取消/租约/Unknown/保留，独立清理复核及11核心healthy。首轮夹具保留锁导致 Started 断言失败，修正顺序并保留全部新旧保护；未放宽锁。Agent1.45、API/Worker 尚未部署，复制 UI/真实身份与实际文件整链仍待。59 项 active，17项移出不算完成。[证据与失败记录](qa/CONTAINER_COPY_PERSISTENCE.md)。

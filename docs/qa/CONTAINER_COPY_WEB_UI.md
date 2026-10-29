@@ -36,6 +36,12 @@
 失败保留：首轮验证器相对模块路径在创建测试容器前报 FileNotFoundError；改用已验证摘要的 `/usr/local/libexec/whaledeck-container-files.py` 后通过。探针发布脚本无执行位，改为显式 bash 调用；未更改系统安全目录信任策略。
 日志 `/tmp/wd-copy-host-{publish,install,validate}.log`、`/tmp/wd-copy-probe-publish-2.log`、`/tmp/wd-copy-installed-agent{,-2}.log`。
 
+## 7c3facd 开发覆盖
+
+冻结 `7c3facd4d3021890d9cd51b9af8755dd2666abdf` 已正常开发覆盖，无自动回滚。systemd 发布单元 `whaledeck-dev-publish-7c3facd.service`，InvocationID `ccbce1b97da84c2181bc82b852989e16`，终态 inactive/dead、MainPID=0、Result=success、ExecMainStatus=0。
+实际 Agent/API/Worker/Gateway/MaintenanceHost/Migrator 六组件及 HTTP build-info 均匹配，宿主安装校验再次通过；复制迁移 `20261028083811_ContainerCopyIntents` 已入库，`container_copy_intents` 表存在、目前意图0，11核心容器全部healthy。
+日志 `/tmp/wd-copy-installed-provenance.log`、`/tmp/wd-copy-host-validate-7c3facd.log`。GitHub CI `40801153829` 已启动，尚未确认完整终态；不能把本地测试和发布成功算作CI全绿。页面仍待真实身份/实际数据业务整链签收。
+
 ## 剩余门禁
 
-候选提交/CI、API/Worker/前端开发覆盖，以及真实 Authentik Cookie → SQL/Worker → Agent/实际字节 → UI、进行中撤权/重启/未知结果处置整链仍需独立验收。Agent 独立协议通过不算完整复制业务已部署，也不代表整个文件管理或全部 59 项完成。
+CI终态，以及真实 Authentik Cookie → SQL/Worker → Agent/实际字节 → UI、进行中撤权/重启/未知结果处置整链仍需独立验收。Agent 独立协议通过不算完整复制业务已部署，也不代表整个文件管理或全部 59 项完成。
