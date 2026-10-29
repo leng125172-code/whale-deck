@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Frozen internal move candidate on a real, isolated two-filesystem container.
 
-Uses one owned HDD bind and one explicitly named Docker volume on NVMe. No
-installed helper/RPC/BFF/UI changes. Unproved data and permanent receipts stay.
+Uses one owned HDD bind and one explicitly named Docker volume on NVMe.
+--installed-helper exercises the existing fixed systemd transport, without
+changing it or claiming signed RPC/BFF/UI coverage. Unproved data stays.
 """
 import hashlib
 import json
@@ -20,6 +21,30 @@ from validate_container_file_staging import load
 
 
 def run(*args): return subprocess.check_output(args, text=True, timeout=30).strip()
+
+
+class InstalledMoveEngine:
+    """Exercise the installed fixed systemd profile; not a signed RPC client."""
+    FACTS = ('destinationPublished', 'sourceRemoved', 'sourceRetained')
+
+    def __init__(self, evidence): self.evidence = evidence; self.sequence = 0
+
+    def invoke(self, action, request):
+        self.sequence += 1
+        result = subprocess.run(['/usr/local/libexec/whaledeck-privileged', 'container-file-moves', action, uuid.uuid4().hex],
+            input=json.dumps(request) + '\n', capture_output=True, text=True, timeout=630)
+        assert len(result.stdout.encode()) <= 65536 and len(result.stderr.encode()) <= 65536
+        stem = self.evidence / ('helper-' + str(self.sequence) + '-' + action)
+        stem.with_suffix('.stdout').write_text(result.stdout); stem.with_suffix('.stderr').write_text(result.stderr)
+        rows = [json.loads(line) for line in result.stdout.splitlines()]
+        assert len(rows) == 2 and set(rows[0]) == {'type', 'invocationId'} and rows[0]['type'] == 'driver'
+        assert re.fullmatch('[a-f0-9]{32}', rows[0]['invocationId'])
+        if result.returncode or rows[1].get('type') == 'error':
+            raise RuntimeError('INSTALLED_MOVE_HELPER_FAILED_DATA_PRESERVED')
+        return rows[1]
+
+    def plan(self, command, _session): return self.invoke('plan', command)
+    def apply(self, request, _session): return self.invoke('apply', request)
 
 
 def inventory(root, expected, reader, content):
@@ -49,19 +74,30 @@ def remove_proved(root, expected, proofs, reader, content):
 
 
 def main():
-    assert os.geteuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] == '--intents'); os.umask(0o077)
+    assert os.geteuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('--intents', '--installed-helper')); os.umask(0o077)
     intents = len(sys.argv) == 3
+    installed = intents and sys.argv[2] == '--installed-helper'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     repository = Path(__file__).resolve().parents[2]
     names = ('whaledeck-container-copy-scope.py', 'whaledeck-container-move-scope.py', 'whaledeck-container-files.py',
         'whaledeck-files.py', 'whaledeck-container-terminal.py', 'whaledeck-container-upload.py', 'whaledeck-container-publish.py',
         'whaledeck-file-operations.py', 'whaledeck-tree-copies.py', 'whaledeck-tree-moves.py', 'whaledeck-file-tree.py')
     if intents: names += ('whaledeck-container-copies.py', 'whaledeck-container-moves.py')
+    if installed: names += ('whaledeck-privileged', 'whaledeck-container-move-transport.py', 'whaledeck-file-backups.py', 'whaledeck-container-backups.py')
     frozen = {name: owned.common.command(['git', '-C', str(repository), 'show', revision + ':deploy/host/' + name]) for name in names}
     for name, content in frozen.items(): assert (repository / 'deploy/host' / name).read_bytes() == content
+    if installed:
+        for name, content in frozen.items():
+            path = Path('/usr/local/libexec') / name; info = path.lstat()
+            assert stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1 and not info.st_mode & 0o022
+            assert path.read_bytes() == content
     assert Path(__file__).read_bytes() == owned.common.command(['git','-C',str(repository),'show',revision+':deploy/validation/'+Path(__file__).name])
     evidence = repository / 'deploy/artifacts' / ('container-move-scope-' + uuid.uuid4().hex); evidence.mkdir(mode=0o700)
-    state = evidence / 'root-state'; state.mkdir(mode=0o700)
+    state = evidence / 'root-state'
+    if installed:
+        state = Path('/var/lib/whaledeck-container-moves'); info = state.lstat()
+        assert stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o700
+    else: state.mkdir(mode=0o700)
     name = 'wdv-container-move-' + uuid.uuid4().hex; volume_name = 'whaledeck-app-' + name
     before = owned.common.core_snapshot(); owned.common.verify_apps_directory(owned.common.APPS, __import__('pwd').getpwnam('whaledeck-agent').pw_uid)
     folder = owned.common.APPS / name; folder.mkdir(mode=0o755); folder.chmod(0o755)
@@ -88,6 +124,7 @@ def main():
             base_type=load(bundle/'whaledeck-container-copies.py','native_move_receipt_base').ContainerCopies
             intent_type=load(bundle/'whaledeck-container-moves.py','native_move_receipts').container_moves_type(base_type)
             intent_engine=intent_type(upload,publisher,scope_type,file_type,copy_type,manifest,tree_type,state)
+            if installed: intent_engine = InstalledMoveEngine(evidence)
         try:
             run('docker','volume','create','--label','io.whaledeck.validation='+name,volume_name)
             volume = json.loads(run('docker','volume','inspect',volume_name))[0]
@@ -115,13 +152,15 @@ def main():
             location=docker.target(inspected,identifier,docker.registry());location={'containerId':identifier,'instanceId':location['instanceId']}
             (evidence/'baseline.json').write_text(json.dumps({'revision':revision,**location,'source':str(folder),'sourceIdentity':folder_identity,
                 'volume':volume_name,'volumeMount':str(fast),'sourceDevice':folder.stat().st_dev,'targetDevice':fast.stat().st_dev,'bytesPerFile':len(content),'sha256':hashlib.sha256(content).hexdigest().upper(),
-                'containerDomainIntents':intents,'coreBefore':before}))
+                'containerDomainIntents':intents,'installedFixedHelper':installed,'coreBefore':before}))
             operations=[]
             with reader.ContainerRoot({**location,'path':'work'},files,docker) as session:
                 for kind,source,destination in (('File','work/中文.bin','fast/移入.bin'),('Directory','work/项目','fast/目录'),('File','fast/移入.bin','work/返回.bin')):
                     source_root=folder if source.startswith('work/') else fast;target_root=folder if destination.startswith('work/') else fast
                     source_path=source_root/source.split('/',1)[1];target=target_root/destination.split('/',1)[1]
                     original=source_path.stat();original_file=(source_path/'代码.bin').stat() if kind=='Directory' else original
+                    tree_originals = {relative:reader.fingerprint((source_path/relative).lstat())
+                        for relative in ('', '代码.bin', '空目录')} if kind == 'Directory' else {}
                     operation=uuid.uuid4().hex;operations.append(operation)
                     command={**location,'sourcePath':source,'targetPath':destination,'expectedVersion':reader.version(location,source,original)}
                     if intents:
@@ -140,9 +179,16 @@ def main():
                     file=retained if kind=='File' else retained/'代码.bin';out=target if kind=='File' else target/'代码.bin'
                     assert file.read_bytes()==out.read_bytes()==content and file.stat().st_ino==original_file.st_ino
                     assert (out.stat().st_uid,out.stat().st_gid,stat.S_IMODE(out.stat().st_mode),out.stat().st_mtime_ns)==(original_file.st_uid,original_file.st_gid,0o640,original_file.st_mtime_ns)
-                    if kind=='Directory':assert (target/'空目录').is_dir() and stat.S_IMODE((target/'空目录').stat().st_mode)==0o700
+                    if kind=='Directory':
+                        for relative,old in tree_originals.items():
+                            new=(target/relative).lstat();kept=(retained/relative).lstat()
+                            assert (stat.S_IFMT(new.st_mode),new.st_uid,new.st_gid,stat.S_IMODE(new.st_mode),new.st_mtime_ns)==(stat.S_IFMT(old[2]),old[3],old[4],old[2]&0o777,old[7])
+                            assert (kept.st_dev,kept.st_ino)==tuple(old[:2])
                     if intents:
-                        receipt=state/(operation+'.json');raw=receipt.read_bytes();again=intent_engine.apply(request,session)
+                        receipt=state/(operation+'.json');raw=receipt.read_bytes();record=json.loads(raw)
+                        assert record['operationId']==operation and record['owner']=='B'*64 and record['plan']==request['plan'] and record['state']=='Completed'
+                        assert all(record[key] is True for key in intent_engine.FACTS)
+                        again=intent_engine.apply(request,session)
                         assert again['replayed'] and {k:v for k,v in again.items() if k!='replayed'}=={k:v for k,v in result.items() if k!='replayed'}
                         assert receipt.read_bytes()==raw
                     else:
@@ -173,9 +219,12 @@ def main():
                 run('docker','volume','rm',volume_name)
             else:(evidence/'preserved.json').write_text(json.dumps({'source':str(folder),'volume':volume_name,'unprovedDataNotDeleted':True}))
     assert proved and owned.common.core_snapshot()==before
+    if installed:
+        assert not run('systemctl','list-units','--all','--no-legend','whaledeck-container-moves-*.service')
     assert not folder.exists() and subprocess.run(['docker','volume','inspect',volume_name],capture_output=True).returncode!=0
     (evidence/'verified.json').write_text(json.dumps({'revision':revision,'crossFilesystemMoves':3,'allBytesAndRetainedOriginalInodesVerified':True,
-        'exactContainerAndVolumeAndSourceCleaned':True,'coreContainersUnchanged':True,'installedEntryPoint':False,'containerDomainIntents':intents,'results':results}))
+        'exactContainerAndVolumeAndSourceCleaned':True,'coreContainersUnchanged':True,'installedEntryPoint':installed,
+        'signedRpc':False,'humanBffOrUi':False,'containerDomainIntents':intents,'rootRecordsRetained':installed,'results':results}))
     print(json.dumps({'containerMoveScope':'passed','evidence':str(evidence),'crossFilesystemMoves':3}),flush=True)
 
 
