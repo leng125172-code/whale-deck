@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-10-29 容器移动Agent1.46已安装签收，业务候选继续**：53701f8宿主707文件匹配、签名UDS两类完整移动/取消及复制回归通过；e839a43已安装固定helper三次HDD↔NVMe完整移动/混合所有者与独立Root摘要、准确清理及11核心不变通过。失败观察器现场保留，单备份命名目录属主定点修复。新业务模型/三层签名/调度候选新增96项，全量3187 Unit/205 Integration通过（7默认原生跳过），Release零警告错误；尚未SQL/Worker注册/API/Vue。API/Worker/Gateway仍7b3f44e，59项active、17项移出不计完成。[安装态证据](qa/CONTAINER_MOVE_AGENT_RPC.md)、[业务边界](qa/CONTAINER_MOVE_WORKFLOW.md)。
+
 - **2026-10-29 容器移动minor46候选（尚未安装）**：独立`ContainerMoveService.Plan/Apply/Inspect/Discard`、`docker.files.move-intents`、完整protobuf/消息类型/方法/45秒期限/单次nonce签名及旧版拒绝已接通。Plan有显式OperationKind=Move及文件/目录移动内层oneof；Receipt三项optional bool保留null/false/true，不把Unknown改写成false。固定受限helper、安装源、SDK及原生探针已生成；Release零警告错误，3091 Unit/205 Integration（7原生默认跳过）、399容器Linux-root/12宿主/8范围通过。安装态签名UDS尚待，不算永久业务任务/权限审计或UI完成；59项继续、17项移出不算完成。
 
 - **2026-10-28 容器复制 SQL/Worker/API 候选通过隔离真实 PG**：`e911452` 实现永久意图/EF migration、双 Job/Outbox/审计、共享发布排斥、不可变历史、专用 Worker 与管理员 API。2970 Unit/205 Integration 通过（7 默认原生跳过）；`a6156a0` 冻结真实 PG 1 执行/1 通过/0 跳过，包含并发确认、四方双向触发器、取消/租约/Unknown/保留，独立清理复核及11核心healthy。首轮夹具保留锁导致 Started 断言失败，修正顺序并保留全部新旧保护；未放宽锁。Agent1.45、API/Worker 尚未部署，复制 UI/真实身份与实际文件整链仍待。59 项 active，17项移出不算完成。[证据与失败记录](qa/CONTAINER_COPY_PERSISTENCE.md)。

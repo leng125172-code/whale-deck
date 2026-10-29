@@ -1,5 +1,7 @@
 # Whale Deck 完整目标与 P0–P5 实施基线
 
+- **2026-10-29 容器移动Agent1.46已安装签收，业务候选继续**：53701f8宿主707文件匹配、签名UDS两类完整移动/取消及复制回归通过；e839a43已安装固定helper三次HDD↔NVMe完整移动/混合所有者与独立Root摘要、准确清理及11核心不变通过。失败观察器现场保留，单备份命名目录属主定点修复。新业务模型/三层签名/调度候选新增96项，全量3187 Unit/205 Integration通过（7默认原生跳过），Release零警告错误；尚未SQL/Worker注册/API/Vue。API/Worker/Gateway仍7b3f44e，59项active、17项移出不计完成。[安装态证据](qa/CONTAINER_MOVE_AGENT_RPC.md)、[业务边界](qa/CONTAINER_MOVE_WORKFLOW.md)。
+
 - **2026-10-29 容器移动独立计划/永久回执候选c2c78b7：Move独立摘要域、完整内层绑定、三态发布/移除/原件事实、仅观察不重做已实现；目录混合UID/GID保留，复制属主规则保持，内层摘要漂移使当前绑定失效。19专项含9次测试子进程SIGKILL、389容器Linux-root/35宿主移动/27复制通过；冻结真实Docker三次跨文件系统2MiB+7、混合UID/GID、原外层回执/原件/清理及11核心不变独立验证通过。未安装/RPC/业务SQL/Worker/API/UI，仍7b3f44e/minor45；59项active、17项移出不算完成。** [证据及首轮失败](qa/CONTAINER_MOVE_INTENTS.md)。
 
 - **2026-10-29 容器移动内部FD候选d48aaae：独立源/目标/私有原件与操作ID绑定、两端可写、父inode及固定FD校验已实现；17专项/368关联Linux-root零跳过，冻结真实非root独占容器完成HDD→NVMe文件/目录和NVMe→HDD文件3次完整2MiB+7、原件inode/普通属性/重试验证，准确CID/命名卷/源清理及独立复核通过、11核心保持。未安装/RPC/永久业务任务/Worker/API/UI，运行时仍7b3f44e；继续外层容器域协议与整链，59项active、17项移出不计完成。** [证据与边界](qa/CONTAINER_MOVE_SCOPE.md)。
