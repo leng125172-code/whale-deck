@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_MOVE_SCOPE.md",
-  "nextStep": "移动FD候选真实三次跨文件系统及17/368 Linux-root通过；继续容器移动独立封存计划/回执、签名RPC、永久任务/Worker/API/UI。复制目录树故障及可见页面中断继续，单工作站59项active，17项移出不计完成。"
+  "nextStep": "移动FD候选真实三次跨文件系统及17/368 Linux-root通过；继续容器移动独立封存计划/回执、签名RPC、永久任务/Worker/API/UI。复制目录树故障及可见页面中断继续，单工作站59项active，17项移出不算完成。"
 }
