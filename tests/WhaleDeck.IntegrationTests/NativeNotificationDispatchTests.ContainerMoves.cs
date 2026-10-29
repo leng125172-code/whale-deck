@@ -275,8 +275,13 @@ public sealed partial class NativeNotificationDispatchTests
             await using (var gate = await second.Database.BeginTransactionAsync())
             {
                 await second.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(41307341);");
-                var blocked = await Assert.ThrowsAsync<PostgresException>(() => repo.StartedAsync(gateWaitClaim, clock.GetUtcNow(), default));
-                Assert.Equal(PostgresErrorCodes.LockNotAvailable, blocked.SqlState);
+                var blocked = await Record.ExceptionAsync(() => repo.StartedAsync(gateWaitClaim, clock.GetUtcNow(), default));
+                Assert.NotNull(blocked);
+                // Npgsql's non-retrying EF strategy may wrap transient 55P03;
+                // assert the actual server failure, not the wrapper shape.
+                Assert.Equal(PostgresErrorCodes.LockNotAvailable, Assert.IsType<PostgresException>(blocked.GetBaseException()).SqlState);
+                var notStarted = (await other.FindAsync(gateWaitClaim.Id, default))!;
+                Assert.Null(notStarted.RootStartedAtUtc); Assert.False(notStarted.PublishBarrier);
                 await gate.RollbackAsync();
             }
             clock.Offset = TimeSpan.FromSeconds(91);
