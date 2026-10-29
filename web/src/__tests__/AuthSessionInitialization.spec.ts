@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { fileBrowserLocationKey, rememberFileBrowserLocation } from '@/services/fileBrowserLocation'
+import { copyHint, saveCopyHint } from '@/services/containerCopyHints'
 
 const { request } = vi.hoisted(() => ({ request: vi.fn<() => Promise<unknown>>() }))
 vi.mock('@/services/apiClient', async (original) => ({
@@ -57,10 +58,17 @@ it.each(['ordinary', 'another-admin'])(
   'clears another or downgraded directory hint after production login: %s',
   async (subject) => {
     rememberFileBrowserLocation('admin', { rootId: 'whaledeck.files.shared', path: '资料' })
+    saveCopyHint({
+      subject: 'admin',
+      containerId: 'a'.repeat(64),
+      key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
+      id: null,
+    })
     request.mockResolvedValueOnce({ subject, isAdministrator: subject === 'another-admin' })
     const { authSession } = await import('@/services/authSession')
     await authSession.initialize()
     expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
+    expect(copyHint('admin', 'a'.repeat(64))).toBeNull()
   },
 )
 it('keeps same-admin hint on refresh, clears on downgrade and logout without a FilesView', async () => {
@@ -71,14 +79,29 @@ it('keeps same-admin hint on refresh, clears on downgrade and logout without a F
     .mockResolvedValueOnce({ ...admin, isAdministrator: false })
   const { authSession } = await import('@/services/authSession')
   rememberFileBrowserLocation('admin', { rootId: 'whaledeck.files.shared', path: '资料' })
+  saveCopyHint({
+    subject: 'admin',
+    containerId: 'a'.repeat(64),
+    key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
+    id: null,
+  })
   await authSession.initialize()
   await authSession.refresh()
   expect(sessionStorage.getItem(fileBrowserLocationKey)).not.toBeNull()
+  expect(copyHint('admin', 'a'.repeat(64))).not.toBeNull()
   await authSession.refresh()
   expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
+  expect(copyHint('admin', 'a'.repeat(64))).toBeNull()
   rememberFileBrowserLocation('admin', { rootId: 'whaledeck.files.shared', path: '资料' })
+  saveCopyHint({
+    subject: 'admin',
+    containerId: 'a'.repeat(64),
+    key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
+    id: null,
+  })
   await authSession.logout()
   expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
+  expect(copyHint('admin', 'a'.repeat(64))).toBeNull()
   const { navigateToLogout } = await import('@/services/logoutNavigation')
   expect(navigateToLogout).toHaveBeenCalledOnce()
 })

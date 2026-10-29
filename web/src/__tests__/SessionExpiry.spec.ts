@@ -38,6 +38,13 @@ it('clears current identity and private location once on a real BFF 401', async 
   const { rememberFileBrowserLocation, fileBrowserLocationKey } =
     await import('@/services/fileBrowserLocation')
   rememberFileBrowserLocation(admin.subject, { rootId: 'whaledeck.files.shared', path: 'private' })
+  const { saveCopyHint, copyHint } = await import('@/services/containerCopyHints')
+  saveCopyHint({
+    subject: admin.subject,
+    containerId: 'a'.repeat(64),
+    key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
+    id: null,
+  })
   fetcher.mockResolvedValue(new Response('{}', { status: 401 }))
   const { apiRequest } = await import('@/services/apiClient')
   await expect(apiRequest('containers')).rejects.toMatchObject({ status: 401 })
@@ -46,6 +53,7 @@ it('clears current identity and private location once on a real BFF 401', async 
   expect(authSession.authenticated.value).toBe(false)
   expect(authSession.unavailable.value).toBe(false)
   expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
+  expect(copyHint(admin.subject, 'a'.repeat(64))).toBeNull()
   expect(expired).toHaveBeenCalledOnce()
 })
 

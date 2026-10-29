@@ -41,6 +41,7 @@ import { canOverwriteDirectory } from '@/services/fileTreeOverwriteRestorings'
 import { canRecycleDirectory } from '@/services/fileTreeRecyclings'
 import FileRecoveryPanel from '@/components/files/FileRecoveryPanel.vue'
 import ContainerDirectoryRecoveryPanel from '@/components/files/ContainerDirectoryRecoveryPanel.vue'
+import ContainerCopyRecoveryPanel from '@/components/files/ContainerCopyRecoveryPanel.vue'
 import { canCopyDirectory } from '@/services/fileTreeCopies'
 import { canMoveDirectory } from '@/services/fileTreeMoves'
 import { canPackDirectory } from '@/services/fileTreePackings'
@@ -651,6 +652,7 @@ onBeforeUnmount(() => {
       <div class="page-heading__actions">
         <FileRecoveryPanel @changed="afterMutation" @failure="message" />
         <ContainerDirectoryRecoveryPanel />
+        <ContainerCopyRecoveryPanel />
         <FileTreeCapturePanel
           :roots="roots"
           :root-id="rootId"

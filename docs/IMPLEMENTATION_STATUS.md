@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-29 容器复制页面候选与 Agent1.45 安装态通过**：新增两阶段复制/原引用恢复/显式取消/Unknown管理员处置页面，584前端单元、28生产预览浏览器及检查构建通过；42复制专项与294关联容器Linux-root全部执行零跳过。冻结ab406eb已安装Agent/MaintenanceHost，实际签名UDS两次完整文件/目录复制与永久取消通过，独立Root原件/属性/准确清理及11核心healthy。验证器相对模块路径失败已修；关联77页面回归通过；API/Worker/前端覆盖、真实身份SQL/Worker/UI整链仍待。59项active，17项移出不算完成。[证据与边界](qa/CONTAINER_COPY_WEB_UI.md)。
+
 - **2026-10-28 容器复制 SQL/Worker/API 候选通过隔离真实 PG**：`e911452` 实现永久意图/EF migration、双 Job/Outbox/审计、共享发布排斥、不可变历史、专用 Worker 与管理员 API。2970 Unit/205 Integration 通过（7 默认原生跳过）；`a6156a0` 冻结真实 PG 1 执行/1 通过/0 跳过，包含并发确认、四方双向触发器、取消/租约/Unknown/保留，独立清理复核及11核心healthy。首轮夹具保留锁导致 Started 断言失败，修正顺序并保留全部新旧保护；未放宽锁。Agent1.45、API/Worker 尚未部署，复制 UI/真实身份与实际文件整链仍待。59 项 active，17项移出不算完成。[证据与失败记录](qa/CONTAINER_COPY_PERSISTENCE.md)。
 
 - **2026-10-28 容器复制异步业务候选已生成，未持久化/部署**：`24238fb` 新增请求/完整计划/确认执行三层独立签名、永久意图实体与事务仓储契约、异步服务和六秒复核调度。HTTP 不扫描/复制，Ready 明确确认后独立执行；原 ID 丢回复只观察或封闭，Unknown 不释放保护。新增 86 项，2968 Unit/201 Integration 通过（7 原生默认跳过）；进行中取消与租约丢失各真实等待一次六秒并取消夹具 RPC。SQL/EF、跨写入排斥、Worker/API/真实 UI 与安装态尚待，不把内存测试算落库。59 项 active，17项移出不算完成。[证据及下一步](qa/CONTAINER_COPY_WORKFLOW.md)。

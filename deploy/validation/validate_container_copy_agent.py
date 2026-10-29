@@ -36,7 +36,7 @@ def main():
         frozen = owned.common.command(['git', '-C', str(repo), 'show', revision + ':deploy/host/' + module])
         assert path.read_bytes() == frozen; digests[module] = hashlib.sha256(frozen).hexdigest()
     state = Path('/var/lib/whaledeck-container-copies'); trusted(state, True); assert stat.S_IMODE(state.stat().st_mode) == 0o700
-    reader = load('whaledeck-container-files.py', 'installed_copy_probe_reader')
+    reader = load(Path('/usr/local/libexec/whaledeck-container-files.py'), 'installed_copy_probe_reader')
     evidence = repo / 'deploy/artifacts' / ('container-copy-agent-' + uuid.uuid4().hex); evidence.mkdir(mode=0o700)
     before = owned.common.core_snapshot()
     with owned.fixture() as fixture:

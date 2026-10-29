@@ -1726,3 +1726,33 @@ a {
     animation-iteration-count: 1 !important;
   }
 }
+
+.container-copy-dialog.el-dialog,
+.container-copy-recovery.el-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  margin-block: 16px;
+}
+.container-copy-dialog .el-dialog__body,
+.container-copy-recovery .el-dialog__body {
+  overflow: auto;
+  min-height: 0;
+  overflow-wrap: anywhere;
+}
+.container-copy-dialog .el-dialog__footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.container-copy-dialog .el-dialog__footer .el-button + .el-button {
+  margin-left: 0;
+}
+
+.container-copy-recovery .el-dialog__footer {
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
