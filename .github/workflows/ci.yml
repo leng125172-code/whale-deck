@@ -260,7 +260,7 @@ jobs:
       - name: Check bounded container detail and relationship layouts
         env:
           WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
-        run: corepack pnpm exec playwright test e2e/container-detail.spec.ts e2e/container-relationships.spec.ts e2e/container-files.spec.ts e2e/container-uploads.spec.ts e2e/container-text.spec.ts e2e/container-history.spec.ts e2e/container-directories.spec.ts e2e/container-copies.spec.ts --reporter=line
+        run: corepack pnpm exec playwright test e2e/container-detail.spec.ts e2e/container-relationships.spec.ts e2e/container-files.spec.ts e2e/container-uploads.spec.ts e2e/container-text.spec.ts e2e/container-history.spec.ts e2e/container-directories.spec.ts e2e/container-copies.spec.ts e2e/container-moves.spec.ts --reporter=line
       - name: Check production authorization, file transfers and host/container terminal UI
         env:
           WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175

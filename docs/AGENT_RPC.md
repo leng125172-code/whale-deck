@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-10-29 容器移动永久SQL/Worker/API/Vue候选已生成，尚未覆盖**：迁移与不可变三态事实、Job/Outbox/审计、五方双向发布屏障、专属Worker和禁止通用重试已接通。冻结73fa4dd真实隔离PG1执行/1通过/0跳过及独立准确清理、11核心不变；首三轮测试问题保留并修正。Release零警告错误、3189 Unit/209 Integration通过（7默认原生跳过）；655前端单元及生产预览78/78、类型/构建/lint/格式通过，320明色/1440暗色目视复核。待冻结覆盖与真实身份/实际磁盘/故障整链；宿主仍53701f8/minor46，API/Worker/Gateway仍7b3f44e。59项active、17项移出不算完成。[SQL证据](qa/CONTAINER_MOVE_PERSISTENCE.md)、[页面证据](qa/CONTAINER_MOVE_WEB_UI.md)。
+
 - **2026-10-29 容器移动Agent1.46已安装签收，业务候选继续**：53701f8宿主707文件匹配、签名UDS两类完整移动/取消及复制回归通过；e839a43已安装固定helper三次HDD↔NVMe完整移动/混合所有者与独立Root摘要、准确清理及11核心不变通过。失败观察器现场保留，单备份命名目录属主定点修复。新业务模型/三层签名/调度候选新增96项，全量3187 Unit/205 Integration通过（7默认原生跳过），Release零警告错误；尚未SQL/Worker注册/API/Vue。API/Worker/Gateway仍7b3f44e，59项active、17项移出不计完成。[安装态证据](qa/CONTAINER_MOVE_AGENT_RPC.md)、[业务边界](qa/CONTAINER_MOVE_WORKFLOW.md)。
 
 - **2026-10-29 容器移动minor46候选（尚未安装）**：独立`ContainerMoveService.Plan/Apply/Inspect/Discard`、`docker.files.move-intents`、完整protobuf/消息类型/方法/45秒期限/单次nonce签名及旧版拒绝已接通。Plan有显式OperationKind=Move及文件/目录移动内层oneof；Receipt三项optional bool保留null/false/true，不把Unknown改写成false。固定受限helper、安装源、SDK及原生探针已生成；Release零警告错误，3091 Unit/205 Integration（7原生默认跳过）、399容器Linux-root/12宿主/8范围通过。安装态签名UDS尚待，不算永久业务任务/权限审计或UI完成；59项继续、17项移出不算完成。

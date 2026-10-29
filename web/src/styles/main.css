@@ -1728,30 +1728,37 @@ a {
 }
 
 .container-copy-dialog.el-dialog,
-.container-copy-recovery.el-dialog {
+.container-move-dialog.el-dialog,
+.container-copy-recovery.el-dialog,
+.container-move-recovery.el-dialog {
   display: flex;
   flex-direction: column;
   max-height: calc(100dvh - 32px);
   margin-block: 16px;
 }
 .container-copy-dialog .el-dialog__body,
-.container-copy-recovery .el-dialog__body {
+.container-move-dialog .el-dialog__body,
+.container-copy-recovery .el-dialog__body,
+.container-move-recovery .el-dialog__body {
   overflow: auto;
   min-height: 0;
   overflow-wrap: anywhere;
 }
-.container-copy-dialog .el-dialog__footer {
+.container-copy-dialog .el-dialog__footer,
+.container-move-dialog .el-dialog__footer {
   flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
-.container-copy-dialog .el-dialog__footer .el-button + .el-button {
+.container-copy-dialog .el-dialog__footer .el-button + .el-button,
+.container-move-dialog .el-dialog__footer .el-button + .el-button {
   margin-left: 0;
 }
 
-.container-copy-recovery .el-dialog__footer {
+.container-copy-recovery .el-dialog__footer,
+.container-move-recovery .el-dialog__footer {
   flex-shrink: 0;
   overflow-wrap: anywhere;
   text-align: left;

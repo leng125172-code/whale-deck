@@ -4,6 +4,7 @@ import { ApiError, apiRequest } from '@/services/apiClient'
 import { navigateToLogout } from '@/services/logoutNavigation'
 import { clearDirectoryHints, reconcileDirectoryHints } from '@/services/containerDirectoryHints'
 import { clearCopyHints, reconcileCopyHints } from '@/services/containerCopyHints'
+import { clearMoveHints, reconcileMoveHints } from '@/services/containerMoveHints'
 import type { CurrentUser } from '@/services/contracts'
 import {
   onSessionExpired,
@@ -37,6 +38,7 @@ function expireSession() {
   clearFileBrowserLocation()
   clearDirectoryHints()
   clearCopyHints()
+  clearMoveHints()
   if (import.meta.env.DEV) sessionStorage.removeItem(previewStorageKey)
   if (hadIdentity) expiredAction?.()
 }
@@ -114,6 +116,7 @@ async function loadAuthSession() {
       reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
       reconcileDirectoryHints(user.value?.subject, user.value?.isAdministrator === true)
       reconcileCopyHints(user.value?.subject, user.value?.isAdministrator === true)
+      reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
       initialized.value = true
     }
   }
@@ -151,6 +154,7 @@ async function logout() {
   clearFileBrowserLocation()
   clearDirectoryHints()
   clearCopyHints()
+  clearMoveHints()
   if (import.meta.env.DEV) {
     generation++
     sessionStorage.removeItem(previewStorageKey)
@@ -178,6 +182,7 @@ async function refresh() {
     reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
     reconcileDirectoryHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileCopyHints(user.value?.subject, user.value?.isAdministrator === true)
+    reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
   } catch (reason) {
     if (current === generation) {
       if (reason instanceof ApiError && [401, 403].includes(reason.status)) expireSession()
