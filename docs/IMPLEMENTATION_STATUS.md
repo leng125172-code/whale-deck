@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-29 容器移动独立计划/永久回执候选c2c78b7：Move独立摘要域、完整内层绑定、三态发布/移除/原件事实、仅观察不重做已实现；目录混合UID/GID保留，复制属主规则保持，内层摘要漂移使当前绑定失效。19专项含9次测试子进程SIGKILL、389容器Linux-root/35宿主移动/27复制通过；冻结真实Docker三次跨文件系统2MiB+7、混合UID/GID、原外层回执/原件/清理及11核心不变独立验证通过。未安装/RPC/业务SQL/Worker/API/UI，仍7b3f44e/minor45；59项active、17项移出不算完成。** [证据及首轮失败](qa/CONTAINER_MOVE_INTENTS.md)。
+
 - **2026-10-29 容器移动内部FD候选d48aaae：独立源/目标/私有原件与操作ID绑定、两端可写、父inode及固定FD校验已实现；17专项/368关联Linux-root零跳过，冻结真实非root独占容器完成HDD→NVMe文件/目录和NVMe→HDD文件3次完整2MiB+7、原件inode/普通属性/重试验证，准确CID/命名卷/源清理及独立复核通过、11核心保持。未安装/RPC/永久业务任务/Worker/API/UI，运行时仍7b3f44e；继续外层容器域协议与整链，59项active、17项移出不计完成。** [证据与边界](qa/CONTAINER_MOVE_SCOPE.md)。
 
 - **2026-10-29 容器复制部分文件中断通过：真实BFF取消/退出、Worker SIGKILL/自然租约及Agent systemd重启共4例，原SQL任务/Root原件及准确清理独立复核，零活动/租约/屏障、临时身份0、11核心healthy；12项root观察器测试通过。验证器15秒退出时钟与30秒服务drain已分开，原子回执读取改为固定FD，失败轮保留。上午属主事故定点修复546对象及Agent应用根，六类数据库临时生命周期复验通过；六类实际HDD备份与校验也通过。产品仍7b3f44e，CI五作业最终success；目录树故障/Unknown可见页面/其余59项继续，17项移出不算完成。** [中断与失败证据](qa/CONTAINER_COPY_INFLIGHT.md)，[属主事故](qa/RUNTIME_OWNERSHIP_REPAIR.md)。
