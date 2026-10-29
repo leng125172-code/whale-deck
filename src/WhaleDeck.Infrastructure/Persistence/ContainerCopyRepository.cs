@@ -149,7 +149,8 @@ public sealed partial class ContainerCopyRepository(PlatformDbContext db, IConta
         if (row.CancelRequestedAtUtc is not null || job.CancelRequestedAtUtc is not null) return ContainerFileUploadStartResult.Canceled;
         if (row.ExecutionExpiresAtUtc <= now) return ContainerFileUploadStartResult.Expired;
         if (await db.FilePathLocks.AnyAsync(cancellationToken) || await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
-            await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) || await db.ContainerCopyIntents.AnyAsync(r => r.PublishBarrier && r.Id != row.Id, cancellationToken)) return ContainerFileUploadStartResult.Busy;
+            await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) || await db.ContainerCopyIntents.AnyAsync(r => r.PublishBarrier && r.Id != row.Id, cancellationToken) ||
+            await db.ContainerMoveIntents.AnyAsync(r => r.PublishBarrier, cancellationToken)) return ContainerFileUploadStartResult.Busy;
         row.State = "Applying"; row.RootStartedAtUtc = now; row.PublishBarrier = true; row.Version++;
         job.State = "Running"; job.Phase = "ApplyingContainerCopy"; job.StartedAtUtc ??= now; job.Version++;
         await Event(job, "CONTAINER_COPY_APPLYING", cancellationToken); await db.SaveChangesAsync(cancellationToken);
