@@ -14,6 +14,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
     public DbSet<ContainerDirectoryOperation> ContainerDirectoryOperations => Set<ContainerDirectoryOperation>();
     public DbSet<ContainerCopyIntent> ContainerCopyIntents => Set<ContainerCopyIntent>();
     public DbSet<ContainerPermissionIntent> ContainerPermissionIntents => Set<ContainerPermissionIntent>();
+    public DbSet<ContainerOwnershipIntent> ContainerOwnershipIntents => Set<ContainerOwnershipIntent>();
     public DbSet<ContainerMoveIntent> ContainerMoveIntents => Set<ContainerMoveIntent>();
     public DbSet<FileMutationOperation> FileMutationOperations => Set<FileMutationOperation>();
     public DbSet<FilePathLock> FilePathLocks => Set<FilePathLock>();
@@ -106,6 +107,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
         ConfigureContainerDirectories(modelBuilder);
         ConfigureContainerCopies(modelBuilder);
         ConfigureContainerPermissions(modelBuilder);
+        ConfigureContainerOwnerships(modelBuilder);
         ConfigureContainerMoves(modelBuilder);
         ConfigureContainerFileHistory(modelBuilder);
         ConfigureFileArchives(modelBuilder);

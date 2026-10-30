@@ -156,6 +156,7 @@ public sealed partial class NativeNotificationDispatchTests
         await ContainerCopyBoundaries(options);
         await ContainerMoveBoundaries(options);
         await ContainerPermissionBoundaries(options);
+        await ContainerOwnershipBoundaries(options);
         await FileUploadBoundaries(options);
         await ContainerFileAuditBoundaries(options);
         await FileMutationBoundaries(options);
