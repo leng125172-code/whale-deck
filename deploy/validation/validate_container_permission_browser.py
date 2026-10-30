@@ -72,7 +72,10 @@ def verify(result, baseline, subject, evidence, reader, storage):
     source = managed['SourceIdentity']
     assert plan['sourceIdentity'] == [source[k] for k in ('Device','Inode','Mode','OwnerUid','OwnerGid','LinkCount','SizeBytes','ModifiedAtUnixNs')] + [managed['SourceChangedAtUnixNs']]
     expected_owners = [2100,3100] if result['kind'] == 'Directory' else [1000,1000]
-    assert plan['attributesDigest'] == managed['AttributesDigest'] and [plan['uid'], plan['gid']] == [managed['OwnerUid'], managed['OwnerGid']] == expected_owners
+    # OwnerUid/Gid bind the container execution identity; SourceIdentity binds
+    # the actual inode's owner. Ordinary chmod must preserve the latter.
+    assert plan['attributesDigest'] == managed['AttributesDigest'] and [plan['uid'], plan['gid']] == [managed['OwnerUid'], managed['OwnerGid']] == [1000,1000]
+    assert plan['sourceIdentity'][3:5] == expected_owners
     with storage.target(create_namespace=False, read_only=True) as (configuration, base):
         target = Path(os.readlink('/proc/self/fd/' + str(base))) / 'container-permissions-v1'; trusted(target, True)
         history = target / (operation + '.json'); trusted(history); assert stat.S_IMODE(history.stat().st_mode) == 0o600

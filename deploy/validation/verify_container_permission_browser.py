@@ -67,7 +67,8 @@ def verify(directory):
             plan = record['plan']; managed = json.loads(row['plan_json'])
             assert plan['fingerprint'] == managed['Fingerprint'] == digest(b'whaledeck-container-permission-plan-v1\n', {k: v for k, v in plan.items() if k != 'fingerprint'})
             assert plan['command']['mode'] == item['command']['mode'] and plan['command']['path'] == row['relative_path']
-            assert [plan['uid'], plan['gid']] == ([2100, 3100] if item['kind'] == 'Directory' else [1000, 1000])
+            assert [plan['uid'], plan['gid']] == [managed['OwnerUid'], managed['OwnerGid']] == [1000, 1000]
+            assert plan['sourceIdentity'][3:5] == ([2100, 3100] if item['kind'] == 'Directory' else [1000, 1000])
             history = hdd / (op + '.json'); trusted(history)
             descriptor = os.open(history, os.O_RDONLY | os.O_NOFOLLOW)
             try:
