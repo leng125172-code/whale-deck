@@ -28,6 +28,7 @@ jobs:
           bash -n deploy/host/whaledeck-privileged
           python3 -m unittest discover -s deploy/validation -p test_container_terminal.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_file*.py'
+          python3 -W error -m py_compile deploy/host/whaledeck-container-ownership.py deploy/validation/validate_container_ownership.py deploy/validation/verify_container_ownership.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_copy*.py'
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_move*.py'
           python3 -m py_compile deploy/host/whaledeck-container-move-scope.py deploy/host/whaledeck-container-moves.py deploy/host/whaledeck-container-move-transport.py deploy/validation/validate_container_move_scope.py deploy/validation/validate_container_move_agent.py
