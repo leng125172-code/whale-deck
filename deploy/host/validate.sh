@@ -44,6 +44,12 @@ done
 assert_metadata /var/lib/whaledeck-container-uploads '700:root:root'
 assert_metadata /var/lib/whaledeck-container-directories '700:root:root'
 [[ ! -L /var/lib/whaledeck-container-directories ]]
+assert_metadata /var/lib/whaledeck-container-permissions '700:root:root'
+[[ ! -L /var/lib/whaledeck-container-permissions ]]
+for module in /usr/local/libexec/whaledeck-container-permissions.py /usr/local/libexec/whaledeck-container-permission-transport.py; do
+  assert_metadata "$module" '750:root:root'
+  [[ ! -L "$module" && $(stat -c %h "$module") == 1 ]]
+done
 assert_metadata /var/lib/whaledeck-container-copies '700:root:root'
 [[ ! -L /var/lib/whaledeck-container-copies ]]
 for module in /usr/local/libexec/whaledeck-container-copy-scope.py /usr/local/libexec/whaledeck-container-copies.py /usr/local/libexec/whaledeck-container-copy-transport.py; do

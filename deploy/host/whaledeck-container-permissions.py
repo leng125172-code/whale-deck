@@ -219,6 +219,7 @@ def container_permissions_type(directory_type):
             with self.locked(request) as (state, record):
                 if record is not None:
                     self.recover(state, record, session); return self.public(record, session, True)
+                if session is None: self.reject('SESSION_REQUIRED')
                 if self.plan(request['plan']['command'], session) != request['plan']: self.reject('VERSION_CONFLICT')
                 record = self.new_record(request, 'Preparing'); self.save(state, record); self.checkpoint('Preparing')
                 try:

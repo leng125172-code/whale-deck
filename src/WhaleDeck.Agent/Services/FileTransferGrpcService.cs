@@ -310,11 +310,11 @@ public sealed partial class FileTransferRunner
             if (newline >= 0)
             {
                 var document = JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 8 });
-                if ((driver.IsContainerRead || driver.IsContainerWrite || driver.IsContainerHistory || driver.IsContainerDirectory || driver.IsContainerCopy || driver.IsContainerMove) && document.RootElement.TryGetProperty("type", out var type) && type.GetString() == "error")
+                if ((driver.IsContainerRead || driver.IsContainerWrite || driver.IsContainerHistory || driver.IsContainerDirectory || driver.IsContainerPermission || driver.IsContainerCopy || driver.IsContainerMove) && document.RootElement.TryGetProperty("type", out var type) && type.GetString() == "error")
                 {
                     var code = document.RootElement.TryGetProperty("code", out var error) && error.ValueKind == JsonValueKind.String ? error.GetString() : null;
                     document.Dispose();
-                    throw driver.IsContainerMove ? ContainerMovePolicy.Failure(code) : driver.IsContainerCopy ? ContainerCopyPolicy.Failure(code) : driver.IsContainerDirectory ? ContainerDirectoryPolicy.Failure(code) : driver.IsContainerHistory ? ContainerHistoryPolicy.Failure(code) : driver.IsContainerWrite ? ContainerUploadPolicy.Failure(code) : ContainerFilePolicy.Failure(code);
+                    throw driver.IsContainerPermission ? ContainerPermissionPolicy.Failure(code) : driver.IsContainerMove ? ContainerMovePolicy.Failure(code) : driver.IsContainerCopy ? ContainerCopyPolicy.Failure(code) : driver.IsContainerDirectory ? ContainerDirectoryPolicy.Failure(code) : driver.IsContainerHistory ? ContainerHistoryPolicy.Failure(code) : driver.IsContainerWrite ? ContainerUploadPolicy.Failure(code) : ContainerFilePolicy.Failure(code);
                 }
                 return document;
             }
@@ -359,13 +359,14 @@ public sealed partial class FileTransferRunner
         var containerWrite = ContainerWriteAction(action);
         var history = ContainerHistoryAction(action);
         var directory = ContainerDirectoryAction(action);
+        var permission = ContainerPermissionAction(action);
         var copy = ContainerCopyAction(action);
         var move = ContainerMoveAction(action);
         var start = new ProcessStartInfo("/usr/bin/sudo") { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         start.ArgumentList.Add("-n"); start.ArgumentList.Add(Helper);
-        var transport = move ? "container-file-moves" : copy ? "container-file-copies" : directory ? "container-file-directories" : history ? "container-file-history" : containerWrite ? "container-file-write" : container ? "container-file-transport" : "file-transport";
+        var transport = permission ? "container-file-permissions" : move ? "container-file-moves" : copy ? "container-file-copies" : directory ? "container-file-directories" : history ? "container-file-history" : containerWrite ? "container-file-write" : container ? "container-file-transport" : "file-transport";
         start.ArgumentList.Add(invocation is null ? transport : transport + "-stop");
-        if (invocation is null) start.ArgumentList.Add(move || copy ? action[15..] : directory ? action[20..] : history ? action[8..] : containerWrite ? action[16..] : container ? action[10..] : action);
+        if (invocation is null) start.ArgumentList.Add(permission ? action[21..] : move || copy ? action[15..] : directory ? action[20..] : history ? action[8..] : containerWrite ? action[16..] : container ? action[10..] : action);
         start.ArgumentList.Add(id); if (invocation is not null) start.ArgumentList.Add(invocation);
         start.Environment.Clear(); start.Environment["PATH"] = "/usr/sbin:/usr/bin:/sbin:/bin"; start.Environment["LANG"] = "C.UTF-8";
         return start;
@@ -384,6 +385,7 @@ public sealed partial class FileTransferRunner
         public bool IsContainerRead => ContainerAction(action);
         public bool IsContainerWrite => ContainerWriteAction(action);
         public bool IsContainerHistory => ContainerHistoryAction(action);
+        public bool IsContainerPermission => ContainerPermissionAction(action);
         public bool IsContainerDirectory => ContainerDirectoryAction(action);
         public bool IsContainerCopy => ContainerCopyAction(action);
         public bool IsContainerMove => ContainerMoveAction(action);

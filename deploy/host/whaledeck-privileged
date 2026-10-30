@@ -186,6 +186,33 @@ case "$action" in
     [[ -z "$move_after" ]] || exit 2
     exit 0
     ;;
+  container-file-permissions)
+    [[ $# -eq 3 && ( "$2" == plan || "$2" == apply || "$2" == inspect || "$2" == discard ) && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit="whaledeck-container-permissions-$3" \
+      --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
+      --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=no \
+      --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
+      --property=RestrictNamespaces=yes --property=RestrictAddressFamilies=AF_UNIX \
+      --property=RuntimeMaxSec=70 --property=TimeoutStopSec=5 --property=KillMode=control-group \
+      --property=Restart=no --property=TasksMax=8 --property=MemoryMax=192M --property=CPUQuota=50% \
+      --property=LimitCORE=0 --property=LimitNOFILE=128 --property=LimitFSIZE=65536 \
+      --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
+      --property="CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_SYS_PTRACE" \
+      --property="ReadWritePaths=/var/lib/whaledeck-container-permissions /data/WhaleDeck/apps /data/DockerData/whaledeck/file-backups" \
+      /usr/bin/python3 -I /usr/local/libexec/whaledeck-container-permission-transport.py "$2"
+    ;;
+  container-file-permissions-stop)
+    [[ $# -eq 3 && "$2" =~ ^[a-f0-9]{32}$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
+    permission_instance=$(/usr/bin/systemctl show "whaledeck-container-permissions-$2.service" -p InvocationID --value 2>/dev/null) || exit 2
+    [[ -n "$permission_instance" ]] || exit 0
+    [[ "$permission_instance" == "$3" ]] || exit 2
+    if /usr/bin/systemctl stop "whaledeck-container-permissions-$2.service" 2>/dev/null; then exit 0; fi
+    permission_after=$(/usr/bin/systemctl show "whaledeck-container-permissions-$2.service" -p InvocationID --value 2>/dev/null) || exit 2
+    [[ -z "$permission_after" ]] || exit 2
+    exit 0
+    ;;
   container-file-directories)
     [[ $# -eq 3 && ( "$2" == plan || "$2" == apply || "$2" == inspect || "$2" == discard ) && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
     exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
