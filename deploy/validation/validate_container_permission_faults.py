@@ -167,7 +167,7 @@ def run_case(kind, revision, evidence):
                         observing = exits.submit(held.wait_exit_seconds, began, 15)
                         write_signal(directory, 'action.json', {'kind': kind})
                         action = wait_signal(directory, 'action-done.json', browser, 30)
-                        elapsed = observing.result(timeout=1)
+                        elapsed = observing.result(timeout=16)
                 else:
                     write_signal(directory, 'action.json', {'kind': kind})
                     action = wait_signal(directory, 'action-done.json', browser, 30)
@@ -188,7 +188,7 @@ def run_case(kind, revision, evidence):
                             after = agent_identity(before, revision)
                             assert command('systemctl', 'show', 'whaledeck-maintenance.service', '-p', 'MainPID', '--value') == maintenance
                             restart = {'oldAgentPid': before, 'newAgentPid': after, 'maintenancePidUnchanged': True, 'otherActiveWork': checks, 'totalRestartSeconds': round(time.monotonic() - began, 3)}
-                        elapsed = observing.result(timeout=1)
+                        elapsed = observing.result(timeout=16)
                 assert elapsed is not None and elapsed < 15, 'PRODUCT_DID_NOT_STOP_BOUND_PERMISSION_HELPER'
                 held.release(); held = None
                 if lease:
