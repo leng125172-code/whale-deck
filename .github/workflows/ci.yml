@@ -50,6 +50,8 @@ jobs:
           node --check deploy/validation/installed_ui_permission_session.mjs
           node --check deploy/validation/validate_container_permission_faults.mjs
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_permission_fault_probe_scope.py
+          python3 -W error -m py_compile deploy/validation/validate_container_permission_unknown.py deploy/validation/verify_container_permission_unknown.py
+          node --check deploy/validation/validate_container_permission_unknown.mjs
           python3 -m py_compile deploy/validation/validate_container_file_reads.py
           python3 -m py_compile deploy/host/whaledeck-container-upload.py deploy/validation/validate_container_file_staging.py
           python3 -m py_compile deploy/host/whaledeck-container-backups.py deploy/validation/validate_container_file_backups.py

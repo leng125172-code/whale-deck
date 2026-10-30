@@ -21,6 +21,13 @@ from validate_container_upload_recovery_agent import trusted
 from validate_metric_continuity import query
 
 
+def healthy_core():
+    values = json.loads(subprocess.check_output(['docker', 'inspect', *common.CORE_NAMES], timeout=20))
+    assert len(values) == 11 and {v['Name'].lstrip('/') for v in values} == set(common.CORE_NAMES)
+    assert all(v['State']['Running'] and v['State'].get('Health', {}).get('Status') == 'healthy' for v in values)
+    return common.core_snapshot()
+
+
 def verify(directory):
     repo = Path(__file__).resolve().parents[2]
     assert directory.parent == repo / 'deploy/artifacts' and re.fullmatch('container-permission-faults-[a-f0-9]{32}', directory.name)
@@ -30,7 +37,7 @@ def verify(directory):
     files = load(Path('/usr/local/libexec/whaledeck-files.py'), 'permission_fault_verifier_files')
     storage = load(Path('/usr/local/libexec/whaledeck-file-backups.py'), 'permission_fault_verifier_hdd').FileBackups(files)
     records = []
-    current_core = common.core_snapshot(); assert len(current_core) == 11
+    current_core = healthy_core()
     for result in accepted['cases']:
         kind = result['kind']; assert kind in ('cancel', 'logout', 'worker-crash', 'agent-restart')
         p = directory / kind; trusted(p, True)
