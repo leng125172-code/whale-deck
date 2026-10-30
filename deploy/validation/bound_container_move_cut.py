@@ -54,14 +54,24 @@ def sql_file_plan(value):
         'sizeBytes': value['SizeBytes'], 'sha256': value['Sha256'], 'fingerprint': value['Fingerprint']}
 
 
+def sql_tree_plan(value):
+    copied = value['CopyPlan']; command = copied['Command']
+    return {'sourceParent': [value['SourceParent'][k] for k in ('Device', 'Inode')], 'fingerprint': value['Fingerprint'],
+        'copyPlan': {'command': {'source': {'rootId': command['Source']['RootId'], 'path': command['Source']['Path'], 'expectedVersion': command['ExpectedVersion']},
+            'target': {'rootId': command['Target']['RootId'], 'path': command['Target']['Path']}},
+            'manifestSha256': copied['ManifestSha256'], 'entryCount': copied['EntryCount'], 'totalBytes': copied['TotalBytes'],
+            'sourcePolicyHash': copied['SourcePolicyHash'], 'targetPolicyHash': copied['TargetPolicyHash'], 'fingerprint': copied['Fingerprint'],
+            'targetParent': [copied['TargetParent'][k] for k in ('Device', 'Inode')]}}
+
+
 def record_for(row):
     operation = row['execution_job_id'].replace('-', ''); assert re.fullmatch('[a-f0-9]{32}', operation)
     path = ROOT / (operation + '.json'); value = receipt_json(path)
     if value is None: raise FileNotFoundError(path)
     plan = json.loads(row['plan_json']); command = json.loads(row['command_json'])
-    assert value['operationId'] == operation and value['owner'] == row['owner_hash'] and value['plan']['kind'] == plan['Kind'] == 'File'
+    assert value['operationId'] == operation and value['owner'] == row['owner_hash'] and value['plan']['kind'] == plan['Kind'] and plan['Kind'] in ('File', 'Directory')
     assert value['plan']['operationKind'] == plan['OperationKind'] == 'Move'
-    assert value['plan']['innerPlan'] == sql_file_plan(plan['FilePlan'])
+    assert value['plan']['innerPlan'] == (sql_file_plan(plan['FilePlan']) if plan['Kind'] == 'File' else sql_tree_plan(plan['TreePlan']))
     assert value['plan']['fingerprint'] == plan['Fingerprint']
     assert value['plan']['command'] == {'containerId': row['container_id'], 'instanceId': row['instance_id'],
         'sourcePath': row['source_path'], 'targetPath': row['target_path'], 'expectedVersion': command['ExpectedVersion']}
