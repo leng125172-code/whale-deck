@@ -31,6 +31,7 @@ builder.Services.AddHostedService<ContainerFileUploadWorker>();
 builder.Services.AddHostedService<ContainerDirectoryWorker>();
 builder.Services.AddHostedService<ContainerCopyWorker>();
 builder.Services.AddHostedService<ContainerPermissionWorker>();
+builder.Services.AddHostedService<ContainerOwnershipWorker>();
 builder.Services.AddHostedService<ContainerMoveWorker>();
 builder.Services.AddHostedService<FileMutationWorker>();
 builder.Services.AddHostedService<FileArchiveWorker>();
