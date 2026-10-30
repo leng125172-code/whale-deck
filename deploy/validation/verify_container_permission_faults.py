@@ -55,6 +55,8 @@ def verify(directory):
         assert value['planJob']['state'] == 'Succeeded' and value['accepted'] == value['confirmed'] == 1 and value['pending'] == 0
         assert row['mode_confirmed'] is False and row['history_may_exist'] and row['history_verified'] and row['published_version'] is None
         assert row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is None and row['lease_expires_at_utc'] is None
+        audit = query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result)) FROM audit_events WHERE job_id=:'id'::uuid AND action='containers.files.permission.result';", id=row['execution_job_id'])
+        assert audit == {'n': 1, 'actors': [ui['subject']], 'results': [row['state']]}
         record = record_for(row); assert record['state'] == 'Aborted' and record['modeConfirmed'] is False
         raw = (ROOT / (record['operationId'] + '.json')).read_bytes(); assert raw == (p / 'final-root.json').read_bytes()
         cut = json.loads((p / 'cut-root.json').read_bytes()); bound = json.loads((p / 'bound-helper.json').read_bytes())

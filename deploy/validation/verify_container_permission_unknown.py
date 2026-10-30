@@ -42,6 +42,8 @@ def verify(directory):
     assert row['actor_subject'] == owner['subject'] and row['acknowledged_by'] == recovery['subject']
     assert row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is None and row['lease_expires_at_utc'] is None and final['pending'] == 0
     assert row['mode_confirmed'] is None and row['published_version'] is None and row['history_verified'] and row['history_digest'] == old['history_digest']
+    audit = query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result),'targets',json_agg(target_id)) FROM audit_events WHERE job_id=:'id'::uuid AND action='containers.files.permission.unknown-acknowledged';", id=row['execution_job_id'])
+    assert audit == {'n': 1, 'actors': [recovery['subject']], 'results': ['Unknown'], 'targets': [baseline['containerId']]}
     record = record_for(row); assert record['state'] == 'Unknown' and record['modeConfirmed'] is None
     raw = (ROOT / (record['operationId'] + '.json')).read_bytes()
     assert raw == (directory / 'unknown-root.json').read_bytes() and hashlib.sha256(raw).hexdigest() == accepted['rootSha256']
@@ -90,7 +92,7 @@ def verify(directory):
     finally: session.close()
     return {'readOnlyVerifier': True, 'revision': accepted['revision'], 'id': row['id'], 'modeConfirmed': None, 'originalExecutionFailed': True,
         'rootUnknownUnchanged': True, 'hddMetadataUnchanged': True, 'lateApplyRemainsUnknown': True,
-        'differentAdministratorActualPage': True, 'otherWriteOnlyAfterAcknowledgement': True, 'exactSourcesAndContainersAbsent': True,
+        'differentAdministratorActualPage': True, 'uniqueCurrentAdministratorAudit': True, 'otherWriteOnlyAfterAcknowledgement': True, 'exactSourcesAndContainersAbsent': True,
         'temporaryIdentitiesAbsent': True, 'permissionTotals': totals, 'coreHealthy': 11, 'physicalFullBytesVerifiedByParentBeforeCleanup': True}
 
 

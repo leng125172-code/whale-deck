@@ -81,12 +81,7 @@ def bound_fds(pid, root_identity, lock_identity):
 
 
 class HeldPermission(HeldCopy):
-    def kill_owned(self):
-        """Only the Unknown-injection gate may kill this already bound pidfd."""
-        assert self.descriptor is not None
-        signal.pidfd_send_signal(self.descriptor, signal.SIGKILL)
-        assert self.wait_exit_seconds(time.monotonic(), 8) is not None
-        os.close(self.descriptor); self.descriptor = None
+    """Resume/close only; product cancellation is responsible for helper exit."""
 
 
 def freeze_before_mode(row, source, container_pid, phase='Any'):
