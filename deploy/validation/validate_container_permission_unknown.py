@@ -136,7 +136,9 @@ def main():
                 PHASE = 'late-original-fixed-helper-cannot-repeat-chmod'
                 original_request = {k: record[k] for k in ('operationId', 'owner', 'plan')}
                 late = subprocess.run(['/usr/local/libexec/whaledeck-privileged', 'container-file-permissions', 'apply', uuid.uuid4().hex],
-                    input=json.dumps(original_request), capture_output=True, text=True, timeout=35)
+                    input=json.dumps(original_request) + '\n', capture_output=True, text=True, timeout=35)
+                (directory / 'late-apply.stdout').write_text(late.stdout)
+                (directory / 'late-apply.stderr').write_text(late.stderr)
                 assert late.returncode == 0 and len(late.stdout.encode()) <= 32768 and len(late.stderr.encode()) <= 32768
                 messages = [json.loads(line) for line in late.stdout.splitlines() if line.strip()]
                 result = messages[-1]; assert result['operationId'] == record['operationId'] and result['state'] == 'Unknown' and result['modeConfirmed'] is None and result['replayed']
