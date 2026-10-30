@@ -44,6 +44,8 @@ jobs:
           node --check deploy/validation/validate_container_copy_browser.mjs
           node --check deploy/validation/validate_container_move_browser.mjs
           python3 -m py_compile deploy/validation/validate_container_move_browser.py deploy/validation/verify_container_move_browser.py
+          python3 -m py_compile deploy/validation/validate_container_permission_browser.py
+          node --check deploy/validation/validate_container_permission_browser.mjs
           python3 -m py_compile deploy/validation/validate_container_file_reads.py
           python3 -m py_compile deploy/host/whaledeck-container-upload.py deploy/validation/validate_container_file_staging.py
           python3 -m py_compile deploy/host/whaledeck-container-backups.py deploy/validation/validate_container_file_backups.py
