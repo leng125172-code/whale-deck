@@ -48,9 +48,10 @@ public sealed partial class ContainerCopyRepository
         var uploads = await db.ContainerFileUploadOperations.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var moves = await db.ContainerMoveIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null)
             .Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
-        if (copies.Length + directories.Length + uploads.Length + moves.Length > 64 || copies.Any(r => Conflicts(r.TargetPath, row.SourcePath) || Conflicts(r.TargetPath, row.TargetPath) || Conflicts(r.SourcePath, row.TargetPath)) ||
+        var permissions = await db.ContainerPermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
+        if (copies.Length + directories.Length + uploads.Length + moves.Length + permissions.Length > 64 || copies.Any(r => Conflicts(r.TargetPath, row.SourcePath) || Conflicts(r.TargetPath, row.TargetPath) || Conflicts(r.SourcePath, row.TargetPath)) ||
             moves.Any(r => Conflicts(r.SourcePath, row.SourcePath) || Conflicts(r.TargetPath, row.SourcePath) || Conflicts(r.SourcePath, row.TargetPath) || Conflicts(r.TargetPath, row.TargetPath)) ||
-            directories.Concat(uploads).Any(p => Conflicts(p, row.SourcePath) || Conflicts(p, row.TargetPath))) throw new InvalidOperationException("CONTAINER_COPY_TARGET_BUSY");
+            directories.Concat(uploads).Any(p => Conflicts(p, row.SourcePath) || Conflicts(p, row.TargetPath)) || permissions.Any(path => Conflicts(path, row.SourcePath) || Conflicts(path, row.TargetPath))) throw new InvalidOperationException("CONTAINER_COPY_TARGET_BUSY");
     }
     private static bool Conflicts(string a, string b) => a == b || a.StartsWith(b + "/", StringComparison.Ordinal) || b.StartsWith(a + "/", StringComparison.Ordinal);
     private DateTimeOffset Now() => ContainerCopyWorkflowValidation.Time(clock.GetUtcNow());

@@ -43,9 +43,10 @@ public sealed class ContainerDirectoryRepository(PlatformDbContext db, IContaine
         var uploads = await db.ContainerFileUploadOperations.Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var copies = await db.ContainerCopyIntents.Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
         var moves = await db.ContainerMoveIntents.Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
-        if (directories.Length + uploads.Length + copies.Length + moves.Length > 64 || directories.Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
+        var permissions = await db.ContainerPermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
+        if (directories.Length + uploads.Length + copies.Length + moves.Length + permissions.Length > 64 || directories.Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
             copies.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath)) ||
-            moves.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath))) throw new InvalidOperationException("CONTAINER_DIRECTORY_TARGET_BUSY");
+            moves.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath)) || permissions.Any(path => Conflicts(path, row.RelativePath))) throw new InvalidOperationException("CONTAINER_DIRECTORY_TARGET_BUSY");
         db.ContainerDirectoryOperations.Add(row);
         var job = new OperationJob { Id = row.Id, JobType = "containers.files.mkdir", ActorSubject = row.ActorSubject, IdempotencyKey = key,
             Phase = "AwaitingContainerDirectory", RequestJson = JsonSerializer.Serialize(new { containerId = row.ContainerId, pathHash = FileManagementService.Hash(row.RelativePath),
@@ -92,6 +93,7 @@ public sealed class ContainerDirectoryRepository(PlatformDbContext db, IContaine
         if (await db.FilePathLocks.AnyAsync(cancellationToken) || await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier && r.Id != row.Id, cancellationToken) ||
             await db.ContainerCopyIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerPermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerMoveIntents.AnyAsync(r => r.PublishBarrier, cancellationToken)) return ContainerFileUploadStartResult.Busy;
         current.State = "Applying"; current.RootStartedAtUtc = ContainerDirectoryWorkflowValidation.Time(now); current.PublishBarrier = true; current.Version++;
         var job = await Job(row.Id, cancellationToken); job.State = "Running"; job.Phase = "CreatingContainerDirectory"; job.StartedAtUtc ??= now; job.Version++;

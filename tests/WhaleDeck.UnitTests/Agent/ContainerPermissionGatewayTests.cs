@@ -79,6 +79,17 @@ public sealed class ContainerPermissionGatewayTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => h.Gateway.ApplyContainerPermissionAsync(Operation, default));
     }
 
+    [Theory]
+    [InlineData(StatusCode.Aborted, "CONTAINER_PERMISSION_VERSION_CONFLICT", "CONTAINER_PERMISSION_VERSION_CONFLICT")]
+    [InlineData(StatusCode.FailedPrecondition, "CONTAINER_PERMISSION_EXTENDED_METADATA_REQUIRED", "CONTAINER_PERMISSION_EXTENDED_METADATA_REQUIRED")]
+    [InlineData(StatusCode.PermissionDenied, "CONTAINER_UPLOAD_PUBLISH_READ_ONLY", "CONTAINER_PERMISSION_PROTECTED")]
+    [InlineData(StatusCode.FailedPrecondition, "CONTAINER_FILES_INSTANCE_CHANGED", "CONTAINER_PERMISSION_TARGET_CHANGED")]
+    public async Task OnlyExplicitPlanningRefusalsBecomeBoundedBusinessErrors(StatusCode status, string detail, string code)
+    {
+        using var h = new Harness { Status = status, Detail = detail };
+        var refusal = await Assert.ThrowsAsync<App.ContainerPermissionPreflightRejectedException>(() => h.Gateway.PlanContainerPermissionAsync(Actor, Command, default));
+        Assert.Equal(code, refusal.Code);
+    }
     private sealed class Harness : HttpMessageHandler
     {
         private readonly string _file = Path.GetTempFileName();

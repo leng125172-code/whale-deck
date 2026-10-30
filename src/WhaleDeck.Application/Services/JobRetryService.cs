@@ -55,6 +55,7 @@ public sealed class JobRetryService(IJobRepository jobs, IAgentGateway agent, Op
         Guid id, CancellationToken cancellationToken)
     {
         var source = await jobs.FindAsync(id, cancellationToken) ?? throw new KeyNotFoundException("Job was not found.");
+        if (source.JobType is "containers.files.permission-plan" or "containers.files.permission") throw new InvalidOperationException("Container permissions require a new inode/version-bound plan and explicit confirmation; generic retry cannot repeat chmod.");
         if (source.JobType is "containers.files.copy-plan" or "containers.files.copy") throw new InvalidOperationException("Container copies require a new instance/source-bound plan and explicit confirmation; generic retry cannot repeat copy.");
         if (source.JobType is "containers.files.move-plan" or "containers.files.move") throw new InvalidOperationException("Container moves require a new instance/source-bound plan and explicit confirmation; generic retry cannot repeat source removal.");
         if (source.JobType == "containers.files.mkdir") throw new InvalidOperationException("Container directories require a new instance/parent-bound plan; generic retry cannot repeat mkdir.");

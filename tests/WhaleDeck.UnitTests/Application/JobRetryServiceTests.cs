@@ -14,6 +14,8 @@ public sealed class JobRetryServiceTests
     [InlineData("containers.files.upload")]
     [InlineData("containers.files.restore")]
     [InlineData("containers.files.mkdir")]
+    [InlineData("containers.files.permission-plan")]
+    [InlineData("containers.files.permission")]
     [InlineData("containers.files.copy-plan")]
     [InlineData("containers.files.copy")]
     [InlineData("containers.files.move-plan")]

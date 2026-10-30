@@ -50,9 +50,10 @@ public sealed partial class ContainerMoveRepository
         var uploads = await db.ContainerFileUploadOperations.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var copies = await db.ContainerCopyIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null)
             .Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
-        if (moves.Length + directories.Length + uploads.Length + copies.Length > 64 || moves.Any(r => Conflicts(r.SourcePath, row.SourcePath) || Conflicts(r.TargetPath, row.SourcePath) || Conflicts(r.TargetPath, row.TargetPath) || Conflicts(r.SourcePath, row.TargetPath)) ||
+        var permissions = await db.ContainerPermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
+        if (moves.Length + directories.Length + uploads.Length + copies.Length + permissions.Length > 64 || moves.Any(r => Conflicts(r.SourcePath, row.SourcePath) || Conflicts(r.TargetPath, row.SourcePath) || Conflicts(r.TargetPath, row.TargetPath) || Conflicts(r.SourcePath, row.TargetPath)) ||
             copies.Any(r => Conflicts(r.SourcePath, row.SourcePath) || Conflicts(r.TargetPath, row.SourcePath) || Conflicts(r.SourcePath, row.TargetPath) || Conflicts(r.TargetPath, row.TargetPath)) ||
-            directories.Concat(uploads).Any(p => Conflicts(p, row.SourcePath) || Conflicts(p, row.TargetPath))) throw new InvalidOperationException("CONTAINER_MOVE_TARGET_BUSY");
+            directories.Concat(uploads).Any(p => Conflicts(p, row.SourcePath) || Conflicts(p, row.TargetPath)) || permissions.Any(path => Conflicts(path, row.SourcePath) || Conflicts(path, row.TargetPath))) throw new InvalidOperationException("CONTAINER_MOVE_TARGET_BUSY");
     }
     private static void MergeFacts(ContainerMoveIntent row, ContainerMoveReceiptDto? receipt)
     {

@@ -150,6 +150,7 @@ public sealed partial class ContainerMoveRepository(PlatformDbContext db, IConta
         if (row.ExecutionExpiresAtUtc <= now) return ContainerFileUploadStartResult.Expired;
         if (await db.FilePathLocks.AnyAsync(cancellationToken) || await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) || await db.ContainerCopyIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerPermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerMoveIntents.AnyAsync(r => r.PublishBarrier && r.Id != row.Id, cancellationToken)) return ContainerFileUploadStartResult.Busy;
         row.State = "Applying"; row.RootStartedAtUtc = now; row.PublishBarrier = true; row.Version++;
         job.State = "Running"; job.Phase = "ApplyingContainerMove"; job.StartedAtUtc ??= now; job.Version++;

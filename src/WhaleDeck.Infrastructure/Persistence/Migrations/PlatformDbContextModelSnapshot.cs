@@ -1618,6 +1618,234 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerPermissionIntent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AcknowledgedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("acknowledged_by");
+
+                    b.Property<string>("AcknowledgementJson")
+                        .HasColumnType("text")
+                        .HasColumnName("acknowledgement_json");
+
+                    b.Property<string>("ActorSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("actor_subject");
+
+                    b.Property<DateTimeOffset?>("CancelRequestedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancel_requested_at_utc");
+
+                    b.Property<string>("CommandJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("command_json");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at_utc");
+
+                    b.Property<string>("ContainerId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("container_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTimeOffset?>("ExecutionExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("execution_expires_at_utc");
+
+                    b.Property<string>("ExecutionHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("execution_hash");
+
+                    b.Property<Guid?>("ExecutionJobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_job_id");
+
+                    b.Property<string>("HistoryDigest")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("history_digest");
+
+                    b.Property<bool>("HistoryMayExist")
+                        .HasColumnType("boolean")
+                        .HasColumnName("history_may_exist");
+
+                    b.Property<bool>("HistoryVerified")
+                        .HasColumnType("boolean")
+                        .HasColumnName("history_verified");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("InstanceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("instance_id");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_expires_at_utc");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<bool?>("ModeConfirmed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("mode_confirmed");
+
+                    b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at_utc");
+
+                    b.Property<string>("OwnerHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("owner_hash");
+
+                    b.Property<string>("PlanHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("plan_hash");
+
+                    b.Property<string>("PlanJson")
+                        .HasColumnType("text")
+                        .HasColumnName("plan_json");
+
+                    b.Property<DateTimeOffset>("PlanningExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("planning_expires_at_utc");
+
+                    b.Property<bool>("PublishBarrier")
+                        .HasColumnType("boolean")
+                        .HasColumnName("publish_barrier");
+
+                    b.Property<string>("PublishedVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("published_version");
+
+                    b.Property<DateTimeOffset?>("ReadyExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ready_expires_at_utc");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("relative_path");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_hash");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("result_code");
+
+                    b.Property<DateTimeOffset?>("RootStartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("root_started_at_utc");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("state");
+
+                    b.Property<string>("TraceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("trace_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionJobId")
+                        .IsUnique()
+                        .HasFilter("execution_job_id IS NOT NULL");
+
+                    b.HasIndex("LeaseToken")
+                        .IsUnique()
+                        .HasFilter("lease_token IS NOT NULL");
+
+                    b.HasIndex("PublishBarrier")
+                        .IsUnique()
+                        .HasFilter("publish_barrier");
+
+                    b.HasIndex("ActorSubject", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("ContainerId", "CompletedAtUtc");
+
+                    b.HasIndex("NextAttemptAtUtc", "Id")
+                        .HasFilter("completed_at_utc IS NULL");
+
+                    b.ToTable("container_permission_intents", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_container_permission_ack", "(state = 'Acknowledged') = (acknowledged_by IS NOT NULL AND acknowledgement_json IS NOT NULL) AND (acknowledged_by IS NULL) = (acknowledgement_json IS NULL) AND (acknowledgement_json IS NULL OR octet_length(acknowledgement_json) BETWEEN 1 AND 32768)");
+
+                            t.HasCheckConstraint("ck_container_permission_barrier", "(NOT publish_barrier OR (completed_at_utc IS NULL AND root_started_at_utc IS NOT NULL AND execution_job_id IS NOT NULL)) AND (root_started_at_utc IS NULL OR execution_job_id IS NOT NULL AND (publish_barrier OR completed_at_utc IS NOT NULL)) AND (state <> 'Applying' OR publish_barrier)");
+
+                            t.HasCheckConstraint("ck_container_permission_execution", "(execution_job_id IS NULL AND confirmed_at_utc IS NULL AND execution_expires_at_utc IS NULL AND execution_hash IS NULL) OR (execution_job_id IS NOT NULL AND execution_job_id <> id AND execution_job_id <> '00000000-0000-0000-0000-000000000000'::uuid AND plan_json IS NOT NULL AND confirmed_at_utc IS NOT NULL AND confirmed_at_utc >= created_at_utc AND confirmed_at_utc < ready_expires_at_utc AND execution_expires_at_utc IS NOT NULL AND execution_expires_at_utc = confirmed_at_utc + INTERVAL '15 minutes' AND execution_hash IS NOT NULL AND execution_hash ~ '^[A-F0-9]{64}$')");
+
+                            t.HasCheckConstraint("ck_container_permission_facts", "(NOT history_verified OR history_may_exist AND history_digest IS NOT NULL) AND ((history_digest IS NOT NULL) = history_verified) AND (history_digest IS NULL OR history_digest ~ '^[A-F0-9]{64}$') AND (execution_job_id IS NOT NULL OR mode_confirmed IS NULL AND NOT history_may_exist AND NOT history_verified AND history_digest IS NULL) AND (root_started_at_utc IS NOT NULL OR mode_confirmed IS NOT TRUE AND NOT history_may_exist AND NOT history_verified AND history_digest IS NULL) AND (execution_job_id IS NULL OR state NOT IN ('Failed','Canceled') OR mode_confirmed IS FALSE)");
+
+                            t.HasCheckConstraint("ck_container_permission_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND owner_hash ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$' AND (published_version IS NULL OR published_version ~ '^[A-F0-9]{64}$')");
+
+                            t.HasCheckConstraint("ck_container_permission_identity", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND idempotency_key <> '00000000-0000-0000-0000-000000000000'::uuid AND container_id ~ '^[a-f0-9]{64}$' AND octet_length(relative_path) BETWEEN 1 AND 4096 AND length(actor_subject) BETWEEN 1 AND 256 AND length(trace_id) BETWEEN 1 AND 128 AND octet_length(command_json) BETWEEN 1 AND 65536");
+
+                            t.HasCheckConstraint("ck_container_permission_lease", "(lease_token IS NULL) = (lease_expires_at_utc IS NULL)");
+
+                            t.HasCheckConstraint("ck_container_permission_lifetime", "created_at_utc > TIMESTAMPTZ '1970-01-01 00:00:00+00' AND planning_expires_at_utc = created_at_utc + INTERVAL '15 minutes' AND version >= 0");
+
+                            t.HasCheckConstraint("ck_container_permission_phase", "(state NOT IN ('Ready','Pending','Applying','Unknown','Succeeded','Superseded','Acknowledged') OR plan_json IS NOT NULL) AND (state NOT IN ('Pending','Applying','Unknown','Succeeded','Superseded','Acknowledged') OR execution_job_id IS NOT NULL) AND (state NOT IN ('Queued','Planning','Ready') OR execution_job_id IS NULL)");
+
+                            t.HasCheckConstraint("ck_container_permission_plan", "(plan_json IS NULL AND plan_hash IS NULL AND ready_expires_at_utc IS NULL) OR (plan_json IS NOT NULL AND octet_length(plan_json) BETWEEN 1 AND 65536 AND plan_hash IS NOT NULL AND plan_hash ~ '^[A-F0-9]{64}$' AND ready_expires_at_utc IS NOT NULL AND ready_expires_at_utc > created_at_utc AND ready_expires_at_utc <= planning_expires_at_utc + INTERVAL '5 minutes')");
+
+                            t.HasCheckConstraint("ck_container_permission_result", "(state NOT IN ('Succeeded','Superseded') OR published_version IS NOT NULL AND root_started_at_utc IS NOT NULL AND mode_confirmed IS TRUE AND history_verified AND history_may_exist) AND (published_version IS NULL OR state IN ('Succeeded','Superseded'))");
+
+                            t.HasCheckConstraint("ck_container_permission_state", "state IN ('Queued','Planning','Ready','Pending','Applying','Unknown','Succeeded','Superseded','Canceled','Failed','Expired','Acknowledged')");
+
+                            t.HasCheckConstraint("ck_container_permission_terminal", "(completed_at_utc IS NULL) = (state IN ('Queued','Planning','Ready','Pending','Applying','Unknown'))");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerUpdateRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5764,6 +5992,20 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerMoveIntent", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithMany()
+                        .HasForeignKey("ExecutionJobId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithMany()
+                        .HasForeignKey("Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerPermissionIntent", b =>
                 {
                     b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
                         .WithMany()

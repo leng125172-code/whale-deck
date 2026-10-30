@@ -37,11 +37,28 @@ public sealed partial class AgentGateway : IContainerPermissionGateway
             string.IsNullOrWhiteSpace(actor.TraceId) || actor.TraceId.Length > 128 || actor.TraceId.Any(char.IsControl)) throw new ArgumentException("CONTAINER_PERMISSION_CONTEXT_INVALID");
         var request = new ContainerPermissionPlanRequest { Command = PermissionCommand(command), Context = new() { ActorSubject = actor.Subject, TraceId = actor.TraceId } };
         var client = await PermissionClient(cancellationToken);
-        var response = await client.PlanAsync(request, PermissionHeaders("Plan", request), deadline: DateTime.UtcNow.AddSeconds(60), cancellationToken: cancellationToken);
-        var plan = PermissionPlan(response);
-        if (plan.Command != command) throw ContainerPermissionValidation.Invalid();
-        return plan;
+        try
+        {
+            var response = await client.PlanAsync(request, PermissionHeaders("Plan", request), deadline: DateTime.UtcNow.AddSeconds(60), cancellationToken: cancellationToken);
+            var plan = PermissionPlan(response);
+            if (plan.Command != command) throw ContainerPermissionValidation.Invalid();
+            return plan;
+        }
+        catch (RpcException error) when (PermissionPreflightCode(error) is { } code)
+        { throw new ContainerPermissionPreflightRejectedException(code); }
     }
+    private static string? PermissionPreflightCode(RpcException error) => (error.StatusCode, error.Status.Detail) switch
+    {
+        (StatusCode.Aborted, "CONTAINER_PERMISSION_VERSION_CONFLICT") => "CONTAINER_PERMISSION_VERSION_CONFLICT",
+        (StatusCode.FailedPrecondition, "CONTAINER_PERMISSION_SOURCE_UNSUPPORTED") => "CONTAINER_PERMISSION_SOURCE_UNSUPPORTED",
+        (StatusCode.FailedPrecondition, "CONTAINER_PERMISSION_EXTENDED_METADATA_REQUIRED") => "CONTAINER_PERMISSION_EXTENDED_METADATA_REQUIRED",
+        (StatusCode.ResourceExhausted, "CONTAINER_PERMISSION_ATTRIBUTES_LIMIT") => "CONTAINER_PERMISSION_ATTRIBUTES_LIMIT",
+        (StatusCode.PermissionDenied, "CONTAINER_PERMISSION_PROTECTED" or "CONTAINER_PROTECTED" or "CONTAINER_UNSAFE_ISOLATION" or "CONTAINER_UNSAFE_MOUNT" or
+            "CONTAINER_FILES_SHARED_CORE_MOUNT" or "CONTAINER_UPLOAD_PUBLISH_READ_ONLY" or "CONTAINER_UPLOAD_PUBLISH_MOUNT_ROOT") => "CONTAINER_PERMISSION_PROTECTED",
+        (StatusCode.FailedPrecondition, "CONTAINER_FILES_TARGET_MISSING" or "CONTAINER_FILES_INSTANCE_CHANGED" or "CONTAINER_FILES_TARGET_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or
+            "CONTAINER_NOT_RUNNING") => "CONTAINER_PERMISSION_TARGET_CHANGED",
+        _ => null
+    };
     public Task<ContainerPermissionReceiptDto> ApplyContainerPermissionAsync(ContainerPermissionOperationDto operation, CancellationToken cancellationToken) => PermissionAction("Apply", operation, cancellationToken);
     public Task<ContainerPermissionReceiptDto> DiscardContainerPermissionAsync(ContainerPermissionOperationDto operation, CancellationToken cancellationToken) => PermissionAction("Discard", operation, cancellationToken);
     public async Task<ContainerPermissionReceiptDto?> InspectContainerPermissionAsync(ContainerPermissionOperationDto operation, CancellationToken cancellationToken)
