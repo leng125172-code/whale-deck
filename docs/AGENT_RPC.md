@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-10-30 容器普通权限内部候选通过真实HDD/NVMe**：原inode非递归模式变更、固定HDD元数据快照/独立域、永久原回执与只观察不重做已生成。26新/320关联Linux-root零跳过；冻结996a25c实际两设备文件/目录20操作（16完成4中止，8真实SIGKILL）、完整2MiB+7/原inode/UID/GID/mtime/子项及20份HDD元数据通过，独立只读核验准确清理/11核心不变。首轮卷命名被保护拒绝，修夹具不放宽白名单，失败另证准确清理且不改记通过。未安装/helper/RPC/永久业务/API/Vue，仍a59ec97/minor46；chown/递归/ACL/删除等保留，59项active、17项移出不算完成。[证据与边界](qa/CONTAINER_PERMISSIONS_ENGINE.md)。
+
 - **2026-10-30 目录移动部分源留存Unknown真实页面通过**：实际a59ec97，16份共33554544字节文件的目标已完整发布、1份原件转存/15份仍在源时准确pidfd中断；SQL/Root保留true/null/null与发布保护。原临时身份删除、另一管理员320暗色页面先取消再一次确认，原Job失败/Acknowledged而非移动成功；另一容器写任务仅解除保护后成功。晚到原固定helper Apply仍Unknown，原Root/完整目标及分布两处原件不变；严格准确清理，独立复核活动/屏障/租约/临时身份0、11核心healthy。9新/14原观察器及47移动root回归通过；同HDD、非全部交换/撤权/跨盘验收。59项active、17项移出不算完成。[完整证据](qa/CONTAINER_MOVE_UNKNOWN.md)。
 
 - **2026-10-29 容器移动实际部分文件中断四例通过**：运行a59ec97不重部署；真实BFF明确取消/正常退出、Worker SIGKILL与原自然租约、Agent systemd重启均在已登记部分私有inode时通过，产品结束helper分别4.008/4.041/0.116/0.268秒。完整134218176字节源SHA及9项原指纹不变、目标未发布、SQL/Root三事实false，原任务/回执/审计保留；第三进程独立核对四例与准确清理，活动/屏障/租约/临时身份0、11核心healthy。14项root观察器测试接CI；不冒称可见页面中断、目录树发布/源留存/Unknown或跨盘业务已验。59项active、17项移出不计完成。[证据与边界](qa/CONTAINER_MOVE_INFLIGHT.md)。
