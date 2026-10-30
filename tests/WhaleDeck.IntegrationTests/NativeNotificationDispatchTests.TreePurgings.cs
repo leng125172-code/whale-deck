@@ -191,7 +191,11 @@ public sealed partial class NativeNotificationDispatchTests
             // The newest permanent container kind must block the complete
             // downgrade first. Independently execute the older migration's
             // actual guard to preserve its original safety evidence too.
-            Assert.Contains("container_permission_downgrade_requires_empty_table",downgrade.MessageText,StringComparison.Ordinal);
+            Assert.Contains("container_ownership_downgrade_requires_empty_table",downgrade.MessageText,StringComparison.Ordinal);
+            var permissionGuard = new WhaleDeck.Infrastructure.Persistence.Migrations.ContainerPermissionIntents().DownOperations
+                .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>().First();
+            var permissionDowngrade = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(permissionGuard.Sql));
+            Assert.Contains("container_permission_downgrade_requires_empty_table",permissionDowngrade.MessageText,StringComparison.Ordinal);
             var moveGuard = new WhaleDeck.Infrastructure.Persistence.Migrations.ContainerMoveIntents().DownOperations
                 .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>().First();
             var moveDowngrade = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(moveGuard.Sql));
@@ -211,6 +215,7 @@ public sealed partial class NativeNotificationDispatchTests
             await db.Database.MigrateAsync();
             Assert.Contains("20261027153646_ContainerDirectoryIntents",await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261029080510_ContainerMoveIntents",await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261030143305_ContainerOwnershipIntents",await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261027015755_ContainerUploadAdministratorRecovery",await db.Database.GetAppliedMigrationsAsync());
             var latestKind = await db.Database.SqlQueryRaw<string>("""SELECT pg_get_constraintdef(oid) AS "Value" FROM pg_constraint WHERE conname='ck_file_recovery_kind' AND conrelid='file_recovery_operations'::regclass""").SingleAsync();
             Assert.Contains("container-upload",latestKind,StringComparison.Ordinal);
