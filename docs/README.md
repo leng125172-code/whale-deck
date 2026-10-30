@@ -13,6 +13,7 @@
 | [FEATURES.md](FEATURES.md) | 产品范围、已确认决策、功能状态和边界 |
 | [DEVELOPMENT_WORKSPACES.md](DEVELOPMENT_WORKSPACES.md) | P3-13–P3-18：多语言开发空间、代码导入、远程调试/测试、报告、隔离及验收 |
 | [PAGES.md](PAGES.md) | 页面、路由、受众、主要状态和操作入口 |
+| [UI_STYLE_GUIDE.md](UI_STYLE_GUIDE.md) | 用户指定的明暗卡片参考图、指标/变更摘要规范、P0-08实施顺序与真实页面验收要求 |
 | [USE_CASES.md](USE_CASES.md) | 后端业务用例、输入、结果、审计和失败处理 |
 | [AGENT_RPC.md](AGENT_RPC.md) | 宿主机 Agent 的 gRPC/Unix Socket 契约和安全边界 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Authentik 管理员组、普通用户、字段可见性和操作矩阵 |

@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-10-30 前端UI风格已纳入当前计划，未实现/未部署**：根据用户四张明暗参考图，新增[视觉规范](UI_STYLE_GUIDE.md)及原图，归属既有P0-08；DEV-UI-001共享样式→002指标卡→003任务/变更摘要与当前P1/P2页面→004全页真实浏览器回归。目标清单、路线、页面规范及产品/设计索引同步；59项不增加。保留现有主题/顶栏/响应式、权限、真实数据及确认/Unknown事实；所有者等原功能任务继续。此条只记录计划，不能作为UI实现或实机验收证据。
+
 - **2026-10-30 所有者独立引擎与Agent1.48安装态通过，业务/UI待接**：新增显式UID/GID存在位、独立完整请求签名/四RPC、SDK版本能力门禁及单独CAP_CHOWN固定helper；旧chmod未扩权。3478 Unit/213 Integration（7默认原生跳过）、103新增专项、362容器文件Linux-root及Release/探针零警告错误通过。冻结532ceb9实际HDD/NVMe文件/目录20操作、8专属候选强杀、完整2MiB+7/原inode/模式/mtime/子项及20份HDD元数据独立核验准确清理通过；2a9ceb6宿主安装成功，运行exe/DLL映射同源。真实签名UDS6操作5Completed/1Aborted、5份HDD/6 Root与独立精确清理通过，旧权限6 RPC回归通过，11核心不变。Agent/MaintenanceHost为2a9ceb6/1.48，API/Worker/Gateway仍cb4c400；永久意图/七方保护/Worker/API/Vue及真实身份页面仍待，不计完整所有者功能完成。59项active，17项移出不算完成。[实施恢复点与证据](qa/CONTAINER_OWNERSHIP_AGENT_RPC.md)。
 
 
