@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_MOVE_INFLIGHT.md",
-  "nextStep": "a59ec97容器移动常规真实页面及文件部分写入取消/退出、Worker/Agent重启均通过；原自然租约、完整源与准确清理独立复核。继续目录树发布/留存Unknown、可见页面中断及跨盘业务，推进其余59项；17项移出不计完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_MOVE_UNKNOWN.md",
+  "nextStep": "目录目标发布后部分原件留存Unknown、另一管理员真实手机页面处置及晚到原helper栅栏已签收并准确清理。继续容器删除/权限等剩余写入、资源隔离/长期清理、交换/撤权/跨盘故障与其余59项；17项移出不算完成。"
 }
