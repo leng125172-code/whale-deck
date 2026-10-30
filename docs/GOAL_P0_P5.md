@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-10-30用户已通过`[Goal]`重新启用本目标执行。本轮新增[所有者内部业务候选](qa/CONTAINER_OWNERSHIP_WORKFLOW.md)：业务签名/原登录状态机已通过3579全Unit与Release；SQL/七方保护/Worker注册/API/UI尚未接通，不能算完成永久业务或新部署。
+
 最新已记录安装态为Agent/MaintenanceHost `2a9ceb6`/1.48，API/Worker/Gateway `cb4c400`，来源见[所有者RPC](qa/CONTAINER_OWNERSHIP_AGENT_RPC.md)与[普通权限实机页面/故障](qa/CONTAINER_PERMISSION_FAULTS.md)。本轮未重新检查运行主机，不能把最后记录当实时状态。普通权限已经覆盖并实机验收；所有者永久意图/七方写入保护/Worker/API/Vue/真实页面、递归/ACL/可恢复删除、剩余故障/长期清理及其余主项仍需完成。
 
 UI风格、C#酒馆/统一供应商/Live2D均为待实现子计划，按DEV-UI-001..004与DEV-AI-001..008衔接；272ST/6PET及16子门槛没有新增功能验收。完整历史日志保留在本文附录，当前目标不从历史70/76项或旧HOLD恢复范围。
