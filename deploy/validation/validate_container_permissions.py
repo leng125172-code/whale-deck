@@ -78,7 +78,7 @@ def main():
     owned.common.verify_apps_directory(owned.common.APPS, __import__('pwd').getpwnam('whaledeck-agent').pw_uid)
     evidence = repo / 'deploy/artifacts' / ('container-permissions-' + uuid.uuid4().hex); evidence.mkdir(mode=0o700)
     state = evidence / 'root-state'; state.mkdir(mode=0o700)
-    name = 'wdv-container-permissions-' + uuid.uuid4().hex; volume_name = name + '-nvme'
+    name = 'wdv-container-permissions-' + uuid.uuid4().hex; volume_name = 'whaledeck-app-native-permissions-' + uuid.uuid4().hex
     folder = owned.common.APPS / name; folder.mkdir(mode=0o755); folder.chmod(0o755)
     identifier = volume = fast = None; proved = False; results = []
     content = hashlib.shake_256(('owned-container-permissions:' + name).encode()).digest(2 * 1024**2 + 7)
@@ -111,6 +111,8 @@ def main():
                     path.chmod(0o640 if path.is_file() else 0o750 if relative == '权限目录' else 0o700)
                     os.utime(path, ns=(1700000000123456789, 1700000000123456789))
             original = {'work': inventory(folder, reader, content), 'fast': inventory(fast, reader, content)}
+            (evidence / 'prepared-fixture.json').write_text(json.dumps({'revision': revision, 'source': str(folder), 'name': name,
+                'volume': volume, 'original': original, 'sha256': hashlib.sha256(content).hexdigest().upper(), 'coreBefore': before}))
             identifier = run('docker', 'run', '--detach', '--name', name, '--network', 'none', '--read-only', '--cap-drop', 'ALL',
                 '--security-opt', 'no-new-privileges', '--user', '1000:1000', '--pids-limit', '16', '--memory', '32m', '--cpus', '0.25',
                 '--log-driver', 'local', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=2', '--label', 'io.whaledeck.validation=' + name,
