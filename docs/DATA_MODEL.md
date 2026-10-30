@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-10-30后续设计（尚无migration/生产表）：新增`DM-AI-PROVIDER/CONNECTION/MODEL/CAPABILITY/PURPOSE-BINDING`与`DM-PET-ACTION-CATALOG/CUE/PLAYBACK-LEASE`，详见[字段与约束](AI_PROVIDERS_LIVE2D.md)。集中配置保存Secret引用、wireModelId/协议/能力与用途版本，生成冻结实际来源；动作绑定原generation/message/segment/pet/packVersion/序号/期限，客户端播放回报与服务端接受事实分列，多标签租约去重。稳定字段/外键/归属与并发需真实EF/PG约束，不持久化逐帧参数，NVMe/HDD恢复包含配置/模型包和必要状态。
+
 2026-10-30明确追加（设计未建表）：酒馆C#重构的`DM-AI-*`与看板娘`DM-PET-*`见[实体与约束](AI_TAVERN_MASCOT.md)。覆盖角色/Persona/世界书/模板/连接、消息候选/分支/生成事件、附件/向量来源、酒馆范围内扩展版本/授权、宠物包/实例/持久睡眠及真实余额/额度快照；属于现有59项子计划，不是恢复通用插件市场或计费实体。Persona不等于人类身份，Authentik Subject归属/跨用户关系约束、Secret引用、原子版本/幂等/租约/有界事件和EF migration必须实现。NVMe对象与SQL/HDD备份需一致；Valkey/localStorage不承担永久会话真相，不增加本地密码表。
 
 2026-10-21范围覆盖：只为[当前59项单工作站任务](SCOPE_SINGLE_WORKSTATION.md)建模，不新增节点/tenant/订阅/邮件域/DNS zone/虚拟机/插件市场实体。已有持久数据和迁移不破坏性回退；门户、空间/run、资源授权与审计继续保留Subject/资源归属、唯一约束和真实migration。下方10月13日扩展说明为历史，不能生成这些已移出业务的空表。

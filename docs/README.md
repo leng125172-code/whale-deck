@@ -21,6 +21,7 @@
 | [PERMISSIONS.md](PERMISSIONS.md) | Authentik 管理员组、普通用户、字段可见性和操作矩阵 |
 | [DATA_MODEL.md](DATA_MODEL.md) | PostgreSQL/Valkey 数据模型、关系、索引和保留策略 |
 | [ROADMAP.md](ROADMAP.md) | 分阶段开发任务、依赖、验收条件和测试要求 |
+| [统一供应商与AI驱动Live2D](AI_PROVIDERS_LIVE2D.md) | 参考Cindy配置、看板娘AI统一经酒馆、必需Live2D对话页/AI动作契约、16个子门槛；待实现 |
 | [C#酒馆与AI看板娘设计](AI_TAVERN_MASCOT.md) | 当前明确纳入范围的架构、页面/权限/数据、dsh-pet六类能力、依赖、失败恢复与分批验收 |
 | [酒馆逐项移植验收账本](AI_TAVERN_ACCEPTANCE.md) | 全部272个ST ID及6个PET子项；逐条记录实现、真实依赖/UI与失败恢复证据，当前均未验收 |
 | [dsh-pet固定源码调研](research/DSH_PET_REFERENCE.md) | 动画/物理/碎碎念/对话/余额/睡眠事实、源文件blob与Vue/C#迁移及素材许可边界 |

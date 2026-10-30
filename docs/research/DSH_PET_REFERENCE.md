@@ -1,5 +1,7 @@
 # dsh-pet 看板娘参考：固定源码事实与 Whale Deck 改造
 
+2026-10-30后续决定：本文件仍如实描述dsh-pet透明视频实现；Whale Deck看板娘**对话页现明确要求Live2D与AI动作**，按[最新配置与动作契约](../AI_PROVIDERS_LIVE2D.md)实施。dsh-pet继续作为交互/物理/节奏/睡眠参考，不能用其视频替代正常Live2D验收；所有AI调用统一走Whale Deck酒馆及集中供应商配置。
+
 核对日期：2026-10-30。用户指定仓库：[PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet)。固定提交 `3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4`；包清单标记0.3.8。本轮通过GitHub只读接口读取文档与下表源码，未安装、运行、调用模型或借用上游测试报告。实施/验收以 [AI_TAVERN_MASCOT.md](../AI_TAVERN_MASCOT.md) 与 [逐项账本](../AI_TAVERN_ACCEPTANCE.md) 为准。
 
 ## 事实与取舍

@@ -4,6 +4,8 @@
 
 **状态：已纳入计划，待实现、待真实依赖及页面验收。** 本次是源码调研与设计登记，没有运行上游应用、调用模型、安装扩展、生成角色素材或部署新服务。59 个主任务 ID 保持；P4-08 的业务范围明确扩大，不能再用“仅 AI 容器模板”解释该项。17 个移出主任务不恢复，不以主任务数不变声称工作量不变。所有者/递归/ACL/删除等已有计划继续保留。
 
+后续明确（同日）：看板娘所有AI功能统一走本项目酒馆；酒馆由参考Cindy配置机制的集中模型供应商层提供能力。**看板娘对话页必须使用Live2D，动作/表情由AI结构化决策，经C#校验后播放**，覆盖此前只需透明视频的对话页设计。详细[统一供应商与Live2D契约/验收](AI_PROVIDERS_LIVE2D.md)是本方案的当前补充，均未实现；不直接读取Cindy本机账户或密钥。
+
 ## 1. 事实、来源与覆盖口径
 
 | 对象 | 固定基线与核实内容 | 尚未证明 |
@@ -41,6 +43,8 @@ P4-09 仍不恢复独立商业 AI 网关/计费/Skills 市场。此次允许为�
 | Worker | 生成调度/租约、RAG 索引/转换、导入/导出/备份、碎碎念/梦话/余额后台任务 | 独立限额/队列，不能阻塞已有文件/运维 Job；事件和终态持久，不把缓存当真相 |
 | Agent / MaintenanceHost | 延用既有安装/容器资源生命周期与维护入口 | **聊天、动画和余额不新增 root RPC**；产品 Agent 最小授权，AI 不持有 Docker/Agent socket，维护入口独立于模型故障 |
 
+看板娘的聊天/碎碎念/梦话/媒体/总结和动作决策均复用酒馆Application与统一供应商配置，按用途绑定模型引用，余额通过同一连接的真实查询适配器；pet前端/包不直连供应商、不持有密钥，不建立独立模型目录。[配置与调用链](AI_PROVIDERS_LIVE2D.md)。
+
 优先在既有 C# 项目中建立明确 AI 模块和专用处理队列；需要分进程时沿用同一程序集分层与内部服务鉴权。最终服务端编排为 C#；不以反代原酒馆 Node 服务或仅包一层 API 作为重构完成。扩展兼容若需 JS/WASM runner，仅放在隔离进程/容器，不能承担酒馆核心权威编排。
 
 生成先创建持久 `generationId` 与消息版本，再单独读取事件；POST 创建带 CSRF/幂等键，GET 续流按事件序号读取原生成，断线不重发模型请求。记录 `Queued/Preparing/Streaming/Completed/Canceled/Failed/Interrupted/Unknown`，区分未发出、部分输出、已取消与远端结果未知；客户端 Abort 不等于供应商停止。未确认远端状态时不自动重试有费用的生成，也不把失败后的模型切换当透明成功。配置/角色/提示词/模型版本随生成冻结，编辑中的草稿不改变在途生成。
@@ -56,23 +60,23 @@ P4-09 仍不恢复独立商业 AI 网关/计费/Skills 市场。此次允许为�
 | PAGE-AI-001 | `/ai/chat/:conversationId?` | 完整聊天、swipe/继续/代写、编辑/排除/分支/检查点、群聊、真实生成状态及提示词检查 |
 | PAGE-AI-002 | `/ai/characters` | 角色卡/Persona、头像与图库、标签、导入导出、角色/版本/看板娘绑定 |
 | PAGE-AI-003 | `/ai/worlds` | 世界书/条目/绑定、递归/概率/预算/插槽、资料库/附件和索引状态 |
-| PAGE-AI-004 | `/ai/configuration` | 连接/Secret选择、模型与能力、采样/模板/tokenizer、作者注释、Regex/宏/STscript/快捷回复；有序表单及高级编辑器 |
+| PAGE-AI-004 | `/ai/configuration` | 选择统一供应商/模型引用，连接预设与用途绑定；采样/模板/tokenizer、作者注释、Regex/宏/STscript/快捷回复，不另存密钥或重复模型目录 |
 | PAGE-AI-005 | `/ai/extensions` | 14 随包及 66 目录条目的实际迁移/依赖/审核/安装/启停/更新/删除/失败恢复，权限与版本可见 |
-| PAGE-AI-006 | `/settings/ai` | 管理员提供商/出站允许范围、Secret录入、模型授权、资源上限与依赖健康；个人设置不显示服务密钥 |
-| PAGE-PET-001 | AppShell 内全局组件 + `/ai/mascot` | 启用/隐藏/大小位置/宠物包、六类能力与余额隐私、静音/睡眠、独立模型/频率/预算配置；全屏编辑页、终端和确认弹窗避让 |
+| PAGE-AI-006 | `/settings/ai`及`/settings/ai/providers` | 参考Cindy供应商列表/三步配置，连接/认证/模型发现与显式测试、模型能力/启停/授权/用途，出站/Secret安全录入/轮换与实际依赖；凭据不回显 |
+| PAGE-PET-001 | AppShell 内全局组件 + `/ai/mascot` | 完整Live2D对话页与同一酒馆会话/AI动作；模型包/动作目录、六类能力/隐私/静音/睡眠、统一供应商的用途模型引用/频率/预算；终端和确认弹窗避让 |
 
 普通用户的 AI 入口只在获得显式 `PERM-AI-USE` 及模型/资源授权后出现；无权路由服务端403。本人角色、聊天、Persona不是 Authentik 人类资料，可独立管理；管理员不默认能读所有人的聊天正文/余额。侧栏抽屉用于快捷聊天，完整配置与历史有可直达页面；不可把全部配置塞入气泡。各 ST 字段必须有编辑/导入/执行/显示证据，展示原酒馆配置 JSON 但忽略字段不算兼容。
 
 ## 5. dsh-pet 六类必需能力与改造验收
 
-上游是 React/Cordis/DSH host + 可选 Electron 的桌宠，不能直接安装为 Vue 插件。取其状态与纯函数设计，浏览器渲染重写为 Vue composable/组件，后端人设/生成/配置/余额重写为 C#。浏览器动画与物理仍在 TypeScript 执行；它们不因“C# 后端”而移到服务器逐帧运行。此次要求的是 Whale Deck 页内看板娘，独立桌面窗/托盘/多显示器 OS 窗口控制不自动变成新交付范围。
+上游是 React/Cordis/DSH host + 可选 Electron 的桌宠，不能直接安装为 Vue 插件。取其状态与纯函数设计，浏览器渲染重写为 Vue composable/组件，后端人设/生成/配置/余额重写为 C#。浏览器动画与物理仍在 TypeScript 执行；它们不因“C# 后端”而移到服务器逐帧运行。对话页按最新决定采用Cubism Live2D；AI选择目录内动作/表情，C#授权/范围/期限校验、Vue播放及取消/去重，详见[动作契约](AI_PROVIDERS_LIVE2D.md)。dsh-pet的视频只保留为机制参考或其他素材/错误回退，正常对话页不能用其替代Live2D。此次要求的是 Whale Deck 页内看板娘，独立桌面窗/托盘/多显示器 OS 窗口控制不自动变成新交付范围。
 
 | 验收 ID | 源码核实事实 | Whale Deck 实施与通过标准 |
 | --- | --- | --- |
-| PET-ANIM-01 | [README](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/README.md) 描述 100+透明视频动画；[next-animation](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/client/pet/animation/next-animation.ts)决策下一动作 | 实际有待机/转向/移动/点击/拖拽/说话/工作/余额/睡眠素材；按包内权重和状态连续切换，解码失败/404/离线明确降级，解除后可恢复；不是静态头像加CSS晃动 |
+| PET-ANIM-01 | [README](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/README.md) 描述 100+透明视频动画；[next-animation](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/client/pet/animation/next-animation.ts)决策下一动作 | 对话页必须加载真实Live2D模型/动作/表情/物理，AI经酒馆结构化选择动作并由C#校验后播放；保留待机/交互/说话/工作/余额/睡眠行为。包/资源失败明确可恢复，视频/静图只作诚实回退；完成PET-L2D-001..008 |
 | PET-PHYS-01 | [physics](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/shared/physics.ts)公开重力/抛掷/弹簧/挤压/碰撞；[throw](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/shared/physics/throw.ts)有dt夹取与子步进 | 点击回应、拖拽、松手速度/甩抛、反弹/摩擦、弹弓、互撞及可调参数；Pointer capture、触摸取消/失焦/缩放/切页/手机旋转不丢失对象；不越过页面安全区域，不劫持滚动/正文选择和表单快捷键；减少动画可关闭物理 |
-| PET-WHISPER-01 | [whisper](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/host/whisper.ts)独立模型、30秒生成超时、结构化失败，梦话复用生成链 | 按角色/世界书编排真实请求，手动与周期独立开关；可见/活跃会话和后台租约去重，多标签不重复扣费；频率/并发/消耗上限、授权模型回退可见；离线/429/401失败有事实，预置台词标为本地台词 |
-| PET-CHAT-01 | [chat](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/host/chat.ts)用DSH llm聚合流式块后返回文本，历史窗口与持久历史不同，支持本轮图片与配图 | 本项目使用持久流式聊天和ST编排；气泡与完整聊天引用同一会话，不复制两套记忆；停止/继续/断线/刷新/切角色/退出正确。图片/粘贴/拖入、语音与配图按能力开启，屏幕捕获每次由用户主动授权，不后台截屏 |
+| PET-WHISPER-01 | [whisper](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/host/whisper.ts)独立模型、30秒生成超时、结构化失败，梦话复用生成链 | 统一走酒馆的角色/世界书编排与供应商用途绑定，不直连pet模型；手动与周期独立开关；可见/活跃会话和后台租约去重，多标签不重复扣费；频率/并发/消耗上限、授权模型回退可见；离线/429/401失败有事实，预置台词标为本地台词 |
+| PET-CHAT-01 | [chat](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/host/chat.ts)用DSH llm聚合流式块后返回文本，历史窗口与持久历史不同，支持本轮图片与配图 | 本项目使用持久流式聊天和ST编排、统一供应商能力及Live2D舞台/AI动作；气泡与完整聊天引用同一会话，不复制两套记忆；停止/继续/断线/刷新/切角色/退出正确。图片/粘贴/拖入、语音与配图按能力开启，屏幕捕获每次由用户主动授权，不后台截屏 |
 | PET-BALANCE-01 | [registry](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/host/balance/registry.ts)内置opencode-go/commandcode/deepseek-official/deepseek-account四适配；[FEATURES](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/FEATURES.md)说明六档动画和不支持提示 | C#查询获授权账户，货币/点数/滚动额度分别建模；展示单位、账户别名、采样时间/额度窗口/重置、过期/未知/不支持。仅供应商给出分母时算百分比；无总额不估算档位，不从token推余额，不将订阅限制叫现金余额；本人可隐藏/手动刷新，轮询去重/退避，Secret不回浏览器 |
 | PET-SLEEP-01 | [SleepStore](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/host/sleep.ts)为内存态、重启即醒；[sleep-machine](https://github.com/PC2005-cloud/dsh-pet/blob/3ec5f5f20db0aac55d8bd616b7f634cfdb4b44e4/dsh-pet/src/client/pet/card/sleep-machine.ts)管理三段；无素材套时接口明确拒绝 | 采用C#持久用户意图+前端三段状态机：入睡/循环/醒来、点击或菜单/聚焦快捷键唤醒；睡姿可拖动，拖动结束不误唤醒；睡眠停止随机动作、工作气泡、普通碎碎念和余额/待办打扰。可选梦话只弹气泡、不换动画/不朗读，也有独立请求预算；刷新/后端重启恢复睡眠，重复命令幂等，异步旧回复不唤醒 |
 
@@ -82,11 +86,13 @@ P4-09 仍不恢复独立商业 AI 网关/计费/Skills 市场。此次允许为�
 
 ## 6. 数据、权限与安全契约
 
-设计实体（均未建生产表）：
+设计实体（均未建生产表）；新增统一供应商/用途绑定/Live2D动作目录及cue的完整字段、用例和权限见[后续契约](AI_PROVIDERS_LIVE2D.md)：
 
 | 标识 | 关键持久事实与约束 |
 | --- | --- |
 | DM-AI-CHARACTER / PERSONA / WORLD / ENTRY / PROMPT / PROFILE | UUID、ownerSubject、版本、作用域/显式共享授权、关联资源；Persona只是角色扮演身份。连接profile只存Secret引用，模板/未知兼容字段保留并验证版本 |
+| DM-AI-PROVIDER / CONNECTION / MODEL / CAPABILITY / PURPOSE-BINDING | 集中配置、真实wireModelId/协议/启停/能力与用途外键、owner/授权、Secret引用和版本；看板娘与全部酒馆用途共享解析，生成冻结实际来源 |
+| DM-PET-ACTION-CATALOG / CUE / PLAYBACK-LEASE | 包版本/语义动作与资源摘要、原生成/消息/段/序号/期限/取消、客户端回报与多标签去重；不持久化逐帧骨骼参数 |
 | DM-AI-CONVERSATION / MESSAGE / CANDIDATE / CHECKPOINT | owner、角色/群成员、父分支/检查点、稳定顺序、消息/候选版本与上下文排除；约束跨用户外键归属，消息内容是私有业务数据，不写审计 |
 | DM-AI-GENERATION / EVENT / TOOL-CALL | 原登录/权限版本、幂等键、模型与提示快照哈希、供应商请求ID、状态/序号/租约/取消、用量事实；唯一owner+幂等键，事件序号唯一，正文分块有保留上限 |
 | DM-AI-DOCUMENT / CHUNK / INDEX / MEDIA | owner、来源/许可、内容摘要/字节/格式、引用计数、向量模型/维数/索引版本、索引任务；NVMe私有对象，清理不误删仍被聊天引用素材 |
@@ -116,7 +122,7 @@ Valkey只存可重建快照、去重/租约/限流/连接心跳，锁丢失不�
 | 文本与分词 | 至少实际授权的Chat与Text Completion后端；固定tokenizer词表/模板与模型能力。不能只依赖一个订阅CLI承诺全部采样/多模态功能 |
 | RAG与转换 | 真实embedding、向量存储方案/索引迁移、PDF/ePUB/HTML/Office转换沙箱；实现前确定版本/许可，未装LibreOffice或服务端插件不能宣称Office可用 |
 | 图片/语音 | 实际选定的视觉/绘图（含ComfyUI工作流）/TTS/STT，按条件单独部署、健康/认证、禁网/超时/取消；模型文件、GPU和音频设备不自动授予 |
-| 动画/立绘 | 带许可/摘要的透明视频角色包、解码/缓存/首帧检查；Live2D/VRM为酒馆清单另一路能力，锁定运行库/模型许可，不能拿视频动画冒充Live2D/VRM |
+| 动画/立绘 | 带许可/摘要的Live2D模型/Core/SDK/动作/表情/物理包及真实页面，AI结构化动作执行与恢复必须验收；视频/立绘/VRM仍按清单各自验证，不能替代正常对话页Live2D |
 | 余额与可选桥接 | 实际供应商查询或额度协议、Secret引用、出站策略、缓存/退避；不支持查询则明确状态，支持适配仍须凭真实账户验证。Codex等登录仅在专用隔离工作域，不复制宿主开发配置 |
 
 数据/媒体/运行缓存放NVMe，HDD保存一致性备份及校验清单；备份包含SQL、角色版本、世界书、预设、聊天与媒体引用、pet pack配置、Secret恢复引用说明和索引来源，向量可重建部分明确区分。隔离恢复后再切换，失败不覆盖有效数据；Secret恢复经专用受控通道，绝不把明文放普通导出包。内部服务不发布宿主端口，只有Gateway/BFF访问，出站代理和离线资源包单独测试。
@@ -127,14 +133,14 @@ Valkey只存可重建快照、去重/租约/限流/连接心跳，锁丢失不�
 
 | 子任务 | 依赖与交付内容 | 必须取得的验收证据 |
 | --- | --- | --- |
-| DEV-AI-001 | 固定272项/模型能力与扩展提交、协议/schema、数据/权限/migration、来源许可、资源与Secret配置 | 每项有固定输入/输出及验收组，真实PG/Valkey迁移/并发/隔离；设计登记不算功能通过 |
-| DEV-AI-002 | C#连接/生成/事件、角色/Persona、完整聊天/群聊/分支与Vue页面 | 上游数据导入/双向导出、授权真实模型、流式停止/继续/断线/刷新/重启、两用户拒绝 |
+| DEV-AI-001 | 固定272项/模型能力与扩展提交、参考Cindy的统一供应商/用途/Secret配置、Live2D动作契约、数据/权限/migration与许可 | 每项有固定输入/输出及验收组，真实PG/Valkey迁移/并发/隔离；设计登记不算功能通过 |
+| DEV-AI-002 | C#统一供应商配置/模型发现测试/能力与用途绑定、酒馆生成/事件、角色/Persona/完整聊天与Vue页面 | 上游数据导入/双向导出、授权真实模型、流式停止/继续/断线/刷新/重启、两用户拒绝 |
 | DEV-AI-003 | 世界书/提示模块/模板/tokenizer/采样/调试、宏/Regex/STscript/Quick Replies | 固定上游实例差分与黄金用例；最终提示、顺序/预算/边界、恶意输入与脚本限制；原生配置实际改变请求 |
 | DEV-AI-004 | 资料/RAG/总结/翻译/图片/语音/立绘/Live2D/VRM及14随包模块 | 实际转换/embedding/检索、媒体生成/识别/播放、模型条件与失败；独立存储核验与相关Vue页面 |
 | DEV-AI-005 | 66扩展逐项源码/许可/依赖审计、功能迁移/隔离适配、生命周期页面 | 每条ST-ADDON的固定版本、外部依赖、正常功能/权限/失败恢复/更新和卸载证据；未审核项保持待实现 |
-| DEV-AI-006 | Vue看板娘与角色包，动画/物理/碎碎念/聊天/工作状态/睡眠 | PET-ANIM/PHYS/WHISPER/CHAT/SLEEP真实浏览器交互、跨页/多标签/退出/减少动画；资产解码及实际模型链路 |
+| DEV-AI-006 | Vue Live2D看板娘对话页、统一酒馆AI与结构化动作/表情、模型包/物理/碎碎念/聊天/工作状态/睡眠 | PET-ANIM/PHYS/WHISPER/CHAT/SLEEP及PET-L2D-001..008真实模型/页面交互、跨页/多标签/退出/减少动画；资产解码及实际模型链路 |
 | DEV-AI-007 | C#余额/额度适配、隐私/预算/刷新与动画 | PET-BALANCE：真实数值与供应商响应核对、unknown/不支持/过期/429、币种/窗口/无分母、不泄密与睡眠去重 |
-| DEV-AI-008 | 全依赖安装升级、备份恢复/离线包、负载/故障/页面与master交付门禁 | 272 ST+6 PET逐项签收、真实身份/实际依赖/SQL/文件/UI证据、部署来源一致、HDD恢复和新机；保留失败与修复记录 |
+| DEV-AI-008 | 全依赖安装升级、备份恢复/离线包、负载/故障/页面与master交付门禁 | 272 ST+6 PET及AI-PROVIDER/PET-L2D子门槛逐项签收、真实身份/实际依赖/SQL/文件/UI证据、部署来源一致、HDD恢复和新机；保留失败与修复记录 |
 
 按当前P1/P2进度衔接安排，方案/契约先登记；功能按批次直接实现前后端，不先交原型或以最小聊天链路替代完整范围。每批可独立发布/修复；dev失败继续修复并覆盖，不自动回滚。上游孤立运行可用于对照测试，不作为最终产品依赖或“已完成C#重构”的证据。
 
