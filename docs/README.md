@@ -10,6 +10,7 @@
 
 | 文档 | 责任 |
 | --- | --- |
+| [Markdown冲突审计](DOCUMENT_AUDIT_2026_10_30.md) | 全量183份文档审阅、现行冲突修正及历史证据保留口径 |
 | [SCOPE_SINGLE_WORKSTATION.md](SCOPE_SINGLE_WORKSTATION.md) | 用户授权的单工作站精简决策、17个移出原ID、保留59项与安全底线 |
 | [GOAL_P0_P5.md](GOAL_P0_P5.md) | 最新完整目标、范围变更、P0–P5 任务/依赖/完成标准 |
 | [FEATURES.md](FEATURES.md) | 产品范围、已确认决策、功能状态和边界 |

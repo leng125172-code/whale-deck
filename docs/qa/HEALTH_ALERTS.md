@@ -1,5 +1,7 @@
 # Host load / systemd / Docker health alerts
 
+> 历史证据口径（2026-10-30）：本页的版本、测试、状态、下一步及70/76项或租户等范围描述只对应其记录批次；不代表当前部署或恢复已移出需求。当前按[59项及用户追加目标](../GOAL_P0_P5.md)与[单工作站范围](../SCOPE_SINGLE_WORKSTATION.md)推进；最新已记录状态见[实施状态](../IMPLEMENTATION_STATUS.md)。原验收、未验收与失败事实不改写。
+
 ## Implementation
 
 - Agent 1.16 adds `host.load-average`: canonical six-second `/proc/loadavg` 1/5/15 minute task counts plus `load.normalized = load1 / logical cores * 100`. Missing/malformed data has `Unavailable` quality, not valid zero. Load is not CPU busy time and can exceed 100%.

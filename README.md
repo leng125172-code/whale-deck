@@ -22,6 +22,8 @@ The product baseline starts in [docs/FEATURES.md](docs/FEATURES.md). The complet
 
 The retained scope includes [multi-language development workspaces](docs/DEVELOPMENT_WORKSPACES.md): Git/upload source import, remote editing/debugging/testing, private previews and automatically collected diagnostic reports. Resource limits and per-user/workspace authorization remain mandatory without enterprise tenants. These environments are for development/testing, not automatic production deployment. Their design is recorded; runtime implementation remains pending.
 
+The current goal also includes the [C# Tavern port and complete acceptance ledger](docs/AI_TAVERN_MASCOT.md), [central model-provider configuration and AI-driven Live2D chat](docs/AI_PROVIDERS_LIVE2D.md), and [compact light/dark UI style](docs/UI_STYLE_GUIDE.md). These are planned additions within the 59 stable main-task IDs; they are not implemented or deployed yet. Tavern-scoped model/extension compatibility does not restore a general plugin marketplace or billing platform.
+
 ## Repository layout
 
 ```text
@@ -54,12 +56,12 @@ Direct feature work must not be committed to `master`.
 
 ## Local verification
 
-```powershell
+```bash
 dotnet restore
 dotnet build --configuration Release --no-restore
 dotnet test --configuration Release --no-build
 
-Set-Location web
+cd web
 corepack pnpm install --frozen-lockfile
 corepack pnpm lint
 corepack pnpm test:unit

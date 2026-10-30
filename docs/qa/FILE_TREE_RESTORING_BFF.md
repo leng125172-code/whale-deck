@@ -1,5 +1,7 @@
 # 目录恢复业务链路：源码候选，尚未部署
 
+> 历史证据口径（2026-10-30）：本页的版本、测试、状态、下一步及70/76项或租户等范围描述只对应其记录批次；不代表当前部署或恢复已移出需求。当前按[59项及用户追加目标](../GOAL_P0_P5.md)与[单工作站范围](../SCOPE_SINGLE_WORKSTATION.md)推进；最新已记录状态见[实施状态](../IMPLEMENTATION_STATUS.md)。原验收、未验收与失败事实不改写。
+
 ## 冻结 PostgreSQL 验收更新
 
 修正候选 **66451f7879e9958f7394be045579ad0bf534f8b5** 已在工作站冻结源码、真实 PostgreSQL 的独立临时库执行完整套件：1实际执行/1通过、无跳过，2026-10-20 02:35:42.904947–02:38:01.978280 UTC；状态 `deploy/artifacts/native-status/dispatch-2671764108ed40aba3197cba2e7b7eeb.json` 为 Passed、cleanupConfirmed=true。SDK实际摘要 `sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa`；临时容器 `whaledeck-native-dispatch-27fe95f3cde1` 已通过独立成功Docker查询确认不存在。

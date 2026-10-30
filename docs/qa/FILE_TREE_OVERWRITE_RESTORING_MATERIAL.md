@@ -1,5 +1,7 @@
 # 目录覆盖恢复：业务绑定材料与调度基础（2026-10-20）
 
+> 历史证据口径（2026-10-30）：本页的版本、测试、状态、下一步及70/76项或租户等范围描述只对应其记录批次；不代表当前部署或恢复已移出需求。当前按[59项及用户追加目标](../GOAL_P0_P5.md)与[单工作站范围](../SCOPE_SINGLE_WORKSTATION.md)推进；最新已记录状态见[实施状态](../IMPLEMENTATION_STATUS.md)。原验收、未验收与失败事实不改写。
+
 ## 实现边界
 
 新增独立 Application 模型、验证器、服务、Dispatcher、仓储抽象和 Domain 操作实体，以及 Infrastructure 的签名保护器、RPC Gateway。尚未接入数据库映射/EF migration、仓储实现、Worker 注册、Controller、当前管理员 Unknown 处置或 WebUI。因此本批不是可用的覆盖恢复入口，也没有部署这些未完成业务。完整 P0–P5 共76项继续 active，P2-03/P2-04仍部分实现。

@@ -36,3 +36,5 @@ The installer never accepts arbitrary commands or script paths. An existing repo
 The default source branch is `master`; unreleased development checkout requires `--source-branch dev`. The full install has **not** passed workstation acceptance yet. See [implementation status](../../docs/IMPLEMENTATION_STATUS.md) before attempting a production deployment.
 
 Reference: [1Panel official installer](https://github.com/1Panel-dev/installer/blob/v2/install.sh). Whale Deck uses its own scripts and retains the project's HTTP/IP, Authentik and database-network boundaries.
+
+Current scope and acceptance are defined by the [59-task goal and explicit additions](../../docs/GOAL_P0_P5.md). The C# Tavern/provider/Live2D dependencies are planned; this installer does not yet claim to install or validate them. The Docker mirror configuration rollback above is a connection/configuration safety mechanism, not automatic rollback of a dev application release; dev releases continue to be fixed and overwritten.

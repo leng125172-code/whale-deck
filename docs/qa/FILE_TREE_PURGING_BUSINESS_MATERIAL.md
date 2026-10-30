@@ -1,5 +1,7 @@
 # 目录清理业务材料候选（2026-10-21）
 
+> 历史证据口径（2026-10-30）：本页的版本、测试、状态、下一步及70/76项或租户等范围描述只对应其记录批次；不代表当前部署或恢复已移出需求。当前按[59项及用户追加目标](../GOAL_P0_P5.md)与[单工作站范围](../SCOPE_SINGLE_WORKSTATION.md)推进；最新已记录状态见[实施状态](../IMPLEMENTATION_STATUS.md)。原验收、未验收与失败事实不改写。
+
 状态：active、未部署。已装 Agent/MaintenanceHost 仍为 56101c8/1.36，API/Worker/Gateway 为 2c8d1bb；[前序安装态子门禁](FILE_TREE_PURGING_INSTALLED.md)不等于本批业务验收。完整 P0–P5 的 76 项及文件管理仍未完成。
 
 ## 本批实现

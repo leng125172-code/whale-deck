@@ -49,7 +49,7 @@
 - systemd Host Agent、Unix Socket、短时能力票据、受控 helper、稳定维护入口和核心资源保护。
 - 六类数据库/缓存适配器、备份、应用生命周期、容器与 Docker 管理、计划任务、告警、配置仓库和平台诊断。
 
-当时发布物已切换至真实工作站，当时的 `HOLD` 与预留曾不进入任务池。2026-10-13 已全部解除；当前范围与顺序仅以 76 项 P0–P5 基线及用户补充为准，不再据此排除工作。
+当时发布物已切换至真实工作站，当时的 `HOLD` 与预留曾不进入任务池。2026-10-13 已全部解除；当前范围与顺序以59项保留任务及10月30日酒馆/统一供应商/Live2D追加为准；当时76项仅作历史，不再据此排除工作。
 
 ## 2. 历史里程碑依赖（不是当前实施顺序）
 
@@ -226,12 +226,12 @@ M3 发布门槛：六种服务的能力矩阵明确；创建账号、权限、�
 
 ## 10. 发布验证命令
 
-```powershell
+```bash
 dotnet restore
 dotnet build --configuration Release --no-restore
 dotnet test --configuration Release --no-build
 
-Set-Location web
+cd web
 corepack pnpm install --frozen-lockfile
 corepack pnpm lint
 corepack pnpm test:unit

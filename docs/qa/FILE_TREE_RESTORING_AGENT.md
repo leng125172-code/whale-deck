@@ -1,5 +1,7 @@
 # HDD 目录恢复 Agent 1.33：源码候选，尚未部署
 
+> 历史证据口径（2026-10-30）：本页的版本、测试、状态、下一步及70/76项或租户等范围描述只对应其记录批次；不代表当前部署或恢复已移出需求。当前按[59项及用户追加目标](../GOAL_P0_P5.md)与[单工作站范围](../SCOPE_SINGLE_WORKSTATION.md)推进；最新已记录状态见[实施状态](../IMPLEMENTATION_STATUS.md)。原验收、未验收与失败事实不改写。
+
 ## 已实现与边界
 
 - 独立 `whaledeck.agent.v1.FileTreeRestoringService` 的 Plan/Apply/Inspect/Discard，能力 `files.tree-restore-intents`，协议次版本 33；不复用普通解压或回收的方法签名，单次短时 capability 与既有 UDS 调用方限制保持。
