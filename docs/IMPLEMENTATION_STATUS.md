@@ -1,5 +1,8 @@
 # 实施状态与恢复入口
 
+- **2026-10-30 普通权限cb4c400已覆盖并通过真实页面常规整链**：六组件/镜像/HTTP同源、运行进程映射与权限迁移核对通过。真实Authentik登录后，桌面/320明暗6场景（文件变更/无变化/恢复、目录变更/恢复、Ready取消）、原登记6次/原确认5次HTTP重试、刷新原引用与正常双端退出通过；5 Succeeded/1 Canceled，独立SQL/Root/HDD五份元数据、完整2097159字节/原inode/UID/GID/mtime/子项及准确清理通过。普通8路403/匿名4路401、CSRF/Origin拒绝，活动/屏障/租约/临时身份0、11核心不变。前两轮关闭抽屉选择器、第三轮执行身份与源属主混淆均为验收器失败，原证据保留且准确清理，第四轮完整命令0及独立只读复核通过；产品未回滚。此次重跑3375 Unit/213 Integration（7默认原生跳过）、695前端、35 Linux-root权限/传输、8范围与类型/生产构建通过；GitHub CI仍执行，不签全绿。完整权限和故障矩阵继续，59项active、17项移出不算完成。[发布与真实页面证据](qa/CONTAINER_PERMISSION_REAL_UI.md)。
+
+
 - **2026-10-30 容器普通权限永久业务与Vue候选已生成**：0d31641已接三段独立业务签名、永久双Job/SQL/Outbox/审计、不可变模式/HDD事实、六方双向排斥、专用Worker/管理员API、预检确认/原引用接续/取消与Unknown页面。3375 Unit/213 Integration（7默认原生跳过）、Release零警告错误，冻结13c0f2a隔离真实PG1执行/1通过/0跳过、独立准确清理与11核心不变；695前端单元、28权限/72关联生产预览浏览器及类型/构建/lint/格式通过，320暗色/1440明色截图复核。SQL回执与浏览器API为明确夹具，不冒称真实身份/实盘业务；候选未覆盖，Agent/MaintenanceHost仍c1f3cd7/1.47、API/Worker/Gateway仍a59ec97。继续冻结发布与真实身份/权限/实际文件/故障整链及其余59项，17项移出不算完成。[SQL证据](qa/CONTAINER_PERMISSION_PERSISTENCE.md)、[页面与边界](qa/CONTAINER_PERMISSION_WEB_UI.md)。
 
 

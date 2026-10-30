@@ -1,5 +1,7 @@
 # 容器普通权限：永久业务意图与SQL、Worker、API
 
+> 2026-10-30后续：cb4c400已覆盖并通过真实身份、普通权限页面、SQL/Root/HDD与准确清理，见[实机证据](CONTAINER_PERMISSION_REAL_UI.md)。下方“候选未部署”保留为当时边界；故障与完整权限继续。
+
 2026-10-30 新业务候选，尚未部署；安装态Agent仍c1f3cd7/1.47，API/Worker/Gateway仍a59ec97。59项继续active，17项移出不算完成。
 
 ## 实现与边界

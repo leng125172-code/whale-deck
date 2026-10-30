@@ -1,5 +1,8 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-10-30 普通权限cb4c400已覆盖并通过真实页面常规整链**：六组件/镜像/HTTP同源、运行进程映射与权限迁移核对通过。真实Authentik登录后，桌面/320明暗6场景（文件变更/无变化/恢复、目录变更/恢复、Ready取消）、原登记6次/原确认5次HTTP重试、刷新原引用与正常双端退出通过；5 Succeeded/1 Canceled，独立SQL/Root/HDD五份元数据、完整2097159字节/原inode/UID/GID/mtime/子项及准确清理通过。普通8路403/匿名4路401、CSRF/Origin拒绝，活动/屏障/租约/临时身份0、11核心不变。前两轮关闭抽屉选择器、第三轮执行身份与源属主混淆均为验收器失败，原证据保留且准确清理，第四轮完整命令0及独立只读复核通过；产品未回滚。此次重跑3375 Unit/213 Integration（7默认原生跳过）、695前端、35 Linux-root权限/传输、8范围与类型/生产构建通过；GitHub CI仍执行，不签全绿。完整权限和故障矩阵继续，59项active、17项移出不算完成。[发布与真实页面证据](qa/CONTAINER_PERMISSION_REAL_UI.md)。
+
+
 2026-10-30：**已安装Agent1.47 / c1f3cd7**，新增`whaledeck.agent.v1.ContainerPermissionService`四个独立强类型RPC及`docker.files.permission-intents`。请求摘要与单次capability采用独立permission域，其他/通用授权不能替代。完整原9项identity、父inode/版本、内核FS身份、mode、属性摘要及noChange绑定；回执明确nullable modeConfirmed及HDD历史可能存在/已验证/摘要。真实安装态6操作、5份HDD元数据与独立核验通过；不等于正式SQL/Worker/API/页面权限流程已完成。详见[安装态证据](qa/CONTAINER_PERMISSION_AGENT_RPC.md)。下方历史协议为对应阶段记录。
 
 - **2026-10-30 容器普通权限内部候选通过真实HDD/NVMe**：原inode非递归模式变更、固定HDD元数据快照/独立域、永久原回执与只观察不重做已生成。26新/320关联Linux-root零跳过；冻结996a25c实际两设备文件/目录20操作（16完成4中止，8真实SIGKILL）、完整2MiB+7/原inode/UID/GID/mtime/子项及20份HDD元数据通过，独立只读核验准确清理/11核心不变。首轮卷命名被保护拒绝，修夹具不放宽白名单，失败另证准确清理且不改记通过。未安装/helper/RPC/永久业务/API/Vue，仍a59ec97/minor46；chown/递归/ACL/删除等保留，59项active、17项移出不算完成。[证据与边界](qa/CONTAINER_PERMISSIONS_ENGINE.md)。
