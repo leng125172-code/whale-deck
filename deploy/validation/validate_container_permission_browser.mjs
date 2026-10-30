@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { chromium, expect } from '../../web/node_modules/@playwright/test/index.mjs'
 import { logoutFromUserMenu } from './installed_ui_logout.mjs'
 
-let phase = 'startup', browser, evidence
+let phase = 'startup', browser, evidence, activePage
 try {
   const revision = process.argv[2], fixture = JSON.parse(await readFile('/dev/stdin', 'utf8'))
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
@@ -19,6 +19,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1050 }, colorScheme: 'light', reducedMotion: 'reduce' })
   context.setDefaultTimeout(20_000)
   const page = await context.newPage()
+  activePage = page
   assert.equal((await (await context.request.get(base + '/api/v1/system/status')).json()).build.sourceRevision, revision)
   phase = 'normal-visible-authentik-login'
   await page.goto(base + '/login?returnUrl=/containers')
@@ -111,16 +112,20 @@ try {
       const canceled = await query(ready); assert.equal(canceled.state, 'Canceled'); assert.equal(canceled.executionJobId, null)
       completed.push({ name: item.name, ...canceled })
     } else {
+      phase = item.name + ':confirm'
       await dialog.getByRole('button', { name: '确认权限修改', exact: true }).click()
+      phase = item.name + ':visible-completion'
       await expect(dialog.getByText('权限修改已完成', { exact: true })).toBeVisible({ timeout: 45_000 })
+      phase = item.name + ':http-retry'
       const result = await query(ready); assert.equal(result.state, 'Succeeded'); assert.equal(result.modeConfirmed, true); assert.equal(result.historyVerified, true)
       const retry = await context.request.post(base + endpoint + '/' + ready.id + '/confirm', { headers: { ...headers, 'Idempotency-Key': ready.id },
         data: { planHash: ready.confirmation.planHash, confirmed: true, version: ready.version } })
       assert.equal(retry.status(), 202); assert.equal((await retry.json()).executionJobId, result.executionJobId)
       completed.push({ name: item.name, ...result })
     }
+    phase = item.name + ':close'
     await dialog.getByRole('button', { name: '关闭', exact: true }).click()
-    await page.getByRole('dialog', { name: new RegExp('容器详情') }).locator('.el-dialog__headerbtn').click()
+    await page.getByRole('dialog', { name: new RegExp('容器详情') }).locator('.el-drawer__close-btn').click()
   }
   assert.equal(registrations, 6); assert.equal(confirmations, 5); assert.equal(uploads, 0); assert.ok((await Promise.all(headerChecks)).every(Boolean))
   assert.ok(completed.every(r => r.confirmation === null))
@@ -131,7 +136,11 @@ try {
   await context.close(); await browser.close(); browser = undefined
   phase = 'done'; console.log(JSON.stringify({ permissionBrowser: 'passed', actualUi: true, cases: 6 }))
 } catch (error) {
-  console.error(JSON.stringify({ permissionBrowser: 'failed', phase, failureType: error?.name }))
+  const frame = error?.stack?.split('\n').find(line => line.includes('validate_container_permission_browser.mjs:'))?.trim()
+  // Only an already authenticated product page may be captured, never login/credentials.
+  if (activePage && evidence && !['startup', 'normal-visible-authentik-login'].includes(phase))
+    await activePage.screenshot({ path: join(evidence, 'failed-product-page.png') }).catch(() => {})
+  console.error(JSON.stringify({ permissionBrowser: 'failed', phase, failureType: error?.name, frame }))
   if (browser) await browser.close().catch(() => {})
   process.exitCode = 1
 }
