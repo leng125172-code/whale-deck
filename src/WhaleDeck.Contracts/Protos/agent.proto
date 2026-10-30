@@ -1230,3 +1230,31 @@ service ContainerPermissionService {
   rpc Inspect(ContainerPermissionRequest) returns (ContainerPermissionReceipt);
   rpc Discard(ContainerPermissionRequest) returns (ContainerPermissionReceipt);
 }
+
+// Non-recursive explicit numeric ownership. No implicit root, mode or ACL writes.
+message ContainerOwnershipCommand {
+  ContainerFileLocation location = 1; optional uint32 uid = 2; optional uint32 gid = 3; string expected_version = 4;
+}
+message ContainerOwnershipPlan {
+  uint32 schema_version = 1; ContainerOwnershipCommand command = 2; string target_proof = 3;
+  FileDirectoryIdentity parent_identity = 4; string parent_version = 5;
+  uint32 owner_uid = 6; uint32 owner_gid = 7; string fingerprint = 8;
+  string kind = 9; FileObjectIdentity source_identity = 10; int64 source_changed_at_unix_ns = 11;
+  string attributes_digest = 12; bool no_change = 13;
+}
+message ContainerOwnershipPlanRequest { ContainerOwnershipCommand command = 1; RequestContext context = 2; }
+message ContainerOwnershipRequest {
+  string operation_id = 1; string owner = 2; ContainerOwnershipPlan plan = 3; RequestContext context = 4;
+}
+message ContainerOwnershipReceipt {
+  string operation_id = 1; string container_id = 2; string instance_id = 3; string fingerprint = 4;
+  string target_proof = 5; string state = 6; string version = 7; bool binding_current = 8; bool replayed = 9;
+  string kind = 10; optional bool owner_confirmed = 11; bool no_change = 12;
+  bool history_may_exist = 13; bool history_verified = 14; string history_digest = 15;
+}
+service ContainerOwnershipService {
+  rpc Plan(ContainerOwnershipPlanRequest) returns (ContainerOwnershipPlan);
+  rpc Apply(ContainerOwnershipRequest) returns (ContainerOwnershipReceipt);
+  rpc Inspect(ContainerOwnershipRequest) returns (ContainerOwnershipReceipt);
+  rpc Discard(ContainerOwnershipRequest) returns (ContainerOwnershipReceipt);
+}

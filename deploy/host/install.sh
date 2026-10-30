@@ -83,6 +83,10 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-directory-t
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-permissions
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-permissions.py" /usr/local/libexec/whaledeck-container-permissions.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-permission-transport.py" /usr/local/libexec/whaledeck-container-permission-transport.py
+[[ ! -L /var/lib/whaledeck-container-ownership ]] || exit 1
+install -d -o root -g root -m 0700 /var/lib/whaledeck-container-ownership
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-ownership.py" /usr/local/libexec/whaledeck-container-ownership.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-ownership-transport.py" /usr/local/libexec/whaledeck-container-ownership-transport.py
 [[ ! -L /var/lib/whaledeck-container-copies ]] || exit 1
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-copies
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-copy-scope.py" /usr/local/libexec/whaledeck-container-copy-scope.py
