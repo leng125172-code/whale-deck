@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_PERMISSION_REAL_UI.md",
-  "nextStep": "已覆盖cb4c400并通过真实普通权限6页面场景、独立SQL/Root/HDD及准确清理；继续进行中取消/撤权/重启/Unknown、所有者/递归/ACL、容器删除及其余59项，17项移出不算完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_PERMISSION_FAULTS.md",
+  "nextStep": "普通权限5类真实页面故障和独立SQL/Root/HDD/唯一主体审计、准确清理已通过；先实现所有者变更全链，再递归/ACL及可恢复删除和剩余故障；继续59项，17项移出不算完成。"
 }
