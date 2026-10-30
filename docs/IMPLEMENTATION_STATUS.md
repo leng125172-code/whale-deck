@@ -1,5 +1,8 @@
 # 实施状态与恢复入口
 
+- **2026-10-30 容器普通权限Agent1.47安装态已通过**：冻结c1f3cd7的专用强类型Plan/Apply/Inspect/Discard、整请求单次签名、SDK能力门禁与受限固定helper已安装。3280 Unit/209 Integration（7默认原生跳过）、91新增专项、329容器Linux-root零跳过、74安装/8范围基线及Release零警告错误通过。真实签名UDS完成文件改模式/无变化/恢复、目录改模式/恢复、永久取消共6操作（5Completed/1Aborted）；完整内容/原inode/UID/GID/mtime/子项、5份物理HDD元数据与6份Root原件通过，第二进程只读独立核对和准确清理通过，原目录RPC实机回归通过，11核心不变。Agent/MaintenanceHost为c1f3cd7，API/Worker/Gateway仍a59ec97；永久业务SQL/共享屏障/Worker/API/Vue及完整权限/删除继续，不冒称公开权限页面已完成。59项active，17项移出不算完成。[证据与边界](qa/CONTAINER_PERMISSION_AGENT_RPC.md)。
+
+
 - **2026-10-30 容器普通权限内部候选通过真实HDD/NVMe**：原inode非递归模式变更、固定HDD元数据快照/独立域、永久原回执与只观察不重做已生成。26新/320关联Linux-root零跳过；冻结996a25c实际两设备文件/目录20操作（16完成4中止，8真实SIGKILL）、完整2MiB+7/原inode/UID/GID/mtime/子项及20份HDD元数据通过，独立只读核验准确清理/11核心不变。首轮卷命名被保护拒绝，修夹具不放宽白名单，失败另证准确清理且不改记通过。未安装/helper/RPC/永久业务/API/Vue，仍a59ec97/minor46；chown/递归/ACL/删除等保留，59项active、17项移出不算完成。[证据与边界](qa/CONTAINER_PERMISSIONS_ENGINE.md)。
 
 - **2026-10-30 目录移动部分源留存Unknown真实页面通过**：实际a59ec97，16份共33554544字节文件的目标已完整发布、1份原件转存/15份仍在源时准确pidfd中断；SQL/Root保留true/null/null与发布保护。原临时身份删除、另一管理员320暗色页面先取消再一次确认，原Job失败/Acknowledged而非移动成功；另一容器写任务仅解除保护后成功。晚到原固定helper Apply仍Unknown，原Root/完整目标及分布两处原件不变；严格准确清理，独立复核活动/屏障/租约/临时身份0、11核心healthy。9新/14原观察器及47移动root回归通过；同HDD、非全部交换/撤权/跨盘验收。59项active、17项移出不算完成。[完整证据](qa/CONTAINER_MOVE_UNKNOWN.md)。

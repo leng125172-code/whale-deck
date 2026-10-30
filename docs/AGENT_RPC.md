@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-10-30：**已安装Agent1.47 / c1f3cd7**，新增`whaledeck.agent.v1.ContainerPermissionService`四个独立强类型RPC及`docker.files.permission-intents`。请求摘要与单次capability采用独立permission域，其他/通用授权不能替代。完整原9项identity、父inode/版本、内核FS身份、mode、属性摘要及noChange绑定；回执明确nullable modeConfirmed及HDD历史可能存在/已验证/摘要。真实安装态6操作、5份HDD元数据与独立核验通过；不等于正式SQL/Worker/API/页面权限流程已完成。详见[安装态证据](qa/CONTAINER_PERMISSION_AGENT_RPC.md)。下方历史协议为对应阶段记录。
+
 - **2026-10-30 容器普通权限内部候选通过真实HDD/NVMe**：原inode非递归模式变更、固定HDD元数据快照/独立域、永久原回执与只观察不重做已生成。26新/320关联Linux-root零跳过；冻结996a25c实际两设备文件/目录20操作（16完成4中止，8真实SIGKILL）、完整2MiB+7/原inode/UID/GID/mtime/子项及20份HDD元数据通过，独立只读核验准确清理/11核心不变。首轮卷命名被保护拒绝，修夹具不放宽白名单，失败另证准确清理且不改记通过。未安装/helper/RPC/永久业务/API/Vue，仍a59ec97/minor46；chown/递归/ACL/删除等保留，59项active、17项移出不算完成。[证据与边界](qa/CONTAINER_PERMISSIONS_ENGINE.md)。
 
 - **2026-10-30 目录移动部分源留存Unknown真实页面通过**：实际a59ec97，16份共33554544字节文件的目标已完整发布、1份原件转存/15份仍在源时准确pidfd中断；SQL/Root保留true/null/null与发布保护。原临时身份删除、另一管理员320暗色页面先取消再一次确认，原Job失败/Acknowledged而非移动成功；另一容器写任务仅解除保护后成功。晚到原固定helper Apply仍Unknown，原Root/完整目标及分布两处原件不变；严格准确清理，独立复核活动/屏障/租约/临时身份0、11核心healthy。9新/14原观察器及47移动root回归通过；同HDD、非全部交换/撤权/跨盘验收。59项active、17项移出不算完成。[完整证据](qa/CONTAINER_MOVE_UNKNOWN.md)。
