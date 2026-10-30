@@ -1,5 +1,8 @@
 # 实施状态与恢复入口
 
+- **2026-10-30 所有者独立引擎与Agent1.48安装态通过，业务/UI待接**：新增显式UID/GID存在位、独立完整请求签名/四RPC、SDK版本能力门禁及单独CAP_CHOWN固定helper；旧chmod未扩权。3478 Unit/213 Integration（7默认原生跳过）、103新增专项、362容器文件Linux-root及Release/探针零警告错误通过。冻结532ceb9实际HDD/NVMe文件/目录20操作、8专属候选强杀、完整2MiB+7/原inode/模式/mtime/子项及20份HDD元数据独立核验准确清理通过；2a9ceb6宿主安装成功，运行exe/DLL映射同源。真实签名UDS6操作5Completed/1Aborted、5份HDD/6 Root与独立精确清理通过，旧权限6 RPC回归通过，11核心不变。Agent/MaintenanceHost为2a9ceb6/1.48，API/Worker/Gateway仍cb4c400；永久意图/七方保护/Worker/API/Vue及真实身份页面仍待，不计完整所有者功能完成。59项active，17项移出不算完成。[实施恢复点与证据](qa/CONTAINER_OWNERSHIP_AGENT_RPC.md)。
+
+
 - **2026-10-30 普通权限真实页面故障五例通过**：产品仍cb4c400/1.47，无重复部署或回滚。真实页面取消/正常退出、Worker准确SIGKILL与自然租约、Agent实际重启，产品结束helper分别5.457/5.433/0.121/0.024秒；原文件完整2097159字节和九字段指纹不变，SQL双任务/原主体审计/Root Aborted及物理HDD元数据独立核验通过。准确临时容器移除后Unknown保留null/历史/保护；原账号删除，另一管理员320暗色页面先取消再明确处置，原执行Failed、Root仍Unknown，迟到Apply不重做；另一容器目录只在释放保护后创建，唯一新管理员审计通过。独立准确源/CID/身份清理、活动/租约/屏障0、11核心healthy。12新观察器/35权限传输Linux-root与8范围通过；首轮Future等待、Unknown换行帧的验收器失败保留，完整重验通过。所有者/递归/ACL、删除及剩余故障仍待，59项active、17项移出不算完成。[实机故障证据](qa/CONTAINER_PERMISSION_FAULTS.md)。
 
 
