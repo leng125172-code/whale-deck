@@ -18,6 +18,11 @@
 - 首轮旧复制按钮定位文本失败后中断原runner修正；第二轮22通过/1失败是私有副本文字未改为HDD元数据，第三轮24通过/1失败是旧错误文本；测试断言更新为实际权限语义，完整28重新执行通过，未跳过负例。最初lint要求抛错信息，补明确消息匹配后通过，未关闭规则。
 - 日志在`/tmp/wd-permission-web-{unit-last,browser-fourth,related-browser,build-last,lint-boundaries,format-boundaries-check,visual-final}.log`。浏览器用受控API夹具，不连接真实API/Authentik/Agent/PostgreSQL或生产容器；本机代理的5080不可达日志不是生产故障或实际业务证据。
 
+## 冻结与截图
+
+- UI候选源码0d31641；其后仅记录文档，不表示已经部署。截图及完整28/72日志已保存`deploy/artifacts/container-permission-ui-3ki83zly`，manifest记录两张PNG完整SHA。320暗色文件和1440明色目录已目视复核；无页面横向溢出，确认/查询/取消在可用视口内。
+- 最新严格JSON类型检查后重新构建，目标两例再次通过；这些定点用例不冒充全套28再次执行。全部695单元覆盖最新字段拒绝；类型/lint/格式及生产构建均通过。
+
 ## 接续
 
 冻结并正常覆盖发布候选，核对迁移/程序集/镜像/前端来源；用真实Authentik身份、BFF/Worker/SQL/Root、完整实际字节及HDD元数据验证普通权限页面、取消/撤权/重启/Unknown边界。所有者、递归、ACL、容器删除等其余59项仍保留；17项移出不算完成。

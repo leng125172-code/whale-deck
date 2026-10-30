@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_PERMISSION_AGENT_RPC.md",
-  "nextStep": "普通权限Agent1.47/c1f3cd7已安装，真实签名UDS6操作、5份物理HDD元数据与独立只读复核/准确清理通过；API/Worker/Gateway仍a59ec97。继续永久意图/SQL与共享保护/Worker/API/Vue及完整权限、删除等59项，17项移出不算完成。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_PERMISSION_PERSISTENCE.md；docs/qa/CONTAINER_PERMISSION_WEB_UI.md",
+  "nextStep": "普通权限永久业务SQL/共享保护/Worker/API/Vue候选0d31641通过隔离真实PG及695单元/100生产预览页面；尚未覆盖。冻结发布并验收真实身份、BFF/Worker/SQL/Root和实际文件/HDD/故障整链；继续所有者/递归/ACL、删除等59项，17项移出不算完成。"
 }

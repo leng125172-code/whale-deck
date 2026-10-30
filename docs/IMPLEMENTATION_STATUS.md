@@ -1,5 +1,8 @@
 # 实施状态与恢复入口
 
+- **2026-10-30 容器普通权限永久业务与Vue候选已生成**：0d31641已接三段独立业务签名、永久双Job/SQL/Outbox/审计、不可变模式/HDD事实、六方双向排斥、专用Worker/管理员API、预检确认/原引用接续/取消与Unknown页面。3375 Unit/213 Integration（7默认原生跳过）、Release零警告错误，冻结13c0f2a隔离真实PG1执行/1通过/0跳过、独立准确清理与11核心不变；695前端单元、28权限/72关联生产预览浏览器及类型/构建/lint/格式通过，320暗色/1440明色截图复核。SQL回执与浏览器API为明确夹具，不冒称真实身份/实盘业务；候选未覆盖，Agent/MaintenanceHost仍c1f3cd7/1.47、API/Worker/Gateway仍a59ec97。继续冻结发布与真实身份/权限/实际文件/故障整链及其余59项，17项移出不算完成。[SQL证据](qa/CONTAINER_PERMISSION_PERSISTENCE.md)、[页面与边界](qa/CONTAINER_PERMISSION_WEB_UI.md)。
+
+
 - **2026-10-30 容器普通权限Agent1.47安装态已通过**：冻结c1f3cd7的专用强类型Plan/Apply/Inspect/Discard、整请求单次签名、SDK能力门禁与受限固定helper已安装。3280 Unit/209 Integration（7默认原生跳过）、91新增专项、329容器Linux-root零跳过、74安装/8范围基线及Release零警告错误通过。真实签名UDS完成文件改模式/无变化/恢复、目录改模式/恢复、永久取消共6操作（5Completed/1Aborted）；完整内容/原inode/UID/GID/mtime/子项、5份物理HDD元数据与6份Root原件通过，第二进程只读独立核对和准确清理通过，原目录RPC实机回归通过，11核心不变。Agent/MaintenanceHost为c1f3cd7，API/Worker/Gateway仍a59ec97；永久业务SQL/共享屏障/Worker/API/Vue及完整权限/删除继续，不冒称公开权限页面已完成。59项active，17项移出不算完成。[证据与边界](qa/CONTAINER_PERMISSION_AGENT_RPC.md)。
 
 
