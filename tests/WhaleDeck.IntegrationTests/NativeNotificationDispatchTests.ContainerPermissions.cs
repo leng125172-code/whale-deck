@@ -91,7 +91,14 @@ public sealed partial class NativeNotificationDispatchTests
         }
         try
         {
-            Assert.False(db.Database.HasPendingModelChanges()); await PeerSeeds();
+            Assert.False(db.Database.HasPendingModelChanges());
+            Assert.False(await db.FilePathLocks.AnyAsync());
+            Assert.False(await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier));
+            Assert.False(await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier));
+            Assert.False(await db.ContainerCopyIntents.AnyAsync(r => r.PublishBarrier));
+            Assert.False(await db.ContainerMoveIntents.AnyAsync(r => r.PublishBarrier));
+            Assert.False(await db.ContainerPermissionIntents.AnyAsync(r => r.PublishBarrier));
+            await PeerSeeds();
             var original = Row(); var ready = await Ready(original);
             await Rejected($"UPDATE container_permission_intents SET relative_path='elsewhere' WHERE id={ready.Id}", "container_permission_request_immutable");
             await Rejected($"UPDATE container_permission_intents SET plan_hash={new string('A', 64)} WHERE id={ready.Id}", "container_permission_plan_immutable");

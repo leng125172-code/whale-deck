@@ -191,7 +191,11 @@ public sealed partial class NativeNotificationDispatchTests
             // The newest permanent container kind must block the complete
             // downgrade first. Independently execute the older migration's
             // actual guard to preserve its original safety evidence too.
-            Assert.Contains("container_move_downgrade_requires_empty_table",downgrade.MessageText,StringComparison.Ordinal);
+            Assert.Contains("container_permission_downgrade_requires_empty_table",downgrade.MessageText,StringComparison.Ordinal);
+            var moveGuard = new WhaleDeck.Infrastructure.Persistence.Migrations.ContainerMoveIntents().DownOperations
+                .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>().First();
+            var moveDowngrade = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(moveGuard.Sql));
+            Assert.Contains("container_move_downgrade_requires_empty_table",moveDowngrade.MessageText,StringComparison.Ordinal);
             var copyGuard = new WhaleDeck.Infrastructure.Persistence.Migrations.ContainerCopyIntents().DownOperations
                 .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>().First();
             var copyDowngrade = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(copyGuard.Sql));

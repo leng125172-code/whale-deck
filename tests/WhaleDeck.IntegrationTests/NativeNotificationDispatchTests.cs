@@ -155,6 +155,7 @@ public sealed partial class NativeNotificationDispatchTests
         await ContainerDirectoryBoundaries(options);
         await ContainerCopyBoundaries(options);
         await ContainerMoveBoundaries(options);
+        await ContainerPermissionBoundaries(options);
         await FileUploadBoundaries(options);
         await ContainerFileAuditBoundaries(options);
         await FileMutationBoundaries(options);
@@ -169,7 +170,6 @@ public sealed partial class NativeNotificationDispatchTests
         await FileTreeOverwriteRestoringWorkflowBoundaries(options);
         await FileTreeMoveWorkflowBoundaries(options);
         await FileTreePurgingWorkflowBoundaries(options);
-        await ContainerPermissionBoundaries(options);
     }
 
     private static async Task PrivateWorkflow(PlatformDbContext db)
