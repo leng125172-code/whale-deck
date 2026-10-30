@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-10-30酒馆/看板娘新增权限**设计待实现**：`PERM-AI-USE`须显式授予；`PERM-AI-READ-OWN/EDIT-OWN/GENERATE/IMPORT-EXPORT`逐资源/模型授权，`PERM-AI-CONFIGURE-SERVICE/EXTENSION-MANAGE/SHARE`独立管理，`PERM-PET-CONFIGURE-OWN/STATE-OWN`和`PERM-AI-BALANCE-READ-OWN`仅本人。完整[权限/资源及工具安全契约](AI_TAVERN_MASCOT.md)与[验收账本](AI_TAVERN_ACCEPTANCE.md)覆盖匿名/普通/管理员/跨用户、CSRF/Origin、退出/两小时复核、Worker发出请求前及在途撤权。管理员不默认读全部聊天/余额，AI不继承操作者宿主管理能力；模型输出/角色卡/扩展脚本不构成运维授权。ST原生密码、登录和资料映射Authentik/BFF，不开第二身份源；下方既有User默认权限不因此自动扩大。
+
 2026-10-21范围覆盖：当前为[单工作站59项](SCOPE_SINGLE_WORKSTATION.md)，不建立企业tenant、节点角色、订阅或邀请体系。保留Authentik管理员/普通用户、本人门户，以及按Subject/稳定组ID授予的开发空间动作；Worker最小授权、二次确认、资源归属和跨用户拒绝不变。下面P5租户描述是旧范围，不作为新权限实施要求；开发期sudo不传播到产品。
 
 正文搜索 **5e131e9/RPC1.29已安装签收**：真实管理员Cookie/CSRF/Origin与实际UDS读取、独立非管理员403、匿名401、缺CSRF400/外源403和保护项403通过；源码双根授权/返回前管理员复核测试保持。320/1440明暗真实网页通过且无管理写请求，见[最终证据及测试修正](qa/FILE_CONTENT_SEARCH.md)。以下“源码候选/未部署”为历史，不据此放宽其他文件功能或宣告全部76项完成。

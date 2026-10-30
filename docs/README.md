@@ -2,6 +2,8 @@
 
 本目录拆分产品、设计、开发与验收文档。2026-10-21用户授权的[SCOPE_SINGLE_WORKSTATION.md](SCOPE_SINGLE_WORKSTATION.md)及[GOAL_P0_P5.md](GOAL_P0_P5.md)定义当前59项范围，`FEATURES.md`同步产品定位；其他文档不得自行恢复已移出的17项或扩大目标。10月13日76项和更早HOLD为历史，不作为当前要求。
 
+2026-10-30用户已明确追加完整酒馆C#重构、Vue原生调用/配置与dsh-pet参考看板娘：归入现有主任务的子计划，59个主ID不变，实际范围扩大；原“AI仅调研、不纳入范围”不再适用。272个ST和6个PET逐项登记，尚未实现/部署/真实验收；17个移出主任务不恢复。
+
 2026-10-13 已确认扩大为 [P0–P5 完整目标](GOAL_P0_P5.md)，原 HOLD/预留不再排除任务。旧页面/用例/RPC/模型/权限表是历史实现契约；新增能力须按任务 ID 同步专用设计后实现，不因解除预留而直接放开权限。用户已恢复开发，不设独立原型阶段。
 
 ## 文档导航
@@ -19,6 +21,11 @@
 | [PERMISSIONS.md](PERMISSIONS.md) | Authentik 管理员组、普通用户、字段可见性和操作矩阵 |
 | [DATA_MODEL.md](DATA_MODEL.md) | PostgreSQL/Valkey 数据模型、关系、索引和保留策略 |
 | [ROADMAP.md](ROADMAP.md) | 分阶段开发任务、依赖、验收条件和测试要求 |
+| [C#酒馆与AI看板娘设计](AI_TAVERN_MASCOT.md) | 当前明确纳入范围的架构、页面/权限/数据、dsh-pet六类能力、依赖、失败恢复与分批验收 |
+| [酒馆逐项移植验收账本](AI_TAVERN_ACCEPTANCE.md) | 全部272个ST ID及6个PET子项；逐条记录实现、真实依赖/UI与失败恢复证据，当前均未验收 |
+| [dsh-pet固定源码调研](research/DSH_PET_REFERENCE.md) | 动画/物理/碎碎念/对话/余额/睡眠事实、源文件blob与Vue/C#迁移及素材许可边界 |
+| [AI 看板娘早期桥接调研](research/AI_MASCOT_SILLYTAVERN_CODEX_DOCKER.md) | 历史酒馆/Subscriptions/Codex CLI/Docker路线；现以C#重构为准，保留CLI首批待验证适配方向 |
+| [酒馆完整功能清单](research/SILLYTAVERN_FEATURE_INVENTORY.md) | 已纳入范围的22域206能力、14随包模块归属与66目录扩展；不代表已移植/已兼容 |
 
 ## 标识约定
 

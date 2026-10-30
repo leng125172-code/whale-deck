@@ -3,9 +3,9 @@
   "name": "WhaleDeck",
   "englishName": "Whale Deck",
   "abbreviation": "WD",
-  "summary": "面向单工作站的容器化协同与运维面板，包含管理界面、宿主Agent、维护入口及多语言开发空间。主体已部署；按用户授权精简为59项，不建设多节点/企业租户平台。",
+  "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_OWNERSHIP_AGENT_RPC.md；docs/UI_STYLE_GUIDE.md",
-  "nextStep": "所有者引擎及1.48安装态签名RPC/HDD与精确清理通过；实现永久意图/EF迁移、七方双向写入保护、Worker/管理员API/Vue及真实身份页面整链；继续递归/ACL/可恢复删除和59项，17项移出不算完成。 P0-08按UI_STYLE_GUIDE.md分批实施卡片视觉与明暗一致性，新增业务页面同步采用，样式待验收。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_OWNERSHIP_AGENT_RPC.md；docs/UI_STYLE_GUIDE.md；docs/AI_TAVERN_MASCOT.md；docs/AI_TAVERN_ACCEPTANCE.md；docs/research/DSH_PET_REFERENCE.md",
+  "nextStep": "所有者引擎及1.48安装态签名RPC/HDD与精确清理通过；实现永久意图/EF迁移、七方双向写入保护、Worker/管理员API/Vue及真实身份页面整链；继续递归/ACL/可恢复删除和59项，17项移出不算完成。 P0-08按UI_STYLE_GUIDE.md分批实施卡片视觉与明暗一致性，新增业务页面同步采用，样式待验收。 用户追加DEV-AI-001..008：C#酒馆272个ST与6个PET验收子项、Vue配置/动画物理/碎碎念对话/真实余额/睡眠；仅计划未实现，先固定依赖/契约，再按批真实验收。"
 }
