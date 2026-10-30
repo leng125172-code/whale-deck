@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_OWNERSHIP_AGENT_RPC.md；docs/UI_STYLE_GUIDE.md；docs/AI_TAVERN_MASCOT.md；docs/AI_TAVERN_ACCEPTANCE.md；docs/research/DSH_PET_REFERENCE.md；docs/AI_PROVIDERS_LIVE2D.md；docs/DOCUMENT_AUDIT_2026_10_30.md；docs/qa/CONTAINER_OWNERSHIP_WORKFLOW.md",
-  "nextStep": "目标已由用户[Goal]启用。所有者内部业务编排/独立三层签名已实现并通过3579 Unit及全方案Release；下一步实现真实EF仓储/migration、七方双向写入保护/双Job/Outbox/审计，再接Worker/API/Vue和真实身份/文件/HDD页面。继续递归/ACL/可恢复删除、UI/C#酒馆/统一供应商/AI Live2D与全部59项；17项移出不算完成，dev修复覆盖、不自动回滚。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_OWNERSHIP_AGENT_RPC.md；docs/UI_STYLE_GUIDE.md；docs/AI_TAVERN_MASCOT.md；docs/AI_TAVERN_ACCEPTANCE.md；docs/research/DSH_PET_REFERENCE.md；docs/AI_PROVIDERS_LIVE2D.md；docs/DOCUMENT_AUDIT_2026_10_30.md；docs/qa/CONTAINER_OWNERSHIP_WORKFLOW.md；docs/qa/CONTAINER_OWNERSHIP_PERSISTENCE.md",
+  "nextStep": "所有者永久仓储/EF迁移、双Job/Outbox/审计/租约、七方双向写保护和专用Worker候选已通过3581 Unit/214 Integration及98bdcca冻结真实PG1/1、清理与11核心不变；尚未部署。接管理员API/Vue预检确认/原引用/取消/Unknown，完成真实身份/实际文件/HDD和页面故障整链，再递归/ACL/可恢复删除与其余59项/UI/C#酒馆/统一供应商/AI Live2D。17项移出不算完成，dev修复覆盖、不自动回滚。"
 }

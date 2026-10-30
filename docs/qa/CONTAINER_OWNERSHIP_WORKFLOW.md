@@ -1,5 +1,7 @@
 # 容器所有者：内部业务编排与签名候选
 
+后续更新：永久仓储/EF迁移、七方双向保护及专用Worker候选已实现，并通过真实隔离PostgreSQL，见[新批证据](CONTAINER_OWNERSHIP_PERSISTENCE.md)。下文保留deef721内部编排批次的原始测试与当时接续点；不代表当前源码仍缺SQL，但生产覆盖/API/Vue和真实页面仍待。
+
 日期：2026-10-30。状态：**内部候选已实现并通过自动化验证，未接SQL/Worker注册/API/Vue，未部署，不是完整所有者验收。** 安装态引擎/1.48 RPC的既有证据见[前批记录](CONTAINER_OWNERSHIP_AGENT_RPC.md)。本轮不重新使用旧HDD/页面证据冒充新业务通过。
 
 ## 实现
