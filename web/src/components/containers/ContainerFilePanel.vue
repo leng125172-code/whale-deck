@@ -9,6 +9,8 @@ import type { FileEntry } from '@/services/fileManagement'
 import ContainerUploadPanel from '@/components/containers/ContainerUploadPanel.vue'
 import ContainerDirectoryPanel from '@/components/containers/ContainerDirectoryPanel.vue'
 import ContainerCopyPanel from '@/components/containers/ContainerCopyPanel.vue'
+import ContainerPermissionPanel from '@/components/containers/ContainerPermissionPanel.vue'
+import { canPermissionContainerEntry } from '@/services/containerPermissions'
 import ContainerMovePanel from '@/components/containers/ContainerMovePanel.vue'
 import { canMoveContainerEntry } from '@/services/containerMoves'
 import { canCopyContainerEntry } from '@/services/containerCopies'
@@ -40,11 +42,13 @@ const editor = ref<InstanceType<typeof ContainerTextEditor> | null>(null)
 const upload = ref<InstanceType<typeof ContainerUploadPanel> | null>(null)
 const history = ref<InstanceType<typeof ContainerHistoryPanel> | null>(null)
 const copier = ref<InstanceType<typeof ContainerCopyPanel> | null>(null)
+const permissionEditor = ref<InstanceType<typeof ContainerPermissionPanel> | null>(null)
 const mover = ref<InstanceType<typeof ContainerMovePanel> | null>(null)
 const editorLocked = ref(false),
   directoryLocked = ref(false),
   uploadLocked = ref(false),
   historyLocked = ref(false),
+  permissionLocked = ref(false),
   copyLocked = ref(false),
   moveLocked = ref(false)
 async function prepareEdited(value: PreparedContainerText) {
@@ -226,7 +230,9 @@ onBeforeUnmount(() => {
       <div class="container-files__buttons">
         <el-button
           v-if="target"
-          :disabled="!!busy || uploadLocked || editorLocked || copyLocked || moveLocked"
+          :disabled="
+            !!busy || uploadLocked || editorLocked || copyLocked || moveLocked || permissionLocked
+          "
           @click="history?.open()"
           >历史版本</el-button
         >
@@ -265,13 +271,36 @@ onBeforeUnmount(() => {
         <el-button native-type="submit" :disabled="!!busy">前往</el-button>
       </form>
     </div>
+    <ContainerPermissionPanel
+      v-if="target"
+      ref="permissionEditor"
+      :target="target"
+      :path="path"
+      :disabled="
+        !!busy ||
+        editorLocked ||
+        historyLocked ||
+        uploadLocked ||
+        directoryLocked ||
+        copyLocked ||
+        moveLocked
+      "
+      @refresh="load(path)"
+      @locked="permissionLocked = $event"
+    />
     <ContainerCopyPanel
       v-if="target"
       ref="copier"
       :target="target"
       :path="path"
       :disabled="
-        !!busy || editorLocked || historyLocked || uploadLocked || directoryLocked || moveLocked
+        !!busy ||
+        editorLocked ||
+        historyLocked ||
+        uploadLocked ||
+        directoryLocked ||
+        moveLocked ||
+        permissionLocked
       "
       @refresh="load(path)"
       @locked="copyLocked = $event"
@@ -282,7 +311,13 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
-        !!busy || editorLocked || historyLocked || uploadLocked || directoryLocked || copyLocked
+        !!busy ||
+        editorLocked ||
+        historyLocked ||
+        uploadLocked ||
+        directoryLocked ||
+        copyLocked ||
+        permissionLocked
       "
       @refresh="load(path)"
       @locked="moveLocked = $event"
@@ -292,7 +327,13 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
-        !!busy || editorLocked || historyLocked || uploadLocked || copyLocked || moveLocked
+        !!busy ||
+        editorLocked ||
+        historyLocked ||
+        uploadLocked ||
+        copyLocked ||
+        moveLocked ||
+        permissionLocked
       "
       @refresh="load(path)"
       @locked="directoryLocked = $event"
@@ -303,7 +344,13 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
-        !!busy || editorLocked || historyLocked || directoryLocked || copyLocked || moveLocked
+        !!busy ||
+        editorLocked ||
+        historyLocked ||
+        directoryLocked ||
+        copyLocked ||
+        moveLocked ||
+        permissionLocked
       "
       @refresh="load(path)"
       @locked="uploadLocked = $event"
@@ -315,7 +362,13 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
-        !!busy || uploadLocked || historyLocked || directoryLocked || copyLocked || moveLocked
+        !!busy ||
+        uploadLocked ||
+        historyLocked ||
+        directoryLocked ||
+        copyLocked ||
+        moveLocked ||
+        permissionLocked
       "
       @locked="editorLocked = $event"
       @prepared="prepareEdited"
@@ -327,7 +380,13 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
-        !!busy || uploadLocked || editorLocked || directoryLocked || copyLocked || moveLocked
+        !!busy ||
+        uploadLocked ||
+        editorLocked ||
+        directoryLocked ||
+        copyLocked ||
+        moveLocked ||
+        permissionLocked
       "
       @locked="historyLocked = $event"
       @refresh="load(path)"
@@ -376,6 +435,27 @@ onBeforeUnmount(() => {
               directoryLocked ||
               copyLocked ||
               moveLocked ||
+              permissionLocked ||
+              !canPermissionContainerEntry(entry)
+            "
+            :aria-label="`权限 ${entry.name}`"
+            title="先预检再确认，仅修改当前对象的普通权限，不递归"
+            @click="permissionEditor?.open(entry)"
+            >权限</el-button
+          >
+
+          <el-button
+            v-if="!entry.isProtected && ['File', 'Directory'].includes(entry.kind)"
+            link
+            :disabled="
+              !!busy ||
+              uploadLocked ||
+              editorLocked ||
+              historyLocked ||
+              directoryLocked ||
+              copyLocked ||
+              moveLocked ||
+              permissionLocked ||
               !canCopyContainerEntry(entry)
             "
             :aria-label="`复制 ${entry.name}`"
@@ -398,6 +478,7 @@ onBeforeUnmount(() => {
               directoryLocked ||
               copyLocked ||
               moveLocked ||
+              permissionLocked ||
               !canMoveContainerEntry(entry)
             "
             :aria-label="`移动 ${entry.name}`"
@@ -424,7 +505,9 @@ onBeforeUnmount(() => {
           <el-button
             v-if="entry.kind === 'File' && !entry.isProtected"
             link
-            :disabled="!!busy || uploadLocked || editorLocked || copyLocked || moveLocked"
+            :disabled="
+              !!busy || uploadLocked || editorLocked || copyLocked || moveLocked || permissionLocked
+            "
             :aria-label="`历史版本 ${entry.name}`"
             @click="history?.open(filePath(path, entry.name))"
             >历史</el-button

@@ -39,7 +39,14 @@ it('clears current identity and private location once on a real BFF 401', async 
     await import('@/services/fileBrowserLocation')
   rememberFileBrowserLocation(admin.subject, { rootId: 'whaledeck.files.shared', path: 'private' })
   const { saveCopyHint, copyHint } = await import('@/services/containerCopyHints')
+  const { savePermissionHint, permissionHint } = await import('@/services/containerPermissionHints')
   saveCopyHint({
+    subject: admin.subject,
+    containerId: 'a'.repeat(64),
+    key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
+    id: null,
+  })
+  savePermissionHint({
     subject: admin.subject,
     containerId: 'a'.repeat(64),
     key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
@@ -54,6 +61,7 @@ it('clears current identity and private location once on a real BFF 401', async 
   expect(authSession.unavailable.value).toBe(false)
   expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
   expect(copyHint(admin.subject, 'a'.repeat(64))).toBeNull()
+  expect(permissionHint(admin.subject, 'a'.repeat(64))).toBeNull()
   expect(expired).toHaveBeenCalledOnce()
 })
 

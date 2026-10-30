@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { fileBrowserLocationKey, rememberFileBrowserLocation } from '@/services/fileBrowserLocation'
 import { copyHint, saveCopyHint } from '@/services/containerCopyHints'
+import { permissionHint, savePermissionHint } from '@/services/containerPermissionHints'
 
 const { request } = vi.hoisted(() => ({ request: vi.fn<() => Promise<unknown>>() }))
 vi.mock('@/services/apiClient', async (original) => ({
@@ -64,11 +65,18 @@ it.each(['ordinary', 'another-admin'])(
       key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
       id: null,
     })
+    savePermissionHint({
+      subject: 'admin',
+      containerId: 'a'.repeat(64),
+      key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
+      id: null,
+    })
     request.mockResolvedValueOnce({ subject, isAdministrator: subject === 'another-admin' })
     const { authSession } = await import('@/services/authSession')
     await authSession.initialize()
     expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
     expect(copyHint('admin', 'a'.repeat(64))).toBeNull()
+    expect(permissionHint('admin', 'a'.repeat(64))).toBeNull()
   },
 )
 it('keeps same-admin hint on refresh, clears on downgrade and logout without a FilesView', async () => {
@@ -85,15 +93,29 @@ it('keeps same-admin hint on refresh, clears on downgrade and logout without a F
     key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
     id: null,
   })
+  savePermissionHint({
+    subject: 'admin',
+    containerId: 'a'.repeat(64),
+    key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
+    id: null,
+  })
   await authSession.initialize()
   await authSession.refresh()
   expect(sessionStorage.getItem(fileBrowserLocationKey)).not.toBeNull()
   expect(copyHint('admin', 'a'.repeat(64))).not.toBeNull()
+  expect(permissionHint('admin', 'a'.repeat(64))).not.toBeNull()
   await authSession.refresh()
   expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
   expect(copyHint('admin', 'a'.repeat(64))).toBeNull()
+  expect(permissionHint('admin', 'a'.repeat(64))).toBeNull()
   rememberFileBrowserLocation('admin', { rootId: 'whaledeck.files.shared', path: '资料' })
   saveCopyHint({
+    subject: 'admin',
+    containerId: 'a'.repeat(64),
+    key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
+    id: null,
+  })
+  savePermissionHint({
     subject: 'admin',
     containerId: 'a'.repeat(64),
     key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
@@ -102,6 +124,7 @@ it('keeps same-admin hint on refresh, clears on downgrade and logout without a F
   await authSession.logout()
   expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
   expect(copyHint('admin', 'a'.repeat(64))).toBeNull()
+  expect(permissionHint('admin', 'a'.repeat(64))).toBeNull()
   const { navigateToLogout } = await import('@/services/logoutNavigation')
   expect(navigateToLogout).toHaveBeenCalledOnce()
 })
