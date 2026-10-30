@@ -78,13 +78,15 @@ def main():
     owned.common.verify_apps_directory(owned.common.APPS, __import__('pwd').getpwnam('whaledeck-agent').pw_uid)
     evidence = repo / 'deploy/artifacts' / ('container-ownership-' + uuid.uuid4().hex); evidence.mkdir(mode=0o700)
     state = evidence / 'root-state'; state.mkdir(mode=0o700)
-    name = 'wdv-container-ownership-' + uuid.uuid4().hex; volume_name = 'whaledeck-app-native-permissions-' + uuid.uuid4().hex
-    folder = owned.common.APPS / name; folder.mkdir(mode=0o755); folder.fchown(0o755)
+    name = 'wdv-container-ownership-' + uuid.uuid4().hex; volume_name = 'whaledeck-app-native-ownership-' + uuid.uuid4().hex
+    folder = owned.common.APPS / name
+    (evidence / 'scope.json').write_text(json.dumps({'source': str(folder), 'name': name, 'volumeName': volume_name, 'revision': revision}))
+    folder.mkdir(mode=0o755); folder.chmod(0o755)
     identifier = volume = fast = None; proved = False; results = []
     content = hashlib.shake_256(('owned-container-ownership:' + name).encode()).digest(2 * 1024**2 + 7)
-    with tempfile.TemporaryDirectory(prefix='wd-native-permissions-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='wd-native-ownership-') as temporary:
         bundle = Path(temporary)
-        for module, raw in frozen.items(): (bundle / module).write_bytes(raw); (bundle / module).fchown(0o750)
+        for module, raw in frozen.items(): (bundle / module).write_bytes(raw); (bundle / module).chmod(0o750)
         reader = load(bundle / names[1], 'native_ownership_reader')
         files = reader.trusted_module(names[0], 'native_ownership_files'); docker = reader.trusted_module(names[2], 'native_ownership_docker')
         upload_type = load(bundle / names[3], 'native_ownership_upload').ContainerUploads
@@ -100,7 +102,7 @@ def main():
             volume = json.loads(run('docker', 'volume', 'inspect', volume_name))[0]
             assert volume['Name'] == volume_name and volume['Driver'] == 'local' and not volume.get('Options') and volume['Labels']['io.whaledeck.validation'] == name
             fast = Path(volume['Mountpoint']); assert fast.resolve(strict=True) == fast and not list(fast.iterdir())
-            os.chown(fast, 1000, 1000); fast.fchown(0o755)
+            os.chown(fast, 1000, 1000); fast.chmod(0o755)
             assert folder.stat().st_dev != fast.stat().st_dev
             fast_device = fast.stat().st_dev; block = Path('/sys/dev/block') / (str(os.major(fast_device)) + ':' + str(os.minor(fast_device)))
             assert block.resolve(strict=True).name.startswith('nvme'), 'ACTUAL_NVME_VOLUME_NOT_PROVED'
@@ -108,7 +110,7 @@ def main():
                 (root / '属主.bin').write_bytes(content); (root / '属主目录').mkdir(mode=0o750); (root / '属主目录/代码.bin').write_bytes(content); (root / '属主目录/空目录').mkdir(mode=0o700)
                 for relative in ('属主.bin', '属主目录', '属主目录/代码.bin', '属主目录/空目录'):
                     path = root / relative; os.chown(path, 2100, 3100)
-                    path.fchown(0o640 if path.is_file() else 0o750 if relative == '属主目录' else 0o700)
+                    path.chmod(0o640 if path.is_file() else 0o750 if relative == '属主目录' else 0o700)
                     os.utime(path, ns=(1700000000123456789, 1700000000123456789))
             original = {'work': inventory(folder, reader, content), 'fast': inventory(fast, reader, content)}
             (evidence / 'prepared-fixture.json').write_text(json.dumps({'revision': revision, 'source': str(folder), 'name': name,
@@ -197,13 +199,13 @@ def main():
         'fullBytesAndOriginalInodesAndChildrenVerified': True, 'actualAttestedHddMetadata': True, 'coreUnchanged': True,
         'exactContainerAndSourceAndVolumeCleaned': True, 'candidateRootReceiptsAndHddHistoryRetained': True,
         'installedHelper': False, 'signedRpc': False, 'humanBffOrUi': False}))
-    print(json.dumps({'containerPermissionCandidate': 'passed', 'evidence': str(evidence), 'operations': len(results), 'actualCrashCuts': 8}), flush=True)
+    print(json.dumps({'containerOwnershipCandidate': 'passed', 'evidence': str(evidence), 'operations': len(results), 'actualCrashCuts': 8}), flush=True)
 
 
 if __name__ == '__main__':
     try: main()
     except BaseException as error:
         import traceback
-        print(json.dumps({'containerPermissionCandidate': 'failed', 'phase': PHASE, 'failureType': type(error).__name__,
+        print(json.dumps({'containerOwnershipCandidate': 'failed', 'phase': PHASE, 'failureType': type(error).__name__,
             'locations': [{'file': Path(f.filename).name, 'line': f.lineno} for f in traceback.extract_tb(error.__traceback__)], 'unprovedDataPreserved': True}), file=sys.stderr)
         raise SystemExit(1) from None
