@@ -51,6 +51,7 @@ jobs:
           python3 -W error::SyntaxWarning -m py_compile deploy/host/whaledeck-container-history-transport.py
           python3 -m py_compile deploy/host/whaledeck-container-publish.py deploy/validation/validate_container_file_publishing.py
           python3 -m py_compile deploy/host/whaledeck-container-directories.py deploy/host/whaledeck-container-directory-transport.py deploy/validation/validate_container_file_directories.py
+          python3 -m py_compile deploy/host/whaledeck-container-permissions.py deploy/validation/validate_container_permissions.py
           python3 -m py_compile deploy/validation/validate_container_directory_agent.py
           python3 -m py_compile deploy/validation/validate_container_directory_browser.py
           python3 -m py_compile deploy/validation/validate_container_directory_restart.py
