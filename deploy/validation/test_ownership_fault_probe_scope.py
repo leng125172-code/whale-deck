@@ -105,6 +105,17 @@ class OwnershipFaultScopeTests(unittest.TestCase):
                 finally: child.terminate(); child.wait(timeout=2)
             finally: os.close(root_fd)
 
+    def test_process_cmdline_permission_denial_is_not_signal_authorization(self):
+        with patch.object(cut.Path, 'read_bytes', side_effect=PermissionError):
+            self.assertFalse(cut.bound_fds(os.getpid(), (1, 2), (3, 4)))
+
+    def test_disappearing_or_inaccessible_fds_cannot_authorize_signal(self):
+        argv = b'/usr/bin/python3\0-I\0' + cut.TRANSPORT + b'\0apply\0'
+        with patch.object(cut.Path, 'read_bytes', return_value=argv):
+            for error in (FileNotFoundError, PermissionError):
+                with self.subTest(error=error), patch.object(cut, 'identity', side_effect=error):
+                    self.assertFalse(cut.bound_fds(os.getpid(), (1, 2), (3, 4)))
+
     def test_scope_refuses_non_owned_source_before_pidfd_access(self):
         with patch.object(cut.os, 'pidfd_open', side_effect=AssertionError('must not open pidfd')) as opened:
             with self.assertRaises(AssertionError): cut.freeze_before_owner(self.row, self.source, 100)

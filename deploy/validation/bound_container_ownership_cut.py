@@ -76,9 +76,9 @@ def bound_fds(pid, root_identity, lock_identity):
         found = set()
         for descriptor in Path(f'/proc/{pid}/fd').iterdir():
             try: found.add(identity(descriptor))
-            except (FileNotFoundError, OwnershipError): pass
+            except (FileNotFoundError, PermissionError): pass
         return root_identity in found and lock_identity in found
-    except (FileNotFoundError, ProcessLookupError, OwnershipError): return False
+    except (FileNotFoundError, ProcessLookupError, PermissionError): return False
 
 
 class HeldOwnership(HeldCopy):
