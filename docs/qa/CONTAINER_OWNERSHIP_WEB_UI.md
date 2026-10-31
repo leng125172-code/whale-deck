@@ -1,5 +1,7 @@
 # 容器所有者：管理员 API 与 Vue 候选验证
 
+> 2026-10-31后续：d5e62ca已覆盖，真实身份/文件/HDD常规页面7场景及独立复核通过，见[实机证据](CONTAINER_OWNERSHIP_REAL_UI.md)。下方未部署/API/UI待接等保留为原批次事实；所有者进行中故障/Unknown、递归/ACL/删除与长期清理仍待。
+
 日期：2026-10-31。基于 `6134e22` 的开发候选；永久 SQL/专用 Worker 的原生证据见[前批记录](CONTAINER_OWNERSHIP_PERSISTENCE.md)。**本批未部署，也没有真实 Authentik → Vue → SQL/Worker → Agent → 实际文件/HDD 的整链验收。** 下述浏览器使用本地生产构建预览和明确测试接口，不能替代实机验收。
 
 ## 已实现的候选

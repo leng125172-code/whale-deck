@@ -126,6 +126,9 @@ def unprivileged(base, baseline, original):
 def main():
     global PHASE
     assert os.geteuid() == 0 and len(sys.argv) == 2; os.umask(0o077)
+    # Git status may otherwise refresh a user-owned index as root/0600.
+    # Acceptance only reads the frozen source; it must never replace that index.
+    os.environ['GIT_OPTIONAL_LOCKS'] = '0'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     repo = Path(__file__).resolve().parents[2]
     base = os.environ.get('WHALEDECK_URL','http://127.0.0.1:8080'); assert base == 'http://127.0.0.1:8080'

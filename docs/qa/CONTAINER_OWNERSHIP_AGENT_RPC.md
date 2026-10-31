@@ -1,5 +1,7 @@
 # 容器所有者变更：独立引擎与Agent1.48实施恢复点
 
+> 2026-10-31后续：d5e62ca已覆盖，真实身份/文件/HDD常规页面7场景及独立复核通过，见[实机证据](CONTAINER_OWNERSHIP_REAL_UI.md)。下方未部署/API/UI待接等保留为原批次事实；所有者进行中故障/Unknown、递归/ACL/删除与长期清理仍待。
+
 2026-10-30。独立非递归UID/GID引擎、专用签名RPC、SDK和固定受限helper已实现，宿主Agent/MaintenanceHost已安装`2a9ceb6`/协议1.48。**仅引擎和安装态协议子门禁通过；永久业务意图/EF迁移、共享写入屏障、Worker、管理员API、Vue和真实人类页面尚未接通，不能签所有者功能完成。** API/Worker/Gateway仍为`cb4c400`。递归、ACL和删除继续；59项active，17项移出不算完成。
 
 ## 本次实现与授权边界

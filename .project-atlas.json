@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_OWNERSHIP_AGENT_RPC.md；docs/UI_STYLE_GUIDE.md；docs/AI_TAVERN_MASCOT.md；docs/AI_TAVERN_ACCEPTANCE.md；docs/research/DSH_PET_REFERENCE.md；docs/AI_PROVIDERS_LIVE2D.md；docs/DOCUMENT_AUDIT_2026_10_30.md；docs/qa/CONTAINER_OWNERSHIP_WORKFLOW.md；docs/qa/CONTAINER_OWNERSHIP_PERSISTENCE.md；docs/qa/CONTAINER_OWNERSHIP_WEB_UI.md",
-  "nextStep": "所有者管理员API/Vue与小屏取消修复已通过候选验证（3581 Unit/247 Integration、755前端、34所有者及89关联浏览器），尚未部署。冻结后覆盖dev并完成真实Authentik→Vue→SQL/Worker→Agent→实际文件/HDD与故障整链；继续递归/ACL/可恢复删除/长期清理及其余59项/UI/C#酒馆/统一供应商/AI Live2D，17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_OWNERSHIP_AGENT_RPC.md；docs/UI_STYLE_GUIDE.md；docs/AI_TAVERN_MASCOT.md；docs/AI_TAVERN_ACCEPTANCE.md；docs/research/DSH_PET_REFERENCE.md；docs/AI_PROVIDERS_LIVE2D.md；docs/DOCUMENT_AUDIT_2026_10_30.md；docs/qa/CONTAINER_OWNERSHIP_WORKFLOW.md；docs/qa/CONTAINER_OWNERSHIP_PERSISTENCE.md；docs/qa/CONTAINER_OWNERSHIP_WEB_UI.md；docs/qa/CONTAINER_OWNERSHIP_REAL_UI.md",
+  "nextStep": "六组件d5e62ca已覆盖并通过所有者真实Authentik/文件/HDD常规页面7场景（6成功1取消）及独立SQL/Root/HDD/准确清理，11核心healthy。继续所有者进行中取消/退出/撤权/Worker与Agent重启/Unknown当前管理员真实页面故障，再递归/ACL/可恢复删除/长期清理及其余59项/UI/C#酒馆/统一供应商/AI Live2D；17项移出不算完成，不自动回滚dev。"
 }
