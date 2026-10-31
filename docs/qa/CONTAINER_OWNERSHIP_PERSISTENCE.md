@@ -2,6 +2,9 @@
 
 日期：2026-10-30。源码候选`ef08f76`实现永久仓储/迁移及七方保护；`ac5c0f3`追加专用Worker注册、Outbox隔离和禁止通用重试。**尚未部署，没有公开所有者API/Vue或真实人类页面证据。** 不把数据库验证或合成Root回执当作实际fchown/HDD/UI验收。
 
+
+2026-10-31接续：管理员API/Vue源码候选及小屏取消修复已完成分层验证，见[后续批次](CONTAINER_OWNERSHIP_WEB_UI.md)。上文及下方“未接API/UI”描述保留为2026-10-30批次事实；候选仍未部署，真实身份/实盘/HDD页面继续。
+
 ## 本轮实现
 
 - 独立`container_ownership_intents`，EF migration `20261030143305_ContainerOwnershipIntents`及snapshot；13类CHECK、双OperationJob受限外键、版本/租约/状态索引，唯一发布屏障及原请求/计划/执行/started/三态结果/HDD事实/终态不可改、永久意图不可删除。Down有历史行时拒绝，不自动丢弃历史。

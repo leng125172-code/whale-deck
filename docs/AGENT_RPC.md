@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-10-31所有者管理员API/Vue候选与小屏取消修复通过，未部署**：显式UID/GID与稳定私有输入错误、原引用预检/确认/取消、当前管理员Unknown处置及身份清理/互锁已接。3581 Unit、247 Integration通过（7默认原生跳过），755前端单元、34所有者生产预览（含320×600明暗取消和原确认不可改写）、89关联浏览器及Release/类型/构建/lint/格式通过。小屏正文内滚动保留底部动作，已复核取消可见；过期提示与原确认不可改写校验也已修正。浏览器为明确测试接口，不冒称真实Authentik/文件/HDD整链。尚未覆盖发布，继续真实身份/实盘与故障验收、递归/ACL/删除及其余59项。[候选、修复与验证边界](qa/CONTAINER_OWNERSHIP_WEB_UI.md)。
+
 - **2026-10-30所有者永久SQL/七方保护与Worker候选通过真实隔离PG，未部署**：ef08f76/ac5c0f3实现独立意图表/EF迁移/永久双Job/Outbox/审计/租约、七方双向发布保护/路径与预算及专用Worker，禁止通用重试/Outbox接管。3581 Unit、214 Integration通过（7默认原生跳过），Release零警告错误；冻结98bdcca真实PG1执行/1通过/0跳过并清理，合成回执不冒称Root。修正旧最新降级断言且独立保留所有旧守卫，原失败记录保留；独立确认11核心不变且healthy、3测试容器和临时库0。管理员API/Vue与真实身份/实盘/HDD页面仍待，运行版本未改。[完整证据及失败](qa/CONTAINER_OWNERSHIP_PERSISTENCE.md)。
 
 - **2026-10-30所有者内部业务编排候选通过，未部署**：独立请求/计划/执行及确认签名、原登录/幂等/期限、取消/租约/Unknown与不重Apply、原inode属主/执行身份/目标UID/GID分离已实现。3579 Unit全部通过（新增101），全方案Release零警告错误；Repository/Gateway为明确内存夹具，不算真实PG/实盘/页面。EF仓储/七方保护/专用Worker注册/API/Vue和真实身份整链继续，运行版本未改。[候选与验证边界](qa/CONTAINER_OWNERSHIP_WORKFLOW.md)。

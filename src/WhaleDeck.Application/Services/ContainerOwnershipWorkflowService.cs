@@ -92,7 +92,7 @@ public sealed class ContainerOwnershipWorkflowService(ContainerFileUploadService
         var confirmation = ready ? new ContainerOwnershipConfirmationDto(protector.SignOwnershipConfirmation(new(row.Id, row.ActorSubject, row.LoginBinding, row.PlanHash!, row.ReadyExpiresAtUtc!.Value)),
             row.ReadyExpiresAtUtc.Value, "预检不修改所有者。确认后校验原容器实例、原inode版本及属性，先保留HDD元数据，再仅修改当前对象的UID/GID；不递归、不修改模式或ACL，目录子项保持。原文件属主与容器执行身份分别展示。断线后查询原任务，未知结果保留保护，不自动重做或恢复所有者。") : null;
         return new(row.Id, row.Id, row.ExecutionJobId, ContainerOwnershipWorkflowValidation.ReadCommand(row), row.State == "Ready" && !ready ? "Expired" : row.State,
-            plan?.Kind, plan?.SourceIdentity.OwnerUid, plan?.SourceIdentity.OwnerGid, plan?.NoChange, row.ReadyExpiresAtUtc, row.ResultCode, row.Version,
+            plan?.Kind, plan?.SourceIdentity.OwnerUid, plan?.SourceIdentity.OwnerGid, plan?.OwnerUid, plan?.OwnerGid, plan?.NoChange, row.ReadyExpiresAtUtc, row.ResultCode, row.Version,
             row.PublishedVersion, row.OwnerConfirmed, row.HistoryMayExist, row.HistoryVerified, row.HistoryDigest, confirmation);
     }
 }

@@ -30,7 +30,8 @@ public sealed class ContainerOwnershipWorkflowTests
         Assert.Equal(0, f.Gateway.Plans); Assert.Equal(0, f.Gateway.Applies);
         await f.Dispatcher.TickAsync(default);
         var ready = await f.Get(); Assert.Equal("Ready", ready.State); Assert.NotNull(ready.Confirmation);
-        Assert.Equal(directory ? "Directory" : "File", ready.Kind); Assert.Equal(1000U, ready.OriginalUid); Assert.Equal(1001U, ready.OriginalGid); Assert.False(ready.NoChange);
+        Assert.Equal(directory ? "Directory" : "File", ready.Kind); Assert.Equal(1000U, ready.OriginalUid); Assert.Equal(1001U, ready.OriginalGid);
+        Assert.Equal(5100U, ready.ExecutorUid); Assert.Equal(5101U, ready.ExecutorGid); Assert.False(ready.NoChange);
         Assert.Equal(1, f.Gateway.Plans); Assert.Equal(0, f.Gateway.Applies); Assert.False(f.Repository.Row!.PublishBarrier);
         var confirmed = await f.Confirm(); Assert.NotEqual(confirmed.Id, confirmed.ExecutionJobId);
         await f.Dispatcher.TickAsync(default);
@@ -233,6 +234,7 @@ public sealed class ContainerOwnershipWorkflowTests
         await f.Ready(); var ready = await f.Get();
         Assert.Equal(uid, ready.Command.Uid); Assert.Equal(gid, ready.Command.Gid);
         Assert.Equal(1000U, ready.OriginalUid); Assert.Equal(1001U, ready.OriginalGid);
+        Assert.Equal(5100U, ready.ExecutorUid); Assert.Equal(5101U, ready.ExecutorGid);
         Assert.Equal(5100U, f.Gateway.PlanValue.OwnerUid); Assert.Equal(5101U, f.Gateway.PlanValue.OwnerGid);
         await f.Confirm(); await f.Dispatcher.TickAsync(default);
         Assert.Equal("Succeeded", (await f.Get()).State);
@@ -252,6 +254,7 @@ public sealed class ContainerOwnershipWorkflowTests
         f.Gateway.PlanValue = f.Gateway.PlanValue with { Command = f.Command with { Uid = 1000, Gid = 1001 }, NoChange = true };
         await f.Ready(); var ready = await f.Get(); Assert.True(ready.NoChange);
         Assert.Equal(1000U, ready.OriginalUid); Assert.Equal(1001U, ready.OriginalGid);
+        Assert.Equal(5100U, ready.ExecutorUid); Assert.Equal(5101U, ready.ExecutorGid);
         await f.Confirm(); await f.Dispatcher.TickAsync(default);
         Assert.Equal("Succeeded", (await f.Get()).State); Assert.True(f.Gateway.LastOperation!.Plan.NoChange);
     }

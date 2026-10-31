@@ -5,6 +5,7 @@ import { navigateToLogout } from '@/services/logoutNavigation'
 import { clearDirectoryHints, reconcileDirectoryHints } from '@/services/containerDirectoryHints'
 import { clearCopyHints, reconcileCopyHints } from '@/services/containerCopyHints'
 import { clearPermissionHints, reconcilePermissionHints } from '@/services/containerPermissionHints'
+import { clearOwnershipHints, reconcileOwnershipHints } from '@/services/containerOwnershipHints'
 import { clearMoveHints, reconcileMoveHints } from '@/services/containerMoveHints'
 import type { CurrentUser } from '@/services/contracts'
 import {
@@ -40,6 +41,7 @@ function expireSession() {
   clearDirectoryHints()
   clearCopyHints()
   clearPermissionHints()
+  clearOwnershipHints()
   clearMoveHints()
   if (import.meta.env.DEV) sessionStorage.removeItem(previewStorageKey)
   if (hadIdentity) expiredAction?.()
@@ -119,6 +121,7 @@ async function loadAuthSession() {
       reconcileDirectoryHints(user.value?.subject, user.value?.isAdministrator === true)
       reconcileCopyHints(user.value?.subject, user.value?.isAdministrator === true)
       reconcilePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
+      reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
       reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
       initialized.value = true
     }
@@ -158,6 +161,7 @@ async function logout() {
   clearDirectoryHints()
   clearCopyHints()
   clearPermissionHints()
+  clearOwnershipHints()
   clearMoveHints()
   if (import.meta.env.DEV) {
     generation++
@@ -187,6 +191,7 @@ async function refresh() {
     reconcileDirectoryHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileCopyHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcilePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
+    reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
   } catch (reason) {
     if (current === generation) {

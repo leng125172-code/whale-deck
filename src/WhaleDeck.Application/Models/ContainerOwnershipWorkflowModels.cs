@@ -13,7 +13,7 @@ public sealed record ContainerOwnershipConfirmation(Guid Id, string Actor, strin
 public sealed record ConfirmContainerOwnershipCommand(string PlanHash, bool Confirmed, long Version);
 public sealed record ContainerOwnershipConfirmationDto(string PlanHash, DateTimeOffset ExpiresAtUtc, string Warning);
 public sealed record ContainerOwnershipIntentDto(Guid Id, Guid PlanningJobId, Guid? ExecutionJobId, ContainerOwnershipCommandDto Command,
-    string State, string? Kind, uint? OriginalUid, uint? OriginalGid, bool? NoChange, DateTimeOffset? ReadyExpiresAtUtc, string? ResultCode,
+    string State, string? Kind, uint? OriginalUid, uint? OriginalGid, uint? ExecutorUid, uint? ExecutorGid, bool? NoChange, DateTimeOffset? ReadyExpiresAtUtc, string? ResultCode,
     long Version, string? PublishedVersion, bool? OwnerConfirmed, bool HistoryMayExist, bool HistoryVerified,
     string? HistoryDigest, ContainerOwnershipConfirmationDto? Confirmation);
 public sealed record AcknowledgeContainerOwnershipCommand(long Version, bool Confirmed);
