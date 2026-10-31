@@ -254,6 +254,25 @@ onBeforeUnmount(() => stop(true))
 </template>
 
 <style scoped>
+:global(.container-ownership-recovery) {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 24px);
+}
+:global(.container-ownership-recovery .el-dialog__body) {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:global(.container-ownership-recovery .el-dialog__header),
+:global(.container-ownership-recovery .el-dialog__footer) {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  :global(.container-ownership-recovery) {
+    margin-block: 12px;
+  }
+}
 .ownership-recovery__row {
   display: flex;
   flex-wrap: wrap;

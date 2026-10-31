@@ -148,17 +148,21 @@ test('ordinary user never sends a ownership or recovery request', async ({ page 
   const control = await installContainerOwnershipFixture(page, { administrator: false }); await page.goto('/containers')
   await expect(page.getByRole('button', { name: /所有者修改 / })).toHaveCount(0); expect(control.state.writes).toHaveLength(0); expect(control.state.reads).toHaveLength(0)
 })
-for (const lost of [false, true]) test(`current administrator Unknown disposition keeps metadata uncertainty; lost=${lost}`, async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 800 })
+for (const height of [600, 800]) for (const colorScheme of ['light', 'dark'] as const) for (const lost of [false, true]) test(`current administrator Unknown disposition keeps metadata uncertainty; height=${height} theme=${colorScheme} lost=${lost}`, async ({ page }) => {
+  await page.setViewportSize({ width: 320, height }); await page.emulateMedia({ colorScheme })
   const control = await installContainerOwnershipFixture(page, { filePage: true, loseAck: lost })
+  control.row.command.location.path = 'work/' + Array(5).fill('长目录'.repeat(20)).join('/') + '.bin'
   await page.goto('/files'); await page.getByRole('button', { name: '容器所有者修改异常', exact: true }).click()
   const recovery = page.getByRole('dialog', { name: '容器所有者修改异常处置', exact: true })
   await expect(recovery).toContainText('可能存在HDD元数据')
   await recovery.getByRole('button', { name: '处置历史结果', exact: true }).click(); expect(control.state.writes).toHaveLength(0)
+  await expect(recovery.getByRole('button', { name: '确认处置并释放保护', exact: true })).toBeInViewport({ ratio: 1 })
+  await expect(recovery.getByRole('button', { name: '暂不处置', exact: true })).toBeInViewport({ ratio: 1 })
   await recovery.getByRole('button', { name: '确认处置并释放保护', exact: true }).click()
   if (lost) {
     await expect(recovery).toContainText('处置响应尚未核实')
     await expect(recovery.getByRole('button', { name: '确认处置并释放保护', exact: true })).toBeDisabled()
+    await expect(recovery.getByRole('button', { name: '查询原处置', exact: true })).toBeInViewport({ ratio: 1 })
     await recovery.getByRole('button', { name: '查询原处置', exact: true }).click()
   }
   await expect(recovery.getByRole('status').filter({ hasText: lost ? '已核实原处置回执' : '已处置历史未知结果' })).toContainText('不代表所有者修改成功')

@@ -87,6 +87,8 @@ try {
     await dialog.getByRole('button', { name: '暂不处置', exact: true }).click()
     assert.equal(confirmations, 0)
     await candidate.getByRole('button', { name: '处置历史结果', exact: true }).click()
+    await expect(dialog.getByRole('button', { name: '确认处置并释放保护', exact: true })).toBeInViewport({ ratio: 1 })
+    await expect(dialog.getByRole('button', { name: '暂不处置', exact: true })).toBeInViewport({ ratio: 1 })
     await page.screenshot({ path: join(directory, 'unknown-confirmation-mobile-dark.png') })
     const acknowledged = page.waitForResponse(r => new URL(r.url()).pathname === root + '/' + fixture.id + '/acknowledge' && r.request().method() === 'POST')
     await dialog.getByRole('button', { name: '确认处置并释放保护', exact: true }).click()
