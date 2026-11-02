@@ -91,6 +91,20 @@ def verify_terminal(identifier, subject, baseline, storage, module, directory=No
     return data,record,raw,hdd_raw
 
 
+def cleanup_original_after_failure(identifier, directory, folder, reader, module, content, original, *, browser_started):
+    """A lost registration signal is uncertainty, never permission to delete."""
+    if identifier is None:
+        if browser_started: return False
+    else:
+        failed=wait_settled(identifier);(directory/'failed-gate-sql.json').write_text(json.dumps(failed));row=failed['row']
+        if row['state'] not in ('Canceled','Failed','Succeeded','Superseded') or row['publish_barrier'] or row['lease_token'] is not None or row['lease_expires_at_utc'] is not None: return False
+        if row['execution_job_id']:
+            record=record_for(row);(directory/'failed-gate-root.json').write_text(json.dumps(record))
+            if record['state'] not in ('Aborted','Completed'): return False
+    if inventory(folder,reader,module,content)!=original: return False
+    remove_proved(folder,reader,module,content,original);return True
+
+
 def run_case(kind, revision, evidence, source, reader, module, storage):
     global PHASE
     PHASE=kind+':preflight';no_active_work();worker=Worker();directory=evidence/kind;directory.mkdir(mode=0o700)
@@ -144,19 +158,20 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
         finally:
             if held is not None:held.release()
             worker.start()
-            if browser is not None and browser.poll() is None:browser.wait(timeout=235)
+            if browser is not None and browser.poll() is None:
+                try:browser.wait(timeout=235)
+                except subprocess.TimeoutExpired:
+                    (directory/'browser-timeout.json').write_text(json.dumps({'gatePassed':False,'sourcePreserved':True}))
+                    browser.terminate()
+                    try:browser.wait(timeout=15)
+                    except subprocess.TimeoutExpired:browser.kill();browser.wait(timeout=10)
+                    raise
+
             registered=directory/'registered.json'
             if identifier is None and registered.exists():identifier=json.loads(registered.read_bytes())['id']
-            safe_cleanup=proved
-            if not proved and identifier:
-                failed=wait_settled(identifier);(directory/'failed-gate-sql.json').write_text(json.dumps(failed));r=failed['row']
-                safe_cleanup=r['state'] in ('Canceled','Failed','Succeeded','Superseded') and not r['publish_barrier'] and r['lease_token'] is None
-                if r['execution_job_id']:
-                    original_root=record_for(r);(directory/'failed-gate-root.json').write_text(json.dumps(original_root))
-                    safe_cleanup=safe_cleanup and original_root['state'] in ('Aborted','Completed')
-            elif not identifier:safe_cleanup=True
-            # No deletion while work is live/Unknown or a source differs.
-            if safe_cleanup and inventory(folder,reader,module,content)==original:remove_proved(folder,reader,module,content,original)
+            if proved:remove_proved(folder,reader,module,content,original)
+            else:cleanup_original_after_failure(identifier,directory,folder,reader,module,content,original,browser_started=browser is not None)
+
     assert not folder.exists() and subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True,timeout=10).returncode!=0
     return result
 

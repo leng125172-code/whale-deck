@@ -101,4 +101,35 @@ class AclFaultScopeTests(unittest.TestCase):
         with self.assertRaises(AssertionError):cut.operation_lock(link)
 
 
+class AclFailureCleanupTests(unittest.TestCase):
+    def setUp(self):
+        import validate_container_acl_faults as driver
+        self.driver=driver;self.temporary=tempfile.TemporaryDirectory();self.addCleanup(self.temporary.cleanup);self.directory=Path(self.temporary.name)
+
+    def cleanup(self, identifier='a', browser_started=True):
+        return self.driver.cleanup_original_after_failure(identifier,self.directory,self.directory,None,None,b'bytes',{'original':'facts'},browser_started=browser_started)
+
+    def test_lost_registration_signal_never_authorizes_deletion(self):
+        with patch.object(self.driver,'remove_proved') as remove,patch.object(self.driver,'inventory') as read:
+            self.assertFalse(self.cleanup(None));remove.assert_not_called();read.assert_not_called()
+
+    def test_active_unknown_barrier_or_lease_preserves_original_source(self):
+        base={'state':'Canceled','publish_barrier':False,'lease_token':None,'lease_expires_at_utc':None,'execution_job_id':None}
+        for delta in ({'state':'Unknown'},{'state':'Applying'},{'publish_barrier':True},{'lease_token':'live'},{'lease_expires_at_utc':'future'}):
+            with self.subTest(delta=delta),patch.object(self.driver,'wait_settled',return_value={'row':{**base,**delta}}),patch.object(self.driver,'remove_proved') as remove:
+                self.assertFalse(self.cleanup());remove.assert_not_called()
+
+    def test_nonterminal_root_and_changed_source_preserved_after_sql_terminal(self):
+        row={'state':'Canceled','publish_barrier':False,'lease_token':None,'lease_expires_at_utc':None,'execution_job_id':'execution'}
+        with patch.object(self.driver,'wait_settled',return_value={'row':row}),patch.object(self.driver,'record_for',return_value={'state':'Preparing'}),patch.object(self.driver,'remove_proved') as remove:
+            self.assertFalse(self.cleanup());remove.assert_not_called()
+        with patch.object(self.driver,'wait_settled',return_value={'row':row}),patch.object(self.driver,'record_for',return_value={'state':'Aborted'}),patch.object(self.driver,'inventory',return_value={'changed':'facts'}),patch.object(self.driver,'remove_proved') as remove:
+            self.assertFalse(self.cleanup());remove.assert_not_called()
+
+    def test_terminal_proved_original_can_be_removed(self):
+        row={'state':'Canceled','publish_barrier':False,'lease_token':None,'lease_expires_at_utc':None,'execution_job_id':'execution'}
+        with patch.object(self.driver,'wait_settled',return_value={'row':row}),patch.object(self.driver,'record_for',return_value={'state':'Aborted'}),patch.object(self.driver,'inventory',return_value={'original':'facts'}),patch.object(self.driver,'remove_proved') as remove:
+            self.assertTrue(self.cleanup());remove.assert_called_once()
+
+
 if __name__=='__main__':unittest.main()

@@ -18,11 +18,11 @@ try {
   const prefix = fileURLToPath(new URL('../artifacts/', import.meta.url))
   assert.ok(directory.startsWith(prefix))
   assert.match(directory.slice(prefix.length), /^container-acl-faults-[a-f0-9]{32}\/(cancel|logout)$/)
-  const behavior = fixture.kind.replace(/^post-owner-/, '')
+  const behavior = fixture.kind
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
-  context = await browser.newContext({ viewport: { width: behavior === 'cancel' || fixture.kind === 'agent-restart' ? 320 : 1440, height: 600 },
-    colorScheme: behavior === 'cancel' || fixture.kind === 'worker-crash' ? 'dark' : 'light', reducedMotion: 'reduce' })
+  context = await browser.newContext({ viewport: { width: behavior === 'cancel' ? 320 : 1440, height: 600 },
+    colorScheme: behavior === 'cancel' ? 'dark' : 'light', reducedMotion: 'reduce' })
   context.setDefaultTimeout(20_000); page = await context.newPage()
   assert.equal((await (await context.request.get(base + '/api/v1/system/status')).json()).build.sourceRevision, revision)
   phase = 'normal-login'
