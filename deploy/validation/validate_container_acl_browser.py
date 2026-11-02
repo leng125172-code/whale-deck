@@ -171,6 +171,10 @@ def main():
     installed_hashes={}
     for name in (*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged'):
         path=Path('/usr/local/libexec')/name;trusted(path);raw=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name]);assert raw==path.read_bytes();installed_hashes[name]=hashlib.sha256(raw).hexdigest()
+    public=__import__('requests').Session();public.trust_env=False
+    try:
+        response=public.get(base+'/api/v1/system/status',timeout=10);assert response.status_code==200 and response.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
+    finally:public.close()
     no_active_work();core=owned.common.core_snapshot();evidence=repo/'deploy/artifacts'/('container-acl-browser-'+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
     print(json.dumps({'actualAclBrowser':'started','evidence':str(evidence)}),flush=True)
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_browser_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_browser_module');files=reader.trusted_module('whaledeck-files.py','acl_browser_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_browser_storage').FileBackups(files)
