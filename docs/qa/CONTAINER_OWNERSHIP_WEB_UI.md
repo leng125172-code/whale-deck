@@ -1,5 +1,7 @@
 # 容器所有者：管理员 API 与 Vue 候选验证
 
+> 2026-11-02证据核对：本文两张file候选PNG最后修改于2026-10-31 10:26，晚于同日08:48的container-ownership-manifest.json，当前SHA与该旧manifest不匹配；这两图不再作为原SHA签收依据，未改写旧manifest或下方原始记录。当前递归权限候选的所有者兼容回归使用独立recursive-permission-regressions截图目录，不冒称重现旧源码/真实身份。详见[新批次与证据边界](CONTAINER_RECURSIVE_PERMISSIONS_WEB_UI.md)。
+
 > 2026-10-31后续：d5e62ca已覆盖，真实身份/文件/HDD常规页面7场景及独立复核通过，见[实机证据](CONTAINER_OWNERSHIP_REAL_UI.md)。下方未部署/API/UI待接等保留为原批次事实；所有者进行中故障/Unknown、递归/ACL/删除与长期清理仍待。
 
 日期：2026-10-31。基于 `6134e22` 的开发候选；永久 SQL/专用 Worker 的原生证据见[前批记录](CONTAINER_OWNERSHIP_PERSISTENCE.md)。**本批未部署，也没有真实 Authentik → Vue → SQL/Worker → Agent → 实际文件/HDD 的整链验收。** 下述浏览器使用本地生产构建预览和明确测试接口，不能替代实机验收。

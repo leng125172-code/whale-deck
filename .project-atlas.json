@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_PERSISTENCE.md",
-  "nextStep": "宿主e668dbe/1.49、应用d1fcca8保持。递归普通权限cca8ec9已接EF/迁移/双Job/八方保护/专用Worker，3794 Unit/259 Integration与双隔离真实PG全套及独立清理通过，未部署。接管理员API/Vue/Partial-Unknown处置、实时身份与真实树/HDD页面及故障整链；继续递归所有者/ACL/可恢复删除/长期清理和其余59项/UI/C#酒馆/统一供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_WEB_UI.md",
+  "nextStep": "递归普通权限API/Vue2056191、验收器f706c86已接并通过3794 Unit/308 Integration/832前端Unit、44递归+104关联分批页面验证，未部署；前批真实PG保持原证据。宿主e668dbe/1.49、应用d1fcca8。正常冻结覆盖后完成真实Authentik/页面/目录树/HDD及故障整链；继续递归所有者/ACL/可恢复删除/长期清理与其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
 }
