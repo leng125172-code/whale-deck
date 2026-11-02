@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Bounded recursive ordinary-mode engine, not a public helper/RPC grant.
+"""Bounded recursive inode engine, not a public helper/RPC grant.
 
 A sealed optimistic inventory and attested HDD manifest precede every write.
-Each inode uses the existing single-permission journal, under a private batch
-namespace. Recovery observes/fences original entry IDs; it never resumes chmod.
+Defaults retain the existing chmod protocol; trusted ownership construction uses
+the fchown journal and separate domains. Recovery never resumes either mutation.
 """
 import contextlib
 import fcntl
@@ -29,27 +29,30 @@ def encode(value):
 def digest(domain, value): return hashlib.sha256(domain + encode(value)).hexdigest().upper()
 
 
-def private_dir(files, parent, name, create):
+def private_dir(files, parent, name, create, prefix='CONTAINER_RECURSIVE_PERMISSION_'):
     if create:
         try: os.mkdir(name, 0o700, dir_fd=parent); os.fsync(parent)
         except FileExistsError: pass
     fd = files.open_at(parent, name, os.O_RDONLY | os.O_DIRECTORY)
     try:
         info = os.fstat(fd)
-        if (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) != (0, 0, 0o700): raise files.Rejected('CONTAINER_RECURSIVE_PERMISSION_PRIVATE_UNSAFE')
+        if (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) != (0, 0, 0o700): raise files.Rejected(prefix+'PRIVATE_UNSAFE')
         return fd
     except BaseException: os.close(fd); raise
 
 
 class RecursivePermissionHistory:
+    NAMESPACE = NAMESPACE
+    RESOURCE_TYPE = 'ContainerRecursivePermissionMetadata'
+    ERROR_PREFIX = 'CONTAINER_RECURSIVE_PERMISSION_'
     DOMAIN = b'whaledeck-container-recursive-permission-history-v1\n'
     def __init__(self, storage):
-        if storage.namespace is not None: raise ValueError('CONTAINER_RECURSIVE_PERMISSION_HISTORY_DOMAIN')
+        if storage.namespace is not None: raise ValueError(self.ERROR_PREFIX+'HISTORY_DOMAIN')
         self.storage, self.f = storage, storage.f
     @contextlib.contextmanager
     def target(self, create):
         with self.storage.target(create_namespace=False, read_only=not create) as (configuration, parent):
-            fd = private_dir(self.f, parent, NAMESPACE, create)
+            fd = private_dir(self.f, parent, self.NAMESPACE, create, self.ERROR_PREFIX)
             try:
                 self.storage.attest(configuration, fd, read_only=not create)
                 yield configuration, fd
@@ -58,7 +61,7 @@ class RecursivePermissionHistory:
         # Only absence under an available, attested HDD is proof of absence.
         # A lost aggregate may still leave immutable per-entry HDD history.
         with self.storage.target(create_namespace=False, read_only=True) as (_, base):
-            try:fd=private_dir(self.f,base,NAMESPACE,False)
+            try:fd=private_dir(self.f,base,self.NAMESPACE,False,self.ERROR_PREFIX)
             except FileNotFoundError:return False
             try:
                 for name in (request['operationId']+'.json',request['operationId']):
@@ -71,10 +74,10 @@ class RecursivePermissionHistory:
     def load(self, request):
         with self.target(False) as (_, fd): value = self.storage.read_json(fd, request['operationId']+'.json', MAX_METADATA)
         required = {'schemaVersion','resourceType','storageId','operationId','owner','plan','entries','createdAtUnixMs','historyDigest'}
-        if set(value) != required or value['schemaVersion'] != 1 or value['resourceType'] != 'ContainerRecursivePermissionMetadata' or value['storageId'] != 'database-platform.backup.hdd' or \
+        if set(value) != required or type(value['schemaVersion']) is not int or value['schemaVersion'] != 1 or value['resourceType'] != self.RESOURCE_TYPE or value['storageId'] != 'database-platform.backup.hdd' or \
                 any(value[k] != request[k] for k in ('operationId','owner','plan')) or type(value['createdAtUnixMs']) is not int or value['createdAtUnixMs'] < 0 or \
                 digest(self.DOMAIN,{k:v for k,v in value.items() if k!='historyDigest'}) != value['historyDigest']:
-            raise self.f.Rejected('CONTAINER_RECURSIVE_PERMISSION_HISTORY_CHANGED')
+            raise self.f.Rejected(self.ERROR_PREFIX+'HISTORY_CHANGED')
         return value
     def capture(self, request, entries):
         with self.target(True) as (configuration, fd):
@@ -82,67 +85,77 @@ class RecursivePermissionHistory:
             try:
                 info=os.fstat(lock)
                 if not stat.S_ISREG(info.st_mode) or info.st_uid!=0 or info.st_nlink!=1 or stat.S_IMODE(info.st_mode)!=0o600 or info.st_size:
-                    raise self.f.Rejected('CONTAINER_RECURSIVE_PERMISSION_HISTORY_UNSAFE')
+                    raise self.f.Rejected(self.ERROR_PREFIX+'HISTORY_UNSAFE')
                 try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-                except BlockingIOError:raise self.f.Rejected('CONTAINER_RECURSIVE_PERMISSION_BUSY') from None
+                except BlockingIOError:raise self.f.Rejected(self.ERROR_PREFIX+'BUSY') from None
                 try:
                     existing=self.load(request)
-                    if existing['entries']!=entries:raise self.f.Rejected('CONTAINER_RECURSIVE_PERMISSION_HISTORY_CHANGED')
+                    if existing['entries']!=entries:raise self.f.Rejected(self.ERROR_PREFIX+'HISTORY_CHANGED')
                     return existing
                 except FileNotFoundError:pass
                 if len(entries)>configuration['maxVersions'] or sum(n.endswith('.json') for n in os.listdir(fd))>=configuration['maxVersions']:
-                    raise self.f.Rejected('CONTAINER_RECURSIVE_PERMISSION_HISTORY_LIMIT')
-                value={'schemaVersion':1,'resourceType':'ContainerRecursivePermissionMetadata','storageId':'database-platform.backup.hdd',
+                    raise self.f.Rejected(self.ERROR_PREFIX+'HISTORY_LIMIT')
+                value={'schemaVersion':1,'resourceType':self.RESOURCE_TYPE,'storageId':'database-platform.backup.hdd',
                     **request,'entries':entries,'createdAtUnixMs':time.time_ns()//1000000}
                 value['historyDigest']=digest(self.DOMAIN,value)
                 size=len(json.dumps(value,separators=(',',':')).encode())
-                if size>MAX_METADATA:raise self.f.Rejected('CONTAINER_RECURSIVE_PERMISSION_MANIFEST_LIMIT')
+                if size>MAX_METADATA:raise self.f.Rejected(self.ERROR_PREFIX+'MANIFEST_LIMIT')
                 capacity=os.fstatvfs(fd)
                 reserve=max(configuration['reserveBytes'],capacity.f_blocks*capacity.f_frsize*configuration['reservePercent']//100)
                 if capacity.f_bavail*capacity.f_frsize < reserve+size+len(entries)*16384+65536:
-                    raise self.f.Rejected('CONTAINER_RECURSIVE_PERMISSION_HISTORY_CAPACITY')
+                    raise self.f.Rejected(self.ERROR_PREFIX+'HISTORY_CAPACITY')
                 self.f.save_receipt(fd,request['operationId'],value)
                 return self.load(request)
             finally:os.close(lock)
 
 
-def recursive_permissions_type(permission_type, directory_type, permission_history_type):
+def recursive_permissions_type(permission_type, directory_type, permission_history_type, *, ownership=False):
+    # Trusted type construction only: this switch is never part of a command,
+    # plan or helper input. Existing permission byte domains stay unchanged.
+    if type(ownership) is not bool: raise ValueError('RECURSIVE_MUTATION_TYPE_INVALID')
+    mutation = 'ownership' if ownership else 'permission'
+    namespace = 'container-recursive-ownership-v1' if ownership else NAMESPACE
+    resource = 'ContainerRecursiveOwnershipMetadata' if ownership else 'ContainerRecursivePermissionMetadata'
+    prefix = 'CONTAINER_RECURSIVE_OWNERSHIP_' if ownership else 'CONTAINER_RECURSIVE_PERMISSION_'
+    child_fields = {'uid','gid'} if ownership else {'mode'}
+    if permission_type.COMMAND != {'containerId','instanceId','path','expectedVersion'} | child_fields:
+        raise ValueError(prefix+'CHILD_ENGINE_MISMATCH')
     class EntryHistory(permission_history_type):
-        DOMAIN=b'whaledeck-container-recursive-permission-entry-history-v1\n'
+        DOMAIN=('whaledeck-container-recursive-'+mutation+'-entry-history-v1\n').encode()
         def __init__(self, outer, request):
             super().__init__(outer.history.storage);self.outer,self.batch=outer,request
         def expected(self,request):
-            return {**super().expected(request),'resourceType':'ContainerRecursivePermissionEntryMetadata','parentOperationId':self.batch['operationId'],
+            return {**super().expected(request),'resourceType':'ContainerRecursiveOwnershipEntryMetadata' if ownership else 'ContainerRecursivePermissionEntryMetadata','parentOperationId':self.batch['operationId'],
                 'manifestDigest':self.batch['plan']['manifestDigest']}
-        def artifact_directories(self):return (NAMESPACE,self.batch['operationId'],'entries')
+        def artifact_directories(self):return (namespace,self.batch['operationId'],'entries')
         @contextlib.contextmanager
         def target(self,create):
             with self.outer.history.target(create) as (configuration,base):
-                batch=private_dir(self.f,base,self.batch['operationId'],create)
-                try:fd=private_dir(self.f,batch,'entries',create)
+                batch=private_dir(self.f,base,self.batch['operationId'],create,prefix)
+                try:fd=private_dir(self.f,batch,'entries',create,prefix)
                 finally:os.close(batch)
                 try:
                     self.storage.attest(configuration,fd,read_only=not create);yield configuration,fd
                 finally:os.close(fd)
 
     class RecursivePermissions(directory_type):
-        COMMAND={'containerId','instanceId','path','expectedVersion','fileMode','directoryMode'}
+        COMMAND={'containerId','instanceId','path','expectedVersion'} | ({'uid','gid'} if ownership else {'fileMode','directoryMode'})
         PLAN=directory_type.PLAN|{'rootIdentity','manifestDigest','entryCount','fileCount','directoryCount','changeCount'}
         RECORD={'schemaVersion','operationId','owner','plan','state','startedThrough','finishedThrough','historyMayExist','historyVerified','historyDigest',
             'completedCount','changedCount','abortedCount','notStartedCount','unknownCount','outcomeDigest'}
         TERMINAL=('Completed','Aborted','Partial','Unknown')
         def __init__(self,uploads,publisher,state_path,history,*,max_entries=MAX_ENTRIES,max_depth=MAX_DEPTH,timeout_seconds=300,cancelled=None):
             super().__init__(uploads,publisher,state_path);self.history=history
-            if history.f is not self.f or type(max_entries) is not int or not 1<=max_entries<=MAX_ENTRIES or type(max_depth) is not int or not 0<=max_depth<=MAX_DEPTH or \
+            if history.f is not self.f or history.NAMESPACE != namespace or history.RESOURCE_TYPE != resource or type(max_entries) is not int or not 1<=max_entries<=MAX_ENTRIES or type(max_depth) is not int or not 0<=max_depth<=MAX_DEPTH or \
                     type(timeout_seconds) not in (int,float) or not math.isfinite(timeout_seconds) or not .001<=timeout_seconds<=300 or cancelled is not None and not callable(cancelled):
                 self.reject('LIMITS_INVALID')
             self.max_entries,self.max_depth,self.timeout,self.cancelled=max_entries,max_depth,timeout_seconds,cancelled
             self.deadline=0;self.observing=False
-        def reject(self,suffix):raise self.r.Rejected('CONTAINER_RECURSIVE_PERMISSION_'+suffix)
+        def reject(self,suffix):raise self.r.Rejected(prefix+suffix)
         @staticmethod
-        def digest(plan):return digest(b'whaledeck-container-recursive-permission-plan-v1\n',{k:v for k,v in plan.items() if k!='fingerprint'})
+        def digest(plan):return digest(('whaledeck-container-recursive-'+mutation+'-plan-v1\n').encode(),{k:v for k,v in plan.items() if k!='fingerprint'})
         @staticmethod
-        def manifest_digest(entries):return digest(b'whaledeck-container-recursive-permission-manifest-v1\n',entries)
+        def manifest_digest(entries):return digest(('whaledeck-container-recursive-'+mutation+'-manifest-v1\n').encode(),entries)
         def begin(self,observing=False):self.deadline=time.monotonic()+self.timeout;self.observing=observing
         def tick(self):
             if time.monotonic()>self.deadline:self.reject('TIMEOUT')
@@ -151,8 +164,11 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
             if type(value) is not dict or set(value)!=self.COMMAND:self.reject('REQUEST_INVALID')
             self.r.target_binding(value['containerId'],value['instanceId']);self.r.canonical_path(value['path'],empty=False)
             if self.r.protected(value['path'],self.f):self.reject('PROTECTED')
-            for key in ('fileMode','directoryMode'):
-                if type(value[key]) is not str or not re.fullmatch('0[0-7]{3}',value[key]):self.reject('MODE_INVALID')
+            if ownership:
+                if any(type(value[key]) is not int or not 0 <= value[key] < 4294967295 for key in ('uid','gid')):self.reject('UID_GID_INVALID')
+            else:
+                for key in ('fileMode','directoryMode'):
+                    if type(value[key]) is not str or not re.fullmatch('0[0-7]{3}',value[key]):self.reject('MODE_INVALID')
             if type(value['expectedVersion']) is not str or not re.fullmatch('[A-F0-9]{64}',value['expectedVersion']):self.reject('VERSION_INVALID')
         def validate_plan(self,plan):
             directory_type.validate_plan(self,plan);permission_type.validate_identity(self,plan['rootIdentity'],'Directory')
@@ -244,7 +260,8 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
             for row in sorted(rows,key=lambda row:(-(row['relativePath'].count('/')+1 if row['relativePath'] else 0),row['relativePath'].encode())):
                 self.tick();path=command['path']+('/'+row['relativePath'] if row['relativePath'] else '')
                 version=hashlib.sha256(b'whaledeck-container-file-v1\n'+json.dumps([command['containerId'],command['instanceId'],path,*row['identity']],ensure_ascii=False,separators=(',',':')).encode()).hexdigest().upper()
-                child_command={'containerId':command['containerId'],'instanceId':command['instanceId'],'path':path,'mode':command['directoryMode'] if row['kind']=='Directory' else command['fileMode'],'expectedVersion':version}
+                targets={key:command[key] for key in ('uid','gid')} if ownership else {'mode':command['directoryMode'] if row['kind']=='Directory' else command['fileMode']}
+                child_command={'containerId':command['containerId'],'instanceId':command['instanceId'],'path':path,'expectedVersion':version,**targets}
                 plan=builder.plan(child_command,session)
                 if plan['sourceIdentity']!=row['identity'] or plan['attributesDigest']!=row['attributesDigest']:self.reject('TREE_CHANGED')
                 entry={'relativePath':row['relativePath'],'plan':plan};size+=len(json.dumps(entry,separators=(',',':')).encode())+1
@@ -256,7 +273,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
             scope['fingerprint']=self.digest(scope);self.validate_plan(scope);return scope,entries
         def plan(self,command,session):self.begin();return self.inventory(command,session)[0]
         def validate_record(self,record,operation):
-            if type(record) is not dict or set(record)!=self.RECORD or record['schemaVersion']!=1:self.reject('RECEIPT_INVALID')
+            if type(record) is not dict or set(record)!=self.RECORD or type(record['schemaVersion']) is not int or record['schemaVersion']!=1:self.reject('RECEIPT_INVALID')
             self.request({k:record[k] for k in self.REQUEST})
             n=record['plan']['entryCount']
             if record['operationId']!=operation or record['state'] not in (*self.TERMINAL,'Preparing','Applying') or \
@@ -289,8 +306,8 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                 if rel:self.r.canonical_path(rel,empty=False)
                 child=entry['plan'];permission_type.validate_plan(inspector,child)
                 path=plan['command']['path']+('/'+rel if rel else '')
-                if child['command']['path']!=path or any(child['command'][key]!=plan['command'][key] for key in ('containerId','instanceId')) or \
-                        child['command']['mode']!=plan['command']['directoryMode' if child['kind']=='Directory' else 'fileMode'] or \
+                target_mismatch=any(child['command'][key]!=plan['command'][key] for key in ('uid','gid')) if ownership else child['command']['mode']!=plan['command']['directoryMode' if child['kind']=='Directory' else 'fileMode']
+                if child['command']['path']!=path or any(child['command'][key]!=plan['command'][key] for key in ('containerId','instanceId')) or target_mismatch or \
                         any(child[key]!=plan[key] for key in ('targetProof','uid','gid')):self.reject('HISTORY_CHANGED')
                 inode=tuple(child['sourceIdentity'][:2])
                 if inode in inodes or inode[0]!=plan['rootIdentity'][0]:self.reject('HISTORY_CHANGED')
@@ -304,11 +321,11 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                 self.reject('HISTORY_CHANGED')
             return entries
         def child_request(self,request,index,entry):
-            operation=hashlib.sha256(b'whaledeck-recursive-permission-entry-id-v1:'+request['operationId'].encode()+b':'+str(index).encode()).hexdigest()[:32]
+            operation=hashlib.sha256(('whaledeck-recursive-'+mutation+'-entry-id-v1:').encode()+request['operationId'].encode()+b':'+str(index).encode()).hexdigest()[:32]
             return {'operationId':operation,'owner':request['owner'],'plan':entry['plan']}
         @contextlib.contextmanager
         def child_engine(self,state,request,create):
-            name=request['operationId']+'.entries';fd=private_dir(self.f,state,name,create)
+            name=request['operationId']+'.entries';fd=private_dir(self.f,state,name,create,prefix)
             try:yield self.child(request['plan'],self.state_path/name,EntryHistory(self,request)),fd
             finally:os.close(fd)
         def checkpoint(self,phase,index):
@@ -335,7 +352,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                         for index,entry in enumerate(entries):
                             self.tick();record['startedThrough']=index;self.save(state,record);self.checkpoint('BeforeEntry',index);self.tick()
                             result=child.apply(self.child_request(request,index,entry),session)
-                            if result['state']!='Completed' or not result['bindingCurrent']:self.reject('ENTRY_RESULT_UNKNOWN')
+                            if result['state']!='Completed' or not result['bindingCurrent'] or ownership and result['ownerConfirmed'] is not True:self.reject('ENTRY_RESULT_UNKNOWN')
                             record['finishedThrough']=index;self.save(state,record);self.checkpoint('AfterEntry',index)
                     self.recover(state,record,session)
                 except BaseException:
@@ -356,12 +373,12 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                     if index<=record['startedThrough']:
                         try:result=child.inspect(sub,session)
                         except self.r.Rejected as error:
-                            if str(error)!='CONTAINER_PERMISSION_NOT_FOUND':raise
+                            if str(error)!=('CONTAINER_OWNERSHIP_NOT_FOUND' if ownership else 'CONTAINER_PERMISSION_NOT_FOUND'):raise
                             result=None
                         if result is None and index>record['finishedThrough']:
                             if child.plan(sub['plan']['command'],session)==sub['plan']:result=child.discard(sub,session)
                         if result is None:phase='Unknown'
-                        elif result['state']=='Completed' and result['bindingCurrent']:phase='Completed';version=result['version'];changed=not entry['plan']['noChange']
+                        elif result['state']=='Completed' and result['bindingCurrent'] and (not ownership or result['ownerConfirmed'] is True):phase='Completed';version=result['version'];changed=not entry['plan']['noChange']
                         elif result['state']=='Aborted' and child.plan(sub['plan']['command'],session)==sub['plan']:phase='Aborted'
                         else:phase='Unknown'
                     elif child.present(fd,sub['operationId']+'.json') or child.plan(sub['plan']['command'],session)!=sub['plan']:phase='Unknown'
@@ -376,7 +393,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                     record['state']='Aborted';self.save(state,record);return
                 outcomes=self.observe(state,record,session,entries)
                 for phase,key in [('Completed','completedCount'),('Aborted','abortedCount'),('NotStarted','notStartedCount'),('Unknown','unknownCount')]:record[key]=sum(r['state']==phase for r in outcomes)
-                record['changedCount']=sum(r['changed'] for r in outcomes);record['outcomeDigest']=digest(b'whaledeck-recursive-permission-outcomes-v1\n',outcomes)
+                record['changedCount']=sum(r['changed'] for r in outcomes);record['outcomeDigest']=digest(('whaledeck-recursive-'+mutation+'-outcomes-v1\n').encode(),outcomes)
                 for index,outcome in enumerate(outcomes):
                     if outcome['state']!='Completed':break
                     record['finishedThrough']=max(record['finishedThrough'],index)
@@ -414,7 +431,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                     fd=self.f.trusted_directory(self.state_path)
                     try:
                         outcomes=self.observe(fd,record,session,entries)
-                        binding=all(r['state']=='Completed' for r in outcomes) and digest(b'whaledeck-recursive-permission-outcomes-v1\n',outcomes)==record['outcomeDigest']
+                        binding=all(r['state']=='Completed' for r in outcomes) and digest(('whaledeck-recursive-'+mutation+'-outcomes-v1\n').encode(),outcomes)==record['outcomeDigest']
                     finally:os.close(fd)
                 except (OSError,self.r.Rejected,self.f.Rejected,ValueError,TypeError,KeyError):pass
             keys=('operationId','state','completedCount','changedCount','abortedCount','notStartedCount','unknownCount','historyMayExist','historyVerified','historyDigest','outcomeDigest')
