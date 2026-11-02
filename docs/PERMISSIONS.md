@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-02内部业务候选7a94733已接当前权威管理员与原BFF登录：读写返回前复核，取消前再复核，执行期间每6秒检查授权/取消/租约；其他当前管理员只能经明确确认、原执行ID的永久Discard fence与返回后的再次授权申请释放Partial/Unknown保护。目标UID/GID必须显式（0表示root），不自动沿用原属主或执行身份。可信最终回执的内部归档不依赖操作者仍获授权，不会据此再次Apply或释放Partial/Unknown。**无HTTP/Vue入口或新增默认User权限，未接具体永久仓储/Worker，也未做本批真人权限验收**。[候选与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_WORKFLOW.md)。
+
 2026-11-02后续实机：递归所有者1.50已在22906f5安装，独立方法/内容签名、显式UID/GID（含0:0）及core/只读/缺失/篡改等16项拒绝边界已真实通过，新受限unit仍独立于旧chmod；[安装态证据](qa/CONTAINER_RECURSIVE_OWNERSHIP_AGENT_RPC.md)。这不是人类Authentik/BFF授权、永久业务共享保护或页面签收；下方候选记录保留，默认User未获得新管理能力。
 
 2026-11-02递归所有者内部授权候选：1.50独立四RPC仅接受完整请求/方法绑定的短时单次capability，UID/GID必须显式提供；新受限unit单独具备CAP_CHOWN，旧递归chmod不扩大。没有新增浏览器授权入口或默认User能力。永久业务接入时仍须Authentik当前管理员/原登录与资源/核心保护、确认及在途撤权；本批仅候选协议/SDK/传输检查，不等于真人权限验收。见[签名与安装候选](qa/CONTAINER_RECURSIVE_OWNERSHIP_RPC.md)。

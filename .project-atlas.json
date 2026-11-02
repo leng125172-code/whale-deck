@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_REVOCATION.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_LOGOUT.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_ENGINE.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_RPC.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_AGENT_RPC.md",
-  "nextStep": "宿主22906f5/1.50正常安装并通过真实递归所有者四RPC/HDD：3完成/1中止、显式root、11预检/5执行拒绝、完整源/Root/3聚合12子历史与独立清理；旧递归chmod4和单对象所有者6操作兼容也通过。11核心不变healthy，API/Worker/Gateway仍0dede08，无业务/UI。下一步递归所有者永久EF业务/请求计划执行签名/共享保护/实时身份/专用Worker/API/Vue及真人树HDD页面和故障矩阵，再ACL/删除/长期清理、P0-05回退来源及其余59项/UI/C#酒馆/供应商/AI Live2D。PROGRESS_ESTIMATE仅规划估算；17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_AGENT_RPC.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_WORKFLOW.md",
+  "nextStep": "递归所有者宿主22906f5/1.50已通过真实签名RPC/HDD；内部业务候选7a94733的独立HMAC、实时身份/原登录、观察恢复与可信回执修复已验证。本轮未部署，API/Worker/Gateway仍按前批0dede08。下一步具体EF仓储/迁移、九方双向写入保护及真实隔离PG，再专用Worker/API/Vue/正常覆盖/真人树HDD常规和故障整链，继续ACL/删除/长期清理/P0-05及其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
 }

@@ -1,5 +1,7 @@
 # 递归普通权限：内部业务编排候选与回执丢失实机修复
 
+> 2026-11-02后续候选7a94733修正C# Dispatcher可信回执归档：身份依赖失联不能阻止已核对Partial/Unknown或将已知Aborted转为无回执Unknown；保持写入前/在途授权及Partial/Unknown保护。六组状态/到期回归通过，**未部署到当前0dede08 Worker**；本条不改变下方已签收实机事实，也不补算该新故障的实机验收。[修复、测试及边界](CONTAINER_RECURSIVE_OWNERSHIP_WORKFLOW.md)。
+
 > 2026-11-02后续：0dede08已正常覆盖，真实Authentik→Vue→SQL/Worker→实际树/HDD常规6场景及独立准确清理通过；同设备元数据，不计异盘灾备。进行中故障/业务Partial/Unknown、递归所有者/ACL/删除等继续。见[最新实机证据](CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md)。下方未部署/未接业务等为原批次事实。
 
 > 2026-11-02后续：管理员API/Vue候选2056191及验收器f706c86已接并通过49项接口、832前端Unit及44递归+104关联生产预览分批验证，未部署/未真实业务整链。见[页面候选、失败与边界](CONTAINER_RECURSIVE_PERMISSIONS_WEB_UI.md)。下方未接HTTP/Vue等保留为原批次事实。

@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-02内部业务候选7a94733新增Domain类`ContainerRecursiveOwnershipIntent`与请求/计划/执行/确认绑定模型。原始/目标/执行UID-GID分列，五计数、历史事实与当前观察分开；规范JSON与独立HMAC防止存储字段被篡改后取得执行权。**尚未加入PlatformDbContext、具体仓储或EF migration，没有新增生产表**；接口仅约定原子幂等/版本/租约及九方共享保护，测试Repository未注册为产品服务。下方此前“没有新增EF实体”等为原批次事实，不能据新Domain类宣称永久存储完成。[完整候选与后续约束](qa/CONTAINER_RECURSIVE_OWNERSHIP_WORKFLOW.md)。
+
 2026-11-02递归所有者1.50候选新增强类型Command/Plan/Operation/Receipt DTO及独立protobuf：显式UID/GID presence、原公开版本、根九字段/父身份/执行身份、密封清单和五类计数/历史/当前观察进入完整签名。Root/HDD沿用独立ownership元数据域；**本批没有新增EF实体、migration或生产表**，永久意图/共享写入保护与Worker仍待接，不能套用下方已安装的recursive-permission实体计作ownership持久化。见[候选与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_RPC.md)。
 
 2026-10-30后续设计（尚无migration/生产表）：新增`DM-AI-PROVIDER/CONNECTION/MODEL/CAPABILITY/PURPOSE-BINDING`与`DM-PET-ACTION-CATALOG/CUE/PLAYBACK-LEASE`，详见[字段与约束](AI_PROVIDERS_LIVE2D.md)。集中配置保存Secret引用、wireModelId/协议/能力与用途版本，生成冻结实际来源；动作绑定原generation/message/segment/pet/packVersion/序号/期限，客户端播放回报与服务端接受事实分列，多标签租约去重。稳定字段/外键/归属与并发需真实EF/PG约束，不持久化逐帧参数，NVMe/HDD恢复包含配置/模型包和必要状态。
