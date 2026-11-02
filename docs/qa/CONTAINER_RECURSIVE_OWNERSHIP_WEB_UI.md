@@ -1,5 +1,7 @@
 # 递归所有者：管理员API与Vue候选
 
+> 2026-11-02后续：产品b1fafed已正常覆盖，真实登录页面6场景、逐轮源树/Root/HDD及准确清理分项签收。原总脚本退出检查失败保留，另身份纯退出补证、原证据恢复与独立核验通过，未重复文件操作；下方“未部署”等保留为a806f56候选原事实。[最新实际事实与边界](CONTAINER_RECURSIVE_OWNERSHIP_REAL_UI.md)。
+
 2026-11-02，源码冻结`a806f56d0202013d94dc15e1de035e5373332344`。已接真实Application/EF业务服务的管理员HTTP入口及Vue容器文件/异常处置页面；本地MVC、前端合同及生产预览验证在本批记录。**尚未部署，未做真实Authentik→页面→SQL/Worker→Agent→实际树/HDD业务整链**。前批[安装态RPC/HDD](CONTAINER_RECURSIVE_OWNERSHIP_AGENT_RPC.md)与[双隔离真实PG持久化](CONTAINER_RECURSIVE_OWNERSHIP_PERSISTENCE.md)保持独立，不能拼接算作新页面实机签收。
 
 59主项继续部分实现，17项移出不计完成；master尚未交付，不自动回滚dev。本批未修改生产schema、运行服务或真实树，没有重做此前已完成的实机操作。宿主22906f5/1.50与应用0dede08为前批运行记录，本批不把旧健康检查冒称复跑。

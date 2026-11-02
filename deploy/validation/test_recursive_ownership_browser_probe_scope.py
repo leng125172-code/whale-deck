@@ -9,12 +9,13 @@ import unittest
 
 from validate_container_recursive_ownership_browser import managed_plan, version, snapshot, wait_case
 from verify_container_recursive_ownership_browser import verify
+from recover_container_recursive_ownership_browser import recover
 
 ROOT = Path(__file__).resolve().parent
 
 
 class RecursiveOwnershipBrowserProbeScopeTests(unittest.TestCase):
-    def test_managed_plan_preserves_large_kernel_identity_and_exact_modes(self):
+    def test_managed_plan_preserves_large_kernel_identity_and_explicit_owners(self):
         identity = {'Device': 18446744073709551615, 'Inode': 18446744073709551614, 'Mode': 16872, 'OwnerUid': 2100, 'OwnerGid': 3100, 'LinkCount': 2, 'SizeBytes': 4096, 'ModifiedAtUnixNs': 1700000000123456789}
         location = {'ContainerId': 'a'*64, 'InstanceId': '777:2026-11-02T01:02:03.123456789Z', 'Path': 'work/中文'}
         source = {'SchemaVersion': 1, 'Command': {'Location': location, 'Uid': 0, 'Gid': 3300, 'ExpectedVersion': 'A'*64},
@@ -58,6 +59,10 @@ class RecursiveOwnershipBrowserProbeScopeTests(unittest.TestCase):
     def test_independent_input_cannot_select_arbitrary_artifacts(self):
         for name in ('../escape','container-recursive-permission-browser-'+'a'*32,'container-recursive-ownership-browser-'+'A'*32):
             with self.subTest(name=name), self.assertRaises(AssertionError): verify(name)
+
+    def test_recovery_cannot_select_arbitrary_fixture_or_other_workflow(self):
+        for name in ('../escape','container-recursive-permission-browser-'+'a'*32,'container-recursive-ownership-browser-'+'A'*32):
+            with self.subTest(name=name),self.assertRaises(AssertionError):recover(name)
 
     def test_native_queries_are_selects_not_fixture_state_edits(self):
         for file in ('validate_container_recursive_ownership_browser.py','verify_container_recursive_ownership_browser.py'):

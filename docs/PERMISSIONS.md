@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-02后续实机：b1fafed管理员真实登录及递归所有者常规6场景、原key/原登录计划与执行事实已签收。退出观察器时序失败保留，另身份纯UI退出补证BFF401/Authentik403，未重复fchown；普通8路403/匿名4路401在原CID移除后验证原永久任务/路由，不能写成原CID存活时的写入实测。默认User不扩权，进行中撤权及同上下文完整退出仍待。[证据与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_REAL_UI.md)。
+
 2026-11-02后续a806f56新增管理员专用递归所有者HTTP与Vue候选：显式UID/GID（0为root）、严格字段/确认/版本/幂等键，Cookie/CSRF/Origin/实时权威身份与原登录授权，原引用查询和跨登录拒绝。部分/未知仅当前管理员明确处置后请求原任务释放，实际计数/历史不可改；新引用随降权/退出清理，不存私有计划或路径。54项新传输/真实回环MVC、77项前端合同与44项生产预览浏览器通过；身份/仓储/Agent为测试夹具，**未部署/未真实Authentik或文件/HDD页面验收，不增加普通User授权**。[候选与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_WEB_UI.md)。
 
 2026-11-02后续候选a19f5c4将原登录/幂等请求、当前身份编排接至真实EF仓储及专用Worker，保留90秒租约、Started后不再Apply、Partial/Unknown需明确处置和原Root事实不可变；新任务与主机锁/七类旧容器写入构成九方双向SQL/路径/预算保护。双隔离真实PG验证不等于人类授权或真实文件验收；**本批没有HTTP/Vue入口、默认User扩权或宿主授权变化，未发布**。[持久化与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_PERSISTENCE.md)。
