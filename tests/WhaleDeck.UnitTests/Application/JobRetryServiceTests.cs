@@ -18,6 +18,8 @@ public sealed class JobRetryServiceTests
     [InlineData("containers.files.recursive-ownership")]
     [InlineData("containers.files.recursive-permission-plan")]
     [InlineData("containers.files.recursive-permission")]
+    [InlineData("containers.files.acl-plan")]
+    [InlineData("containers.files.acl")]
     [InlineData("containers.files.ownership-plan")]
     [InlineData("containers.files.ownership")]
     [InlineData("containers.files.permission-plan")]
