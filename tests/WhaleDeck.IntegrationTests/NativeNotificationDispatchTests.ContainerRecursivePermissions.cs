@@ -214,7 +214,7 @@ public sealed partial class NativeNotificationDispatchTests
             await Rejected($"UPDATE container_recursive_permission_intents SET state='Pending' WHERE id={paused.Id}", "container_recursive_permission_resolution_required");
             await Assert.ThrowsAsync<InvalidOperationException>(() => other.AcknowledgeAsync(admin, paused.Id, paused.Version, Receipt(partial, "Aborted"), default));
             await new JobRepository(second).RequestCancellationAsync(paused.ExecutionJobId!.Value, actor.Subject, default);
-            Assert.True(await db.OutboxMessages.AnyAsync(m => m.MessageType == "ContainerRecursivePermissionCancellationRequested" && m.PayloadJson.Contains(paused.ExecutionJobId.Value.ToString("D"))));
+            Assert.True(await db.Database.SqlQuery<bool>($"SELECT EXISTS (SELECT 1 FROM outbox_messages WHERE message_type='ContainerRecursivePermissionCancellationRequested' AND payload_json->>'jobId'={paused.ExecutionJobId.Value.ToString("D")}) AS \"Value\"").SingleAsync());
             await other.AcknowledgeAsync(admin, paused.Id, paused.Version, partialReceipt with { HistoryAvailable = false, Replayed = true }, default);
             var resolvedPartial = (await repo.FindAsync(paused.Id, default))!;
             Assert.Equal("Acknowledged", resolvedPartial.State); Assert.Equal("Partial", resolvedPartial.RootState); Assert.Equal(1, resolvedPartial.ChangedCount);
