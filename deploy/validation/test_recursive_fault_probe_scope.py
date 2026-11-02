@@ -6,10 +6,24 @@ import unittest
 from unittest.mock import patch, Mock
 
 import bound_container_recursive_permission_cut as cut
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, maintenance_response, restore_fault_services
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, maintenance_response, restore_fault_services, require_authority_change
 
 
 class RecursiveFaultProbeScope(unittest.TestCase):
+    def test_revocation_proof_cannot_change_identity_or_other_fields(self):
+        subject = '11111111-1111-4111-8111-111111111111'
+        ready = {'subject':subject,'permissionExpiresAtUtc':'2026-11-03T10:00:00+00:00'}
+        before = {'pk':1,'uuid':subject,'username':'whaledeck-upload-qa-'+'a'*12,'groups':['admin'],'is_active':True}
+        for kind,changes in (('group-removal',{'groups':[]}),('account-disable',{'is_active':False})):
+            value = {'kind':kind,'subject':subject,'before':before,'after':{**before,**changes},'onlyOwnedIdentityChanged':True,'confirmedAtUtc':'2026-11-02T10:00:00+00:00'}
+            require_authority_change(value,ready,kind)
+            for field,replacement in (('pk',2),('uuid','22222222-2222-4222-8222-222222222222'),('username','real-admin'),('is_active',True if kind == 'account-disable' else False),('groups',['another-admin'])):
+                bad = copy.deepcopy(value); bad['after'][field] = replacement
+                with self.subTest(kind=kind,field=field),self.assertRaises(AssertionError): require_authority_change(bad,ready,kind)
+            for bad_changes in ({'subject':'22222222-2222-4222-8222-222222222222'},{'kind':'cancel'},{'onlyOwnedIdentityChanged':False}):
+                with self.subTest(kind=kind,bad=bad_changes),self.assertRaises(AssertionError): require_authority_change({**value,**bad_changes},ready,kind)
+            with self.assertRaises(AssertionError): require_authority_change(value,{**ready,'permissionExpiresAtUtc':'2026-11-02T10:59:59+00:00'},kind)
+
     def test_agent_cleanup_failure_never_skips_worker_restore(self):
         host = {'whaledeck-agent.service':{'pid':10}}; revision = 'a'*40
         prefix = 'validate_container_recursive_permission_faults.'

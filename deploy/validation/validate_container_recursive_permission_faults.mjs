@@ -13,8 +13,9 @@ try {
   const revision = process.argv[2], role = process.argv[3]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
   assert.ok(['cancel', 'recovery'].includes(role))
-  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash', 'agent-restart', 'target-disappearance', 'target-disappearance-barrier'].includes(kind))
+  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash', 'agent-restart', 'target-disappearance', 'target-disappearance-barrier', 'group-removal', 'account-disable'].includes(kind))
   const barrierCase = kind === 'target-disappearance-barrier'
+  const revoked = ['group-removal', 'account-disable'].includes(kind)
   const unknownCase = kind === 'target-disappearance' || barrierCase, expectedState = unknownCase ? 'Unknown' : 'Partial'
   if (fixture.expectedState) assert.equal(fixture.expectedState, expectedState)
   assert.match(fixture.containerId, /^[a-f0-9]{64}$/)
@@ -51,7 +52,7 @@ try {
     currentId = (await registered.json()).id
     await writeSignal(directory, 'registered.json', { id: currentId, subject: profile.subject })
     await expect(dialog.getByText('预检已完成，尚未修改权限', { exact: true })).toBeVisible({ timeout: 45_000 })
-    await writeSignal(directory, 'ready.json', { id: currentId, subject: profile.subject })
+    await writeSignal(directory, 'ready.json', { id: currentId, subject: profile.subject, permissionExpiresAtUtc: profile.permissionExpiresAtUtc })
     await waitSignal(directory, 'confirm.json', 30_000)
     phase = 'actual-confirm-worker-stopped'
     const confirming = page.waitForResponse(r => r.url() === endpoint + '/' + currentId + '/confirm' && r.request().method() === 'POST')
@@ -64,6 +65,7 @@ try {
     await dialog.getByRole('button', { name: '查询原递归权限修改任务', exact: true }).click()
     await expect(dialog.getByRole('status')).toHaveText('正在逐项修改权限')
     await expect(dialog.getByRole('button', { name: '请求取消递归权限修改', exact: true })).toBeInViewport({ ratio: 1 })
+    if (revoked) await expect.poll(() => page.evaluate(id => (sessionStorage.getItem('whaledeck-container-recursive-permission-hints-v1') ?? '').includes(id), currentId)).toBe(true)
     await page.screenshot({ path: join(directory, 'inflight.png') })
     if (kind === 'cancel') {
       await dialog.getByRole('button', { name: '请求取消递归权限修改', exact: true }).click()
@@ -83,6 +85,32 @@ try {
     } else {
     const settled = await waitSignal(directory, 'settled.json', kind === 'worker-crash' ? 220_000 : 120_000)
     assert.equal(settled.id, currentId); assert.equal(settled.state, 'Partial')
+    if (revoked) {
+      phase = 'original-live-authority-denied'
+      const denied = await context.request.get(endpoint + '/' + currentId)
+      assert.ok([401, 403].includes(denied.status()))
+      const me = await context.request.get(base + '/api/v1/auth/me'), currentIdentityStatus = me.status()
+      let currentIdentityAdministrator = null
+      if (kind === 'group-removal') { assert.equal(me.status(), 200); currentIdentityAdministrator = (await me.json()).isAdministrator; assert.equal(currentIdentityAdministrator, false) }
+      else assert.ok([401, 403].includes(me.status()))
+      await page.reload()
+      await expect(page.getByRole('status', { name: '正在启动 WhaleDeck 协同平台', exact: true })).toHaveCount(0)
+      if (kind === 'group-removal') {
+        await expect(page).toHaveURL(base + '/forbidden')
+        await expect(page.getByRole('heading', { name: '没有管理权限', exact: true })).toBeVisible()
+      } else {
+        await expect(page).toHaveURL(new RegExp('^' + base + '/login(?:\\?|$)'))
+        await expect(page.getByRole('heading', { name: '使用工作站账号登录', exact: true })).toBeVisible()
+      }
+      await expect(page.getByRole('region', { name: '容器递归权限修改任务', exact: true })).toHaveCount(0)
+      await expect.poll(() => page.evaluate(id => !(sessionStorage.getItem('whaledeck-container-recursive-permission-hints-v1') ?? '').includes(id), currentId)).toBe(true)
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+      await page.screenshot({ path: join(directory, 'authority-denied.png') })
+      assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, 0); assert.equal(acknowledgements, 0); assert.equal(bodies, 0)
+      await writeSignal(directory, 'cancel-browser.json', { kind, subject: profile.subject, registrations, confirmations, cancellations, bodies, actualUi: true,
+        normalDualLogout: false, authorityRevoked: true, deniedIntentStatus: denied.status(), currentIdentityStatus, currentIdentityAdministrator,
+        renderedRevocationPage: kind === 'group-removal' ? 'forbidden' : 'login', oldTaskAndHintRemoved: true })
+    } else {
     phase = 'actual-partial-page'
     await dialog.getByRole('button', { name: '查询原递归权限修改任务', exact: true }).click()
     await expect(dialog.getByRole('status')).toHaveText('部分修改，保护已保留')
@@ -106,6 +134,7 @@ try {
     await closePermissionDetails(page, dialog); await logoutFromUserMenu(page, context, base)
     assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, kind === 'cancel' ? 1 : 0); assert.equal(acknowledgements, 0); assert.equal(bodies, 0)
     await writeSignal(directory, 'cancel-browser.json', { kind, subject: profile.subject, result, registrations, confirmations, cancellations, bodies, actualUi: true, normalDualLogout: true })
+    }
     }
   } else {
     currentId = fixture.id; assert.notEqual(profile.subject, fixture.originalSubject)

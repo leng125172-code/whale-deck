@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import stat
 import subprocess
 import sys
@@ -37,6 +38,7 @@ from validate_container_recursive_permissions import NAMES as INSTALLED_NAMES
 from validate_container_directory_unknown import register as register_waiting, wait_settled as settle_waiting
 from validate_container_directory_browser import snapshot as directory_snapshot, ROOT as DIRECTORY_ROOT, verify_directory
 from validate_container_directory_restart import clean_success
+from owned_authentik_revocation import OwnedAuthentikRevocation
 
 PHASE = 'startup'
 PATHS = {'': 'Directory', 'sub': 'Directory', **{f'sub/entry-{i:02}.bin': 'File' for i in range(16)}}
@@ -47,7 +49,26 @@ SOURCES = ('bound_container_recursive_permission_cut.py', 'validate_container_re
     'validate_container_recursive_permission_browser.py', 'validate_container_recursive_permission_agent.py',
     'validate_container_recursive_permissions.py', 'verify_container_recursive_permissions.py',
     'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs', 'validate_container_directory_unknown.py',
-    'validate_container_directory_browser.py', 'validate_container_upload_bff.py', 'validate_databases.py')
+    'validate_container_directory_browser.py', 'validate_container_upload_bff.py', 'validate_databases.py',
+    'owned_authentik_revocation.py')
+
+
+def require_authority_change(authority, ready, kind):
+    assert kind in ('group-removal','account-disable') and authority['kind'] == kind
+    assert authority['onlyOwnedIdentityChanged'] is True and authority['subject'] == ready['subject']
+    before, after = authority['before'], authority['after']
+    assert before.keys() == after.keys() == {'pk','uuid','username','is_active','groups'}
+    assert re.fullmatch('whaledeck-upload-qa-[a-f0-9]{12}', before['username'])
+    assert str(uuid.UUID(ready['subject'])) == ready['subject']
+    assert before['uuid'] == after['uuid'] == ready['subject'] and before['username'] == after['username']
+    assert type(before['pk']) is type(after['pk']) is int and before['pk'] == after['pk'] and 0 < before['pk'] < 10**12
+    assert before['is_active'] is True and type(before['groups']) is list and 0 < len(before['groups']) <= 256
+    assert all(type(group) is str for group in before['groups'])
+    assert after == {**before,**({'groups':[]} if kind == 'group-removal' else {'is_active':False})}
+    confirmed = dt.datetime.fromisoformat(authority['confirmedAtUtc'])
+    expires = dt.datetime.fromisoformat(ready['permissionExpiresAtUtc'])
+    assert confirmed.utcoffset() is not None and expires.utcoffset() is not None
+    assert expires > confirmed + dt.timedelta(hours=1), 'ORIGINAL_POSITIVE_AUTHORITY_WOULD_STILL_BE_VALID'
 
 
 def inventory(root, content):
@@ -437,8 +458,9 @@ def main():
     global PHASE
     assert os.geteuid() == 0 and len(sys.argv) in (2,3); os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}',revision)
-    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','worker-crash','agent-restart','target-disappearance','target-disappearance-barrier')
+    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','worker-crash','agent-restart','target-disappearance','target-disappearance-barrier','group-removal','account-disable')
     barrier_case = kind == 'target-disappearance-barrier'
+    revoked = kind in ('group-removal','account-disable')
     unknown_case = kind in ('target-disappearance','target-disappearance-barrier'); expected_state = 'Unknown' if unknown_case else 'Partial'
     repo = Path(__file__).resolve().parents[2]
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(), 'FREEZE_VALIDATION_SOURCE_FIRST'
@@ -488,32 +510,41 @@ def main():
                 applying = snapshot(identifier)['row']; assert applying['state'] == 'Applying' and applying['publish_barrier'] and applying['root_started_at_utc']
                 (directory/'cut-root.json').write_text(json.dumps(held.record))
                 (directory/'bound-helper.json').write_text(json.dumps({'pid':held.pid,'unit':held.cgroup,'twoKernelFdProofs':True,'proof':held.proof}))
-                PHASE = 'actual-'+kind+'-and-product-helper-exit'; crash = lease_proof = agent_restart = None; began = time.monotonic()
+                PHASE = 'actual-'+kind+'-and-product-helper-exit'; crash = lease_proof = agent_restart = authority = None; began = time.monotonic()
                 write_signal(directory,'action.json',{'kind':kind})
-                if kind in ('worker-crash','agent-restart') or unknown_case:
+                if kind in ('worker-crash','agent-restart') or unknown_case or revoked:
                     action = wait_signal(directory,'action-done.json',browser,30); assert action['cancellations'] == 0
                     checks = restart_allowed(held,applying)
                     applying = snapshot(identifier)['row']; lease_held(applying,applying)
                     assert applying['lease_token'] and applying['lease_expires_at_utc']
                     cut_tree = inventory(root,content); cut_raw = (ROOT/(uuid.UUID(applying['execution_job_id']).hex+'.json')).read_bytes()
                     assert json.loads(cut_raw) == held.record
-                    (directory/('pre-disappearance-sql.json' if unknown_case else 'pre-agent-restart-sql.json' if kind == 'agent-restart' else 'pre-crash-sql.json')).write_text(json.dumps(snapshot(identifier)))
+                    (directory/('pre-authority-sql.json' if revoked else 'pre-disappearance-sql.json' if unknown_case else 'pre-agent-restart-sql.json' if kind == 'agent-restart' else 'pre-crash-sql.json')).write_text(json.dumps(snapshot(identifier)))
                     (directory/'physical-cut.json').write_text(json.dumps(cut_tree)); (directory/'cut-root-original.json').write_bytes(cut_raw)
                 if unknown_case:
                     PHASE = 'exact-owned-container-disappearance'
                     fixture['remove_owned'](); assert inventory(root,content) == cut_tree
                     (directory/'target-disappearance.json').write_text(json.dumps({'containerId':fixture['identifier'],'exactOwnedContainerRemoved':True,'sourcePreserved':True,'otherActiveWork':checks}))
-                if kind in ('worker-crash','agent-restart') or unknown_case: began = time.monotonic()
+                if kind in ('worker-crash','agent-restart') or unknown_case or revoked: began = time.monotonic()
                 maintenance_stop = threading.Event(); maintenance_ready = threading.Event(); maintenance = None
                 with ThreadPoolExecutor(max_workers=2) as exits, contextlib.ExitStack() as observation_cleanup:
                     observation_cleanup.callback(maintenance_stop.set)
+                    native = observation_cleanup.enter_context(OwnedAuthentikRevocation(username,ready['subject'])) if revoked else None
+                    if revoked:
+                        assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc']) > dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
+                        assert not select.select([held.descriptor],[],[],0)[0], 'BOUND_HELPER_ALREADY_EXITED'
+                        assert inventory(root,content) == cut_tree
+                        began = time.monotonic()
                     if kind == 'agent-restart':
                         maintenance = exits.submit(observe_maintenance,maintenance_stop,maintenance_ready)
                         if not maintenance_ready.wait(5):
                             maintenance_stop.set(); maintenance.result(timeout=5); raise AssertionError('MAINTENANCE_OBSERVER_NOT_READY')
                         began = time.monotonic()
                     stopping = exits.submit(held.wait_exit_seconds,began,15)
-                    if kind == 'agent-restart':
+                    if revoked:
+                        authority = native.change(kind); require_authority_change(authority,ready,kind)
+                        (directory/'authority-change.json').write_text(json.dumps(authority))
+                    elif kind == 'agent-restart':
                         try:
                             assert host_identity(revision) == host
                             restart_began = dt.datetime.now(dt.timezone.utc).isoformat(); agent_restart_attempted = True
@@ -547,7 +578,7 @@ def main():
                     elapsed = stopping.result(timeout=16)
                 assert elapsed is not None and elapsed < 15, 'PRODUCT_DID_NOT_STOP_BOUND_RECURSIVE_HELPER'
                 held_record = held.record; held.release(); held = None
-                if kind == 'agent-restart':
+                if kind == 'agent-restart' or revoked:
                     stopped_tree = inventory(root,content); require_stopped_tree(cut_tree,stopped_tree,held_record['finishedThrough'],held_record['startedThrough'])
                     (directory/'physical-after-helper-exit.json').write_text(json.dumps(stopped_tree))
                 if kind == 'worker-crash':
@@ -557,9 +588,10 @@ def main():
                     same_operation(applying,partial['row'])
                     assert dt.datetime.now(dt.timezone.utc) >= dt.datetime.fromisoformat(applying['lease_expires_at_utc'])
                     assert inventory(root,content) == cut_tree, 'RECOVERY_RESUMED_CHMOD'
-                if kind == 'agent-restart':
+                if kind == 'agent-restart' or revoked:
                     same_operation(applying,partial['row'])
-                    assert inventory(root,content) == stopped_tree, 'AGENT_RESTART_RECOVERY_RESUMED_CHMOD'
+                    assert inventory(root,content) == stopped_tree, 'INTERRUPTED_RECOVERY_RESUMED_CHMOD'
+                if revoked: assert partial['row']['cancel_requested_at_utc'] is None
                 after = inventory(root,content)
                 record,proof = (verify_unknown if unknown_case else verify_partial)(partial,baseline,before,after,storage,directory)
                 (directory/'partial-sql.json').write_text(json.dumps(partial)); (directory/'physical-partial.json').write_text(json.dumps(after))
@@ -570,6 +602,7 @@ def main():
                     assert browser.wait(timeout=60) == 0, 'PARTIAL_PAGE_NOT_VERIFIED'
                 browser = None
                 ui = json.loads((directory/'cancel-browser.json').read_bytes()); assert ui['subject'] == partial['row']['actor_subject'] == ready['subject']
+                if revoked: assert ui['authorityRevoked'] and not ui['normalDualLogout'] and ui['cancellations'] == 0
             # The original temporary Authentik identity has actually been deleted.
             # A new, distinct human login owns the explicit recovery decision.
             PHASE = 'different-admin-real-recovery'
@@ -643,7 +676,7 @@ def main():
                 'workerCrash':crash,'naturalLeaseSamples':len(lease_proof['samples']) if lease_proof else 0,
                 'rootState':expected_state,'physicalChangedCount':unchanged_except_modes(before,after),'targetRemovedDuringOperation':unknown_case,
                 'waitingId':waiting['id'] if waiting else None,'otherWriteDeferredUntilExplicitRelease':barrier_case,'waitingActualUi':recovery.get('waitingVisibleDirectory',False),
-                'agentRestart':agent_restart}
+                'agentRestart':agent_restart,'authorityRevoked':revoked}
         finally:
             if held is not None: held.release()
             restore_fault_services(worker,agent_restart_attempted,host,revision)
