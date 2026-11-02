@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-02后续a806f56新增管理员专用递归所有者HTTP与Vue候选：显式UID/GID（0为root）、严格字段/确认/版本/幂等键，Cookie/CSRF/Origin/实时权威身份与原登录授权，原引用查询和跨登录拒绝。部分/未知仅当前管理员明确处置后请求原任务释放，实际计数/历史不可改；新引用随降权/退出清理，不存私有计划或路径。54项新传输/真实回环MVC、77项前端合同与44项生产预览浏览器通过；身份/仓储/Agent为测试夹具，**未部署/未真实Authentik或文件/HDD页面验收，不增加普通User授权**。[候选与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_WEB_UI.md)。
+
 2026-11-02后续候选a19f5c4将原登录/幂等请求、当前身份编排接至真实EF仓储及专用Worker，保留90秒租约、Started后不再Apply、Partial/Unknown需明确处置和原Root事实不可变；新任务与主机锁/七类旧容器写入构成九方双向SQL/路径/预算保护。双隔离真实PG验证不等于人类授权或真实文件验收；**本批没有HTTP/Vue入口、默认User扩权或宿主授权变化，未发布**。[持久化与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_PERSISTENCE.md)。
 
 2026-11-02内部业务候选7a94733已接当前权威管理员与原BFF登录：读写返回前复核，取消前再复核，执行期间每6秒检查授权/取消/租约；其他当前管理员只能经明确确认、原执行ID的永久Discard fence与返回后的再次授权申请释放Partial/Unknown保护。目标UID/GID必须显式（0表示root），不自动沿用原属主或执行身份。可信最终回执的内部归档不依赖操作者仍获授权，不会据此再次Apply或释放Partial/Unknown。**无HTTP/Vue入口或新增默认User权限，未接具体永久仓储/Worker，也未做本批真人权限验收**。[候选与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_WORKFLOW.md)。

@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_AGENT_RPC.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_PERSISTENCE.md",
-  "nextStep": "递归所有者永久EF/迁移/九方双向保护/专用Worker候选a19f5c4已通过4036 Unit、309 Integration及双隔离真实PG全套/独立清理；生产新表不存在，本轮未发布，应用仍按前批0dede08、宿主22906f5/1.50。下一步管理员API/Vue、正常冻结覆盖及真人身份→SQL/Worker→实际树/HDD常规与故障整链，再ACL/删除/长期清理/P0-05及其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_PERSISTENCE.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_WEB_UI.md",
+  "nextStep": "递归所有者永久EF/九方保护/Worker已有真实隔离PG证据；a806f56管理员API/Vue候选通过严格UID/GID、实时身份/原登录、原引用与Partial/Unknown页面验证，未部署。下一步正常冻结覆盖、生产前向迁移及真实Authentik→Vue→SQL/Worker→Agent→实际树/HDD常规和故障/兼容整链，再ACL/删除/长期清理/P0-05及其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
 }
