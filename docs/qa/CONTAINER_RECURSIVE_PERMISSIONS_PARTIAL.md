@@ -1,5 +1,7 @@
 # 递归普通权限：真实进行中取消与Partial跨管理员处置
 
+> 后续2026-11-02：目标消失后Unknown18与宿主实际1项修改分开保留、原账号删除后的另一管理员真实页面处置/迟到不续做和独立核验已通过，见[后续Unknown证据](CONTAINER_RECURSIVE_PERMISSIONS_UNKNOWN.md)。原实例保留的退出/撤权/Agent重启及其他组合仍待；以下原批次正文和失败记录保留。
+
 > 后续2026-11-02：Worker实际SIGKILL、原自然租约40次观测与同一原操作Partial真实页面恢复/不同管理员处置及独立核验已通过，见[后续强杀证据](CONTAINER_RECURSIVE_PERMISSIONS_WORKER_CRASH.md)。两轮QA失败保留；以下页面取消批次正文不变，其他故障仍待。
 
 2026-11-02。产品保持已安装`0dede0804a5f9d1847c23744b90c7e3bae5f7751`/Agent 1.49，本批不重复发布、不回滚。新增真实故障门禁与只读核验器；通过的是**一次实际部分修改后的页面取消及不同管理员明确处置**，不代表全部递归权限或59项完成。原常规6场景仍见[前批证据](CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md)，没有重做它们。
