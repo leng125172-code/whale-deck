@@ -44,12 +44,13 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
         var directories = await db.ContainerDirectoryOperations.Where(item => item.ContainerId == row.ContainerId && item.CompletedAtUtc == null).Select(item => item.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var copies = await db.ContainerCopyIntents.Where(item => item.ContainerId == row.ContainerId && item.CompletedAtUtc == null).Select(item => new { item.SourcePath, item.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
         var moves = await db.ContainerMoveIntents.Where(item => item.ContainerId == row.ContainerId && item.CompletedAtUtc == null).Select(item => new { item.SourcePath, item.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
+        var recursiveOwnerships = await db.ContainerRecursiveOwnershipIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursivePermissions = await db.ContainerRecursivePermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var ownerships = await db.ContainerOwnershipIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var permissions = await db.ContainerPermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
-        if (held.Length + directories.Length + copies.Length + moves.Length + permissions.Length + ownerships.Length + recursivePermissions.Length > 64 || held.Any(item => Conflicts(item.RelativePath, row.RelativePath)) || directories.Any(path => Conflicts(path, row.RelativePath)) ||
+        if (held.Length + directories.Length + copies.Length + moves.Length + permissions.Length + ownerships.Length + recursiveOwnerships.Length + recursivePermissions.Length > 64 || held.Any(item => Conflicts(item.RelativePath, row.RelativePath)) || directories.Any(path => Conflicts(path, row.RelativePath)) ||
             copies.Any(item => Conflicts(item.SourcePath, row.RelativePath) || Conflicts(item.TargetPath, row.RelativePath)) ||
-            moves.Any(item => Conflicts(item.SourcePath, row.RelativePath) || Conflicts(item.TargetPath, row.RelativePath)) || permissions.Concat(ownerships).Concat(recursivePermissions).Any(path => Conflicts(path, row.RelativePath)))
+            moves.Any(item => Conflicts(item.SourcePath, row.RelativePath) || Conflicts(item.TargetPath, row.RelativePath)) || permissions.Concat(ownerships).Concat(recursivePermissions).Concat(recursiveOwnerships).Any(path => Conflicts(path, row.RelativePath)))
             throw new InvalidOperationException("CONTAINER_UPLOAD_TARGET_BUSY");
         var resource = await db.ManagedResources.Where(item => item.ResourceType == "Container" && item.ExternalId == row.ContainerId)
             .Select(item => (Guid?)item.Id).SingleOrDefaultAsync(cancellationToken);
@@ -163,6 +164,7 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
             await db.ContainerDirectoryOperations.AnyAsync(item => item.PublishBarrier, cancellationToken) ||
             await db.ContainerCopyIntents.AnyAsync(item => item.PublishBarrier, cancellationToken) ||
             await db.ContainerOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerRecursiveOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursivePermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerPermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerMoveIntents.AnyAsync(item => item.PublishBarrier, cancellationToken)) return ContainerFileUploadStartResult.Busy;

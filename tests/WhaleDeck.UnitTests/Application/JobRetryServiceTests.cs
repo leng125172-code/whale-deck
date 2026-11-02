@@ -14,6 +14,8 @@ public sealed class JobRetryServiceTests
     [InlineData("containers.files.upload")]
     [InlineData("containers.files.restore")]
     [InlineData("containers.files.mkdir")]
+    [InlineData("containers.files.recursive-ownership-plan")]
+    [InlineData("containers.files.recursive-ownership")]
     [InlineData("containers.files.recursive-permission-plan")]
     [InlineData("containers.files.recursive-permission")]
     [InlineData("containers.files.ownership-plan")]
