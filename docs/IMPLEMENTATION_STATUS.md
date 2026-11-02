@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-11-02递归普通权限签名RPC/SDK候选aead344通过，未安装**：独立完整请求签名与四RPC、强类型DTO/回执计数、能力1.49协商、固定stdin helper/准确Invocation停止及安装/校验已接，未新增HTTP/Vue入口。3678 Unit（93新专项）、258 Integration通过（7默认原生跳过），33递归/395关联Linux-root零跳过、12宿主artifact/8范围与Release零警告错误通过。复核补SIGTERM逐项取消与Unknown正计数，真实子进程信号后Partial不续做通过；非真实UDS/身份/实盘签名证据。运行仍最后记录d1fcca8/1.48，25281a1内部实盘保持原批次；继续宿主覆盖/原生RPC、永久业务/Worker/API/Vue及真实身份树/HDD全链、ACL/删除和其余59项，17项移出不算完成。[候选与边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_RPC.md)。
+
 - **2026-11-02递归普通权限内部候选25281a1通过真实HDD**：有界乐观清单/独立HDD聚合与子项历史、最深项先执行、逐项永久回执和Partial/Unknown只观察恢复已实现。20专项/382关联Linux-root零跳过、8范围与语法检查通过；冻结独占容器4操作（2完成/1部分/1中止）、2次候选真实SIGKILL、每文件完整2097159字节及原inode/属主/mtime/属性、4份聚合/9份子项HDD和迟到重放不变均通过，独立复核准确清理/11核心不变且healthy。失败与修复保留。未安装/helper/RPC/永久业务/Worker/API/Vue，不算真实身份页面或完整递归权限；运行仍d1fcca8/1.48，继续全链/更多故障、递归所有者/ACL/删除及其余59项，17移出不算完成。[证据与边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_ENGINE.md)。
 
 - **2026-11-02所有者实际变更后取消/Worker回执中断实机通过**：产品保持d1fcca8/1.48，不重部署。精确原helper仍Applying且owner未确认时，原inode已为目标UID/GID、属性/HDD及完整字节符合；真实页面取消与Worker SIGKILL均由原操作恢复Succeeded/Root Completed（退出5.321/0.113秒），不误报未发生或自动恢复。Worker原自然租约保持；迟到Apply重放保持Root/版本/ctime不变。两例及独立SQL/Root/HDD/原件和准确清理通过；8新/16原root边界及宿主检查通过。仍需其余组合、递归/ACL/删除等，59项active。[证据与边界](qa/CONTAINER_OWNERSHIP_POST_CHANGE.md)。
@@ -22,7 +24,7 @@
 
 当前目标以[可复制目标正文与59项主表](GOAL_P0_P5.md)为准，包含完整C#酒馆、统一供应商、AI驱动Live2D、272ST/6PET父级和16个子门槛，以及原有UI/所有者/递归/ACL/删除等全部任务。17项移出不恢复，文档更新不算功能完成。
 
-最后已记录安装六组件为`d1fcca8`/Agent1.48，2026-11-02真实组移除/账号停用与常规7场景通过，见[实时撤权记录](qa/CONTAINER_OWNERSHIP_REVOCATION.md)。此前e91a770四类中断/Unknown和小屏修复证据保持原批次。所有者变更后取消与Worker回执中断已实机对账；递归普通权限内部候选已通过4操作/2次候选强杀和实际HDD独立核验，未安装/RPC/永久业务/API/UI；仍需其他变更后/回执组合、目录/实例/跨盘等剩余故障、递归/ACL、删除/长期清理及完整模块验收；其他模块即时撤权、UI统一风格、酒馆/供应商/Live2D继续。
+最后已记录安装六组件为`d1fcca8`/Agent1.48，2026-11-02真实组移除/账号停用与常规7场景通过，见[实时撤权记录](qa/CONTAINER_OWNERSHIP_REVOCATION.md)。此前e91a770四类中断/Unknown和小屏修复证据保持原批次。所有者变更后取消与Worker回执中断已实机对账；递归普通权限内部候选已通过4操作/2次候选强杀和实际HDD独立核验，后续aead344签名RPC/固定helper/SDK候选已构建测试，未安装/原生签名实机/永久业务/API/UI；仍需其他变更后/回执组合、目录/实例/跨盘等剩余故障、递归/ACL、删除/长期清理及完整模块验收；其他模块即时撤权、UI统一风格、酒馆/供应商/Live2D继续。
 
 下方是按批次保存的历史实施日志。其“当前/最新/下一步”、运行版本、70/76项与旧HOLD仅属于原记录日期；发生冲突时以上述目标和最新对应版本证据为准，不从旧日志恢复移出任务或重复发布。
 
