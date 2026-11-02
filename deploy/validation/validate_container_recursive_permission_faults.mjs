@@ -13,8 +13,9 @@ try {
   const revision = process.argv[2], role = process.argv[3]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
   assert.ok(['cancel', 'recovery'].includes(role))
-  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash', 'target-disappearance'].includes(kind))
-  const unknownCase = kind === 'target-disappearance', expectedState = unknownCase ? 'Unknown' : 'Partial'
+  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash', 'target-disappearance', 'target-disappearance-barrier'].includes(kind))
+  const barrierCase = kind === 'target-disappearance-barrier'
+  const unknownCase = kind === 'target-disappearance' || barrierCase, expectedState = unknownCase ? 'Unknown' : 'Partial'
   if (fixture.expectedState) assert.equal(fixture.expectedState, expectedState)
   assert.match(fixture.containerId, /^[a-f0-9]{64}$/)
   directory = fixture.evidence
@@ -27,7 +28,7 @@ try {
   assert.equal((await (await context.request.get(base + '/api/v1/system/status')).json()).build.sourceRevision, revision)
   phase = 'normal-login'; const profile = await loginVisible(page, context, base, role === 'recovery' ? '/files' : '/containers')
   endpoint = `${base}/api/v1/containers/${fixture.containerId}/files/recursive-permissions`
-  let registrations = 0, confirmations = 0, cancellations = 0, acknowledgements = 0, bodies = 0
+  let registrations = 0, confirmations = 0, cancellations = 0, acknowledgements = 0, bodies = 0, directoryRegistrations = 0
   page.on('request', request => {
     const url = request.url()
     if (request.method() === 'POST' && url === endpoint) registrations++
@@ -35,6 +36,7 @@ try {
     if (request.method() === 'POST' && url.startsWith(endpoint + '/') && url.endsWith('/cancel')) cancellations++
     if (request.method() === 'POST' && url.includes('/container-recursive-permissions/recovery/') && url.endsWith('/acknowledge')) acknowledgements++
     if (request.method() === 'PUT' && url.includes('/files/')) bodies++
+    if (request.method() === 'POST' && /\/files\/directories(?:\/plan)?$/.test(new URL(url).pathname)) directoryRegistrations++
   })
   if (role === 'cancel') {
     phase = 'actual-preflight'
@@ -140,9 +142,33 @@ try {
     assert.equal(result.state, 'Acknowledged'); assert.equal(result.receipt.state, expectedState)
     assert.equal(result.receipt.changedCount, fixture.changedCount)
     await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+    let waitingState = null, waitingVisibleDirectory = false
+    if (barrierCase) {
+      phase = 'same-waiting-directory-after-explicit-release'
+      assert.match(fixture.waitingId, /^[a-f0-9-]{36}$/); assert.match(fixture.waitingContainerId, /^[a-f0-9]{64}$/)
+      assert.match(fixture.waitingContainerName, /^wdv-container-publish-[a-f0-9]{32}$/)
+      assert.equal(fixture.waitingPath, 'work/递归未知保护解除后的目录')
+      for (let n = 0; n < 120; n++) {
+        const response = await context.request.get(base + '/api/v1/files/container-directories/recovery/' + fixture.waitingId)
+        assert.equal(response.status(), 200); const waiting = await response.json(); assert.equal(waiting.id, fixture.waitingId)
+        waitingState = waiting.state
+        if (waitingState === 'Succeeded') break
+        assert.ok(['Pending', 'Applying'].includes(waitingState)); await page.waitForTimeout(500)
+      }
+      assert.equal(waitingState, 'Succeeded')
+      await page.goto(base + '/containers')
+      const files = await openPermissionFiles(page, { containerId: fixture.waitingContainerId, containerName: fixture.waitingContainerName })
+      const createdDirectory = files.getByText('递归未知保护解除后的目录', { exact: true })
+      await createdDirectory.scrollIntoViewIfNeeded()
+      await expect(createdDirectory).toBeInViewport({ ratio: 1 })
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+      await page.screenshot({ path: join(directory, 'waiting-directory.png') }); waitingVisibleDirectory = true
+      await page.getByRole('dialog', { name: /容器详情/ }).locator('.el-drawer__close-btn').click()
+    }
     await logoutFromUserMenu(page, context, base)
-    assert.equal(registrations, 0); assert.equal(confirmations, 0); assert.equal(cancellations, 0); assert.equal(acknowledgements, 1); assert.equal(bodies, 0)
-    await writeSignal(directory, 'recovery-browser.json', { subject: profile.subject, result, acknowledgements, actualUi: true, normalDualLogout: true })
+    assert.equal(registrations, 0); assert.equal(confirmations, 0); assert.equal(cancellations, 0); assert.equal(acknowledgements, 1); assert.equal(bodies, 0); assert.equal(directoryRegistrations, 0)
+    await writeSignal(directory, 'recovery-browser.json', { subject: profile.subject, result, acknowledgements, actualUi: true, normalDualLogout: true,
+      waitingState, waitingVisibleDirectory, waitingId: fixture.waitingId ?? null, directoryRegistrations })
   }
   console.log(JSON.stringify({ recursiveFaultBrowser: 'passed', role }))
 } catch (error) {

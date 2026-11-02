@@ -5,6 +5,7 @@ No SQL/Root/clock edits or product hooks. All bytes and history are verified
 before exact fixture removal. A missed cut or failed page remains a failed gate.
 """
 from concurrent.futures import ThreadPoolExecutor
+import contextlib
 import datetime as dt
 import hashlib
 import json
@@ -29,6 +30,9 @@ from validate_container_upload_bff import temporary_user, login, logout, request
 from validate_databases import Api
 from validate_metric_continuity import query
 from verify_container_recursive_permissions import digest, unsigned
+from validate_container_directory_unknown import register as register_waiting, wait_settled as settle_waiting
+from validate_container_directory_browser import snapshot as directory_snapshot, ROOT as DIRECTORY_ROOT, verify_directory
+from validate_container_directory_restart import clean_success
 
 PHASE = 'startup'
 PATHS = {'': 'Directory', 'sub': 'Directory', **{f'sub/entry-{i:02}.bin': 'File' for i in range(16)}}
@@ -38,7 +42,8 @@ SOURCES = ('bound_container_recursive_permission_cut.py', 'validate_container_re
     'validate_container_ownership_faults.py', 'validate_container_file_publishing.py',
     'validate_container_recursive_permission_browser.py', 'validate_container_recursive_permission_agent.py',
     'validate_container_recursive_permissions.py', 'verify_container_recursive_permissions.py',
-    'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs')
+    'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs', 'validate_container_directory_unknown.py',
+    'validate_container_directory_browser.py', 'validate_container_upload_bff.py', 'validate_databases.py')
 
 
 def inventory(root, content):
@@ -237,6 +242,39 @@ def require_unknown_counts(record, count):
     assert record['outcomeDigest'] == ''
 
 
+def require_waiting_deferred(value, identifier, subject):
+    row = value['row']; job = value['job']
+    assert row['id'] == job['id'] == identifier and row['actor_subject'] == job['actor_subject'] == subject
+    assert row['state'] == 'Pending' and row['root_started_at_utc'] is None and not row['publish_barrier'] and row['completed_at_utc'] is None
+    assert job['state'] in ('Pending','Running') and job['completed_at_utc'] is None and value['accepted'] == 1
+
+
+def observe_waiting(waiting, baseline, fixture, subject, unknown, root, content, expected, directory, worker):
+    samples = []; output = fixture['folder']/baseline['path'].removeprefix('work/')
+    original_raw = (ROOT/(uuid.UUID(unknown['row']['execution_job_id']).hex+'.json')).read_bytes()
+    deadline = time.monotonic()+95; previous_version = 0; previous_next = None
+    while len(samples) < 4:
+        value = directory_snapshot(waiting['id']); require_waiting_deferred(value,waiting['id'],subject)
+        assert not output.exists() and not (DIRECTORY_ROOT/(uuid.UUID(waiting['id']).hex+'.json')).exists()
+        assert not (fixture['folder']/'.whaledeck-container-directories-v1').exists()
+        assert snapshot(unknown['row']['id']) == unknown and unknown['row']['publish_barrier']
+        assert {p:fingerprint((root/p).lstat()) for p in PATHS} == expected and (ROOT/(uuid.UUID(unknown['row']['execution_job_id']).hex+'.json')).read_bytes() == original_raw
+        row = value['row']; next_attempt = dt.datetime.fromisoformat(row['next_attempt_at_utc'])
+        if previous_next is None: previous_next = dt.datetime.fromisoformat(row['created_at_utc'])
+        if row['lease_token'] is None and row['lease_expires_at_utc'] is None and row['version'] >= previous_version+2 and (previous_next is None or next_attempt > previous_next):
+            assert inventory(root,content) == expected
+            running = worker.current(); assert running['State']['Running']
+            checks = preflight([unknown['row']['id'],unknown['row']['execution_job_id'],waiting['id']])
+            samples.append({'atUtc':dt.datetime.now(dt.timezone.utc).isoformat(),'sql':value,'actualTargetAbsent':True,'rootReceiptAbsent':True,'sourceTreeAndUnknownUnchanged':True,
+                'workerId':worker.id,'workerImage':running['Image'],'workerStartedAt':running['State']['StartedAt'],'workerRunning':True,'otherWorkChecks':checks})
+            previous_version = row['version']; previous_next = next_attempt
+        assert time.monotonic() < deadline, 'FOUR_REAL_DIRECTORY_DEFERRALS_NOT_OBSERVED'
+        if len(samples) < 4: time.sleep(1)
+    assert samples[-1]['sql']['row']['version'] >= 8
+    (directory/'waiting-blocked.json').write_text(json.dumps(samples))
+    return samples
+
+
 def verify_unknown(data, baseline, before, after, storage, directory):
     """Unknown aggregate does not erase independently observed physical changes.
 
@@ -332,8 +370,9 @@ def main():
     global PHASE
     assert os.geteuid() == 0 and len(sys.argv) in (2,3); os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}',revision)
-    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','worker-crash','target-disappearance')
-    unknown_case = kind == 'target-disappearance'; expected_state = 'Unknown' if unknown_case else 'Partial'
+    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','worker-crash','target-disappearance','target-disappearance-barrier')
+    barrier_case = kind == 'target-disappearance-barrier'
+    unknown_case = kind in ('target-disappearance','target-disappearance-barrier'); expected_state = 'Unknown' if unknown_case else 'Partial'
     repo = Path(__file__).resolve().parents[2]
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(), 'FREEZE_VALIDATION_SOURCE_FIRST'
     validation = subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()
@@ -346,8 +385,9 @@ def main():
     print(json.dumps({'recursiveFaults':'started','evidence':str(directory)}),flush=True)
     files = load('/usr/local/libexec/whaledeck-files.py','recursive_fault_files')
     storage = load('/usr/local/libexec/whaledeck-file-backups.py','recursive_fault_storage').FileBackups(files)
-    held = browser = identifier = baseline = None; passed = False
-    with owned.fixture(restartable_core=('whaledeck-worker',),removable=unknown_case) as fixture:
+    held = browser = identifier = baseline = waiting = waiting_baseline = client = profile = None; passed = waiting_clean = False
+    with owned.fixture(restartable_core=('whaledeck-worker',),removable=unknown_case) as fixture, contextlib.ExitStack() as extras:
+        other = extras.enter_context(owned.fixture(restartable_core=('whaledeck-worker',))) if barrier_case else None
         root = fixture['folder']/'recursive-tree'; root.mkdir(mode=0o750); (root/'sub').mkdir(mode=0o750)
         content = hashlib.shake_256(('recursive-fault:'+fixture['identifier']).encode()).digest(2*1024**2+7)
         for i,(relative,entry_kind) in enumerate(PATHS.items()):
@@ -380,7 +420,7 @@ def main():
                 (directory/'bound-helper.json').write_text(json.dumps({'pid':held.pid,'unit':held.cgroup,'twoKernelFdProofs':True,'proof':held.proof}))
                 PHASE = 'actual-'+kind+'-and-product-helper-exit'; crash = lease_proof = None; began = time.monotonic()
                 write_signal(directory,'action.json',{'kind':kind})
-                if kind in ('worker-crash','target-disappearance'):
+                if kind == 'worker-crash' or unknown_case:
                     action = wait_signal(directory,'action-done.json',browser,30); assert action['cancellations'] == 0
                     checks = restart_allowed(held,applying)
                     applying = snapshot(identifier)['row']; lease_held(applying,applying)
@@ -393,7 +433,7 @@ def main():
                     PHASE = 'exact-owned-container-disappearance'
                     fixture['remove_owned'](); assert inventory(root,content) == cut_tree
                     (directory/'target-disappearance.json').write_text(json.dumps({'containerId':fixture['identifier'],'exactOwnedContainerRemoved':True,'sourcePreserved':True,'otherActiveWork':checks}))
-                if kind in ('worker-crash','target-disappearance'): began = time.monotonic()
+                if kind == 'worker-crash' or unknown_case: began = time.monotonic()
                 with ThreadPoolExecutor(max_workers=1) as exits:
                     stopping = exits.submit(held.wait_exit_seconds,began,15)
                     if kind == 'worker-crash':
@@ -438,14 +478,40 @@ def main():
             with temporary_user(True) as (username,password):
                 recovery_fixture = {**baseline,'id':identifier,'originalSubject':ready['subject'],'changedCount':record['changedCount'],'expectedState':expected_state,
                     'counts':{k:record[k] for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')}}
+                if barrier_case:
+                    PHASE = 'actual-other-container-directory-deferred'
+                    client,profile = login('http://127.0.0.1:8080',username,password); assert profile['subject'] != ready['subject']
+                    waiting,waiting_baseline = register_waiting('http://127.0.0.1:8080',client,Api('http://127.0.0.1:8080',client),other,'work/递归未知保护解除后的目录')
+                    inspected_other = json.loads(command('docker','inspect',other['identifier']))[0]
+                    waiting_baseline.update(id=waiting['id'],subject=profile['subject'],containerName=inspected_other['Name'].lstrip('/'),originalFileProof=other['proofs']['original.bin'])
+                    (directory/'waiting-baseline.json').write_text(json.dumps(waiting_baseline))
+                    observe_waiting(waiting,waiting_baseline,other,profile['subject'],partial,root,content,after,directory,worker)
+                    recovery_fixture.update(waitingId=waiting['id'],waitingContainerId=other['identifier'],waitingContainerName=waiting_baseline['containerName'],waitingPath=waiting_baseline['path'])
                 browser = browser_start(recovery_fixture,'recovery',username,password,directory)
                 canceled = wait_signal(directory,'recovery-canceled.json',browser)
                 assert canceled['subject'] != ready['subject'] and canceled['acknowledgements'] == 0
+                if barrier_case:
+                    assert canceled['subject'] == profile['subject']
+                    require_waiting_deferred(directory_snapshot(waiting['id']),waiting['id'],profile['subject'])
+                    assert not (other['folder']/waiting_baseline['path'].removeprefix('work/')).exists()
                 still = snapshot(identifier); assert still == partial, 'CANCELED_RECOVERY_CHANGED_ORIGINAL_TASK'
                 assert inventory(root,content) == after and record_for(still['row']) == record
                 write_signal(directory,'acknowledge.json',{'id':identifier,'originalStillProtected':True})
-                assert browser.wait(timeout=65) == 0, 'CURRENT_ADMIN_ACK_PAGE_NOT_VERIFIED'; browser = None
+                assert browser.wait(timeout=105 if barrier_case else 65) == 0, 'CURRENT_ADMIN_ACK_PAGE_NOT_VERIFIED'; browser = None
                 recovery = json.loads((directory/'recovery-browser.json').read_bytes())
+                if barrier_case:
+                    PHASE = 'same-original-waiting-task-published-after-acknowledgement'
+                    waiting_final = settle_waiting(waiting['id']); released = snapshot(identifier)['row']
+                    assert waiting_final['row']['state'] == waiting_final['job']['state'] == 'Succeeded'
+                    assert dt.datetime.fromisoformat(waiting_final['row']['root_started_at_utc']) >= dt.datetime.fromisoformat(released['completed_at_utc'])
+                    assert waiting_final['accepted'] == 1 and waiting_final['pending'] == 0 and recovery['waitingState'] == 'Succeeded'
+                    proof_directory = directory/'waiting-proof'; proof_directory.mkdir(mode=0o700)
+                    output,inode,private_inode = verify_directory({'id':waiting['id'],'path':waiting_baseline['path'],'publishedVersion':waiting_final['row']['published_version']},waiting_baseline,profile['subject'],proof_directory)
+                    assert owned.common.fingerprint(other['folder']/'original.bin') == other['proofs']['original.bin'][0] and owned.common.file_digest(other['folder']/'original.bin') == other['proofs']['original.bin'][1]
+                    (directory/'waiting-final-sql.json').write_text(json.dumps(waiting_final))
+                    (directory/'waiting-physical.json').write_text(json.dumps({'inode':inode,'privateIdentity':private_inode,'originalFileUnchanged':True,'actualUiDirectoryObserved':recovery['waitingVisibleDirectory']}))
+                    clean_success(waiting,waiting_baseline,profile,proof_directory,other); waiting_clean = True
+                    logout('http://127.0.0.1:8080',client); client.close(); client = None
             PHASE = 'final-independent-physical-and-permanent-proof'
             final = snapshot(identifier); row = final['row']
             assert row['state'] == 'Acknowledged' and final['executionJob']['state'] == 'Failed'
@@ -476,7 +542,8 @@ def main():
                 'originalIdentityDeleted':True,'rootHistoryAndPhysicalPreserved':True,'latePrivilegedHelperReplayNoChanges':True,
                 'lateReplayWasSignedRpc':False,'actualUi':True,'workerRestartedSameContainer':True,'allFileBytesUidGidMtimeXattrPreserved':True,
                 'workerCrash':crash,'naturalLeaseSamples':len(lease_proof['samples']) if lease_proof else 0,
-                'rootState':expected_state,'physicalChangedCount':unchanged_except_modes(before,after),'targetRemovedDuringOperation':unknown_case}
+                'rootState':expected_state,'physicalChangedCount':unchanged_except_modes(before,after),'targetRemovedDuringOperation':unknown_case,
+                'waitingId':waiting['id'] if waiting else None,'otherWriteDeferredUntilExplicitRelease':barrier_case,'waitingActualUi':recovery.get('waitingVisibleDirectory',False)}
         finally:
             if held is not None: held.release()
             worker.start()
@@ -504,8 +571,36 @@ def main():
                 if current['completed_at_utc'] and not current['publish_barrier']:
                     observed = inventory(root,content); unchanged_except_modes(before,observed)
                     (directory/'failed-gate-physical.json').write_text(json.dumps(observed)); remove_proved(root,content,observed)
+            if waiting is not None and not waiting_clean:
+                end = settle_waiting(waiting['id'])
+                if end['row']['state'] == 'Unknown':
+                    with temporary_user(True) as (cleanup_name,cleanup_password):
+                        cleanup_session,_ = login('http://127.0.0.1:8080',cleanup_name,cleanup_password)
+                        try:
+                            api = Api('http://127.0.0.1:8080',cleanup_session)
+                            url = 'http://127.0.0.1:8080/api/v1/files/container-directories/recovery/'+waiting['id']
+                            value = request(cleanup_session,'GET',url,200).json()
+                            request(cleanup_session,'POST',url+'/acknowledge',202,headers={**api.headers,'Idempotency-Key':waiting['id']},json={'version':value['version'],'confirmed':True})
+                            logout('http://127.0.0.1:8080',cleanup_session)
+                        finally: cleanup_session.close()
+                    end = directory_snapshot(waiting['id'])
+                    (directory/'failed-waiting-acknowledgement.json').write_text(json.dumps({'id':waiting['id'],'state':end['row']['state'],'gatePassed':False,'normalBffCleanup':True}))
+                if end['row']['state'] == 'Succeeded':
+                    proof_directory = directory/'failed-waiting-proof'; proof_directory.mkdir(mode=0o700)
+                    clean_success(waiting,waiting_baseline,profile,proof_directory,other)
+                    (directory/'failed-waiting-cleanup.json').write_text(json.dumps({'id':waiting['id'],'gatePassed':False,'exactCompletedDirectoryRemoved':True}))
+            if client is not None:
+                try: logout('http://127.0.0.1:8080',client)
+                except Exception:
+                    # The temporary identity may already have been deleted by
+                    # context unwinding. This never counts as a passing logout.
+                    (directory/'failed-client-logout.json').write_text(json.dumps({'gatePassed':False,'identityMayAlreadyBeDeleted':True}))
+                finally: client.close()
     assert passed and baseline is not None
     assert not Path(baseline['source']).exists() and subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True).returncode != 0
+    if barrier_case:
+        assert waiting_clean and not Path(waiting_baseline['source']).exists()
+        assert subprocess.run(['docker','inspect',waiting_baseline['containerId']],capture_output=True).returncode != 0
     no_active_work(); inactive_except(); (directory/'verified.json').write_text(json.dumps(result))
     print(json.dumps({'recursiveFaults':'passed',**result,'evidence':str(directory)}),flush=True)
 

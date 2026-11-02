@@ -16,7 +16,8 @@ import sys
 
 from validate_container_file_staging import load
 from validate_container_recursive_permission_browser import snapshot, read_metadata, managed_plan
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except, same_operation, require_unknown_counts
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except, same_operation, require_unknown_counts, require_waiting_deferred
+from validate_container_directory_browser import snapshot as directory_snapshot, ROOT as DIRECTORY_ROOT
 from validate_container_recursive_permission_agent import no_active_work, host_identity
 from validate_container_recursive_permissions import NAMES
 from validate_metric_continuity import query
@@ -39,7 +40,8 @@ def main():
     row = actual['row']; assert row['state'] == 'Acknowledged' and actual['executionJob']['state'] == 'Failed' and not row['publish_barrier']
     original = saved('cancel-browser.json'); recovery = saved('recovery-browser.json')
     kind = baseline.get('kind','cancel'); assert result.get('kind','cancel') == kind
-    unknown_case = kind == 'target-disappearance'; expected_state = 'Unknown' if unknown_case else 'Partial'
+    barrier_case = kind == 'target-disappearance-barrier'
+    unknown_case = kind in ('target-disappearance','target-disappearance-barrier'); expected_state = 'Unknown' if unknown_case else 'Partial'
     assert original['actualUi'] and recovery['actualUi'] and original['normalDualLogout'] and recovery['normalDualLogout']
     assert original['subject'] == row['actor_subject'] != row['acknowledged_by'] == recovery['subject']
     if kind == 'worker-crash':
@@ -142,16 +144,57 @@ def main():
     assert not Path(baseline['source']).exists() and not Path(baseline['root']).exists()
     assert subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True,timeout=15).returncode != 0
     assert host_identity(baseline['revision']) == baseline['hostBefore']
+    if barrier_case:
+        waiting_baseline = saved('waiting-baseline.json'); waiting = saved('waiting-final-sql.json'); blocked = saved('waiting-blocked.json'); physical = saved('waiting-physical.json')
+        assert result['otherWriteDeferredUntilExplicitRelease'] and result['waitingId'] == waiting_baseline['id'] == waiting['row']['id']
+        assert waiting_baseline['subject'] == waiting['row']['actor_subject'] == row['acknowledged_by'] == recovery['subject']
+        assert len(blocked) == 4
+        previous_version = 0; previous_next = dt.datetime.fromisoformat(waiting['row']['created_at_utc'])
+        for sample in blocked:
+            require_waiting_deferred(sample['sql'],waiting['row']['id'],recovery['subject'])
+            assert sample['actualTargetAbsent'] and sample['rootReceiptAbsent'] and sample['sourceTreeAndUnknownUnchanged']
+            for field in ('id','container_id','instance_id','actor_subject','owner_hash','request_hash','plan_json','relative_path'):
+                assert sample['sql']['row'][field] == waiting['row'][field]
+            assert dt.datetime.fromisoformat(sample['atUtc']) < dt.datetime.fromisoformat(row['completed_at_utc'])
+            deferred = sample['sql']['row']; next_attempt = dt.datetime.fromisoformat(deferred['next_attempt_at_utc'])
+            assert deferred['lease_token'] is None and deferred['lease_expires_at_utc'] is None and deferred['version'] >= previous_version+2 and next_attempt > previous_next
+            previous_version = deferred['version']; previous_next = next_attempt
+            assert sample['workerRunning'] and [sample['workerId'],sample['workerImage']] == baseline['coreBefore']['/whaledeck-worker'][:2]
+            assert sample['workerStartedAt'] == current_core['/whaledeck-worker'][3]
+            assert all(n == 0 for n in sample['otherWorkChecks'].values())
+        assert previous_version >= 8
+        assert directory_snapshot(waiting['row']['id']) == waiting and waiting['row']['state'] == waiting['job']['state'] == 'Succeeded'
+        assert waiting['accepted'] == 1 and waiting['pending'] == 0 and not waiting['row']['publish_barrier'] and waiting['row']['lease_token'] is None
+        assert dt.datetime.fromisoformat(waiting['row']['root_started_at_utc']) >= dt.datetime.fromisoformat(row['completed_at_utc'])
+        operation = waiting['row']['id'].replace('-',''); directory_path = DIRECTORY_ROOT/(operation+'.json'); info = directory_path.lstat()
+        assert stat.S_ISREG(info.st_mode) and info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1 and info.st_size <= 16384
+        directory_raw = directory_path.read_bytes()
+        assert directory_raw == (directory/'waiting-proof'/(operation+'.root.json')).read_bytes()
+        receipt = json.loads(directory_raw); plan = receipt['plan']; managed = json.loads(waiting['row']['plan_json'])
+        assert receipt['operationId'] == operation and receipt['state'] == 'Completed' and receipt['owner'] == waiting['row']['owner_hash']
+        assert receipt['version'] == waiting['row']['published_version'] and plan['fingerprint'] == managed['Fingerprint']
+        assert plan['fingerprint'] == digest(b'whaledeck-container-directory-plan-v1\n',unsigned(plan,'fingerprint'))
+        assert physical['inode'][:2] == receipt['pendingIdentity'] and physical['inode'][2:] == [1000,1000,0o750] and physical['privateIdentity'] == receipt['privateIdentity']
+        assert physical['originalFileUnchanged'] and physical['actualUiDirectoryObserved'] and recovery['waitingVisibleDirectory'] and recovery['directoryRegistrations'] == 0
+        assert recovery['waitingState'] == 'Succeeded' and recovery['waitingId'] == waiting_baseline['id'] and result['waitingActualUi']
+        directory_audits = query("SELECT json_build_object('rows',json_agg(json_build_object('actor',actor_subject,'action',action,'detail',detail_json))) FROM audit_events WHERE job_id=:'id'::uuid AND action LIKE 'containers.files.mkdir.%';",id=waiting['row']['id'])['rows']
+        expected_hashes = {'pathHash':hashlib.sha256(waiting['row']['relative_path'].encode()).hexdigest().upper(),'instanceHash':hashlib.sha256(waiting['row']['instance_id'].encode()).hexdigest().upper()}
+        assert len(directory_audits) >= 2 and len([a for a in directory_audits if a['action'] == 'containers.files.mkdir.accepted']) == 1
+        for audit in directory_audits:
+            assert audit['actor'] == recovery['subject'] and (json.loads(audit['detail']) if isinstance(audit['detail'],str) else audit['detail']) == expected_hashes
+        assert not Path(waiting_baseline['source']).exists() and subprocess.run(['docker','inspect',waiting_baseline['containerId']],capture_output=True,timeout=15).returncode != 0
+        (directory/'waiting-independent.json').write_text(json.dumps({'originalIdExecutedOnce':True,'deferredSamples':4,'startedAfterOriginalAcknowledgement':True,'rootAndPhysicalInodeVerified':True,'bothFixturesRemoved':True,'actualDirectoryUi':True,'directoryAuditRows':len(directory_audits),'hashedMetadataAndCurrentAdminVerified':True}))
     no_active_work(); inactive_except()
     screenshots = (('inflight.png','unknown-counts.png','partial-recovery-confirm.png','partial-acknowledged.png') if unknown_case
         else ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png')) + (('partial-counts.png',) if kind == 'worker-crash' else ())
+    if barrier_case: screenshots += ('waiting-directory.png',)
     for name in screenshots:
         raw = (directory/name).read_bytes(); assert raw.startswith(b'\x89PNG\r\n\x1a\n')
         assert int.from_bytes(raw[16:20],'big') == 320 and int.from_bytes(raw[20:24],'big') == 600
     observed = {'independentReadOnlyVerification':'passed','id':row['id'],'actualSqlAndRootAndHddUnchanged':True,'hddMetadataFiles':len(checked),
         'kind':kind,'sourceAndContainerAccuratelyRemoved':True,'deletedSourceBytesReRead':False,'screenshots':len(screenshots),'auditRows':len(audits),
         'all11Healthy':True,'installedHelpersMatchProductRevision':True,'productRevision':baseline['revision'],
-        'sourceDevice':baseline['original'][''][0],'hddDevice':hdd_device}
+        'sourceDevice':baseline['original'][''][0],'hddDevice':hdd_device,'waitingWriteVerified':barrier_case}
     (directory/'independent-final.json').write_text(json.dumps(observed))
     print(json.dumps(observed))
 
