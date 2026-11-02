@@ -314,6 +314,25 @@ public sealed class ContainerRecursivePermissionWorkflowTests
         Assert.Equal("Canceled", f.Repository.Row.State); Assert.False(f.Repository.Row.PublishBarrier);
         Assert.Equal(1, f.Gateway.Applies); Assert.Equal(1, f.Gateway.Discards);
     }
+    [Theory]
+    [InlineData("Partial",false)][InlineData("Partial",true)][InlineData("Unknown",false)][InlineData("Unknown",true)]
+    [InlineData("Aborted",false)][InlineData("Aborted",true)]
+    public async Task TrustedRootOutcomeSurvivesIdentityOutageEvenPastExecutionExpiry(string rootState,bool expired)
+    {
+        using var f = new Fixture(); await f.Create();
+        f.Gateway.ApplyHandler = op => {
+            f.Gateway.Receipt = Gateway.ReceiptFor(op,rootState); f.Identity.LiveUnavailable = true; return f.Gateway.Receipt;
+        };
+        await f.Dispatcher.TickAsync(default); Assert.Equal(1,f.Gateway.Applies); Assert.True(f.Repository.Row!.PublishBarrier);
+        if (expired) f.Clock.Now = f.Clock.Now.AddMinutes(16);
+        await f.Dispatcher.TickAsync(default); var row = f.Repository.Row;
+        Assert.Equal(rootState == "Aborted" ? "Failed" : rootState,row.State); Assert.Equal(rootState,row.RootState);
+        Assert.Equal(f.Gateway.Receipt!.ChangedCount,(uint)row.ChangedCount!.Value);
+        Assert.Equal(f.Gateway.Receipt.UnknownCount,(uint)row.UnknownCount!.Value);
+        Assert.Equal(f.Gateway.Receipt.HistoryDigest,row.HistoryDigest ?? "");
+        Assert.Equal(rootState != "Aborted",row.PublishBarrier); Assert.Equal(1,f.Gateway.Applies);
+        Assert.Equal(0,f.Gateway.Discards);
+    }
     private sealed class Fixture : IDisposable
     {
         private readonly string _key = Path.GetTempFileName(); public Clock Clock { get; } = new();

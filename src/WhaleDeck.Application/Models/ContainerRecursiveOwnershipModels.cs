@@ -1,6 +1,8 @@
+using System.Text.Json.Serialization;
+
 namespace WhaleDeck.Application.Models;
 
-public sealed record ContainerRecursiveOwnershipCommandDto(ContainerFileLocationDto Location, uint Uid, uint Gid, string ExpectedVersion);
+public sealed record ContainerRecursiveOwnershipCommandDto(ContainerFileLocationDto Location, [property: JsonRequired] uint Uid, [property: JsonRequired] uint Gid, string ExpectedVersion);
 public sealed record ContainerRecursiveOwnershipPlanDto(uint SchemaVersion, ContainerRecursiveOwnershipCommandDto Command, string TargetProof,
     FileParentIdentity ParentIdentity, string ParentVersion, uint OwnerUid, uint OwnerGid, string Fingerprint,
     FileObjectIdentityDto RootIdentity, long RootChangedAtUnixNs, string ManifestDigest, uint EntryCount, uint FileCount, uint DirectoryCount, uint ChangeCount)

@@ -48,7 +48,19 @@ public sealed class ContainerRecursivePermissionDispatcher(IContainerRecursivePe
             async Task Finish(ContainerRecursivePermissionReceiptDto receipt)
             {
                 ContainerRecursivePermissionWorkflowValidation.RequireCompatibleReceipt(row, receipt);
-                var canceled = receipt.State != "Completed" && (await Canceled(row, cancellationToken) || !await Allowed(row, cancellationToken));
+                // Recording an already verified Root outcome is observe-only.
+                // Identity/cache outages cannot erase Partial/Unknown counts or
+                // turn a known Aborted fence into a missing/unknown result.
+                var canceled = false;
+                if (receipt.State == "Aborted")
+                {
+                    canceled = await Canceled(row, cancellationToken);
+                    if (!canceled)
+                    {
+                        try { canceled = !await Allowed(row, cancellationToken); }
+                        catch (Exception) when (!cancellationToken.IsCancellationRequested) { }
+                    }
+                }
                 var state = receipt.State == "Completed" ? receipt.BindingCurrent ? "Succeeded" : "Superseded" : receipt.State == "Partial" ? "Partial" : receipt.State == "Unknown" ? "Unknown" : canceled ? "Canceled" : "Failed";
                 var code = state switch { "Succeeded" => "CONTAINER_RECURSIVE_PERMISSION_COMPLETED", "Superseded" => "CONTAINER_RECURSIVE_PERMISSION_TARGET_CHANGED",
                     "Partial" => "CONTAINER_RECURSIVE_PERMISSION_PARTIAL_REQUIRES_ACKNOWLEDGEMENT", "Unknown" => "CONTAINER_RECURSIVE_PERMISSION_RESULT_UNKNOWN", "Canceled" => "CONTAINER_RECURSIVE_PERMISSION_CANCELED", _ => "CONTAINER_RECURSIVE_PERMISSION_INTERRUPTED" };
