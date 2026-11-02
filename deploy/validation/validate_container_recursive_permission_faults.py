@@ -495,7 +495,8 @@ def main():
                     (directory/'target-disappearance.json').write_text(json.dumps({'containerId':fixture['identifier'],'exactOwnedContainerRemoved':True,'sourcePreserved':True,'otherActiveWork':checks}))
                 if kind in ('worker-crash','agent-restart') or unknown_case: began = time.monotonic()
                 maintenance_stop = threading.Event(); maintenance_ready = threading.Event(); maintenance = None
-                with ThreadPoolExecutor(max_workers=2) as exits:
+                with ThreadPoolExecutor(max_workers=2) as exits, contextlib.ExitStack() as observation_cleanup:
+                    observation_cleanup.callback(maintenance_stop.set)
                     if kind == 'agent-restart':
                         maintenance = exits.submit(observe_maintenance,maintenance_stop,maintenance_ready)
                         if not maintenance_ready.wait(5):
