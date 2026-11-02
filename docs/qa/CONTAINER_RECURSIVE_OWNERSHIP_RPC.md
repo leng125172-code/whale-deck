@@ -1,5 +1,7 @@
 # 递归所有者：独立签名 RPC、SDK 与安装候选
 
+> 后续2026-11-02：宿主22906f5/1.50已正常安装，真实签名四RPC/HDD、16拒绝边界及两类旧协议兼容/独立核验通过，见[安装态证据](CONTAINER_RECURSIVE_OWNERSHIP_AGENT_RPC.md)。下文2d3b7e0候选原文保留；永久业务/API/Vue和真人页面仍待，不把安装态协议子门禁算作完整功能。
+
 2026-11-02。候选冻结`2d3b7e0fa529d61c97d5855248e10e87eaad3c2a`，协议候选1.50。**尚未安装、未通过真实签名UDS/HDD或人类页面验收**。运行仍`0dede08`/1.49，Agent PID1851523、MaintenanceHost PID1432309/source不变；没有发布、服务重启或自动回滚。前批[底层真实容器/HDD证据](CONTAINER_RECURSIVE_OWNERSHIP_ENGINE.md)保留，不把它记为本批RPC实机结果。
 
 ## 独立协议、显式UID/GID与完整请求签名
