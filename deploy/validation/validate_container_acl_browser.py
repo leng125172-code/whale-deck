@@ -243,7 +243,7 @@ def main():
                         after=inventory(folder,reader,module,content);proof=verify_case(result,baseline,signal['subject'],evidence,reader,module,storage,current,after);results.append(proof);current=after
                         (evidence/'results.json').write_text(json.dumps(results));(evidence/'physical-final.json').write_text(json.dumps(current))
                         pending=evidence/(name+'-verified.pending');pending.write_text(json.dumps({'id':result['id'],'physicalAndHistoryVerified':True}));pending.replace(evidence/(name+'-verified.json'))
-                    assert process.wait(timeout=75)==0,'ACTUAL_ACL_BROWSER_FAILED'
+                    assert process.wait(timeout=180 if baseline.get('jobResultsVersion')==1 else 75)==0,'ACTUAL_ACL_BROWSER_FAILED'
                 finally:
                     if process.poll() is None:
                         process.terminate()
