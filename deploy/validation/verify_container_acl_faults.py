@@ -30,6 +30,9 @@ def verify(directory):
         assert '/' not in name
         raw=subprocess.check_output(['git','-C',str(repo),'show',accepted['revision']+':deploy/host/'+name]);assert hashlib.sha256(raw).hexdigest()==digest and (Path('/usr/local/libexec')/name).read_bytes()==raw
     files=load('/usr/local/libexec/whaledeck-files.py','acl_fault_independent_files');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_fault_independent_module');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_fault_independent_hdd').FileBackups(files)
+    actual=json.loads(subprocess.check_output(['docker','inspect',*owned.common.CORE_NAMES],timeout=20))
+    assert len(actual)==11 and {v['Name'].lstrip('/') for v in actual}==set(owned.common.CORE_NAMES)
+    assert all(v['State']['Running'] and v['State'].get('Health',{}).get('Status')=='healthy' for v in actual)
     current=owned.common.core_snapshot();assert len(current)==11;results=[]
     assert accepted['cases'] and len(accepted['cases'])<=2 and len({r['kind'] for r in accepted['cases']})==len(accepted['cases'])
     for result in accepted['cases']:
