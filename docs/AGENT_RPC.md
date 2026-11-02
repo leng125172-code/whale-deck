@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-03 ACL原登录实时移组/停用实机：冻结f3ca007、运行633a2ca不重发；原正快照余7164秒以上，仅变更准确临时身份，产品约5.2秒停helper，旧任务403、原页面分别/forbidden和/login，引用键null、取消POST0。Canceled/Aborted、完整源/两类ACL/2HDD/4Job/8审计与独立原件/准确清理通过，四真实PNG/38边界与语法通过。仅写ACL前切点；重启/变更后/Unknown/跨写入、递归恢复/删除继续。[实际证据](qa/CONTAINER_ACL_REVOCATION.md)。
+
 2026-11-03后续ACL故障实机：633a2ca不重发，78479ec两新独占资源在Preparing/HistoryVerified、尚未写ACL时真实页面取消/正常双端退出通过；原任务Canceled/Aborted、全源/两类ACL不变、2HDD/4Job/9审计、独立只读与准确清理通过，320×600暗色按钮在视口内。22离线与语法通过、未知登记/活动/Unknown失败清理保留源；11核心healthy，仅Worker正常启停。其余变更后/撤权/重启/Unknown/跨写入、ACL递归恢复和删除继续，不计完整权限。[证据与边界](qa/CONTAINER_ACL_FAULTS.md)。
 
 - **2026-11-03 ACL已正常覆盖633a2ca，真实页面九场景首轮及独立核验通过**：唯一发布Invocation5761b5620b27452d925f196bb134537e成功，六组件/HTTP/实际宿主映射同源、生产ACL迁移17 CHECK应用，11核心healthy且8数据库平台不变，user NOPASSWD保留。冻结0668215/21依赖，以正常Authentik→Vue→SQL/Worker→Agent→实际ACL/HDD完成8成功/1预检取消，显式ID/权限0、mask/NoChange/default清空、完整2097159字节/原inode-UID-GID-mtime/非目标ACL/子项逐轮核对，8份原HDD与35审计/17 Job、原key/确认重试不重做通过。同原上下文正常双端退出、普通8路403/匿名4路401、CSRF/Origin及缺字段拒绝、9真PNG、准确清理与独立原件核验通过；源/HDD同device不算异盘。14离线及语法通过，前批单元/预览不冒称复跑或新CI全绿；真实进行中故障/Unknown/跨写入、ACL递归/历史恢复、删除及其余59项继续，不计完整ACL。[实际部署、原件和未验边界](qa/CONTAINER_ACL_REAL_UI.md)。

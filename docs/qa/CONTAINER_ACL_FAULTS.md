@@ -1,5 +1,7 @@
 # 容器ACL：执行前已留历史的进行中取消与正常双端退出
 
+后续记录：[原登录实时移组/账号停用两案](CONTAINER_ACL_REVOCATION.md)也已实机通过，且本轮已成功推送上批c8a16eb..546b6cc。以下原批次的退出、当时待办和TLS失败事实保留，未重做原操作。
+
 2026-11-03。运行六组件仍为 `633a2ca42012bbd6f388a67bd128fe3125bfab76`、Agent 1.51，本批没有重新发布。真实门禁冻结 `78479ec`；后续 `a61d715` 加固失败清理，`e1a3419` 补独立观察器的实际容器健康断言。**两套新独占资源的真实页面、SQL/Worker/Agent、原文件/ACL和HDD门禁首轮通过，独立只读核验通过。** 不重复前批[九个常规场景](CONTAINER_ACL_REAL_UI.md)。
 
 仅签收**已进入Applying业务状态、Root为Preparing且HistoryVerified、ACL系统调用尚未发生**时的两种中断。不是ACL已修改后的回执丢失、Worker崩溃、Agent重启、实时撤权、Unknown或递归恢复验收，不计完整ACL或59主项完成，master尚未交付。

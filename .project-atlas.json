@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_FAULTS.md；docs/qa/CONTAINER_ACL_REAL_UI.md",
-  "nextStep": "运行633a2ca/1.51保留。ACL写入前HistoryVerified进行中取消/正常双端退出两案及独立原件核验通过；继续实际变更后取消/丢回执、实时组撤权/停用、Worker强杀/自然租约、Agent重启、目标/实例Unknown及共享写入延期/明确处置，再ACL递归/历史恢复、删除/长期清理、P0-05和其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，开发sudo保留，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_REVOCATION.md；docs/qa/CONTAINER_ACL_FAULTS.md",
+  "nextStep": "运行633a2ca/1.51保持。ACL写入前取消/正常退出/原登录实时移组与停用均已实机及独立原件验收；继续Worker强杀/自然租约、Agent重启、实际变更后取消/丢回执/撤权、目标/实例Unknown和共享写入延期/明确处置，再ACL递归/历史恢复、可恢复删除/长期清理、P0-05与其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，开发sudo保留，不自动回滚dev。"
 }
