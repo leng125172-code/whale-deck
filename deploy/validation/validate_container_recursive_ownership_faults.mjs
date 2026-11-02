@@ -13,7 +13,7 @@ try {
   const revision = process.argv[2], role = process.argv[3]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
   assert.ok(['cancel', 'recovery'].includes(role))
-  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel','logout','worker-crash','agent-restart','group-removal','account-disable'].includes(kind))
+  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel','logout','worker-crash','agent-restart','group-removal','account-disable','target-disappearance'].includes(kind))
   const barrierCase = kind === 'target-disappearance-barrier'
   const revoked = ['group-removal', 'account-disable'].includes(kind)
   const logoutCase = kind === 'logout'

@@ -119,9 +119,12 @@ def main():
     assert [plan['command']['uid'],plan['command']['gid']]==[2200,3200]
     if unknown_case:
         require_unknown_counts(record,len(PATHS))
+        assert recovery['actualCountersVerified'] is True
+        assert result['validatorKilledHelper'] is False and 0 <= result['productStoppedHelperSeconds'] < 15
         assert original['cancellations'] == 0 and original['registrations'] == original['confirmations'] == 1 and original['bodies'] == 0
         removed = saved('target-disappearance.json'); assert removed['containerId'] == baseline['containerId'] and removed['exactOwnedContainerRemoved'] and removed['sourcePreserved']
         assert result['targetRemovedDuringOperation'] and result['rootState'] == 'Unknown'
+        assert all(n == 0 for n in removed['otherActiveWork'].values())
         assert saved('physical-cut.json') == after and 0 < unchanged_except_owners(before,after) == result['physicalChangedCount'] < len(PATHS)
         same_operation(saved('pre-disappearance-sql.json')['row'],row)
         assert saved('history-proof.json')['unknownAggregateDoesNotMeanNoPhysicalChanges']
