@@ -69,6 +69,43 @@ def profile(label):
             {'tag':'group_obj','id':None,'permissions':0},{'tag':'mask','id':None,'permissions':mask},{'tag':'other','id':None,'permissions':0}]
 
 
+def expected_job_summary(row,plan,execution=False):
+    return {'schemaVersion':1,'intentId':row['id'],'stage':'execution' if execution else 'planning',
+        'state':'Succeeded' if execution else 'Ready','code':'CONTAINER_ACL_COMPLETED' if execution else 'CONTAINER_ACL_READY',
+        'aclType':plan['command']['aclType'],'kind':plan['kind'],'targetMode':plan['targetMode'],'noChange':plan['noChange'],
+        'aclConfirmed':True if execution else None,'receiptState':'Completed' if execution else None,
+        'bindingCurrent':True if execution else None,'historyMayExist':execution,'historyVerified':execution,'hasPublishedVersion':execution}
+
+
+def validate_job_summary(job,expected,identifier):
+    assert job['id']==identifier and job['state']=='Succeeded'
+    assert job.get('jobType',job.get('job_type'))==('containers.files.acl' if expected['stage']=='execution' else 'containers.files.acl-plan')
+    value=job.get('resultJson',job.get('result_json'))
+    def unique(pairs):
+        result={}
+        for key,item in pairs:
+            assert key not in result,'DUPLICATE_JOB_SUMMARY_FIELD';result[key]=item
+        return result
+    if isinstance(value,str):
+        assert len(value)<=4096;value=json.loads(value,object_pairs_hook=unique)
+    assert type(value) is dict and set(value)==set(expected) and value==expected
+    for key in expected:assert type(value[key]) is type(expected[key]),'JOB_SUMMARY_SCALAR_TYPE_CHANGED'
+    return value
+
+
+def verify_job_summaries(data,plan,evidence,label):
+    row=data['row'];path=evidence/(label+'-jobs.json');trusted(path);assert path.stat().st_size<=32768
+    proof=json.loads(path.read_bytes());assert proof['intentId']==row['id'] and proof['schemaVersion']==1
+    for execution,sql_job,api_job in ((False,data['planJob'],proof['plan']), (True,data['executionJob'],proof['execution'])):
+        if execution and row['execution_job_id'] is None:assert sql_job is api_job is None;continue
+        expected=expected_job_summary(row,plan,execution);identifier=row['execution_job_id'] if execution else row['id']
+        value=validate_job_summary(sql_job,expected,identifier);assert validate_job_summary(api_job,expected,identifier)==value
+        encoded=json.dumps(value)
+        for secret in (row.get(k) for k in ('relative_path','instance_id','actor_subject','login_binding','owner_hash','request_hash','plan_hash','execution_hash','receipt_hash')):
+            if secret:assert secret not in encoded,'PRIVATE_BINDING_IN_JOB_SUMMARY'
+        for secret in (plan['fingerprint'],plan['targetProof']):assert secret not in encoded
+
+
 def verify_case(result,baseline,subject,evidence,reader,module,storage,before,after):
     label=result['name'];assert label in CASES;relative='acl-directory' if label in ('default','default-noop','clear-default') else 'acl-file.bin'
     kind='default' if relative=='acl-directory' else 'access';data=snapshot(result['id']);row=data['row'];plan=managed_plan(json.loads(row['plan_json']))
@@ -86,6 +123,7 @@ def verify_case(result,baseline,subject,evidence,reader,module,storage,before,af
     assert [result['originalUid'],result['originalGid']]==before[relative]['identity'][3:5]
     assert plan['noChange']==result['noChange']==(label in ('noop','default-noop')) and plan['targetMode']==result['targetMode']
     (evidence/(label+'.sql.json')).write_text(json.dumps(data))
+    if baseline.get('jobResultsVersion')==1:verify_job_summaries(data,plan,evidence,label)
     if label=='cancel':
         assert row['state']=='Canceled' and row['execution_job_id'] is None and row['root_started_at_utc'] is None and data['executionJob'] is None and data['confirmed']==0
         assert row['receipt_json'] is None and row['receipt_hash'] is None and row['acl_confirmed'] is None and not row['history_may_exist'] and not row['history_verified'] and row['history_digest'] is None
@@ -121,7 +159,8 @@ def verify_case(result,baseline,subject,evidence,reader,module,storage,before,af
 
 def unprivileged(base,baseline,original):
     endpoint=base+'/api/v1/containers/'+baseline['containerId']+'/files/acls';recovery=base+'/api/v1/files/container-acls/recovery'
-    paths=[endpoint+'/'+original['id'],endpoint+'/by-key/'+str(uuid.uuid4()),recovery,recovery+'/'+original['id']]
+    paths=[endpoint+'/'+original['id'],endpoint+'/by-key/'+str(uuid.uuid4()),recovery,recovery+'/'+original['id'],
+        base+'/api/v1/jobs',base+'/api/v1/jobs/'+original['planningJobId'],base+'/api/v1/jobs/'+original['executionJobId']]
     anonymous=__import__('requests').Session();anonymous.trust_env=False
     try:
         for path in paths:request(anonymous,'GET',path,401)
@@ -187,6 +226,9 @@ def main():
         for relative in PATHS:os.utime(folder/relative,ns=(1700000000123456789,1700000000123456789))
         inspected=json.loads(owned.common.command(['docker','inspect',fixture['identifier']]))[0];original=inventory(folder,reader,module,content)
         baseline={'revision':revision,'validationSourceRevision':source,'validationSourceSha256':hashes,'installedSourceSha256':installed_hashes,'containerId':fixture['identifier'],'containerName':inspected['Name'].lstrip('/'),'instanceId':str(inspected['State']['Pid'])+':'+inspected['State']['StartedAt'],'source':str(folder),'original':original,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'coreBefore':core,'evidence':str(evidence),'fixtureOriginal':{'identity':list(fixture['proofs']['original.bin'][0]),'sha256':fixture['proofs']['original.bin'][1]}}
+        baseline['jobResultsVersion']=1
+        baseline['legacyJob']=query("SELECT (SELECT to_jsonb(j) FROM operation_jobs j WHERE job_type='containers.files.acl' AND state='Succeeded' AND result_json IS NULL ORDER BY created_at_utc DESC LIMIT 1);")
+        assert baseline['legacyJob'] and baseline['legacyJob']['result_json'] is None
         baseline['sourceVersion']=version(baseline,'work/acl-file.bin',original['acl-file.bin']['identity'])
         with storage.target(create_namespace=False,read_only=True) as (configuration,fd):storage.attest(configuration,fd,read_only=True);baseline['sourceDevice']=folder.stat().st_dev;baseline['hddDevice']=os.fstat(fd).st_dev
         (evidence/'baseline.json').write_text(json.dumps(baseline));results=[];current=original
@@ -213,6 +255,9 @@ def main():
     no_active_work();assert owned.common.core_snapshot()==core and not fixture['folder'].exists()
     assert not subprocess.check_output(['systemctl','list-units','--all','--no-legend','whaledeck-container-acl-*'],text=True).strip()
     verified={'revision':revision,'actualBrowserAndIdentity':True,'cases':9,'completed':8,'canceledBeforeExecution':1,'hddRecords':8,'perCasePhysicalBytesAndMetadata':True,'ordinaryDenied':8,'anonymousDenied':4,'normalDualLogout':True,'exactSourceAndContainerAbsent':True,'coreUnchanged':11,'permanentHistoryRetained':True}
+    assert browser['jobResultsVersion']==1 and len(browser['taskCenter'])==18
+    assert query("SELECT to_jsonb(j) FROM operation_jobs j WHERE id=:'id'::uuid;",id=baseline['legacyJob']['id'])==baseline['legacyJob']
+    verified.update(jobResultsVersion=1,newJobSummaries=17,actualTaskDrawers=18,legacyJobUnchanged=True,ordinaryDenied=11,anonymousDenied=7)
     (evidence/'verified.json').write_text(json.dumps(verified));print(json.dumps({'actualAclBrowser':'passed','evidence':str(evidence),'cases':9}),flush=True)
 
 

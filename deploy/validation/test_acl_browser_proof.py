@@ -1,5 +1,6 @@
 """Offline proof/cleanup boundaries on temporary owned data, never actual RPC/UI."""
 import importlib.util
+import json
 from pathlib import Path
 import os
 import tempfile
@@ -25,6 +26,39 @@ class Acl:
 
 
 class AclBrowserProofTests(unittest.TestCase):
+    def job_fixture(self,execution=False):
+        row={'id':str(uuid.uuid4())};plan={'command':{'aclType':'access'},'kind':'File','targetMode':0,'noChange':False}
+        expected=browser.expected_job_summary(row,plan,execution);identifier=str(uuid.uuid4()) if execution else row['id']
+        return {'id':identifier,'state':'Succeeded','jobType':'containers.files.acl' if execution else 'containers.files.acl-plan','resultJson':json.dumps(expected)},expected,identifier
+    def test_summaries_prove_explicit_zero_false_and_null_without_raw_bindings(self):
+        for execution in (False,True):
+            job,expected,identifier=self.job_fixture(execution)
+            self.assertEqual(browser.validate_job_summary(job,expected,identifier),expected)
+            job['resultJson']=expected.copy();self.assertEqual(browser.validate_job_summary(job,expected,identifier),expected)
+            self.assertEqual(expected['targetMode'],0);self.assertIs(expected['noChange'],False)
+            self.assertEqual(expected['aclConfirmed'],True if execution else None)
+    def test_ready_plan_remains_a_plan_even_when_the_intent_is_canceled(self):
+        row={'id':str(uuid.uuid4()),'state':'Canceled'};plan={'command':{'aclType':'default'},'kind':'Directory','targetMode':416,'noChange':True}
+        value=browser.expected_job_summary(row,plan);self.assertEqual(value['state'],'Ready');self.assertIsNone(value['aclConfirmed']);self.assertFalse(value['hasPublishedVersion'])
+    def test_wrong_id_stage_state_or_type_cannot_match_original_job(self):
+        for field,value in (('id',str(uuid.uuid4())),('state','Failed'),('jobType','containers.files.ownership')):
+            job,expected,identifier=self.job_fixture();job[field]=value
+            with self.subTest(field=field),self.assertRaises(AssertionError):browser.validate_job_summary(job,expected,identifier)
+    def test_missing_extra_and_wrong_scalar_fields_are_rejected(self):
+        for change in ('missing','extra','boolean-schema','integer-boolean','false-for-null'):
+            job,expected,identifier=self.job_fixture();value=expected.copy()
+            if change=='missing':del value['historyVerified']
+            elif change=='extra':value['path']='/private'
+            elif change=='boolean-schema':value['schemaVersion']=True
+            elif change=='integer-boolean':value['noChange']=0
+            else:value['aclConfirmed']=False
+            job['resultJson']=json.dumps(value)
+            with self.subTest(change=change),self.assertRaises(AssertionError):browser.validate_job_summary(job,expected,identifier)
+    def test_duplicate_fields_and_unbounded_json_are_rejected(self):
+        job,expected,identifier=self.job_fixture();original=job['resultJson']
+        for value in (original[:-1]+',"schemaVersion":1}', ' '*4097+original):
+            job['resultJson']=value
+            with self.assertRaises(AssertionError):browser.validate_job_summary(job,expected,identifier)
     def fixture(self,root):
         folder=root/('wdv-container-publish-'+uuid.uuid4().hex);folder.mkdir();(folder/'acl-directory').mkdir()
         for name in ('acl-file.bin','acl-directory/existing.bin'):

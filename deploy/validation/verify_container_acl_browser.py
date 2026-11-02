@@ -49,6 +49,17 @@ def verify(name):
             count+=1
         previous=proof['after']
     assert count==8 and previous==private_json(evidence/'physical-final.json')
+    if baseline.get('jobResultsVersion')==1:
+        assert accepted['jobResultsVersion']==browser['jobResultsVersion']==1
+        assert accepted['newJobSummaries']==17 and accepted['actualTaskDrawers']==18 and accepted['legacyJobUnchanged']
+        expected=[(item['executionJobId'] if execution else item['planningJobId'],item['id'],execution) for item in browser['completed'] for execution in (False,True) if not execution or item['executionJobId']]
+        assert [(t['id'],t['intentId'],t['execution']) for t in browser['taskCenter'][:-1]]==expected
+        assert len(expected)==17 and len({t[0] for t in expected})==17
+        assert browser['taskCenter'][-1]=={'id':baseline['legacyJob']['id'],'legacy':True,'resultJson':None,'screenshot':'legacy-job.png'}
+        for item in browser['taskCenter']:
+            name=item['screenshot'];assert '/' not in name and re.fullmatch('[a-z-]+(?:-job)?\\.png',name)
+            path=evidence/name;trusted(path);assert 1000<path.stat().st_size<4*1024**2 and path.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
+        assert __import__('validate_metric_continuity').query("SELECT to_jsonb(j) FROM operation_jobs j WHERE id=:'id'::uuid;",id=baseline['legacyJob']['id'])==baseline['legacyJob']
     source=Path(baseline['source']);assert source.parent==common.APPS and source.name==baseline['containerName'] and not os.path.lexists(source)
     missing=subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True,timeout=15);assert missing.returncode!=0 and b'no such' in missing.stderr.lower()
     no_active_work();assert common.core_snapshot()=={k:tuple(v) for k,v in baseline['coreBefore'].items()}
