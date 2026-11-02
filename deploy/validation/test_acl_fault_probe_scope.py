@@ -170,9 +170,76 @@ class AclRevocationEvidenceTests(unittest.TestCase):
         self.verifier.validate_source_profile({'sha256':old},['cancel','logout'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'sha256':old},['group-removal'])
         self.verifier.validate_source_profile({'schemaVersion':2,'sha256':sources},['group-removal','account-disable'])
-        for schema in (True,3,'2'):
+        for schema in (True,4,'2'):
             with self.subTest(schema=schema),self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':schema,'sha256':sources},['group-removal'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':2,'sha256':old},['account-disable'])
+        with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':2,'sha256':sources},['worker-crash'])
+        self.verifier.validate_source_profile({'schemaVersion':3,'sha256':sources},['worker-crash','agent-restart'])
+
+
+class AclRestartEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        import validate_container_acl_faults as driver
+        import verify_container_acl_faults as verifier
+        self.driver,self.verifier=driver,verifier
+        self.row={'id':'11111111-2222-3333-4444-555555555555','execution_job_id':'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'}
+        self.held=type('Held',(),{'cgroup':'whaledeck-container-acl-'+'a'*32+'.service'})()
+        self.counts={key:0 for key in driver.RESTART_KEYS}
+
+    def test_each_other_intent_blocks_restart_before_transient_or_signals(self):
+        for key in self.counts:
+            with self.subTest(key=key),patch.object(self.driver,'preflight',return_value={}),patch.object(self.driver,'query',return_value={**self.counts,key:1}),patch.object(self.driver,'TRANSIENT') as transient:
+                with self.assertRaises(AssertionError):self.driver.restart_allowed(self.held,self.row)
+                transient.glob.assert_not_called()
+
+    def test_incomplete_or_truthy_false_idle_counts_cannot_authorize_restart(self):
+        for counts in ({},{**self.counts,'acls':False}):
+            with self.subTest(counts=counts),patch.object(self.driver,'preflight',return_value={}),patch.object(self.driver,'query',return_value=counts),self.assertRaises(AssertionError):self.driver.restart_allowed(self.held,self.row)
+
+    def test_unrelated_transient_or_inactive_live_pid_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'whaledeck-other.service').touch()
+            for active,pid in [('active','123'),('inactive','123')]:
+                props='ActiveState='+active+'\nMainPID='+pid+'\nControlPID=0\nControlGroup=\n'
+                with self.subTest(active=active),patch.object(self.driver,'preflight',return_value={}),patch.object(self.driver,'query',return_value=self.counts),patch.object(self.driver,'TRANSIENT',root),patch.object(self.driver,'command',return_value=props),self.assertRaises(AssertionError):self.driver.restart_allowed(self.held,self.row)
+
+    def test_changed_operation_or_lease_cannot_be_a_natural_wait(self):
+        before={key:'original' for key in ('id','execution_job_id','container_id','instance_id','actor_subject','owner_hash','root_started_at_utc','plan_json','command_json')}
+        before.update(state='Applying',publish_barrier=True,completed_at_utc=None,cancel_requested_at_utc=None,lease_token='lease',lease_expires_at_utc='future')
+        self.driver.lease_held(before,before)
+        for key,value in [('id','other'),('lease_token','new'),('lease_expires_at_utc','changed'),('publish_barrier',False),('state','Failed'),('cancel_requested_at_utc','now')]:
+            with self.subTest(key=key),self.assertRaises(AssertionError):self.driver.lease_held(before,{**before,key:value})
+
+    def test_shortened_expired_unbounded_or_naive_lease_refused(self):
+        import datetime as dt
+        now=dt.datetime(2026,11,3,tzinfo=dt.timezone.utc)
+        for seconds in (-1,20,96):
+            with self.subTest(seconds=seconds),self.assertRaises(AssertionError):self.driver.observation_expiry({'lease_token':'lease','lease_expires_at_utc':(now+dt.timedelta(seconds=seconds)).isoformat()},now)
+        with self.assertRaises(AssertionError):self.driver.observation_expiry({'lease_token':'lease','lease_expires_at_utc':'2026-11-03T00:01:00'},now)
+        self.driver.observation_expiry({'lease_token':'lease','lease_expires_at_utc':(now+dt.timedelta(seconds=60)).isoformat()},now)
+
+    def test_maintenance_probe_requires_bounded_healthy_ready_no_store(self):
+        good=json.dumps({'state':'healthy','phase':'Ready'}).encode();self.driver.maintenance_response(200,good,'no-store')
+        for status,raw,cache in [(503,good,'no-store'),(200,good,''),(200,b' '*2049,'no-store'),(200,b'{"state":"offline","phase":"Ready"}','no-store'),(200,b'{"state":"healthy","phase":"Ready","secret":"fixture"}','no-store')]:
+            with self.subTest(status=status,cache=cache),self.assertRaises(AssertionError):self.driver.maintenance_response(status,raw,cache)
+
+    def test_only_agent_pid_changes_and_both_hosts_keep_frozen_source(self):
+        revision='a'*40;before={'whaledeck-agent.service':{'pid':100,'sourceRevision':revision},'whaledeck-maintenance.service':{'pid':200,'sourceRevision':revision}}
+        after={**before,'whaledeck-agent.service':{'pid':101,'sourceRevision':revision}};self.driver.require_host_restart(before,after,revision)
+        for changed in [before,{**after,'whaledeck-maintenance.service':{'pid':201,'sourceRevision':revision}},{**after,'whaledeck-agent.service':{'pid':101,'sourceRevision':'b'*40}}]:
+            with self.subTest(changed=changed),self.assertRaises(AssertionError):self.driver.require_host_restart(before,changed,revision)
+
+    def test_original_full_lease_observation_cannot_finish_early_or_skip_gap(self):
+        import datetime as dt
+        began=dt.datetime(2026,11,3,tzinfo=dt.timezone.utc);at=lambda seconds:(began+dt.timedelta(seconds=seconds)).isoformat()
+        raw=b'{"state":"Preparing","historyVerified":true}';digest=hashlib.sha256(raw).hexdigest()
+        row={'state':'Applying','publish_barrier':True,'completed_at_utc':None,'cancel_requested_at_utc':None,'lease_token':'lease','lease_expires_at_utc':at(60)}
+        proof={'originalLeaseToken':'lease','originalLeaseExpiresAtUtc':at(60),'waitBeganAtUtc':at(0),'waitEndedAtUtc':at(60),'monotonicWaitSeconds':60,'clocksOrSqlModified':False,'rootSha256':digest,'rootStateAfterHelperExit':'Preparing',
+            'samples':[{'atUtc':at(i),'state':'Applying','barrier':True,'leaseToken':'lease','leaseExpiresAtUtc':at(60),'rootSha256':digest,'sourceFullBytesAclsAndAttributesUnchanged':True} for i in range(0,60,2)]}
+        final={'completed_at_utc':at(61)};self.verifier.verify_lease_proof(row,final,proof,raw)
+        for delta in ({'waitEndedAtUtc':at(59)},{'originalLeaseToken':'other'},{'clocksOrSqlModified':True},{'samples':proof['samples'][:3]}):
+            with self.subTest(delta=delta),self.assertRaises(AssertionError):self.verifier.verify_lease_proof(row,final,{**proof,**delta},raw)
+        with self.assertRaises(AssertionError):self.verifier.verify_lease_proof(row,{'completed_at_utc':at(59)},proof,raw)
 
 
 if __name__=='__main__':unittest.main()

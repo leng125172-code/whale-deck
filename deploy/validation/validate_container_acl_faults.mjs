@@ -13,16 +13,16 @@ try {
   const fixture = JSON.parse(await readFile('/dev/stdin', 'utf8'))
   const revision = process.argv[2]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
-  assert.ok(['cancel', 'logout', 'group-removal', 'account-disable'].includes(fixture.kind))
+  assert.ok(['cancel', 'logout', 'group-removal', 'account-disable', 'worker-crash', 'agent-restart'].includes(fixture.kind))
   directory = fixture.evidence
   const prefix = fileURLToPath(new URL('../artifacts/', import.meta.url))
   assert.ok(directory.startsWith(prefix))
-  assert.match(directory.slice(prefix.length), /^container-acl-faults-[a-f0-9]{32}\/(cancel|logout|group-removal|account-disable)$/)
+  assert.match(directory.slice(prefix.length), /^container-acl-faults-[a-f0-9]{32}\/(cancel|logout|group-removal|account-disable|worker-crash|agent-restart)$/)
   const behavior = fixture.kind
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
-  context = await browser.newContext({ viewport: { width: ['cancel', 'group-removal'].includes(behavior) ? 320 : 1440, height: 600 },
-    colorScheme: ['cancel', 'group-removal'].includes(behavior) ? 'dark' : 'light', reducedMotion: 'reduce' })
+  context = await browser.newContext({ viewport: { width: ['cancel', 'group-removal', 'agent-restart'].includes(behavior) ? 320 : 1440, height: 600 },
+    colorScheme: ['cancel', 'group-removal', 'agent-restart'].includes(behavior) ? 'dark' : 'light', reducedMotion: 'reduce' })
   context.setDefaultTimeout(20_000); page = await context.newPage()
   assert.equal((await (await context.request.get(base + '/api/v1/system/status')).json()).build.sourceRevision, revision)
   phase = 'normal-login'
@@ -114,7 +114,12 @@ try {
   } else if (fixture.kind !== 'logout') {
     phase = 'visible-original-terminal'
     await dialog.getByRole('button', { name: '查询原ACL修改任务', exact: true }).click()
-    await expect(dialog.getByRole('status')).toHaveText('已取消')
+    await expect(dialog.getByRole('status')).toHaveText(final.state === 'Failed' ? 'ACL修改未完成' : '已取消')
+    if (['worker-crash', 'agent-restart'].includes(fixture.kind)) {
+      const original = await context.request.get(ownEndpoint + '/' + intent.id); assert.equal(original.status(), 200)
+      terminalIntent = await original.json(); assert.equal(terminalIntent.state, 'Failed'); assert.equal(terminalIntent.resultCode, 'CONTAINER_ACL_INTERRUPTED')
+      assert.equal(terminalIntent.confirmation, null); assert.equal(terminalIntent.aclConfirmed, false); assert.equal(terminalIntent.historyVerified, true); assert.equal(terminalIntent.receipt.state, 'Aborted')
+    }
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
     await page.screenshot({ path: join(directory, 'terminal.png') })
     await closePermissionDetails(page, dialog)

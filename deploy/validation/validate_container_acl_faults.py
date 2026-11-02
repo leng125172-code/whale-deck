@@ -15,6 +15,7 @@ import select
 import stat
 import subprocess
 import sys
+import threading
 import time
 import uuid
 
@@ -22,10 +23,11 @@ import requests
 import validate_container_file_publishing as owned
 from bound_container_acl_cut import ROOT, freeze_before_acl, record_for
 from validate_container_acl_browser import SOURCES as BROWSER_SOURCES, snapshot, managed_plan, no_active_work, read_metadata, inventory, PATHS, NAMES, remove_proved
-from validate_container_directory_restart import Worker, command, preflight
+from validate_container_directory_restart import Worker, command, preflight, agent_identity
 from validate_container_file_staging import load
 from validate_container_upload_bff import temporary_user
 from owned_authentik_revocation import OwnedAuthentikRevocation
+from validate_metric_continuity import query
 
 PHASE = 'startup'
 SOURCES = tuple(dict.fromkeys((*BROWSER_SOURCES, 'bound_container_acl_cut.py', 'bound_container_copy_cut.py',
@@ -61,12 +63,19 @@ def wait_settled(identifier):
         assert time.monotonic()<until,'ACL_TERMINAL_DEADLINE'; time.sleep(.5)
 
 
+def terminal_state(kind):
+    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart')
+    return 'Failed' if kind in ('worker-crash','agent-restart') else 'Canceled'
+
+
 def verify_terminal(identifier, subject, baseline, storage, module, directory=None):
     """Read permanent facts; optionally archive to a NEW evidence directory."""
     data=snapshot(identifier);row=data['row'];plan=managed_plan(json.loads(row['plan_json']))
     assert row['actor_subject']==subject and row['container_id']==baseline['containerId'] and row['instance_id']==baseline['instanceId']
     assert row['relative_path']==plan['command']['path']=='work/acl-file.bin'
-    assert row['state']==data['executionJob']['state']=='Canceled' and data['planJob']['state']=='Succeeded'
+    expected=terminal_state(baseline['kind'])
+    assert row['state']==data['executionJob']['state']==expected and data['planJob']['state']=='Succeeded'
+    assert row['result_code']==('CONTAINER_ACL_INTERRUPTED' if expected=='Failed' else 'CONTAINER_ACL_CANCELED')
     assert data['accepted']==data['confirmed']==1 and data['pending']==0
     assert row['root_started_at_utc'] and row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is row['lease_expires_at_utc'] is None
     assert row['acl_confirmed'] is False and row['history_may_exist'] and row['history_verified'] and not row['published_version']
@@ -108,10 +117,110 @@ def cleanup_original_after_failure(identifier, directory, folder, reader, module
     remove_proved(folder,reader,module,content,original);return True
 
 
+RESTART_KEYS={'uploads','directories','copies','moves','permissions','ownerships','recursivePermissions','recursiveOwnerships','acls'}
+TRANSIENT=Path('/run/systemd/transient')
+
+
+def restart_allowed(held, row):
+    checks=preflight([row['id'],row['execution_job_id']])
+    tables={'uploads':'container_file_upload_operations','directories':'container_directory_operations','copies':'container_copy_intents',
+        'moves':'container_move_intents','permissions':'container_permission_intents','ownerships':'container_ownership_intents',
+        'recursivePermissions':'container_recursive_permission_intents','recursiveOwnerships':'container_recursive_ownership_intents','acls':'container_acl_intents'}
+    counts=query('SELECT json_build_object('+','.join("'"+key+"',(SELECT count(*) FROM "+table+" WHERE (completed_at_utc IS NULL OR publish_barrier OR lease_token IS NOT NULL OR lease_expires_at_utc IS NOT NULL)"+(" AND id<>:'id'::uuid" if key=='acls' else '')+")" for key,table in tables.items())+');',id=row['id'])
+    assert set(counts)==RESTART_KEYS and all(type(n) is int and n==0 for n in counts.values()),'OTHER_FILE_WORK_RESTART_REFUSED'
+    active=[]
+    for path in TRANSIENT.glob('whaledeck-*.service'):
+        props=dict(line.split('=',1) for line in command('systemctl','show',path.name,'-p','ActiveState','-p','MainPID','-p','ControlPID','-p','ControlGroup').splitlines())
+        if props['ActiveState'] in ('inactive','failed'):
+            assert props['MainPID']==props['ControlPID']=='0'
+            if props['ControlGroup']:
+                processes=Path('/sys/fs/cgroup')/props['ControlGroup'].lstrip('/')/'cgroup.procs'
+                assert not processes.exists() or not processes.read_text().split()
+        else:active.append(path.name)
+    assert set(active)<={held.cgroup},'OTHER_TRANSIENT_WORK_RESTART_REFUSED'
+    return {**checks,**counts}
+
+
+def host_snapshot(revision):
+    result={}
+    for unit,app in (('whaledeck-agent.service','WhaleDeck.Agent'),('whaledeck-maintenance.service','WhaleDeck.MaintenanceHost')):
+        assert command('systemctl','show',unit,'-p','ActiveState','--value')=='active'
+        pid=int(command('systemctl','show',unit,'-p','MainPID','--value'));assert pid>1
+        exe=Path('/proc')/str(pid)/'exe';assert exe.readlink().name==app
+        info=json.loads(command(str(exe),'--build-info'));assert info['sourceRevision']==revision
+        result[unit]={'pid':pid,'sourceRevision':revision}
+    return result
+
+
+def require_host_restart(before, after, revision):
+    assert before.keys()==after.keys()=={'whaledeck-agent.service','whaledeck-maintenance.service'}
+    for value in (*before.values(),*after.values()):assert type(value['pid']) is int and value['pid']>1 and value['sourceRevision']==revision
+    assert before['whaledeck-agent.service']['pid']!=after['whaledeck-agent.service']['pid']
+    assert before['whaledeck-maintenance.service']==after['whaledeck-maintenance.service']
+
+
+def maintenance_response(status, raw, cache):
+    assert status==200 and 0<len(raw)<=2048 and 'no-store' in cache
+    value=json.loads(raw);assert set(value)<={'state','phase','message','operationId','updatedAtUtc'} and value['state']=='healthy' and value['phase']=='Ready'
+    return value
+
+
+def maintenance_sample(client):
+    began=time.monotonic()
+    with client.get('http://127.0.0.1:8080/maintenance/status',timeout=(1,3),stream=True) as response:
+        raw=response.raw.read(2049,decode_content=True);value=maintenance_response(response.status_code,raw,response.headers.get('Cache-Control',''))
+    return {'atUtc':dt.datetime.now(dt.timezone.utc).isoformat(),'httpStatus':200,'state':value['state'],'phase':value['phase'],'noStore':True,'bytes':len(raw),'responseSeconds':round(time.monotonic()-began,4)}
+
+
+def observe_maintenance(stop, ready):
+    samples=[]
+    with requests.Session() as client:
+        client.trust_env=False
+        while not stop.is_set():
+            samples.append(maintenance_sample(client));ready.set();stop.wait(.2)
+    return samples
+
+
+def observation_expiry(row, now):
+    assert row['lease_token'] and now.utcoffset() is not None
+    expiry=dt.datetime.fromisoformat(row['lease_expires_at_utc'])
+    assert expiry.utcoffset() is not None and dt.timedelta(seconds=25)<expiry-now<=dt.timedelta(seconds=95),'NATURAL_LEASE_OUTSIDE_BOUNDED_WINDOW'
+    return expiry
+
+
+def lease_held(before, current):
+    for key in ('id','execution_job_id','container_id','instance_id','actor_subject','owner_hash','root_started_at_utc','plan_json','command_json'):
+        assert current[key]==before[key]
+    assert current['state']=='Applying' and current['publish_barrier'] and current['completed_at_utc'] is None and current['cancel_requested_at_utc'] is None
+    assert current['lease_token']==before['lease_token'] and current['lease_expires_at_utc']==before['lease_expires_at_utc']
+
+
+def natural_lease(row, folder, reader, module, content, original, directory):
+    wall=dt.datetime.now(dt.timezone.utc);expiry=observation_expiry(row,wall);began=time.monotonic()
+    path=ROOT/(uuid.UUID(row['execution_job_id']).hex+'.json');raw=path.read_bytes();root=json.loads(raw)
+    assert root==record_for(row) and root['state'] in ('Preparing','Prepared') and root['historyVerified']
+    (directory/'after-helper-exit-root.json').write_bytes(raw);samples=[]
+    while dt.datetime.now(dt.timezone.utc)<expiry:
+        assert time.monotonic()-began<100,'NATURAL_LEASE_MONOTONIC_DEADLINE'
+        current=snapshot(row['id']);observed=dt.datetime.now(dt.timezone.utc)
+        if observed>=expiry:break
+        lease_held(row,current['row']);assert current['executionJob']['state']=='Running' and current['executionJob']['cancel_requested_at_utc'] is None
+        assert path.read_bytes()==raw and inventory(folder,reader,module,content)==original
+        samples.append({'atUtc':observed.isoformat(),'state':'Applying','barrier':True,'leaseToken':row['lease_token'],'leaseExpiresAtUtc':row['lease_expires_at_utc'],
+            'rootSha256':hashlib.sha256(raw).hexdigest(),'sourceFullBytesAclsAndAttributesUnchanged':True})
+        time.sleep(min(2,max(.001,(expiry-observed).total_seconds())))
+    ended=dt.datetime.now(dt.timezone.utc);elapsed=time.monotonic()-began
+    assert len(samples)>=3 and abs((ended-wall).total_seconds()-elapsed)<3,'NATURAL_LEASE_NOT_OBSERVED'
+    proof={'originalLeaseToken':row['lease_token'],'originalLeaseExpiresAtUtc':row['lease_expires_at_utc'],'waitBeganAtUtc':wall.isoformat(),
+        'waitEndedAtUtc':ended.isoformat(),'monotonicWaitSeconds':round(elapsed,3),'rootSha256':hashlib.sha256(raw).hexdigest(),
+        'rootStateAfterHelperExit':root['state'],'samples':samples,'clocksOrSqlModified':False}
+    (directory/'natural-lease.json').write_text(json.dumps(proof));return proof
+
+
 def run_case(kind, revision, evidence, source, reader, module, storage):
     global PHASE
     PHASE=kind+':preflight';no_active_work();worker=Worker();directory=evidence/kind;directory.mkdir(mode=0o700)
-    held=browser=None;identifier=None;proved=False;current=None
+    held=browser=None;identifier=None;proved=False;current=None;agent_attempted=False;host=None
     with owned.fixture(restartable_core=('whaledeck-worker',)) as fixture, temporary_user(True) as (username,password):
         folder=fixture['folder'];(folder/'acl-directory').mkdir(mode=0o750)
         content=hashlib.shake_256(('acl-fault:'+fixture['identifier']).encode()).digest(2*1024**2+7)
@@ -142,7 +251,7 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                 applying=snapshot(identifier)['row'];assert applying['state']=='Applying' and applying['root_started_at_utc'] and applying['publish_barrier'] and held.record['historyVerified']
                 assert inventory(folder,reader,module,content)==original
                 (directory/'cut-root.json').write_text(json.dumps(held.record));(directory/'bound-helper.json').write_text(json.dumps({'pid':held.pid,'unit':held.cgroup,'twoKernelFdProofs':True,'proof':held.proof}))
-                PHASE=kind+':visible-action-and-product-helper-exit';authority=None
+                PHASE=kind+':visible-action-and-product-helper-exit';authority=None;restart=None;lease=None
                 if kind in ('group-removal','account-disable'):
                     # Keep the original login and unexpired positive permission snapshot.
                     write_signal(directory,'action.json',{'kind':kind});action=wait_signal(directory,'action-done.json',browser,30)
@@ -154,28 +263,72 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                         with ThreadPoolExecutor(max_workers=1) as pool:
                             exit_observer=pool.submit(held.wait_exit_seconds,began,15);authority=native.change(kind)
                             (directory/'authority-change.json').write_text(json.dumps(authority));elapsed=exit_observer.result(timeout=16)
+                elif kind in ('worker-crash','agent-restart'):
+                    write_signal(directory,'action.json',{'kind':kind});action=wait_signal(directory,'action-done.json',browser,30)
+                    checks=restart_allowed(held,applying);host=host_snapshot(revision)
+                    start_frame=snapshot(identifier);applying=start_frame['row'];assert applying['state']=='Applying' and applying['publish_barrier']
+                    (directory/'restart-start-sql.json').write_text(json.dumps(start_frame))
+                    began=time.monotonic()
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        if kind=='worker-crash':
+                            exit_observer=pool.submit(held.wait_exit_seconds,began,15)
+                            before=worker.current();lease=applying['lease_expires_at_utc'];observation_expiry(applying,dt.datetime.now(dt.timezone.utc))
+                            worker.stopped=True;command('docker','kill','--signal','KILL',worker.id)
+                            crashed=snapshot(identifier);assert crashed['row']['lease_token']==applying['lease_token'] and crashed['row']['root_started_at_utc']==applying['root_started_at_utc']
+                            assert dt.datetime.fromisoformat(crashed['row']['lease_expires_at_utc'])>=dt.datetime.fromisoformat(lease)
+                            applying=crashed['row'];lease=applying['lease_expires_at_utc'];(directory/'after-worker-crash-sql.json').write_text(json.dumps(crashed))
+                            automatic=worker.current()['State']['Running'];worker.start(wait_ready=False);after=worker.current()
+                            assert after['State']['StartedAt']!=before['State']['StartedAt']
+                            restart={'sameWorkerContainerAndImage':True,'workerId':worker.id,'signal':'SIGKILL','manuallyStarted':not automatic,
+                                'beforeStartedAt':before['State']['StartedAt'],'afterStartedAt':after['State']['StartedAt'],'originalLeaseExpiresAtUtc':lease,
+                                'otherActiveWork':checks,'hostsBefore':host,'hostsAfter':host_snapshot(revision)}
+                            assert restart['hostsBefore']==restart['hostsAfter']
+                        else:
+                            stop=threading.Event();ready_probe=threading.Event();monitor=pool.submit(observe_maintenance,stop,ready_probe)
+                            try:
+                                assert ready_probe.wait(5),'MAINTENANCE_PRE_RESTART_PROBE_MISSING'
+                                began=time.monotonic();started=dt.datetime.now(dt.timezone.utc);exit_observer=pool.submit(held.wait_exit_seconds,began,15)
+                                agent_attempted=True;command('systemctl','restart','whaledeck-agent.service')
+                                agent_identity(str(host['whaledeck-agent.service']['pid']),revision);after=host_snapshot(revision);require_host_restart(host,after,revision)
+                                ended=dt.datetime.now(dt.timezone.utc)
+                                with requests.Session() as client:
+                                    client.trust_env=False;last=maintenance_sample(client)
+                            finally:stop.set()
+                            samples=monitor.result(timeout=5)+[last];samples.sort(key=lambda v:v['atUtc']);assert len(samples)>=3
+                            (directory/'maintenance-observations.json').write_text(json.dumps(samples))
+                            restart={'hostsBefore':host,'hostsAfter':after,'maintenancePidUnchanged':True,'otherActiveWork':checks,
+                                'restartBeganAtUtc':started.isoformat(),'restartEndedAtUtc':ended.isoformat(),'totalRestartSeconds':round(time.monotonic()-began,3),'maintenanceSamples':len(samples)}
+                        elapsed=exit_observer.result(timeout=16)
                 else:
                     began=time.monotonic()
                     with ThreadPoolExecutor(max_workers=1) as pool:
                         exit_observer=pool.submit(held.wait_exit_seconds,began,15);write_signal(directory,'action.json',{'kind':kind})
                         action=wait_signal(directory,'action-done.json',browser,30);elapsed=exit_observer.result(timeout=16)
                 assert elapsed is not None and elapsed<15,'PRODUCT_DID_NOT_STOP_BOUND_ACL_HELPER'
-                held.release();held=None;PHASE=kind+':original-terminal-and-full-source-proof'
+                held.release();held=None
+                if lease:
+                    PHASE=kind+':original-natural-lease';natural_lease(applying,folder,reader,module,content,original,directory)
+                PHASE=kind+':original-terminal-and-full-source-proof'
                 final=wait_settled(identifier);data,record,_,_=verify_terminal(identifier,ready['subject'],baseline,storage,module,directory)
                 assert final==data and bool(data['row']['cancel_requested_at_utc']) is (kind=='cancel')
+                if lease:assert dt.datetime.fromisoformat(data['row']['completed_at_utc'])>=dt.datetime.fromisoformat(lease)
                 current=inventory(folder,reader,module,content);assert current==original
-                (directory/'physical-final.json').write_text(json.dumps(current));write_signal(directory,'settled.json',{'id':identifier,'state':'Canceled'})
+                (directory/'physical-final.json').write_text(json.dumps(current));write_signal(directory,'settled.json',{'id':identifier,'state':terminal_state(kind)})
                 assert browser.wait(timeout=65)==0,'ACTUAL_ACL_TERMINAL_PAGE_NOT_VERIFIED'
                 ui=json.loads((directory/'browser.json').read_bytes());assert ui['actualUi'] and ui['id']==identifier and ui['subject']==ready['subject']
                 assert ui['authorityRevoked'] if authority else ui['normalDualLogout']
                 assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==(1 if kind=='cancel' else 0) and ui['bodies']==0
-                result={'kind':kind,'id':identifier,'executionJobId':data['row']['execution_job_id'],'state':'Canceled','code':data['row']['result_code'],
+                result={'kind':kind,'id':identifier,'executionJobId':data['row']['execution_job_id'],'state':terminal_state(kind),'code':data['row']['result_code'],
                     'rootState':record['state'],'rootCutState':json.loads((directory/'cut-root.json').read_bytes())['state'],'productStoppedHelperSeconds':round(elapsed,3),
-                    'validatorKilledHelper':False,'originalFullBytesFingerprintAclsAndAttributesUnchanged':True,'actualUi':True,'normalDualLogout':authority is None,'authorityRevoked':authority is not None}
+                    'validatorKilledHelper':False,'originalFullBytesFingerprintAclsAndAttributesUnchanged':True,'actualUi':True,'normalDualLogout':authority is None,'authorityRevoked':authority is not None,'serviceRestart':restart}
                 (directory/'verified.json').write_text(json.dumps(result));proved=True
         finally:
             if held is not None:held.release()
-            worker.start()
+            try:
+                if agent_attempted:
+                    if command('systemctl','show','whaledeck-agent.service','-p','ActiveState','--value')!='active':command('systemctl','start','whaledeck-agent.service')
+                    agent_identity(str(host['whaledeck-agent.service']['pid']),revision)
+            finally:worker.start()
             if browser is not None and browser.poll() is None:
                 try:browser.wait(timeout=235)
                 except subprocess.TimeoutExpired:
@@ -199,8 +352,8 @@ def main():
     assert os.geteuid()==0 and len(sys.argv) in (2,3);os.umask(0o077)
     revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision);kinds=('cancel','logout')
     if len(sys.argv)==3:
-        assert sys.argv[2] in (*kinds,'group-removal','account-disable','revocation')
-        kinds=('group-removal','account-disable') if sys.argv[2]=='revocation' else (sys.argv[2],)
+        assert sys.argv[2] in (*kinds,'group-removal','account-disable','revocation','worker-crash','agent-restart','restart')
+        kinds=('group-removal','account-disable') if sys.argv[2]=='revocation' else ('worker-crash','agent-restart') if sys.argv[2]=='restart' else (sys.argv[2],)
     repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
     for name in SOURCES:
@@ -211,7 +364,7 @@ def main():
     with requests.Session() as session:
         session.trust_env=False;r=session.get('http://127.0.0.1:8080/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();evidence=repo/'deploy/artifacts'/('container-acl-faults-'+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
-    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':2,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision}))
+    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':3,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_fault_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_fault_module');files=reader.trusted_module('whaledeck-files.py','acl_fault_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_fault_hdd').FileBackups(files)
     print(json.dumps({'aclFaults':'started','evidence':str(evidence),'kinds':kinds}),flush=True);results=[]
     for kind in kinds:
