@@ -43,3 +43,5 @@
 2. 与上传/目录/复制/移动/普通权限/单对象所有者/递归权限/递归所有者及主机路径锁形成双向数据库、路径和预算保护；所有旧写入方也必须检查新 ACL 屏障。隔离真实 PostgreSQL 验证并发、租约、不可变与准确清理后，再注册专用 Worker。
 3. 严格管理员 API 与 Vue 原 ACL/目标条目/mask影响、预检/确认/取消/原引用恢复及 Unknown 处置；输入须区分 ID/permissions 缺失与显式0，拒绝重复/额外字段。普通用户不因看板娘或AI功能获得文件管理权限。
 4. 正常冻结覆盖后，以真实 Authentik→Vue→BFF/API→SQL/Worker→Agent→实际 inode/HDD 验证常规和故障；随后 ACL 递归/历史恢复、可恢复删除/长期清理和其余59项。NVMe/HDD异盘证明及完整灾备独立验收，保留稳定维护入口、USB/动态网卡和最小 Agent 授权。
+
+仓库同步收尾：源码41f02fb和文档7543c31均已本地提交；两次正常HTTP/1.1推送均在TLS握手阶段以 `GnuTLS, handshake failed: The TLS connection was non-properly terminated.` / exit128失败，未取得远端更新回执，不能称已推送或新CI通过。项目图谱事件 `whale-deck.container-acl.41f02fb.business-workflow` 已取得成功回执并从pending移入synced；后续重试正常Git推送，继续本地永久业务实现，不以网络暂故障推翻已验证的源码/测试。
