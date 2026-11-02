@@ -192,10 +192,12 @@ jobs:
           docker exec -i "$POSTGRES_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
           CREATE ROLE whaledeck LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
           CREATE DATABASE wdv_dispatch_0000000000000001 OWNER whaledeck;
+          CREATE DATABASE wdv_dispatch_0000000000000002 OWNER whaledeck;
           SQL
       - name: Run actual migrations, SQL lifecycle and transactional audit
         env:
           WHALEDECK_NATIVE_TEST_CONNECTION: Host=127.0.0.1;Port=15432;Database=wdv_dispatch_0000000000000001;Username=whaledeck
+          WHALEDECK_NATIVE_RECURSIVE_TEST_CONNECTION: Host=127.0.0.1;Port=15432;Database=wdv_dispatch_0000000000000002;Username=whaledeck
         run: >-
           dotnet test tests/WhaleDeck.IntegrationTests/WhaleDeck.IntegrationTests.csproj
           --configuration Release --logger "trx;LogFileName=native-ci.trx"

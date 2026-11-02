@@ -21,22 +21,17 @@ public sealed partial class NativeNotificationDispatchTests
         // Earlier host tests intentionally keep Unknown/tampered locks. Never release them to pass this gate.
         const string locksSql = "SELECT COALESCE(jsonb_agg(to_jsonb(l) ORDER BY path_hash),'[]'::jsonb)::text AS \"Value\" FROM file_path_locks l";
         var beforeLocks = await original.Database.SqlQueryRaw<string>(locksSql).SingleAsync();
-        const string schema = "wdv_recursive_permissions";
-        await original.Database.ExecuteSqlRawAsync("CREATE SCHEMA wdv_recursive_permissions");
-        var connection = new NpgsqlConnectionStringBuilder(original.Database.GetConnectionString()) { SearchPath = schema };
-        var options = new DbContextOptionsBuilder<PlatformDbContext>().UseNpgsql(connection.ConnectionString,
-            postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", schema)).Options;
+        var primary = new NpgsqlConnectionStringBuilder(original.Database.GetConnectionString());
+        var connection = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("WHALEDECK_NATIVE_RECURSIVE_TEST_CONNECTION"));
+        if (connection.Database is null || !System.Text.RegularExpressions.Regex.IsMatch(connection.Database, "^wdv_dispatch_[a-f0-9]{16}$") ||
+            connection.Database == primary.Database || connection.Host != primary.Host || connection.Port != primary.Port || connection.Username != primary.Username)
+            throw new InvalidOperationException("NATIVE_RECURSIVE_DATABASE_INVALID");
+        connection.SearchPath = "public";
+        var options = new DbContextOptionsBuilder<PlatformDbContext>().UseNpgsql(connection.ConnectionString).Options;
         await using var isolated = new PlatformDbContext(options);
         Assert.False(await isolated.Database.SqlQueryRaw<bool>("SELECT rolsuper AS \"Value\" FROM pg_roles WHERE rolname=current_user").SingleAsync());
-        Assert.Equal(schema, await isolated.Database.SqlQueryRaw<string>("SELECT current_schema()::text AS \"Value\"").SingleAsync());
-        try { await isolated.Database.MigrateAsync(); }
-        catch (PostgresException error)
-        {
-            // Only a bounded identifier and SQLSTATE; never SQL values, connection strings or raw exceptions.
-            var identifier = System.Text.RegularExpressions.Regex.Match(error.MessageText, "relation \"([A-Za-z0-9_]{1,63})\" already exists").Groups[1].Value;
-            Console.WriteLine("INBOX_PHASE=recursive-schema-migration-object-" + identifier.ToLowerInvariant().Replace('_', '-'));
-            throw;
-        }
+        Assert.Equal("public", await isolated.Database.SqlQueryRaw<string>("SELECT current_schema()::text AS \"Value\"").SingleAsync());
+        await isolated.Database.MigrateAsync();
         // Actual peer repository regressions supply permanent completed fixtures for raw fence probes.
         await ContainerCopyBoundaries(options);
         await ContainerMoveBoundaries(options);
@@ -44,7 +39,7 @@ public sealed partial class NativeNotificationDispatchTests
         await ContainerOwnershipBoundaries(options);
         await ContainerRecursivePermissionBoundaries(options);
         Assert.Equal(beforeLocks, await original.Database.SqlQueryRaw<string>(locksSql).SingleAsync());
-        // Keep both schemas, including every Unknown/terminal row, until the runner removes its owned DB.
+        // Keep both databases, including every Unknown/terminal row, until the runner removes its owned resources.
     }
     /// <summary>Real isolated PostgreSQL/MAC/transactions/triggers. Receipts are synthetic, not Root or UI evidence.</summary>
     private static async Task ContainerRecursivePermissionBoundaries(DbContextOptions<PlatformDbContext> options)

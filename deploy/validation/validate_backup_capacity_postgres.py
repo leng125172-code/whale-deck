@@ -41,6 +41,7 @@ def run_native(suite, report):
         raise ValueError('Unknown isolated native suite')
     repository = Path(__file__).resolve().parents[2]
     database = 'wdv_' + suite + '_' + uuid.uuid4().hex[:16]
+    recursive_database = 'wdv_dispatch_' + uuid.uuid4().hex[:16] if suite == 'dispatch' else None
     container = 'whaledeck-native-' + suite + '-' + uuid.uuid4().hex[:12]
     assert re.fullmatch(r'wdv_' + suite + r'_[a-f0-9]{16}', database)
     values = container_environment()
@@ -51,9 +52,14 @@ def run_native(suite, report):
         'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-d', 'postgres']
     identity = None
     created = False
+    recursive_created = False
     try:
         command(sql_arguments, input=f'CREATE DATABASE "{database}" OWNER whaledeck;')
         created = True
+        if recursive_database:
+            assert re.fullmatch(r'wdv_dispatch_[a-f0-9]{16}', recursive_database) and recursive_database != database
+            command(sql_arguments, input=f'CREATE DATABASE "{recursive_database}" OWNER whaledeck;')
+            recursive_created = True
         api_networks = json.loads(command(['docker', 'inspect', '--format', '{{json .NetworkSettings.Networks}}', 'whaledeck-api']))
         db_networks = json.loads(command(['docker', 'inspect', '--format', '{{json .NetworkSettings.Networks}}', 'database-platform-postgres']))
         common = sorted(set(api_networks) & set(db_networks))
@@ -82,6 +88,10 @@ def run_native(suite, report):
             descriptor = os.open(environment, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(descriptor, 'w') as stream:
                 stream.write('WHALEDECK_NATIVE_TEST_CONNECTION=' + connection + '\n')
+                if recursive_database:
+                    recursive_connection, recursive_changed = re.subn(r'(?i)\bDatabase=[^;]*', 'Database=' + recursive_database, connection)
+                    assert recursive_changed == 1
+                    stream.write('WHALEDECK_NATIVE_RECURSIVE_TEST_CONNECTION=' + recursive_connection + '\n')
                 if suite == 'metrics':
                     stream.write('WHALEDECK_METRIC_LOAD_VALIDATION=1\n')
             identity = command(['docker', 'create', '--name', container, '--read-only', '--cap-drop', 'ALL',
@@ -164,8 +174,12 @@ def run_native(suite, report):
             if identity:
                 command(['docker', 'rm', '-f', identity])
         finally:
-            if created:
-                command(sql_arguments, input=f'DROP DATABASE "{database}" WITH (FORCE);')
+            try:
+                if recursive_created:
+                    command(sql_arguments, input=f'DROP DATABASE "{recursive_database}" WITH (FORCE);')
+            finally:
+                if created:
+                    command(sql_arguments, input=f'DROP DATABASE "{database}" WITH (FORCE);')
         report.update(cleanupConfirmed=True)
         print(json.dumps({'nativeTemporaryCleanup': 'passed', 'suite': suite}))
 
