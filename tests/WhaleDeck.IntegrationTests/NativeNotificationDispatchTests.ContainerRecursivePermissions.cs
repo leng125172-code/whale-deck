@@ -28,7 +28,15 @@ public sealed partial class NativeNotificationDispatchTests
             postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", schema)).Options;
         await using var isolated = new PlatformDbContext(options);
         Assert.False(await isolated.Database.SqlQueryRaw<bool>("SELECT rolsuper AS \"Value\" FROM pg_roles WHERE rolname=current_user").SingleAsync());
-        await isolated.Database.MigrateAsync();
+        Assert.Equal(schema, await isolated.Database.SqlQueryRaw<string>("SELECT current_schema()::text AS \"Value\"").SingleAsync());
+        try { await isolated.Database.MigrateAsync(); }
+        catch (PostgresException error)
+        {
+            // Only a bounded identifier and SQLSTATE; never SQL values, connection strings or raw exceptions.
+            var identifier = System.Text.RegularExpressions.Regex.Match(error.MessageText, "relation \"([A-Za-z0-9_]{1,63})\" already exists").Groups[1].Value;
+            Console.WriteLine("INBOX_PHASE=recursive-schema-migration-object-" + identifier.ToLowerInvariant().Replace('_', '-'));
+            throw;
+        }
         // Actual peer repository regressions supply permanent completed fixtures for raw fence probes.
         await ContainerCopyBoundaries(options);
         await ContainerMoveBoundaries(options);
