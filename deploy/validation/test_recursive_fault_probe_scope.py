@@ -6,10 +6,22 @@ import unittest
 from unittest.mock import patch
 
 import bound_container_recursive_permission_cut as cut
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held, require_unknown_counts
 
 
 class RecursiveFaultProbeScope(unittest.TestCase):
+    def test_unknown_does_not_misreport_aggregate_as_zero_or_completed(self):
+        record = {'state':'Unknown','completedCount':0,'changedCount':0,'abortedCount':0,'notStartedCount':0,'unknownCount':18,'outcomeDigest':''}
+        require_unknown_counts(record,18)
+        for changes in ({'state':'Aborted'},{'unknownCount':0},{'completedCount':1,'unknownCount':17},
+            {'changedCount':1},{'notStartedCount':18},{'unknownCount':True},{'outcomeDigest':'invented'}):
+            with self.subTest(changes=changes),self.assertRaises(AssertionError): require_unknown_counts({**record,**changes},18)
+
+    def test_unknown_expected_count_must_be_bounded_integer(self):
+        record = {'state':'Unknown','completedCount':0,'changedCount':0,'abortedCount':0,'notStartedCount':0,'unknownCount':18,'outcomeDigest':''}
+        for count in (True,0,-1,10001,'18'):
+            with self.subTest(count=count),self.assertRaises(AssertionError): require_unknown_counts(record,count)
+
     def test_recovery_must_retain_original_plan_job_instance_and_subject(self):
         fields = ('id','execution_job_id','root_started_at_utc','actor_subject','owner_hash','container_id','instance_id','relative_path',
             'command_json','request_hash','plan_json','plan_hash','execution_hash','confirmed_at_utc','execution_expires_at_utc')

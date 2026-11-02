@@ -13,14 +13,16 @@ try {
   const revision = process.argv[2], role = process.argv[3]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
   assert.ok(['cancel', 'recovery'].includes(role))
-  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash'].includes(kind))
+  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash', 'target-disappearance'].includes(kind))
+  const unknownCase = kind === 'target-disappearance', expectedState = unknownCase ? 'Unknown' : 'Partial'
+  if (fixture.expectedState) assert.equal(fixture.expectedState, expectedState)
   assert.match(fixture.containerId, /^[a-f0-9]{64}$/)
   directory = fixture.evidence
   assert.equal(dirname(directory), fileURLToPath(new URL('../artifacts/', import.meta.url)).replace(/\/$/, ''))
   assert.match(directory.split('/').at(-1), /^container-recursive-permission-faults-[a-f0-9]{32}$/)
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
-  context = await browser.newContext({ viewport: { width: 320, height: 600 }, colorScheme: role === 'cancel' ? 'dark' : 'light', reducedMotion: 'reduce' })
+  context = await browser.newContext({ viewport: { width: 320, height: 600 }, colorScheme: role === 'cancel' || unknownCase ? 'dark' : 'light', reducedMotion: 'reduce' })
   context.setDefaultTimeout(20_000); page = await context.newPage()
   assert.equal((await (await context.request.get(base + '/api/v1/system/status')).json()).build.sourceRevision, revision)
   phase = 'normal-login'; const profile = await loginVisible(page, context, base, role === 'recovery' ? '/files' : '/containers')
@@ -69,6 +71,14 @@ try {
       await page.getByRole('button', { name: '确认请求取消', exact: true }).click()
     }
     await writeSignal(directory, 'action-done.json', { cancellations })
+    if (unknownCase) {
+      await waitSignal(directory, 'logout.json', 30_000)
+      phase = 'removed-target-normal-visible-logout'
+      await closePermissionDetails(page, dialog)
+      await logoutFromUserMenu(page, context, base)
+      assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, 0); assert.equal(acknowledgements, 0); assert.equal(bodies, 0)
+      await writeSignal(directory, 'cancel-browser.json', { kind, subject: profile.subject, registrations, confirmations, cancellations, bodies, actualUi: true, normalDualLogout: true })
+    } else {
     const settled = await waitSignal(directory, 'settled.json', kind === 'worker-crash' ? 220_000 : 120_000)
     assert.equal(settled.id, currentId); assert.equal(settled.state, 'Partial')
     phase = 'actual-partial-page'
@@ -94,13 +104,23 @@ try {
     await closePermissionDetails(page, dialog); await logoutFromUserMenu(page, context, base)
     assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, kind === 'cancel' ? 1 : 0); assert.equal(acknowledgements, 0); assert.equal(bodies, 0)
     await writeSignal(directory, 'cancel-browser.json', { kind, subject: profile.subject, result, registrations, confirmations, cancellations, bodies, actualUi: true, normalDualLogout: true })
+    }
   } else {
     currentId = fixture.id; assert.notEqual(profile.subject, fixture.originalSubject)
     phase = 'different-admin-recovery'
     await page.getByRole('button', { name: '容器递归权限修改异常', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '容器递归权限修改异常处置', exact: true })
     const row = dialog.locator('.recursive-permission-recovery__row').filter({ hasText: currentId })
-    await expect(row).toHaveCount(1); await expect(row).toContainText('部分修改，保护已保留')
+    await expect(row).toHaveCount(1); await expect(row).toContainText(unknownCase ? '结果未知，保护已保留' : '部分修改，保护已保留')
+    if (unknownCase) {
+      const facts = row.getByLabel('实际逐项结果', { exact: true })
+      for (const [label, key] of [['已完成核对', 'completedCount'], ['实际修改', 'changedCount'], ['已中止', 'abortedCount'], ['未开始', 'notStartedCount'], ['待证明', 'unknownCount']]) {
+        await expect(facts.getByText(label, { exact: true }).locator('..').locator('dd')).toHaveText(String(fixture.counts[key]))
+      }
+      await facts.scrollIntoViewIfNeeded()
+      await page.screenshot({ path: join(directory, 'unknown-counts.png') })
+      await expect(row.getByText('部分结果尚未证明。保护已保留，不得推断零修改或成功；请查询原任务并明确处置。', { exact: true })).toBeVisible()
+    }
     await row.getByRole('button', { name: '处置历史结果', exact: true }).click()
     await expect(dialog.getByRole('button', { name: '暂不处置', exact: true })).toBeInViewport({ ratio: 1 })
     await expect(dialog.getByRole('button', { name: '确认处置并释放保护', exact: true })).toBeInViewport({ ratio: 1 })
@@ -117,7 +137,7 @@ try {
     await page.screenshot({ path: join(directory, 'partial-acknowledged.png') })
     const response = await context.request.get(base + '/api/v1/files/container-recursive-permissions/recovery/' + currentId)
     assert.equal(response.status(), 200); const result = await response.json()
-    assert.equal(result.state, 'Acknowledged'); assert.equal(result.receipt.state, 'Partial')
+    assert.equal(result.state, 'Acknowledged'); assert.equal(result.receipt.state, expectedState)
     assert.equal(result.receipt.changedCount, fixture.changedCount)
     await dialog.getByRole('button', { name: '关闭', exact: true }).click()
     await logoutFromUserMenu(page, context, base)

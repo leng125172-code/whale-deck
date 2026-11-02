@@ -230,6 +230,81 @@ def verify_partial(data, baseline, before, after, storage, directory):
     return record, {'children':children, 'outcomes':outcomes, 'sha256':{k:hashlib.sha256(v).hexdigest() for k,v in raw_files.items()}}
 
 
+def require_unknown_counts(record, count):
+    assert type(count) is int and 1 <= count <= 10000
+    assert all(type(record[k]) is int for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount'))
+    assert record['state'] == 'Unknown' and [record[k] for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')] == [0,0,0,0,count]
+    assert record['outcomeDigest'] == ''
+
+
+def verify_unknown(data, baseline, before, after, storage, directory):
+    """Unknown aggregate does not erase independently observed physical changes.
+
+    Keep incomplete original children verbatim; never finish/fence them by
+    writing state or pretending lack of current binding proves no mutation.
+    """
+    row = data['row']; record = record_for(row); plan = managed_plan(json.loads(row['plan_json']))
+    require_unknown_counts(record,len(PATHS))
+    assert row['state'] == row['root_state'] == 'Unknown' and row['publish_barrier'] and row['root_started_at_utc'] and row['completed_at_utc'] is None
+    assert row['lease_token'] is None and row['lease_expires_at_utc'] is None
+    assert data['planJob']['state'] == 'Succeeded' and data['executionJob']['state'] == 'Running' and data['executionJob']['completed_at_utc'] is None
+    assert data['accepted'] == data['confirmed'] == 1 and row['history_verified'] and row['history_may_exist']
+    same_operation(json.loads((directory/'pre-disappearance-sql.json').read_bytes())['row'],row)
+    assert plan['rootIdentity'] == before[''] and plan['entryCount'] == plan['changeCount'] == len(PATHS)
+    physical_changed = unchanged_except_modes(before,after); assert 0 < physical_changed < len(PATHS)
+    assert after == json.loads((directory/'physical-cut.json').read_bytes())
+    receipt = json.loads(row['receipt_json'])
+    for key in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount'):
+        column = re.sub(r'(?<!^)(?=[A-Z])','_',key).lower()
+        assert receipt[key[0].upper()+key[1:]] == row[column] == record[key]
+    assert not row['binding_current'] and row['history_available']
+    assert plan['fingerprint'] == digest(b'whaledeck-container-recursive-permission-plan-v1\n',unsigned(plan,'fingerprint'))
+    operation = record['operationId']; raw_files = {'partial.root.json':(ROOT/(operation+'.json')).read_bytes()}; children = []
+    with storage.target(create_namespace=False,read_only=True) as (configuration,base):
+        fd = storage.f.open_at(base,'container-recursive-permissions-v1',os.O_RDONLY|os.O_DIRECTORY)
+        try:
+            raw = read_metadata(storage.f,storage,configuration,fd,operation+'.json'); saved = json.loads(raw); raw_files['partial.hdd.json'] = raw
+            assert saved['operationId'] == operation and saved['owner'] == row['owner_hash'] and saved['plan'] == plan
+            assert saved['resourceType'] == 'ContainerRecursivePermissionMetadata' and saved['storageId'] == 'database-platform.backup.hdd'
+            assert saved['historyDigest'] == record['historyDigest'] == row['history_digest'] == digest(b'whaledeck-container-recursive-permission-history-v1\n',unsigned(saved,'historyDigest'))
+            assert plan['manifestDigest'] == digest(b'whaledeck-container-recursive-permission-manifest-v1\n',saved['entries'])
+            assert {e['relativePath'] for e in saved['entries']} == PATHS.keys()
+            child_fd = storage.f.open_at(fd,operation+'/entries',os.O_RDONLY|os.O_DIRECTORY)
+            try:
+                names = {n for n in os.listdir(child_fd) if n.endswith('.json')}; expected_root = set(); expected_hdd = set()
+                for index,entry in enumerate(saved['entries']):
+                    cid = child_id(operation,index); relative = entry['relativePath']; cp = entry['plan']; path = ROOT/(operation+'.entries')/(cid+'.json')
+                    assert cp['sourceIdentity'] == before[relative] and cp['command']['path'] == 'work/recursive-tree'+('/'+relative if relative else '')
+                    assert cp['fingerprint'] == digest(b'whaledeck-container-permission-plan-v1\n',unsigned(cp,'fingerprint'))
+                    child = None
+                    if path.exists():
+                        assert index <= record['startedThrough']; expected_root.add(cid)
+                        info = path.lstat(); assert stat.S_ISREG(info.st_mode) and info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1 and info.st_size <= 16384
+                        craw = path.read_bytes(); child = json.loads(craw); raw_files[cid+'.root.json'] = craw
+                        assert child['operationId'] == cid and child['owner'] == record['owner'] and child['plan'] == cp
+                        if child['state'] == 'Completed':
+                            assert child['modeConfirmed'] and child['actualIdentity'] == after[relative] and child['historyVerified']
+                            assert child['version'] == version(baseline,cp['command']['path'],after[relative])
+                        children.append({'id':cid,'state':child['state'],'historyVerified':child['historyVerified']})
+                    else: assert index > record['finishedThrough'] and after[relative] == before[relative]
+                    if cid+'.json' in names:
+                        assert index <= record['startedThrough']; expected_hdd.add(cid+'.json')
+                        hraw = read_metadata(storage.f,storage,configuration,child_fd,cid+'.json',16384); hdd = json.loads(hraw)
+                        assert hdd['operationId'] == cid and hdd['owner'] == record['owner'] and hdd['plan'] == cp
+                        assert hdd['parentOperationId'] == operation and hdd['manifestDigest'] == plan['manifestDigest'] and hdd['resourceType'] == 'ContainerRecursivePermissionEntryMetadata'
+                        assert hdd['historyDigest'] == digest(b'whaledeck-container-recursive-permission-entry-history-v1\n',unsigned(hdd,'historyDigest'))
+                        if child and child['historyVerified']: assert child['historyDigest'] == hdd['historyDigest']
+                        raw_files[cid+'.hdd.json'] = hraw
+                    elif child: assert not child['historyVerified']
+                assert {p.stem for p in (ROOT/(operation+'.entries')).glob('*.json')} == expected_root
+                assert names == expected_hdd and children and children[0]['state'] == 'Completed'
+            finally: os.close(child_fd)
+        finally: os.close(fd)
+    for name,raw in raw_files.items(): (directory/name).write_bytes(raw)
+    return record, {'children':children,'outcomes':None,'physicalChangedCount':physical_changed,
+        'unknownAggregateDoesNotMeanNoPhysicalChanges':True,'sha256':{k:hashlib.sha256(v).hexdigest() for k,v in raw_files.items()}}
+
+
 def browser_start(baseline, role, username, password, directory):
     out = (directory/(role+'.stdout')).open('wb'); err = (directory/(role+'.stderr')).open('wb')
     try:
@@ -257,7 +332,8 @@ def main():
     global PHASE
     assert os.geteuid() == 0 and len(sys.argv) in (2,3); os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}',revision)
-    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','worker-crash')
+    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','worker-crash','target-disappearance')
+    unknown_case = kind == 'target-disappearance'; expected_state = 'Unknown' if unknown_case else 'Partial'
     repo = Path(__file__).resolve().parents[2]
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(), 'FREEZE_VALIDATION_SOURCE_FIRST'
     validation = subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()
@@ -271,7 +347,7 @@ def main():
     files = load('/usr/local/libexec/whaledeck-files.py','recursive_fault_files')
     storage = load('/usr/local/libexec/whaledeck-file-backups.py','recursive_fault_storage').FileBackups(files)
     held = browser = identifier = baseline = None; passed = False
-    with owned.fixture(restartable_core=('whaledeck-worker',)) as fixture:
+    with owned.fixture(restartable_core=('whaledeck-worker',),removable=unknown_case) as fixture:
         root = fixture['folder']/'recursive-tree'; root.mkdir(mode=0o750); (root/'sub').mkdir(mode=0o750)
         content = hashlib.shake_256(('recursive-fault:'+fixture['identifier']).encode()).digest(2*1024**2+7)
         for i,(relative,entry_kind) in enumerate(PATHS.items()):
@@ -304,16 +380,20 @@ def main():
                 (directory/'bound-helper.json').write_text(json.dumps({'pid':held.pid,'unit':held.cgroup,'twoKernelFdProofs':True,'proof':held.proof}))
                 PHASE = 'actual-'+kind+'-and-product-helper-exit'; crash = lease_proof = None; began = time.monotonic()
                 write_signal(directory,'action.json',{'kind':kind})
-                if kind == 'worker-crash':
+                if kind in ('worker-crash','target-disappearance'):
                     action = wait_signal(directory,'action-done.json',browser,30); assert action['cancellations'] == 0
                     checks = restart_allowed(held,applying)
                     applying = snapshot(identifier)['row']; lease_held(applying,applying)
                     assert applying['lease_token'] and applying['lease_expires_at_utc']
                     cut_tree = inventory(root,content); cut_raw = (ROOT/(uuid.UUID(applying['execution_job_id']).hex+'.json')).read_bytes()
                     assert json.loads(cut_raw) == held.record
-                    (directory/'pre-crash-sql.json').write_text(json.dumps(snapshot(identifier)))
+                    (directory/('pre-disappearance-sql.json' if unknown_case else 'pre-crash-sql.json')).write_text(json.dumps(snapshot(identifier)))
                     (directory/'physical-cut.json').write_text(json.dumps(cut_tree)); (directory/'cut-root-original.json').write_bytes(cut_raw)
-                if kind == 'worker-crash': began = time.monotonic()
+                if unknown_case:
+                    PHASE = 'exact-owned-container-disappearance'
+                    fixture['remove_owned'](); assert inventory(root,content) == cut_tree
+                    (directory/'target-disappearance.json').write_text(json.dumps({'containerId':fixture['identifier'],'exactOwnedContainerRemoved':True,'sourcePreserved':True,'otherActiveWork':checks}))
+                if kind in ('worker-crash','target-disappearance'): began = time.monotonic()
                 with ThreadPoolExecutor(max_workers=1) as exits:
                     stopping = exits.submit(held.wait_exit_seconds,began,15)
                     if kind == 'worker-crash':
@@ -328,29 +408,36 @@ def main():
                             'signal':'SIGKILL','automaticRestartObserved':automatic,'exitCodeObservedBeforeExplicitStart':stopped['State']['ExitCode'],
                             'sameContainerAndImage':True,'otherActiveWork':checks,'originalLeaseExpiresAtUtc':applying['lease_expires_at_utc']}
                         (directory/'worker-crash.json').write_text(json.dumps(crash))
+                    elif unknown_case:
+                        write_signal(directory,'logout.json',{'exactOwnedContainerRemoved':True})
+                        assert browser.wait(timeout=35) == 0, 'REMOVED_TARGET_ORIGINAL_LOGOUT_FAILED'
                     else: wait_signal(directory,'action-done.json',browser,30)
                     elapsed = stopping.result(timeout=16)
                 assert elapsed is not None and elapsed < 15, 'PRODUCT_DID_NOT_STOP_BOUND_RECURSIVE_HELPER'
                 held.release(); held = None
                 if kind == 'worker-crash':
                     PHASE = 'original-natural-lease'; lease_proof = natural_lease(applying,root,cut_tree,directory)
-                PHASE = 'real-partial-proof'; partial = wait_state(identifier,'Partial')
+                PHASE = 'real-'+expected_state.lower()+'-proof'; partial = wait_state(identifier,expected_state)
                 if kind == 'worker-crash':
                     same_operation(applying,partial['row'])
                     assert dt.datetime.now(dt.timezone.utc) >= dt.datetime.fromisoformat(applying['lease_expires_at_utc'])
                     assert inventory(root,content) == cut_tree, 'RECOVERY_RESUMED_CHMOD'
-                after = inventory(root,content); record, proof = verify_partial(partial,baseline,before,after,storage,directory)
+                after = inventory(root,content)
+                record,proof = (verify_unknown if unknown_case else verify_partial)(partial,baseline,before,after,storage,directory)
                 (directory/'partial-sql.json').write_text(json.dumps(partial)); (directory/'physical-partial.json').write_text(json.dumps(after))
                 (directory/'history-proof.json').write_text(json.dumps(proof))
-                write_signal(directory,'settled.json',{'id':identifier,'state':'Partial',
-                    **{k:record[k] for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')}})
-                assert browser.wait(timeout=60) == 0, 'PARTIAL_PAGE_NOT_VERIFIED'; browser = None
+                if not unknown_case:
+                    write_signal(directory,'settled.json',{'id':identifier,'state':expected_state,
+                        **{k:record[k] for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')}})
+                    assert browser.wait(timeout=60) == 0, 'PARTIAL_PAGE_NOT_VERIFIED'
+                browser = None
                 ui = json.loads((directory/'cancel-browser.json').read_bytes()); assert ui['subject'] == partial['row']['actor_subject'] == ready['subject']
             # The original temporary Authentik identity has actually been deleted.
             # A new, distinct human login owns the explicit recovery decision.
             PHASE = 'different-admin-real-recovery'
             with temporary_user(True) as (username,password):
-                recovery_fixture = {**baseline,'id':identifier,'originalSubject':ready['subject'],'changedCount':record['changedCount']}
+                recovery_fixture = {**baseline,'id':identifier,'originalSubject':ready['subject'],'changedCount':record['changedCount'],'expectedState':expected_state,
+                    'counts':{k:record[k] for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')}}
                 browser = browser_start(recovery_fixture,'recovery',username,password,directory)
                 canceled = wait_signal(directory,'recovery-canceled.json',browser)
                 assert canceled['subject'] != ready['subject'] and canceled['acknowledgements'] == 0
@@ -377,7 +464,7 @@ def main():
                 input=json.dumps({k:record[k] for k in ('operationId','owner','plan')})+'\n',capture_output=True,text=True,timeout=35)
             assert late.returncode == 0 and len(late.stdout.encode()) <= 65536 and len(late.stderr.encode()) <= 32768
             replay = [json.loads(line) for line in late.stdout.splitlines() if line.strip()][-1]
-            assert replay['state'] == 'Partial' and replay['operationId'] == record['operationId'] and replay['replayed']
+            assert replay['state'] == expected_state and replay['operationId'] == record['operationId'] and replay['replayed']
             assert inventory(root,content) == after and (ROOT/(record['operationId']+'.json')).read_bytes() == (directory/'partial.root.json').read_bytes()
             (directory/'late-apply.json').write_text(json.dumps(replay)); (directory/'final-sql.json').write_text(json.dumps(final))
             (directory/'physical-final.json').write_text(json.dumps(after))
@@ -388,7 +475,8 @@ def main():
                 'productStoppedHelperSeconds':round(elapsed,3),'validatorKilledHelper':False,'differentAdminAcknowledged':True,
                 'originalIdentityDeleted':True,'rootHistoryAndPhysicalPreserved':True,'latePrivilegedHelperReplayNoChanges':True,
                 'lateReplayWasSignedRpc':False,'actualUi':True,'workerRestartedSameContainer':True,'allFileBytesUidGidMtimeXattrPreserved':True,
-                'workerCrash':crash,'naturalLeaseSamples':len(lease_proof['samples']) if lease_proof else 0}
+                'workerCrash':crash,'naturalLeaseSamples':len(lease_proof['samples']) if lease_proof else 0,
+                'rootState':expected_state,'physicalChangedCount':unchanged_except_modes(before,after),'targetRemovedDuringOperation':unknown_case}
         finally:
             if held is not None: held.release()
             worker.start()

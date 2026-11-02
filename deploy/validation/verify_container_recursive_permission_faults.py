@@ -16,7 +16,7 @@ import sys
 
 from validate_container_file_staging import load
 from validate_container_recursive_permission_browser import snapshot, read_metadata, managed_plan
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except, same_operation
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except, same_operation, require_unknown_counts
 from validate_container_recursive_permission_agent import no_active_work, host_identity
 from validate_container_recursive_permissions import NAMES
 from validate_metric_continuity import query
@@ -39,6 +39,7 @@ def main():
     row = actual['row']; assert row['state'] == 'Acknowledged' and actual['executionJob']['state'] == 'Failed' and not row['publish_barrier']
     original = saved('cancel-browser.json'); recovery = saved('recovery-browser.json')
     kind = baseline.get('kind','cancel'); assert result.get('kind','cancel') == kind
+    unknown_case = kind == 'target-disappearance'; expected_state = 'Unknown' if unknown_case else 'Partial'
     assert original['actualUi'] and recovery['actualUi'] and original['normalDualLogout'] and recovery['normalDualLogout']
     assert original['subject'] == row['actor_subject'] != row['acknowledged_by'] == recovery['subject']
     if kind == 'worker-crash':
@@ -66,16 +67,25 @@ def main():
             assert sample['leaseToken'] == lease['originalLeaseToken'] and sample['leaseExpiresAtUtc'] == lease['originalLeaseExpiresAtUtc']
             assert sample['state'] == 'Applying' and sample['barrier'] and sample['sourceFingerprintsUnchanged'] and sample['rootSha256'] == lease['rootSha256']
         assert saved('physical-cut.json') == after and lease['clocksOrSqlModified'] is False
-    assert partial['row']['state'] == 'Partial' and partial['row']['publish_barrier'] and partial['row']['completed_at_utc'] is None
+    assert partial['row']['state'] == expected_state and partial['row']['publish_barrier'] and partial['row']['completed_at_utc'] is None
     record = saved('partial.root.json'); operation = result['operationId']; assert operation == record['operationId']
     late = saved('late-apply.json')
-    assert late['operationId'] == operation and late['state'] == 'Partial' and late['replayed']
+    assert late['operationId'] == operation and late['state'] == expected_state and late['replayed']
     assert result['lateReplayWasSignedRpc'] is False
     for key in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount'):
         assert late[key] == record[key] == result['partialCounts'][key]
     plan = managed_plan(json.loads(row['plan_json'])); assert record['plan'] == plan
-    assert record['state'] == 'Partial' and record['unknownCount'] == 0 and record['notStartedCount'] > 0
-    assert unchanged_except_modes(before,after) == record['changedCount'] == record['completedCount']
+    if unknown_case:
+        require_unknown_counts(record,len(PATHS))
+        assert original['cancellations'] == 0 and original['registrations'] == original['confirmations'] == 1 and original['bodies'] == 0
+        removed = saved('target-disappearance.json'); assert removed['containerId'] == baseline['containerId'] and removed['exactOwnedContainerRemoved'] and removed['sourcePreserved']
+        assert result['targetRemovedDuringOperation'] and result['rootState'] == 'Unknown'
+        assert saved('physical-cut.json') == after and 0 < unchanged_except_modes(before,after) == result['physicalChangedCount'] < len(PATHS)
+        same_operation(saved('pre-disappearance-sql.json')['row'],row)
+        assert saved('history-proof.json')['unknownAggregateDoesNotMeanNoPhysicalChanges']
+    else:
+        assert record['state'] == 'Partial' and record['unknownCount'] == 0 and record['notStartedCount'] > 0
+        assert unchanged_except_modes(before,after) == record['changedCount'] == record['completedCount']
     assert sum(record[k] for k in ('completedCount','abortedCount','notStartedCount','unknownCount')) == len(PATHS)
     root = Path('/var/lib/whaledeck-container-recursive-permissions')
     for name in ['partial.root.json', *[p.name for p in directory.glob('*.root.json') if p.name != 'partial.root.json']]:
@@ -97,18 +107,20 @@ def main():
     assert history['historyDigest'] == row['history_digest'] == digest(b'whaledeck-container-recursive-permission-history-v1\n',unsigned(history,'historyDigest'))
     assert history['plan'] == plan and plan['manifestDigest'] == digest(b'whaledeck-container-recursive-permission-manifest-v1\n',history['entries'])
     outcomes = saved('history-proof.json')['outcomes']
-    assert record['outcomeDigest'] == digest(b'whaledeck-recursive-permission-outcomes-v1\n',outcomes)
+    if unknown_case: assert outcomes is None and record['outcomeDigest'] == ''
+    else: assert record['outcomeDigest'] == digest(b'whaledeck-recursive-permission-outcomes-v1\n',outcomes)
     audits = query('''SELECT json_build_object('rows',json_agg(json_build_object('actor',actor_subject,'action',action,'result',result,'detail',detail_json)))
       FROM audit_events WHERE job_id IN (:'id'::uuid,:'execution'::uuid) AND action LIKE 'containers.files.recursive-permission.%';''', id=row['id'],execution=row['execution_job_id'])['rows']
-    assert audits and len([a for a in audits if a['action'].endswith('.partial-acknowledged')]) == 1
+    acknowledgement = '.unknown-acknowledged' if unknown_case else '.partial-acknowledged'
+    assert audits and len([a for a in audits if a['action'].endswith(acknowledgement)]) == 1
     expected = {'intentId':row['id'],'containerId':row['container_id'],
         'instanceHash':hashlib.sha256(row['instance_id'].encode()).hexdigest().upper(),
         'pathHash':hashlib.sha256(row['relative_path'].encode()).hexdigest().upper()}
     for audit in audits:
         detail = json.loads(audit['detail']) if isinstance(audit['detail'],str) else audit['detail']
         assert detail == expected
-        if audit['action'].endswith('.partial-acknowledged'):
-            assert audit['actor'] == row['acknowledged_by'] and audit['result'] == 'Partial'
+        if audit['action'].endswith(acknowledgement):
+            assert audit['actor'] == row['acknowledged_by'] and audit['result'] == expected_state
         else: assert audit['actor'] == row['actor_subject']
     (directory/'audit-proof.json').write_text(json.dumps({'rows':len(audits),'differentAdminAcknowledgement':1,'originalSubjectPreserved':True,'onlyRecomputedHashedMetadata':True}))
     repo = Path(__file__).resolve().parents[2]; installed = {}
@@ -131,7 +143,8 @@ def main():
     assert subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True,timeout=15).returncode != 0
     assert host_identity(baseline['revision']) == baseline['hostBefore']
     no_active_work(); inactive_except()
-    screenshots = ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png') + (('partial-counts.png',) if kind == 'worker-crash' else ())
+    screenshots = (('inflight.png','unknown-counts.png','partial-recovery-confirm.png','partial-acknowledged.png') if unknown_case
+        else ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png')) + (('partial-counts.png',) if kind == 'worker-crash' else ())
     for name in screenshots:
         raw = (directory/name).read_bytes(); assert raw.startswith(b'\x89PNG\r\n\x1a\n')
         assert int.from_bytes(raw[16:20],'big') == 320 and int.from_bytes(raw[20:24],'big') == 600
