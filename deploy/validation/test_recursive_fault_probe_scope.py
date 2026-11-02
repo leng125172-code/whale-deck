@@ -6,10 +6,24 @@ import unittest
 from unittest.mock import patch, Mock
 
 import bound_container_recursive_permission_cut as cut
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, maintenance_response, restore_fault_services, require_authority_change
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, maintenance_response, restore_fault_services, require_authority_change, require_logout_authority
 
 
 class RecursiveFaultProbeScope(unittest.TestCase):
+    def test_logout_cannot_be_proved_by_identity_removal_or_disabling(self):
+        subject = '11111111-1111-4111-8111-111111111111'
+        identity = {'pk':1,'uuid':subject,'username':'whaledeck-upload-qa-'+'a'*12,'groups':['admin'],'is_active':True}
+        value = {'kind':'logout','subject':subject,'before':identity,'after':copy.deepcopy(identity),'noIdentityMutation':True}
+        require_logout_authority(value,subject)
+        for changes in ({'groups':[]},{'is_active':False},{'pk':2},{'uuid':'22222222-2222-4222-8222-222222222222'}):
+            bad = copy.deepcopy(value); bad['after'].update(changes)
+            with self.subTest(changes=changes),self.assertRaises(AssertionError): require_logout_authority(bad,subject)
+            if 'pk' not in changes:
+                bad['before'].update(changes)
+                with self.subTest(both=changes),self.assertRaises(AssertionError): require_logout_authority(bad,subject)
+        for changes in ({'kind':'account-disable'},{'noIdentityMutation':False},{'subject':'22222222-2222-4222-8222-222222222222'}):
+            with self.subTest(changes=changes),self.assertRaises(AssertionError): require_logout_authority({**value,**changes},subject)
+
     def test_revocation_proof_cannot_change_identity_or_other_fields(self):
         subject = '11111111-1111-4111-8111-111111111111'
         ready = {'subject':subject,'permissionExpiresAtUtc':'2026-11-03T10:00:00+00:00'}

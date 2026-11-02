@@ -13,9 +13,10 @@ try {
   const revision = process.argv[2], role = process.argv[3]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
   assert.ok(['cancel', 'recovery'].includes(role))
-  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash', 'agent-restart', 'target-disappearance', 'target-disappearance-barrier', 'group-removal', 'account-disable'].includes(kind))
+  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash', 'agent-restart', 'target-disappearance', 'target-disappearance-barrier', 'group-removal', 'account-disable', 'logout'].includes(kind))
   const barrierCase = kind === 'target-disappearance-barrier'
   const revoked = ['group-removal', 'account-disable'].includes(kind)
+  const logoutCase = kind === 'logout'
   const unknownCase = kind === 'target-disappearance' || barrierCase, expectedState = unknownCase ? 'Unknown' : 'Partial'
   if (fixture.expectedState) assert.equal(fixture.expectedState, expectedState)
   assert.match(fixture.containerId, /^[a-f0-9]{64}$/)
@@ -65,7 +66,7 @@ try {
     await dialog.getByRole('button', { name: '查询原递归权限修改任务', exact: true }).click()
     await expect(dialog.getByRole('status')).toHaveText('正在逐项修改权限')
     await expect(dialog.getByRole('button', { name: '请求取消递归权限修改', exact: true })).toBeInViewport({ ratio: 1 })
-    if (revoked) await expect.poll(() => page.evaluate(id => (sessionStorage.getItem('whaledeck-container-recursive-permission-hints-v1') ?? '').includes(id), currentId)).toBe(true)
+    if (revoked || logoutCase) await expect.poll(() => page.evaluate(id => (sessionStorage.getItem('whaledeck-container-recursive-permission-hints-v1') ?? '').includes(id), currentId)).toBe(true)
     await page.screenshot({ path: join(directory, 'inflight.png') })
     if (kind === 'cancel') {
       await dialog.getByRole('button', { name: '请求取消递归权限修改', exact: true }).click()
@@ -75,13 +76,24 @@ try {
       await page.getByRole('button', { name: '确认请求取消', exact: true }).click()
     }
     await writeSignal(directory, 'action-done.json', { cancellations })
-    if (unknownCase) {
+    if (unknownCase || logoutCase) {
       await waitSignal(directory, 'logout.json', 30_000)
-      phase = 'removed-target-normal-visible-logout'
+      phase = 'original-normal-visible-logout'
+      const logoutBeganAtUtc = new Date().toISOString()
       await closePermissionDetails(page, dialog)
       await logoutFromUserMenu(page, context, base)
+      let deniedIntentStatus = null
+      if (logoutCase) {
+        deniedIntentStatus = (await context.request.get(endpoint + '/' + currentId)).status(); assert.equal(deniedIntentStatus, 401)
+        await expect(page.getByRole('region', { name: '容器递归权限修改任务', exact: true })).toHaveCount(0)
+        await expect.poll(() => page.evaluate(id => !(sessionStorage.getItem('whaledeck-container-recursive-permission-hints-v1') ?? '').includes(id), currentId)).toBe(true)
+        await expect(page.getByRole('heading', { name: '使用工作站账号登录', exact: true })).toBeVisible()
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+        await page.screenshot({ path: join(directory, 'logged-out.png') })
+      }
       assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, 0); assert.equal(acknowledgements, 0); assert.equal(bodies, 0)
-      await writeSignal(directory, 'cancel-browser.json', { kind, subject: profile.subject, registrations, confirmations, cancellations, bodies, actualUi: true, normalDualLogout: true })
+      await writeSignal(directory, 'cancel-browser.json', { kind, subject: profile.subject, registrations, confirmations, cancellations, bodies, actualUi: true, normalDualLogout: true,
+        oldTaskAndHintRemoved: logoutCase, deniedIntentStatus, logoutBeganAtUtc, logoutEndedAtUtc: new Date().toISOString() })
     } else {
     const settled = await waitSignal(directory, 'settled.json', kind === 'worker-crash' ? 220_000 : 120_000)
     assert.equal(settled.id, currentId); assert.equal(settled.state, 'Partial')
@@ -143,14 +155,14 @@ try {
     const dialog = page.getByRole('dialog', { name: '容器递归权限修改异常处置', exact: true })
     const row = dialog.locator('.recursive-permission-recovery__row').filter({ hasText: currentId })
     await expect(row).toHaveCount(1); await expect(row).toContainText(unknownCase ? '结果未知，保护已保留' : '部分修改，保护已保留')
-    if (unknownCase) {
+    if (unknownCase || logoutCase) {
       const facts = row.getByLabel('实际逐项结果', { exact: true })
       for (const [label, key] of [['已完成核对', 'completedCount'], ['实际修改', 'changedCount'], ['已中止', 'abortedCount'], ['未开始', 'notStartedCount'], ['待证明', 'unknownCount']]) {
         await expect(facts.getByText(label, { exact: true }).locator('..').locator('dd')).toHaveText(String(fixture.counts[key]))
       }
       await facts.scrollIntoViewIfNeeded()
-      await page.screenshot({ path: join(directory, 'unknown-counts.png') })
-      await expect(row.getByText('部分结果尚未证明。保护已保留，不得推断零修改或成功；请查询原任务并明确处置。', { exact: true })).toBeVisible()
+      await page.screenshot({ path: join(directory, unknownCase ? 'unknown-counts.png' : 'partial-counts.png') })
+      if (unknownCase) await expect(row.getByText('部分结果尚未证明。保护已保留，不得推断零修改或成功；请查询原任务并明确处置。', { exact: true })).toBeVisible()
     }
     await row.getByRole('button', { name: '处置历史结果', exact: true }).click()
     await expect(dialog.getByRole('button', { name: '暂不处置', exact: true })).toBeInViewport({ ratio: 1 })
@@ -197,7 +209,7 @@ try {
     await logoutFromUserMenu(page, context, base)
     assert.equal(registrations, 0); assert.equal(confirmations, 0); assert.equal(cancellations, 0); assert.equal(acknowledgements, 1); assert.equal(bodies, 0); assert.equal(directoryRegistrations, 0)
     await writeSignal(directory, 'recovery-browser.json', { subject: profile.subject, result, acknowledgements, actualUi: true, normalDualLogout: true,
-      waitingState, waitingVisibleDirectory, waitingId: fixture.waitingId ?? null, directoryRegistrations })
+      waitingState, waitingVisibleDirectory, waitingId: fixture.waitingId ?? null, directoryRegistrations, actualCountersVerified: unknownCase || logoutCase })
   }
   console.log(JSON.stringify({ recursiveFaultBrowser: 'passed', role }))
 } catch (error) {

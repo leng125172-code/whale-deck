@@ -16,7 +16,7 @@ import sys
 
 from validate_container_file_staging import load
 from validate_container_recursive_permission_browser import snapshot, read_metadata, managed_plan
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except, same_operation, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, require_authority_change
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except, same_operation, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, require_authority_change, require_logout_authority
 from validate_container_directory_browser import snapshot as directory_snapshot, ROOT as DIRECTORY_ROOT
 from validate_container_recursive_permission_agent import no_active_work, host_identity
 from validate_container_recursive_permissions import NAMES
@@ -42,6 +42,7 @@ def main():
     kind = baseline.get('kind','cancel'); assert result.get('kind','cancel') == kind
     barrier_case = kind == 'target-disappearance-barrier'
     revoked = kind in ('group-removal','account-disable')
+    logout_case = kind == 'logout'
     unknown_case = kind in ('target-disappearance','target-disappearance-barrier'); expected_state = 'Unknown' if unknown_case else 'Partial'
     assert original['actualUi'] and recovery['actualUi'] and recovery['normalDualLogout']
     if revoked:
@@ -56,6 +57,21 @@ def main():
         require_stopped_tree(saved('physical-cut.json'),stopped,cut_record['finishedThrough'],cut_record['startedThrough'])
         assert stopped == after; same_operation(saved('pre-authority-sql.json')['row'],row)
     else: assert original['normalDualLogout']
+    if logout_case:
+        authority = saved('logout-authority.json'); require_logout_authority(authority,original['subject'])
+        instance = authority['containerInstance']
+        assert instance['containerId'] == baseline['containerId'] and instance['pid'] == baseline['containerPid'] and instance['running'] is True
+        assert str(instance['pid'])+':'+instance['startedAt'] == baseline['instanceId'] and not result['targetRemovedDuringOperation']
+        assert original['kind'] == kind and original['oldTaskAndHintRemoved'] and original['deniedIntentStatus'] == 401
+        assert original['registrations'] == original['confirmations'] == 1 and original['cancellations'] == original['bodies'] == 0
+        assert row['cancel_requested_at_utc'] is None and result['normalLogoutWhileIdentityActive'] and not result['authorityRevoked']
+        assert recovery['actualCountersVerified'] and 0 <= result['productStoppedHelperSeconds'] < 15
+        began = dt.datetime.fromisoformat(original['logoutBeganAtUtc']); ended = dt.datetime.fromisoformat(original['logoutEndedAtUtc'])
+        assert began < ended <= dt.datetime.fromisoformat(authority['observedAfterLogoutAtUtc'])
+        assert dt.datetime.fromisoformat(saved('ready.json')['permissionExpiresAtUtc']) > ended + dt.timedelta(hours=1)
+        stopped = saved('physical-after-helper-exit.json'); cut_record = saved('cut-root.json')
+        require_stopped_tree(saved('physical-cut.json'),stopped,cut_record['finishedThrough'],cut_record['startedThrough'])
+        assert stopped == after; same_operation(saved('pre-logout-sql.json')['row'],row)
     assert original['subject'] == row['actor_subject'] != row['acknowledged_by'] == recovery['subject']
     if kind == 'worker-crash':
         assert original['kind'] == kind and original['cancellations'] == 0
@@ -214,8 +230,8 @@ def main():
         assert not Path(waiting_baseline['source']).exists() and subprocess.run(['docker','inspect',waiting_baseline['containerId']],capture_output=True,timeout=15).returncode != 0
         (directory/'waiting-independent.json').write_text(json.dumps({'originalIdExecutedOnce':True,'deferredSamples':4,'startedAfterOriginalAcknowledgement':True,'rootAndPhysicalInodeVerified':True,'bothFixturesRemoved':True,'actualDirectoryUi':True,'directoryAuditRows':len(directory_audits),'hashedMetadataAndCurrentAdminVerified':True}))
     no_active_work(); inactive_except()
-    screenshots = (('inflight.png','authority-denied.png','partial-recovery-confirm.png','partial-acknowledged.png') if revoked else ('inflight.png','unknown-counts.png','partial-recovery-confirm.png','partial-acknowledged.png') if unknown_case
-        else ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png')) + (('partial-counts.png',) if kind in ('worker-crash','agent-restart') else ())
+    screenshots = (('inflight.png','logged-out.png','partial-recovery-confirm.png','partial-acknowledged.png') if logout_case else ('inflight.png','authority-denied.png','partial-recovery-confirm.png','partial-acknowledged.png') if revoked else ('inflight.png','unknown-counts.png','partial-recovery-confirm.png','partial-acknowledged.png') if unknown_case
+        else ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png')) + (('partial-counts.png',) if kind in ('worker-crash','agent-restart','logout') else ())
     if barrier_case: screenshots += ('waiting-directory.png',)
     for name in screenshots:
         raw = (directory/name).read_bytes(); assert raw.startswith(b'\x89PNG\r\n\x1a\n')
@@ -223,7 +239,7 @@ def main():
     observed = {'independentReadOnlyVerification':'passed','id':row['id'],'actualSqlAndRootAndHddUnchanged':True,'hddMetadataFiles':len(checked),
         'kind':kind,'sourceAndContainerAccuratelyRemoved':True,'deletedSourceBytesReRead':False,'screenshots':len(screenshots),'auditRows':len(audits),
         'all11Healthy':True,'installedHelpersMatchProductRevision':True,'productRevision':baseline['revision'],
-        'sourceDevice':baseline['original'][''][0],'hddDevice':hdd_device,'waitingWriteVerified':barrier_case,'authorityRevoked':revoked}
+        'sourceDevice':baseline['original'][''][0],'hddDevice':hdd_device,'waitingWriteVerified':barrier_case,'authorityRevoked':revoked,'normalLogoutWhileIdentityActive':logout_case}
     (directory/'independent-final.json').write_text(json.dumps(observed))
     print(json.dumps(observed))
 
