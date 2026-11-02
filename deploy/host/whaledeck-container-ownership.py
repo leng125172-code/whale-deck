@@ -47,6 +47,22 @@ class ContainerOwnershipHistory:
                 yield configuration, descriptor
             finally: os.close(descriptor)
 
+    def artifact_directories(self):return (self.NAMESPACE,)
+
+    def has_artifacts(self, request):
+        with self.storage.target(create_namespace=False, read_only=True) as (_, base):
+            directory=os.dup(base)
+            try:
+                for part in self.artifact_directories():
+                    try:child=self.f.open_at(directory,part,os.O_RDONLY|os.O_DIRECTORY)
+                    except FileNotFoundError:return False
+                    os.close(directory);directory=child;info=os.fstat(directory)
+                    if (info.st_uid,info.st_gid,stat.S_IMODE(info.st_mode))!=(0,0,0o700):self.reject('HISTORY_UNSAFE')
+                try:os.stat(request['operationId']+'.json',dir_fd=directory,follow_symlinks=False)
+                except FileNotFoundError:return False
+                return True
+            finally:os.close(directory)
+
     @staticmethod
     def expected(request):
         return {'schemaVersion': 1, 'resourceType': 'ContainerOwnershipMetadata', 'storageId': 'database-platform.backup.hdd',
@@ -220,6 +236,9 @@ def container_ownership_type(directory_type):
             with self.locked(request) as (state, record):
                 if record is not None:
                     self.recover(state, record, session); return self.public(record, session, True)
+                if self.history.has_artifacts(request):
+                    record=self.new_record(request,'Unknown');record['historyMayExist']=True;self.save(state,record)
+                    return self.public(record,session,False)
                 if session is None: self.reject('SESSION_REQUIRED')
                 if self.plan(request['plan']['command'], session) != request['plan']: self.reject('VERSION_CONFLICT')
                 record = self.new_record(request, 'Preparing'); self.save(state, record); self.checkpoint('Preparing')
@@ -245,6 +264,15 @@ def container_ownership_type(directory_type):
                     with contextlib.suppress(OSError, self.r.Rejected, self.f.Rejected): self.recover(state, record, session)
                     raise
                 return self.public(record, session, False)
+
+        def discard(self, request, session=None):
+            with self.locked(request) as (state,record):
+                replayed=True
+                if record is None:
+                    orphan=self.history.has_artifacts(request)
+                    record=self.new_record(request,'Unknown' if orphan else 'Aborted');record['historyMayExist']=orphan;self.save(state,record)
+                else:self.recover(state,record,session)
+                return self.public(record,session,replayed)
 
         def recover(self, state, record, session):
             if record['state'] in self.TERMINAL: return

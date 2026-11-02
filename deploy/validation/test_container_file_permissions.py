@@ -310,4 +310,24 @@ class LinuxContainerPermissionTests(unittest.TestCase):
         with self.assertRaisesRegex(self.r.Rejected, 'IDEMPOTENCY_CONFLICT'): self.engine.apply(changed, self.session)
 
 
+    def test_missing_root_with_retained_hdd_must_fence_discard_unknown_without_mutation(self):
+        request=self.request();self.engine.apply(request,self.session);before=self.r.fingerprint(self.leaf.stat())
+        (self.state/(request['operationId']+'.json')).unlink();history=self.history_file(request).read_bytes()
+        with patch.object(os,'fchmod',side_effect=AssertionError('must not chmod')),patch.object(os,'fchown',side_effect=AssertionError('must not chown')):
+            result=self.engine.discard(request,self.session);replay=self.engine.apply(request,self.session)
+        self.assertEqual(result['state'],'Unknown');self.assertTrue(result['historyMayExist']);self.assertFalse(result['historyVerified'])
+        self.assertEqual(replay['state'],'Unknown');self.assertEqual(before,self.r.fingerprint(self.leaf.stat()));self.assertEqual(history,self.history_file(request).read_bytes())
+
+    def test_fresh_apply_with_retained_hdd_after_root_loss_cannot_repeat_metadata_write(self):
+        request=self.request();self.engine.apply(request,self.session);before=self.r.fingerprint(self.leaf.stat());(self.state/(request['operationId']+'.json')).unlink()
+        with patch.object(os,'fchmod',side_effect=AssertionError('must not chmod')),patch.object(os,'fchown',side_effect=AssertionError('must not chown')):
+            result=self.engine.apply(request,self.session)
+        self.assertEqual(result['state'],'Unknown');self.assertEqual(before,self.r.fingerprint(self.leaf.stat()))
+
+    def test_hdd_unavailable_during_discard_cannot_create_an_aborted_receipt(self):
+        request=self.request();before=self.r.fingerprint(self.leaf.stat())
+        with patch.object(self.history.storage,'configuration',side_effect=FileNotFoundError('synthetic missing policy')):
+            with self.assertRaises(FileNotFoundError):self.engine.discard(request,self.session)
+        self.assertFalse((self.state/(request['operationId']+'.json')).exists());self.assertEqual(before,self.r.fingerprint(self.leaf.stat()))
+
 if __name__ == '__main__': unittest.main()

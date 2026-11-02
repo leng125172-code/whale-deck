@@ -114,6 +114,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
         def expected(self,request):
             return {**super().expected(request),'resourceType':'ContainerRecursivePermissionEntryMetadata','parentOperationId':self.batch['operationId'],
                 'manifestDigest':self.batch['plan']['manifestDigest']}
+        def artifact_directories(self):return (NAMESPACE,self.batch['operationId'],'entries')
         @contextlib.contextmanager
         def target(self,create):
             with self.outer.history.target(create) as (configuration,base):
