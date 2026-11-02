@@ -106,6 +106,7 @@ jobs:
           python3 -W error -m py_compile deploy/validation/bound_container_acl_cut.py deploy/validation/validate_container_acl_faults.py deploy/validation/verify_container_acl_faults.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_acl_fault_probe_scope.py
           node --check deploy/validation/validate_container_acl_faults.mjs
+          node --check deploy/validation/validate_acl_post_revocation_jobs.mjs
           python3 -W error -m py_compile deploy/validation/validate_container_acl_unknown.py deploy/validation/verify_container_acl_unknown.py
           node --check deploy/validation/validate_container_acl_unknown.mjs
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_acl_unknown_proof.py
