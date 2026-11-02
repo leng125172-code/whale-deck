@@ -6,10 +6,37 @@ import unittest
 from unittest.mock import patch
 
 import bound_container_recursive_permission_cut as cut
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held, require_unknown_counts, require_waiting_deferred
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, maintenance_response
 
 
 class RecursiveFaultProbeScope(unittest.TestCase):
+    def test_restart_must_change_only_agent_process(self):
+        revision = 'a'*40
+        before = {'whaledeck-agent.service':{'pid':10,'sourceRevision':revision},'whaledeck-maintenance.service':{'pid':20,'sourceRevision':revision}}
+        after = copy.deepcopy(before); after['whaledeck-agent.service']['pid'] = 30
+        require_agent_restart(before,after,revision)
+        for bad in (before,{**after,'unexpected.service':{}}, {'whaledeck-agent.service':{'pid':30,'sourceRevision':revision},'whaledeck-maintenance.service':{'pid':21,'sourceRevision':revision}}):
+            with self.assertRaises(AssertionError): require_agent_restart(before,bad,revision)
+        bad = copy.deepcopy(after); bad['whaledeck-agent.service']['sourceRevision'] = 'b'*40
+        with self.assertRaises(AssertionError): require_agent_restart(before,bad,revision)
+
+    def test_stop_does_not_authorize_redo_finished_or_unstarted_entries(self):
+        cut = {p:[1,i+10,0o100640 if kind=='File' else 0o40750,2100+i,3100+i,1,100,1000,2000] for i,(p,kind) in enumerate(PATHS.items())}
+        cut['sub/entry-00.bin'][2] = 0o100600
+        stopped = copy.deepcopy(cut); stopped['sub/entry-01.bin'][2] = 0o100600; stopped['sub/entry-01.bin'][8] += 1
+        require_stopped_tree(cut,stopped,0,1)
+        for path in ('sub/entry-00.bin','sub/entry-02.bin','sub',''):
+            bad = copy.deepcopy(stopped); bad[path][8] += 1
+            with self.subTest(path=path),self.assertRaises(AssertionError): require_stopped_tree(cut,bad,0,1)
+        bad = copy.deepcopy(stopped); bad['sub/entry-01.bin'][3] += 1
+        with self.assertRaises(AssertionError): require_stopped_tree(cut,bad,0,1)
+
+    def test_maintenance_must_be_bounded_uncached_healthy_response(self):
+        raw = b'{"state":"healthy","phase":"Ready"}'
+        self.assertEqual(maintenance_response(200,raw,'no-store'),('healthy','Ready'))
+        for status,body,cache in ((503,raw,'no-store'),(200,raw,''),(200,b'x'*2049,'no-store'),(200,b'{"state":"Unavailable","phase":"GatewayOffline"}','no-store'),(200,b'{"state":"healthy","phase":"Ready","private":"not-public"}','no-store')):
+            with self.assertRaises(AssertionError): maintenance_response(status,body,cache)
+
     def test_waiter_cannot_silently_publish_or_finish_behind_unknown_protection(self):
         value = {'row':{'id':'original','actor_subject':'current-admin','state':'Pending','root_started_at_utc':None,'publish_barrier':False,'completed_at_utc':None},
             'job':{'id':'original','actor_subject':'current-admin','state':'Running','completed_at_utc':None},'accepted':1}

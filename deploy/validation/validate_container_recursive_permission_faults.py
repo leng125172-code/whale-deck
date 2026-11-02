@@ -15,21 +15,25 @@ import re
 import stat
 import subprocess
 import sys
+import threading
 import time
 import uuid
+
+import requests
 
 import validate_container_file_publishing as owned
 from bound_container_recursive_permission_cut import ROOT, child_id, freeze_partial, record_for
 from bound_container_permission_cut import fingerprint
 from validate_container_recursive_permission_browser import snapshot, managed_plan, read_metadata, version
 from validate_container_recursive_permission_agent import no_active_work, host_identity
-from validate_container_directory_restart import Worker, command, preflight
+from validate_container_directory_restart import Worker, command, preflight, agent_identity
 from validate_container_ownership_faults import write_signal, wait_signal
 from validate_container_file_staging import load
 from validate_container_upload_bff import temporary_user, login, logout, request
 from validate_databases import Api
 from validate_metric_continuity import query
 from verify_container_recursive_permissions import digest, unsigned
+from validate_container_recursive_permissions import NAMES as INSTALLED_NAMES
 from validate_container_directory_unknown import register as register_waiting, wait_settled as settle_waiting
 from validate_container_directory_browser import snapshot as directory_snapshot, ROOT as DIRECTORY_ROOT, verify_directory
 from validate_container_directory_restart import clean_success
@@ -107,6 +111,57 @@ def restart_allowed(held, row):
         else: active.append(path.name)
     assert set(active) <= {held.cgroup}, 'OTHER_TRANSIENT_WORK_RESTART_REFUSED'
     return checks
+
+
+def require_agent_restart(before, after, revision):
+    assert re.fullmatch('[a-f0-9]{40}',revision)
+    assert before.keys() == after.keys() == {'whaledeck-agent.service','whaledeck-maintenance.service'}
+    for values in (before,after):
+        for value in values.values():
+            assert type(value['pid']) is int and value['pid'] > 1 and value['sourceRevision'] == revision
+    assert before['whaledeck-agent.service']['pid'] != after['whaledeck-agent.service']['pid']
+    assert before['whaledeck-maintenance.service'] == after['whaledeck-maintenance.service']
+
+
+def installed_helper_provenance(revision):
+    repo = Path(__file__).resolve().parents[2]; result = {}
+    for name in (*INSTALLED_NAMES,'whaledeck-container-recursive-permission-transport.py','whaledeck-privileged'):
+        path = Path('/usr/local/libexec')/name; info = path.lstat()
+        assert stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o750
+        frozen = subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name])
+        assert path.read_bytes() == frozen; result[name] = hashlib.sha256(frozen).hexdigest()
+    return result
+
+
+def require_stopped_tree(cut, stopped, finished, started):
+    assert type(finished) is int and type(started) is int and 0 <= finished <= started < len(PATHS)-1
+    unchanged_except_modes(cut,stopped)
+    ordered = sorted(PATHS,key=lambda p:(-len(p.split('/')) if p else 0,p.encode()))
+    for index,path in enumerate(ordered):
+        if index <= finished or index > started: assert stopped[path] == cut[path], 'RESTART_RECHANGED_FINISHED_OR_UNSTARTED_ENTRY'
+
+
+def maintenance_response(status, raw, cache):
+    assert status == 200 and 0 < len(raw) <= 2048 and 'no-store' in cache
+    value = json.loads(raw)
+    assert value['state'] == 'healthy' and value['phase'] == 'Ready'
+    assert set(value) <= {'state','phase','message','operationId','updatedAtUtc'}
+    return value['state'],value['phase']
+
+
+def observe_maintenance(stop, ready):
+    samples = []; client = requests.Session(); client.trust_env = False
+    try:
+        while not stop.is_set():
+            began = time.monotonic()
+            with client.get('http://127.0.0.1:8080/maintenance/status',timeout=(1,3),stream=True) as response:
+                raw = response.raw.read(2049,decode_content=True)
+                state,phase = maintenance_response(response.status_code,raw,response.headers.get('Cache-Control',''))
+            samples.append({'atUtc':dt.datetime.now(dt.timezone.utc).isoformat(),'httpStatus':200,'state':state,'phase':phase,
+                'noStore':True,'bytes':len(raw),'responseSeconds':round(time.monotonic()-began,4)})
+            ready.set(); stop.wait(0.2)
+        return samples
+    finally: client.close()
 
 
 def same_operation(before, after):
@@ -372,7 +427,7 @@ def main():
     global PHASE
     assert os.geteuid() == 0 and len(sys.argv) in (2,3); os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}',revision)
-    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','worker-crash','target-disappearance','target-disappearance-barrier')
+    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','worker-crash','agent-restart','target-disappearance','target-disappearance-barrier')
     barrier_case = kind == 'target-disappearance-barrier'
     unknown_case = kind in ('target-disappearance','target-disappearance-barrier'); expected_state = 'Unknown' if unknown_case else 'Partial'
     repo = Path(__file__).resolve().parents[2]
@@ -383,11 +438,13 @@ def main():
         raw = subprocess.check_output(['git','-C',str(repo),'show',validation+':deploy/validation/'+name]); assert raw == (repo/'deploy/validation'/name).read_bytes()
         hashes[name] = hashlib.sha256(raw).hexdigest()
     no_active_work(); inactive_except(); host = host_identity(revision); worker = Worker()
+    installed_before = installed_helper_provenance(revision) if kind == 'agent-restart' else None
     directory = repo/'deploy/artifacts'/('container-recursive-permission-faults-'+uuid.uuid4().hex); directory.mkdir(mode=0o700)
     print(json.dumps({'recursiveFaults':'started','evidence':str(directory)}),flush=True)
     files = load('/usr/local/libexec/whaledeck-files.py','recursive_fault_files')
     storage = load('/usr/local/libexec/whaledeck-file-backups.py','recursive_fault_storage').FileBackups(files)
-    held = browser = identifier = baseline = waiting = waiting_baseline = client = profile = None; passed = waiting_clean = False
+    held = browser = identifier = baseline = waiting = waiting_baseline = client = profile = None; passed = waiting_clean = agent_restart_attempted = False
+    expected_host = host
     with owned.fixture(restartable_core=('whaledeck-worker',),removable=unknown_case) as fixture, contextlib.ExitStack() as extras:
         other = extras.enter_context(owned.fixture(restartable_core=('whaledeck-worker',))) if barrier_case else None
         root = fixture['folder']/'recursive-tree'; root.mkdir(mode=0o750); (root/'sub').mkdir(mode=0o750)
@@ -402,7 +459,8 @@ def main():
             'containerId':fixture['identifier'],'containerName':actual['Name'].lstrip('/'),'containerPid':actual['State']['Pid'],
             'instanceId':str(actual['State']['Pid'])+':'+actual['State']['StartedAt'],'root':str(root),'source':str(fixture['folder']),
             'original':before,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'coreBefore':owned.common.core_snapshot(),'hostBefore':host,
-            'fixtureOriginal':{'identity':owned.common.fingerprint(fixture['folder']/'original.bin'),'sha256':fixture['proofs']['original.bin'][1]}}
+            'fixtureOriginal':{'identity':owned.common.fingerprint(fixture['folder']/'original.bin'),'sha256':fixture['proofs']['original.bin'][1]},
+            'installedHelpersBefore':installed_before}
         (directory/'baseline.json').write_text(json.dumps(baseline))
         try:
             with temporary_user(True) as (username,password):
@@ -420,25 +478,46 @@ def main():
                 applying = snapshot(identifier)['row']; assert applying['state'] == 'Applying' and applying['publish_barrier'] and applying['root_started_at_utc']
                 (directory/'cut-root.json').write_text(json.dumps(held.record))
                 (directory/'bound-helper.json').write_text(json.dumps({'pid':held.pid,'unit':held.cgroup,'twoKernelFdProofs':True,'proof':held.proof}))
-                PHASE = 'actual-'+kind+'-and-product-helper-exit'; crash = lease_proof = None; began = time.monotonic()
+                PHASE = 'actual-'+kind+'-and-product-helper-exit'; crash = lease_proof = agent_restart = None; began = time.monotonic()
                 write_signal(directory,'action.json',{'kind':kind})
-                if kind == 'worker-crash' or unknown_case:
+                if kind in ('worker-crash','agent-restart') or unknown_case:
                     action = wait_signal(directory,'action-done.json',browser,30); assert action['cancellations'] == 0
                     checks = restart_allowed(held,applying)
                     applying = snapshot(identifier)['row']; lease_held(applying,applying)
                     assert applying['lease_token'] and applying['lease_expires_at_utc']
                     cut_tree = inventory(root,content); cut_raw = (ROOT/(uuid.UUID(applying['execution_job_id']).hex+'.json')).read_bytes()
                     assert json.loads(cut_raw) == held.record
-                    (directory/('pre-disappearance-sql.json' if unknown_case else 'pre-crash-sql.json')).write_text(json.dumps(snapshot(identifier)))
+                    (directory/('pre-disappearance-sql.json' if unknown_case else 'pre-agent-restart-sql.json' if kind == 'agent-restart' else 'pre-crash-sql.json')).write_text(json.dumps(snapshot(identifier)))
                     (directory/'physical-cut.json').write_text(json.dumps(cut_tree)); (directory/'cut-root-original.json').write_bytes(cut_raw)
                 if unknown_case:
                     PHASE = 'exact-owned-container-disappearance'
                     fixture['remove_owned'](); assert inventory(root,content) == cut_tree
                     (directory/'target-disappearance.json').write_text(json.dumps({'containerId':fixture['identifier'],'exactOwnedContainerRemoved':True,'sourcePreserved':True,'otherActiveWork':checks}))
-                if kind == 'worker-crash' or unknown_case: began = time.monotonic()
-                with ThreadPoolExecutor(max_workers=1) as exits:
+                if kind in ('worker-crash','agent-restart') or unknown_case: began = time.monotonic()
+                maintenance_stop = threading.Event(); maintenance_ready = threading.Event(); maintenance = None
+                with ThreadPoolExecutor(max_workers=2) as exits:
+                    if kind == 'agent-restart':
+                        maintenance = exits.submit(observe_maintenance,maintenance_stop,maintenance_ready)
+                        if not maintenance_ready.wait(5):
+                            maintenance_stop.set(); maintenance.result(timeout=5); raise AssertionError('MAINTENANCE_OBSERVER_NOT_READY')
+                        began = time.monotonic()
                     stopping = exits.submit(held.wait_exit_seconds,began,15)
-                    if kind == 'worker-crash':
+                    if kind == 'agent-restart':
+                        try:
+                            assert host_identity(revision) == host
+                            restart_began = dt.datetime.now(dt.timezone.utc).isoformat(); agent_restart_attempted = True
+                            command('systemctl','restart','whaledeck-agent.service')
+                            new_pid = agent_identity(str(host['whaledeck-agent.service']['pid']),revision)
+                            expected_host = host_identity(revision); require_agent_restart(host,expected_host,revision)
+                            assert expected_host['whaledeck-agent.service']['pid'] == int(new_pid)
+                            restart_ended = dt.datetime.now(dt.timezone.utc).isoformat(); time.sleep(0.5)
+                        finally: maintenance_stop.set()
+                        samples = maintenance.result(timeout=6)
+                        assert len(samples) >= 3 and samples[0]['atUtc'] < restart_began and samples[-1]['atUtc'] > restart_ended
+                        agent_restart = {'before':host,'after':expected_host,'restartBeganAtUtc':restart_began,'restartEndedAtUtc':restart_ended,
+                            'maintenanceSamples':samples,'onlyFixedAgentServiceRestarted':True,'otherActiveWork':checks}
+                        (directory/'agent-restart.json').write_text(json.dumps(agent_restart))
+                    elif kind == 'worker-crash':
                         prior = worker.current(); worker.stopped = True
                         command('docker','kill','--signal','KILL',worker.id)
                         stopped = worker.current(); automatic = stopped['State']['Running']
@@ -456,7 +535,10 @@ def main():
                     else: wait_signal(directory,'action-done.json',browser,30)
                     elapsed = stopping.result(timeout=16)
                 assert elapsed is not None and elapsed < 15, 'PRODUCT_DID_NOT_STOP_BOUND_RECURSIVE_HELPER'
-                held.release(); held = None
+                held_record = held.record; held.release(); held = None
+                if kind == 'agent-restart':
+                    stopped_tree = inventory(root,content); require_stopped_tree(cut_tree,stopped_tree,held_record['finishedThrough'],held_record['startedThrough'])
+                    (directory/'physical-after-helper-exit.json').write_text(json.dumps(stopped_tree))
                 if kind == 'worker-crash':
                     PHASE = 'original-natural-lease'; lease_proof = natural_lease(applying,root,cut_tree,directory)
                 PHASE = 'real-'+expected_state.lower()+'-proof'; partial = wait_state(identifier,expected_state)
@@ -464,6 +546,9 @@ def main():
                     same_operation(applying,partial['row'])
                     assert dt.datetime.now(dt.timezone.utc) >= dt.datetime.fromisoformat(applying['lease_expires_at_utc'])
                     assert inventory(root,content) == cut_tree, 'RECOVERY_RESUMED_CHMOD'
+                if kind == 'agent-restart':
+                    same_operation(applying,partial['row'])
+                    assert inventory(root,content) == stopped_tree, 'AGENT_RESTART_RECOVERY_RESUMED_CHMOD'
                 after = inventory(root,content)
                 record,proof = (verify_unknown if unknown_case else verify_partial)(partial,baseline,before,after,storage,directory)
                 (directory/'partial-sql.json').write_text(json.dumps(partial)); (directory/'physical-partial.json').write_text(json.dumps(after))
@@ -536,7 +621,8 @@ def main():
             assert inventory(root,content) == after and (ROOT/(record['operationId']+'.json')).read_bytes() == (directory/'partial.root.json').read_bytes()
             (directory/'late-apply.json').write_text(json.dumps(replay)); (directory/'final-sql.json').write_text(json.dumps(final))
             (directory/'physical-final.json').write_text(json.dumps(after))
-            assert host_identity(revision) == host; worker.start(); inactive_except()
+            assert host_identity(revision) == expected_host
+            (directory/'host-after.json').write_text(json.dumps(expected_host)); worker.start(); inactive_except()
             remove_proved(root,content,after); passed = True
             result = {'id':identifier,'kind':kind,'operationId':record['operationId'],'productRevision':revision,'validationSourceRevision':validation,
                 'partialCounts':{k:record[k] for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')},
@@ -545,9 +631,13 @@ def main():
                 'lateReplayWasSignedRpc':False,'actualUi':True,'workerRestartedSameContainer':True,'allFileBytesUidGidMtimeXattrPreserved':True,
                 'workerCrash':crash,'naturalLeaseSamples':len(lease_proof['samples']) if lease_proof else 0,
                 'rootState':expected_state,'physicalChangedCount':unchanged_except_modes(before,after),'targetRemovedDuringOperation':unknown_case,
-                'waitingId':waiting['id'] if waiting else None,'otherWriteDeferredUntilExplicitRelease':barrier_case,'waitingActualUi':recovery.get('waitingVisibleDirectory',False)}
+                'waitingId':waiting['id'] if waiting else None,'otherWriteDeferredUntilExplicitRelease':barrier_case,'waitingActualUi':recovery.get('waitingVisibleDirectory',False),
+                'agentRestart':agent_restart}
         finally:
             if held is not None: held.release()
+            if agent_restart_attempted:
+                if command('systemctl','show','whaledeck-agent.service','-p','ActiveState','--value') != 'active': command('systemctl','start','whaledeck-agent.service')
+                agent_identity(str(host['whaledeck-agent.service']['pid']),revision)
             worker.start()
             if browser is not None and browser.poll() is None:
                 try: browser.wait(timeout=235)

@@ -16,7 +16,7 @@ import sys
 
 from validate_container_file_staging import load
 from validate_container_recursive_permission_browser import snapshot, read_metadata, managed_plan
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except, same_operation, require_unknown_counts, require_waiting_deferred
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except, same_operation, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree
 from validate_container_directory_browser import snapshot as directory_snapshot, ROOT as DIRECTORY_ROOT
 from validate_container_recursive_permission_agent import no_active_work, host_identity
 from validate_container_recursive_permissions import NAMES
@@ -143,7 +143,23 @@ def main():
     (directory/'installed-and-core-proof.json').write_text(json.dumps({'installedSha256':installed,'all11Healthy':True,'sameCoreContainersAndImages':True,'onlyWorkerStartedAtChanged':True,'databasePlatformEightUnchanged':True}))
     assert not Path(baseline['source']).exists() and not Path(baseline['root']).exists()
     assert subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True,timeout=15).returncode != 0
-    assert host_identity(baseline['revision']) == baseline['hostBefore']
+    if kind == 'agent-restart':
+        assert installed == baseline['installedHelpersBefore']
+        restart = saved('agent-restart.json'); after_host = saved('host-after.json')
+        assert restart == result['agentRestart'] and restart['before'] == baseline['hostBefore'] and restart['after'] == after_host
+        require_agent_restart(baseline['hostBefore'],after_host,baseline['revision']); assert host_identity(baseline['revision']) == after_host
+        assert restart['onlyFixedAgentServiceRestarted'] and all(n == 0 for n in restart['otherActiveWork'].values())
+        began = dt.datetime.fromisoformat(restart['restartBeganAtUtc']); ended = dt.datetime.fromisoformat(restart['restartEndedAtUtc'])
+        samples = restart['maintenanceSamples']; assert len(samples) >= 3 and began < ended
+        assert dt.datetime.fromisoformat(samples[0]['atUtc']) < began and dt.datetime.fromisoformat(samples[-1]['atUtc']) > ended
+        previous = None
+        for sample in samples:
+            at = dt.datetime.fromisoformat(sample['atUtc']); assert previous is None or at >= previous; previous = at
+            assert sample['httpStatus'] == 200 and sample['state'] == 'healthy' and sample['phase'] == 'Ready' and sample['noStore'] and 0 < sample['bytes'] <= 2048
+        cut = saved('cut-root.json'); stopped = saved('physical-after-helper-exit.json')
+        require_stopped_tree(saved('physical-cut.json'),stopped,cut['finishedThrough'],cut['startedThrough'])
+        assert stopped == after; same_operation(saved('pre-agent-restart-sql.json')['row'],row)
+    else: assert host_identity(baseline['revision']) == baseline['hostBefore']
     if barrier_case:
         waiting_baseline = saved('waiting-baseline.json'); waiting = saved('waiting-final-sql.json'); blocked = saved('waiting-blocked.json'); physical = saved('waiting-physical.json')
         assert result['otherWriteDeferredUntilExplicitRelease'] and result['waitingId'] == waiting_baseline['id'] == waiting['row']['id']
@@ -186,7 +202,7 @@ def main():
         (directory/'waiting-independent.json').write_text(json.dumps({'originalIdExecutedOnce':True,'deferredSamples':4,'startedAfterOriginalAcknowledgement':True,'rootAndPhysicalInodeVerified':True,'bothFixturesRemoved':True,'actualDirectoryUi':True,'directoryAuditRows':len(directory_audits),'hashedMetadataAndCurrentAdminVerified':True}))
     no_active_work(); inactive_except()
     screenshots = (('inflight.png','unknown-counts.png','partial-recovery-confirm.png','partial-acknowledged.png') if unknown_case
-        else ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png')) + (('partial-counts.png',) if kind == 'worker-crash' else ())
+        else ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png')) + (('partial-counts.png',) if kind in ('worker-crash','agent-restart') else ())
     if barrier_case: screenshots += ('waiting-directory.png',)
     for name in screenshots:
         raw = (directory/name).read_bytes(); assert raw.startswith(b'\x89PNG\r\n\x1a\n')

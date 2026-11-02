@@ -13,7 +13,7 @@ try {
   const revision = process.argv[2], role = process.argv[3]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
   assert.ok(['cancel', 'recovery'].includes(role))
-  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash', 'target-disappearance', 'target-disappearance-barrier'].includes(kind))
+  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash', 'agent-restart', 'target-disappearance', 'target-disappearance-barrier'].includes(kind))
   const barrierCase = kind === 'target-disappearance-barrier'
   const unknownCase = kind === 'target-disappearance' || barrierCase, expectedState = unknownCase ? 'Unknown' : 'Partial'
   if (fixture.expectedState) assert.equal(fixture.expectedState, expectedState)
@@ -87,7 +87,7 @@ try {
     await dialog.getByRole('button', { name: '查询原递归权限修改任务', exact: true }).click()
     await expect(dialog.getByRole('status')).toHaveText('部分修改，保护已保留')
     await expect(dialog.getByLabel('实际逐项结果', { exact: true })).toBeVisible()
-    if (kind === 'worker-crash') {
+    if (kind === 'worker-crash' || kind === 'agent-restart') {
       const facts = dialog.getByLabel('实际逐项结果', { exact: true })
       for (const [label, key] of [['已完成核对', 'completedCount'], ['实际修改', 'changedCount'], ['已中止', 'abortedCount'], ['未开始', 'notStartedCount'], ['待证明', 'unknownCount']]) {
         await expect(facts.getByText(label, { exact: true }).locator('..').locator('dd')).toHaveText(String(settled[key]))
