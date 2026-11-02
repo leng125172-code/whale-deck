@@ -126,7 +126,9 @@ for (const status of [401, 403, 404, 503]) test(`${status} cannot lose original 
   await modal(page).getByRole('button', { name: '查询原递归权限修改任务', exact: true }).click()
   if ([401, 403].includes(status)) {
     await expect(modal(page)).toHaveCount(0)
-    expect(await page.evaluate(() => sessionStorage.getItem('whaledeck-container-recursive-permission-hints-v1'))).not.toContain(control.id)
+    const stored = await page.evaluate(() => sessionStorage.getItem('whaledeck-container-recursive-permission-hints-v1'))
+    if (status === 401) expect(stored).toBeNull()
+    else expect(stored).not.toContain(control.id)
   } else {
     await expect(modal(page).getByRole('alert').filter({ hasText: status === 404 ? '尚未找到原登记' : '请求失败' })).toBeVisible()
     await expect(modal(page).getByRole('button', { name: '确认递归权限修改', exact: true })).toBeDisabled()
