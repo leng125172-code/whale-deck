@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_PARTIAL.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_WORKER_CRASH.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_UNKNOWN.md",
-  "nextStep": "产品0dede08/1.49保持，目标消失Unknown18与实际宿主1项修改分开保留，原账号删除后另一管理员真实页面处置/迟到原请求不续做及独立核验首次通过，5审计/4小屏PNG/24检查/11核心healthy，8数据库平台不变。继续原实例保留时退出/撤权/Agent重启、其他Worker/回执/HDD组合、Unknown期间其他写入延期/释放和首次登记，再递归所有者/ACL/删除/长期清理、P0-05回退来源及其余59项/UI/C#酒馆/供应商/AI Live2D。PROGRESS_ESTIMATE仅规划估算；17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_PARTIAL.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_WORKER_CRASH.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_UNKNOWN.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_UNKNOWN_BARRIER.md",
+  "nextStep": "产品0dede08/1.49保持，递归Unknown保护期间另一独占容器目录至少4次实际延期(版本2/4/6/8)、当前管理员真实页面明确处置后原Job发布/实际Vue列表/独立核验通过，唯一登记及inode证明、5+2哈希审计/5 PNG/26检查/11核心healthy，首轮QA错误和准确清理保留。继续其他写入类型、原实例保留时退出/撤权/Agent重启、其他Worker/回执/HDD组合和首次登记，再递归所有者/ACL/删除/长期清理、P0-05及其余59项/UI/C#酒馆/供应商/AI Live2D。PROGRESS_ESTIMATE仅规划估算；17项移出不算完成，不自动回滚dev。"
 }

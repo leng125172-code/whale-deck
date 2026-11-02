@@ -1,5 +1,7 @@
 # 递归普通权限：目标容器消失后的Unknown与不同管理员处置
 
+> 后续2026-11-02：另一独占容器的新建目录实际至少4次延期、不同管理员明确处置后原Job发布及真实列表/独立核验已通过，首轮QA枚举错误保留，见[后续跨容器写入证据](CONTAINER_RECURSIVE_PERMISSIONS_UNKNOWN_BARRIER.md)。本次只补新建目录，其他写入类型/故障仍待；以下原批次正文不改。
+
 2026-11-02。运行产品保持`0dede0804a5f9d1847c23744b90c7e3bae5f7751`/Agent 1.49。本批未发布/升级/回滚，验收源码冻结`300d19ecb37b4335b66a7925c05e0fdecba45b2c`，依赖的15份验收源码与Git blob/SHA对账。**新增分支首次完整执行通过**；此前[取消/Partial](CONTAINER_RECURSIVE_PERMISSIONS_PARTIAL.md)和[Worker强杀/原租约](CONTAINER_RECURSIVE_PERMISSIONS_WORKER_CRASH.md)没有重做。完整文件模块和59项仍未签收。
 
 ## 先证明真实修改，再失去原容器绑定
