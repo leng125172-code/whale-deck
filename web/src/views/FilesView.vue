@@ -44,6 +44,7 @@ import ContainerDirectoryRecoveryPanel from '@/components/files/ContainerDirecto
 import ContainerCopyRecoveryPanel from '@/components/files/ContainerCopyRecoveryPanel.vue'
 import ContainerPermissionRecoveryPanel from '@/components/files/ContainerPermissionRecoveryPanel.vue'
 import ContainerOwnershipRecoveryPanel from '@/components/files/ContainerOwnershipRecoveryPanel.vue'
+import ContainerRecursivePermissionRecoveryPanel from '@/components/files/ContainerRecursivePermissionRecoveryPanel.vue'
 import ContainerMoveRecoveryPanel from '@/components/files/ContainerMoveRecoveryPanel.vue'
 import { canCopyDirectory } from '@/services/fileTreeCopies'
 import { canMoveDirectory } from '@/services/fileTreeMoves'
@@ -658,6 +659,7 @@ onBeforeUnmount(() => {
         <ContainerCopyRecoveryPanel />
         <ContainerPermissionRecoveryPanel />
         <ContainerOwnershipRecoveryPanel />
+        <ContainerRecursivePermissionRecoveryPanel />
         <ContainerMoveRecoveryPanel />
         <FileTreeCapturePanel
           :roots="roots"

@@ -45,7 +45,7 @@ for (const width of [320, 1045, 1440]) for (const colorScheme of ['light', 'dark
     expect(writes(control, '')).toHaveLength(1); expect(writes(control, '/confirm')).toHaveLength(0)
     await expect(modal(page)).toContainText('原UID/GID 1000:1001 → 2200:3200')
     await fit(page)
-    await page.screenshot({ path: `../deploy/artifacts/ui-candidates/container-ownership-${width}-${colorScheme}-${directory ? 'directory' : 'file'}.png` })
+    await page.screenshot({ path: `../deploy/artifacts/ui-candidates/recursive-permission-regressions/container-ownership-${width}-${colorScheme}-${directory ? 'directory' : 'file'}.png` })
     await modal(page).getByRole('button', { name: '确认所有者修改', exact: true }).click()
     await expect(modal(page).getByText('等待所有者修改', { exact: true })).toBeVisible()
     await modal(page).getByRole('button', { name: '查询原所有者修改任务', exact: true }).click()
