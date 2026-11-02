@@ -270,16 +270,17 @@ def main():
     with owned.fixture(restartable_core=('whaledeck-worker',)) as fixture:
         root = fixture['folder']/'recursive-tree'; root.mkdir(mode=0o750); (root/'sub').mkdir(mode=0o750)
         content = hashlib.shake_256(('recursive-fault:'+fixture['identifier']).encode()).digest(2*1024**2+7)
-        for i,(relative,kind) in enumerate(PATHS.items()):
+        for i,(relative,entry_kind) in enumerate(PATHS.items()):
             path = root/relative
-            if kind == 'File': path.write_bytes(content); os.setxattr(path,'user.whaledeck-recursive',b'preserve ordinary attribute')
-            os.chown(path,2100+i,3100+i); path.chmod(0o640 if kind=='File' else 0o750)
+            if entry_kind == 'File': path.write_bytes(content); os.setxattr(path,'user.whaledeck-recursive',b'preserve ordinary attribute')
+            os.chown(path,2100+i,3100+i); path.chmod(0o640 if entry_kind=='File' else 0o750)
         for relative in PATHS: os.utime(root/relative,ns=(1700000000123456789,1700000000123456789))
         before = inventory(root,content); actual = json.loads(command('docker','inspect',fixture['identifier']))[0]
         baseline = {'revision':revision,'kind':kind,'validationSourceRevision':validation,'sourceSha256':hashes,'evidence':str(directory),
             'containerId':fixture['identifier'],'containerName':actual['Name'].lstrip('/'),'containerPid':actual['State']['Pid'],
             'instanceId':str(actual['State']['Pid'])+':'+actual['State']['StartedAt'],'root':str(root),'source':str(fixture['folder']),
-            'original':before,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'coreBefore':owned.common.core_snapshot(),'hostBefore':host}
+            'original':before,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'coreBefore':owned.common.core_snapshot(),'hostBefore':host,
+            'fixtureOriginal':{'identity':owned.common.fingerprint(fixture['folder']/'original.bin'),'sha256':fixture['proofs']['original.bin'][1]}}
         (directory/'baseline.json').write_text(json.dumps(baseline))
         try:
             with temporary_user(True) as (username,password):
@@ -392,6 +393,15 @@ def main():
                 except subprocess.TimeoutExpired: browser.terminate(); browser.wait(timeout=10)
             registered = directory/'registered.json'
             if identifier is None and registered.exists(): identifier = json.loads(registered.read_bytes())['id']
+            if identifier is None and not passed:
+                # No browser reference is not proof that HTTP registration did
+                # not arrive. Require actual SQL absence and no active work.
+                no_active_work(); inactive_except()
+                unregistered = query("SELECT json_build_object('n',count(*)) FROM container_recursive_permission_intents WHERE container_id=:'cid';",cid=baseline['containerId'])
+                assert unregistered['n'] == 0, 'UNREFERENCED_REGISTRATION_PRESERVED'
+                assert inventory(root,content) == before
+                remove_proved(root,content,before)
+                (directory/'failure-before-registration.json').write_text(json.dumps({'gatePassed':False,'actualIntentRows':0,'exactUnchangedTreeRemoved':True}))
             if identifier is not None and not passed:
                 current = snapshot(identifier)['row']; until = time.monotonic()+115
                 while current['state'] in ('Pending','Applying') and time.monotonic()<until:
