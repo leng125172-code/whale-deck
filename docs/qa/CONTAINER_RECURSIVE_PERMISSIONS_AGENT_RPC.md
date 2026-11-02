@@ -1,5 +1,7 @@
 # 容器递归普通权限：Agent 1.49 安装与真实签名 RPC
 
+> 后续2026-11-02：产品0dede08/1.49继续运行，真实进行中取消与Partial不同管理员处置、原计数/全文件/HDD及独立核验已通过，首轮QA错误与修复保留，见[后续Partial证据](CONTAINER_RECURSIVE_PERMISSIONS_PARTIAL.md)。Unknown和其他故障组合仍待；以下原批次正文与结果保留，不从历史“尚未”推断当前未接业务。
+
 > 后续2026-11-02：宿主已覆盖e668dbe/1.49，递归及单对象遗留回执保护、三类共16操作兼容与递归实际回执丢失/独立核验通过，见[后续候选与修复](CONTAINER_RECURSIVE_PERMISSIONS_WORKFLOW.md)。以下95c0787批次保持原始证据，内部业务仍未接EF/Worker/API/Vue。
 
 2026-11-02。宿主 Agent/MaintenanceHost 已正常覆盖为冻结 `95c07870e005fa758a23356c2d8347f88b1c05ac`，协议1.49；API/Worker/Gateway仍为 `d1fcca8`，数据库平台没有重建或迁移。递归引擎及安装态签名协议子门禁通过，**永久业务意图/共享保护/Worker/API/Vue和真实身份页面仍未接通，递归完整功能未验收**。59项继续，17项移出不算完成；未自动回滚dev。
