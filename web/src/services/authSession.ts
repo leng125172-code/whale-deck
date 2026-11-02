@@ -10,6 +10,10 @@ import {
   clearRecursivePermissionHints,
   reconcileRecursivePermissionHints,
 } from '@/services/containerRecursivePermissionHints'
+import {
+  clearRecursiveOwnershipHints,
+  reconcileRecursiveOwnershipHints,
+} from '@/services/containerRecursiveOwnershipHints'
 import { clearMoveHints, reconcileMoveHints } from '@/services/containerMoveHints'
 import type { CurrentUser } from '@/services/contracts'
 import {
@@ -47,6 +51,7 @@ function expireSession() {
   clearPermissionHints()
   clearOwnershipHints()
   clearRecursivePermissionHints()
+  clearRecursiveOwnershipHints()
   clearMoveHints()
   if (import.meta.env.DEV) sessionStorage.removeItem(previewStorageKey)
   if (hadIdentity) expiredAction?.()
@@ -128,6 +133,7 @@ async function loadAuthSession() {
       reconcilePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
       reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
       reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
+      reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
       reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
       initialized.value = true
     }
@@ -169,6 +175,7 @@ async function logout() {
   clearPermissionHints()
   clearOwnershipHints()
   clearRecursivePermissionHints()
+  clearRecursiveOwnershipHints()
   clearMoveHints()
   if (import.meta.env.DEV) {
     generation++
@@ -200,6 +207,7 @@ async function refresh() {
     reconcilePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
+    reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
   } catch (reason) {
     if (current === generation) {

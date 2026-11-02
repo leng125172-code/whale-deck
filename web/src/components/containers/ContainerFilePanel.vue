@@ -12,6 +12,8 @@ import ContainerCopyPanel from '@/components/containers/ContainerCopyPanel.vue'
 import ContainerPermissionPanel from '@/components/containers/ContainerPermissionPanel.vue'
 import ContainerOwnershipPanel from '@/components/containers/ContainerOwnershipPanel.vue'
 import ContainerRecursivePermissionPanel from '@/components/containers/ContainerRecursivePermissionPanel.vue'
+import ContainerRecursiveOwnershipPanel from '@/components/containers/ContainerRecursiveOwnershipPanel.vue'
+import { canRecursiveOwnershipContainerEntry } from '@/services/containerRecursiveOwnerships'
 import { canRecursivePermissionContainerEntry } from '@/services/containerRecursivePermissions'
 import { canOwnershipContainerEntry } from '@/services/containerOwnerships'
 import { canPermissionContainerEntry } from '@/services/containerPermissions'
@@ -51,6 +53,9 @@ const ownershipEditor = ref<InstanceType<typeof ContainerOwnershipPanel> | null>
 const recursivePermissionEditor = ref<InstanceType<
   typeof ContainerRecursivePermissionPanel
 > | null>(null)
+const recursiveOwnershipEditor = ref<InstanceType<typeof ContainerRecursiveOwnershipPanel> | null>(
+  null,
+)
 const mover = ref<InstanceType<typeof ContainerMovePanel> | null>(null)
 const editorLocked = ref(false),
   directoryLocked = ref(false),
@@ -59,6 +64,7 @@ const editorLocked = ref(false),
   permissionLocked = ref(false),
   ownershipLocked = ref(false),
   recursivePermissionLocked = ref(false),
+  recursiveOwnershipLocked = ref(false),
   copyLocked = ref(false),
   moveLocked = ref(false)
 async function prepareEdited(value: PreparedContainerText) {
@@ -248,6 +254,7 @@ onBeforeUnmount(() => {
             moveLocked ||
             permissionLocked ||
             recursivePermissionLocked ||
+            recursiveOwnershipLocked ||
             ownershipLocked
           "
           @click="history?.open()"
@@ -302,6 +309,7 @@ onBeforeUnmount(() => {
         copyLocked ||
         moveLocked ||
         recursivePermissionLocked ||
+        recursiveOwnershipLocked ||
         ownershipLocked
       "
       @refresh="load(path)"
@@ -321,7 +329,8 @@ onBeforeUnmount(() => {
         copyLocked ||
         moveLocked ||
         permissionLocked ||
-        recursivePermissionLocked
+        recursivePermissionLocked ||
+        recursiveOwnershipLocked
       "
       @refresh="load(path)"
       @locked="ownershipLocked = $event"
@@ -340,10 +349,31 @@ onBeforeUnmount(() => {
         copyLocked ||
         moveLocked ||
         permissionLocked ||
-        ownershipLocked
+        ownershipLocked ||
+        recursiveOwnershipLocked
       "
       @refresh="load(path)"
       @locked="recursivePermissionLocked = $event"
+    />
+    <ContainerRecursiveOwnershipPanel
+      v-if="target"
+      ref="recursiveOwnershipEditor"
+      :target="target"
+      :path="path"
+      :disabled="
+        !!busy ||
+        editorLocked ||
+        historyLocked ||
+        uploadLocked ||
+        directoryLocked ||
+        copyLocked ||
+        moveLocked ||
+        permissionLocked ||
+        ownershipLocked ||
+        recursivePermissionLocked
+      "
+      @refresh="load(path)"
+      @locked="recursiveOwnershipLocked = $event"
     />
     <ContainerCopyPanel
       v-if="target"
@@ -359,6 +389,7 @@ onBeforeUnmount(() => {
         moveLocked ||
         permissionLocked ||
         recursivePermissionLocked ||
+        recursiveOwnershipLocked ||
         ownershipLocked
       "
       @refresh="load(path)"
@@ -378,6 +409,7 @@ onBeforeUnmount(() => {
         copyLocked ||
         permissionLocked ||
         recursivePermissionLocked ||
+        recursiveOwnershipLocked ||
         ownershipLocked
       "
       @refresh="load(path)"
@@ -396,6 +428,7 @@ onBeforeUnmount(() => {
         moveLocked ||
         permissionLocked ||
         recursivePermissionLocked ||
+        recursiveOwnershipLocked ||
         ownershipLocked
       "
       @refresh="load(path)"
@@ -415,6 +448,7 @@ onBeforeUnmount(() => {
         moveLocked ||
         permissionLocked ||
         recursivePermissionLocked ||
+        recursiveOwnershipLocked ||
         ownershipLocked
       "
       @refresh="load(path)"
@@ -435,6 +469,7 @@ onBeforeUnmount(() => {
         moveLocked ||
         permissionLocked ||
         recursivePermissionLocked ||
+        recursiveOwnershipLocked ||
         ownershipLocked
       "
       @locked="editorLocked = $event"
@@ -455,6 +490,7 @@ onBeforeUnmount(() => {
         moveLocked ||
         permissionLocked ||
         recursivePermissionLocked ||
+        recursiveOwnershipLocked ||
         ownershipLocked
       "
       @locked="historyLocked = $event"
@@ -506,6 +542,7 @@ onBeforeUnmount(() => {
               moveLocked ||
               permissionLocked ||
               recursivePermissionLocked ||
+              recursiveOwnershipLocked ||
               ownershipLocked ||
               !canPermissionContainerEntry(entry)
             "
@@ -527,6 +564,7 @@ onBeforeUnmount(() => {
               moveLocked ||
               permissionLocked ||
               recursivePermissionLocked ||
+              recursiveOwnershipLocked ||
               ownershipLocked ||
               !canOwnershipContainerEntry(entry)
             "
@@ -548,6 +586,7 @@ onBeforeUnmount(() => {
               moveLocked ||
               permissionLocked ||
               recursivePermissionLocked ||
+              recursiveOwnershipLocked ||
               ownershipLocked ||
               !canRecursivePermissionContainerEntry(entry)
             "
@@ -555,6 +594,28 @@ onBeforeUnmount(() => {
             title="分别设置文件和目录普通模式，整树预检后明确确认"
             @click="recursivePermissionEditor?.open(entry)"
             >递归权限</el-button
+          >
+          <el-button
+            v-if="!entry.isProtected && entry.kind === 'Directory'"
+            link
+            :disabled="
+              !!busy ||
+              uploadLocked ||
+              editorLocked ||
+              historyLocked ||
+              directoryLocked ||
+              copyLocked ||
+              moveLocked ||
+              permissionLocked ||
+              recursivePermissionLocked ||
+              recursiveOwnershipLocked ||
+              ownershipLocked ||
+              !canRecursiveOwnershipContainerEntry(entry)
+            "
+            :aria-label="`递归所有者 ${entry.name}`"
+            title="显式设置整树目标UID/GID，预检后明确确认，0表示root"
+            @click="recursiveOwnershipEditor?.open(entry)"
+            >递归所有者</el-button
           >
 
           <el-button
@@ -570,6 +631,7 @@ onBeforeUnmount(() => {
               moveLocked ||
               permissionLocked ||
               recursivePermissionLocked ||
+              recursiveOwnershipLocked ||
               ownershipLocked ||
               !canCopyContainerEntry(entry)
             "
@@ -595,6 +657,7 @@ onBeforeUnmount(() => {
               moveLocked ||
               permissionLocked ||
               recursivePermissionLocked ||
+              recursiveOwnershipLocked ||
               ownershipLocked ||
               !canMoveContainerEntry(entry)
             "
@@ -616,7 +679,8 @@ onBeforeUnmount(() => {
               moveLocked ||
               permissionLocked ||
               ownershipLocked ||
-              recursivePermissionLocked
+              recursivePermissionLocked ||
+              recursiveOwnershipLocked
             "
             :aria-label="`编辑 ${entry.name}`"
             @click="editor?.open(entry)"
@@ -633,6 +697,7 @@ onBeforeUnmount(() => {
               moveLocked ||
               permissionLocked ||
               recursivePermissionLocked ||
+              recursiveOwnershipLocked ||
               ownershipLocked
             "
             :aria-label="`历史版本 ${entry.name}`"
