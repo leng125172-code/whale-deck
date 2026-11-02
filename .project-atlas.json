@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_REAL_UI.md",
-  "nextStep": "b1fafed六组件已正常覆盖/迁移，真实递归所有者5成功1预检取消、源树/Root/HDD及准确清理分项签收。原脚本最后退出检查Failed保留，已修观察时序并另身份纯退出补证，未重做文件操作。下一步同上下文完整退出、进行中取消/撤权/重启/回执丢失及Partial/Unknown等故障，再ACL/删除/长期清理/P0-05与其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_REAL_UI.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_PARTIAL.md",
+  "nextStep": "b1fafed保持运行；新的递归所有者首项修改后页面取消/同原身份和实例正常双端退出、Partial五计数/不同管理员明确处置及独立清理已通过。旧六场景退出Failed原文保留，未重做。下一步Worker强杀/原自然租约、Agent重启/维护入口、实时撤权/停用、目标消失Unknown/跨写入保护等组合，再ACL/删除/长期清理/P0-05与其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
 }

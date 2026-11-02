@@ -16,7 +16,7 @@ import sys
 
 from validate_container_file_staging import load
 from validate_container_recursive_ownership_browser import snapshot, read_metadata, managed_plan
-from validate_container_recursive_ownership_faults import PATHS, unchanged_except_owners, inactive_except, same_operation, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, require_authority_change, require_logout_authority
+from validate_container_recursive_ownership_faults import SOURCES, PATHS, unchanged_except_owners, inactive_except, same_operation, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, require_authority_change, require_logout_authority
 from validate_container_directory_browser import snapshot as directory_snapshot, ROOT as DIRECTORY_ROOT
 from validate_container_recursive_ownership_agent import host_identity
 from validate_container_recursive_ownership_browser import no_active_work
@@ -36,6 +36,11 @@ def main():
         assert stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size <= 16*1024**2
         return json.loads(path.read_bytes())
     baseline = saved('baseline.json'); result = saved('verified.json'); partial = saved('partial-sql.json'); final = saved('final-sql.json')
+    repo=Path(__file__).resolve().parents[2]
+    assert set(baseline['sourceSha256']) == set(SOURCES)
+    for name,sha in baseline['sourceSha256'].items():
+        frozen=subprocess.check_output(['git','-C',str(repo),'show',baseline['validationSourceRevision']+':deploy/validation/'+name])
+        assert hashlib.sha256(frozen).hexdigest()==sha
     actual = snapshot(result['id']); assert actual == final
     before = baseline['original']; after = saved('physical-partial.json'); assert after == saved('physical-final.json')
     row = actual['row']; assert row['state'] == 'Acknowledged' and actual['executionJob']['state'] == 'Failed' and not row['publish_barrier']
@@ -58,6 +63,9 @@ def main():
         require_stopped_tree(saved('physical-cut.json'),stopped,cut_record['finishedThrough'],cut_record['startedThrough'])
         assert stopped == after; same_operation(saved('pre-authority-sql.json')['row'],row)
     else: assert original['normalDualLogout']
+    if kind == 'cancel':
+        assert original['registrations']==original['confirmations']==original['cancellations']==1 and original['bodies']==0
+        assert recovery['actualCountersVerified'] is True
     if logout_case:
         authority = saved('logout-authority.json'); require_logout_authority(authority,original['subject'])
         instance = authority['containerInstance']
@@ -107,6 +115,7 @@ def main():
     for key in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount'):
         assert late[key] == record[key] == result['partialCounts'][key]
     plan = managed_plan(json.loads(row['plan_json'])); assert record['plan'] == plan
+    assert [plan['command']['uid'],plan['command']['gid']]==[2200,3200]
     if unknown_case:
         require_unknown_counts(record,len(PATHS))
         assert original['cancellations'] == 0 and original['registrations'] == original['confirmations'] == 1 and original['bodies'] == 0
@@ -232,7 +241,7 @@ def main():
         (directory/'waiting-independent.json').write_text(json.dumps({'originalIdExecutedOnce':True,'deferredSamples':4,'startedAfterOriginalAcknowledgement':True,'rootAndPhysicalInodeVerified':True,'bothFixturesRemoved':True,'actualDirectoryUi':True,'directoryAuditRows':len(directory_audits),'hashedMetadataAndCurrentAdminVerified':True}))
     no_active_work(); inactive_except()
     screenshots = (('inflight.png','logged-out.png','partial-recovery-confirm.png','partial-acknowledged.png') if logout_case else ('inflight.png','authority-denied.png','partial-recovery-confirm.png','partial-acknowledged.png') if revoked else ('inflight.png','unknown-counts.png','partial-recovery-confirm.png','partial-acknowledged.png') if unknown_case
-        else ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png')) + (('partial-counts.png',) if kind in ('worker-crash','agent-restart','logout') else ())
+        else ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png')) + (('partial-counts.png',) if kind in ('cancel','worker-crash','agent-restart','logout') else ())
     if barrier_case: screenshots += ('waiting-directory.png',)
     for name in screenshots:
         raw = (directory/name).read_bytes(); assert raw.startswith(b'\x89PNG\r\n\x1a\n')

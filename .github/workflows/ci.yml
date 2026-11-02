@@ -28,7 +28,14 @@ jobs:
           bash -n deploy/host/whaledeck-privileged
           python3 -m unittest discover -s deploy/validation -p test_container_terminal.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_file*.py'
-          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_ownership_agent_probe_scope.py
+          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_recursive_*_probe_scope.py'
+          python3 -W error -m py_compile deploy/validation/bound_container_recursive_permission_cut.py deploy/validation/validate_container_recursive_permission_browser.py deploy/validation/verify_container_recursive_permission_browser.py deploy/validation/validate_container_recursive_permission_faults.py deploy/validation/verify_container_recursive_permission_faults.py
+          python3 -W error -m py_compile deploy/validation/bound_container_recursive_ownership_cut.py deploy/validation/validate_container_recursive_ownership_browser.py deploy/validation/verify_container_recursive_ownership_browser.py deploy/validation/recover_container_recursive_ownership_browser.py deploy/validation/validate_container_recursive_ownership_faults.py deploy/validation/verify_container_recursive_ownership_faults.py
+          node --check deploy/validation/validate_container_recursive_permission_browser.mjs
+          node --check deploy/validation/validate_container_recursive_permission_faults.mjs
+          node --check deploy/validation/validate_container_recursive_ownership_browser.mjs
+          node --check deploy/validation/validate_container_recursive_ownership_faults.mjs
+          node --check deploy/validation/validate_installed_logout_only.mjs
           python3 -W error -m py_compile deploy/host/whaledeck-container-recursive-ownership-transport.py deploy/host/whaledeck-container-recursive-ownership.py deploy/validation/validate_container_recursive_ownership.py deploy/validation/verify_container_recursive_ownership.py deploy/validation/validate_container_recursive_ownership_agent.py deploy/validation/verify_container_recursive_ownership_agent.py
           python3 -W error -m py_compile deploy/host/whaledeck-container-recursive-permission-transport.py deploy/host/whaledeck-container-recursive-permissions.py deploy/validation/validate_container_recursive_permissions.py deploy/validation/verify_container_recursive_permissions.py deploy/validation/validate_container_recursive_permission_agent.py deploy/validation/verify_container_recursive_permission_agent.py deploy/validation/validate_container_recursive_orphan.py
           python3 -W error -m py_compile deploy/host/whaledeck-container-ownership.py deploy/validation/validate_container_ownership.py deploy/validation/verify_container_ownership.py
