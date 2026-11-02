@@ -1,5 +1,7 @@
 # 容器 ACL：永久 SQL、不可变回执与十方共享保护候选
 
+> 后续API/Vue候选（2026-11-03）：062e361已接实际业务的管理员端点/容器文件及Unknown处置页面，4272 Unit/432 Integration（7默认原生跳过）、972前端Unit、43 ACL及156关联生产预览两组通过；尚未部署或真实身份ACL/HDD业务验收。下方72d678e/c9c9265原生PG与“无API/Vue”等属于原批次，正文逐字保留。[页面候选与边界](CONTAINER_ACL_WEB_UI.md)。
+
 2026-11-03。SQL/仓储/测试源码 `72d678ebababbe748b3b34dc164700a8cf11326d`；通用任务入口加固 `c9c9265f900284fb989bb533d10be8111ea2bdc7`。已实现具体持久化、共享保护和专用 Worker 候选，**本批未部署，尚无 ACL 管理员 API、Vue 或真实身份/文件/HDD业务页面整链**。59主项不晋升整项完成，17项移出不算完成，master尚未交付。
 
 前批安装态 Agent/MaintenanceHost `4a58961` / 1.51 与 API/Worker/Gateway `b1fafed` 的运行事实保留；本批不重跑原 ACL RPC/HDD、不重启服务、不修改生产 schema，不自动回滚 dev，不修改开发 user NOPASSWD 或密码。

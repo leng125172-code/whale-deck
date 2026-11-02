@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-03 ACL API/Vue候选更新：062e361已接实际永久业务的管理员端点/完整条目与mask预览/原登录/明确确认/取消/原key恢复及当前管理员Unknown处置；严格0/缺字段/重复与三态原回执检查、旧写入互斥和退出提示清理保留。4272 Unit/432 Integration（7默认原生跳过）、972前端Unit及43+156两组生产预览通过，页脚越界修复；未部署，无真实Authentik/ACL文件/HDD业务整链，不把前批机器RPC和隔离PG拼接作本批真人验收。[候选与边界](qa/CONTAINER_ACL_WEB_UI.md)。
+
 2026-11-03 ACL永久化候选更新：72d678e已接具体EF/迁移17个CHECK、原登录/原回执MAC与历史不可改、自然租约/CAS和十方双向保护；c9c9265补专用消息排除/通用重试拒绝。4272 Unit/364 Integration（7原生默认跳过）及双隔离真实PG完整门禁与独立清理通过。未部署/生产ACL表不存在，无管理员API/Vue、实际Worker或真实身份文件/HDD业务验收，原Root/身份/时钟为合成；不据此前批机器RPC拼接真人整链。[实现和边界](qa/CONTAINER_ACL_PERSISTENCE.md)。
 
 2026-11-02后续实机：b1fafed正常覆盖已应用递归所有者migration，真实页面6意图/5执行/同原Subject23审计与5成功/1取消、5聚合20子项HDD对账，生产不再是“新表不存在”。原整套退出失败保留，独立补证/原事实回读与清理通过；不是全部故障或完整文件模块签收。[当前证据](qa/CONTAINER_RECURSIVE_OWNERSHIP_REAL_UI.md)。
