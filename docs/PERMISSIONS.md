@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-03 ACL内部业务更新：41f02fb已接登录绑定/实时授权、原计划明确确认、结构比较/深复制及原任务Inspect优先恢复，回执独立MAC保护原ACL类型/模式/历史及三态；Unknown不重做、不篡改历史，处置使用原执行ID。4270 Unit/363 Integration（7默认原生跳过）与8范围通过；仍无具体EF仓储/共享保护/Worker/API/Vue或真人业务验收，无发布和默认User扩权，运行沿前批4a58961/1.51。[实现与验收边界](qa/CONTAINER_ACL_WORKFLOW.md)。
+
 2026-11-03 ACL1.51安装态权限已真实签收：4a58961固定helper/独立签名四RPC、13预检及4执行绑定拒绝通过，显式ID0与缺ID/权限分开、core/只读根/错域/过期/重放拒绝，真实初始namespace/准确FD非IDMAP通过，无CHOWN/SYS_ADMIN。9操作及8HDD/原inode/非目标ACL/迟到原签名请求不重写、独立清理通过；仅受信机器调用，不是人类Authentik/BFF/永久意图/页面授权验收，默认User不扩权。两次写前失败及真实入口工厂回归保留，开发user NOPASSWD/密码未改。[实际证据与未验边界](qa/CONTAINER_ACL_AGENT_RPC.md)。
 
 2026-11-03后续ACL协议候选6a62027：独立四RPC/完整message与method签名/短时单次capability，ID与permissions presence严格，SDK必须1.51专属能力。fixed unit无CHOWN/SYS_ADMIN，namespace与准确FD mount映射未证明即拒绝；旧chmod/chown不放宽。当前无ACL HTTP/永久意图或默认User扩权，宿主未安装新helper，真人权限/在途撤权及实际签名UDS仍待。测试夹具与实际只读依赖证明不当作人类授权验收。[候选和边界](qa/CONTAINER_ACL_RPC.md)。

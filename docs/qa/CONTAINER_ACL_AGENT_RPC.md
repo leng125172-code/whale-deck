@@ -1,5 +1,7 @@
 # 容器ACL 1.51安装态：真实签名四RPC、HDD及旧能力兼容
 
+> 后续内部业务候选（2026-11-03）：41f02fb已实现独立登录绑定意图/确认/回执MAC、ACL深复制和原任务恢复，4270 Unit/363 Integration（7原生跳过）通过；尚无具体EF/共享保护/Worker/API/Vue或真人业务验收，未发布。下方安装态原始正文逐字保留。[内部候选与下一步](CONTAINER_ACL_WORKFLOW.md)。
+
 2026-11-03。宿主正常覆盖后，实际Agent/MaintenanceHost运行来源为`4a58961d638b3e6f89073e59fb893ab7b22552e8`，协议1.51；成功ACL验收工具来源另记`224f744b535c8950addb1e6c46674a7e2a59f16d`，不把工具新提交冒充运行版本。API/Worker/Gateway仍b1fafed，11核心容器未重建。**真实签名UDS/固定受限helper及实际HDD已通过；永久ACL业务/共享保护/Worker/API/Vue与真人页面未实现，不计完整ACL或59项完成。**
 
 ## 冻结发布、安装和实际运行来源
