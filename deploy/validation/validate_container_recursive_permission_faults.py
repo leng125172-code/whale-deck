@@ -19,7 +19,7 @@ import uuid
 import validate_container_file_publishing as owned
 from bound_container_recursive_permission_cut import ROOT, child_id, freeze_partial, record_for
 from bound_container_permission_cut import fingerprint
-from validate_container_recursive_permission_browser import snapshot, managed_plan, read_metadata
+from validate_container_recursive_permission_browser import snapshot, managed_plan, read_metadata, version
 from validate_container_recursive_permission_agent import no_active_work, host_identity
 from validate_container_directory_restart import Worker, command, preflight
 from validate_container_ownership_faults import write_signal, wait_signal
@@ -86,7 +86,9 @@ def wait_state(identifier, expected, timeout=115):
     deadline = time.monotonic()+timeout
     while True:
         value = snapshot(identifier)
-        if value['row']['state'] == expected and value['pending'] == 0: return value
+        # Partial is deliberately unresolved: its original outbox messages stay
+        # pending until explicit acknowledgement finishes the execution job.
+        if value['row']['state'] == expected: return value
         assert value['row']['state'] in ('Pending', 'Applying', expected), 'UNEXPECTED_RECURSIVE_RESULT'
         assert time.monotonic() < deadline, 'RECURSIVE_RESULT_DEADLINE'
         time.sleep(0.5)
@@ -98,7 +100,7 @@ def verify_partial(data, baseline, before, after, storage, directory):
     assert row['root_started_at_utc'] and row['publish_barrier'] and row['completed_at_utc'] is None
     assert row['lease_token'] is None and row['lease_expires_at_utc'] is None
     assert data['planJob']['state'] == 'Succeeded' and data['executionJob']['state'] == 'Running'
-    assert data['accepted'] == data['confirmed'] == 1 and data['pending'] == 0
+    assert data['accepted'] == data['confirmed'] == 1
     assert data['executionJob']['completed_at_utc'] is None and row['history_verified'] and row['history_may_exist']
     assert row['container_id'] == baseline['containerId'] and row['instance_id'] == baseline['instanceId']
     assert plan['rootIdentity'] == before[''] and plan['entryCount'] == plan['changeCount'] == len(PATHS)
@@ -130,7 +132,7 @@ def verify_partial(data, baseline, before, after, storage, directory):
                     relative = entry['relativePath']; cp = entry['plan']; actual = after[relative]
                     assert cp['sourceIdentity'] == before[relative] and cp['command']['path'] == 'work/recursive-tree'+('/'+relative if relative else '')
                     assert not cp['noChange'] and cp['fingerprint'] == digest(b'whaledeck-container-permission-plan-v1\n', unsigned(cp, 'fingerprint'))
-                    phase = 'NotStarted'; version = ''; changed_entry = False
+                    phase = 'NotStarted'; published = ''; changed_entry = False
                     if index <= record['startedThrough']:
                         info = path.lstat(); assert stat.S_ISREG(info.st_mode) and info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1 and info.st_size <= 16384
                         child_raw = path.read_bytes(); child = json.loads(child_raw)
@@ -140,7 +142,8 @@ def verify_partial(data, baseline, before, after, storage, directory):
                         if phase == 'Completed':
                             assert child['actualIdentity'] == actual and child['modeConfirmed'] and child['historyVerified']
                             assert actual[2] != before[relative][2]
-                            version = child['version']; changed_entry = True
+                            assert child['version'] == version(baseline,cp['command']['path'],actual)
+                            published = child['version']; changed_entry = True
                         else: assert actual == before[relative]
                         if child['historyVerified']:
                             hraw = read_metadata(storage.f, storage, configuration, child_fd, cid+'.json', 16384); hdd = json.loads(hraw)
@@ -152,7 +155,7 @@ def verify_partial(data, baseline, before, after, storage, directory):
                         children.append({'id':cid,'state':phase,'historyVerified':child['historyVerified']})
                     else:
                         assert not path.exists() and actual == before[relative]
-                    outcomes.append({'id':cid,'state':phase,'version':version,'changed':changed_entry})
+                    outcomes.append({'id':cid,'state':phase,'version':published if changed_entry else '', 'changed':changed_entry})
                 assert {p.stem for p in (ROOT/(operation+'.entries')).glob('*.json')} == {c['id'] for c in children}
                 assert {n for n in os.listdir(child_fd) if n.endswith('.json')} == {c['id']+'.json' for c in children if c['historyVerified']}
             finally: os.close(child_fd)
@@ -266,8 +269,12 @@ def main():
             assert row['acknowledged_by'] == recovery['subject'] != row['actor_subject'] and row['actor_subject'] == ready['subject']
             assert row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is None and row['lease_expires_at_utc'] is None
             assert final['pending'] == 0 and final['accepted'] == final['confirmed'] == 1
-            for key in ('id','container_id','instance_id','actor_subject','owner_hash','request_hash','plan_json','execution_job_id','root_started_at_utc','receipt_json','completed_count','changed_count','aborted_count','not_started_count','unknown_count','outcome_digest','history_digest','root_state'):
+            for key in ('id','container_id','instance_id','actor_subject','owner_hash','request_hash','plan_json','execution_job_id','root_started_at_utc','completed_count','changed_count','aborted_count','not_started_count','unknown_count','outcome_digest','history_digest','root_state'):
                 assert row[key] == partial['row'][key], 'ACK_REWROTE_ORIGINAL_FACTS'
+            # Discard reports Replayed=false, Inspect reports true. Availability
+            # and binding are observations too; permanent facts remain equal.
+            def facts(raw): return {k:v for k,v in json.loads(raw).items() if k not in ('Replayed','BindingCurrent','HistoryAvailable')}
+            assert facts(row['receipt_json']) == facts(partial['row']['receipt_json'])
             assert (ROOT/(record['operationId']+'.json')).read_bytes() == (directory/'partial.root.json').read_bytes()
             assert inventory(root,content) == after
             late = subprocess.run(['/usr/local/libexec/whaledeck-privileged','container-file-recursive-permissions','apply',uuid.uuid4().hex],

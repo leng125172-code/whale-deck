@@ -38,6 +38,11 @@ def main():
     assert original['subject'] == row['actor_subject'] != row['acknowledged_by'] == recovery['subject']
     assert partial['row']['state'] == 'Partial' and partial['row']['publish_barrier'] and partial['row']['completed_at_utc'] is None
     record = saved('partial.root.json'); operation = result['operationId']; assert operation == record['operationId']
+    late = saved('late-apply.json')
+    assert late['operationId'] == operation and late['state'] == 'Partial' and late['replayed']
+    assert result['lateReplayWasSignedRpc'] is False
+    for key in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount'):
+        assert late[key] == record[key] == result['partialCounts'][key]
     plan = managed_plan(json.loads(row['plan_json'])); assert record['plan'] == plan
     assert record['state'] == 'Partial' and record['unknownCount'] == 0 and record['notStartedCount'] > 0
     assert unchanged_except_modes(before,after) == record['changedCount'] == record['completedCount']
