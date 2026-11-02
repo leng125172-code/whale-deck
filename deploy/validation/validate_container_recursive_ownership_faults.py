@@ -479,7 +479,7 @@ def main():
     global PHASE
     assert os.geteuid() == 0 and len(sys.argv) in (2,3); os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}',revision)
-    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','logout','worker-crash','agent-restart','group-removal','account-disable','target-disappearance')
+    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','logout','worker-crash','agent-restart','group-removal','account-disable','target-disappearance','target-disappearance-barrier')
     barrier_case = kind == 'target-disappearance-barrier'
     revoked = kind in ('group-removal','account-disable')
     logout_case = kind == 'logout'
