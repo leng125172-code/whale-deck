@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_AGENT_RPC.md",
-  "nextStep": "宿主95c0787/Agent1.49已安装，递归真实签名RPC4操作/3聚合与12子项HDD、旧权限6操作兼容及独立核验通过；API/Worker/Gateway仍d1fcca8。接永久意图/EF/共享保护/确认/审计/Worker/API/Vue与实时身份页面整链，补进行中故障/大树/设备、递归所有者/ACL/可恢复删除与长期清理；其余59项/UI/C#酒馆/统一供应商/AI Live2D继续，17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_WORKFLOW.md",
+  "nextStep": "宿主e668dbe/1.49已覆盖递归/单对象遗留回执保护，三类16原生RPC及递归实际回执丢失/独立核验通过；应用仍d1fcca8。内部业务71b6334通过3792 Unit但尚未持久化：接真实EF/迁移/双Job/审计/租约、八方共享保护/路径预算/专用Worker与真实PG，再接API/Vue/实时身份整链。补单对象丢失实机及其余故障、递归所有者/ACL/删除/长期清理；其余59项/UI/C#酒馆/统一供应商/AI Live2D继续，17项移出不算完成，不自动回滚dev。"
 }
