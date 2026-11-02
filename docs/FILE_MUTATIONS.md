@@ -1,5 +1,7 @@
 # 文件操作、编辑与回收站实施契约
 
+2026-11-03补充：容器POSIX ACL独立底层候选ed50dc1已实现单对象access/default、显式mask/数值ID、64项预算、原ACL HDD元数据与只观察恢复，真实容器/HDD候选及独立核验通过。尚未安装/无签名RPC/永久业务/Worker/API/Vue，既有chmod/chown仍拒绝ACL，完整递归/恢复/namespace映射及删除/长期清理继续。Linux POSIX ACL/xattr必须实际可用，不支持/拒绝/IO错误不当空ACL；getfacl仅本机候选验收依赖，不引入libacl运行时依赖。[事实和验收边界](qa/CONTAINER_ACL_ENGINE.md)。
+
 > 文档口径（2026-10-30）：下文运行版本、测试、下一步及70/76项等描述仅属于各自记录的批次，不是当前部署或当前范围声明。当前目标为[59个主任务及明确追加](GOAL_P0_P5.md)，现状见[实施状态](IMPLEMENTATION_STATUS.md)；企业租户等17项不恢复，原测试与失败事实保留。
 
 2026-10-16起，承接已签收的浏览/上传下载。文件变更BFF/SQL任务/Worker/API/WebUI及1.23取消tombstone于1e72ac4签收；当前安装931a24c/协议1.25另完成目录树/名称搜索、UTF-8编辑及覆盖前完整HDD备份。历史/回收站/恢复的独立基础源码继续开发，尚未注册产品入口或部署，见[后续实施证据](FILE_HISTORY_RECYCLE.md)。P1-11/P2-03/P2-04完整范围仍保留，不能把本子范围当成完整文件管理。最新见[编辑/HDD运行时签收](qa/FILE_TEXT_HDD.md#最终运行时签收931a24c--agent125)及[文件变更实机证据](qa/FILE_MUTATION_WORKFLOW.md#最终运行时签收1e72ac4)，下方执行层历史记录保留。

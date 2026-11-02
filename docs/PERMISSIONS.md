@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-03 ACL底层候选记录：ed50dc1单次仅替换显式access或default ACL，named条目须显式mask/数值ID，default限目录，保留另一ACL/原inode与HDD旧属性；fsync失败不误签完成。已有普通chmod/chown遇ACL仍拒绝，不借新模块扩大旧入口。当前未安装，无新增RPC/HTTP/Vue/默认User或Agent授权；候选实盘只为本轮自有资源，真实人类权限与namespace映射仍须接入验收。[候选与实际边界](qa/CONTAINER_ACL_ENGINE.md)。
+
 2026-11-02后续实机：递归所有者原目标消失后保留Unknown/18待证明，宿主实际1项修改单独保留；不同当前管理员真实页面五计数、先暂不处置再唯一确认后才释放保护。另一自有容器原目录任务在保护期间至少四次自然延期、无Root写入，确认后同一ID才发布并在Vue可见。原/新上下文正常双端退出与准确清理通过；Unknown汇总0不表示零修改，不以QA改SQL/时钟/缓存放行。仅该跨容器目录组合签收，其他类型/故障、ACL/删除继续，默认User与Agent授权未扩大。[真实授权与保护证据](qa/CONTAINER_RECURSIVE_OWNERSHIP_UNKNOWN_BARRIER.md)。
 
 2026-11-02后续实机：递归所有者首项实际fchown后，只移除本轮新账号管理员组或停用本轮新账号；原正权限快照仍余7161/7162秒，产品3.951/4.255秒结束原helper、保留原Partial与五计数，不续做。旧任务403，移组me200非管理员/forbidden、停用me403/login；取消POST0，不以撤权或身份删除冒充正常退出。另一位新管理员真实页面五类dt/dd、先暂不处置再唯一确认及其正常双端退出通过；原Subject/Root/HDD不改。旧引用只签当前region/sessionStorage提示重载清理，不泛称其他标签页/路由/持久缓存；其他模块实时撤权仍待，默认User/Agent授权不扩大。[实际身份与页面证据](qa/CONTAINER_RECURSIVE_OWNERSHIP_REVOCATION.md)。
