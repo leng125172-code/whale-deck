@@ -214,6 +214,7 @@ public static class DependencyInjection
         services.AddSingleton<IContainerFileWriteGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerFileHistoryGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerDirectoryGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddSingleton<IContainerRecursivePermissionGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerPermissionGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerOwnershipGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerCopyGateway>(provider => provider.GetRequiredService<AgentGateway>());

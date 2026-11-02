@@ -50,6 +50,12 @@ for module in /usr/local/libexec/whaledeck-container-permissions.py /usr/local/l
   assert_metadata "$module" '750:root:root'
   [[ ! -L "$module" && $(stat -c %h "$module") == 1 ]]
 done
+assert_metadata /var/lib/whaledeck-container-recursive-permissions '700:root:root'
+[[ ! -L /var/lib/whaledeck-container-recursive-permissions ]]
+for module in /usr/local/libexec/whaledeck-container-recursive-permissions.py /usr/local/libexec/whaledeck-container-recursive-permission-transport.py; do
+  assert_metadata "$module" '750:root:root'
+  [[ ! -L "$module" && $(stat -c %h "$module") == 1 ]]
+done
 assert_metadata /var/lib/whaledeck-container-ownership '700:root:root'
 [[ ! -L /var/lib/whaledeck-container-ownership ]]
 for module in /usr/local/libexec/whaledeck-container-ownership.py /usr/local/libexec/whaledeck-container-ownership-transport.py; do

@@ -1258,3 +1258,35 @@ service ContainerOwnershipService {
   rpc Inspect(ContainerOwnershipRequest) returns (ContainerOwnershipReceipt);
   rpc Discard(ContainerOwnershipRequest) returns (ContainerOwnershipReceipt);
 }
+
+// Bounded recursive ordinary modes. Manifest stays root-private on attested HDD.
+// No caller paths to host storage, selected owner, ACL or automatic continuation.
+message ContainerRecursivePermissionCommand {
+  ContainerFileLocation location = 1; string file_mode = 2; string directory_mode = 3; string expected_version = 4;
+}
+message ContainerRecursivePermissionPlan {
+  uint32 schema_version = 1; ContainerRecursivePermissionCommand command = 2; string target_proof = 3;
+  FileDirectoryIdentity parent_identity = 4; string parent_version = 5;
+  uint32 owner_uid = 6; uint32 owner_gid = 7; string fingerprint = 8;
+  FileObjectIdentity root_identity = 9; int64 root_changed_at_unix_ns = 10;
+  string manifest_digest = 11; uint32 entry_count = 12; uint32 file_count = 13;
+  uint32 directory_count = 14; uint32 change_count = 15;
+}
+message ContainerRecursivePermissionPlanRequest { ContainerRecursivePermissionCommand command = 1; RequestContext context = 2; }
+message ContainerRecursivePermissionRequest {
+  string operation_id = 1; string owner = 2; ContainerRecursivePermissionPlan plan = 3; RequestContext context = 4;
+}
+message ContainerRecursivePermissionReceipt {
+  string operation_id = 1; string container_id = 2; string instance_id = 3; string fingerprint = 4;
+  string target_proof = 5; string state = 6; bool binding_current = 7; bool replayed = 8;
+  uint32 completed_count = 9; uint32 changed_count = 10; uint32 aborted_count = 11;
+  uint32 not_started_count = 12; uint32 unknown_count = 13;
+  bool history_may_exist = 14; bool history_verified = 15; string history_digest = 16;
+  bool history_available = 17; string outcome_digest = 18;
+}
+service ContainerRecursivePermissionService {
+  rpc Plan(ContainerRecursivePermissionPlanRequest) returns (ContainerRecursivePermissionPlan);
+  rpc Apply(ContainerRecursivePermissionRequest) returns (ContainerRecursivePermissionReceipt);
+  rpc Inspect(ContainerRecursivePermissionRequest) returns (ContainerRecursivePermissionReceipt);
+  rpc Discard(ContainerRecursivePermissionRequest) returns (ContainerRecursivePermissionReceipt);
+}

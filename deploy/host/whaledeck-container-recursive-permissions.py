@@ -255,6 +255,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
             if record['changedCount']>record['plan']['changeCount']:self.reject('RECEIPT_INVALID')
             if record['state']=='Completed' and (record['completedCount']!=n or record['changedCount']!=record['plan']['changeCount'] or not record['historyVerified'] or record['finishedThrough']!=n-1):self.reject('RECEIPT_INVALID')
             if record['state']=='Partial' and (not 0<record['changedCount']<=n or record['completedCount']==n or record['unknownCount'] or not record['historyVerified']):self.reject('RECEIPT_INVALID')
+            if record['state']=='Unknown' and not record['unknownCount']:self.reject('RECEIPT_INVALID')
             if record['state']=='Aborted' and (record['changedCount'] or record['unknownCount']):self.reject('RECEIPT_INVALID')
             if record['state'] in ('Completed','Partial') and not re.fullmatch('[A-F0-9]{64}',record['outcomeDigest']):self.reject('RECEIPT_INVALID')
         def new_record(self,request):
@@ -309,6 +310,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                 if existing is not None or self.present(state,request['operationId']+'.entries'):
                     record.update(state='Unknown',unknownCount=request['plan']['entryCount'],notStartedCount=0,historyMayExist=True)
                     self.save(state,record);return self.public(record,session,False)
+                if session is None:self.reject('SESSION_REQUIRED')
                 self.save(state,record)
                 try:
                     plan,entries=self.inventory(request['plan']['command'],session)
@@ -318,7 +320,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                     record.update(state='Applying',historyVerified=True,historyDigest=saved['historyDigest']);self.save(state,record)
                     with self.child_engine(state,request,True) as (child,_):
                         for index,entry in enumerate(entries):
-                            self.tick();record['startedThrough']=index;self.save(state,record);self.checkpoint('BeforeEntry',index)
+                            self.tick();record['startedThrough']=index;self.save(state,record);self.checkpoint('BeforeEntry',index);self.tick()
                             result=child.apply(self.child_request(request,index,entry),session)
                             if result['state']!='Completed' or not result['bindingCurrent']:self.reject('ENTRY_RESULT_UNKNOWN')
                             record['finishedThrough']=index;self.save(state,record);self.checkpoint('AfterEntry',index)
@@ -375,7 +377,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
         def inspect(self,request,session):
             self.begin(True)
             with self.locked(request) as (state,record):
-                if record is None:return None
+                if record is None:self.reject('NOT_FOUND')
                 self.recover(state,record,session);return self.public(record,session,True)
         def discard(self,request,session):
             self.begin(True)
@@ -398,5 +400,6 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                     finally:os.close(fd)
                 except (OSError,self.r.Rejected,self.f.Rejected,ValueError,TypeError,KeyError):pass
             keys=('operationId','state','completedCount','changedCount','abortedCount','notStartedCount','unknownCount','historyMayExist','historyVerified','historyDigest','outcomeDigest')
-            return {**{k:record[k] for k in keys},'fingerprint':record['plan']['fingerprint'],'bindingCurrent':binding,'historyAvailable':available,'replayed':replayed}
+            return {**{k:record[k] for k in keys},'containerId':record['plan']['command']['containerId'],'instanceId':record['plan']['command']['instanceId'],
+                'targetProof':record['plan']['targetProof'],'fingerprint':record['plan']['fingerprint'],'bindingCurrent':binding,'historyAvailable':available,'replayed':replayed}
     return RecursivePermissions
