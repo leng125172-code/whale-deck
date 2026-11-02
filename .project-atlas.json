@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_OWNERSHIP_POST_CHANGE.md",
-  "nextStep": "d1fcca8/1.48的所有者真实撤权和常规7场景保持；已补实际fchown后/Root回执前取消与Worker强杀实机，对账Succeeded/Completed、迟到Apply不重做及独立清理通过。推进递归权限/ACL/可恢复删除完整链，补目录/实例/跨盘及其他变更后/回执组合和长期清理；其余59项/UI/C#酒馆/统一供应商/AI Live2D继续，17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_ENGINE.md",
+  "nextStep": "递归普通模式25281a1内部候选通过实际HDD4操作/2次候选强杀及独立只读核验；产品仍d1fcca8/1.48。接固定最小授权RPC/C#SDK、永久业务/共享保护/Worker/API/Vue、实时身份与真实页面整链，补大树/挂载/更多故障及递归所有者/ACL/可恢复删除和长期清理；其余59项/UI/C#酒馆/统一供应商/AI Live2D继续，17项移出不算完成，不自动回滚dev。"
 }

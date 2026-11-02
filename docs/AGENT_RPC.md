@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-11-02递归普通权限内部候选25281a1通过真实HDD**：有界乐观清单/独立HDD聚合与子项历史、最深项先执行、逐项永久回执和Partial/Unknown只观察恢复已实现。20专项/382关联Linux-root零跳过、8范围与语法检查通过；冻结独占容器4操作（2完成/1部分/1中止）、2次候选真实SIGKILL、每文件完整2097159字节及原inode/属主/mtime/属性、4份聚合/9份子项HDD和迟到重放不变均通过，独立复核准确清理/11核心不变且healthy。失败与修复保留。未安装/helper/RPC/永久业务/Worker/API/Vue，不算真实身份页面或完整递归权限；运行仍d1fcca8/1.48，继续全链/更多故障、递归所有者/ACL/删除及其余59项，17移出不算完成。[证据与边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_ENGINE.md)。
+
 - **2026-11-02所有者实际变更后取消/Worker回执中断实机通过**：产品保持d1fcca8/1.48，不重部署。精确原helper仍Applying且owner未确认时，原inode已为目标UID/GID、属性/HDD及完整字节符合；真实页面取消与Worker SIGKILL均由原操作恢复Succeeded/Root Completed（退出5.321/0.113秒），不误报未发生或自动恢复。Worker原自然租约保持；迟到Apply重放保持Root/版本/ctime不变。两例及独立SQL/Root/HDD/原件和准确清理通过；8新/16原root边界及宿主检查通过。仍需其余组合、递归/ACL/删除等，59项active。[证据与边界](qa/CONTAINER_OWNERSHIP_POST_CHANGE.md)。
 
 - **2026-11-02所有者d1fcca8已覆盖，真实组撤权/账号停用及正常授权回归通过**：六组件/镜像/HTTP/宿主进程同源，数据库平台未重建。原正快照未过期时，只改本轮临时Authentik身份，产品分别5.221/5.177秒结束helper；原接口拒绝、403/登录实际页面与提示清理、SQL Canceled/Root Aborted、原完整文件/HDD及独立准确清理通过。常规7场景同版本重跑与独立核验通过。首轮截图仅BootScreen已保留并补强后重验；不冒称其他模块即时撤权或全部BFF注销。12新边界/16原观察器通过；继续变更后/回执丢失、递归/ACL/删除和其余59项。[实机证据及边界](qa/CONTAINER_OWNERSHIP_REVOCATION.md)。

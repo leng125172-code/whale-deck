@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+**2026-11-02递归普通权限内部候选25281a1通过真实HDD**：有界乐观清单/独立HDD聚合与子项历史、最深项先执行、逐项永久回执和Partial/Unknown只观察恢复已实现。20专项/382关联Linux-root零跳过、8范围与语法检查通过；冻结独占容器4操作（2完成/1部分/1中止）、2次候选真实SIGKILL、每文件完整2097159字节及原inode/属主/mtime/属性、4份聚合/9份子项HDD和迟到重放不变均通过，独立复核准确清理/11核心不变且healthy。失败与修复保留。未安装/helper/RPC/永久业务/Worker/API/Vue，不算真实身份页面或完整递归权限；运行仍d1fcca8/1.48，继续全链/更多故障、递归所有者/ACL/删除及其余59项，17移出不算完成。[证据与边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_ENGINE.md)。
+
 2026-11-02新增所有者实机证据：在真实fchown已发生、原Root仍Applying/未确认的切点进行页面取消与Worker强杀，两例均按原操作恢复Succeeded/Completed；原自然租约、完整内容/同inode/目标属主/属性/HDD与迟到Apply不重做及独立清理通过。[变更后证据](qa/CONTAINER_OWNERSHIP_POST_CHANGE.md)。仅QA与记录变化，产品仍d1fcca8/1.48；其余回执/变更后组合、目录/跨盘和递归/ACL/删除继续。
 
 2026-11-02所有者实时权威身份已在d1fcca8覆盖：真实Authentik组移除与账号停用在原正快照仍有效时停止执行，实际403/登录页面、SQL/Root/HDD/全部字节和独立清理通过；同版本常规7场景也重跑通过。其他模块即时撤权/全部BFF注销尚不能据此签收。[最新实机证据](qa/CONTAINER_OWNERSHIP_REVOCATION.md)。
