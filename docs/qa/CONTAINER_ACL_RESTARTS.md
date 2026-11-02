@@ -1,5 +1,7 @@
 # 容器ACL：写入前Worker强杀、自然租约与Agent重启实机验收
 
+后续记录：[实际ACL写入后取消与Worker回执中断](CONTAINER_ACL_POST_CHANGE.md)已首轮实机及独立核验通过，最终Succeeded/Completed，与本页写入前Failed/Aborted分开签收。以下原切点、原租约、失败及当时待办正文保留，未重做旧操作。
+
 2026-11-03。六组件运行源码仍 `633a2ca42012bbd6f388a67bd128fe3125bfab76`、Agent 1.51，没有重新发布或生产迁移。实际门禁冻结 `ed241e9`，27份验收依赖和11份安装模块逐字节核对；后续 `6fce7dc` 加固独立观察器的Worker实际启动时间与原租约绑定。**两套新独占资源的真实Authentik/Vue/持久SQL/Worker/Agent/原文件-ACL/HDD门禁首轮通过，独立只读首轮及加固后核验通过。** 不重做[取消/正常退出](CONTAINER_ACL_FAULTS.md)、[实时撤权](CONTAINER_ACL_REVOCATION.md)或[常规九场景](CONTAINER_ACL_REAL_UI.md)。
 
 仅签收**业务Applying、Root Preparing/HistoryVerified、ACL系统调用尚未发生**时的两种进程中断。不是ACL已修改后的中断、Unknown、路径/实例交换、递归恢复或删除验收。59主项继续部分实现，17项移出不算完成，master未交付。

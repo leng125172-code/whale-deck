@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-03 ACL写后实机：517c42a两新资源真实目标ACL已写、Root仍Applying时取消/Worker强杀，最终原任务Succeeded/Completed，未误报未修改；原字节/inode/属主/mtime/default ACL/xattr保持、实际新access ACL/ctime及写后九字段/版本在迟到原Apply前后不再改变。2HDD/4Job/9审计、42采样自然租约、原上下文退出/4 PNG/独立原件与准确清理通过；54边界/语法通过、11核心healthy，运行仍633a2ca/1.51。其他写后/Unknown/跨写入/递归恢复/删除继续。[写后事实与边界](qa/CONTAINER_ACL_POST_CHANGE.md)。
+
 2026-11-03 ACL写入前重启实机：ed241e9两新资源Worker实际SIGKILL/原自然租约42采样和Agent实际重启/维护152采样均通过；产品0.116/0.015秒停helper、原任务Failed/Interrupted而Root Aborted，完整源/两类ACL/2HDD/4Job/8审计、原上下文退出及独立原件/清理通过。Agent PID3288068/维护3122598，运行仍633a2ca/1.51，11核心healthy。47边界/语法通过，写入后/Unknown/跨写入、ACL递归恢复/删除继续。[重启与实际租约](qa/CONTAINER_ACL_RESTARTS.md)。
 
 2026-11-03 ACL原登录实时移组/停用实机：冻结f3ca007、运行633a2ca不重发；原正快照余7164秒以上，仅变更准确临时身份，产品约5.2秒停helper，旧任务403、原页面分别/forbidden和/login，引用键null、取消POST0。Canceled/Aborted、完整源/两类ACL/2HDD/4Job/8审计与独立原件/准确清理通过，四真实PNG/38边界与语法通过。仅写ACL前切点；重启/变更后/Unknown/跨写入、递归恢复/删除继续。[实际证据](qa/CONTAINER_ACL_REVOCATION.md)。
