@@ -92,3 +92,20 @@ class AclTransportTests(unittest.TestCase):
                 for action in ('apply','inspect','discard'):
                     with self.assertRaises(type(error)):self.execute(action,request)
         self.assertEqual(list(self.fixture.state.glob('*.json')),[])
+
+    def test_actual_main_engine_factory_uses_acl_history_not_ownership_class(self):
+        import test_file_backups as backup_fixtures
+        modules={
+            'whaledeck-container-upload.py':common.uploads,
+            'whaledeck-file-backups.py':backup_fixtures.backups,
+            'whaledeck-container-backups.py':common.load('whaledeck-container-backups.py','acl_factory_content_history'),
+            'whaledeck-container-publish.py':fixtures.fixture.publisher,
+            'whaledeck-container-acl.py':fixtures.acl,
+            'whaledeck-container-permissions.py':fixtures.fixture.candidate,
+            'whaledeck-container-directories.py':fixtures.fixture.directories}
+        with patch.object(transport,'load',side_effect=lambda name:modules[name]),patch.object(transport,'STATE',self.fixture.state):
+            engine=transport.create_engine(self.r,self.f)
+        self.assertEqual(engine.history.NAMESPACE,'container-acl-v1');self.assertIs(engine.history.f,self.f)
+        self.assertEqual(engine.history.expected(self.fixture.request())['resourceType'],'ContainerAclMetadata')
+        result=engine.apply(self.fixture.request(),self.session)
+        self.assertEqual(result['state'],'Completed');self.assertEqual(self.fixture.acl(),fixtures.named_acl())

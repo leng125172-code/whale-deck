@@ -127,7 +127,8 @@ def main():
             actual=json.loads(owned.common.command(['docker','inspect',fixture['identifier']]))[0]
             location={'containerId':fixture['identifier'],'instanceId':str(actual['State']['Pid'])+':'+actual['State']['StartedAt']}
             baseline={'revision':revision,**location,'source':str(folder),'original':inventory(folder,reader,module,content),'sha256':hashlib.sha256(content).hexdigest().upper(),
-                      'bytesPerFile':len(content),'coreBefore':core,'hostBefore':hosts,'installedSourceSha256':hashes,'candidateOnly':False}
+                      'bytesPerFile':len(content),'coreBefore':core,'hostBefore':hosts,'installedSourceSha256':hashes,'candidateOnly':False,
+                      'fixtureOriginal':{'identity':list(fixture['proofs']['original.bin'][0]),'sha256':fixture['proofs']['original.bin'][1]}}
             (evidence/'baseline.json').write_text(json.dumps(baseline));probe=Probe(binary,evidence,{'revision':revision,**location,'coreId':core['/whaledeck-api'][0]})
             cases=[('access','acl-file.bin','access','named'),('noop','acl-file.bin','access','named'),('mask','acl-file.bin','access','mask'),('root','acl-file.bin','access','root'),
                    ('base','acl-file.bin','access','base'),('default','acl-directory','default','named'),('default-noop','acl-directory','default','named'),

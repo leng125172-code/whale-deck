@@ -109,13 +109,7 @@ def execute(action, request, reader, files, docker, engine):
     finally: manager.__exit__(None, None, None)
 
 
-def main():
-    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('plan', 'apply', 'inspect', 'discard'):
-        raise Rejected('CONTAINER_ACL_ACTION_INVALID')
-    invocation = os.environ.get('INVOCATION_ID', '')
-    if not re.fullmatch('[a-f0-9]{32}', invocation): raise Rejected('CONTAINER_ACL_INVOCATION_INVALID')
-    files, reader = load('whaledeck-files.py'), load('whaledeck-container-files.py')
-    docker = load('whaledeck-container-terminal.py')
+def create_engine(reader, files):
     upload = load('whaledeck-container-upload.py').ContainerUploads(reader, files, Path('/var/lib/whaledeck-container-uploads'))
     storage = load('whaledeck-file-backups.py').FileBackups(files, namespace='container-files-v1')
     captures = load('whaledeck-container-backups.py').ContainerBackups(upload, storage)
@@ -124,7 +118,18 @@ def main():
     permission = load('whaledeck-container-permissions.py')
     metadata = load('whaledeck-file-backups.py').FileBackups(files, namespace=None)
     engine_type = scoped_acl_type(acl.container_acl_type(load('whaledeck-container-directories.py').ContainerDirectories))
-    engine = engine_type(upload, publisher, STATE, acl.ContainerOwnershipHistory(metadata))
+    engine = engine_type(upload, publisher, STATE, acl.acl_history_type(permission)(metadata))
+    return engine
+
+
+def main():
+    if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('plan', 'apply', 'inspect', 'discard'):
+        raise Rejected('CONTAINER_ACL_ACTION_INVALID')
+    invocation = os.environ.get('INVOCATION_ID', '')
+    if not re.fullmatch('[a-f0-9]{32}', invocation): raise Rejected('CONTAINER_ACL_INVOCATION_INVALID')
+    files, reader = load('whaledeck-files.py'), load('whaledeck-container-files.py')
+    docker = load('whaledeck-container-terminal.py')
+    engine = create_engine(reader, files)
     files.emit({'type': 'driver', 'invocationId': invocation})
     def expired(_number, _frame): raise Rejected('CONTAINER_ACL_TIMEOUT')
     signal.signal(signal.SIGALRM, expired); signal.alarm(10)
