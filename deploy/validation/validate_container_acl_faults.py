@@ -5,11 +5,13 @@ No installed hooks, arbitrary process signals, injected sessions, SQL/Root edits
 clock edits, replayed writes or automatic rollback. Root/HDD history is retained.
 """
 from concurrent.futures import ThreadPoolExecutor
+import datetime as dt
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import select
 import stat
 import subprocess
 import sys
@@ -23,10 +25,11 @@ from validate_container_acl_browser import SOURCES as BROWSER_SOURCES, snapshot,
 from validate_container_directory_restart import Worker, command, preflight
 from validate_container_file_staging import load
 from validate_container_upload_bff import temporary_user
+from owned_authentik_revocation import OwnedAuthentikRevocation
 
 PHASE = 'startup'
 SOURCES = tuple(dict.fromkeys((*BROWSER_SOURCES, 'bound_container_acl_cut.py', 'bound_container_copy_cut.py',
-    'validate_container_acl_faults.py', 'validate_container_acl_faults.mjs', 'verify_container_acl_faults.py')))
+    'validate_container_acl_faults.py', 'validate_container_acl_faults.mjs', 'verify_container_acl_faults.py', 'owned_authentik_revocation.py')))
 
 
 def write_signal(directory, name, value):
@@ -128,6 +131,7 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                 browser=subprocess.Popen(['node',str(Path(__file__).with_suffix('.mjs')),revision],stdin=subprocess.PIPE,stdout=out,stderr=err,env={**os.environ,'VALIDATION_USERNAME':username,'VALIDATION_PASSWORD':password})
                 browser.stdin.write(json.dumps(baseline).encode());browser.stdin.close();browser.stdin=None
                 ready=wait_signal(directory,'ready.json',browser);identifier=ready['id'];assert snapshot(identifier)['row']['state']=='Ready'
+                baseline['permissionExpiresAtUtc']=ready['permissionExpiresAtUtc'];(directory/'baseline.json').write_text(json.dumps(baseline))
                 preflight([identifier]);worker.stop();write_signal(directory,'confirm.json',{'workerStopped':True})
                 accepted=wait_signal(directory,'confirmed.json',browser,30);row=snapshot(identifier)['row']
                 assert row['state']=='Pending' and row['root_started_at_utc'] is None and row['execution_job_id']==accepted['executionJobId'] and row['actor_subject']==ready['subject']
@@ -138,10 +142,23 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                 applying=snapshot(identifier)['row'];assert applying['state']=='Applying' and applying['root_started_at_utc'] and applying['publish_barrier'] and held.record['historyVerified']
                 assert inventory(folder,reader,module,content)==original
                 (directory/'cut-root.json').write_text(json.dumps(held.record));(directory/'bound-helper.json').write_text(json.dumps({'pid':held.pid,'unit':held.cgroup,'twoKernelFdProofs':True,'proof':held.proof}))
-                PHASE=kind+':visible-action-and-product-helper-exit';began=time.monotonic()
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    exit_observer=pool.submit(held.wait_exit_seconds,began,15);write_signal(directory,'action.json',{'kind':kind})
-                    action=wait_signal(directory,'action-done.json',browser,30);elapsed=exit_observer.result(timeout=16)
+                PHASE=kind+':visible-action-and-product-helper-exit';authority=None
+                if kind in ('group-removal','account-disable'):
+                    # Keep the original login and unexpired positive permission snapshot.
+                    write_signal(directory,'action.json',{'kind':kind});action=wait_signal(directory,'action-done.json',browser,30)
+                    assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc'])>dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
+                    with OwnedAuthentikRevocation(username,ready['subject']) as native:
+                        assert not select.select([held.descriptor],[],[],0)[0],'BOUND_ACL_HELPER_ALREADY_EXITED'
+                        assert inventory(folder,reader,module,content)==original
+                        began=time.monotonic()
+                        with ThreadPoolExecutor(max_workers=1) as pool:
+                            exit_observer=pool.submit(held.wait_exit_seconds,began,15);authority=native.change(kind)
+                            (directory/'authority-change.json').write_text(json.dumps(authority));elapsed=exit_observer.result(timeout=16)
+                else:
+                    began=time.monotonic()
+                    with ThreadPoolExecutor(max_workers=1) as pool:
+                        exit_observer=pool.submit(held.wait_exit_seconds,began,15);write_signal(directory,'action.json',{'kind':kind})
+                        action=wait_signal(directory,'action-done.json',browser,30);elapsed=exit_observer.result(timeout=16)
                 assert elapsed is not None and elapsed<15,'PRODUCT_DID_NOT_STOP_BOUND_ACL_HELPER'
                 held.release();held=None;PHASE=kind+':original-terminal-and-full-source-proof'
                 final=wait_settled(identifier);data,record,_,_=verify_terminal(identifier,ready['subject'],baseline,storage,module,directory)
@@ -149,11 +166,12 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                 current=inventory(folder,reader,module,content);assert current==original
                 (directory/'physical-final.json').write_text(json.dumps(current));write_signal(directory,'settled.json',{'id':identifier,'state':'Canceled'})
                 assert browser.wait(timeout=65)==0,'ACTUAL_ACL_TERMINAL_PAGE_NOT_VERIFIED'
-                ui=json.loads((directory/'browser.json').read_bytes());assert ui['actualUi'] and ui['normalDualLogout'] and ui['id']==identifier and ui['subject']==ready['subject']
+                ui=json.loads((directory/'browser.json').read_bytes());assert ui['actualUi'] and ui['id']==identifier and ui['subject']==ready['subject']
+                assert ui['authorityRevoked'] if authority else ui['normalDualLogout']
                 assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==(1 if kind=='cancel' else 0) and ui['bodies']==0
                 result={'kind':kind,'id':identifier,'executionJobId':data['row']['execution_job_id'],'state':'Canceled','code':data['row']['result_code'],
                     'rootState':record['state'],'rootCutState':json.loads((directory/'cut-root.json').read_bytes())['state'],'productStoppedHelperSeconds':round(elapsed,3),
-                    'validatorKilledHelper':False,'originalFullBytesFingerprintAclsAndAttributesUnchanged':True,'actualUi':True,'normalDualLogout':True}
+                    'validatorKilledHelper':False,'originalFullBytesFingerprintAclsAndAttributesUnchanged':True,'actualUi':True,'normalDualLogout':authority is None,'authorityRevoked':authority is not None}
                 (directory/'verified.json').write_text(json.dumps(result));proved=True
         finally:
             if held is not None:held.release()
@@ -180,7 +198,9 @@ def main():
     global PHASE
     assert os.geteuid()==0 and len(sys.argv) in (2,3);os.umask(0o077)
     revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision);kinds=('cancel','logout')
-    if len(sys.argv)==3:assert sys.argv[2] in kinds;kinds=(sys.argv[2],)
+    if len(sys.argv)==3:
+        assert sys.argv[2] in (*kinds,'group-removal','account-disable','revocation')
+        kinds=('group-removal','account-disable') if sys.argv[2]=='revocation' else (sys.argv[2],)
     repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
     for name in SOURCES:
@@ -191,7 +211,7 @@ def main():
     with requests.Session() as session:
         session.trust_env=False;r=session.get('http://127.0.0.1:8080/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();evidence=repo/'deploy/artifacts'/('container-acl-faults-'+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
-    (evidence/'validation-source.json').write_text(json.dumps({'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision}))
+    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':2,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_fault_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_fault_module');files=reader.trusted_module('whaledeck-files.py','acl_fault_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_fault_hdd').FileBackups(files)
     print(json.dumps({'aclFaults':'started','evidence':str(evidence),'kinds':kinds}),flush=True);results=[]
     for kind in kinds:

@@ -132,4 +132,47 @@ class AclFailureCleanupTests(unittest.TestCase):
             self.assertTrue(self.cleanup());remove.assert_called_once()
 
 
+class AclRevocationEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        import verify_container_acl_faults as verifier
+        self.verifier=verifier
+        self.subject='11111111-2222-3333-4444-555555555555'
+        self.baseline={'permissionExpiresAtUtc':'2026-11-03T06:00:00+00:00'}
+        self.ui={'authorityRevoked':True,'normalDualLogout':False,'renderedRevocationPage':'forbidden','hintsCleared':True,'originalIntentStatus':403,'currentIdentityStatus':200,'subject':self.subject,'cancellations':0}
+        self.row={'actor_subject':self.subject,'cancel_requested_at_utc':None};self.result={'kind':'group-removal','authorityRevoked':True}
+        before={'pk':41,'uuid':self.subject,'username':'whaledeck-upload-qa-123456abcdef','is_active':True,'groups':['admin-fixture']}
+        self.proof={'kind':'group-removal','onlyOwnedIdentityChanged':True,'subject':self.subject,'before':before,'after':{**before,'groups':[]},'confirmedAtUtc':'2026-11-03T04:00:00+00:00'}
+
+    def check(self):self.verifier.verify_authority(self.baseline,self.ui,self.row,self.result,self.proof)
+
+    def test_original_unexpired_account_and_exact_native_change_are_required(self):
+        self.check()
+        for key,value in [('pk',42),('uuid','foreign'),('username','admin'),('is_active',False)]:
+            proof=copy.deepcopy(self.proof);proof['after'][key]=value
+            with self.subTest(key=key),self.assertRaises(AssertionError):self.verifier.verify_authority(self.baseline,self.ui,self.row,self.result,proof)
+        self.baseline['permissionExpiresAtUtc']='2026-11-03T04:30:00+00:00'
+        with self.assertRaises(AssertionError):self.check()
+
+    def test_logout_cancel_uncleared_hints_or_successful_old_access_is_not_revocation(self):
+        for key,value in [('normalDualLogout',True),('hintsCleared',False),('originalIntentStatus',200),('cancellations',1),('currentIdentityStatus',401)]:
+            ui={**self.ui,key:value}
+            with self.subTest(key=key),self.assertRaises(AssertionError):self.verifier.verify_authority(self.baseline,ui,self.row,self.result,self.proof)
+
+    def test_disable_requires_original_groups_preserved_and_login_denial(self):
+        self.result['kind']=self.proof['kind']='account-disable'
+        self.ui.update(renderedRevocationPage='login',currentIdentityStatus=401)
+        self.proof['after']={**self.proof['before'],'is_active':False};self.check()
+        self.proof['after']['groups']=[]
+        with self.assertRaises(AssertionError):self.check()
+
+    def test_legacy_sources_remain_valid_only_for_legacy_kinds(self):
+        sources={n:'synthetic-sha' for n in self.verifier.SOURCES};old={k:v for k,v in sources.items() if k!='owned_authentik_revocation.py'}
+        self.verifier.validate_source_profile({'sha256':old},['cancel','logout'])
+        with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'sha256':old},['group-removal'])
+        self.verifier.validate_source_profile({'schemaVersion':2,'sha256':sources},['group-removal','account-disable'])
+        for schema in (True,3,'2'):
+            with self.subTest(schema=schema),self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':schema,'sha256':sources},['group-removal'])
+        with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':2,'sha256':old},['account-disable'])
+
+
 if __name__=='__main__':unittest.main()

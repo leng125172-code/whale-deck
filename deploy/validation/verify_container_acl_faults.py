@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Independent read-only permanent ACL fault evidence after exact cleanup."""
+import datetime as dt
 import hashlib
 import json
 import os
@@ -15,13 +16,41 @@ from validate_container_upload_recovery_agent import trusted
 from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, require
 
 
+def validate_source_profile(provenance, kinds):
+    schema=provenance.get('schemaVersion',1)
+    assert type(schema) is int and schema in (1,2)
+    expected=set(SOURCES)
+    if schema==1:
+        assert not set(kinds)&{'group-removal','account-disable'}
+        expected.remove('owned_authentik_revocation.py')
+    assert set(provenance['sha256'])==expected
+
+
+def verify_authority(baseline, ui, row, result, proof):
+    kind=result['kind'];assert kind in ('group-removal','account-disable')
+    assert ui['authorityRevoked'] and result['authorityRevoked'] and ui['normalDualLogout'] is False and not ui.get('logout')
+    assert ui['renderedRevocationPage']==('forbidden' if kind=='group-removal' else 'login') and ui['hintsCleared'] is True
+    assert ui['originalIntentStatus'] in (401,403) and ui['currentIdentityStatus'] in ((200,) if kind=='group-removal' else (401,403))
+    assert proof['kind']==kind and proof['onlyOwnedIdentityChanged'] is True and proof['subject']==ui['subject']==row['actor_subject']
+    before,after=proof['before'],proof['after'];keys={'pk','uuid','username','is_active','groups'}
+    assert set(before)==set(after)==keys and type(before['pk']) is int and before['pk']>0 and before['pk']==after['pk']
+    assert before['uuid']==after['uuid']==proof['subject'] and before['username']==after['username'] and re.fullmatch('whaledeck-upload-qa-[a-f0-9]{12}',before['username'])
+    assert before['is_active'] is True and type(before['groups']) is list and before['groups'] and all(type(g) is str for g in before['groups'])
+    if kind=='group-removal':assert after['groups']==[] and after['is_active'] is True
+    else:assert after['is_active'] is False and after['groups']==before['groups']
+    expiry=dt.datetime.fromisoformat(baseline['permissionExpiresAtUtc']);changed=dt.datetime.fromisoformat(proof['confirmedAtUtc'])
+    assert expiry.tzinfo is not None and changed.tzinfo is not None and expiry>changed+dt.timedelta(hours=1)
+    assert row['cancel_requested_at_utc'] is None and ui['cancellations']==0
+
+
 def verify(directory):
     repo=Path(__file__).resolve().parents[2]
     assert directory.parent==repo/'deploy/artifacts' and re.fullmatch('container-acl-faults-[a-f0-9]{32}',directory.name);trusted(directory,True)
     def read(path):
         info=trusted(path);assert info.st_size<=262144;return json.loads(path.read_bytes())
     accepted=read(directory/'verified.json');provenance=read(directory/'validation-source.json')
-    assert accepted['revision']==provenance['productRevision'] and set(provenance['sha256'])==set(SOURCES)
+    assert accepted['revision']==provenance['productRevision']
+    validate_source_profile(provenance,[r['kind'] for r in accepted['cases']])
     subprocess.run(['git','-C',str(repo),'merge-base','--is-ancestor',accepted['revision'],provenance['revision']],check=True,capture_output=True,timeout=15)
     for name,digest in provenance['sha256'].items():
         assert '/' not in name
@@ -36,11 +65,14 @@ def verify(directory):
     current=owned.common.core_snapshot();assert len(current)==11;results=[]
     assert accepted['cases'] and len(accepted['cases'])<=2 and len({r['kind'] for r in accepted['cases']})==len(accepted['cases'])
     for result in accepted['cases']:
-        kind=result['kind'];assert kind in ('cancel','logout');p=directory/kind;trusted(p,True)
+        kind=result['kind'];assert kind in ('cancel','logout','group-removal','account-disable');p=directory/kind;trusted(p,True)
         baseline=read(p/'baseline.json');ui=read(p/'browser.json');cut=read(p/'cut-root.json');bound=read(p/'bound-helper.json')
         assert baseline['revision']==ui['revision']==accepted['revision'] and baseline['validationSourceRevision']==provenance['revision'] and baseline['kind']==ui['kind']==kind
-        assert ui['logout']['normalUiLogout'] and ui['logout']['providerNavigationObserved'] and ui['logout']['bffStatus']==401 and ui['logout']['identityStatus'] in (401,403)
-        assert ui['id']==result['id'] and ui['executionJobId']==result['executionJobId'] and ui['actualUi'] and ui['normalDualLogout']
+        revoked=kind in ('group-removal','account-disable')
+        if not revoked:
+            assert ui['logout']['normalUiLogout'] and ui['logout']['providerNavigationObserved'] and ui['logout']['bffStatus']==401 and ui['logout']['identityStatus'] in (401,403)
+            assert ui['normalDualLogout']
+        assert ui['id']==result['id'] and ui['executionJobId']==result['executionJobId'] and ui['actualUi']
         assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==(1 if kind=='cancel' else 0) and ui['bodies']==0
         assert 0<=result['productStoppedHelperSeconds']<15 and not result['validatorKilledHelper'] and result['originalFullBytesFingerprintAclsAndAttributesUnchanged']
         content=hashlib.shake_256(('acl-fault:'+baseline['containerId']).encode()).digest(2*1024**2+7)
@@ -50,6 +82,7 @@ def verify(directory):
         assert read(p/'physical-final.json')==baseline['original']
         assert data['row']['execution_job_id']==ui['executionJobId'] and data['row']['state']==ui['finalState']==result['state']=='Canceled'
         assert bool(data['row']['cancel_requested_at_utc']) is (kind=='cancel')
+        if revoked:verify_authority(baseline,ui,data['row'],result,read(p/'authority-change.json'))
         assert cut['state'] in ('Preparing','Prepared') and cut['aclConfirmed'] is None and cut['historyVerified'] and cut['historyMayExist']
         assert cut['plan']==record['plan'] and cut['operationId']==record['operationId'] and cut['owner']==record['owner'] and cut['historyDigest']==record['historyDigest']
         proof=bound['proof'];assert bound['twoKernelFdProofs'] and re.fullmatch(r'whaledeck-container-acl-[a-f0-9]{32}\.service',bound['unit'])
