@@ -13,11 +13,11 @@ try {
   const fixture = JSON.parse(await readFile('/dev/stdin', 'utf8'))
   const revision = process.argv[2]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
-  assert.ok(['cancel', 'logout', 'worker-crash', 'agent-restart'].includes(fixture.kind))
+  assert.ok(['cancel', 'logout', 'worker-crash', 'agent-restart', 'group-removal', 'account-disable'].includes(fixture.kind))
   directory = fixture.evidence
   const prefix = fileURLToPath(new URL('../artifacts/', import.meta.url))
   assert.ok(directory.startsWith(prefix))
-  assert.match(directory.slice(prefix.length), /^container-ownership-faults-[a-f0-9]{32}\/(cancel|logout|worker-crash|agent-restart)$/)
+  assert.match(directory.slice(prefix.length), /^container-ownership-faults-[a-f0-9]{32}\/(cancel|logout|worker-crash|agent-restart|group-removal|account-disable)$/)
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
   context = await browser.newContext({ viewport: { width: fixture.kind === 'cancel' || fixture.kind === 'agent-restart' ? 320 : 1440, height: 800 },
@@ -49,7 +49,7 @@ try {
   currentIntent = intent.id
   await writeSignal(directory, 'registered.json', { id: intent.id, subject: profile.subject })
   await expect(dialog.getByText('预检已完成，尚未修改所有者', { exact: true })).toBeVisible({ timeout: 45_000 })
-  await writeSignal(directory, 'ready.json', { id: intent.id, subject: profile.subject })
+  await writeSignal(directory, 'ready.json', { id: intent.id, subject: profile.subject, permissionExpiresAtUtc: profile.permissionExpiresAtUtc })
   await waitSignal(directory, 'confirm.json', 30_000)
   phase = 'visible-confirmation-with-worker-stopped'
   const confirming = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/' + intent.id + '/confirm' && r.request().method() === 'POST')
@@ -80,7 +80,20 @@ try {
   await writeSignal(directory, 'action-done.json', { registrations, confirmations, cancellations, bodies, subject: profile.subject, dualLogout: fixture.kind === 'logout' })
   const final = await waitSignal(directory, 'settled.json')
   assert.equal(final.id, intent.id)
-  if (fixture.kind !== 'logout') {
+  const revoked = ['group-removal', 'account-disable'].includes(fixture.kind)
+  let currentIdentityStatus = null
+  if (revoked) {
+    phase = 'original-live-authority-denied'
+    const denied = await context.request.get(ownEndpoint + '/' + intent.id)
+    assert.ok([401,403].includes(denied.status()))
+    const me = await context.request.get(base + '/api/v1/auth/me'); currentIdentityStatus = me.status()
+    if (fixture.kind === 'group-removal') { assert.equal(me.status(),200); assert.equal((await me.json()).isAdministrator,false) }
+    else assert.ok([401,403].includes(me.status()))
+    await page.reload()
+    await expect(page.getByRole('region', { name: '容器所有者修改任务', exact: true })).toHaveCount(0)
+    await expect.poll(() => page.evaluate(id => !(sessionStorage.getItem('whaledeck-container-ownership-hints-v1') ?? '').includes(id), intent.id)).toBe(true)
+    await page.screenshot({ path: join(directory, 'authority-denied.png') })
+  } else if (fixture.kind !== 'logout') {
     phase = 'visible-original-terminal'
     await dialog.getByRole('button', { name: '查询原所有者修改任务', exact: true }).click()
     await expect(dialog.getByRole('status')).toHaveText(final.state === 'Canceled' ? '已取消' : '所有者修改未完成')
@@ -91,7 +104,7 @@ try {
   }
   assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, fixture.kind === 'cancel' ? 1 : 0); assert.equal(bodies, 0)
   await writeSignal(directory, 'browser.json', { revision, kind: fixture.kind, id: intent.id, executionJobId: pending.executionJobId,
-    subject: profile.subject, registrations, confirmations, cancellations, bodies, finalState: final.state, normalDualLogout: true, actualUi: true })
+    subject: profile.subject, registrations, confirmations, cancellations, bodies, finalState: final.state, normalDualLogout: !revoked, authorityRevoked: revoked, currentIdentityStatus, actualUi: true })
   await context.close()
   console.log(JSON.stringify({ ownershipFaultBrowser: 'passed', kind: fixture.kind }))
 } catch (error) {

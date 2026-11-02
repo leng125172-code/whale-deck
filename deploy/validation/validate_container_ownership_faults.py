@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import stat
 import subprocess
 import sys
@@ -25,6 +26,7 @@ from validate_container_upload_bff import login, logout, request, temporary_user
 from validate_container_file_staging import load
 from validate_databases import Api
 from validate_metric_continuity import query
+from owned_authentik_revocation import OwnedAuthentikRevocation
 
 PHASE = 'startup'
 
@@ -159,7 +161,7 @@ def run_case(kind, revision, evidence):
                 assert applying['state'] == 'Applying' and applying['root_started_at_utc'] and applying['publish_barrier'] and held.record['historyVerified']
                 (directory / 'cut-root.json').write_text(json.dumps(held.record))
                 (directory / 'bound-helper.json').write_text(json.dumps({'pid': held.pid, 'unit': held.cgroup, 'twoKernelFdProofs': True, 'proof': held.proof}))
-                restart = None; lease = None; elapsed = None
+                restart = None; lease = None; elapsed = None; authority = None
                 PHASE = kind + ':real-action-and-product-helper-exit'
                 # Observe exit concurrently with actual page actions and service drain.
                 if kind in ('cancel', 'logout'):
@@ -169,6 +171,19 @@ def run_case(kind, revision, evidence):
                         write_signal(directory, 'action.json', {'kind': kind})
                         action = wait_signal(directory, 'action-done.json', browser, 30)
                         elapsed = observing.result(timeout=16)
+                elif kind in ('group-removal','account-disable'):
+                    write_signal(directory, 'action.json', {'kind':kind})
+                    action = wait_signal(directory, 'action-done.json', browser, 30)
+                    assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc']) > dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
+                    with OwnedAuthentikRevocation(username, ready['subject']) as native:
+                        assert not select.select([held.descriptor],[],[],0)[0], 'BOUND_HELPER_ALREADY_EXITED'
+                        assert fingerprint(source.stat()) == baseline['original']
+                        began = time.monotonic()
+                        with ThreadPoolExecutor(max_workers=1) as exits:
+                            observing = exits.submit(held.wait_exit_seconds, began, 15)
+                            authority = native.change(kind)
+                            (directory/'authority-change.json').write_text(json.dumps(authority))
+                            elapsed = observing.result(timeout=16)
                 else:
                     write_signal(directory, 'action.json', {'kind': kind})
                     action = wait_signal(directory, 'action-done.json', browser, 30)
@@ -203,7 +218,7 @@ def run_case(kind, revision, evidence):
                         samples.append({'state': waiting['state'], 'lease': lease}); time.sleep(1)
                     (directory / 'natural-lease.json').write_text(json.dumps(samples))
                 PHASE = kind + ':original-business-and-root-terminal'
-                final = wait_settled(identifier); row = final['row']; expected = 'Canceled' if kind in ('cancel', 'logout') else 'Failed'
+                final = wait_settled(identifier); row = final['row']; expected = 'Canceled' if kind in ('cancel', 'logout', 'group-removal', 'account-disable') else 'Failed'
                 assert row['state'] == final['executionJob']['state'] == expected and final['planJob']['state'] == 'Succeeded'
                 assert row['root_started_at_utc'] and row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is None and row['lease_expires_at_utc'] is None
                 assert row['owner_confirmed'] is False and row['history_verified'] and row['history_may_exist'] and row['published_version'] is None
@@ -214,12 +229,13 @@ def run_case(kind, revision, evidence):
                 (directory / 'final-sql.json').write_text(json.dumps(final))
                 write_signal(directory, 'settled.json', {'id': identifier, 'state': expected})
                 assert browser.wait(timeout=60) == 0, 'ACTUAL_OWNERSHIP_TERMINAL_PAGE_NOT_VERIFIED'
-                ui = json.loads((directory / 'browser.json').read_bytes()); assert ui['actualUi'] and ui['normalDualLogout'] and ui['id'] == identifier
+                ui = json.loads((directory / 'browser.json').read_bytes()); assert ui['actualUi'] and ui['id'] == identifier
+                assert ui['authorityRevoked'] if authority else ui['normalDualLogout']
                 assert ui['registrations'] == ui['confirmations'] == 1 and ui['cancellations'] == (1 if kind == 'cancel' else 0) and ui['bodies'] == 0
                 result = {'kind': kind, 'id': identifier, 'executionJobId': row['execution_job_id'], 'state': expected, 'code': row['result_code'],
                     'rootState': 'Aborted', 'rootCutState': json.loads((directory / 'cut-root.json').read_bytes())['state'],
                     'productStoppedHelperSeconds': round(elapsed, 3), 'validatorKilledHelper': False, 'originalFullBytesAndFingerprintUnchanged': True,
-                    'actualUi': True, 'serviceRestart': restart}
+                    'actualUi': True, 'serviceRestart': restart, 'authorityRevoked': authority is not None}
                 (directory / 'verified.json').write_text(json.dumps(result)); proved = True
         finally:
             if held is not None: held.release()
@@ -249,12 +265,12 @@ def main():
     os.environ['GIT_OPTIONAL_LOCKS'] = '0'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     kinds = ('cancel', 'logout', 'worker-crash', 'agent-restart')
-    if len(sys.argv) == 3: assert sys.argv[2] in kinds; kinds = (sys.argv[2],)
+    if len(sys.argv) == 3: assert sys.argv[2] in kinds + ('group-removal','account-disable'); kinds = (sys.argv[2],)
     repo = Path(__file__).resolve().parents[2]
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(), 'FREEZE_VALIDATION_SOURCE_FIRST'
     validation_revision = subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()
     sources = {}
-    for name in ('bound_container_ownership_cut.py','bound_container_copy_cut.py','validate_container_ownership_faults.py','validate_container_ownership_faults.mjs','verify_container_ownership_faults.py','installed_ui_permission_session.mjs','validate_container_directory_restart.py'):
+    for name in ('bound_container_ownership_cut.py','bound_container_copy_cut.py','validate_container_ownership_faults.py','validate_container_ownership_faults.mjs','verify_container_ownership_faults.py','installed_ui_permission_session.mjs','validate_container_directory_restart.py','owned_authentik_revocation.py'):
         relative = 'deploy/validation/' + name
         frozen = subprocess.check_output(['git','-C',str(repo),'show',validation_revision+':'+relative])
         assert (repo/relative).read_bytes() == frozen

@@ -39,19 +39,19 @@ def verify(directory):
     records = []
     current_core = healthy_core()
     for result in accepted['cases']:
-        kind = result['kind']; assert kind in ('cancel', 'logout', 'worker-crash', 'agent-restart')
+        kind = result['kind']; assert kind in ('cancel', 'logout', 'worker-crash', 'agent-restart', 'group-removal', 'account-disable')
         p = directory / kind; trusted(p, True)
         baseline = json.loads((p / 'baseline.json').read_bytes()); ui = json.loads((p / 'browser.json').read_bytes())
         assert baseline['revision'] == ui['revision'] == accepted['revision'] and ui['id'] == result['id']
         assert ui['registrations'] == ui['confirmations'] == 1 and ui['cancellations'] == (1 if kind == 'cancel' else 0) and ui['bodies'] == 0
-        assert ui['actualUi'] and ui['normalDualLogout'] and result['actualUi'] and not result['validatorKilledHelper']
+        assert ui['actualUi'] and (ui['authorityRevoked'] if kind in ('group-removal','account-disable') else ui['normalDualLogout']) and result['actualUi'] and not result['validatorKilledHelper']
         assert 0 <= result['productStoppedHelperSeconds'] < 15 and result['originalFullBytesAndFingerprintUnchanged']
         expected_sha = hashlib.sha256(hashlib.shake_256(('owned-container-original:' + baseline['containerName']).encode()).digest(common.SIZE)).hexdigest().upper()
         assert baseline['sha256'] == expected_sha and baseline['bytes'] == common.SIZE
         value = snapshot(result['id']); row = value['row']
         assert value == json.loads((p / 'final-sql.json').read_bytes())
         assert row['actor_subject'] == ui['subject'] and row['execution_job_id'] == ui['executionJobId'] == result['executionJobId']
-        assert row['state'] == ui['finalState'] == value['executionJob']['state'] == ('Canceled' if kind in ('cancel', 'logout') else 'Failed')
+        assert row['state'] == ui['finalState'] == value['executionJob']['state'] == ('Canceled' if kind in ('cancel', 'logout', 'group-removal', 'account-disable') else 'Failed')
         assert value['planJob']['state'] == 'Succeeded' and value['accepted'] == value['confirmed'] == 1 and value['pending'] == 0
         assert row['owner_confirmed'] is False and row['history_may_exist'] and row['history_verified'] and row['published_version'] is None
         assert row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is None and row['lease_expires_at_utc'] is None
@@ -73,6 +73,16 @@ def verify(directory):
             digest = hashlib.sha256(b'whaledeck-container-ownership-history-v1\n' + json.dumps({k: v for k, v in history.items() if k != 'historyDigest'},
                 sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode()).hexdigest().upper()
             assert digest == history['historyDigest'] == record['historyDigest'] == row['history_digest']
+        if kind in ('group-removal','account-disable'):
+            proof = json.loads((p/'authority-change.json').read_bytes())
+            before,after = proof['before'],proof['after']
+            assert proof['kind']==kind and proof['onlyOwnedIdentityChanged'] and result['authorityRevoked']
+            assert before['uuid']==after['uuid']==proof['subject']==row['actor_subject']
+            assert re.fullmatch('whaledeck-upload-qa-[a-f0-9]{12}',before['username']) and after['username']==before['username']
+            assert before['pk']==after['pk'] and before['is_active'] is True and before['groups']
+            assert row['cancel_requested_at_utc'] is None and ui['cancellations']==0
+            if kind=='group-removal': assert after['groups']==[] and after['is_active'] is True and ui['currentIdentityStatus']==200
+            else: assert after['is_active'] is False and after['groups']==before['groups'] and ui['currentIdentityStatus'] in (401,403)
         if kind == 'worker-crash':
             service = result['serviceRestart']; assert service['sameWorkerContainerAndImage'] and service['signal'] == 'SIGKILL'
             assert dt.datetime.fromisoformat(row['completed_at_utc']) >= dt.datetime.fromisoformat(service['originalLeaseExpiresAtUtc'])

@@ -56,6 +56,8 @@ jobs:
           node --check deploy/validation/validate_container_ownership_faults.mjs
           node --check deploy/validation/validate_container_ownership_browser.mjs
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_ownership_fault_probe_scope.py
+          python3 -W error -m py_compile deploy/validation/owned_authentik_revocation.py
+          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_owned_authentik_revocation_scope.py
           python3 -W error -m py_compile deploy/validation/validate_container_ownership_unknown.py deploy/validation/verify_container_ownership_unknown.py
           node --check deploy/validation/validate_container_ownership_unknown.mjs
           python3 -W error -m py_compile deploy/validation/validate_container_permission_unknown.py deploy/validation/verify_container_permission_unknown.py
