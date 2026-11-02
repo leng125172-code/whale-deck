@@ -13,11 +13,11 @@ try {
   const fixture = JSON.parse(await readFile('/dev/stdin', 'utf8'))
   const revision = process.argv[2]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
-  assert.ok(['cancel', 'logout', 'group-removal', 'account-disable', 'worker-crash', 'agent-restart', 'post-acl-cancel', 'post-acl-worker-crash'].includes(fixture.kind))
+  assert.ok(['cancel', 'logout', 'group-removal', 'account-disable', 'worker-crash', 'agent-restart', 'post-acl-cancel', 'post-acl-worker-crash', 'post-acl-group-removal', 'post-acl-account-disable'].includes(fixture.kind))
   directory = fixture.evidence
   const prefix = fileURLToPath(new URL('../artifacts/', import.meta.url))
   assert.ok(directory.startsWith(prefix))
-  assert.match(directory.slice(prefix.length), /^container-acl-faults-[a-f0-9]{32}\/(cancel|logout|group-removal|account-disable|worker-crash|agent-restart|post-acl-cancel|post-acl-worker-crash)$/)
+  assert.match(directory.slice(prefix.length), /^container-acl-faults-[a-f0-9]{32}\/(cancel|logout|group-removal|account-disable|worker-crash|agent-restart|post-acl-cancel|post-acl-worker-crash|post-acl-group-removal|post-acl-account-disable)$/)
   const behavior = fixture.kind.replace(/^post-acl-/, ''), postAcl = fixture.kind.startsWith('post-acl-')
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
@@ -87,19 +87,19 @@ try {
   await writeSignal(directory, 'action-done.json', { registrations, confirmations, cancellations, bodies, subject: profile.subject, dualLogout: fixture.kind === 'logout' })
   const final = await waitSignal(directory, 'settled.json')
   assert.equal(final.id, intent.id)
-  const revoked = ['group-removal', 'account-disable'].includes(fixture.kind)
+  const revoked = ['group-removal', 'account-disable'].includes(behavior)
   let terminalIntent = null, currentIdentityStatus = null, originalIntentStatus = null, hintsCleared = false
   if (revoked) {
     phase = 'original-live-authority-denied'
     const denied = await context.request.get(ownEndpoint + '/' + intent.id); originalIntentStatus = denied.status()
     assert.ok([401, 403].includes(originalIntentStatus))
     const me = await context.request.get(base + '/api/v1/auth/me'); currentIdentityStatus = me.status()
-    if (fixture.kind === 'group-removal') {
+    if (behavior === 'group-removal') {
       assert.equal(me.status(), 200); const identity = await me.json(); assert.equal(identity.isAdministrator, false); assert.equal(identity.subject, profile.subject)
     } else assert.ok([401, 403].includes(me.status()))
     await page.reload()
     await expect(page.getByRole('status', { name: '正在启动 WhaleDeck 协同平台', exact: true })).toHaveCount(0)
-    if (fixture.kind === 'group-removal') {
+    if (behavior === 'group-removal') {
       await expect(page).toHaveURL(base + '/forbidden')
       await expect(page.getByRole('heading', { name: '没有管理权限', exact: true })).toBeVisible()
     } else {
@@ -128,7 +128,7 @@ try {
   assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, behavior === 'cancel' ? 1 : 0); assert.equal(bodies, 0)
   await writeSignal(directory, 'browser.json', { revision, kind: fixture.kind, id: intent.id, executionJobId: pending.executionJobId,
     subject: profile.subject, registrations, confirmations, cancellations, bodies, finalState: final.state, normalDualLogout: !revoked, authorityRevoked: revoked,
-    renderedRevocationPage: revoked ? fixture.kind === 'group-removal' ? 'forbidden' : 'login' : null, currentIdentityStatus, originalIntentStatus, hintsCleared,
+    renderedRevocationPage: revoked ? behavior === 'group-removal' ? 'forbidden' : 'login' : null, currentIdentityStatus, originalIntentStatus, hintsCleared,
     terminalIntent, logout: logoutReceipt, actualUi: true })
   await context.close()
   console.log(JSON.stringify({ aclFaultBrowser: 'passed', kind: fixture.kind }))

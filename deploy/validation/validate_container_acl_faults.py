@@ -25,7 +25,7 @@ from bound_container_acl_cut import ROOT, freeze_before_acl, freeze_after_acl, r
 from validate_container_acl_browser import SOURCES as BROWSER_SOURCES, snapshot, managed_plan, no_active_work, read_metadata, inventory, PATHS, NAMES, remove_proved, version
 from validate_container_directory_restart import Worker, command, preflight, agent_identity
 from validate_container_file_staging import load
-from validate_container_upload_bff import temporary_user
+from validate_container_upload_bff import temporary_user, login, logout, request
 from owned_authentik_revocation import OwnedAuthentikRevocation
 from validate_metric_continuity import query
 from validate_container_acl import unchanged_except_target
@@ -65,7 +65,7 @@ def wait_settled(identifier):
 
 
 def terminal_state(kind):
-    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash')
+    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash','post-acl-group-removal','post-acl-account-disable')
     if kind.startswith('post-acl-'):return 'Succeeded'
     return 'Failed' if kind in ('worker-crash','agent-restart') else 'Canceled'
 
@@ -110,6 +110,21 @@ def verify_terminal(identifier, subject, baseline, storage, module, directory=No
     if directory:
         (directory/'final-sql.json').write_text(json.dumps(data));(directory/'final-root.json').write_bytes(raw);(directory/'final-hdd.json').write_bytes(hdd_raw)
     return data,record,raw,hdd_raw
+
+
+def current_admin_terminal(identifier, original_subject, execution, version_value, directory):
+    """Read existing facts with a different currently authorized BFF identity."""
+    base='http://127.0.0.1:8080'
+    with temporary_user(True) as (name,password):
+        session,profile=login(base,name,password)
+        try:
+            assert profile['subject']!=original_subject and profile['isAdministrator'] is True
+            response=request(session,'GET',base+'/api/v1/files/container-acls/recovery/'+identifier,200);intent=response.json()
+            assert intent['id']==identifier and intent['executionJobId']==execution and intent['state']=='Succeeded' and intent['publishedVersion']==version_value
+            logout(base,session)
+            proof={'subject':profile['subject'],'currentlyAdministrator':True,'readStatus':200,'intent':intent,'readOnlyOperation':True,'normalHttpDualLogout':True}
+            (directory/'current-admin-read.json').write_text(json.dumps(proof));return proof
+        finally:session.close()
 
 
 def cleanup_original_after_failure(identifier, directory, folder, reader, module, content, original, *, browser_started):
@@ -283,16 +298,16 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                 (directory/'cut-physical.json').write_text(json.dumps(cut))
                 (directory/'cut-root.json').write_text(json.dumps(held.record));(directory/'bound-helper.json').write_text(json.dumps({'pid':held.pid,'unit':held.cgroup,'twoKernelFdProofs':True,'proof':held.proof}))
                 PHASE=kind+':visible-action-and-product-helper-exit';authority=None;restart=None;lease=None
-                if kind in ('group-removal','account-disable'):
+                if behavior in ('group-removal','account-disable'):
                     # Keep the original login and unexpired positive permission snapshot.
                     write_signal(directory,'action.json',{'kind':kind});action=wait_signal(directory,'action-done.json',browser,30)
                     assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc'])>dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
                     with OwnedAuthentikRevocation(username,ready['subject']) as native:
                         assert not select.select([held.descriptor],[],[],0)[0],'BOUND_ACL_HELPER_ALREADY_EXITED'
-                        assert inventory(folder,reader,module,content)==original
+                        assert inventory(folder,reader,module,content)==cut
                         began=time.monotonic()
                         with ThreadPoolExecutor(max_workers=1) as pool:
-                            exit_observer=pool.submit(held.wait_exit_seconds,began,15);authority=native.change(kind)
+                            exit_observer=pool.submit(held.wait_exit_seconds,began,15);authority=native.change(behavior)
                             (directory/'authority-change.json').write_text(json.dumps(authority));elapsed=exit_observer.result(timeout=16)
                 elif behavior in ('worker-crash','agent-restart'):
                     write_signal(directory,'action.json',{'kind':kind});action=wait_signal(directory,'action-done.json',browser,30)
@@ -361,6 +376,7 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                 ui=json.loads((directory/'browser.json').read_bytes());assert ui['actualUi'] and ui['id']==identifier and ui['subject']==ready['subject']
                 assert ui['authorityRevoked'] if authority else ui['normalDualLogout']
                 assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==(1 if behavior=='cancel' else 0) and ui['bodies']==0
+                if post and authority:current_admin_terminal(identifier,ready['subject'],data['row']['execution_job_id'],record['version'],directory)
                 result={'kind':kind,'id':identifier,'executionJobId':data['row']['execution_job_id'],'state':terminal_state(kind),'code':data['row']['result_code'],
                     'rootState':record['state'],'rootCutState':json.loads((directory/'cut-root.json').read_bytes())['state'],'productStoppedHelperSeconds':round(elapsed,3),
                     'validatorKilledHelper':False,'originalFullBytesFingerprintAclsAndAttributesUnchanged':not post,'postAclIdentityFullBytesAndAclsVerified':post,'actualUi':True,'normalDualLogout':authority is None,'authorityRevoked':authority is not None,'serviceRestart':restart}
@@ -397,8 +413,8 @@ def main():
     assert os.geteuid()==0 and len(sys.argv) in (2,3);os.umask(0o077)
     revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision);kinds=('cancel','logout')
     if len(sys.argv)==3:
-        assert sys.argv[2] in (*kinds,'group-removal','account-disable','revocation','worker-crash','agent-restart','restart','post-acl-cancel','post-acl-worker-crash','post-change')
-        kinds=('group-removal','account-disable') if sys.argv[2]=='revocation' else ('worker-crash','agent-restart') if sys.argv[2]=='restart' else ('post-acl-cancel','post-acl-worker-crash') if sys.argv[2]=='post-change' else (sys.argv[2],)
+        assert sys.argv[2] in (*kinds,'group-removal','account-disable','revocation','worker-crash','agent-restart','restart','post-acl-cancel','post-acl-worker-crash','post-change','post-acl-group-removal','post-acl-account-disable','post-revocation')
+        kinds=('group-removal','account-disable') if sys.argv[2]=='revocation' else ('worker-crash','agent-restart') if sys.argv[2]=='restart' else ('post-acl-cancel','post-acl-worker-crash') if sys.argv[2]=='post-change' else ('post-acl-group-removal','post-acl-account-disable') if sys.argv[2]=='post-revocation' else (sys.argv[2],)
     repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
     for name in SOURCES:
@@ -409,7 +425,7 @@ def main():
     with requests.Session() as session:
         session.trust_env=False;r=session.get('http://127.0.0.1:8080/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();evidence=repo/'deploy/artifacts'/('container-acl-faults-'+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
-    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':4,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision}))
+    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':5,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_fault_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_fault_module');files=reader.trusted_module('whaledeck-files.py','acl_fault_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_fault_hdd').FileBackups(files)
     print(json.dumps({'aclFaults':'started','evidence':str(evidence),'kinds':kinds}),flush=True);results=[]
     for kind in kinds:

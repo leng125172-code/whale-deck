@@ -215,18 +215,37 @@ class AclRevocationEvidenceTests(unittest.TestCase):
         self.proof['after']['groups']=[]
         with self.assertRaises(AssertionError):self.check()
 
+    def test_post_acl_revocation_keeps_same_authority_denial_requirements(self):
+        self.result['kind']='post-acl-group-removal';self.check()
+        self.result['kind']='post-acl-account-disable';self.proof['kind']='account-disable';self.proof['after']={**self.proof['before'],'is_active':False}
+        self.ui.update(renderedRevocationPage='login',currentIdentityStatus=403);self.check()
+        self.ui['originalIntentStatus']=200
+        with self.assertRaises(AssertionError):self.check()
+
+    def test_historical_success_read_requires_distinct_current_admin_and_original_ids(self):
+        row={'id':'intent','execution_job_id':'execution','actor_subject':'old'};record={'version':'version','historyDigest':'digest'}
+        intent={'id':'intent','executionJobId':'execution','state':'Succeeded','publishedVersion':'version','aclConfirmed':True,'confirmation':None,'historyVerified':True,'historyDigest':'digest','receipt':{'id':'execution','state':'Completed','bindingCurrent':True}}
+        proof={'subject':'new','currentlyAdministrator':True,'readStatus':200,'readOnlyOperation':True,'normalHttpDualLogout':True,'intent':intent}
+        self.verifier.verify_current_admin(proof,row,record,'old')
+        for key,value in [('subject','old'),('currentlyAdministrator',False),('readOnlyOperation',False),('normalHttpDualLogout',False),('readStatus',403)]:
+            with self.subTest(key=key),self.assertRaises(AssertionError):self.verifier.verify_current_admin({**proof,key:value},row,record,'old')
+        changed=copy.deepcopy(proof);changed['intent']['executionJobId']='foreign'
+        with self.assertRaises(AssertionError):self.verifier.verify_current_admin(changed,row,record,'old')
+
     def test_legacy_sources_remain_valid_only_for_legacy_kinds(self):
         sources={n:'synthetic-sha' for n in self.verifier.SOURCES};old={k:v for k,v in sources.items() if k!='owned_authentik_revocation.py'}
         self.verifier.validate_source_profile({'sha256':old},['cancel','logout'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'sha256':old},['group-removal'])
         self.verifier.validate_source_profile({'schemaVersion':2,'sha256':sources},['group-removal','account-disable'])
-        for schema in (True,5,'2'):
+        for schema in (True,6,'2'):
             with self.subTest(schema=schema),self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':schema,'sha256':sources},['group-removal'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':2,'sha256':old},['account-disable'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':2,'sha256':sources},['worker-crash'])
         self.verifier.validate_source_profile({'schemaVersion':3,'sha256':sources},['worker-crash','agent-restart'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':3,'sha256':sources},['post-acl-cancel'])
         self.verifier.validate_source_profile({'schemaVersion':4,'sha256':sources},['post-acl-cancel','post-acl-worker-crash'])
+        with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':4,'sha256':sources},['post-acl-group-removal'])
+        self.verifier.validate_source_profile({'schemaVersion':5,'sha256':sources},['post-acl-group-removal','post-acl-account-disable'])
 
 
 class AclRestartEvidenceTests(unittest.TestCase):

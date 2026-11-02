@@ -18,7 +18,8 @@ from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, requi
 
 def validate_source_profile(provenance, kinds):
     schema=provenance.get('schemaVersion',1)
-    assert type(schema) is int and schema in (1,2,3,4)
+    assert type(schema) is int and schema in (1,2,3,4,5)
+    if schema<5:assert not set(kinds)&{'post-acl-group-removal','post-acl-account-disable'}
     if schema<4:assert not set(kinds)&{'post-acl-cancel','post-acl-worker-crash'}
     if schema<3:assert not set(kinds)&{'worker-crash','agent-restart'}
     expected=set(SOURCES)
@@ -29,7 +30,7 @@ def validate_source_profile(provenance, kinds):
 
 
 def verify_authority(baseline, ui, row, result, proof):
-    kind=result['kind'];assert kind in ('group-removal','account-disable')
+    kind=result['kind'].removeprefix('post-acl-');assert kind in ('group-removal','account-disable')
     assert ui['authorityRevoked'] and result['authorityRevoked'] and ui['normalDualLogout'] is False and not ui.get('logout')
     assert ui['renderedRevocationPage']==('forbidden' if kind=='group-removal' else 'login') and ui['hintsCleared'] is True
     assert ui['originalIntentStatus'] in (401,403) and ui['currentIdentityStatus'] in ((200,) if kind=='group-removal' else (401,403))
@@ -43,6 +44,16 @@ def verify_authority(baseline, ui, row, result, proof):
     expiry=dt.datetime.fromisoformat(baseline['permissionExpiresAtUtc']);changed=dt.datetime.fromisoformat(proof['confirmedAtUtc'])
     assert expiry.tzinfo is not None and changed.tzinfo is not None and expiry>changed+dt.timedelta(hours=1)
     assert row['cancel_requested_at_utc'] is None and ui['cancellations']==0
+
+
+def verify_current_admin(proof, row, record, old_subject):
+    assert proof['subject']!=old_subject==row['actor_subject'] and proof['currentlyAdministrator'] is True
+    assert proof['readStatus']==200 and proof['readOnlyOperation'] is True and proof['normalHttpDualLogout'] is True
+    intent=proof['intent'];assert intent['id']==row['id'] and intent['executionJobId']==row['execution_job_id'] and intent['state']=='Succeeded'
+    assert intent['publishedVersion']==record['version'] and intent['aclConfirmed'] is True and intent['confirmation'] is None
+    assert intent['historyVerified'] and intent['historyDigest']==record['historyDigest'] and intent['receipt']['state']=='Completed'
+    assert intent['receipt']['id']==row['execution_job_id'] and intent['receipt']['bindingCurrent'] is True
+    return intent
 
 
 def verify_lease_proof(row, final, proof, raw, *, post=False):
@@ -124,11 +135,11 @@ def verify(directory):
     current=owned.common.core_snapshot();assert len(current)==11;results=[]
     assert accepted['cases'] and len(accepted['cases'])<=2 and len({r['kind'] for r in accepted['cases']})==len(accepted['cases'])
     for result in accepted['cases']:
-        kind=result['kind'];assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash');p=directory/kind;trusted(p,True)
+        kind=result['kind'];assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash','post-acl-group-removal','post-acl-account-disable');p=directory/kind;trusted(p,True)
         baseline=read(p/'baseline.json');ui=read(p/'browser.json');cut=read(p/'cut-root.json');bound=read(p/'bound-helper.json')
         assert baseline['revision']==ui['revision']==accepted['revision'] and baseline['validationSourceRevision']==provenance['revision'] and baseline['kind']==ui['kind']==kind
         post=kind.startswith('post-acl-');behavior=kind.removeprefix('post-acl-')
-        revoked=kind in ('group-removal','account-disable')
+        revoked=behavior in ('group-removal','account-disable')
         if not revoked:
             assert ui['logout']['normalUiLogout'] and ui['logout']['providerNavigationObserved'] and ui['logout']['bffStatus']==401 and ui['logout']['identityStatus'] in (401,403)
             assert ui['normalDualLogout']
@@ -147,7 +158,7 @@ def verify(directory):
             assert target['identity'][8]>baseline['original']['acl-file.bin']['identity'][8] and target['access']==record['plan']['command']['entries'] and target['default']==record['plan']['defaultAcl']
             late=read(p/'late-apply.json');assert late['operationId']==record['operationId'] and late['state']=='Completed' and late['aclConfirmed'] is True and late['replayed']
             assert late['version']==record['version'] and late['historyDigest']==record['historyDigest']
-            intent=ui['terminalIntent'];assert intent['id']==data['row']['id'] and intent['executionJobId']==data['row']['execution_job_id']
+            intent=verify_current_admin(read(p/'current-admin-read.json'),data['row'],record,ui['subject']) if revoked else ui['terminalIntent'];assert intent['id']==data['row']['id'] and intent['executionJobId']==data['row']['execution_job_id']
             assert intent['state']=='Succeeded' and intent['resultCode']=='CONTAINER_ACL_COMPLETED' and intent['publishedVersion']==record['version'] and intent['aclConfirmed'] is True and intent['confirmation'] is None
             assert intent['historyVerified'] and intent['historyDigest']==record['historyDigest'] and intent['receipt']['id']==data['row']['execution_job_id'] and intent['receipt']['state']=='Completed' and intent['receipt']['bindingCurrent']
             assert intent['receipt']['version']==record['version'] and intent['receipt']['historyDigest']==record['historyDigest']
