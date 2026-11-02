@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-03 ACL永久化候选更新：72d678e已接具体EF/迁移17个CHECK、原登录/原回执MAC与历史不可改、自然租约/CAS和十方双向保护；c9c9265补专用消息排除/通用重试拒绝。4272 Unit/364 Integration（7原生默认跳过）及双隔离真实PG完整门禁与独立清理通过。未部署/生产ACL表不存在，无管理员API/Vue、实际Worker或真实身份文件/HDD业务验收，原Root/身份/时钟为合成；不据此前批机器RPC拼接真人整链。[实现和边界](qa/CONTAINER_ACL_PERSISTENCE.md)。
+
 2026-11-03 ACL内部业务更新：41f02fb已接登录绑定/实时授权、原计划明确确认、结构比较/深复制及原任务Inspect优先恢复，回执独立MAC保护原ACL类型/模式/历史及三态；Unknown不重做、不篡改历史，处置使用原执行ID。4270 Unit/363 Integration（7默认原生跳过）与8范围通过；仍无具体EF仓储/共享保护/Worker/API/Vue或真人业务验收，无发布和默认User扩权，运行沿前批4a58961/1.51。[实现与验收边界](qa/CONTAINER_ACL_WORKFLOW.md)。
 
 2026-11-03 ACL1.51安装态权限已真实签收：4a58961固定helper/独立签名四RPC、13预检及4执行绑定拒绝通过，显式ID0与缺ID/权限分开、core/只读根/错域/过期/重放拒绝，真实初始namespace/准确FD非IDMAP通过，无CHOWN/SYS_ADMIN。9操作及8HDD/原inode/非目标ACL/迟到原签名请求不重写、独立清理通过；仅受信机器调用，不是人类Authentik/BFF/永久意图/页面授权验收，默认User不扩权。两次写前失败及真实入口工厂回归保留，开发user NOPASSWD/密码未改。[实际证据与未验边界](qa/CONTAINER_ACL_AGENT_RPC.md)。

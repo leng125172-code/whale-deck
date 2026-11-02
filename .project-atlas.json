@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_WORKFLOW.md；docs/qa/CONTAINER_ACL_AGENT_RPC.md",
-  "nextStep": "ACL内部业务41f02fb已通过4270 Unit/363 Integration（7原生跳过）及8范围，无发布；宿主4a58961/1.51与应用b1fafed沿前批。下一步具体ACL EF/迁移、双Job/Outbox/审计/自然租约与回执MAC，双向数据库/路径/预算保护及隔离真实PG，再专用Worker、严格管理员API/Vue和真实Authentik对象/HDD常规及故障整链；ACL递归/历史恢复、删除/长期清理和其余59项/UI/C#酒馆/供应商/AI Live2D继续。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_PERSISTENCE.md；docs/qa/CONTAINER_ACL_AGENT_RPC.md",
+  "nextStep": "ACL永久化72d678e/任务入口c9c9265候选已接EF/17 CHECK/十方保护/独立回执MAC/租约/CAS/Worker，4272 Unit/364 Integration（7默认原生跳过）、双隔离真实PG1通过及独立清理通过，未部署/生产表不存在。下一步严格管理员API/Vue、正常覆盖和真实Authentik→业务→Agent→实际ACL/HDD常规及故障整链；ACL递归/历史恢复、删除/长期清理/P0-05及其余59项/UI/C#酒馆/供应商/AI Live2D继续。17项移出不算完成，不自动回滚dev。"
 }

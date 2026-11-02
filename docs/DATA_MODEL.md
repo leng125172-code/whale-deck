@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-03 ACL永久化候选更新：72d678e已接具体EF/迁移17个CHECK、原登录/原回执MAC与历史不可改、自然租约/CAS和十方双向保护；c9c9265补专用消息排除/通用重试拒绝。4272 Unit/364 Integration（7原生默认跳过）及双隔离真实PG完整门禁与独立清理通过。未部署/生产ACL表不存在，无管理员API/Vue、实际Worker或真实身份文件/HDD业务验收，原Root/身份/时钟为合成；不据此前批机器RPC拼接真人整链。[实现和边界](qa/CONTAINER_ACL_PERSISTENCE.md)。
+
 2026-11-02后续实机：b1fafed正常覆盖已应用递归所有者migration，真实页面6意图/5执行/同原Subject23审计与5成功/1取消、5聚合20子项HDD对账，生产不再是“新表不存在”。原整套退出失败保留，独立补证/原事实回读与清理通过；不是全部故障或完整文件模块签收。[当前证据](qa/CONTAINER_RECURSIVE_OWNERSHIP_REAL_UI.md)。
 
 2026-11-02后续候选a19f5c4已将`ContainerRecursiveOwnershipIntent`加入PlatformDbContext并实现具体仓储与migration `20261102131222_ContainerRecursiveOwnershipIntents`：16个CHECK（含显式UID/GID范围）、双Job受限外键/唯一执行与租约/屏障/版本、原请求/计划/执行/开始与Root事实不可变、永久行删除/非空降级拒绝。九方数据库触发器及应用路径/预算双向保护已接；双隔离真实PG全套与独立清理通过。**生产新表仍不存在，尚未部署或接管理员API/Vue**。下方“尚无具体仓储/migration”等是前批事实，不按类或文档完成永久业务上线。[候选模型与实际边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_PERSISTENCE.md)。
