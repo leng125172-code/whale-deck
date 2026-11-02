@@ -88,4 +88,11 @@ public sealed class ContainerAclPolicyTests
         var caps=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.Equal(1U,caps.ProtocolMajor);Assert.Equal(51U,caps.ProtocolMinor);
         Assert.Contains("docker.files.acl-intents",caps.Capabilities);Assert.Contains("docker.files.ownership-intents",caps.Capabilities);Assert.Contains("docker.files.recursive-ownership-intents",caps.Capabilities);
     }
+    [Fact] public void SignatureNegativeProbeMustRemainSemanticallyValidBeforeBindingCheck()
+    {
+        var original=Request();var changed=original.Clone();changed.Plan.SourceChangedAtUnixNs++;
+        ContainerAclPolicy.Request(changed);
+        Assert.NotEqual(ContainerAclBinding.Hash(original),ContainerAclBinding.Hash(changed));
+    }
+
 }

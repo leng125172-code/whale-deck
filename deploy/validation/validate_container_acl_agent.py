@@ -100,8 +100,8 @@ def archive(evidence,operation,storage):
 
 def main():
     global PHASE
-    assert os.geteuid()==0 and len(sys.argv)==3;os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
-    revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision);repo=Path(__file__).resolve().parents[2];binary=Path(sys.argv[2])
+    assert os.geteuid()==0 and len(sys.argv) in (3,4);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
+    revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision);probe_revision=sys.argv[3] if len(sys.argv)==4 else revision;assert re.fullmatch('[a-f0-9]{40}',probe_revision);repo=Path(__file__).resolve().parents[2];binary=Path(sys.argv[2])
     assert binary.parent.parent==repo/'deploy/artifacts' and re.fullmatch(r'terminal-probe\.[A-Za-z0-9]+',binary.parent.name) and binary.name=='TerminalProbe'
     trusted(binary);trusted(binary.parent,True);subprocess.run(['sha256sum','--quiet','-c','SHA256SUMS'],cwd=binary.parent,check=True,capture_output=True,timeout=20)
     names=(*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged');hashes={}
@@ -126,10 +126,10 @@ def main():
             for relative in PATHS:os.utime(folder/relative,ns=(1700000000123456789,1700000000123456789))
             actual=json.loads(owned.common.command(['docker','inspect',fixture['identifier']]))[0]
             location={'containerId':fixture['identifier'],'instanceId':str(actual['State']['Pid'])+':'+actual['State']['StartedAt']}
-            baseline={'revision':revision,**location,'source':str(folder),'original':inventory(folder,reader,module,content),'sha256':hashlib.sha256(content).hexdigest().upper(),
+            baseline={'revision':revision,'probeRevision':probe_revision,**location,'source':str(folder),'original':inventory(folder,reader,module,content),'sha256':hashlib.sha256(content).hexdigest().upper(),
                       'bytesPerFile':len(content),'coreBefore':core,'hostBefore':hosts,'installedSourceSha256':hashes,'candidateOnly':False,
                       'fixtureOriginal':{'identity':list(fixture['proofs']['original.bin'][0]),'sha256':fixture['proofs']['original.bin'][1]}}
-            (evidence/'baseline.json').write_text(json.dumps(baseline));probe=Probe(binary,evidence,{'revision':revision,**location,'coreId':core['/whaledeck-api'][0]})
+            (evidence/'baseline.json').write_text(json.dumps(baseline));probe=Probe(binary,evidence,{'revision':revision,'probeRevision':probe_revision,**location,'coreId':core['/whaledeck-api'][0]})
             cases=[('access','acl-file.bin','access','named'),('noop','acl-file.bin','access','named'),('mask','acl-file.bin','access','mask'),('root','acl-file.bin','access','root'),
                    ('base','acl-file.bin','access','base'),('default','acl-directory','default','named'),('default-noop','acl-directory','default','named'),
                    ('clear-default','acl-directory','default','clear'),('cancel','acl-file.bin','access','mask')]
@@ -171,7 +171,7 @@ def main():
             directory=folder/'acl-directory';assert not list(directory.iterdir()) and list(reader.fingerprint(directory.lstat()))[:5]==final['acl-directory']['identity'][:5];directory.rmdir()
         assert not folder.exists() and owned.common.core_snapshot()==core and host_identity(revision)==hosts;no_active_work()
         units=subprocess.check_output(['systemctl','list-units','--all','--no-legend','whaledeck-container-acl-*'],text=True,timeout=10);assert not units.strip()
-        result={'installedAclRpc':'passed','revision':revision,'operations':9,'completed':8,'aborted':1,'hddMetadata':8,'planBoundaryRefusals':13,'executionBoundaryRefusals':4,
+        result={'installedAclRpc':'passed','revision':revision,'probeRevision':probe_revision,'operations':9,'completed':8,'aborted':1,'hddMetadata':8,'planBoundaryRefusals':13,'executionBoundaryRefusals':4,
                 'fullBytesOriginalInodesOwnersMtimeOrdinaryAttributes':True,'nonselectedAclAndChildrenPreserved':True,'lateSignedRpcDidNotReapply':True,'exactSourceAndContainerRemoved':True,'coreAndHostsUnchanged':True,'humanBffOrUi':False}
         (evidence/'verified.json').write_text(json.dumps(result));print(json.dumps({**result,'evidence':evidence.name}),flush=True)
     except BaseException as error:

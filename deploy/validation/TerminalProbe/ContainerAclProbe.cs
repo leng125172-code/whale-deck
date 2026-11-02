@@ -19,11 +19,13 @@ internal static class ContainerAclProbe
         using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(360));
         var headerText = await Console.In.ReadLineAsync(lifetime.Token); Require(headerText is { Length: > 0 and <= 8192 });
         using var header = JsonDocument.Parse(headerText!); var value = header.RootElement;
-        Require(value.EnumerateObject().Count() == 4);
+        Require(value.EnumerateObject().Count() == 5);
+        var probeRevision = value.GetProperty("probeRevision").GetString()!;
+        Require(probeRevision.Length == 40 && probeRevision.All(char.IsAsciiHexDigitLower));
         var revision = value.GetProperty("revision").GetString()!; var id = value.GetProperty("containerId").GetString()!;
         var instance = value.GetProperty("instanceId").GetString()!; var core = value.GetProperty("coreId").GetString()!;
         Require(revision.Length == 40 && revision.All(char.IsAsciiHexDigitLower) && id.Length == 64 && id.All(char.IsAsciiHexDigitLower) && core.Length == 64 && core.All(char.IsAsciiHexDigitLower));
-        Require(Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.EndsWith("+" + revision, StringComparison.Ordinal));
+        Require(Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.EndsWith("+" + probeRevision, StringComparison.Ordinal));
         var key = await File.ReadAllBytesAsync("/etc/whaledeck/agent-capability.key", lifetime.Token);
         try
         {
@@ -111,7 +113,7 @@ internal static class ContainerAclProbe
                     var refusals=0;
                     if(input.GetProperty("boundaries").GetBoolean())
                     {
-                        var changed=request.Clone();changed.Plan.NoChange=!changed.Plan.NoChange;
+                        var changed=request.Clone();changed.Plan.SourceChangedAtUnixNs++;
                         await Denied(async()=>await client.ApplyAsync(changed,Headers("Apply",request),Until(),lifetime.Token),StatusCode.PermissionDenied);refusals++;
                         await Denied(async()=>await client.ApplyAsync(request,Headers("Plan",request),Until(),lifetime.Token),StatusCode.PermissionDenied);refusals++;
                         await Denied(async()=>await client.ApplyAsync(request,Headers("Apply",request,"domain"),Until(),lifetime.Token),StatusCode.PermissionDenied);refusals++;
