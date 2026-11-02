@@ -100,6 +100,9 @@ jobs:
           python3 -m py_compile deploy/validation/validate_container_restoration_publication.py
           python3 -m py_compile deploy/validation/validate_container_missing_target.py
           node --check deploy/validation/validate_container_restoration_publication.mjs
+          python3 -W error::SyntaxWarning -m py_compile deploy/validation/validate_container_acl_browser.py deploy/validation/verify_container_acl_browser.py
+          python3 -m unittest discover -s deploy/validation -p test_acl_browser_proof.py
+          node --check deploy/validation/validate_container_acl_browser.mjs
           node --check deploy/validation/installed_ui_logout.mjs
           node --check deploy/validation/validate_container_restore_browser.mjs
           python3 -m py_compile deploy/validation/validate_container_upload_bff.py
