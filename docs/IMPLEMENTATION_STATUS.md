@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-11-02递归所有者底层候选ef5425a通过真实容器/HDD**：新增显式UID/GID、有界双遍清单与独立聚合/子项历史域，复用单对象fchown与永久回执，Partial/Unknown只观察恢复、不续做。421项容器文件Linux-root（16新专项）零跳过通过；冻结10模块新资源4操作(2完成/1部分/1中止)、2次真实候选子进程SIGKILL、完整2097159字节/原inode/mode/mtime/普通属性与4聚合/9子项HDD和迟到不重做通过，独立准确清理/11核心不变且healthy通过。共享框架默认chmod的另4操作/2强杀及独立HDD回归也通过；schemaVersion严格整数加固未覆盖线上。**未安装/无签名RPC/永久业务/Worker/API/Vue或人类页面**，产品仍0dede08/1.49，不发布/不回滚；同设备元数据不计异盘灾备。下一步C# RPC/SDK/固定传输与安装实测，再永久业务及真实页面；ACL/删除和其余59项继续，17移出不算完成。[候选证据与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_ENGINE.md)。
+
 - **2026-11-02递归进行中正常双端退出实机通过**：产品保持0dede08/1.49、不发布/不回滚。冻结8dc8d55及20份运行依赖，新资源首次真实门禁及独立核验通过。首项实际chmod后正常可见用户菜单完成BFF/Authentik双端退出，产品4.257秒结束原helper、取消POST0；退出前后原账号仍启用且组/Subject/PK不变、原快照尚余7157秒，原容器CID/PID/StartedAt不变。旧任务HTTP401、旧region/引用清空；原ID保留Partial(1完成/1修改/1中止/16未开始/0未知)，切点/退出后/恢复后全树相同，不续做。不同管理员真实明色小屏逐dt/dd核对五类计数，先暂不处置再确认，原Job Failed/Acknowledged、Root/HDD/完整源事实保留，迟到不重做。5哈希审计/5真实PNG/52检查通过，11核心healthy及8数据库平台不变；同设备历史不计异盘灾备。继续递归所有者/ACL/删除和其余故障/59项。[完整证据与边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_LOGOUT.md)。
 
 - **2026-11-02递归进行中实时组撤权/账号停用两例实机通过**：产品保持0dede08/1.49、不发布/不回滚。冻结3c76ecc及20份运行依赖，两套新资源首次真实门禁及各自独立核验通过。首项实际修改后只改准确临时Authentik账号，原正快照仍剩约7160秒；产品4.116/4.113秒结束原helper，无取消POST，原实例保留。旧任务均HTTP403，移组后me200/admin=false及forbidden，停用后me403及login，旧任务region/引用清空。两例原ID保留Partial(1完成/1修改/1中止/16未开始/0未知)，切点/退出后/恢复后全树相同，不续做；不同管理员真实页面先暂不处置再确认，原Job Failed/Acknowledged、Root/HDD/完整源事实保留，迟到不重做。共10哈希审计/8小屏PNG/51检查、11核心healthy及8数据库平台不变；撤权不计正常双端退出，同设备历史不计异盘灾备。其余切点/退出、递归所有者/ACL/删除和59项继续。[完整证据与边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_REVOCATION.md)。
