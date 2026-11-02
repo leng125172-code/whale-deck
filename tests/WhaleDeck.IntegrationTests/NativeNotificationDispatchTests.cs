@@ -171,6 +171,7 @@ public sealed partial class NativeNotificationDispatchTests
         await FileTreeOverwriteRestoringWorkflowBoundaries(options);
         await FileTreeMoveWorkflowBoundaries(options);
         await FileTreePurgingWorkflowBoundaries(options);
+        await ContainerRecursivePermissionBoundaries(options);
     }
 
     private static async Task PrivateWorkflow(PlatformDbContext db)

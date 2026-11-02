@@ -151,6 +151,7 @@ public sealed partial class ContainerCopyRepository(PlatformDbContext db, IConta
         if (await db.FilePathLocks.AnyAsync(cancellationToken) || await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) || await db.ContainerCopyIntents.AnyAsync(r => r.PublishBarrier && r.Id != row.Id, cancellationToken) ||
             await db.ContainerOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerRecursivePermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerPermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerMoveIntents.AnyAsync(r => r.PublishBarrier, cancellationToken)) return ContainerFileUploadStartResult.Busy;
         row.State = "Applying"; row.RootStartedAtUtc = now; row.PublishBarrier = true; row.Version++;
