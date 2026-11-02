@@ -6,9 +6,16 @@ namespace WhaleDeck.Application.Services;
 
 /// <summary>HTTP-sized transitions only. Metadata attestation and UID/GID changes belong to the dispatcher.</summary>
 public sealed class ContainerOwnershipWorkflowService(ContainerFileUploadService authorization, IContainerOwnershipRepository repository,
-    IContainerOwnershipProtector protector, IContainerOwnershipGateway gateway, TimeProvider clock)
+    IContainerOwnershipProtector protector, IContainerOwnershipGateway gateway, TimeProvider clock, IPrivilegedIdentityDirectory liveIdentity)
 {
-    public Task AuthorizeAsync(TerminalActor actor, CancellationToken cancellationToken) => authorization.AuthorizeAsync(actor, cancellationToken);
+    public async Task AuthorizeAsync(TerminalActor actor, CancellationToken cancellationToken)
+    {
+        FileManagementService.ValidateActor(actor);
+        var current = await liveIdentity.ResolveForPrivilegedActionAsync(actor.Subject, actor.Name, cancellationToken);
+        if (current.Subject != actor.Subject || !current.IsAdministrator || current.PermissionExpiresAtUtc <= clock.GetUtcNow())
+            throw new UnauthorizedAccessException("CONTAINER_OWNERSHIP_CURRENT_ADMINISTRATOR_REQUIRED");
+        await authorization.AuthorizeAsync(actor, cancellationToken);
+    }
     public async Task<ContainerOwnershipIntentDto> QueueAsync(TerminalActor actor, ContainerOwnershipCommandDto command, string key, CancellationToken cancellationToken)
     {
         await AuthorizeAsync(actor, cancellationToken); ContainerOwnershipValidation.Command(command);

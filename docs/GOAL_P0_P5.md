@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-02新增源码候选：所有者已接独立实时Authentik权威复核，修正6秒巡检仍读取2小时快照的问题；3585 Unit/258 Integration（7默认原生跳过）及Release通过。普通页面快照保留，候选未部署；真实组撤权/账号停用仍待，不以HTTP Stub冒充实机证据。[候选边界](qa/CONTAINER_OWNERSHIP_LIVE_AUTHORITY.md)。
+
 最新已记录安装六组件为`e91a770`/Agent1.48。2026-10-31所有者真实页面四类中断（取消/退出/Worker强杀自然租约/Agent重启）与Unknown不同管理员处置、等待目录保护/迟到Apply不重做、独立SQL/Root/HDD/原文件和准确清理通过；修复Unknown小屏确认按钮后已覆盖并实际重验，记录于2026-11-02补齐。[完整证据及未验边界](qa/CONTAINER_OWNERSHIP_FAULTS.md)。d5e62ca常规7场景证据独立保留；仍需真实组撤权/账户停用、fchown之后/回执丢失等其余组合及递归/ACL/删除，不计完整文件模块完成，不把旧健康当当日复跑。
 
 2026-10-30用户已通过`[Goal]`重新启用本目标执行。前批deef721新增[所有者内部业务候选](qa/CONTAINER_OWNERSHIP_WORKFLOW.md)：业务签名/原登录状态机已通过3579全Unit与Release；SQL/七方保护/Worker注册/API/UI尚未接通，不能算完成永久业务或新部署。

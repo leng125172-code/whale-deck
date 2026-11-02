@@ -269,6 +269,42 @@ public sealed class ContainerOwnershipWorkflowTests
         Assert.Equal("Unknown", row.State); Assert.Equal(0, f.Gateway.Inspects); Assert.Equal(0, f.Gateway.Applies);
         Assert.Equal("CONTAINER_OWNERSHIP_BINDING_CHANGED", row.ResultCode);
     }
+    [Fact]
+    public async Task LiveDemotionCannotUseThePositiveCachedAdministratorOrRegisterAPlan()
+    {
+        using var f = new Fixture(); f.Identity.LiveAdmin = false;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => f.Queue());
+        Assert.Null(f.Repository.Row); Assert.Equal(0, f.Gateway.Requires);
+    }
+
+    [Fact]
+    public async Task LostLiveIdentityCannotUseThePositiveCachedAdministrator()
+    {
+        using var f = new Fixture(); f.Identity.LiveUnavailable = true;
+        await Assert.ThrowsAsync<IOException>(() => f.Queue());
+        Assert.Null(f.Repository.Row); Assert.Equal(0, f.Gateway.Requires);
+    }
+
+    [Theory][InlineData(false)][InlineData(true)]
+    public async Task LiveAuthorityLossDuringApplyCancelsRpcDespitePositiveCachedPermission(bool unavailable)
+    {
+        using var f = new Fixture(); await f.Create();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var canceled = false;
+        f.Gateway.AsyncApply = async (_, token) => {
+            started.SetResult();
+            try { await Task.Delay(Timeout.Infinite, token); throw new InvalidOperationException(); }
+            catch (OperationCanceledException) { canceled = true; throw; }
+        };
+        var tick = f.Dispatcher.TickAsync(default); await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        if (unavailable) f.Identity.LiveUnavailable = true; else f.Identity.LiveAdmin = false;
+        await tick.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(f.Identity.Admin); Assert.True(canceled); Assert.True(f.Repository.Row!.PublishBarrier);
+        Assert.Equal(1, f.Gateway.Applies);
+        f.Identity.LiveUnavailable = false; f.Identity.LiveAdmin = false;
+        await f.Dispatcher.TickAsync(default);
+        Assert.Equal("Canceled", f.Repository.Row.State); Assert.False(f.Repository.Row.PublishBarrier);
+        Assert.Equal(1, f.Gateway.Applies); Assert.Equal(1, f.Gateway.Discards);
+    }
     private sealed class Fixture : IDisposable
     {
         private readonly string _key = Path.GetTempFileName(); public Clock Clock { get; } = new();
@@ -284,7 +320,7 @@ public sealed class ContainerOwnershipWorkflowTests
             Identity = new(Clock); Gateway = new(directory); Repository = new(Protector, Clock);
             var files = new FileManagementService(Unused<IFileGateway>(), Unused<IFileUploadRepository>(), Protector, Identity, Clock);
             var auth = new ContainerFileUploadService(files, Logins, Unused<IContainerFileWriteGateway>(), Unused<IContainerFileUploadRepository>(), Protector, Clock);
-            Service = new(auth, Repository, Protector, Gateway, Clock); Dispatcher = new(Repository, Gateway, Service, Protector, Clock);
+            Service = new(auth, Repository, Protector, Gateway, Clock, Identity); Dispatcher = new(Repository, Gateway, Service, Protector, Clock);
         }
         private static T Unused<T>() where T : class => DispatchProxy.Create<T, ContainerUploadServiceTests.Unused>();
         public Task<ContainerOwnershipIntentDto> Queue() => Service.QueueAsync(Actor, Command, Key, default);
@@ -295,11 +331,15 @@ public sealed class ContainerOwnershipWorkflowTests
         public void Dispose() => File.Delete(_key);
     }
     private sealed class Clock : TimeProvider { public DateTimeOffset Now { get; set; } = new(2026, 10, 28, 1, 2, 3, TimeSpan.Zero); public override DateTimeOffset GetUtcNow() => Now; }
-    private sealed class Identity(TimeProvider clock) : IIdentityDirectory
+    private sealed class Identity(TimeProvider clock) : IIdentityDirectory, IPrivilegedIdentityDirectory
     {
         public bool Admin { get; set; } = true; public bool Unavailable { get; set; }
+        public bool? LiveAdmin { get; set; } public bool LiveUnavailable { get; set; }
         public Task<CurrentUserDto> ResolveCurrentAsync(string subject, string? name, IReadOnlyCollection<string> groups, CancellationToken token) =>
             Unavailable ? Task.FromException<CurrentUserDto>(new IOException("synthetic identity unavailable")) : Task.FromResult(new CurrentUserDto(subject, name, groups, Admin, clock.GetUtcNow().AddHours(2)));
+        public Task<CurrentUserDto> ResolveForPrivilegedActionAsync(string subject, string? name, CancellationToken token) =>
+            LiveUnavailable ? Task.FromException<CurrentUserDto>(new IOException("synthetic live identity unavailable")) :
+            LiveAdmin is { } admin ? Task.FromResult(new CurrentUserDto(subject, name, [], admin, clock.GetUtcNow().AddHours(2))) : ResolveCurrentAsync(subject, name, [], token);
         public Task<IReadOnlyCollection<ManagedResourceDto>> ListUsersAsync(CancellationToken token) => throw new NotSupportedException();
         public Task<IReadOnlyCollection<ManagedResourceDto>> ListGroupsAsync(CancellationToken token) => throw new NotSupportedException();
         public Task<IReadOnlyCollection<ManagedResourceDto>> ListSsoApplicationsAsync(CancellationToken token) => throw new NotSupportedException();

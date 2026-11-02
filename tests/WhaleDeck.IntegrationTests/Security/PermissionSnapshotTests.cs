@@ -141,15 +141,83 @@ public sealed class PermissionSnapshotTests
         Assert.True(payload.RootElement.GetProperty("is_active").GetBoolean());
     }
 
+    [Fact]
+    public async Task PrivilegedActionObservesRemovedGroupsDespitePositiveNavigationSnapshot()
+    {
+        var cache = NewCache();
+        var warm = Directory(new StubClientFactory(HttpStatusCode.OK, LiveUser(true, true)), cache, "test-token");
+        Assert.True((await warm.ResolveCurrentAsync(Subject, "User", [], default)).IsAdministrator);
+        var factory = new StubClientFactory(HttpStatusCode.OK, LiveUser(true, false));
+        var changed = Directory(factory, cache, "test-token");
+        Assert.False((await changed.ResolveForPrivilegedActionAsync(Subject, "User", default)).IsAdministrator);
+        Assert.NotNull(factory.LastRequestUri);
+        Assert.False((await changed.ResolveCurrentAsync(Subject, "User", ["admin-id"], default)).IsAdministrator);
+    }
+
+    [Fact]
+    public async Task PrivilegedActionCanRestoreAuthorityAfterAnAuthoritativeNegativeSnapshot()
+    {
+        var cache = NewCache();
+        var denied = Directory(new StubClientFactory(HttpStatusCode.OK, LiveUser(true, false)), cache, "test-token");
+        Assert.False((await denied.ResolveForPrivilegedActionAsync(Subject, "User", default)).IsAdministrator);
+        var restored = Directory(new StubClientFactory(HttpStatusCode.OK, LiveUser(true, true)), cache, "test-token");
+        Assert.True((await restored.ResolveForPrivilegedActionAsync(Subject, "User", default)).IsAdministrator);
+        Assert.True((await restored.ResolveCurrentAsync(Subject, "User", [], default)).IsAdministrator);
+    }
+
+    [Fact]
+    public async Task DisabledPrivilegedIdentityIsRejectedAndEvictsTheOldPositiveSnapshot()
+    {
+        var cache = NewCache();
+        var warm = Directory(new StubClientFactory(HttpStatusCode.OK, LiveUser(true, true)), cache, "test-token");
+        Assert.True((await warm.ResolveCurrentAsync(Subject, "User", [], default)).IsAdministrator);
+        var disabled = Directory(new StubClientFactory(HttpStatusCode.OK, LiveUser(false, true)), cache, "test-token");
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => disabled.ResolveForPrivilegedActionAsync(Subject, "User", default));
+        Assert.Null(await cache.GetStringAsync($"whaledeck:authz:{Subject}"));
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(null, true)]
+    [InlineData("test-token", false)]
+    [InlineData("test-token", true)]
+    public async Task PrivilegedActionsNeverTrustPositiveCacheOrClaimFallbackDuringOutage(string? token, bool fallback)
+    {
+        var cache = NewCache();
+        var warm = Directory(new StubClientFactory(HttpStatusCode.OK, LiveUser(true, true)), cache, "test-token");
+        Assert.True((await warm.ResolveCurrentAsync(Subject, "User", [], default)).IsAdministrator);
+        var unavailable = Directory(new StubClientFactory(HttpStatusCode.ServiceUnavailable), cache, token, allowClaimFallback: fallback);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => unavailable.ResolveForPrivilegedActionAsync(Subject, "User", default));
+        Assert.Null(await cache.GetStringAsync($"whaledeck:authz:{Subject}"));
+    }
+
+    [Theory]
+    [InlineData("""{"results":[{"is_active":true,"groups_obj":[{"pk":"admin-id"}]}]}""")]
+    [InlineData("""{"results":[{"uuid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","is_active":true,"groups_obj":[{"pk":"admin-id"}]}]}""")]
+    [InlineData("""{"results":[{"uuid":"11111111-2222-3333-4444-555555555555","groups_obj":[{"pk":"admin-id"}]}]}""")]
+    [InlineData("""{"results":[{"uuid":"11111111-2222-3333-4444-555555555555","is_active":"true","groups_obj":[{"pk":"admin-id"}]}]}""")]
+    public async Task PrivilegedIdentityRequiresTheExactUuidAndExplicitActiveBoolean(string payload)
+    {
+        var directory = Directory(new StubClientFactory(HttpStatusCode.OK, payload), NewCache(), "test-token");
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => directory.ResolveForPrivilegedActionAsync(Subject, "User", default));
+    }
+
+    private static string LiveUser(bool active, bool administrator) => JsonSerializer.Serialize(new
+    {
+        results = new[] { new { uuid = Subject, is_active = active, groups_obj = administrator ? new[] { new { pk = "admin-id" } } : [] } }
+    });
+
     private static MemoryDistributedCache NewCache() => new(Options.Create(new MemoryDistributedCacheOptions()));
 
     private static AuthentikIdentityDirectory Directory(
         IHttpClientFactory clientFactory,
         IDistributedCache cache,
         string? token = null,
-        IReadOnlyCollection<RoleMapping>? mappings = null)
+        IReadOnlyCollection<RoleMapping>? mappings = null,
+        bool allowClaimFallback = false)
     {
         var configuration = Config(token);
+        configuration["Authentication:Authentik:AllowClaimFallback"] = allowClaimFallback.ToString();
         return new AuthentikIdentityDirectory(
             clientFactory,
             cache,

@@ -13,10 +13,33 @@ public sealed class AuthentikIdentityDirectory(
     IDistributedCache cache,
     IRoleMappingRepository roleMappings,
     IAdministratorGroupConfiguration administratorGroup,
-    IConfiguration configuration) : IIdentityDirectory, IIdentityManager
+    IConfiguration configuration) : IIdentityDirectory, IIdentityManager, IPrivilegedIdentityDirectory
 {
     private static readonly TimeSpan PermissionTtl = TimeSpan.FromHours(2);
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+
+    public async Task<CurrentUserDto> ResolveForPrivilegedActionAsync(string subject, string? name, CancellationToken cancellationToken)
+    {
+        var administrators = await AdministratorGroupsAsync(cancellationToken);
+        var key = $"whaledeck:authz:{subject}";
+        GroupResolution resolution;
+        try { resolution = await ResolveGroupsFromAuthentik(subject, [], cancellationToken, privileged: true); }
+        catch (UnauthorizedAccessException)
+        {
+            await cache.RemoveAsync(key, cancellationToken);
+            throw;
+        }
+        if (!resolution.Authoritative)
+        {
+            await cache.RemoveAsync(key, cancellationToken);
+            throw new UnauthorizedAccessException("Authoritative Authentik identity is required for this action.");
+        }
+        var administrator = resolution.Groups.Any(administrators.GroupIds.Contains);
+        var expires = DateTimeOffset.UtcNow.Add(PermissionTtl);
+        await cache.SetStringAsync(key, JsonSerializer.Serialize(new PermissionSnapshot(resolution.Groups, administrator, expires, administrators.Revision)),
+            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = PermissionTtl }, cancellationToken);
+        return new CurrentUserDto(subject, name, resolution.Groups, administrator, expires);
+    }
 
     public async Task<CurrentUserDto> ResolveCurrentAsync(string subject, string? name, IReadOnlyCollection<string> claimGroups, CancellationToken cancellationToken)
     {
@@ -168,10 +191,10 @@ public sealed class AuthentikIdentityDirectory(
         }
     }
 
-    private async Task<GroupResolution> ResolveGroupsFromAuthentik(string subject, IReadOnlyCollection<string> fallback, CancellationToken cancellationToken)
+    private async Task<GroupResolution> ResolveGroupsFromAuthentik(string subject, IReadOnlyCollection<string> fallback, CancellationToken cancellationToken, bool privileged = false)
     {
         var token = configuration["Authentication:Authentik:ApiToken"];
-        var allowClaimFallback = configuration.GetValue("Authentication:Authentik:AllowClaimFallback", false);
+        var allowClaimFallback = !privileged && configuration.GetValue("Authentication:Authentik:AllowClaimFallback", false);
         if (string.IsNullOrWhiteSpace(token))
         {
             return new GroupResolution(allowClaimFallback ? fallback.ToArray() : [], false);
@@ -190,6 +213,10 @@ public sealed class AuthentikIdentityDirectory(
             if (!document.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() != 1)
                 return new GroupResolution([], false);
             var user = results[0];
+            if (privileged && (!user.TryGetProperty("uuid", out var uuid) || uuid.ValueKind != JsonValueKind.String ||
+                !Guid.TryParse(uuid.GetString(), out var resolvedUuid) || resolvedUuid != userUuid ||
+                !user.TryGetProperty("is_active", out var enabled) || enabled.ValueKind is not (JsonValueKind.True or JsonValueKind.False)))
+                return new GroupResolution([], false);
             if (user.TryGetProperty("is_active", out var active) && !active.GetBoolean())
                 throw new UnauthorizedAccessException("The Authentik account is disabled.");
             if (!user.TryGetProperty("groups_obj", out var groups)) return new GroupResolution([], true);

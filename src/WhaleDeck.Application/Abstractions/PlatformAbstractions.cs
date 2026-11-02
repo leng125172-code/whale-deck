@@ -82,6 +82,12 @@ public interface IIdentityManager
     Task ExecuteAsync(string action, string? resourceId, IReadOnlyDictionary<string, string> parameters, CancellationToken cancellationToken);
 }
 
+/// <summary>Authoritative action-time identity, independent of cached navigation permissions and OIDC claims.</summary>
+public interface IPrivilegedIdentityDirectory
+{
+    Task<CurrentUserDto> ResolveForPrivilegedActionAsync(string subject, string? name, CancellationToken cancellationToken);
+}
+
 public interface IRoleMappingRepository
 {
     Task<IReadOnlyCollection<RoleMapping>> ListAsync(CancellationToken cancellationToken);
