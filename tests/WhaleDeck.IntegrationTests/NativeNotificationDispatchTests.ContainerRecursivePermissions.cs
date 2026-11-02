@@ -15,6 +15,29 @@ namespace WhaleDeck.IntegrationTests;
 public sealed partial class NativeNotificationDispatchTests
 {
     private static readonly string[] RecursivePermissionFenceTables = ["container_file_upload_operations", "container_directory_operations", "container_copy_intents", "container_move_intents", "container_permission_intents", "container_ownership_intents"];
+    private static async Task ContainerRecursivePermissionIsolatedBoundaries(DbContextOptions<PlatformDbContext> originalOptions)
+    {
+        await using var original = new PlatformDbContext(originalOptions);
+        // Earlier host tests intentionally keep Unknown/tampered locks. Never release them to pass this gate.
+        const string locksSql = "SELECT COALESCE(jsonb_agg(to_jsonb(l) ORDER BY path_hash),'[]'::jsonb)::text AS \"Value\" FROM file_path_locks l";
+        var beforeLocks = await original.Database.SqlQueryRaw<string>(locksSql).SingleAsync();
+        const string schema = "wdv_recursive_permissions";
+        await original.Database.ExecuteSqlRawAsync("CREATE SCHEMA wdv_recursive_permissions");
+        var connection = new NpgsqlConnectionStringBuilder(original.Database.GetConnectionString()) { SearchPath = schema };
+        var options = new DbContextOptionsBuilder<PlatformDbContext>().UseNpgsql(connection.ConnectionString,
+            postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", schema)).Options;
+        await using var isolated = new PlatformDbContext(options);
+        Assert.False(await isolated.Database.SqlQueryRaw<bool>("SELECT rolsuper AS \"Value\" FROM pg_roles WHERE rolname=current_user").SingleAsync());
+        await isolated.Database.MigrateAsync();
+        // Actual peer repository regressions supply permanent completed fixtures for raw fence probes.
+        await ContainerCopyBoundaries(options);
+        await ContainerMoveBoundaries(options);
+        await ContainerPermissionBoundaries(options);
+        await ContainerOwnershipBoundaries(options);
+        await ContainerRecursivePermissionBoundaries(options);
+        Assert.Equal(beforeLocks, await original.Database.SqlQueryRaw<string>(locksSql).SingleAsync());
+        // Keep both schemas, including every Unknown/terminal row, until the runner removes its owned DB.
+    }
     /// <summary>Real isolated PostgreSQL/MAC/transactions/triggers. Receipts are synthetic, not Root or UI evidence.</summary>
     private static async Task ContainerRecursivePermissionBoundaries(DbContextOptions<PlatformDbContext> options)
     {
