@@ -1,5 +1,7 @@
 # 容器ACL：实际写入后的取消与Worker回执中断实机对账
 
+后续记录：[ACL原容器消失Unknown及跨容器目录保护](CONTAINER_ACL_UNKNOWN.md)已在修正初始排队/视口证明后严格复验通过；不是整体首轮通过。以下本页原写后成功对账、失败边界和当时待办正文保留，未重做本页已签收操作。
+
 2026-11-03。运行仍为 `633a2ca42012bbd6f388a67bd128fe3125bfab76`、Agent 1.51，无重新发布或生产迁移。验收冻结 `517c42a`，27份验收依赖与11份安装模块逐字节核对。**两个新独占资源的真实页面、实际ACL系统调用后切点、原任务/SQL/Worker/Agent/文件-HDD及独立只读核验首轮通过。** 不重复[写入前重启](CONTAINER_ACL_RESTARTS.md)、[取消/退出](CONTAINER_ACL_FAULTS.md)、[实时撤权](CONTAINER_ACL_REVOCATION.md)或[九常规场景](CONTAINER_ACL_REAL_UI.md)。
 
 这里签收的是**目标ACL已实际写入，而Root仍Applying、aclConfirmed/actualIdentity为空、version为空**的取消或原Worker回执中断。产品最后按原事实确认Succeeded/Completed，不误报“未修改”，也不自动恢复旧ACL。不是实际写入后组撤权、Agent重启、目标消失Unknown、ACL递归恢复或删除验收；59主项继续部分实现，17项移出不算完成，master未交付。

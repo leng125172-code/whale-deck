@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-03 ACL Unknown严格复验：d977c7a新资源原容器准确消失，原页面正常退出后Unknown/null/原HDD与MAC/源保持；另一容器目录四次真实延期[2,4,6,8]，不同管理员小屏先暂不处置再唯一ACK，原Job Failed/Acknowledged、Root/HDD/迟到Apply仍Unknown，目录原ID才发布且Vue视口可见。52边界/语法、5 PNG、独立原件/清理及11核心healthy通过；首轮初始排队误计及视口不足已明确拒绝，非整体首轮通过。其他组合/递归恢复/删除继续。[实际失败与复验](qa/CONTAINER_ACL_UNKNOWN.md)。
+
 2026-11-03 ACL写后实机：517c42a两新资源真实目标ACL已写、Root仍Applying时取消/Worker强杀，最终原任务Succeeded/Completed，未误报未修改；原字节/inode/属主/mtime/default ACL/xattr保持、实际新access ACL/ctime及写后九字段/版本在迟到原Apply前后不再改变。2HDD/4Job/9审计、42采样自然租约、原上下文退出/4 PNG/独立原件与准确清理通过；54边界/语法通过、11核心healthy，运行仍633a2ca/1.51。其他写后/Unknown/跨写入/递归恢复/删除继续。[写后事实与边界](qa/CONTAINER_ACL_POST_CHANGE.md)。
 
 2026-11-03 ACL写入前重启实机：ed241e9两新资源Worker实际SIGKILL/原自然租约42采样和Agent实际重启/维护152采样均通过；产品0.116/0.015秒停helper、原任务Failed/Interrupted而Root Aborted，完整源/两类ACL/2HDD/4Job/8审计、原上下文退出及独立原件/清理通过。Agent PID3288068/维护3122598，运行仍633a2ca/1.51，11核心healthy。47边界/语法通过，写入后/Unknown/跨写入、ACL递归恢复/删除继续。[重启与实际租约](qa/CONTAINER_ACL_RESTARTS.md)。
