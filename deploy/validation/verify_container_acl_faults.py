@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 import requests
-from validate_container_acl_faults import SOURCES, verify_terminal, no_active_work, load, owned, terminal_state, RESTART_KEYS, require_host_restart
+from validate_container_acl_faults import SOURCES, verify_terminal, no_active_work, load, owned, terminal_state, RESTART_KEYS, require_host_restart, observation_expiry
 from validate_metric_continuity import query
 from validate_container_upload_recovery_agent import trusted
 from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, require
@@ -61,6 +61,14 @@ def verify_lease_proof(row, final, proof, raw):
     assert (ended-previous).total_seconds()<5
 
 
+def verify_worker_snapshot(service, baseline, observed):
+    original=baseline['coreBefore']['/whaledeck-worker']
+    assert service['workerId']==observed['containerId']==original[0] and observed['imageId']==original[1]
+    assert observed['startedAt']==service['afterStartedAt'] and observed['running'] is True
+    before=dt.datetime.fromisoformat(service['beforeStartedAt']);after=dt.datetime.fromisoformat(service['afterStartedAt']);at=dt.datetime.fromisoformat(observed['observedAtUtc'])
+    assert dt.datetime.fromisoformat(original[3])<=before<after<=at
+
+
 def verify_restart(kind, result, baseline, ui, final, start, read, directory):
     service=result['serviceRestart'];assert service and ui['normalDualLogout'] and ui['cancellations']==0 and final['cancel_requested_at_utc'] is None
     intent=ui['terminalIntent'];assert intent['id']==final['id'] and intent['executionJobId']==final['execution_job_id'] and intent['state']=='Failed' and intent['resultCode']=='CONTAINER_ACL_INTERRUPTED'
@@ -74,13 +82,16 @@ def verify_restart(kind, result, baseline, ui, final, start, read, directory):
         original=baseline['coreBefore']['/whaledeck-worker'];assert service['workerId']==original[0] and service['beforeStartedAt']!=service['afterStartedAt']
         assert service['hostsBefore']==service['hostsAfter']
         crashed=read(directory/'after-worker-crash-sql.json');crash=crashed['row'];assert crash['lease_token']==row['lease_token']
-        assert dt.datetime.fromisoformat(crash['lease_expires_at_utc'])>=dt.datetime.fromisoformat(row['lease_expires_at_utc'])
+        assert crash['lease_expires_at_utc']==row['lease_expires_at_utc']
+        witness=directory/'independent-worker-inspect.json'
+        if not witness.exists():witness=directory/'worker-inspect.json'
+        verify_worker_snapshot(service,baseline,read(witness))
         for key in ('id','execution_job_id','container_id','instance_id','actor_subject','owner_hash','root_started_at_utc','plan_json','command_json'):assert crash[key]==row[key]
         assert crashed['executionJob']['state']=='Running' and service['originalLeaseExpiresAtUtc']==crash['lease_expires_at_utc']
         verify_lease_proof(crash,final,read(directory/'natural-lease.json'),(directory/'after-helper-exit-root.json').read_bytes())
     else:
         require_host_restart(service['hostsBefore'],service['hostsAfter'],baseline['revision']);assert service['maintenancePidUnchanged']
-        began=dt.datetime.fromisoformat(service['restartBeganAtUtc']);ended=dt.datetime.fromisoformat(service['restartEndedAtUtc']);samples=read(directory/'maintenance-observations.json')
+        began=dt.datetime.fromisoformat(service['restartBeganAtUtc']);observation_expiry(row,began);ended=dt.datetime.fromisoformat(service['restartEndedAtUtc']);samples=read(directory/'maintenance-observations.json')
         assert 0<=(ended-began).total_seconds()<=service['totalRestartSeconds']+1 and len(samples)==service['maintenanceSamples']>=3
         times=[dt.datetime.fromisoformat(v['atUtc']) for v in samples];assert times[0]<=began<ended<=times[-1] and times==sorted(times)
         assert any(began<t<ended for t in times) and all((b-a).total_seconds()<5 for a,b in zip(times,times[1:]))

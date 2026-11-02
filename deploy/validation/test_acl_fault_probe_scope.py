@@ -229,6 +229,14 @@ class AclRestartEvidenceTests(unittest.TestCase):
         for changed in [before,{**after,'whaledeck-maintenance.service':{'pid':201,'sourceRevision':revision}},{**after,'whaledeck-agent.service':{'pid':101,'sourceRevision':'b'*40}}]:
             with self.subTest(changed=changed),self.assertRaises(AssertionError):self.driver.require_host_restart(before,changed,revision)
 
+    def test_actual_worker_id_image_and_start_time_must_bind_to_baseline(self):
+        baseline={'coreBefore':{'/whaledeck-worker':['cid','image','running','2026-11-03T00:00:00Z']}}
+        service={'workerId':'cid','beforeStartedAt':'2026-11-03T00:01:00Z','afterStartedAt':'2026-11-03T00:02:00Z'}
+        frame={'containerId':'cid','imageId':'image','startedAt':service['afterStartedAt'],'running':True,'observedAtUtc':'2026-11-03T00:03:00Z'}
+        self.verifier.verify_worker_snapshot(service,baseline,frame)
+        for key,value in [('containerId','other'),('imageId','other-image'),('startedAt',service['beforeStartedAt']),('running',False),('observedAtUtc','2026-11-03T00:01:30Z')]:
+            with self.subTest(key=key),self.assertRaises(AssertionError):self.verifier.verify_worker_snapshot(service,baseline,{**frame,key:value})
+
     def test_original_full_lease_observation_cannot_finish_early_or_skip_gap(self):
         import datetime as dt
         began=dt.datetime(2026,11,3,tzinfo=dt.timezone.utc);at=lambda seconds:(began+dt.timedelta(seconds=seconds)).isoformat()

@@ -275,10 +275,12 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                             before=worker.current();lease=applying['lease_expires_at_utc'];observation_expiry(applying,dt.datetime.now(dt.timezone.utc))
                             worker.stopped=True;command('docker','kill','--signal','KILL',worker.id)
                             crashed=snapshot(identifier);assert crashed['row']['lease_token']==applying['lease_token'] and crashed['row']['root_started_at_utc']==applying['root_started_at_utc']
-                            assert dt.datetime.fromisoformat(crashed['row']['lease_expires_at_utc'])>=dt.datetime.fromisoformat(lease)
+                            assert crashed['row']['lease_expires_at_utc']==lease
                             applying=crashed['row'];lease=applying['lease_expires_at_utc'];(directory/'after-worker-crash-sql.json').write_text(json.dumps(crashed))
                             automatic=worker.current()['State']['Running'];worker.start(wait_ready=False);after=worker.current()
                             assert after['State']['StartedAt']!=before['State']['StartedAt']
+                            (directory/'worker-inspect.json').write_text(json.dumps({'observedAtUtc':dt.datetime.now(dt.timezone.utc).isoformat(),
+                                'containerId':after['Id'],'imageId':after['Image'],'startedAt':after['State']['StartedAt'],'running':after['State']['Running']}))
                             restart={'sameWorkerContainerAndImage':True,'workerId':worker.id,'signal':'SIGKILL','manuallyStarted':not automatic,
                                 'beforeStartedAt':before['State']['StartedAt'],'afterStartedAt':after['State']['StartedAt'],'originalLeaseExpiresAtUtc':lease,
                                 'otherActiveWork':checks,'hostsBefore':host,'hostsAfter':host_snapshot(revision)}
