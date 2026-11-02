@@ -54,6 +54,16 @@ class DeferProofTests(unittest.TestCase):
         for changed in (self.samples[:3],[self.samples[0]]*4):
             with self.subTest(count=len(changed)),self.assertRaises(AssertionError):self.check(changed)
 
+    def test_initial_six_second_queue_delay_is_not_a_real_defer(self):
+        changed=copy.deepcopy(self.samples);changed[0]['sql']['row']['version']=0
+        with self.assertRaises(AssertionError):self.check(changed)
+        self.assertFalse(require_blocked(changed[0]['sql'],self.waiting,'new',self.start))
+
+    def test_rapid_observations_with_future_spaced_attempts_do_not_prove_elapsed_retries(self):
+        changed=copy.deepcopy(self.samples)
+        for index,sample in enumerate(changed):sample['observedAtUtc']=(self.start+dt.timedelta(milliseconds=index*500)).isoformat()
+        with self.assertRaises(AssertionError):self.check(changed)
+
     def test_created_root_target_or_released_unknown_cannot_be_a_blocked_sample(self):
         for key in ('rootAbsent','targetAbsent','aclUnknownProtected','sourceUnchanged'):
             changed=copy.deepcopy(self.samples);changed[2][key]=False

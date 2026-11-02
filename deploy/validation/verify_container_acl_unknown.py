@@ -38,6 +38,8 @@ def require_deferrals(samples, waiting, actor, released):
         versions.append(sample['sql']['row']['version']);attempts.append(sample['sql']['row']['next_attempt_at_utc']);times.append(at)
     assert len(set(versions))==len(set(attempts))==4 and versions==sorted(versions) and times==sorted(times)
     assert all((dt.datetime.fromisoformat(b)-dt.datetime.fromisoformat(a)).total_seconds()>=5 for a,b in zip(attempts,attempts[1:]))
+    assert all(later>=dt.datetime.fromisoformat(due) for later,due in zip(times[1:],attempts[:-1]))
+    assert all((later-earlier).total_seconds()>=5 for earlier,later in zip(times,times[1:]))
 
 
 def verify(directory):
@@ -46,6 +48,7 @@ def verify(directory):
         info=trusted(path);assert info.st_size<=262144 and info.st_mode&0o777==0o600;return json.loads(path.read_bytes())
     baseline=read(directory/'baseline.json');accepted=read(directory/'verified.json');source=read(directory/'validation-source.json');owner=read(directory/'owner-browser.json');recovery=read(directory/'recovery-browser.json')
     assert accepted['revision']==baseline['revision']==owner['revision']==recovery['revision']==source['productRevision']
+    assert source['proofVersion']==2
     assert baseline['validationSourceRevision']==source['revision'] and set(source['sha256'])==set(SOURCES)
     subprocess.run(['git','-C',str(repo),'merge-base','--is-ancestor',baseline['revision'],source['revision']],check=True,capture_output=True,timeout=15)
     for name,sha in source['sha256'].items():
@@ -56,7 +59,8 @@ def verify(directory):
         assert ui['actualUi'] and ui['normalDualLogout'] and ui['logout']['normalUiLogout'] and ui['logout']['providerNavigationObserved']
         assert ui['logout']['bffStatus']==401 and ui['logout']['identityStatus'] in (401,403)
     assert owner['registrations']==owner['confirmations']==recovery['confirmations']==1 and owner['bodies']==recovery['registrations']==recovery['bodies']==0
-    assert owner['subject']==accepted['originalSubject']==baseline['originalSubject']!=recovery['subject']==accepted['recoverySubject'] and recovery['waitingVisibleInVue']
+    assert owner['subject']==accepted['originalSubject']==baseline['originalSubject']!=recovery['subject']==accepted['recoverySubject'] and recovery['waitingVisibleInVue'] and recovery['waitingDirectoryInViewport']
+    assert recovery['displayedContainerId']==baseline['containerId'] and recovery['displayedPath']=='/work/acl-file.bin'
     assert 0<=accepted['productStoppedHelperSeconds']<15 and accepted['validatorKilledHelper'] is False
     removed=read(directory/'removed-owned.json');assert removed=={'containerId':baseline['containerId'],'onlyExactOwnedContainerRemoved':True,'helperAliveBeforeLogout':True,'sourceFullInventoryUnchanged':True}
     original=read(directory/'unknown-sql.json');final=snapshot(accepted['id']);assert final==read(directory/'final-sql.json')

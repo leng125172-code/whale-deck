@@ -79,7 +79,7 @@ def require_blocked(value, waiting, actor, observed):
     row=value['row'];assert row['id']==waiting['id'] and row['actor_subject']==actor and row['state']=='Pending'
     assert row['root_started_at_utc'] is None and not row['publish_barrier'] and row['completed_at_utc'] is None
     assert row['container_id']==waiting['containerId'] and row['relative_path']==WAITING_PATH
-    return row['lease_token'] is None and row['lease_expires_at_utc'] is None and dt.datetime.fromisoformat(row['next_attempt_at_utc'])>observed
+    return type(row['version']) is int and row['version']>=2 and row['lease_token'] is None and row['lease_expires_at_utc'] is None and dt.datetime.fromisoformat(row['next_attempt_at_utc'])>observed
 
 
 def observe_waiting(identifier, waiting, waiting_baseline, other, actor, original, baseline, reader, module, content, raw, directory):
@@ -125,7 +125,7 @@ def main():
     with requests.Session() as public:
         public.trust_env=False;r=public.get(base+'/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();hosts=host_snapshot(revision);worker=Worker();directory=repo/'deploy/artifacts'/('container-acl-unknown-'+uuid.uuid4().hex);directory.mkdir(mode=0o700)
-    (directory/'validation-source.json').write_text(json.dumps({'revision':source_revision,'productRevision':revision,'sha256':hashes,'installedSha256':installed}))
+    (directory/'validation-source.json').write_text(json.dumps({'proofVersion':2,'revision':source_revision,'productRevision':revision,'sha256':hashes,'installedSha256':installed}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_unknown_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_unknown_module');files=reader.trusted_module('whaledeck-files.py','acl_unknown_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_unknown_hdd').FileBackups(files)
     print(json.dumps({'aclUnknown':'started','evidence':str(directory)}),flush=True)
     held=owner_browser=recovery_browser=None;identifier=waiting=None;client=profile=None;original_proved=waiting_proved=False
