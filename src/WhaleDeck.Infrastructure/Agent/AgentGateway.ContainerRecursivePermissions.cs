@@ -37,11 +37,30 @@ public sealed partial class AgentGateway : IContainerRecursivePermissionGateway
             string.IsNullOrWhiteSpace(actor.TraceId) || actor.TraceId.Length > 128 || actor.TraceId.Any(char.IsControl)) throw new ArgumentException("CONTAINER_RECURSIVE_PERMISSION_CONTEXT_INVALID");
         var request = new ContainerRecursivePermissionPlanRequest { Command = RecursivePermissionCommand(command), Context = new() { ActorSubject = actor.Subject, TraceId = actor.TraceId } };
         var client = await RecursivePermissionClient(cancellationToken);
-        var response = await client.PlanAsync(request, RecursivePermissionHeaders("Plan", request), deadline: DateTime.UtcNow.AddSeconds(330), cancellationToken: cancellationToken);
-        var plan = RecursivePermissionPlan(response);
-        if (plan.Command != command) throw ContainerRecursivePermissionValidation.Invalid();
-        return plan;
+        try
+        {
+            var response = await client.PlanAsync(request, RecursivePermissionHeaders("Plan", request), deadline: DateTime.UtcNow.AddSeconds(330), cancellationToken: cancellationToken);
+            var plan = RecursivePermissionPlan(response);
+            if (plan.Command != command) throw ContainerRecursivePermissionValidation.Invalid();
+            return plan;
+        }
+        catch (RpcException error) when (RecursivePermissionPreflightCode(error) is { } code)
+        { throw new ContainerRecursivePermissionPreflightRejectedException(code); }
     }
+    private static string? RecursivePermissionPreflightCode(RpcException error) => (error.StatusCode, error.Status.Detail) switch
+    {
+        (StatusCode.Aborted, "CONTAINER_RECURSIVE_PERMISSION_VERSION_CONFLICT" or "CONTAINER_RECURSIVE_PERMISSION_TREE_CHANGED") => "CONTAINER_RECURSIVE_PERMISSION_VERSION_CONFLICT",
+        (StatusCode.FailedPrecondition, "CONTAINER_RECURSIVE_PERMISSION_SOURCE_UNSUPPORTED") => "CONTAINER_RECURSIVE_PERMISSION_SOURCE_UNSUPPORTED",
+        (StatusCode.FailedPrecondition, "CONTAINER_RECURSIVE_PERMISSION_EXTENDED_METADATA_REQUIRED") => "CONTAINER_RECURSIVE_PERMISSION_EXTENDED_METADATA_REQUIRED",
+        (StatusCode.ResourceExhausted, "CONTAINER_RECURSIVE_PERMISSION_ATTRIBUTES_LIMIT") => "CONTAINER_RECURSIVE_PERMISSION_ATTRIBUTES_LIMIT",
+        (StatusCode.ResourceExhausted, "CONTAINER_RECURSIVE_PERMISSION_TREE_LIMIT") => "CONTAINER_RECURSIVE_PERMISSION_TREE_LIMIT",
+        (StatusCode.ResourceExhausted, "CONTAINER_RECURSIVE_PERMISSION_MANIFEST_LIMIT") => "CONTAINER_RECURSIVE_PERMISSION_MANIFEST_LIMIT",
+        (StatusCode.PermissionDenied, "CONTAINER_RECURSIVE_PERMISSION_PROTECTED" or "CONTAINER_PROTECTED" or "CONTAINER_UNSAFE_ISOLATION" or "CONTAINER_UNSAFE_MOUNT" or
+            "CONTAINER_FILES_SHARED_CORE_MOUNT" or "CONTAINER_UPLOAD_PUBLISH_READ_ONLY" or "CONTAINER_UPLOAD_PUBLISH_MOUNT_ROOT") => "CONTAINER_RECURSIVE_PERMISSION_PROTECTED",
+        (StatusCode.FailedPrecondition, "CONTAINER_RECURSIVE_PERMISSION_ROOT_CHANGED" or "CONTAINER_FILES_TARGET_MISSING" or "CONTAINER_FILES_INSTANCE_CHANGED" or
+            "CONTAINER_FILES_TARGET_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or "CONTAINER_NOT_RUNNING") => "CONTAINER_RECURSIVE_PERMISSION_TARGET_CHANGED",
+        _ => null
+    };
     public Task<ContainerRecursivePermissionReceiptDto> ApplyContainerRecursivePermissionAsync(ContainerRecursivePermissionOperationDto operation, CancellationToken cancellationToken) => RecursivePermissionAction("Apply", operation, cancellationToken);
     public Task<ContainerRecursivePermissionReceiptDto> DiscardContainerRecursivePermissionAsync(ContainerRecursivePermissionOperationDto operation, CancellationToken cancellationToken) => RecursivePermissionAction("Discard", operation, cancellationToken);
     public async Task<ContainerRecursivePermissionReceiptDto?> InspectContainerRecursivePermissionAsync(ContainerRecursivePermissionOperationDto operation, CancellationToken cancellationToken)

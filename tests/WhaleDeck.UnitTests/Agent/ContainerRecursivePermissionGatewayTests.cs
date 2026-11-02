@@ -80,6 +80,28 @@ public sealed class ContainerRecursivePermissionGatewayTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => h.Gateway.ApplyContainerRecursivePermissionAsync(Operation, default));
     }
 
+    [Theory]
+    [InlineData(StatusCode.Aborted, "CONTAINER_RECURSIVE_PERMISSION_TREE_CHANGED", "CONTAINER_RECURSIVE_PERMISSION_VERSION_CONFLICT")]
+    [InlineData(StatusCode.FailedPrecondition, "CONTAINER_RECURSIVE_PERMISSION_EXTENDED_METADATA_REQUIRED", "CONTAINER_RECURSIVE_PERMISSION_EXTENDED_METADATA_REQUIRED")]
+    [InlineData(StatusCode.ResourceExhausted, "CONTAINER_RECURSIVE_PERMISSION_TREE_LIMIT", "CONTAINER_RECURSIVE_PERMISSION_TREE_LIMIT")]
+    [InlineData(StatusCode.ResourceExhausted, "CONTAINER_RECURSIVE_PERMISSION_MANIFEST_LIMIT", "CONTAINER_RECURSIVE_PERMISSION_MANIFEST_LIMIT")]
+    [InlineData(StatusCode.PermissionDenied, "CONTAINER_UPLOAD_PUBLISH_READ_ONLY", "CONTAINER_RECURSIVE_PERMISSION_PROTECTED")]
+    [InlineData(StatusCode.FailedPrecondition, "CONTAINER_FILES_INSTANCE_CHANGED", "CONTAINER_RECURSIVE_PERMISSION_TARGET_CHANGED")]
+    public async Task OnlyKnownPlanningRefusalsBecomeBoundedWorkflowErrors(StatusCode status, string detail, string code)
+    {
+        using var h = new Harness { Status = status, Detail = detail };
+        var error = await Assert.ThrowsAsync<App.ContainerRecursivePermissionPreflightRejectedException>(() => h.Gateway.PlanContainerRecursivePermissionAsync(Actor, Command, default));
+        Assert.Equal(code, error.Code);
+    }
+    [Theory]
+    [InlineData(StatusCode.Unavailable, "CONTAINER_RECURSIVE_PERMISSION_UNAVAILABLE")]
+    [InlineData(StatusCode.ResourceExhausted, "unknown private text")]
+    public async Task TransportFailureCannotBeMisreportedAsSafePreflightRefusal(StatusCode status, string detail)
+    {
+        using var h = new Harness { Status = status, Detail = detail };
+        var error = await Assert.ThrowsAsync<RpcException>(() => h.Gateway.PlanContainerRecursivePermissionAsync(Actor, Command, default));
+        Assert.Equal(status, error.StatusCode);
+    }
     private sealed class Harness : HttpMessageHandler
     {
         private readonly string _file = Path.GetTempFileName();
