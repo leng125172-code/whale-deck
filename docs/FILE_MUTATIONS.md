@@ -1,5 +1,7 @@
 # 文件操作、编辑与回收站实施契约
 
+2026-11-03后续：6a62027已接ACL独立1.51四RPC/SDK、固定受限stdin传输、初始namespace/准确FD非IDMAP检查及安装验证候选。实际工作站只读依赖支持，但新helper/状态未安装，无真实UDS/永久业务/共享保护/页面验收；旧权限/所有者遇ACL继续拒绝。下一步正常覆盖后实际四RPC/HDD，再永久任务与真人UI，不以本段替代失败恢复。[完整证据](qa/CONTAINER_ACL_RPC.md)。
+
 2026-11-03补充：容器POSIX ACL独立底层候选ed50dc1已实现单对象access/default、显式mask/数值ID、64项预算、原ACL HDD元数据与只观察恢复，真实容器/HDD候选及独立核验通过。尚未安装/无签名RPC/永久业务/Worker/API/Vue，既有chmod/chown仍拒绝ACL，完整递归/恢复/namespace映射及删除/长期清理继续。Linux POSIX ACL/xattr必须实际可用，不支持/拒绝/IO错误不当空ACL；getfacl仅本机候选验收依赖，不引入libacl运行时依赖。[事实和验收边界](qa/CONTAINER_ACL_ENGINE.md)。
 
 > 文档口径（2026-10-30）：下文运行版本、测试、下一步及70/76项等描述仅属于各自记录的批次，不是当前部署或当前范围声明。当前目标为[59个主任务及明确追加](GOAL_P0_P5.md)，现状见[实施状态](IMPLEMENTATION_STATUS.md)；企业租户等17项不恢复，原测试与失败事实保留。

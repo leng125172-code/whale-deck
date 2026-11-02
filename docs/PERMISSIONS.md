@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-03后续ACL协议候选6a62027：独立四RPC/完整message与method签名/短时单次capability，ID与permissions presence严格，SDK必须1.51专属能力。fixed unit无CHOWN/SYS_ADMIN，namespace与准确FD mount映射未证明即拒绝；旧chmod/chown不放宽。当前无ACL HTTP/永久意图或默认User扩权，宿主未安装新helper，真人权限/在途撤权及实际签名UDS仍待。测试夹具与实际只读依赖证明不当作人类授权验收。[候选和边界](qa/CONTAINER_ACL_RPC.md)。
+
 2026-11-03 ACL底层候选记录：ed50dc1单次仅替换显式access或default ACL，named条目须显式mask/数值ID，default限目录，保留另一ACL/原inode与HDD旧属性；fsync失败不误签完成。已有普通chmod/chown遇ACL仍拒绝，不借新模块扩大旧入口。当前未安装，无新增RPC/HTTP/Vue/默认User或Agent授权；候选实盘只为本轮自有资源，真实人类权限与namespace映射仍须接入验收。[候选与实际边界](qa/CONTAINER_ACL_ENGINE.md)。
 
 2026-11-02后续实机：递归所有者原目标消失后保留Unknown/18待证明，宿主实际1项修改单独保留；不同当前管理员真实页面五计数、先暂不处置再唯一确认后才释放保护。另一自有容器原目录任务在保护期间至少四次自然延期、无Root写入，确认后同一ID才发布并在Vue可见。原/新上下文正常双端退出与准确清理通过；Unknown汇总0不表示零修改，不以QA改SQL/时钟/缓存放行。仅该跨容器目录组合签收，其他类型/故障、ACL/删除继续，默认User与Agent授权未扩大。[真实授权与保护证据](qa/CONTAINER_RECURSIVE_OWNERSHIP_UNKNOWN_BARRIER.md)。

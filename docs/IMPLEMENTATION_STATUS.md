@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-11-03容器ACL独立RPC1.51/SDK/固定传输候选6a62027通过，未安装**：新增四unary方法、完整请求/方法/单次短时capability独立签名、显式ID/权限presence、原access/default ACL与目标mask模式/回执绑定；SDK严格协商major1/minor≥51及专属能力，旧chmod/chown不扩大。固定stdin/unit/准确Invocation停止、独立状态和安装/验证接入；无CAP_CHOWN/SYS_ADMIN，初始user namespace及准确FD statmount BY_FD证明非IDMAP，不支持/错误直接拒绝。冻结Release零警告错误且编译Agent来源6a62027；4132 Unit(96新)、363 Integration(7默认原生跳过)、468 Linux-root(12新)、12宿主/5安装CLI/8范围及语法通过。首轮2测试编译错误/只读汇总sudo PATH错误保留并修正。实际只读apps FD依赖支持、11核心及宿主PID/b1fafed来源不变且healthy、idle0；当前ACL文件/状态未安装，真实签名RPC0，无业务/Worker/API/Vue或真人页面，不重复ed50实盘。下一步原生探针/正常宿主覆盖及真实RPC-HDD拒绝/兼容，再永久业务页面/ACL剩余/删除及59项。[完整候选与边界](qa/CONTAINER_ACL_RPC.md)。
+
 - **2026-11-03记录：容器ACL底层候选ed50dc1已通过真实容器/HDD，未安装**：2026-11-02冻结源码新增独立FD access/default ACL、显式mask/数值ID、64项预算、独立原ACL HDD历史及只观察恢复；写后确认/恢复须原inode fsync成功，持续EIO保留Unknown。22新专项纳入456项Linux-root全套零跳过、8范围与语法通过；实际setuid/组权限、default继承、6隔离强杀切点有证据。新独占容器/HDD候选首次9操作(7完成/2中止)、2候选SIGKILL、8份HDD元数据/完整2097159字节/原inode-owner-mtime普通属性及迟到不重写通过，独立核验准确清理/11核心与宿主PID来源不变且healthy通过。产品仍b1fafed/1.50，未签名RPC/永久业务/Worker/API/Vue或真人页面；同设备历史非异盘，namespace映射须接入前明确。下一步C#协议/SDK/固定受限传输及安装态验证，再完整业务页面、ACL剩余范围/删除及其余59项。[实现、实际依赖与边界](qa/CONTAINER_ACL_ENGINE.md)。
 
 - **2026-11-02递归所有者目标消失Unknown及跨容器目录延期/释放实机通过**：产品保持b1fafed/1.50，无发布/回滚；冻结003f504及a6f472b/各21依赖，两套新组合首次实机和独立核验均通过。准确首项fchown后只移除自有CID，源树保留，原管理员正常双端退出，产品2.755/2.197秒结束原helper；均汇总0/0/0/0/18待证明、物理1项实际修改，不能推断零修改。不同新管理员真实320×600五计数/暂不处置/明确确认及原Unknown/Root/HDD/完整源/迟到不改通过；第二例另一容器原目录任务版本2/4/6/8自然延期，23:38:46.298696处置后原ID才于23:38:53.318649实际Root写入并Succeeded、Vue列表可见。9真PNG/12哈希审计/4HDD元数据、准确清理与最终idle0、11核心healthy/8数据库平台不变通过。56递归+8范围和语法通过；仅跨容器目录组合、同设备历史，不扩大其他写入/异盘或未保存的历史文件系统重算结论。[事实与剩余边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_UNKNOWN_BARRIER.md)。
@@ -74,7 +76,7 @@
 
 当前目标以[可复制目标正文与59项主表](GOAL_P0_P5.md)为准，包含完整C#酒馆、统一供应商、AI驱动Live2D、272ST/6PET父级和16个子门槛，以及原有UI/所有者/递归/ACL/删除等全部任务。17项移出不恢复，文档更新不算功能完成。
 
-最后实际运行保持`b1fafed`/Agent1.50；递归所有者已部署，真实常规六场景分项与旧退出失败/独立补证分别保留，后续进行中取消、原身份/实例保留的同上下文正常双端退出、Worker强杀/原自然租约恢复、固定Agent重启/维护入口，以及首项fchown后实时组撤权/账号停用均有实机证据。Partial须不同当前管理员明确处置，五计数/原Root/HDD/完整源/迟到不续做及准确清理通过。最新两撤权场景及独立核验见[撤权原件与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_REVOCATION.md)；递归所有者目标消失Unknown/另一容器目录四次真实延期及明确处置后原ID发布也已实机签收，见[最新Unknown/跨容器目录记录](qa/CONTAINER_RECURSIVE_OWNERSHIP_UNKNOWN_BARRIER.md)；ACL独立底层ed50dc1已通过隔离Linux及真实容器/HDD候选，未安装或接业务/页面，见[ACL候选](qa/CONTAINER_ACL_ENGINE.md)；当前仍需ACL签名RPC/最小宿主安装/永久业务与真实页面、其他写入/回执/路径磁盘组合、容器可恢复删除/长期清理、目录/实例/跨盘剩余故障、其他模块即时撤权、UI统一风格、网站/开发空间、酒馆/供应商/Live2D及其余59项完整验收；不按该分项提升整项完成率。下方旧候选/运行版本和待办均按原批次理解。
+最后实际运行保持`b1fafed`/Agent1.50；递归所有者已部署，真实常规六场景分项与旧退出失败/独立补证分别保留，后续进行中取消、原身份/实例保留的同上下文正常双端退出、Worker强杀/原自然租约恢复、固定Agent重启/维护入口，以及首项fchown后实时组撤权/账号停用均有实机证据。Partial须不同当前管理员明确处置，五计数/原Root/HDD/完整源/迟到不续做及准确清理通过。最新两撤权场景及独立核验见[撤权原件与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_REVOCATION.md)；递归所有者目标消失Unknown/另一容器目录四次真实延期及明确处置后原ID发布也已实机签收，见[最新Unknown/跨容器目录记录](qa/CONTAINER_RECURSIVE_OWNERSHIP_UNKNOWN_BARRIER.md)；ACL独立底层ed50dc1已通过隔离Linux及真实容器/HDD候选，未安装或接业务/页面，见[ACL候选](qa/CONTAINER_ACL_ENGINE.md)；后续6a62027独立1.51协议/SDK/固定受限传输与安装配置候选已通过分层测试，见[ACL RPC候选](qa/CONTAINER_ACL_RPC.md)；当前仍需原生探针/宿主覆盖后的实际签名RPC、永久业务与真实页面、其他写入/回执/路径磁盘组合、容器可恢复删除/长期清理、目录/实例/跨盘剩余故障、其他模块即时撤权、UI统一风格、网站/开发空间、酒馆/供应商/Live2D及其余59项完整验收；不按该分项提升整项完成率。下方旧候选/运行版本和待办均按原批次理解。
 
 下方是按批次保存的历史实施日志。其“当前/最新/下一步”、运行版本、70/76项与旧HOLD仅属于原记录日期；发生冲突时以上述目标和最新对应版本证据为准，不从旧日志恢复移出任务或重复发布。
 
