@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_PARTIAL.md",
-  "nextStep": "产品0dede08/1.49保持，真实18项树进行中取消Partial及原账号删除后的另一管理员页面处置通过，1完成/1修改/1中止/16未开始/0未知、原Root/HDD/文件保留，独立核验/6条审计/4小屏PNG/11核心healthy通过，首轮QA失败保留。继续递归退出/撤权/Worker强杀/Agent重启/丢回复/Unknown及首次登记边界，再递归所有者/ACL/可恢复删除/长期清理、P0-05回退来源和其余59项/UI/C#酒馆/统一供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_PARTIAL.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_WORKER_CRASH.md；docs/PROGRESS_ESTIMATE.md",
+  "nextStep": "产品0dede08/1.49保持，递归Worker实际SIGKILL/83.827秒原自然租约40次观测/Partial真实页面及不同管理员处置、独立核验通过；两轮QA失败和准确清理保留，11核心healthy/8数据库平台不变。继续退出/撤权/Agent重启/其他回执与Unknown组合、首次登记边界，再递归所有者/ACL/删除/长期清理、P0-05回退来源及其余59项/UI/C#酒馆/供应商/AI Live2D。67.8%是部分实现覆盖，整体工作量25%–35%仅粗估，见PROGRESS_ESTIMATE。17项移出不算完成，不自动回滚dev。"
 }
