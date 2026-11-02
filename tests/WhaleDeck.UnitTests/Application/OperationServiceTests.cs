@@ -7,6 +7,7 @@ namespace WhaleDeck.UnitTests.Application;
 
 public sealed class OperationServiceTests
 {
+    private static readonly System.Text.Json.JsonSerializerOptions ResultJson = new(System.Text.Json.JsonSerializerDefaults.Web);
     [Theory]
     [InlineData("backup")]
     [InlineData("verify-backup")]
@@ -168,9 +169,64 @@ public sealed class OperationServiceTests
         await Assert.ThrowsAsync<ArgumentException>(() => service.EnqueueAsync("subject", "trace", command, default));
     }
 
+    [Theory]
+    [InlineData("containers.files.acl", "Succeeded", "Succeeded", "execution")]
+    [InlineData("containers.files.acl", "Failed", "Acknowledged", "execution")]
+    [InlineData("containers.files.acl", "Failed", "Superseded", "execution")]
+    [InlineData("containers.files.acl", "Canceled", "Canceled", "execution")]
+    [InlineData("containers.files.acl", "Running", "Unknown", "execution")]
+    [InlineData("containers.files.acl-plan", "Succeeded", "Ready", "planning")]
+    [InlineData("containers.files.acl-plan", "Failed", "Expired", "planning")]
+    public async Task AclSafeFactsAreReturnedForExactTaskStateInDetailAndList(string type, string state, string outcome, string stage)
+    {
+        var facts = new ContainerAclJobResults.Summary(1, Guid.NewGuid(), stage, outcome, "CONTAINER_ACL_COMPLETED",
+            "access", "File", 416, false, outcome == "Unknown" ? null : true, "Completed", true, true, true, true);
+        var json = System.Text.Json.JsonSerializer.Serialize(facts, ResultJson);
+        var job = new OperationJob { Id = stage == "execution" ? ContainerAclWorkflowValidation.ExecutionId(facts.IntentId) : facts.IntentId, ActorSubject = "subject", IdempotencyKey = "key", JobType = type, State = state, ResultJson = json };
+        var service = new OperationService(new RecordingJobRepository { Job = job });
+        Assert.Equal(json, (await service.FindAsync(job.Id, default))!.ResultJson);
+        Assert.Equal(json, Assert.Single(await service.ListAsync(100, default)).ResultJson);
+        job.State = "Queued";
+        Assert.Null((await service.FindAsync(job.Id, default))!.ResultJson);
+        var ordinary = new OperationJob { ActorSubject = "subject", IdempotencyKey = "key", JobType = "containers.stop", State = state, ResultJson = json };
+        var other = new OperationService(new RecordingJobRepository { Job = ordinary });
+        Assert.Equal(state == "Succeeded" ? json : null, (await other.FindAsync(ordinary.Id, default))!.ResultJson);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{}")]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("{broken")]
+    public async Task OldOrInvalidAclResultsAreNotReturnedAsRawJson(string? result)
+    {
+        var job = new OperationJob { ActorSubject = "subject", IdempotencyKey = "key", JobType = "containers.files.acl", State = "Succeeded", ResultJson = result };
+        var service = new OperationService(new RecordingJobRepository { Job = job });
+        Assert.Null((await service.FindAsync(job.Id, default))!.ResultJson);
+    }
+
+    [Fact]
+    public void AclResultRejectsUnknownMissingDuplicateAndUnsafeFields()
+    {
+        var facts = new ContainerAclJobResults.Summary(1, Guid.NewGuid(), "execution", "Succeeded", "CONTAINER_ACL_COMPLETED",
+            "access", "File", 0, true, true, "Completed", true, true, true, true);
+        var json = System.Text.Json.JsonSerializer.Serialize(facts, ResultJson);
+        var job = new OperationJob { Id = ContainerAclWorkflowValidation.ExecutionId(facts.IntentId), ActorSubject = "subject", IdempotencyKey = "key", JobType = "containers.files.acl", State = "Succeeded", ResultJson = json };
+        Assert.NotNull(ContainerAclJobResults.ForJob(job));
+        var wrongJob = new OperationJob { ActorSubject = "subject", IdempotencyKey = "other", JobType = job.JobType, State = job.State, ResultJson = json };
+        Assert.Null(ContainerAclJobResults.ForJob(wrongJob));
+        foreach (var bad in new[] {
+            json[..^1] + ",\"path\":\"/private\"}", json.Replace("\"schemaVersion\":1,", ""),
+            json.Replace("\"schemaVersion\":1", "\"schemaVersion\":1,\"schemaVersion\":1"),
+            json.Replace("\"schemaVersion\":1", "\"schemaVersion\":2"), json.Replace("\"targetMode\":0", "\"targetMode\":4095"),
+            json.Replace("CONTAINER_ACL_COMPLETED", "<script>unsafe</script>"), new string('x',4097) })
+        { job.ResultJson = bad; Assert.Null(ContainerAclJobResults.ForJob(job)); }
+    }
+
     private sealed class RecordingJobRepository : IJobRepository
     {
-        public OperationJob? Job { get; private set; }
+        public OperationJob? Job { get; set; }
         public OutboxMessage? Outbox { get; private set; }
         public AuditEvent? Audit { get; private set; }
 
@@ -182,8 +238,8 @@ public sealed class OperationServiceTests
             return Task.FromResult(job);
         }
 
-        public Task<OperationJob?> FindAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<OperationJob?>(null);
-        public Task<IReadOnlyCollection<OperationJob>> ListAsync(int take, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<OperationJob>>([]);
+        public Task<OperationJob?> FindAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(Job?.Id == id ? Job : null);
+        public Task<IReadOnlyCollection<OperationJob>> ListAsync(int take, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<OperationJob>>(Job is null ? [] : [Job]);
         public Task<IReadOnlyCollection<OperationJobEvent>> ListEventsAsync(Guid id, long afterSequence, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<OperationJobEvent>>([]);
         public Task RequestCancellationAsync(Guid id, string actorSubject, CancellationToken cancellationToken) => Task.CompletedTask;
     }

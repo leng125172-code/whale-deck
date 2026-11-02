@@ -109,7 +109,8 @@ public sealed class OperationService(IJobRepository jobs)
         "batch-start" or "batch-stop" or "batch-restart" or "batch-delete";
 
     private static JobDto Map(OperationJob job) => new(job.Id, job.JobType, job.State, job.Phase, job.ProgressPercent, job.ErrorCode,
-        job.CreatedAtUtc, job.CompletedAtUtc, job.State == "Succeeded" ? job.ResultJson : null);
+        job.CreatedAtUtc, job.CompletedAtUtc, job.JobType is "containers.files.acl" or "containers.files.acl-plan"
+            ? ContainerAclJobResults.ForJob(job) : job.State == "Succeeded" ? job.ResultJson : null);
 
     private static void RejectSensitiveParameters(string requestJson)
     {

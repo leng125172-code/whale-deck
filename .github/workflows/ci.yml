@@ -308,6 +308,10 @@ jobs:
       - run: corepack pnpm build
       - name: Install Chromium for production authorization regression
         run: corepack pnpm exec playwright install chromium --with-deps
+      - name: Check ACL task results and terminal event refresh
+        env:
+          WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
+        run: corepack pnpm exec playwright test e2e/acl-job-results.spec.ts e2e/job-events.spec.ts --reporter=line
       - name: Check bounded container detail and relationship layouts
         env:
           WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175

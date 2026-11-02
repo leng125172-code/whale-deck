@@ -76,7 +76,7 @@ public sealed partial class ContainerAclRepository(PlatformDbContext db, IContai
             if (row.ExecutionJobId is null)
             {
                 row.State = "Canceled"; row.ResultCode = "CONTAINER_ACL_CANCELED"; row.CompletedAtUtc = now; row.LeaseToken = null; row.LeaseExpiresAtUtc = null;
-                if (job.State != "Succeeded") { job.CancelRequestedAtUtc ??= now; await FinishJob(job, "Canceled", "Canceled", row.ResultCode, cancellationToken); }
+                if (job.State != "Succeeded") { job.CancelRequestedAtUtc ??= now; await FinishJob(job, row, "Canceled", "Canceled", row.ResultCode, cancellationToken); }
                 await Processed(job.Id, now, cancellationToken);
             }
             else { job.CancelRequestedAtUtc ??= now; job.Version++; Message(job.Id, "ContainerAclCancellationRequested"); }
@@ -131,13 +131,13 @@ public sealed partial class ContainerAclRepository(PlatformDbContext db, IContai
             row.PlanJson = ContainerAclWorkflowValidation.Serialize(plan); row.ReadyExpiresAtUtc = now.AddMinutes(5);
             row.PlanHash = protector.FingerprintAclPlan(ContainerAclWorkflowValidation.PlanBinding(row));
             row.State = "Ready"; row.NextAttemptAtUtc = row.ReadyExpiresAtUtc.Value; row.ResultCode = "CONTAINER_ACL_READY";
-            await FinishJob(job, "Succeeded", "ContainerAclPlanReady", row.ResultCode, cancellationToken);
+            await FinishJob(job, row, "Succeeded", "ContainerAclPlanReady", row.ResultCode, cancellationToken);
         }
         else
         {
             row.State = code == "CONTAINER_ACL_CANCELED" ? "Canceled" : code == "CONTAINER_ACL_PLAN_EXPIRED" ? "Expired" : "Failed";
             row.ResultCode = code; row.CompletedAtUtc = now;
-            if (job.State != "Succeeded") await FinishJob(job, row.State == "Canceled" ? "Canceled" : "Failed", row.State, code, cancellationToken);
+            if (job.State != "Succeeded") await FinishJob(job, row, row.State == "Canceled" ? "Canceled" : "Failed", row.State, code, cancellationToken);
         }
         row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
         Audit(row, row.Id, row.ActorSubject, row.TraceId, "plan-result", row.State); await Processed(row.Id, now, cancellationToken); await db.SaveChangesAsync(cancellationToken); return true;

@@ -14,6 +14,7 @@ namespace WhaleDeck.IntegrationTests;
 
 public sealed partial class NativeNotificationDispatchTests
 {
+    private static readonly System.Text.Json.JsonSerializerOptions AclResultJson = new(System.Text.Json.JsonSerializerDefaults.Web);
     private static readonly string[] AclFenceTables = ["container_file_upload_operations", "container_directory_operations", "container_copy_intents", "container_move_intents", "container_permission_intents", "container_ownership_intents", "container_recursive_permission_intents", "container_recursive_ownership_intents"];
     /// <summary>Real isolated PostgreSQL/MAC/transactions/triggers. Receipts are synthetic, not Root or UI evidence.</summary>
     private static async Task ContainerAclBoundaries(DbContextOptions<PlatformDbContext> options)
@@ -52,11 +53,33 @@ public sealed partial class NativeNotificationDispatchTests
                 state=="Completed"&&current,false,plan.Kind,state=="Unknown"?null:state=="Completed",false,state!="Aborted",state=="Completed",
                 state=="Completed"?new('8',64):"",plan.Command.AclType,plan.TargetMode);
         }
+        async Task<ContainerAclJobResults.Summary> JobFacts(ContainerAclIntent row, bool execution, string state)
+        {
+            var jobId = execution ? row.ExecutionJobId!.Value : row.Id;
+            var job = await second.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == jobId);
+            Assert.NotNull(job.ResultJson);
+            var projected = await new OperationService(new JobRepository(second)).FindAsync(jobId, default);
+            Assert.Equal(ContainerAclJobResults.ForJob(job), projected!.ResultJson);
+            Assert.NotNull(projected.ResultJson);
+            var value = System.Text.Json.JsonSerializer.Deserialize<ContainerAclJobResults.Summary>(job.ResultJson,
+                AclResultJson)!;
+            Assert.Equal(row.Id, value.IntentId); Assert.Equal(state, value.State);
+            Assert.Equal(execution ? "execution" : "planning", value.Stage);
+            Assert.Equal(ContainerAclWorkflowValidation.ReadCommand(row).AclType, value.AclType);
+            using var document = System.Text.Json.JsonDocument.Parse(job.ResultJson);
+            Assert.Equal(15, document.RootElement.EnumerateObject().Count());
+            foreach (var secret in new[] { row.RelativePath, row.InstanceId, row.ActorSubject, row.LoginBinding, row.OwnerHash, row.RequestHash, row.PlanHash, row.ExecutionHash, row.ReceiptHash })
+                if (secret is not null) Assert.DoesNotContain(secret, job.ResultJson, StringComparison.Ordinal);
+            return value;
+        }
         async Task<ContainerAclIntent> Ready(ContainerAclIntent row)
         {
             await repo.EnqueueAsync(row, default); var claimed = Assert.IsType<ContainerAclIntent>(await repo.ClaimAsync(clock.GetUtcNow(), default)); Assert.Equal(row.Id, claimed.Id);
             Assert.True(await repo.MarkPlanningAsync(claimed, default)); await repo.FinishPlanningAsync(claimed, Plan(row), "CONTAINER_ACL_READY", default);
-            return (await repo.FindAsync(row.Id, default))!;
+            var ready = (await repo.FindAsync(row.Id, default))!;
+            var facts = await JobFacts(ready, false, "Ready");
+            Assert.Null(facts.AclConfirmed); Assert.Null(facts.ReceiptState); Assert.False(facts.HasPublishedVersion);
+            return ready;
         }
         async Task<ContainerAclIntent> Pending(ContainerAclIntent row)
         {
@@ -162,6 +185,10 @@ public sealed partial class NativeNotificationDispatchTests
             await Rejected($"UPDATE container_acl_intents SET root_started_at_utc=NULL WHERE id={apply.Id}", "container_acl_started_immutable");
             Assert.True(await repo.FinishAsync(apply, "Succeeded", "CONTAINER_ACL_COMPLETED", Receipt(apply, "Completed"), default));
             var complete = (await other.FindAsync(ready.Id, default))!; Assert.True(complete.AclConfirmed); Assert.True(complete.HistoryMayExist); Assert.True(complete.HistoryVerified); Assert.Equal(new string('8', 64), complete.HistoryDigest);
+            var completedFacts = await JobFacts(complete, true, "Succeeded");
+            Assert.True(completedFacts.AclConfirmed); Assert.True(completedFacts.HistoryVerified); Assert.True(completedFacts.HasPublishedVersion);
+            Assert.Equal("Completed", completedFacts.ReceiptState);
+            Assert.Equal("Ready", (await JobFacts(complete, false, "Ready")).State); // Original plan snapshot never becomes an execution claim.
             await Rejected($"UPDATE container_acl_intents SET acl_confirmed=false WHERE id={ready.Id}", "container_acl_fact_immutable");
             await Rejected($"UPDATE container_acl_intents SET history_verified=false WHERE id={ready.Id}", "container_acl_fact_immutable");
             await Rejected($"UPDATE container_acl_intents SET history_digest=NULL WHERE id={ready.Id}", "container_acl_fact_immutable");
@@ -201,12 +228,16 @@ public sealed partial class NativeNotificationDispatchTests
             var uncertain = Receipt(blocked, "Unknown") with { HistoryVerified = true, HistoryDigest = new('7', 64) };
             Assert.True(await repo.FinishAsync(blocked, "Unknown", "CONTAINER_ACL_RESULT_UNKNOWN", uncertain, default));
             var unknown = (await other.FindAsync(blocked.Id, default))!; Assert.True(unknown.PublishBarrier); Assert.Null(unknown.AclConfirmed); Assert.True(unknown.HistoryVerified);
+            var unknownFacts = await JobFacts(unknown, true, "Unknown");
+            Assert.Null(unknownFacts.AclConfirmed); Assert.Equal("Unknown", unknownFacts.ReceiptState); Assert.False(unknownFacts.HasPublishedVersion);
             Assert.Null(await repo.ClaimAsync(clock.GetUtcNow(), default));
             await Rejected($"UPDATE container_acl_intents SET history_may_exist=false WHERE id={unknown.Id}", "container_acl_fact_immutable");
             var admin = actor with { Subject = "native-current-permission-admin", LoginBinding = new('F', 64) };
             await other.AcknowledgeAsync(admin, unknown.Id, unknown.Version, uncertain, default);
             var ack = (await repo.FindAsync(unknown.Id, default))!; Assert.Equal("Acknowledged", ack.State); Assert.False(ack.PublishBarrier); Assert.Null(ack.PublishedVersion);
             Assert.Null(ack.AclConfirmed); Assert.True(ack.HistoryVerified); Assert.Equal(admin.Subject, ack.AcknowledgedBy);
+            var ackFacts = await JobFacts(ack, true, "Acknowledged");
+            Assert.Null(ackFacts.AclConfirmed); Assert.Equal("Unknown", ackFacts.ReceiptState); Assert.True(ackFacts.HistoryVerified);
             Assert.Equal(unknown.ReceiptHash,ack.ReceiptHash); Assert.Equal(unknown.ReceiptJson,ack.ReceiptJson);
             Assert.True(ContainerAclWorkflowValidation.HasValidBinding(ack,protector));
             Assert.Equal("Failed", (await db.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == ack.ExecutionJobId)).State);
@@ -223,6 +254,8 @@ public sealed partial class NativeNotificationDispatchTests
             await second.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM file_path_locks WHERE operation_id={inverse.Id}");
             await repo.CancelAsync(actor, inverse.Id, default); Assert.True(await repo.FinishAsync(inverse, "Canceled", "CONTAINER_ACL_CANCELED", Receipt(inverse, "Aborted"), default));
             var canceled = (await other.FindAsync(inverse.Id, default))!; Assert.False(canceled.AclConfirmed); Assert.False(canceled.HistoryMayExist); Assert.Null(canceled.HistoryDigest);
+            var canceledFacts = await JobFacts(canceled, true, "Canceled");
+            Assert.False(canceledFacts.AclConfirmed); Assert.False(canceledFacts.HistoryVerified); Assert.Equal("Aborted", canceledFacts.ReceiptState);
             var leased = await Applying(await Ready(Row()));
             Assert.Null(await other.ClaimAsync(clock.GetUtcNow(),default));
             clock.Offset=TimeSpan.FromSeconds(91);
@@ -234,6 +267,8 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.True(await other.FinishAsync(reclaimed,"Unknown","CONTAINER_ACL_RESULT_UNKNOWN",null,default));
             var missing=(await other.FindAsync(reclaimed.Id,default))!;
             Assert.True(missing.PublishBarrier); Assert.Null(missing.ReceiptJson); Assert.True(missing.HistoryMayExist);
+            var missingFacts = await JobFacts(missing, true, "Unknown");
+            Assert.Null(missingFacts.AclConfirmed); Assert.Null(missingFacts.ReceiptState); Assert.True(missingFacts.HistoryMayExist);
             await repo.AcknowledgeAsync(admin,missing.Id,missing.Version,Receipt(missing,"Aborted"),default);
             var resolved=(await other.FindAsync(missing.Id,default))!; Assert.False(resolved.PublishBarrier);
             Assert.False(resolved.AclConfirmed); Assert.True(resolved.HistoryMayExist); Assert.True(ContainerAclWorkflowValidation.HasValidBinding(resolved,protector));

@@ -190,3 +190,56 @@ describe('Job retry', () => {
     expect(preview![1]!.body).not.toContain('acceptance-example-only')
   })
 })
+
+describe('Task result empty states', () => {
+  it.each(['Succeeded', 'Failed', 'Canceled', 'RolledBack', 'Queued', 'Running'])(
+    '%s does not imply an empty result is waiting for success',
+    async (state) => {
+      const job = { ...source, state }
+      request.mockImplementation(async (path) => (path === 'jobs?take=100' ? [job] : job))
+      const wrapper = mount(JobsView, { global: { plugins: [ElementPlus], stubs } })
+      wrappers.push(wrapper)
+      await flushPromises()
+      await wrapper.get('.el-table__body tr').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('.job-result').text()).toBe(
+        ['Queued', 'Running'].includes(state)
+          ? '任务尚未结束，暂无可展示的安全结果。'
+          : '任务已结束，未记录可展示的安全结果。',
+      )
+      expect(wrapper.text()).not.toContain('任务成功后')
+    },
+  )
+})
+
+it('refreshes the original result after terminal SSE even when the task left the latest list', async () => {
+  let detailReads = 0
+  const job = { ...source, state: 'Running', resultJson: null as string | null }
+  request.mockImplementation(async (path) => {
+    if (path === 'jobs?take=100') return detailReads ? [] : [job]
+    if (path === `jobs/${job.id}`) {
+      detailReads++
+      return { ...job }
+    }
+    throw new Error(`Unexpected request: ${path}`)
+  })
+  const wrapper = mount(JobsView, { global: { plugins: [ElementPlus], stubs } })
+  wrappers.push(wrapper)
+  await flushPromises()
+  await wrapper.get('.el-table__body tr').trigger('click')
+  await flushPromises()
+  job.state = 'Succeeded'
+  job.resultJson = '{"safe":"original result"}'
+  subscribe.mock.calls[0]![1].progress({
+    sequence: 2,
+    state: 'Succeeded',
+    phase: 'Completed',
+    progressPercent: 100,
+    messageCode: 'COMPLETED',
+    occurredAtUtc: source.completedAtUtc,
+  })
+  await flushPromises()
+  expect(wrapper.get('.job-result').text()).toBe(job.resultJson)
+  expect(detailReads).toBe(2)
+  expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false)
+})

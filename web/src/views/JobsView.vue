@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiRequest, apiUrl, createIdempotencyKey } from '@/services/apiClient'
 import { stageSecret, subscribeToJob, type OperationPlan } from '@/services/operations'
+import ContainerAclJobResult from '@/components/containers/ContainerAclJobResult.vue'
 import type { Job, JobEvent } from '@/services/contracts'
 
 const jobs = ref<Job[]>([])
@@ -70,10 +71,16 @@ function stateType(state: string) {
 
 async function load() {
   loading.value = true
+  const selectedId = selected.value?.id
+  const version = openVersion
   try {
     jobs.value = await apiRequest<Job[]>('jobs?take=100')
-    if (selected.value)
-      selected.value = jobs.value.find((item) => item.id === selected.value?.id) ?? selected.value
+    if (selectedId && selected.value?.id === selectedId && version === openVersion) {
+      const detail =
+        jobs.value.find((item) => item.id === selectedId) ??
+        (await apiRequest<Job>(`jobs/${selectedId}`))
+      if (selected.value?.id === selectedId && version === openVersion) selected.value = detail
+    }
   } finally {
     loading.value = false
   }
@@ -280,7 +287,20 @@ onBeforeUnmount(() => {
             selected.errorCode || '—'
           }}</el-descriptions-item>
           <el-descriptions-item label="结果">
-            <pre class="job-result">{{ selected.resultJson || '任务成功后显示安全结果。' }}</pre>
+            <ContainerAclJobResult
+              v-if="
+                ['containers.files.acl', 'containers.files.acl-plan'].includes(selected.jobType)
+              "
+              :job-type="selected.jobType"
+              :state="selected.state"
+              :result-json="selected.resultJson"
+            />
+            <pre v-else class="job-result">{{
+              selected.resultJson ||
+              (terminalStates.has(selected.state)
+                ? '任务已结束，未记录可展示的安全结果。'
+                : '任务尚未结束，暂无可展示的安全结果。')
+            }}</pre>
             <el-button
               v-if="diagnosticBundleId"
               class="diagnostic-download"

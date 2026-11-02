@@ -24,8 +24,8 @@ public sealed partial class ContainerAclRepository
         Facts(row, receipt);
         if (state == "Unknown" && row.RootStartedAtUtc is not null) row.HistoryMayExist = true;
         row.NextAttemptAtUtc = now.AddSeconds(30); row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
-        if (terminal) { await FinishJob(job, state == "Succeeded" ? "Succeeded" : state == "Canceled" ? "Canceled" : "Failed", state, code, cancellationToken); await Processed(job.Id, now, cancellationToken); }
-        else { job.State = "Running"; job.Phase = "AwaitingContainerAclReceipt"; job.ErrorCode = code; job.Version++; await Event(job, code, cancellationToken); }
+        if (terminal) { await FinishJob(job, row, state == "Succeeded" ? "Succeeded" : state == "Canceled" ? "Canceled" : "Failed", state, code, cancellationToken); await Processed(job.Id, now, cancellationToken); }
+        else { job.State = "Running"; job.Phase = "AwaitingContainerAclReceipt"; job.ErrorCode = code; job.ResultJson = JobResult(row, job); job.Version++; await Event(job, code, cancellationToken); }
         Audit(row, job.Id, row.ActorSubject, row.TraceId, "result", state); await db.SaveChangesAsync(cancellationToken); return true;
     }, cancellationToken);
     public Task AcknowledgeAsync(TerminalActor actor, Guid id, long version, ContainerAclReceiptDto receipt, CancellationToken cancellationToken) => Transaction(async () =>
@@ -38,7 +38,7 @@ public sealed partial class ContainerAclRepository
         row.State = "Acknowledged"; row.CompletedAtUtc = now; row.PublishBarrier = false; row.ResultCode = "CONTAINER_ACL_UNKNOWN_ACKNOWLEDGED";
         Facts(row, receipt); row.AcknowledgedBy = actor.Subject;
         row.AcknowledgementJson = ContainerAclWorkflowValidation.Serialize(receipt); row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
-        await FinishJob(job, "Failed", "Acknowledged", row.ResultCode, cancellationToken); await Processed(job.Id, now, cancellationToken);
+        await FinishJob(job, row, "Failed", "Acknowledged", row.ResultCode, cancellationToken); await Processed(job.Id, now, cancellationToken);
         Audit(row, job.Id, actor.Subject, actor.TraceId, "unknown-acknowledged", receipt.State); await db.SaveChangesAsync(cancellationToken); return true;
     }, cancellationToken);
     private async Task EnsurePaths(ContainerAclIntent row, CancellationToken cancellationToken)
@@ -112,9 +112,12 @@ public sealed partial class ContainerAclRepository
         var sequence = (await db.OperationJobEvents.Where(e => e.JobId == job.Id).MaxAsync(e => (long?)e.Sequence, cancellationToken) ?? 0) + 1;
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
     }
-    private async Task FinishJob(OperationJob job, string state, string phase, string code, CancellationToken cancellationToken)
+    private string? JobResult(ContainerAclIntent row, OperationJob job) =>
+        ContainerAclWorkflowValidation.HasValidBinding(row, protector) ? ContainerAclJobResults.Snapshot(row, row.ExecutionJobId == job.Id) : null;
+    private async Task FinishJob(OperationJob job, ContainerAclIntent row, string state, string phase, string code, CancellationToken cancellationToken)
     {
         job.State = state; job.Phase = phase; job.CompletedAtUtc = Now(); job.ErrorCode = state == "Succeeded" ? null : code;
+        job.ResultJson = JobResult(row, job);
         job.ProgressPercent = state == "Succeeded" ? (short)100 : null; job.Version++; await Event(job, code, cancellationToken);
     }
     private void Audit(ContainerAclIntent row, Guid jobId, string actor, string trace, string action, string result) => db.AuditEvents.Add(new()
