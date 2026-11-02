@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-11-02递归普通权限永久SQL/八方保护/专用Worker候选cca8ec9通过，未部署**：真实EF迁移/双Job/Outbox/审计、90秒租约、原请求/计划/执行/回执计数与历史不可改、Partial/Unknown保留保护且不自动Claim、原ID明确处置及旧七方双向数据库/路径/预算保护已接。3794 Unit、259 Integration（7默认原生跳过）、Release零警告错误及10项范围/回执门禁通过；冻结cca8ec9双隔离真实PG全套1执行/1通过/0跳过，独立准确清理、原Unknown锁不改、11核心门禁期间不变且healthy、生产候选表不存在。四轮失败/中断保留，Root/身份/时钟为合成输入；不是实际树/HDD/UI证据。宿主仍e668dbe/1.49，应用仍d1fcca8；下一步接管理员API/Vue、实时身份及真实树/HDD页面与故障整链，递归所有者/ACL/删除/长期清理及其余59项继续，17项移出不算完成。[完整证据与边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_PERSISTENCE.md)。
+
 - **2026-11-02递归内部业务候选71b6334通过，回执丢失保护已覆盖e668dbe**：独立请求/计划/执行HMAC、确认与实时授权、Partial/Unknown保留计数/保护及原ID处置已实现，尚未EF仓储/迁移/八方保护/Worker/API/Vue。3792 Unit（本批114新）、258 Integration（7默认原生跳过）、405 Linux-root及Release零警告错误通过。修复递归及单对象chmod/chown缺失Root时误报Aborted：先查可信HDD/子项，遗留即Unknown，依赖不可用不作缺失。宿主最终e668dbe/1.49正常覆盖；递归4+chmod6+chown6共16个真实签名操作及各自独立HDD/原件/清理通过。递归准确自有回执实际丢失、原件保留、Discard/迟到Apply Unknown且全树/HDD不变与独立核验通过；单对象对应丢失组合仍需安装态验收。应用容器仍d1fcca8、11核心不变且healthy，59项继续，17项移出不算完成。[候选、修复及边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_WORKFLOW.md)。
 
 - **2026-11-02递归普通权限Agent1.49已安装，真实签名RPC通过**：宿主冻结95c0787正常覆盖，真实进程/10.0.13/UDS/权限/HDD/动态入口通过；API/Worker/Gateway仍d1fcca8，11核心容器未重建。原生四RPC在准确HDD树完成4操作（3完成/1执行前取消）、8预检/3执行绑定拒绝，完整2097159字节/原inode/属主/mtime/属性、逐次重放源九字段/Root原件不变、3聚合/12子项HDD与独立准确清理通过。旧单对象权限6操作兼容与独立核验通过，最终任务/终端/锁/屏障与未结束意图预检0、11核心healthy。安装正常重启两宿主，RPC期间PID稳定；未真实人类/永久业务/Worker/API/Vue，仍需完整链、进行中故障、ACL/删除及其余59项，17项移出不算完成。[实机证据及边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_AGENT_RPC.md)。

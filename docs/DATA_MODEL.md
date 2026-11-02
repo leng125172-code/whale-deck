@@ -25,6 +25,12 @@
 
 ## 2. 已有实体
 
+### `DM-CONTAINER-RECURSIVE-PERMISSION` `container_recursive_permission_intents`（源码候选，未部署）
+
+2026-11-02新增真实EF migration `20261102044324_ContainerRecursivePermissionIntents`与独立事务仓储：原Subject/LoginBinding/幂等请求、不可变树计划及三层HMAC、两个OperationJob受限外键、90秒租约/版本、Root started/发布保护、原回执JSON、五类计数/outcomeDigest与HDD事实、明确处置人和终态。15个CHECK验证状态/期限/计数与计划/回执列一致，唯一租约/执行ID/发布屏障；原请求/计划/执行/已知事实/终态不可改、永久记录不可删除，非空拒绝降级。
+
+Partial/Unknown保持未完成和保护且不自动Claim；明确处置释放保护时原Root状态/计数/历史仍保留、执行任务记失败。与旧七方共享41307341事务锁、八方数据库发布屏障、层级路径及64/每Actor4预算；观测字段和历史证明区分。该表尚未迁入运行数据库，原生验证进度及失败记录见[持久化候选](qa/CONTAINER_RECURSIVE_PERMISSIONS_PERSISTENCE.md)，不能据模型算真实身份/Worker/磁盘/UI已验收。
+
 ### `DM-TERMINAL-SESSION` `terminal_sessions`
 
 2026-10-16新增EF migration `TerminalSessionLifecycle`：UUID、Authentik主体、当前登录的不透明SHA256绑定、UUID幂等键、连接票据哈希、固定宿主目标、Issued/Connecting/Active/Closed、创建/30秒票据期限/10分钟硬期限、实际Ready时间、租约/关闭时间/关闭码/退出码与并发版本。主体+登录绑定+幂等键唯一；活动租约和创建时间索引、目标/哈希/状态/期限约束由PostgreSQL校验。票据原文、服务器Cookie引用和终端正文不入表。
