@@ -1,5 +1,7 @@
 # 递归普通权限：内部业务编排候选与回执丢失实机修复
 
+> 2026-11-02后续：0dede08已正常覆盖，真实Authentik→Vue→SQL/Worker→实际树/HDD常规6场景及独立准确清理通过；同设备元数据，不计异盘灾备。进行中故障/业务Partial/Unknown、递归所有者/ACL/删除等继续。见[最新实机证据](CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md)。下方未部署/未接业务等为原批次事实。
+
 > 2026-11-02后续：管理员API/Vue候选2056191及验收器f706c86已接并通过49项接口、832前端Unit及44递归+104关联生产预览分批验证，未部署/未真实业务整链。见[页面候选、失败与边界](CONTAINER_RECURSIVE_PERMISSIONS_WEB_UI.md)。下方未接HTTP/Vue等保留为原批次事实。
 
 > 2026-11-02后续：最终cca8ec9已接EF仓储/迁移、八方共享保护及专用Worker候选，3794 Unit/259 Integration（7默认原生跳过）、双隔离真实PG全套1执行/1通过/0跳过及独立准确清理通过；未部署/未接HTTP/Vue/真实身份业务页面。见[持久化候选、失败和证据边界](CONTAINER_RECURSIVE_PERMISSIONS_PERSISTENCE.md)。下方未接仓储等保留为71b6334原批次事实。

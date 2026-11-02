@@ -1,5 +1,7 @@
 # 递归普通权限：管理员API、Vue候选与验证边界
 
+> 2026-11-02后续：0dede08已正常覆盖，真实Authentik→Vue→SQL/Worker→实际树/HDD常规6场景及独立准确清理通过；同设备元数据，不计异盘灾备。进行中故障/业务Partial/Unknown、递归所有者/ACL/删除等继续。见[最新实机证据](CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md)。下方未部署/未接业务等为原批次事实。
+
 2026-11-02。源码候选`2056191`，验收器修正`f706c86`，尚未部署；当前宿主e668dbe/Agent1.49、API/Worker/Gateway d1fcca8保持。59主项继续部分实现，17移出不算完成；没有交付master，不自动回滚dev。
 
 ## 实现
