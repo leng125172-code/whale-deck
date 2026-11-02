@@ -28,8 +28,23 @@ from validate_metric_continuity import query
 def verify(name):
     assert re.fullmatch('container-recursive-ownership-browser-[a-f0-9]{32}',name)
     repo = Path(__file__).resolve().parents[2]; evidence = repo/'deploy/artifacts'/name; trusted(evidence,True)
-    baseline = private_json(evidence/'baseline.json'); results = private_json(evidence/'browser.json'); accepted = private_json(evidence/'verified.json'); proofs = private_json(evidence/'results.json')
-    assert baseline['revision'] == results['revision'] == accepted['revision'] and results['actualUi'] and results['normalDualLogout']
+    baseline = private_json(evidence/'baseline.json'); proofs = private_json(evidence/'results.json')
+    recovered=(evidence/'recovered.json').exists()
+    if recovered:
+        accepted=private_json(evidence/'recovered.json');results=private_json(evidence/'browser-recovered.json');logout=private_json(evidence/'logout-only.json')
+        assert accepted['originalGateFailedAtLogout'] and accepted['originalFailurePreserved'] and accepted['noRepeatedFileMutation']
+        assert results['normalDualLogout'] is False and results['separateAuthOnlyLogout'] and results['countersProvedByFrozenBrowserBeforeLogout']
+        assert logout['authOnly'] is True and logout['fileMutations']==0 and logout['normalUiLogout'] is True and logout['providerNavigationObserved'] is True
+        assert logout['postStatus']==302 and logout['bffStatus']==401 and logout['identityStatus'] in (401,403) and logout['finalLoginPage'] is True
+        failures=[json.loads(line) for line in (evidence/'browser.stderr').read_text().splitlines()]
+        assert len(failures)==1 and failures[0]['phase']=='visible-dual-logout' and failures[0]['recursiveOwnershipBrowser']=='failed'
+        assert logout['subject']!=results['subject']
+        for index,label in enumerate(CASES):
+            signal=private_json(evidence/(label+'-result.json'));checked=private_json(evidence/(label+'-verified.json'))
+            assert signal=={'subject':results['subject'],'result':results['completed'][index]} and checked=={'id':signal['result']['id'],'physicalAndHistoryVerified':True}
+    else:
+        results=private_json(evidence/'browser.json');accepted=private_json(evidence/'verified.json');assert results['normalDualLogout']
+    assert baseline['revision'] == results['revision'] == accepted['revision'] and results['actualUi']
     assert accepted['actualBrowserAndIdentity'] and accepted['cases'] == len(proofs) == len(results['completed']) == 6
     assert results['registrations'] == results['registrationRetries'] == 6 and results['confirmations'] == results['confirmationRetries'] == 5 and results['contentUploads'] == 0
     assert re.fullmatch('[a-f0-9]{40}',baseline['validationSourceRevision'])
@@ -116,7 +131,7 @@ def verify(name):
             response = api.get(AUTHENTIK_API+'core/users/',params={'search':prefix,'page_size':100},timeout=20); assert response.status_code == 200 and not response.json().get('pagination',{}).get('next')
             assert not any(str(user['username']).startswith(prefix) for user in response.json()['results'])
     finally: api.close()
-    return {'revision':baseline['revision'],'independentReadOnlyVerifier':True,'cases':6,'aggregateHddRecords':aggregates,'childHddRecords':children,'temporaryIdentitiesAbsent':True,'exactSourceAndContainerAbsent':True,'coreUnchanged':11,'physicalBytesCheckedByParentPerCase':True,'sourceBytesRereadAfterCleanup':False}
+    return {'revision':baseline['revision'],'independentReadOnlyVerifier':True,'cases':6,'aggregateHddRecords':aggregates,'childHddRecords':children,'temporaryIdentitiesAbsent':True,'exactSourceAndContainerAbsent':True,'coreUnchanged':11,'physicalBytesCheckedByParentPerCase':True,'sourceBytesRereadAfterCleanup':False,'originalGateRecoveredAfterLogoutFailure':recovered,'normalDualLogoutFromOriginalContext':not recovered,'separateAuthOnlyLogout':recovered}
 
 
 if __name__ == '__main__':
