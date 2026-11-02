@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_UNKNOWN.md；docs/qa/CONTAINER_ACL_POST_CHANGE.md",
-  "nextStep": "运行633a2ca/1.51，Agent3288068/维护3122598。ACL原容器消失Unknown/不同管理员明确处置、另一容器目录四次真实延期与原ID发布已严格复验；首轮初始排队误计及视口不足拒绝原件保留。继续写后撤权/Agent、写后或实例Unknown及其他共享写入组合，再ACL递归/历史恢复、可恢复删除/长期清理、P0-05与其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，开发sudo保留，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_POST_REVOCATION.md；docs/qa/CONTAINER_ACL_UNKNOWN.md",
+  "nextStep": "运行633a2ca/1.51，Agent3288068/维护3122598。ACL写后移组/停用已实机核对原用户403与历史Succeeded/Completed，当前不同管理员只读API及任务中心原执行ID/Succeeded页面通过；完整ACL任务结果摘要与空文案待补。继续写后Agent、写后或实例Unknown和其余共享写入组合，再ACL递归/历史恢复、可恢复删除/长期清理、P0-05及其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，开发sudo保留，不自动回滚dev。"
 }

@@ -1,5 +1,7 @@
 # 容器ACL：目标消失Unknown、不同管理员处置与跨容器目录延期
 
+后续记录：[ACL已写入后实时移组/停用](CONTAINER_ACL_POST_REVOCATION.md)的原页面拒绝、历史Succeeded对账与不同当前管理员只读API已实机通过；后续已补任务中心原执行ID/Succeeded真实只读页面；完整ACL结果摘要仍未签收。以下本页首轮拒绝、严格复验与当时待办正文逐字保留。
+
 2026-11-03。运行仍 `633a2ca42012bbd6f388a67bd128fe3125bfab76`、Agent 1.51，无重新发布或生产迁移。**修正后的冻结 `d977c7a`（proofVersion2、33份验收依赖/11份安装模块）严格主门禁与独立只读核验通过。** 首轮 `cab4dbc` 曾由旧检查器报Passed，但复核发现计数错误，已明确拒绝其“四次延期”结论、保留全部原件；不能称本轮整体首轮通过。两轮用不同新独占资源，未重复原已处置操作。
 
 本批只签收**写ACL前Preparing/HistoryVerified，准确自有容器消失后形成Unknown**及另一容器目录的共享保护组合。[写前中断](CONTAINER_ACL_RESTARTS.md)、[写后成功对账](CONTAINER_ACL_POST_CHANGE.md)、[实时撤权](CONTAINER_ACL_REVOCATION.md)各自证据不混用。不是实例替换、实际ACL写后Unknown、所有共享写类型、递归/历史恢复或删除的完整验收；59主项保持部分实现，17项移出不算完成，master未交付。

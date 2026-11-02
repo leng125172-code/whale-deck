@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-11-03 ACL写后实时移组/停用实机及独立核验通过**：运行633a2ca/1.51不重发，冻结8d93fbe/schema5/27依赖，两新资源目标ACL已写/Root仍Applying时准确移组或停用原身份；原正快照余7163秒，产品4.806/4.834秒停helper，原任务GET403、移组/me200非管理员并/forbidden、停用/me403并/login，引用键null/取消POST0。原任务按实际事实Succeeded/Completed，原字节/属主/mtime/另一ACL/xattr保持，写后清单/版本及迟到Apply不再变化，2HDD/4Job/8原主体审计与独立准确清理通过。不同当前管理员正常BFF只读GET200核对原终态并HTTP双端退出；后续0b7d43c真实任务中心原执行ID/Succeeded只读页面及正常退出通过，管理写0/原SQL不变；其完整ACL结果摘要仍待。6有效PNG/56边界/语法、11核心healthy通过；连接中断后未重做已完成操作。写后Agent/Unknown/其余组合、递归恢复/删除及59项继续。[实际角色与证据边界](qa/CONTAINER_ACL_POST_REVOCATION.md)。
+
 - **2026-11-03 ACL目标消失Unknown/不同管理员处置与跨容器目录保护严格复验通过**：运行633a2ca/1.51不重发，d977c7a/proofVersion2/33依赖使用两新独占资源，Preparing/HistoryVerified后准确移除原容器、原上下文正常退出，产品4.981秒停helper；原ACL Unknown/null与原HDD/回执MAC/全源保持。另一容器原目录任务四次真实自然延期版本[2,4,6,8]，当前不同管理员320×600先暂不处置再唯一ACK后，原Job Failed/Acknowledged、原Root/HDD及迟到Apply仍Unknown；目录同一ID才实际发布并在Vue视口可见。3Job/7审计/5真实PNG、独立原件/准确清理、52边界/语法及11核心healthy通过。首轮cab4dbc把初始排队误计第四次且目录截图未入视口，已明确拒绝旧Passed、原件留存，非整体首轮通过。其余组合/递归恢复/删除及59项继续。[失败、严格复验和边界](qa/CONTAINER_ACL_UNKNOWN.md)。
 
 - **2026-11-03 ACL写后取消/Worker回执中断实机通过**：运行633a2ca/1.51不重发；冻结517c42a，两新独占资源准确抓到目标ACL已写、Root Applying/尚无完成回执，取消后产品5.313秒停helper，Worker实际强杀后0.123秒停helper/42采样87.079秒等原自然租约。两案原任务最终Succeeded/Completed，不误报未修改或恢复旧ACL；目标ACL与新增ctime实际证明，原字节/inode/属主/mtime/另一ACL/xattr不变，写后清单/版本在迟到同操作Apply重放前后完全保持。2意图/4Job/9原主体审计/2HDD、原上下文正常退出、4真实PNG及独立原件/准确清理与v3兼容通过，54边界/语法通过、11核心healthy。剩余写后撤权/Agent/Unknown/跨写入、ACL递归恢复/删除及59项继续。[实际写后结果与边界](qa/CONTAINER_ACL_POST_CHANGE.md)。
@@ -96,7 +98,7 @@
 
 当前目标以[可复制目标正文与59项主表](GOAL_P0_P5.md)为准，包含完整C#酒馆、统一供应商、AI驱动Live2D、272ST/6PET父级和16个子门槛，以及原有UI/所有者/递归/ACL/删除等全部任务。17项移出不恢复，文档更新不算功能完成。
 
-当前API/Worker/Gateway/Migrator与Agent/MaintenanceHost均为`633a2ca`（协议1.51），ACL生产迁移17个CHECK已应用；真实常规9场景/源-HDD/35审计、同原上下文正常退出及独立准确清理通过，见[ACL实际记录](qa/CONTAINER_ACL_REAL_UI.md)。递归所有者/权限此前常规与取消/退出/重启/撤权/Unknown跨容器目录签收分别保留；ACL已补执行前留历史的取消/正常退出/实时移组与停用/Worker强杀自然租约及Agent重启，当前Agent PID3288068、维护PID3122598；另已补ACL写后取消/Worker回执中断的Succeeded对账与迟到重放；已补原容器消失Unknown及另一容器目录四次延期/不同管理员处置；仍需写后撤权/Agent、写后或实例Unknown/其他写入保护、递归/历史恢复，另继续容器可恢复删除/长期清理、目录/实例/跨盘剩余故障、其他模块即时撤权、统一UI、网站/开发空间、C#酒馆/供应商/Live2D及59项完整验收；不按分项提升整项完成率。下方旧候选/运行版本和待办均按原批次理解。
+当前API/Worker/Gateway/Migrator与Agent/MaintenanceHost均为`633a2ca`（协议1.51），ACL生产迁移17个CHECK已应用；真实常规9场景/源-HDD/35审计、同原上下文正常退出及独立准确清理通过，见[ACL实际记录](qa/CONTAINER_ACL_REAL_UI.md)。递归所有者/权限此前常规与取消/退出/重启/撤权/Unknown跨容器目录签收分别保留；ACL已补执行前留历史的取消/正常退出/实时移组与停用/Worker强杀自然租约及Agent重启，当前Agent PID3288068、维护PID3122598；另已补ACL写后取消/Worker回执中断的Succeeded对账与迟到重放；已补原容器消失Unknown及另一容器目录四次延期/不同管理员处置；已补写后实时移组/停用与新当前管理员只读API；已补不同当前管理员任务中心历史Succeeded只读页面；仍需完整ACL结果摘要、写后Agent、写后或实例Unknown/其他写入保护、递归/历史恢复，另继续容器可恢复删除/长期清理、目录/实例/跨盘剩余故障、其他模块即时撤权、统一UI、网站/开发空间、C#酒馆/供应商/Live2D及59项完整验收；不按分项提升整项完成率。下方旧候选/运行版本和待办均按原批次理解。
 
 下方是按批次保存的历史实施日志。其“当前/最新/下一步”、运行版本、70/76项与旧HOLD仅属于原记录日期；发生冲突时以上述目标和最新对应版本证据为准，不从旧日志恢复移出任务或重复发布。
 

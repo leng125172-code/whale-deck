@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-03 ACL写后失权实机：8d93fbe原正快照余7163秒时移组/停用，约4.8秒停helper、原用户GET403及真实/forbidden或/login/私有引用清空；已发生ACL事实最终Succeeded/Completed，写后九字段/版本/迟到Apply保持、2HDD/4Job/8审计、独立原件与清理通过。不同当前管理员正常BFF只读GET200和HTTP双端退出通过，后续0b7d43c真实任务中心原执行ID/Succeeded只读页面与正常退出通过，管理写0/原SQL不变，完整结果摘要仍待。56边界/语法、6有效PNG、11核心healthy，运行仍633a2ca/1.51。[角色、历史与边界](qa/CONTAINER_ACL_POST_REVOCATION.md)。
+
 2026-11-03 ACL Unknown严格复验：d977c7a新资源原容器准确消失，原页面正常退出后Unknown/null/原HDD与MAC/源保持；另一容器目录四次真实延期[2,4,6,8]，不同管理员小屏先暂不处置再唯一ACK，原Job Failed/Acknowledged、Root/HDD/迟到Apply仍Unknown，目录原ID才发布且Vue视口可见。52边界/语法、5 PNG、独立原件/清理及11核心healthy通过；首轮初始排队误计及视口不足已明确拒绝，非整体首轮通过。其他组合/递归恢复/删除继续。[实际失败与复验](qa/CONTAINER_ACL_UNKNOWN.md)。
 
 2026-11-03 ACL写后实机：517c42a两新资源真实目标ACL已写、Root仍Applying时取消/Worker强杀，最终原任务Succeeded/Completed，未误报未修改；原字节/inode/属主/mtime/default ACL/xattr保持、实际新access ACL/ctime及写后九字段/版本在迟到原Apply前后不再改变。2HDD/4Job/9审计、42采样自然租约、原上下文退出/4 PNG/独立原件与准确清理通过；54边界/语法通过、11核心healthy，运行仍633a2ca/1.51。其他写后/Unknown/跨写入/递归恢复/删除继续。[写后事实与边界](qa/CONTAINER_ACL_POST_CHANGE.md)。
