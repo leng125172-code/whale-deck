@@ -3,13 +3,27 @@ import ast
 import copy
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 import bound_container_recursive_permission_cut as cut
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, maintenance_response
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, maintenance_response, restore_fault_services
 
 
 class RecursiveFaultProbeScope(unittest.TestCase):
+    def test_agent_cleanup_failure_never_skips_worker_restore(self):
+        host = {'whaledeck-agent.service':{'pid':10}}; revision = 'a'*40
+        prefix = 'validate_container_recursive_permission_faults.'
+        for outputs,identity_failure in (([RuntimeError('state lookup failed')],False),(['inactive',RuntimeError('start failed')],False),(['active'],True)):
+            worker = Mock()
+            with patch(prefix+'command',side_effect=outputs),patch(prefix+'agent_identity',side_effect=RuntimeError('identity failed') if identity_failure else None):
+                with self.assertRaises(RuntimeError): restore_fault_services(worker,True,host,revision)
+            worker.start.assert_called_once_with()
+        worker = Mock()
+        with patch(prefix+'command') as command_mock,patch(prefix+'agent_identity') as identity_mock:
+            restore_fault_services(worker,False,host,revision)
+            command_mock.assert_not_called(); identity_mock.assert_not_called()
+        worker.start.assert_called_once_with()
+
     def test_restart_must_change_only_agent_process(self):
         revision = 'a'*40
         before = {'whaledeck-agent.service':{'pid':10,'sourceRevision':revision},'whaledeck-maintenance.service':{'pid':20,'sourceRevision':revision}}

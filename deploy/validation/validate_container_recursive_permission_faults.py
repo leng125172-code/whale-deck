@@ -164,6 +164,16 @@ def observe_maintenance(stop, ready):
     finally: client.close()
 
 
+def restore_fault_services(worker, agent_attempted, host, revision):
+    try:
+        if agent_attempted:
+            if command('systemctl','show','whaledeck-agent.service','-p','ActiveState','--value') != 'active': command('systemctl','start','whaledeck-agent.service')
+            agent_identity(str(host['whaledeck-agent.service']['pid']),revision)
+    finally:
+        # Agent recovery/identity failures must not strand the original Worker.
+        worker.start()
+
+
 def same_operation(before, after):
     for key in ('id','execution_job_id','root_started_at_utc','actor_subject','owner_hash','container_id','instance_id','relative_path',
         'command_json','request_hash','plan_json','plan_hash','execution_hash','confirmed_at_utc','execution_expires_at_utc'):
@@ -636,10 +646,7 @@ def main():
                 'agentRestart':agent_restart}
         finally:
             if held is not None: held.release()
-            if agent_restart_attempted:
-                if command('systemctl','show','whaledeck-agent.service','-p','ActiveState','--value') != 'active': command('systemctl','start','whaledeck-agent.service')
-                agent_identity(str(host['whaledeck-agent.service']['pid']),revision)
-            worker.start()
+            restore_fault_services(worker,agent_restart_attempted,host,revision)
             if browser is not None and browser.poll() is None:
                 try: browser.wait(timeout=235)
                 except subprocess.TimeoutExpired: browser.terminate(); browser.wait(timeout=10)
