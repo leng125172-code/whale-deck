@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiRequest, apiUrl, createIdempotencyKey } from '@/services/apiClient'
 import { stageSecret, subscribeToJob, type OperationPlan } from '@/services/operations'
 import ContainerAclJobResult from '@/components/containers/ContainerAclJobResult.vue'
+import { readAclJobResult } from '@/services/containerAclJobResults'
 import type { Job, JobEvent } from '@/services/contracts'
 
 const jobs = ref<Job[]>([])
@@ -17,7 +18,22 @@ let timer: number | undefined
 let unsubscribe: (() => void) | undefined
 let openVersion = 0
 const terminalStates = new Set(['Succeeded', 'Failed', 'Canceled', 'RolledBack'])
-const canCancel = computed(() => selected.value && !terminalStates.has(selected.value.state))
+const aclTask = computed(
+  () =>
+    !!selected.value &&
+    ['containers.files.acl', 'containers.files.acl-plan'].includes(selected.value.jobType),
+)
+const canCancel = computed(
+  () =>
+    selected.value &&
+    !terminalStates.has(selected.value.state) &&
+    !(
+      aclTask.value &&
+      (selected.value.phase === 'AwaitingContainerAclReceipt' ||
+        readAclJobResult(selected.value.resultJson, selected.value.jobType, selected.value.state)
+          ?.state === 'Unknown')
+    ),
+)
 const byteUpload = computed(
   () =>
     !!selected.value &&
@@ -32,6 +48,7 @@ const canRetry = computed(
   () =>
     selected.value &&
     !byteUpload.value &&
+    !aclTask.value &&
     ['Failed', 'Canceled', 'RolledBack'].includes(selected.value.state),
 )
 interface RetryContext {
@@ -288,9 +305,7 @@ onBeforeUnmount(() => {
           }}</el-descriptions-item>
           <el-descriptions-item label="结果">
             <ContainerAclJobResult
-              v-if="
-                ['containers.files.acl', 'containers.files.acl-plan'].includes(selected.jobType)
-              "
+              v-if="aclTask"
               :job-type="selected.jobType"
               :state="selected.state"
               :result-json="selected.resultJson"
@@ -310,6 +325,12 @@ onBeforeUnmount(() => {
             >
           </el-descriptions-item>
         </el-descriptions>
+        <el-alert
+          v-if="aclTask"
+          title="重新修改 ACL 请回到容器文件，基于当前对象版本生成新预检；未知结果请在文件页面的容器 ACL 恢复入口核对并明确处置。原任务不会自动重复执行。"
+          type="info"
+          :closable="false"
+        />
         <el-alert
           v-if="byteUpload"
           title="重新上传或恢复请回到文件页面，重新选择来源并确认基于当前版本的新计划。原任务不会自动重传或重复发布。"

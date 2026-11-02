@@ -192,6 +192,33 @@ describe('Job retry', () => {
 })
 
 describe('Task result empty states', () => {
+  it.each(['containers.files.acl', 'containers.files.acl-plan'])(
+    '%s never offers generic retry or Unknown cancellation',
+    async (jobType) => {
+      const job = { ...source, jobType, state: 'Running', phase: 'AwaitingContainerAclReceipt' }
+      request.mockImplementation(async (path) =>
+        path === 'jobs?take=100' ? [{ ...job }] : { ...job },
+      )
+      const wrapper = mount(JobsView, { global: { plugins: [ElementPlus], stubs } })
+      wrappers.push(wrapper)
+      await flushPromises()
+      await wrapper.get('.el-table__body tr').trigger('click')
+      await flushPromises()
+      expect(wrapper.findAll('button').some((b) => b.text() === '取消任务')).toBe(false)
+      job.state = 'Failed'
+      job.phase = 'Acknowledged'
+      await wrapper
+        .findAll('button')
+        .find((b) => b.text() === '刷新')!
+        .trigger('click')
+      await flushPromises()
+      expect(wrapper.findAll('button').some((b) => b.text() === '重新预检并重试')).toBe(false)
+      expect(wrapper.text()).toContain('原任务不会自动重复执行')
+      expect(
+        request.mock.calls.some(([path]) => path.includes('/retry') || path.includes('/cancel')),
+      ).toBe(false)
+    },
+  )
   it.each(['Succeeded', 'Failed', 'Canceled', 'RolledBack', 'Queued', 'Running'])(
     '%s does not imply an empty result is waiting for success',
     async (state) => {

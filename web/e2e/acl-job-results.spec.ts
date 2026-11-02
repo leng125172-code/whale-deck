@@ -147,13 +147,19 @@ for (const width of [320, 1440])
             await expect(region).toContainText('处置仅解除业务保护，不证明 ACL 已恢复或重新执行。')
         }
         await expect(drawer).not.toContainText('任务成功后')
+        if (i === 1)
+          await expect(drawer.getByRole('button', { name: '取消任务', exact: true })).toHaveCount(0)
+        if (i !== 5)
+          await expect(
+            drawer.getByRole('button', { name: '重新预检并重试', exact: true }),
+          ).toHaveCount(0)
         await expect(drawer).not.toContainText('/private-do-not-render')
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         )
         if (i < 4)
           await page.screenshot({
-            path: `test-results/acl-job-result-${i}-${width}-${colorScheme}.png`,
+            path: `../deploy/artifacts/ui-candidates/acl-job-summary/acl-job-result-${i}-${width}-${colorScheme}.png`,
             scale: 'css',
           })
         await drawer.getByRole('button', { name: 'Close this dialog', exact: true }).click()
