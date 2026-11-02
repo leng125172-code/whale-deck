@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/AGENT_RPC.md；docs/qa/CONTAINER_ACL_RPC.md",
-  "nextStep": "产品仍b1fafed/1.50；ACL独立1.51 RPC/SDK/固定受限传输与安装验证候选6a62027已通过Release/4132 Unit/363 Integration(7默认跳过)/468 Linux-root，未安装/真实RPC0。下一步原生签名探针、正常冻结宿主覆盖及实际四RPC/HDD/拒绝/旧能力兼容，再永久SQL/共享保护/Worker/API/Vue与真人页面，继续ACL递归/恢复、删除/长期清理/P0-05及其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/AGENT_RPC.md；docs/qa/CONTAINER_ACL_AGENT_RPC.md",
+  "nextStep": "Agent/MaintenanceHost实际4a58961/1.51，API/Worker/Gateway仍b1fafed；ACL真实签名9操作/8HDD/17拒绝及独立清理、旧能力兼容已通过，失败原件保留。下一步永久ACL意图/迁移、共享写入保护/租约/Worker、实时人类授权/原登录、API/Vue与真实Authentik对象/HDD常规及故障整链，再ACL递归/历史恢复、删除/长期清理/P0-05和其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
 }

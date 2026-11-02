@@ -1,5 +1,7 @@
 # 文件操作、编辑与回收站实施契约
 
+2026-11-03 ACL安装态更新：宿主4a58961/1.51已正常覆盖，实际四签名RPC在新自有容器完成9操作及8份原ACL HDD元数据，完整字节/原inode与属性/非目标ACL/目录子项、每轮重放/签名迟到不写和独立清理通过。旧所有者/递归权限能力已回归；仍未接永久ACL意图/共享发布保护/Worker/API/Vue，真人授权与故障矩阵、递归/历史恢复和删除/长期清理继续。下列未安装说明按原批次理解，不扩大普通chmod/chown入口。[安装及失败事实](qa/CONTAINER_ACL_AGENT_RPC.md)。
+
 2026-11-03后续：6a62027已接ACL独立1.51四RPC/SDK、固定受限stdin传输、初始namespace/准确FD非IDMAP检查及安装验证候选。实际工作站只读依赖支持，但新helper/状态未安装，无真实UDS/永久业务/共享保护/页面验收；旧权限/所有者遇ACL继续拒绝。下一步正常覆盖后实际四RPC/HDD，再永久任务与真人UI，不以本段替代失败恢复。[完整证据](qa/CONTAINER_ACL_RPC.md)。
 
 2026-11-03补充：容器POSIX ACL独立底层候选ed50dc1已实现单对象access/default、显式mask/数值ID、64项预算、原ACL HDD元数据与只观察恢复，真实容器/HDD候选及独立核验通过。尚未安装/无签名RPC/永久业务/Worker/API/Vue，既有chmod/chown仍拒绝ACL，完整递归/恢复/namespace映射及删除/长期清理继续。Linux POSIX ACL/xattr必须实际可用，不支持/拒绝/IO错误不当空ACL；getfacl仅本机候选验收依赖，不引入libacl运行时依赖。[事实和验收边界](qa/CONTAINER_ACL_ENGINE.md)。

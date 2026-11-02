@@ -1,5 +1,7 @@
 # 容器ACL：独立签名RPC/SDK与固定传输候选
 
+后续更新（2026-11-03）：真实入口初始化缺陷已修复并正常覆盖到4a58961/1.51，工具224f744单独记来源的真实四RPC/HDD/拒绝/旧能力兼容及独立核验已通过，见[安装态证据和两次失败](CONTAINER_ACL_AGENT_RPC.md)。以下6a62027候选/未安装正文逐字保留，未将其测试夹具改称原生证据；永久业务/真人页面仍待。
+
 2026-11-03。候选冻结`6a620275a9f8c56a92275d13b78e63c0ebd9462e`，编译Agent实际`--build-info`来源一致，协议1.51。**未安装、未执行真实签名UDS RPC或人类业务页面**；运行Agent/MaintenanceHost仍b1fafed/1.50，API/Worker/Gateway及11核心保持。此前[ed50dc1底层真实容器/HDD候选](CONTAINER_ACL_ENGINE.md)不重做，不把其9操作/2强杀冒称新RPC证据。
 
 ## 独立协议、完整绑定与SDK
