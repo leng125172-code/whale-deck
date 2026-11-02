@@ -1,5 +1,7 @@
 # 文件操作、编辑与回收站实施契约
 
+**2026-11-03 ACL任务安全摘要候选2491add/9b419c2**：新增预检/执行/Unknown/明确处置的15字段受限摘要，与任务/事件同事务保存；读取校验原意图/执行ID、阶段、状态和严格字段，未知/错误数据不原样返回。Vue展示真实三态、普通模式与历史回执，预检不冒充已修改，处置不冒充恢复；旧任务不补造历史，成功/失败空文案已区分。摘要源码候选与回归已验证，运行仍633a2ca/1.51，未部署、未签收真实身份/文件/HDD页面整链。[候选与验收边界](qa/CONTAINER_ACL_JOB_RESULTS.md)。
+
 2026-11-03 ACL写后失权实机：8d93fbe原正快照余7163秒时移组/停用，约4.8秒停helper、原用户GET403及真实/forbidden或/login/私有引用清空；已发生ACL事实最终Succeeded/Completed，写后九字段/版本/迟到Apply保持、2HDD/4Job/8审计、独立原件与清理通过。不同当前管理员正常BFF只读GET200和HTTP双端退出通过，后续0b7d43c真实任务中心原执行ID/Succeeded只读页面与正常退出通过，管理写0/原SQL不变，完整结果摘要仍待。56边界/语法、6有效PNG、11核心healthy，运行仍633a2ca/1.51。[角色、历史与边界](qa/CONTAINER_ACL_POST_REVOCATION.md)。
 
 2026-11-03 ACL Unknown严格复验：d977c7a新资源原容器准确消失，原页面正常退出后Unknown/null/原HDD与MAC/源保持；另一容器目录四次真实延期[2,4,6,8]，不同管理员小屏先暂不处置再唯一ACK，原Job Failed/Acknowledged、Root/HDD/迟到Apply仍Unknown，目录原ID才发布且Vue视口可见。52边界/语法、5 PNG、独立原件/清理及11核心healthy通过；首轮初始排队误计及视口不足已明确拒绝，非整体首轮通过。其他组合/递归恢复/删除继续。[实际失败与复验](qa/CONTAINER_ACL_UNKNOWN.md)。

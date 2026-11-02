@@ -1,5 +1,7 @@
 # 容器ACL：实际写入后实时移组与账号停用实机对账
 
+后续2491add已实现[任务安全摘要候选](CONTAINER_ACL_JOB_RESULTS.md)，尚未覆盖发布或取得新的真实页面签收；本页633a2ca/0b7d43c的空摘要事实和原验收正文保留。
+
 2026-11-03。运行保持 `633a2ca42012bbd6f388a67bd128fe3125bfab76`、Agent 1.51，无应用发布或生产迁移。实际验收冻结 `8d93fbe`，schemaVersion5/27份验收依赖与11份安装模块逐字节核对。**两套新独占资源的真实写后切点、原登录实时失权页面、持久SQL/Worker/Agent/文件-HDD、不同当前管理员只读API与独立观察器通过；随后补证源码0b7d43c的真实任务中心只读查看也通过。** 模型连接中断后仅核对已有结果，未重做已通过的真实操作。
 
 本批只签收**目标access ACL已写、Root仍Applying且尚无完成回执**时的实时组撤权/账号停用；当前容器和已变更inode仍然存在并绑定。与[写入前撤权](CONTAINER_ACL_REVOCATION.md)、[写后取消/Worker中断](CONTAINER_ACL_POST_CHANGE.md)、[容器消失Unknown](CONTAINER_ACL_UNKNOWN.md)分开，不计写后Agent重启、写后/实例变化Unknown、ACL递归/历史恢复或删除完成。59主项继续部分实现，17项移出不算完成，master未交付。
