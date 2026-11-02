@@ -212,3 +212,37 @@ class RecursivePermissionTests(unittest.TestCase):
         (self.state/(request['operationId']+'.entries')/(sub['operationId']+'.json')).unlink()
         with patch.object(os,'fchmod',side_effect=AssertionError('lost child receipt must not repeat mutation')):result=self.engine.inspect(request,self.base.session)
         self.assertEqual(result['state'],'Unknown');self.assertEqual(before,self.snapshot())
+
+    def test_discard_after_missing_aggregate_fences_existing_hdd_and_never_claims_aborted(self):
+        request=self.request();self.engine.apply(request,self.base.session);before=self.snapshot();(self.state/(request['operationId']+'.json')).unlink()
+        with patch.object(os,'fchmod',side_effect=AssertionError('missing root discard must never chmod')):
+            fenced=self.engine.discard(request,self.base.session);replay=self.engine.apply(request,self.base.session)
+        self.assertEqual((fenced['state'],fenced['unknownCount']),('Unknown',4));self.assertTrue(fenced['historyMayExist'])
+        self.assertEqual(replay['state'],'Unknown');self.assertEqual(before,self.snapshot())
+
+    def test_discard_after_missing_aggregate_and_hdd_uses_child_state_as_permanent_unknown_fence(self):
+        (self.tree/'sub/中文.bin').chmod(0o644);request=self.request();self.killed(request,'AfterEntry');before=self.snapshot()
+        (self.state/(request['operationId']+'.json')).unlink()
+        (self.base.disk.target/recursive.NAMESPACE/(request['operationId']+'.json')).unlink()
+        with patch.object(os,'fchmod',side_effect=AssertionError('remaining child receipts forbid fresh execution')):
+            fenced=self.engine.discard(request,self.base.session);replay=self.engine.apply(request,self.base.session)
+        self.assertEqual(fenced['state'],'Unknown');self.assertEqual(replay['state'],'Unknown');self.assertEqual(before,self.snapshot())
+
+    def test_hdd_child_artifacts_fence_discard_when_aggregate_and_local_state_are_lost(self):
+        request=self.request();self.engine.apply(request,self.base.session);before=self.snapshot()
+        (self.state/(request['operationId']+'.json')).unlink()
+        (self.base.disk.target/recursive.NAMESPACE/(request['operationId']+'.json')).unlink()
+        children=self.state/(request['operationId']+'.entries')
+        for path in children.iterdir():self.assertTrue(path.is_file());path.unlink()
+        children.rmdir()
+        with patch.object(os,'fchmod',side_effect=AssertionError('HDD child history forbids a fresh operation')):
+            result=self.engine.discard(request,self.base.session);replay=self.engine.apply(request,self.base.session)
+        self.assertEqual(result['state'],'Unknown');self.assertTrue(result['historyMayExist'])
+        self.assertEqual(replay['state'],'Unknown');self.assertEqual(before,self.snapshot())
+
+    def test_unavailable_hdd_cannot_be_treated_as_absence_during_fresh_apply_or_discard(self):
+        request=self.request();before=self.snapshot()
+        with patch.object(self.history.storage,'configuration',side_effect=FileNotFoundError('synthetic missing policy')):
+            for action in ('apply','discard'):
+                with self.subTest(action=action),self.assertRaises(FileNotFoundError):getattr(self.engine,action)(request,self.base.session)
+        self.assertFalse((self.state/(request['operationId']+'.json')).exists());self.assertEqual(before,self.snapshot())

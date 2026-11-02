@@ -54,6 +54,20 @@ class RecursivePermissionHistory:
                 self.storage.attest(configuration, fd, read_only=not create)
                 yield configuration, fd
             finally: os.close(fd)
+    def has_artifacts(self, request):
+        # Only absence under an available, attested HDD is proof of absence.
+        # A lost aggregate may still leave immutable per-entry HDD history.
+        with self.storage.target(create_namespace=False, read_only=True) as (_, base):
+            try:fd=private_dir(self.f,base,NAMESPACE,False)
+            except FileNotFoundError:return False
+            try:
+                for name in (request['operationId']+'.json',request['operationId']):
+                    try:os.stat(name,dir_fd=fd,follow_symlinks=False)
+                    except FileNotFoundError:continue
+                    return True
+                return False
+            finally:os.close(fd)
+
     def load(self, request):
         with self.target(False) as (_, fd): value = self.storage.read_json(fd, request['operationId']+'.json', MAX_METADATA)
         required = {'schemaVersion','resourceType','storageId','operationId','owner','plan','entries','createdAtUnixMs','historyDigest'}
@@ -305,9 +319,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                     if record['state'] not in self.TERMINAL:self.recover(state,record,session)
                     return self.public(record,session,True)
                 record=self.new_record(request)
-                try:existing=self.history.load(request)
-                except FileNotFoundError:existing=None
-                if existing is not None or self.present(state,request['operationId']+'.entries'):
+                if self.history.has_artifacts(request) or self.present(state,request['operationId']+'.entries'):
                     record.update(state='Unknown',unknownCount=request['plan']['entryCount'],notStartedCount=0,historyMayExist=True)
                     self.save(state,record);return self.public(record,session,False)
                 if session is None:self.reject('SESSION_REQUIRED')
@@ -382,7 +394,12 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
         def discard(self,request,session):
             self.begin(True)
             with self.locked(request) as (state,record):
-                if record is None:record=self.new_record(request);record['state']='Aborted';self.save(state,record)
+                if record is None:
+                    record=self.new_record(request)
+                    if self.history.has_artifacts(request) or self.present(state,request['operationId']+'.entries'):
+                        record.update(state='Unknown',unknownCount=request['plan']['entryCount'],notStartedCount=0,historyMayExist=True)
+                    else:record['state']='Aborted'
+                    self.save(state,record)
                 else:self.recover(state,record,session)
                 return self.public(record,session,False)
         def public(self,record,session,replayed):
