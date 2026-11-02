@@ -42,3 +42,5 @@ QA观察器以pidfd、固定命令 `/usr/bin/python3 -I /usr/local/libexec/whale
 剩余：ACL实际系统调用后取消/丢回执、实时组撤权/停用、Worker强杀/自然租约与Agent重启、目标/实例变化Unknown及其他共享写入延期/明确处置组合，ACL递归/历史恢复、可恢复删除/长期清理、P0-05及其余59项/UI/C#酒馆/供应商/AI Live2D。单对象原ACL元数据不等于内容备份或异盘灾备；17项移出不计完成。
 
 文档终检：227份Markdown、1393处相对链接无缺失；目标第1节逐字不变，前批常规QA原始正文逐字保留，59项/17移出口径不变。项目图谱事件 `whale-deck.container-acl.78479ec.pre-syscall-faults` 已取得projectId/key/eventId一致回执并移入synced，阶段保持active。
+
+远端同步状态：本批实机与文档已本地提交；2026-11-03首次push及一次重试均报 `GnuTLS, handshake failed: The TLS connection was non-properly terminated.`，独立ls-remote也同错。当前未取得远端SHA成功回执，不能称已推送或CI已运行。本地工作和图谱成功回执保留，后续先恢复dev同步，不重复两案真实操作。
