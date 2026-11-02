@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-02后续候选a19f5c4已将`ContainerRecursiveOwnershipIntent`加入PlatformDbContext并实现具体仓储与migration `20261102131222_ContainerRecursiveOwnershipIntents`：16个CHECK（含显式UID/GID范围）、双Job受限外键/唯一执行与租约/屏障/版本、原请求/计划/执行/开始与Root事实不可变、永久行删除/非空降级拒绝。九方数据库触发器及应用路径/预算双向保护已接；双隔离真实PG全套与独立清理通过。**生产新表仍不存在，尚未部署或接管理员API/Vue**。下方“尚无具体仓储/migration”等是前批事实，不按类或文档完成永久业务上线。[候选模型与实际边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_PERSISTENCE.md)。
+
 2026-11-02内部业务候选7a94733新增Domain类`ContainerRecursiveOwnershipIntent`与请求/计划/执行/确认绑定模型。原始/目标/执行UID-GID分列，五计数、历史事实与当前观察分开；规范JSON与独立HMAC防止存储字段被篡改后取得执行权。**尚未加入PlatformDbContext、具体仓储或EF migration，没有新增生产表**；接口仅约定原子幂等/版本/租约及九方共享保护，测试Repository未注册为产品服务。下方此前“没有新增EF实体”等为原批次事实，不能据新Domain类宣称永久存储完成。[完整候选与后续约束](qa/CONTAINER_RECURSIVE_OWNERSHIP_WORKFLOW.md)。
 
 2026-11-02递归所有者1.50候选新增强类型Command/Plan/Operation/Receipt DTO及独立protobuf：显式UID/GID presence、原公开版本、根九字段/父身份/执行身份、密封清单和五类计数/历史/当前观察进入完整签名。Root/HDD沿用独立ownership元数据域；**本批没有新增EF实体、migration或生产表**，永久意图/共享写入保护与Worker仍待接，不能套用下方已安装的recursive-permission实体计作ownership持久化。见[候选与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_RPC.md)。
