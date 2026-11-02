@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-11-03 ACL已正常覆盖633a2ca，真实页面九场景首轮及独立核验通过**：唯一发布Invocation5761b5620b27452d925f196bb134537e成功，六组件/HTTP/实际宿主映射同源、生产ACL迁移17 CHECK应用，11核心healthy且8数据库平台不变，user NOPASSWD保留。冻结0668215/21依赖，以正常Authentik→Vue→SQL/Worker→Agent→实际ACL/HDD完成8成功/1预检取消，显式ID/权限0、mask/NoChange/default清空、完整2097159字节/原inode-UID-GID-mtime/非目标ACL/子项逐轮核对，8份原HDD与35审计/17 Job、原key/确认重试不重做通过。同原上下文正常双端退出、普通8路403/匿名4路401、CSRF/Origin及缺字段拒绝、9真PNG、准确清理与独立原件核验通过；源/HDD同device不算异盘。14离线及语法通过，前批单元/预览不冒称复跑或新CI全绿；真实进行中故障/Unknown/跨写入、ACL递归/历史恢复、删除及其余59项继续，不计完整ACL。[实际部署、原件和未验边界](qa/CONTAINER_ACL_REAL_UI.md)。
+
 - **2026-11-03 ACL管理员API/Vue候选062e361已通过，尚未部署**：实际永久业务入口与容器文件/全局Unknown处置页面已接；access/default完整条目、显式ID/权限0、mask有效权限/模式、默认清空、原两类ACL/执行身份/不可变原回执与确认/取消/原key恢复齐接。根/条目/确认/处置严格拒绝缺失、重复、额外和错误类型，保留实时权威身份/原登录/CSRF/Origin与十方保护；首登记执行回复只允许原GET核实。4272 Unit/432 Integration（7默认原生跳过）、972前端Unit、Release零警告错误及类型/构建/lint/格式通过；43 ACL和156关联生产预览浏览器分两组全通过，18明暗PNG及5175实际字节来源核验通过。真实桌面页脚越界已修正，脚手架/断言失败保留；**测试身份/API/仓储/Agent不是Authentik/实际ACL/HDD业务证据，无发布或生产迁移**。下一步正常冻结覆盖与真实常规/故障整链，再ACL递归/恢复、删除和其余59项。[实现、失败和验收边界](qa/CONTAINER_ACL_WEB_UI.md)。
 
 - **2026-11-03 ACL永久SQL/十方共享保护与专用Worker候选已通过真实PG，未部署**：72d678e新增EF仓储/迁移17个CHECK、双Job/Outbox/审计、90秒租约/CAS与原回执独立MAC原子保存/不可改；既有八类容器写入及主机锁双向路径/发布/预算保护齐接。c9c9265补通用Worker专用消息排除与通用重试拒绝，最终4272 Unit/364 Integration（7默认原生跳过）、Release零警告错误及10范围/状态门禁通过。冻结72d678e双隔离真实PG完整1执行/1通过/0跳过，独立原件/准确清理、11核心不变且healthy/8数据库平台不变、生产ACL表不存在通过；原回执/身份/时钟为合成输入，**不是实际Worker/Authentik/ACL文件HDD或页面证据**。无发布/回滚，前批4a58961/1.51安装RPC事实保留；下一步严格管理员API/Vue及正常覆盖后真实业务常规/故障整链，ACL递归/恢复、删除与其余59项继续。[候选、失败和证据边界](qa/CONTAINER_ACL_PERSISTENCE.md)。
@@ -84,7 +86,7 @@
 
 当前目标以[可复制目标正文与59项主表](GOAL_P0_P5.md)为准，包含完整C#酒馆、统一供应商、AI驱动Live2D、272ST/6PET父级和16个子门槛，以及原有UI/所有者/递归/ACL/删除等全部任务。17项移出不恢复，文档更新不算功能完成。
 
-当前API/Worker/Gateway保持`b1fafed`；Agent/MaintenanceHost已正常覆盖为`4a58961`、协议1.51，ACL实际签名四RPC/HDD与旧能力兼容通过，见[安装态记录](qa/CONTAINER_ACL_AGENT_RPC.md)；递归所有者已部署，真实常规六场景分项与旧退出失败/独立补证分别保留，后续进行中取消、原身份/实例保留的同上下文正常双端退出、Worker强杀/原自然租约恢复、固定Agent重启/维护入口，以及首项fchown后实时组撤权/账号停用均有实机证据。Partial须不同当前管理员明确处置，五计数/原Root/HDD/完整源/迟到不续做及准确清理通过。最新两撤权场景及独立核验见[撤权原件与边界](qa/CONTAINER_RECURSIVE_OWNERSHIP_REVOCATION.md)；递归所有者目标消失Unknown/另一容器目录四次真实延期及明确处置后原ID发布也已实机签收，见[最新Unknown/跨容器目录记录](qa/CONTAINER_RECURSIVE_OWNERSHIP_UNKNOWN_BARRIER.md)；ACL独立底层ed50dc1已通过隔离Linux及真实容器/HDD候选，未安装或接业务/页面，见[ACL候选](qa/CONTAINER_ACL_ENGINE.md)；后续6a62027独立1.51协议/SDK/固定受限传输与安装配置候选已通过分层测试，见[ACL RPC候选](qa/CONTAINER_ACL_RPC.md)；后续4a58961已安装、工具224f744与运行版本分列的实际四RPC/HDD及旧能力兼容已通过；当前仍需永久ACL业务/共享保护/Worker/API/Vue及真实身份页面、其他写入/回执/路径磁盘组合、容器可恢复删除/长期清理、目录/实例/跨盘剩余故障、其他模块即时撤权、UI统一风格、网站/开发空间、酒馆/供应商/Live2D及其余59项完整验收；不按该分项提升整项完成率。下方旧候选/运行版本和待办均按原批次理解。
+当前API/Worker/Gateway/Migrator与Agent/MaintenanceHost均为`633a2ca`（协议1.51），ACL生产迁移17个CHECK已应用；真实常规9场景/源-HDD/35审计、同原上下文正常退出及独立准确清理通过，见[ACL实际记录](qa/CONTAINER_ACL_REAL_UI.md)。递归所有者/权限此前常规与取消/退出/重启/撤权/Unknown跨容器目录签收分别保留；ACL仍需进行中故障与Unknown/其他写入保护矩阵、递归/历史恢复，另继续容器可恢复删除/长期清理、目录/实例/跨盘剩余故障、其他模块即时撤权、统一UI、网站/开发空间、C#酒馆/供应商/Live2D及59项完整验收；不按分项提升整项完成率。下方旧候选/运行版本和待办均按原批次理解。
 
 下方是按批次保存的历史实施日志。其“当前/最新/下一步”、运行版本、70/76项与旧HOLD仅属于原记录日期；发生冲突时以上述目标和最新对应版本证据为准，不从旧日志恢复移出任务或重复发布。
 

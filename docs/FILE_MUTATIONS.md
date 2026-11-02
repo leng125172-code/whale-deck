@@ -1,5 +1,7 @@
 # 文件操作、编辑与回收站实施契约
 
+2026-11-03 ACL实机更新：633a2ca已标准覆盖并应用生产迁移，0668215/21依赖的正常Authentik→Vue→SQL/Worker→Agent→实际ACL/HDD九场景及独立核验首轮通过。8成功/1预检取消、显式0/mask/default清空、原字节/inode/属主/另一ACL/子项、8HDD/35审计/17 Job、同上下文正常退出与实际普通/匿名拒绝通过。准确清理/11核心不变且healthy，开发sudo不改；不计异盘或完整ACL，进行中故障/Unknown/跨写入、递归/恢复、删除继续。[实际事实与边界](qa/CONTAINER_ACL_REAL_UI.md)。
+
 2026-11-03 ACL API/Vue候选更新：062e361已接实际永久业务的管理员端点/完整条目与mask预览/原登录/明确确认/取消/原key恢复及当前管理员Unknown处置；严格0/缺字段/重复与三态原回执检查、旧写入互斥和退出提示清理保留。4272 Unit/432 Integration（7默认原生跳过）、972前端Unit及43+156两组生产预览通过，页脚越界修复；未部署，无真实Authentik/ACL文件/HDD业务整链，不把前批机器RPC和隔离PG拼接作本批真人验收。[候选与边界](qa/CONTAINER_ACL_WEB_UI.md)。
 
 2026-11-03 ACL永久化候选更新：72d678e已接具体EF/迁移17个CHECK、原登录/原回执MAC与历史不可改、自然租约/CAS和十方双向保护；c9c9265补专用消息排除/通用重试拒绝。4272 Unit/364 Integration（7原生默认跳过）及双隔离真实PG完整门禁与独立清理通过。未部署/生产ACL表不存在，无管理员API/Vue、实际Worker或真实身份文件/HDD业务验收，原Root/身份/时钟为合成；不据此前批机器RPC拼接真人整链。[实现和边界](qa/CONTAINER_ACL_PERSISTENCE.md)。

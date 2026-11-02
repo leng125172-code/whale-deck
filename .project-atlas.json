@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_WEB_UI.md；docs/qa/CONTAINER_ACL_PERSISTENCE.md",
-  "nextStep": "ACL管理员API/Vue062e361候选已接实际永久业务，4272 Unit/432 Integration（7原生默认跳过）、972前端Unit及43 ACL+156关联生产预览两组通过；未部署/无真实身份ACL/HDD链。下一步正常冻结覆盖/前向迁移，实际Authentik→Vue→SQL/Worker→Agent→ACL对象/HDD常规及故障整链、原件和独立清理；再ACL递归/历史恢复、删除/长期清理/P0-05和其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_REAL_UI.md；docs/qa/CONTAINER_ACL_WEB_UI.md",
+  "nextStep": "六组件633a2ca/1.51已标准覆盖，ACL生产迁移与0668215真实页面九场景(8成功/1预检取消)、8HDD/35审计/17 Job、同上下文正常退出和独立准确清理通过。下一步ACL进行中取消/退出、实时撤权/停用、Worker/Agent重启、丢回执/Unknown与共享写入延期/明确处置矩阵；再ACL递归/历史恢复、删除/长期清理/P0-05及其余59项/UI/C#酒馆/供应商/AI Live2D。源/HDD同设备非异盘；17项移出不算完成，user开发sudo保留，不自动回滚dev。"
 }
