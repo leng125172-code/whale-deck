@@ -1,5 +1,7 @@
 # 递归所有者：真实进行中取消、正常退出与Partial跨管理员处置
 
+> 2026-11-02后续：0442fb4另两套资源已启用并首次通过真实Worker强杀/原自然租约及固定Agent重启/维护入口观测、Partial页面处置和独立核验，运行源码仍b1fafed。下方“工具只启用cancel/logout”等是原批次事实，旧任务/证据不重做。[新进程恢复与未验边界](CONTAINER_RECURSIVE_OWNERSHIP_PROCESS_RESTARTS.md)。
+
 2026-11-02。产品保持`b1fafedddfa1767d2d573bd94d2748f3cb5e7b44`/Agent1.50，本批不发布、不回滚。冻结验收源`51e0ec3f6b576eb88cda73e4f489b398c5fa8efc`及21份依赖，以两套新的独占资源完成首项实际fchown后的页面取消、同原账号/实例保持时正常双端退出。两例均首次实际执行通过，原任务Partial、另一管理员真实页面处置、迟到不续做及独立准确清理通过。
 
 这是新增故障组合签收，不代表全部递归所有者/文件模块或59项完成。上一批六场景及其最后退出观察失败、另身份补证仍按[原证据](CONTAINER_RECURSIVE_OWNERSHIP_REAL_UI.md)保留；没有重做那六次操作，也没有把旧Failed改成Passed。
