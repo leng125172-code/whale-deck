@@ -246,7 +246,7 @@ def require_waiting_deferred(value, identifier, subject):
     row = value['row']; job = value['job']
     assert row['id'] == job['id'] == identifier and row['actor_subject'] == job['actor_subject'] == subject
     assert row['state'] == 'Pending' and row['root_started_at_utc'] is None and not row['publish_barrier'] and row['completed_at_utc'] is None
-    assert job['state'] in ('Pending','Running') and job['completed_at_utc'] is None and value['accepted'] == 1
+    assert job['state'] in ('Queued','Running') and job['completed_at_utc'] is None and value['accepted'] == 1
 
 
 def observe_waiting(waiting, baseline, fixture, subject, unknown, root, content, expected, directory, worker):
@@ -254,7 +254,9 @@ def observe_waiting(waiting, baseline, fixture, subject, unknown, root, content,
     original_raw = (ROOT/(uuid.UUID(unknown['row']['execution_job_id']).hex+'.json')).read_bytes()
     deadline = time.monotonic()+95; previous_version = 0; previous_next = None
     while len(samples) < 4:
-        value = directory_snapshot(waiting['id']); require_waiting_deferred(value,waiting['id'],subject)
+        value = directory_snapshot(waiting['id'])
+        (directory/'waiting-latest-observation.json').write_text(json.dumps(value))
+        require_waiting_deferred(value,waiting['id'],subject)
         assert not output.exists() and not (DIRECTORY_ROOT/(uuid.UUID(waiting['id']).hex+'.json')).exists()
         assert not (fixture['folder']/'.whaledeck-container-directories-v1').exists()
         assert snapshot(unknown['row']['id']) == unknown and unknown['row']['publish_barrier']

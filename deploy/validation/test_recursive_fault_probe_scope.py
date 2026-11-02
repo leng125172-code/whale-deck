@@ -23,7 +23,8 @@ class RecursiveFaultProbeScope(unittest.TestCase):
 
     def test_waiter_id_subject_and_registration_count_must_stay_original(self):
         value = {'row':{'id':'original','actor_subject':'current-admin','state':'Pending','root_started_at_utc':None,'publish_barrier':False,'completed_at_utc':None},
-            'job':{'id':'original','actor_subject':'current-admin','state':'Pending','completed_at_utc':None},'accepted':1}
+            'job':{'id':'original','actor_subject':'current-admin','state':'Queued','completed_at_utc':None},'accepted':1}
+        require_waiting_deferred(value,'original','current-admin')
         for side,key in (('row','id'),('row','actor_subject'),('job','id'),('job','actor_subject')):
             bad = copy.deepcopy(value); bad[side][key] = 'replacement'
             with self.subTest(side=side,key=key),self.assertRaises(AssertionError): require_waiting_deferred(bad,'original','current-admin')
