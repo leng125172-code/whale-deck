@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_REVOCATION.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_LOGOUT.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_ENGINE.md",
-  "nextStep": "递归所有者底层ef5425a候选已通过421项root及真实容器/HDD四操作/两次子进程强杀，4聚合/9子项HDD与独立清理/11核心不变healthy通过，默认chmod另四操作兼容通过。产品仍0dede08/1.49，未安装或接RPC/永久业务/UI。下一步独立C#签名RPC/SDK/能力协商与固定传输/安装实测，再EF业务/共享保护/Worker/管理员API/Vue及真实身份树/HDD页面与故障矩阵；ACL/删除/长期清理、P0-05回退来源及其余59项/UI/C#酒馆/供应商/AI Live2D继续。PROGRESS_ESTIMATE仅规划估算；17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_REAL_UI.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_REVOCATION.md；docs/qa/CONTAINER_RECURSIVE_PERMISSIONS_LOGOUT.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_ENGINE.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_RPC.md",
+  "nextStep": "递归所有者2d3b7e0新增独立四RPC/SDK/完整签名与UID/GID显式presence、1.50能力协商、固定受限helper及安装候选；3904 Unit/308 Integration(7默认原生跳过)/434 root/12 host检查及Release通过。运行仍0dede08/1.49，未安装/无持久业务/UI。下一步宿主正常覆盖、真实签名UDS四RPC/HDD/拒绝/兼容及准确清理，再EF业务/共享保护/实时身份/Worker/API/Vue及真人页面/故障矩阵；ACL/删除/长期清理、P0-05回退来源和其余59项/UI/C#酒馆/供应商/AI Live2D继续。PROGRESS_ESTIMATE仅规划估算；17项移出不算完成，不自动回滚dev。"
 }

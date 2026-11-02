@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-02递归所有者内部授权候选：1.50独立四RPC仅接受完整请求/方法绑定的短时单次capability，UID/GID必须显式提供；新受限unit单独具备CAP_CHOWN，旧递归chmod不扩大。没有新增浏览器授权入口或默认User能力。永久业务接入时仍须Authentik当前管理员/原登录与资源/核心保护、确认及在途撤权；本批仅候选协议/SDK/传输检查，不等于真人权限验收。见[签名与安装候选](qa/CONTAINER_RECURSIVE_OWNERSHIP_RPC.md)。
+
 2026-10-30后续权限设计：`PERM-AI-PROVIDER-EDIT-OWN`须额外显式授予，本人可聊天不等于可配置连接/读密钥；实例连接沿用管理员`PERM-AI-CONFIGURE-SERVICE`，共享只授予使用权。`PERM-PET-ACTION-OWN`同时检查原生成与当前pet/会话/模型包/期限，AI只选择已登记动作表情，不取得URL/任意代码/SDK/宿主能力，不覆盖用户睡眠/隐藏/直接操作。[供应商/Live2D授权及拒绝门槛](AI_PROVIDERS_LIVE2D.md)尚待实现，包含真实匿名/跨用户/撤权/CSRF/Origin/Secret隔离验收。
 
 2026-10-30酒馆/看板娘新增权限**设计待实现**：`PERM-AI-USE`须显式授予；`PERM-AI-READ-OWN/EDIT-OWN/GENERATE/IMPORT-EXPORT`逐资源/模型授权，`PERM-AI-CONFIGURE-SERVICE/EXTENSION-MANAGE/SHARE`独立管理，`PERM-PET-CONFIGURE-OWN/STATE-OWN`和`PERM-AI-BALANCE-READ-OWN`仅本人。完整[权限/资源及工具安全契约](AI_TAVERN_MASCOT.md)与[验收账本](AI_TAVERN_ACCEPTANCE.md)覆盖匿名/普通/管理员/跨用户、CSRF/Origin、退出/两小时复核、Worker发出请求前及在途撤权。管理员不默认读全部聊天/余额，AI不继承操作者宿主管理能力；模型输出/角色卡/扩展脚本不构成运维授权。ST原生密码、登录和资料映射Authentik/BFF，不开第二身份源；下方既有User默认权限不因此自动扩大。
