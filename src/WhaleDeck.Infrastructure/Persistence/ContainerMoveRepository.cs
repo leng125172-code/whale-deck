@@ -151,6 +151,7 @@ public sealed partial class ContainerMoveRepository(PlatformDbContext db, IConta
         if (await db.FilePathLocks.AnyAsync(cancellationToken) || await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) || await db.ContainerCopyIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerAclIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursiveOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursivePermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerPermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||

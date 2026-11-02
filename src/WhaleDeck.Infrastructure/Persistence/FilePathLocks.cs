@@ -19,6 +19,7 @@ internal static class FilePathLocks
             await db.ContainerDirectoryOperations.AnyAsync(item => item.PublishBarrier, cancellationToken) ||
             await db.ContainerCopyIntents.AnyAsync(item => item.PublishBarrier, cancellationToken) ||
             await db.ContainerPermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerAclIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursiveOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursivePermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
@@ -205,7 +206,8 @@ internal static class FilePathLocks
         var restorings = db.FileTreeRestoringOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         var overwrites = db.FileTreeOverwriteRestoringOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
         var purges = db.FileTreePurgingOperations.Where(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value));
-        if (await db.ContainerRecursiveOwnershipIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
+        if (await db.ContainerAclIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
+            await db.ContainerRecursiveOwnershipIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecursivePermissionIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerOwnershipIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerPermissionIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
@@ -216,6 +218,7 @@ internal static class FilePathLocks
             await db.FileUploadOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.FileMutationOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) +
             await db.FileArchiveOperations.CountAsync(item => item.CompletedAtUtc == null, cancellationToken) + await trees.CountAsync(cancellationToken) + await moves.CountAsync(cancellationToken) + await packings.CountAsync(cancellationToken) + await unpackings.CountAsync(cancellationToken) + await recyclings.CountAsync(cancellationToken) + await restorings.CountAsync(cancellationToken) + await overwrites.CountAsync(cancellationToken) + await purges.CountAsync(cancellationToken) >= 64 ||
+            await db.ContainerAclIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecursiveOwnershipIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecursivePermissionIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerOwnershipIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +

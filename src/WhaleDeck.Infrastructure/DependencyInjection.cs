@@ -105,6 +105,9 @@ public static class DependencyInjection
         services.AddScoped<ContainerRecursivePermissionDispatcher>();
         services.AddSingleton<IContainerOwnershipProtector, FilePlanProtector>();
         services.AddSingleton<IContainerAclProtector, FilePlanProtector>();
+        services.AddScoped<IContainerAclRepository, ContainerAclRepository>();
+        services.AddScoped<ContainerAclWorkflowService>();
+        services.AddScoped<ContainerAclDispatcher>();
         services.AddScoped<IContainerOwnershipRepository, ContainerOwnershipRepository>();
         services.AddScoped<ContainerOwnershipWorkflowService>();
         services.AddScoped<ContainerOwnershipDispatcher>();

@@ -32,6 +32,7 @@ builder.Services.AddHostedService<ContainerDirectoryWorker>();
 builder.Services.AddHostedService<ContainerCopyWorker>();
 builder.Services.AddHostedService<ContainerPermissionWorker>();
 builder.Services.AddHostedService<ContainerOwnershipWorker>();
+builder.Services.AddHostedService<ContainerAclWorker>();
 builder.Services.AddHostedService<ContainerRecursivePermissionWorker>();
 builder.Services.AddHostedService<ContainerRecursiveOwnershipWorker>();
 builder.Services.AddHostedService<ContainerMoveWorker>();

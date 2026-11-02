@@ -44,6 +44,7 @@ public sealed partial class ContainerPermissionRepository
     }, cancellationToken);
     private async Task EnsurePaths(ContainerPermissionIntent row, CancellationToken cancellationToken)
     {
+        var acls = await db.ContainerAclIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursiveOwnerships = await db.ContainerRecursiveOwnershipIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursivePermissions = await db.ContainerRecursivePermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var ownerships = await db.ContainerOwnershipIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
@@ -55,8 +56,8 @@ public sealed partial class ContainerPermissionRepository
             .Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
         var moves = await db.ContainerMoveIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null)
             .Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
-        if (permissions.Length + ownerships.Length + recursiveOwnerships.Length + recursivePermissions.Length + directories.Length + uploads.Length + copies.Length + moves.Length > 64 ||
-            permissions.Concat(ownerships).Concat(recursivePermissions).Concat(recursiveOwnerships).Concat(directories).Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
+        if (permissions.Length + ownerships.Length + acls.Length + recursiveOwnerships.Length + recursivePermissions.Length + directories.Length + uploads.Length + copies.Length + moves.Length > 64 ||
+            permissions.Concat(ownerships).Concat(recursivePermissions).Concat(recursiveOwnerships).Concat(acls).Concat(directories).Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
             copies.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath)) ||
             moves.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath)))
             throw new InvalidOperationException("CONTAINER_PERMISSION_TARGET_BUSY");
