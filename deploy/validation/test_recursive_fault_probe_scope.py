@@ -6,10 +6,28 @@ import unittest
 from unittest.mock import patch
 
 import bound_container_recursive_permission_cut as cut
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, same_operation, lease_held
 
 
 class RecursiveFaultProbeScope(unittest.TestCase):
+    def test_recovery_must_retain_original_plan_job_instance_and_subject(self):
+        fields = ('id','execution_job_id','root_started_at_utc','actor_subject','owner_hash','container_id','instance_id','relative_path',
+            'command_json','request_hash','plan_json','plan_hash','execution_hash','confirmed_at_utc','execution_expires_at_utc')
+        original = {key:'original-'+key for key in fields}; same_operation(original,copy.deepcopy(original))
+        for key in fields:
+            changed = {**original,key:'replacement'}
+            with self.subTest(key=key),self.assertRaises(AssertionError): same_operation(original,changed)
+
+    def test_before_natural_expiry_new_lease_or_false_terminal_is_rejected(self):
+        fields = ('id','execution_job_id','root_started_at_utc','actor_subject','owner_hash','container_id','instance_id','relative_path',
+            'command_json','request_hash','plan_json','plan_hash','execution_hash','confirmed_at_utc','execution_expires_at_utc')
+        original = {**{key:'original-'+key for key in fields},'state':'Applying','publish_barrier':True,'completed_at_utc':None,
+            'lease_token':'original-token','lease_expires_at_utc':'original-expiry','cancel_requested_at_utc':None}
+        lease_held(original,copy.deepcopy(original))
+        for changes in ({'lease_token':'replacement'},{'lease_expires_at_utc':'extended'},{'state':'Partial'},{'publish_barrier':False},
+            {'completed_at_utc':'early'},{'cancel_requested_at_utc':'not-a-crash-only-case'}):
+            with self.subTest(changes=changes),self.assertRaises(AssertionError): lease_held(original,{**original,**changes})
+
     def test_child_identifiers_reject_non_owned_shapes(self):
         for operation,index in [('A'*32,0),('a'*32,-1),('a'*32,10000),('a'*32,True),('../a',0)]:
             with self.subTest(operation=operation,index=index), self.assertRaises(AssertionError): cut.child_id(operation,index)

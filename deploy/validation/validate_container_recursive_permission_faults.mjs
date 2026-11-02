@@ -13,6 +13,7 @@ try {
   const revision = process.argv[2], role = process.argv[3]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
   assert.ok(['cancel', 'recovery'].includes(role))
+  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel', 'worker-crash'].includes(kind))
   assert.match(fixture.containerId, /^[a-f0-9]{64}$/)
   directory = fixture.evidence
   assert.equal(dirname(directory), fileURLToPath(new URL('../artifacts/', import.meta.url)).replace(/\/$/, ''))
@@ -54,24 +55,34 @@ try {
     const confirmed = await confirming; assert.equal(confirmed.status(), 202)
     const pending = await confirmed.json(); assert.equal(pending.state, 'Pending'); assert.ok(pending.executionJobId)
     await writeSignal(directory, 'confirmed.json', pending)
-    await waitSignal(directory, 'action.json', 40_000)
-    phase = 'actual-inflight-cancel'
+    const action = await waitSignal(directory, 'action.json', 40_000); assert.equal(action.kind, kind)
+    phase = 'actual-inflight-' + kind
     await dialog.getByRole('button', { name: '查询原递归权限修改任务', exact: true }).click()
     await expect(dialog.getByRole('status')).toHaveText('正在逐项修改权限')
     await expect(dialog.getByRole('button', { name: '请求取消递归权限修改', exact: true })).toBeInViewport({ ratio: 1 })
     await page.screenshot({ path: join(directory, 'inflight.png') })
-    await dialog.getByRole('button', { name: '请求取消递归权限修改', exact: true }).click()
-    await page.getByRole('button', { name: '继续等待', exact: true }).click()
-    assert.equal(cancellations, 0)
-    await dialog.getByRole('button', { name: '请求取消递归权限修改', exact: true }).click()
-    await page.getByRole('button', { name: '确认请求取消', exact: true }).click()
+    if (kind === 'cancel') {
+      await dialog.getByRole('button', { name: '请求取消递归权限修改', exact: true }).click()
+      await page.getByRole('button', { name: '继续等待', exact: true }).click()
+      assert.equal(cancellations, 0)
+      await dialog.getByRole('button', { name: '请求取消递归权限修改', exact: true }).click()
+      await page.getByRole('button', { name: '确认请求取消', exact: true }).click()
+    }
     await writeSignal(directory, 'action-done.json', { cancellations })
-    const settled = await waitSignal(directory, 'settled.json', 120_000)
+    const settled = await waitSignal(directory, 'settled.json', kind === 'worker-crash' ? 220_000 : 120_000)
     assert.equal(settled.id, currentId); assert.equal(settled.state, 'Partial')
     phase = 'actual-partial-page'
     await dialog.getByRole('button', { name: '查询原递归权限修改任务', exact: true }).click()
     await expect(dialog.getByRole('status')).toHaveText('部分修改，保护已保留')
     await expect(dialog.getByLabel('实际逐项结果', { exact: true })).toBeVisible()
+    if (kind === 'worker-crash') {
+      const facts = dialog.getByLabel('实际逐项结果', { exact: true })
+      for (const [label, key] of [['已完成核对', 'completedCount'], ['实际修改', 'changedCount'], ['已中止', 'abortedCount'], ['未开始', 'notStartedCount'], ['待证明', 'unknownCount']]) {
+        await expect(facts.locator('div').filter({ hasText: label }).locator('dd')).toHaveText(String(settled[key]))
+      }
+      await facts.scrollIntoViewIfNeeded()
+      await page.screenshot({ path: join(directory, 'partial-counts.png') })
+    }
     await expect(dialog.getByText('部分对象已经修改。实际计数和历史保留，不自动续做或回滚；解除保护须管理员核实并明确处置。', { exact: true })).toBeVisible()
     assert.equal(await dialog.getByRole('button', { name: '确认递归权限修改', exact: true }).count(), 0)
     await dialog.getByRole('link', { name: '前往递归权限修改异常处置', exact: true }).scrollIntoViewIfNeeded()
@@ -81,8 +92,8 @@ try {
     const result = await response.json(); assert.equal(result.state, 'Partial'); assert.equal(result.receipt.state, 'Partial')
     assert.equal(result.receipt.changedCount, settled.changedCount); assert.equal(result.confirmation, null)
     await closePermissionDetails(page, dialog); await logoutFromUserMenu(page, context, base)
-    assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, 1); assert.equal(acknowledgements, 0); assert.equal(bodies, 0)
-    await writeSignal(directory, 'cancel-browser.json', { subject: profile.subject, result, registrations, confirmations, cancellations, bodies, actualUi: true, normalDualLogout: true })
+    assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, kind === 'cancel' ? 1 : 0); assert.equal(acknowledgements, 0); assert.equal(bodies, 0)
+    await writeSignal(directory, 'cancel-browser.json', { kind, subject: profile.subject, result, registrations, confirmations, cancellations, bodies, actualUi: true, normalDualLogout: true })
   } else {
     currentId = fixture.id; assert.notEqual(profile.subject, fixture.originalSubject)
     phase = 'different-admin-recovery'

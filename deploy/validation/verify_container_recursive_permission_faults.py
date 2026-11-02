@@ -5,6 +5,7 @@ Source data has already been removed after the live gate's full reads; this
 observer does not pretend to re-read deleted bytes. SQL/Root/HDD remain real.
 """
 import hashlib
+import datetime as dt
 import json
 import os
 from pathlib import Path
@@ -15,7 +16,7 @@ import sys
 
 from validate_container_file_staging import load
 from validate_container_recursive_permission_browser import snapshot, read_metadata, managed_plan
-from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except
+from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except, same_operation
 from validate_container_recursive_permission_agent import no_active_work, host_identity
 from validate_container_recursive_permissions import NAMES
 from validate_metric_continuity import query
@@ -37,8 +38,32 @@ def main():
     before = baseline['original']; after = saved('physical-partial.json'); assert after == saved('physical-final.json')
     row = actual['row']; assert row['state'] == 'Acknowledged' and actual['executionJob']['state'] == 'Failed' and not row['publish_barrier']
     original = saved('cancel-browser.json'); recovery = saved('recovery-browser.json')
+    kind = baseline.get('kind','cancel'); assert result.get('kind','cancel') == kind
     assert original['actualUi'] and recovery['actualUi'] and original['normalDualLogout'] and recovery['normalDualLogout']
     assert original['subject'] == row['actor_subject'] != row['acknowledged_by'] == recovery['subject']
+    if kind == 'worker-crash':
+        assert original['kind'] == kind and original['cancellations'] == 0
+        assert original['registrations'] == original['confirmations'] == 1 and original['bodies'] == 0
+        crash = saved('worker-crash.json'); lease = saved('natural-lease.json'); crashed = saved('crash-sql.json')['row']
+        assert crash == result['workerCrash'] and crash['signal'] == 'SIGKILL' and crash['sameContainerAndImage']
+        assert [crash['workerId'],crash['imageId']] == baseline['coreBefore']['/whaledeck-worker'][:2]
+        assert crash['oldStartedAt'] != crash['newStartedAt']
+        assert lease['originalLeaseToken'] == crashed['lease_token'] and lease['originalLeaseExpiresAtUtc'] == crashed['lease_expires_at_utc'] == crash['originalLeaseExpiresAtUtc']
+        assert crashed['state'] == 'Applying' and crashed['publish_barrier'] and crashed['cancel_requested_at_utc'] is None
+        same_operation(crashed,row)
+        expiry = dt.datetime.fromisoformat(lease['originalLeaseExpiresAtUtc'])
+        began = dt.datetime.fromisoformat(lease['waitBeganAtUtc']); ended = dt.datetime.fromisoformat(lease['waitEndedAtUtc'])
+        assert ended >= expiry > began and abs((ended-began).total_seconds()-lease['monotonicWaitSeconds']) < 3
+        samples = lease['samples']; assert len(samples) >= 3 and result['naturalLeaseSamples'] == len(samples)
+        assert dt.datetime.fromisoformat(samples[-1]['atUtc'])-dt.datetime.fromisoformat(samples[0]['atUtc']) > dt.timedelta(seconds=15)
+        raw = (directory/'cut-root-original.json').read_bytes()
+        assert json.loads(raw)['state'] == 'Applying' and hashlib.sha256(raw).hexdigest() == lease['rootSha256']
+        previous = began
+        for sample in samples:
+            at = dt.datetime.fromisoformat(sample['atUtc']); assert previous <= at < expiry; previous = at
+            assert sample['leaseToken'] == lease['originalLeaseToken'] and sample['leaseExpiresAtUtc'] == lease['originalLeaseExpiresAtUtc']
+            assert sample['state'] == 'Applying' and sample['barrier'] and sample['sourceFingerprintsUnchanged'] and sample['rootSha256'] == lease['rootSha256']
+        assert saved('physical-cut.json') == after and lease['clocksOrSqlModified'] is False
     assert partial['row']['state'] == 'Partial' and partial['row']['publish_barrier'] and partial['row']['completed_at_utc'] is None
     record = saved('partial.root.json'); operation = result['operationId']; assert operation == record['operationId']
     late = saved('late-apply.json')
@@ -98,16 +123,18 @@ def main():
         observed_core = list(current_core[name])
         if name == '/whaledeck-worker': assert observed_core[:3] == before_core[:3] and observed_core[3] != before_core[3]
         else: assert observed_core == before_core
+    if kind == 'worker-crash': assert current_core['/whaledeck-worker'][3] == crash['newStartedAt']
     (directory/'installed-and-core-proof.json').write_text(json.dumps({'installedSha256':installed,'all11Healthy':True,'sameCoreContainersAndImages':True,'onlyWorkerStartedAtChanged':True,'databasePlatformEightUnchanged':True}))
     assert not Path(baseline['source']).exists() and not Path(baseline['root']).exists()
     assert subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True,timeout=15).returncode != 0
     assert host_identity(baseline['revision']) == baseline['hostBefore']
     no_active_work(); inactive_except()
-    for name in ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png'):
+    screenshots = ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png') + (('partial-counts.png',) if kind == 'worker-crash' else ())
+    for name in screenshots:
         raw = (directory/name).read_bytes(); assert raw.startswith(b'\x89PNG\r\n\x1a\n')
         assert int.from_bytes(raw[16:20],'big') == 320 and int.from_bytes(raw[20:24],'big') == 600
     observed = {'independentReadOnlyVerification':'passed','id':row['id'],'actualSqlAndRootAndHddUnchanged':True,'hddMetadataFiles':len(checked),
-        'sourceAndContainerAccuratelyRemoved':True,'deletedSourceBytesReRead':False,'screenshots':4,'auditRows':len(audits),
+        'kind':kind,'sourceAndContainerAccuratelyRemoved':True,'deletedSourceBytesReRead':False,'screenshots':len(screenshots),'auditRows':len(audits),
         'all11Healthy':True,'installedHelpersMatchProductRevision':True,'productRevision':baseline['revision'],
         'sourceDevice':baseline['original'][''][0],'hddDevice':hdd_device}
     (directory/'independent-final.json').write_text(json.dumps(observed))
