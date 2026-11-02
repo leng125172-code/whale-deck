@@ -1290,3 +1290,35 @@ service ContainerRecursivePermissionService {
   rpc Inspect(ContainerRecursivePermissionRequest) returns (ContainerRecursivePermissionReceipt);
   rpc Discard(ContainerRecursivePermissionRequest) returns (ContainerRecursivePermissionReceipt);
 }
+
+// Independent recursive ownership authority. UID/GID presence is required; explicit zero means root.
+// Manifests and old metadata stay root-private; recovery never resumes fchown.
+message ContainerRecursiveOwnershipCommand {
+  ContainerFileLocation location = 1; optional uint32 uid = 2; optional uint32 gid = 3; string expected_version = 4;
+}
+message ContainerRecursiveOwnershipPlan {
+  uint32 schema_version = 1; ContainerRecursiveOwnershipCommand command = 2; string target_proof = 3;
+  FileDirectoryIdentity parent_identity = 4; string parent_version = 5;
+  uint32 owner_uid = 6; uint32 owner_gid = 7; string fingerprint = 8;
+  FileObjectIdentity root_identity = 9; int64 root_changed_at_unix_ns = 10;
+  string manifest_digest = 11; uint32 entry_count = 12; uint32 file_count = 13;
+  uint32 directory_count = 14; uint32 change_count = 15;
+}
+message ContainerRecursiveOwnershipPlanRequest { ContainerRecursiveOwnershipCommand command = 1; RequestContext context = 2; }
+message ContainerRecursiveOwnershipRequest {
+  string operation_id = 1; string owner = 2; ContainerRecursiveOwnershipPlan plan = 3; RequestContext context = 4;
+}
+message ContainerRecursiveOwnershipReceipt {
+  string operation_id = 1; string container_id = 2; string instance_id = 3; string fingerprint = 4;
+  string target_proof = 5; string state = 6; bool binding_current = 7; bool replayed = 8;
+  uint32 completed_count = 9; uint32 changed_count = 10; uint32 aborted_count = 11;
+  uint32 not_started_count = 12; uint32 unknown_count = 13;
+  bool history_may_exist = 14; bool history_verified = 15; string history_digest = 16;
+  bool history_available = 17; string outcome_digest = 18;
+}
+service ContainerRecursiveOwnershipService {
+  rpc Plan(ContainerRecursiveOwnershipPlanRequest) returns (ContainerRecursiveOwnershipPlan);
+  rpc Apply(ContainerRecursiveOwnershipRequest) returns (ContainerRecursiveOwnershipReceipt);
+  rpc Inspect(ContainerRecursiveOwnershipRequest) returns (ContainerRecursiveOwnershipReceipt);
+  rpc Discard(ContainerRecursiveOwnershipRequest) returns (ContainerRecursiveOwnershipReceipt);
+}

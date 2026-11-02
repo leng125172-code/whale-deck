@@ -87,6 +87,10 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-permission-
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-recursive-permissions
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-permissions.py" /usr/local/libexec/whaledeck-container-recursive-permissions.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-permission-transport.py" /usr/local/libexec/whaledeck-container-recursive-permission-transport.py
+[[ ! -L /var/lib/whaledeck-container-recursive-ownership ]] || exit 1
+install -d -o root -g root -m 0700 /var/lib/whaledeck-container-recursive-ownership
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-ownership.py" /usr/local/libexec/whaledeck-container-recursive-ownership.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-ownership-transport.py" /usr/local/libexec/whaledeck-container-recursive-ownership-transport.py
 [[ ! -L /var/lib/whaledeck-container-ownership ]] || exit 1
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-ownership
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-ownership.py" /usr/local/libexec/whaledeck-container-ownership.py

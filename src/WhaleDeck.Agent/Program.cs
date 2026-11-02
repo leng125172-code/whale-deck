@@ -74,6 +74,7 @@ app.MapGrpcService<ContainerFileGrpcService>();
 app.MapGrpcService<ContainerFileWriteGrpcService>();
 app.MapGrpcService<ContainerDirectoryGrpcService>();
 app.MapGrpcService<ContainerRecursivePermissionGrpcService>();
+app.MapGrpcService<ContainerRecursiveOwnershipGrpcService>();
 app.MapGrpcService<ContainerPermissionGrpcService>();
 app.MapGrpcService<ContainerOwnershipGrpcService>();
 app.MapGrpcService<ContainerCopyGrpcService>();

@@ -19,6 +19,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         if (method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerDirectoryBinding.Service, StringComparison.Ordinal) ||
+            method.StartsWith(ContainerRecursiveOwnershipBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecursivePermissionBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerPermissionBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerOwnershipBinding.Service, StringComparison.Ordinal) ||
@@ -88,6 +89,11 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         method is ContainerRecursivePermissionBinding.Service + "Plan" or ContainerRecursivePermissionBinding.Service + "Apply" or
             ContainerRecursivePermissionBinding.Service + "Inspect" or ContainerRecursivePermissionBinding.Service + "Discard" &&
         ValidateContentBound(token, method, requestHash, ContainerRecursivePermissionBinding.Payload);
+
+    public bool ValidateContainerRecursiveOwnership(string? token, string method, string? requestHash) =>
+        method is ContainerRecursiveOwnershipBinding.Service + "Plan" or ContainerRecursiveOwnershipBinding.Service + "Apply" or
+            ContainerRecursiveOwnershipBinding.Service + "Inspect" or ContainerRecursiveOwnershipBinding.Service + "Discard" &&
+        ValidateContentBound(token, method, requestHash, ContainerRecursiveOwnershipBinding.Payload);
 
     public bool ValidateContainerPermission(string? token, string method, string? requestHash) =>
         method is ContainerPermissionBinding.Service + "Plan" or ContainerPermissionBinding.Service + "Apply" or
@@ -173,7 +179,9 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     private void Authorize(ServerCallContext context)
     {
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");
-        var valid = context.Method.StartsWith(ContainerRecursivePermissionBinding.Service, StringComparison.Ordinal)
+        var valid = context.Method.StartsWith(ContainerRecursiveOwnershipBinding.Service, StringComparison.Ordinal)
+            ? validator.ValidateContainerRecursiveOwnership(token, context.Method, context.RequestHeaders.GetValue(ContainerRecursiveOwnershipBinding.Header))
+            : context.Method.StartsWith(ContainerRecursivePermissionBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerRecursivePermission(token, context.Method, context.RequestHeaders.GetValue(ContainerRecursivePermissionBinding.Header))
             : context.Method.StartsWith(ContainerOwnershipBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerOwnership(token, context.Method, context.RequestHeaders.GetValue(ContainerOwnershipBinding.Header))
