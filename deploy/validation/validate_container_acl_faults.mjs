@@ -13,12 +13,12 @@ try {
   const fixture = JSON.parse(await readFile('/dev/stdin', 'utf8'))
   const revision = process.argv[2]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
-  assert.ok(['cancel', 'logout', 'group-removal', 'account-disable', 'worker-crash', 'agent-restart'].includes(fixture.kind))
+  assert.ok(['cancel', 'logout', 'group-removal', 'account-disable', 'worker-crash', 'agent-restart', 'post-acl-cancel', 'post-acl-worker-crash'].includes(fixture.kind))
   directory = fixture.evidence
   const prefix = fileURLToPath(new URL('../artifacts/', import.meta.url))
   assert.ok(directory.startsWith(prefix))
-  assert.match(directory.slice(prefix.length), /^container-acl-faults-[a-f0-9]{32}\/(cancel|logout|group-removal|account-disable|worker-crash|agent-restart)$/)
-  const behavior = fixture.kind
+  assert.match(directory.slice(prefix.length), /^container-acl-faults-[a-f0-9]{32}\/(cancel|logout|group-removal|account-disable|worker-crash|agent-restart|post-acl-cancel|post-acl-worker-crash)$/)
+  const behavior = fixture.kind.replace(/^post-acl-/, ''), postAcl = fixture.kind.startsWith('post-acl-')
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
   context = await browser.newContext({ viewport: { width: ['cancel', 'group-removal', 'agent-restart'].includes(behavior) ? 320 : 1440, height: 600 },
@@ -114,11 +114,11 @@ try {
   } else if (fixture.kind !== 'logout') {
     phase = 'visible-original-terminal'
     await dialog.getByRole('button', { name: '查询原ACL修改任务', exact: true }).click()
-    await expect(dialog.getByRole('status')).toHaveText(final.state === 'Failed' ? 'ACL修改未完成' : '已取消')
-    if (['worker-crash', 'agent-restart'].includes(fixture.kind)) {
+    await expect(dialog.getByRole('status')).toHaveText(postAcl ? 'ACL修改已完成' : final.state === 'Failed' ? 'ACL修改未完成' : '已取消')
+    if (postAcl || ['worker-crash', 'agent-restart'].includes(fixture.kind)) {
       const original = await context.request.get(ownEndpoint + '/' + intent.id); assert.equal(original.status(), 200)
-      terminalIntent = await original.json(); assert.equal(terminalIntent.state, 'Failed'); assert.equal(terminalIntent.resultCode, 'CONTAINER_ACL_INTERRUPTED')
-      assert.equal(terminalIntent.confirmation, null); assert.equal(terminalIntent.aclConfirmed, false); assert.equal(terminalIntent.historyVerified, true); assert.equal(terminalIntent.receipt.state, 'Aborted')
+      terminalIntent = await original.json(); assert.equal(terminalIntent.state, postAcl ? 'Succeeded' : 'Failed'); assert.equal(terminalIntent.resultCode, postAcl ? 'CONTAINER_ACL_COMPLETED' : 'CONTAINER_ACL_INTERRUPTED')
+      assert.equal(terminalIntent.confirmation, null); assert.equal(terminalIntent.aclConfirmed, postAcl); assert.equal(terminalIntent.historyVerified, true); assert.equal(terminalIntent.receipt.state, postAcl ? 'Completed' : 'Aborted')
     }
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
     await page.screenshot({ path: join(directory, 'terminal.png') })

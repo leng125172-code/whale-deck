@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 import requests
-from validate_container_acl_faults import SOURCES, verify_terminal, no_active_work, load, owned, terminal_state, RESTART_KEYS, require_host_restart, observation_expiry
+from validate_container_acl_faults import SOURCES, verify_terminal, no_active_work, load, owned, terminal_state, RESTART_KEYS, require_host_restart, observation_expiry, unchanged_except_target, managed_plan
 from validate_metric_continuity import query
 from validate_container_upload_recovery_agent import trusted
 from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, require
@@ -18,7 +18,8 @@ from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, requi
 
 def validate_source_profile(provenance, kinds):
     schema=provenance.get('schemaVersion',1)
-    assert type(schema) is int and schema in (1,2,3)
+    assert type(schema) is int and schema in (1,2,3,4)
+    if schema<4:assert not set(kinds)&{'post-acl-cancel','post-acl-worker-crash'}
     if schema<3:assert not set(kinds)&{'worker-crash','agent-restart'}
     expected=set(SOURCES)
     if schema==1:
@@ -44,14 +45,14 @@ def verify_authority(baseline, ui, row, result, proof):
     assert row['cancel_requested_at_utc'] is None and ui['cancellations']==0
 
 
-def verify_lease_proof(row, final, proof, raw):
+def verify_lease_proof(row, final, proof, raw, *, post=False):
     expiry=dt.datetime.fromisoformat(proof['originalLeaseExpiresAtUtc']);began=dt.datetime.fromisoformat(proof['waitBeganAtUtc']);ended=dt.datetime.fromisoformat(proof['waitEndedAtUtc'])
     assert all(t.utcoffset() is not None for t in (expiry,began,ended)) and dt.timedelta(seconds=25)<expiry-began<=dt.timedelta(seconds=95)
     assert ended>=expiry and abs((ended-began).total_seconds()-proof['monotonicWaitSeconds'])<3 and proof['monotonicWaitSeconds']<100
     assert dt.datetime.fromisoformat(final['completed_at_utc'])>=expiry and proof['clocksOrSqlModified'] is False
     assert row['state']=='Applying' and row['publish_barrier'] and row['completed_at_utc'] is None and row['cancel_requested_at_utc'] is None
     assert row['lease_token']==proof['originalLeaseToken'] and row['lease_expires_at_utc']==proof['originalLeaseExpiresAtUtc']
-    digest=hashlib.sha256(raw).hexdigest();root=json.loads(raw);assert root['state']==proof['rootStateAfterHelperExit'] in ('Preparing','Prepared') and root['historyVerified']
+    digest=hashlib.sha256(raw).hexdigest();root=json.loads(raw);assert root['state']==proof['rootStateAfterHelperExit'] in (('Applying',) if post else ('Preparing','Prepared')) and root['historyVerified']
     assert digest==proof['rootSha256'] and len(proof['samples'])>=3
     previous=began
     for sample in proof['samples']:
@@ -69,10 +70,10 @@ def verify_worker_snapshot(service, baseline, observed):
     assert dt.datetime.fromisoformat(original[3])<=before<after<=at
 
 
-def verify_restart(kind, result, baseline, ui, final, start, read, directory):
+def verify_restart(kind, result, baseline, ui, final, start, read, directory, *, post=False):
     service=result['serviceRestart'];assert service and ui['normalDualLogout'] and ui['cancellations']==0 and final['cancel_requested_at_utc'] is None
-    intent=ui['terminalIntent'];assert intent['id']==final['id'] and intent['executionJobId']==final['execution_job_id'] and intent['state']=='Failed' and intent['resultCode']=='CONTAINER_ACL_INTERRUPTED'
-    assert intent['aclConfirmed'] is False and intent['confirmation'] is None and intent['historyVerified'] and intent['receipt']['state']=='Aborted'
+    intent=ui['terminalIntent'];assert intent['id']==final['id'] and intent['executionJobId']==final['execution_job_id'] and intent['state']==('Succeeded' if post else 'Failed') and intent['resultCode']==('CONTAINER_ACL_COMPLETED' if post else 'CONTAINER_ACL_INTERRUPTED')
+    assert intent['aclConfirmed'] is post and intent['confirmation'] is None and intent['historyVerified'] and intent['receipt']['state']==('Completed' if post else 'Aborted')
     checks=service['otherActiveWork'];assert RESTART_KEYS<=set(checks) and all(type(n) is int and n==0 for n in checks.values())
     row=start['row']
     for key in ('id','execution_job_id','container_id','instance_id','actor_subject','owner_hash','plan_json','command_json','root_started_at_utc'):assert row[key]==final[key]
@@ -88,7 +89,10 @@ def verify_restart(kind, result, baseline, ui, final, start, read, directory):
         verify_worker_snapshot(service,baseline,read(witness))
         for key in ('id','execution_job_id','container_id','instance_id','actor_subject','owner_hash','root_started_at_utc','plan_json','command_json'):assert crash[key]==row[key]
         assert crashed['executionJob']['state']=='Running' and service['originalLeaseExpiresAtUtc']==crash['lease_expires_at_utc']
-        verify_lease_proof(crash,final,read(directory/'natural-lease.json'),(directory/'after-helper-exit-root.json').read_bytes())
+        raw=(directory/'after-helper-exit-root.json').read_bytes();original_root=json.loads(raw)
+        assert original_root['operationId']==final['execution_job_id'].replace('-','') and original_root['owner']==final['owner_hash'] and original_root['plan']==managed_plan(json.loads(final['plan_json']))
+        assert original_root['aclConfirmed'] is None and original_root['actualIdentity'] is None and original_root['version']=='' and original_root['historyDigest']==final['history_digest']
+        verify_lease_proof(crash,final,read(directory/'natural-lease.json'),raw,post=post)
     else:
         require_host_restart(service['hostsBefore'],service['hostsAfter'],baseline['revision']);assert service['maintenancePidUnchanged']
         began=dt.datetime.fromisoformat(service['restartBeganAtUtc']);observation_expiry(row,began);ended=dt.datetime.fromisoformat(service['restartEndedAtUtc']);samples=read(directory/'maintenance-observations.json')
@@ -120,30 +124,43 @@ def verify(directory):
     current=owned.common.core_snapshot();assert len(current)==11;results=[]
     assert accepted['cases'] and len(accepted['cases'])<=2 and len({r['kind'] for r in accepted['cases']})==len(accepted['cases'])
     for result in accepted['cases']:
-        kind=result['kind'];assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart');p=directory/kind;trusted(p,True)
+        kind=result['kind'];assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash');p=directory/kind;trusted(p,True)
         baseline=read(p/'baseline.json');ui=read(p/'browser.json');cut=read(p/'cut-root.json');bound=read(p/'bound-helper.json')
         assert baseline['revision']==ui['revision']==accepted['revision'] and baseline['validationSourceRevision']==provenance['revision'] and baseline['kind']==ui['kind']==kind
+        post=kind.startswith('post-acl-');behavior=kind.removeprefix('post-acl-')
         revoked=kind in ('group-removal','account-disable')
         if not revoked:
             assert ui['logout']['normalUiLogout'] and ui['logout']['providerNavigationObserved'] and ui['logout']['bffStatus']==401 and ui['logout']['identityStatus'] in (401,403)
             assert ui['normalDualLogout']
         assert ui['id']==result['id'] and ui['executionJobId']==result['executionJobId'] and ui['actualUi']
-        assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==(1 if kind=='cancel' else 0) and ui['bodies']==0
-        assert 0<=result['productStoppedHelperSeconds']<15 and not result['validatorKilledHelper'] and result['originalFullBytesFingerprintAclsAndAttributesUnchanged']
+        assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==(1 if behavior=='cancel' else 0) and ui['bodies']==0
+        assert 0<=result['productStoppedHelperSeconds']<15 and not result['validatorKilledHelper'] and result['originalFullBytesFingerprintAclsAndAttributesUnchanged'] is (not post)
         content=hashlib.shake_256(('acl-fault:'+baseline['containerId']).encode()).digest(2*1024**2+7)
         assert baseline['bytesPerFile']==len(content) and baseline['sha256']==hashlib.sha256(content).hexdigest().upper()
         data,record,raw,hdd_raw=verify_terminal(result['id'],ui['subject'],baseline,storage,module)
         assert data==read(p/'final-sql.json') and raw==(p/'final-root.json').read_bytes() and hdd_raw==(p/'final-hdd.json').read_bytes()
-        assert read(p/'physical-final.json')==baseline['original']
+        physical=read(p/'physical-final.json')
+        if post:
+            assert result['postAclIdentityFullBytesAndAclsVerified'] and physical==baseline['cutPhysical']==read(p/'cut-physical.json')
+            unchanged_except_target(baseline['original'],physical,'acl-file.bin',record['plan']['targetMode'])
+            target=physical['acl-file.bin'];assert target['identity']==record['actualIdentity']==bound['proof']['changedIdentity']
+            assert target['identity'][8]>baseline['original']['acl-file.bin']['identity'][8] and target['access']==record['plan']['command']['entries'] and target['default']==record['plan']['defaultAcl']
+            late=read(p/'late-apply.json');assert late['operationId']==record['operationId'] and late['state']=='Completed' and late['aclConfirmed'] is True and late['replayed']
+            assert late['version']==record['version'] and late['historyDigest']==record['historyDigest']
+            intent=ui['terminalIntent'];assert intent['id']==data['row']['id'] and intent['executionJobId']==data['row']['execution_job_id']
+            assert intent['state']=='Succeeded' and intent['resultCode']=='CONTAINER_ACL_COMPLETED' and intent['publishedVersion']==record['version'] and intent['aclConfirmed'] is True and intent['confirmation'] is None
+            assert intent['historyVerified'] and intent['historyDigest']==record['historyDigest'] and intent['receipt']['id']==data['row']['execution_job_id'] and intent['receipt']['state']=='Completed' and intent['receipt']['bindingCurrent']
+            assert intent['receipt']['version']==record['version'] and intent['receipt']['historyDigest']==record['historyDigest']
+        else:assert physical==baseline['original']
         assert data['row']['execution_job_id']==ui['executionJobId'] and data['row']['state']==ui['finalState']==result['state']==terminal_state(kind)
-        assert bool(data['row']['cancel_requested_at_utc']) is (kind=='cancel')
+        assert bool(data['row']['cancel_requested_at_utc']) is (behavior=='cancel')
         if revoked:verify_authority(baseline,ui,data['row'],result,read(p/'authority-change.json'))
-        if kind in ('worker-crash','agent-restart'):verify_restart(kind,result,baseline,ui,data['row'],read(p/'restart-start-sql.json'),read,p)
-        assert cut['state'] in ('Preparing','Prepared') and cut['aclConfirmed'] is None and cut['historyVerified'] and cut['historyMayExist']
+        if behavior in ('worker-crash','agent-restart'):verify_restart(behavior,result,baseline,ui,data['row'],read(p/'restart-start-sql.json'),read,p,post=post)
+        assert cut['state'] in (('Applying',) if post else ('Preparing','Prepared')) and cut['aclConfirmed'] is None and cut['historyVerified'] and cut['historyMayExist']
         assert cut['plan']==record['plan'] and cut['operationId']==record['operationId'] and cut['owner']==record['owner'] and cut['historyDigest']==record['historyDigest']
         proof=bound['proof'];assert bound['twoKernelFdProofs'] and re.fullmatch(r'whaledeck-container-acl-[a-f0-9]{32}\.service',bound['unit'])
         assert proof['originalIdentity']==cut['plan']['sourceIdentity']==baseline['original']['acl-file.bin']['identity']
-        assert proof['accessAcl']==cut['plan']['accessAcl'] and proof['defaultAcl']==cut['plan']['defaultAcl'] and proof['attributesDigest']==cut['plan']['attributesDigest']
+        assert proof['accessAcl']==(cut['plan']['command']['entries'] if post else cut['plan']['accessAcl']) and proof['defaultAcl']==cut['plan']['defaultAcl'] and proof['attributesDigest']==cut['plan']['attributesDigest']
         audit=query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result)) FROM audit_events WHERE job_id=:'id'::uuid AND action='containers.files.acl.result';",id=ui['executionJobId'])
         assert audit=={'n':1,'actors':[ui['subject']],'results':[terminal_state(kind)]}
         source=Path(baseline['source']);assert source.parent==owned.common.APPS and source.name==baseline['containerName'] and not os.path.lexists(source)

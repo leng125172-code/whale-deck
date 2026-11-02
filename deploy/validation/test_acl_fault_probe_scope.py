@@ -100,6 +100,43 @@ class AclFaultScopeTests(unittest.TestCase):
         link=self.root/'symlink';link.symlink_to(lock)
         with self.assertRaises(AssertionError):cut.operation_lock(link)
 
+    def write_target_acl(self, entries=None):
+        os.setxattr(self.file,self.module.XATTRS['access'],self.module.encode_acl(entries or self.plan['command']['entries']))
+        self.record['state']='Applying'
+
+    def test_post_acl_cut_requires_real_changed_acl_and_original_inode(self):
+        self.record['state']='Applying';self.assertIsNone(cut.changed_proof(self.record,self.source))
+        self.write_target_acl();proof=cut.changed_proof(self.record,self.source)
+        self.assertEqual(proof['changedIdentity'],cut.fingerprint(self.file.stat()));self.assertEqual(proof['changedIdentity'][:8],self.plan['sourceIdentity'][:8])
+        self.assertGreater(proof['changedIdentity'][8],self.plan['sourceIdentity'][8]);self.assertEqual(proof['accessAcl'],self.plan['command']['entries'])
+        self.assertEqual(self.file.read_bytes(),b'unchanged full content')
+
+    def test_wrong_named_permissions_with_same_mode_are_not_a_post_acl_cut(self):
+        entries=copy.deepcopy(self.plan['command']['entries']);entries[1]['permissions']=7;self.write_target_acl(entries)
+        self.assertEqual(self.file.stat().st_mode,self.plan['sourceIdentity'][2])
+        with self.assertRaises(AssertionError):cut.changed_proof(self.record,self.source)
+
+    def test_post_acl_cut_rejects_changed_owner_or_ordinary_attribute(self):
+        self.write_target_acl();os.setxattr(self.file,'user.qa',b'foreign value')
+        with self.assertRaises(AssertionError):cut.changed_proof(self.record,self.source)
+        os.setxattr(self.file,'user.qa',b'unchanged attribute');os.chown(self.file,2201,3201)
+        with self.assertRaises(AssertionError):cut.changed_proof(self.record,self.source)
+
+    def test_post_acl_cut_does_not_accept_unverified_history_or_noop(self):
+        self.write_target_acl()
+        for key,value in [('historyVerified',False),('historyMayExist',False),('aclConfirmed',True),('version','already-completed')]:
+            with self.subTest(key=key),self.assertRaises(AssertionError):cut.changed_proof({**self.record,key:value},self.source)
+        changed=copy.deepcopy(self.record);changed['plan']['noChange']=True
+        with self.assertRaises(AssertionError):cut.changed_proof(changed,self.source)
+        for phase in ('Preparing','Prepared','Completed','Aborted','Unknown'):
+            with self.subTest(phase=phase):self.assertIsNone(cut.changed_proof({**self.record,'state':phase},self.source))
+
+    def test_post_acl_cut_rejects_hardlink_and_foreign_parent(self):
+        self.write_target_acl();changed=copy.deepcopy(self.record);changed['plan']['parentIdentity']=[1,2]
+        with self.assertRaises(AssertionError):cut.changed_proof(changed,self.source)
+        os.link(self.file,self.source/'extra')
+        with self.assertRaises(AssertionError):cut.changed_proof(self.record,self.source)
+
 
 class AclFailureCleanupTests(unittest.TestCase):
     def setUp(self):
@@ -130,6 +167,19 @@ class AclFailureCleanupTests(unittest.TestCase):
         row={'state':'Canceled','publish_barrier':False,'lease_token':None,'lease_expires_at_utc':None,'execution_job_id':'execution'}
         with patch.object(self.driver,'wait_settled',return_value={'row':row}),patch.object(self.driver,'record_for',return_value={'state':'Aborted'}),patch.object(self.driver,'inventory',return_value={'original':'facts'}),patch.object(self.driver,'remove_proved') as remove:
             self.assertTrue(self.cleanup());remove.assert_called_once()
+
+    def test_missed_post_acl_cut_never_cleans_unknown_or_active_result(self):
+        with patch.object(self.driver,'remove_proved') as remove,patch.object(self.driver,'wait_settled') as wait:
+            self.assertFalse(self.driver.cleanup_post_acl_failure(None,{},self.directory,self.directory,None,None,None,b'bytes'));wait.assert_not_called();remove.assert_not_called()
+        for state,barrier in [('Unknown',True),('Succeeded',True)]:
+            with self.subTest(state=state),patch.object(self.driver,'wait_settled',return_value={'row':{'state':state,'publish_barrier':barrier}}),patch.object(self.driver,'remove_proved') as remove:
+                self.assertFalse(self.driver.cleanup_post_acl_failure('id',{},self.directory,self.directory,None,None,None,b'bytes'));remove.assert_not_called()
+
+    def test_missed_post_acl_cut_preserves_mismatched_source(self):
+        row={'state':'Succeeded','publish_barrier':False,'lease_token':None,'lease_expires_at_utc':None,'plan_json':'{}'}
+        with patch.object(self.driver,'wait_settled',return_value={'row':row}),patch.object(self.driver,'inventory',return_value={}),patch.object(self.driver,'managed_plan',return_value={'targetMode':0o640}),patch.object(self.driver,'unchanged_except_target',side_effect=AssertionError('foreign source')),patch.object(self.driver,'remove_proved') as remove:
+            with self.assertRaises(AssertionError):self.driver.cleanup_post_acl_failure('id',{'original':{}},self.directory,self.directory,None,None,None,b'bytes')
+            remove.assert_not_called()
 
 
 class AclRevocationEvidenceTests(unittest.TestCase):
@@ -170,11 +220,13 @@ class AclRevocationEvidenceTests(unittest.TestCase):
         self.verifier.validate_source_profile({'sha256':old},['cancel','logout'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'sha256':old},['group-removal'])
         self.verifier.validate_source_profile({'schemaVersion':2,'sha256':sources},['group-removal','account-disable'])
-        for schema in (True,4,'2'):
+        for schema in (True,5,'2'):
             with self.subTest(schema=schema),self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':schema,'sha256':sources},['group-removal'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':2,'sha256':old},['account-disable'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':2,'sha256':sources},['worker-crash'])
         self.verifier.validate_source_profile({'schemaVersion':3,'sha256':sources},['worker-crash','agent-restart'])
+        with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':3,'sha256':sources},['post-acl-cancel'])
+        self.verifier.validate_source_profile({'schemaVersion':4,'sha256':sources},['post-acl-cancel','post-acl-worker-crash'])
 
 
 class AclRestartEvidenceTests(unittest.TestCase):

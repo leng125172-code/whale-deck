@@ -1,7 +1,7 @@
 """QA-only exact pidfd/Root/lock binding for an installed single-object ACL change.
 
 No installed hooks, arbitrary PID/command, Root edits or host path input. A cut
-counts only while the named synthetic inode has its full original fingerprint.
+counts only with the exact original inode and independently observed ACL state.
 """
 from functools import lru_cache
 import base64
@@ -92,6 +92,36 @@ def original_proof(record, source):
         'rootPhase': record['state'], 'historyMayExist': record['historyMayExist'], 'historyVerified': record['historyVerified']}
 
 
+def changed_proof(record, source):
+    """A real access-ACL syscall occurred; its permanent receipt is still Applying."""
+    if record['state']!='Applying':return None
+    plan=record['plan'];old=plan['sourceIdentity'];command=plan['command']
+    assert plan['kind']=='File' and command['aclType']=='access' and plan['noChange'] is False
+    assert record['aclConfirmed'] is None and record['actualIdentity'] is None and record['version']==''
+    assert record['historyMayExist'] and record['historyVerified'] and re.fullmatch('[A-F0-9]{64}',record['historyDigest'])
+    assert command['path']=='work/acl-file.bin' and list(identity(source))==plan['parentIdentity']
+    target=source/'acl-file.bin';named=target.lstat();assert stat.S_ISREG(named.st_mode) and not target.is_symlink() and named.st_nlink==1
+    actual=fingerprint(named)
+    if actual==old:return None
+    desired=list(old);desired[2]=(old[2]&~0o777)|plan['targetMode']
+    assert actual[:8]==desired[:8] and actual[8]>old[8],'ACL_OBSERVER_CHANGED_SOURCE_INVALID'
+    module=acl_module();descriptor=os.open(target,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC)
+    try:
+        assert fingerprint(os.fstat(descriptor))==actual
+        access=module.read_acl(descriptor,'access',named.st_mode);default=module.read_acl(descriptor,'default',named.st_mode)
+        assert access==command['entries'] and access!=plan['accessAcl'] and default==plan['defaultAcl']
+        names=os.listxattr(descriptor);assert len(names)<=128;values=[];size=0
+        for name in sorted(names):
+            if name in module.XATTRS.values():continue
+            assert not name.startswith(('system.posix_acl_','security.'))
+            value=os.getxattr(descriptor,name);size+=len(name.encode())+len(value);assert size<=65536;values.append([name,base64.b64encode(value).decode('ascii')])
+        digest=hashlib.sha256(b'whaledeck-container-acl-attributes-v1\n'+module.encode(values)).hexdigest().upper();assert digest==plan['attributesDigest']
+        assert fingerprint(os.fstat(descriptor))==fingerprint(target.lstat())==actual
+    finally:os.close(descriptor)
+    return {'originalIdentity':old,'changedIdentity':actual,'accessAcl':access,'defaultAcl':default,'attributesDigest':digest,
+        'rootPhase':'Applying','historyMayExist':True,'historyVerified':True}
+
+
 def bound_fds(pid, root_identity, lock_identity):
     try:
         args = Path(f'/proc/{pid}/cmdline').read_bytes().rstrip(b'\0').split(b'\0')
@@ -110,6 +140,10 @@ class HeldAcl(HeldCopy):
 
 def freeze_before_acl(row, source, container_pid, phase='Any'):
     return _freeze_acl(row, source, container_pid, phase, original_proof)
+
+
+def freeze_after_acl(row, source, container_pid, phase='HistoryVerified'):
+    return _freeze_acl(row, source, container_pid, phase, changed_proof)
 
 
 def _freeze_acl(row, source, container_pid, phase, prove):

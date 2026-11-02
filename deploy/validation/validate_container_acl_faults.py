@@ -21,13 +21,14 @@ import uuid
 
 import requests
 import validate_container_file_publishing as owned
-from bound_container_acl_cut import ROOT, freeze_before_acl, record_for
-from validate_container_acl_browser import SOURCES as BROWSER_SOURCES, snapshot, managed_plan, no_active_work, read_metadata, inventory, PATHS, NAMES, remove_proved
+from bound_container_acl_cut import ROOT, freeze_before_acl, freeze_after_acl, record_for
+from validate_container_acl_browser import SOURCES as BROWSER_SOURCES, snapshot, managed_plan, no_active_work, read_metadata, inventory, PATHS, NAMES, remove_proved, version
 from validate_container_directory_restart import Worker, command, preflight, agent_identity
 from validate_container_file_staging import load
 from validate_container_upload_bff import temporary_user
 from owned_authentik_revocation import OwnedAuthentikRevocation
 from validate_metric_continuity import query
+from validate_container_acl import unchanged_except_target
 
 PHASE = 'startup'
 SOURCES = tuple(dict.fromkeys((*BROWSER_SOURCES, 'bound_container_acl_cut.py', 'bound_container_copy_cut.py',
@@ -64,7 +65,8 @@ def wait_settled(identifier):
 
 
 def terminal_state(kind):
-    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart')
+    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash')
+    if kind.startswith('post-acl-'):return 'Succeeded'
     return 'Failed' if kind in ('worker-crash','agent-restart') else 'Canceled'
 
 
@@ -73,18 +75,25 @@ def verify_terminal(identifier, subject, baseline, storage, module, directory=No
     data=snapshot(identifier);row=data['row'];plan=managed_plan(json.loads(row['plan_json']))
     assert row['actor_subject']==subject and row['container_id']==baseline['containerId'] and row['instance_id']==baseline['instanceId']
     assert row['relative_path']==plan['command']['path']=='work/acl-file.bin'
-    expected=terminal_state(baseline['kind'])
+    expected=terminal_state(baseline['kind']);post=expected=='Succeeded'
     assert row['state']==data['executionJob']['state']==expected and data['planJob']['state']=='Succeeded'
-    assert row['result_code']==('CONTAINER_ACL_INTERRUPTED' if expected=='Failed' else 'CONTAINER_ACL_CANCELED')
+    assert row['result_code']==('CONTAINER_ACL_COMPLETED' if post else 'CONTAINER_ACL_INTERRUPTED' if expected=='Failed' else 'CONTAINER_ACL_CANCELED')
     assert data['accepted']==data['confirmed']==1 and data['pending']==0
     assert row['root_started_at_utc'] and row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is row['lease_expires_at_utc'] is None
-    assert row['acl_confirmed'] is False and row['history_may_exist'] and row['history_verified'] and not row['published_version']
+    assert row['acl_confirmed'] is post and row['history_may_exist'] and row['history_verified']
+    assert bool(row['published_version']) is post
     assert plan['sourceIdentity']==baseline['original']['acl-file.bin']['identity'] and plan['accessAcl']==baseline['original']['acl-file.bin']['access'] and plan['defaultAcl']==baseline['original']['acl-file.bin']['default']
     assert plan['command']['entries']==__import__('validate_container_acl_browser').profile('access') and plan['noChange'] is False
     record=record_for(row);operation=uuid.UUID(row['execution_job_id']).hex;raw=(ROOT/(operation+'.json')).read_bytes()
-    assert json.loads(raw)==record and record['state']=='Aborted' and record['aclConfirmed'] is False
-    assert record['actualIdentity'] is None and record['version']=='' and record['historyVerified'] and record['historyMayExist']
-    receipt=json.loads(row['receipt_json']);assert receipt['Id']==row['execution_job_id'] and receipt['State']=='Aborted' and receipt['AclConfirmed'] is False
+    assert json.loads(raw)==record and record['state']==('Completed' if post else 'Aborted') and record['aclConfirmed'] is post
+    assert record['historyVerified'] and record['historyMayExist']
+    if post:
+        actual=baseline['cutPhysical']['acl-file.bin']['identity'];assert record['actualIdentity']==actual
+        assert record['version']==row['published_version']==version(baseline,'work/acl-file.bin',actual)
+    else:assert record['actualIdentity'] is None and record['version']==''
+    receipt=json.loads(row['receipt_json']);assert receipt['Id']==row['execution_job_id'] and receipt['State']==record['state'] and receipt['AclConfirmed'] is post
+    assert receipt['Version']==record['version'] and receipt['BindingCurrent'] is post
+    assert receipt['Kind']==plan['kind'] and receipt['TargetMode']==plan['targetMode'] and receipt['NoChange'] is plan['noChange']
     assert re.fullmatch('[A-F0-9]{64}',row['receipt_hash'])
     assert receipt['HistoryMayExist'] and receipt['HistoryVerified'] and receipt['Fingerprint']==plan['fingerprint'] and receipt['TargetProof']==plan['targetProof']
     assert receipt['ContainerId']==row['container_id'] and receipt['InstanceId']==row['instance_id'] and receipt['AclType']=='access'
@@ -115,6 +124,21 @@ def cleanup_original_after_failure(identifier, directory, folder, reader, module
             if record['state'] not in ('Aborted','Completed'): return False
     if inventory(folder,reader,module,content)!=original: return False
     remove_proved(folder,reader,module,content,original);return True
+
+
+def cleanup_post_acl_failure(identifier, baseline, directory, folder, reader, module, storage, content):
+    """A missed cut stays FAILED; only proven own Completed data can be removed."""
+    if identifier is None:return False
+    failed=wait_settled(identifier);row=failed['row'];(directory/'failed-gate-sql.json').write_text(json.dumps(failed))
+    if row['state']!='Succeeded' or row['publish_barrier'] or row['lease_token'] is not None or row['lease_expires_at_utc'] is not None:return False
+    current=inventory(folder,reader,module,content);plan=managed_plan(json.loads(row['plan_json']))
+    unchanged_except_target(baseline['original'],current,'acl-file.bin',plan['targetMode'])
+    assert current['acl-file.bin']['access']==plan['command']['entries'] and current['acl-file.bin']['default']==plan['defaultAcl']
+    _,record,raw,hdd=verify_terminal(identifier,row['actor_subject'],{**baseline,'cutPhysical':current},storage,module)
+    assert record['actualIdentity']==current['acl-file.bin']['identity']
+    (directory/'failed-gate-root.json').write_bytes(raw);(directory/'failed-gate-hdd.json').write_bytes(hdd)
+    remove_proved(folder,reader,module,content,current);(directory/'failed-gate-cleanup.json').write_text(json.dumps({'gatePassed':False,'provedCompletedOwnSourceRemoved':True}))
+    return True
 
 
 RESTART_KEYS={'uploads','directories','copies','moves','permissions','ownerships','recursivePermissions','recursiveOwnerships','acls'}
@@ -195,10 +219,10 @@ def lease_held(before, current):
     assert current['lease_token']==before['lease_token'] and current['lease_expires_at_utc']==before['lease_expires_at_utc']
 
 
-def natural_lease(row, folder, reader, module, content, original, directory):
+def natural_lease(row, folder, reader, module, content, original, directory, *, post=False):
     wall=dt.datetime.now(dt.timezone.utc);expiry=observation_expiry(row,wall);began=time.monotonic()
     path=ROOT/(uuid.UUID(row['execution_job_id']).hex+'.json');raw=path.read_bytes();root=json.loads(raw)
-    assert root==record_for(row) and root['state'] in ('Preparing','Prepared') and root['historyVerified']
+    assert root==record_for(row) and root['state'] in (('Applying',) if post else ('Preparing','Prepared')) and root['historyVerified']
     (directory/'after-helper-exit-root.json').write_bytes(raw);samples=[]
     while dt.datetime.now(dt.timezone.utc)<expiry:
         assert time.monotonic()-began<100,'NATURAL_LEASE_MONOTONIC_DEADLINE'
@@ -219,6 +243,7 @@ def natural_lease(row, folder, reader, module, content, original, directory):
 
 def run_case(kind, revision, evidence, source, reader, module, storage):
     global PHASE
+    post=kind.startswith('post-acl-');behavior=kind.removeprefix('post-acl-')
     PHASE=kind+':preflight';no_active_work();worker=Worker();directory=evidence/kind;directory.mkdir(mode=0o700)
     held=browser=None;identifier=None;proved=False;current=None;agent_attempted=False;host=None
     with owned.fixture(restartable_core=('whaledeck-worker',)) as fixture, temporary_user(True) as (username,password):
@@ -244,12 +269,18 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                 preflight([identifier]);worker.stop();write_signal(directory,'confirm.json',{'workerStopped':True})
                 accepted=wait_signal(directory,'confirmed.json',browser,30);row=snapshot(identifier)['row']
                 assert row['state']=='Pending' and row['root_started_at_utc'] is None and row['execution_job_id']==accepted['executionJobId'] and row['actor_subject']==ready['subject']
-                PHASE=kind+':exact-installed-pre-syscall-history-cut'
+                PHASE=kind+(':exact-installed-post-acl-cut' if post else ':exact-installed-pre-syscall-history-cut')
                 with ThreadPoolExecutor(max_workers=1) as pool:
-                    watch=pool.submit(freeze_before_acl,row,folder,baseline['containerPid'],'HistoryVerified');worker.start(wait_ready=False);held=watch.result(timeout=28)
+                    watch=pool.submit(freeze_after_acl if post else freeze_before_acl,row,folder,baseline['containerPid'],'HistoryVerified');worker.start(wait_ready=False);held=watch.result(timeout=28)
                 assert held is not None,'REAL_ACL_CUT_MISSED_NOT_COUNTED'
                 applying=snapshot(identifier)['row'];assert applying['state']=='Applying' and applying['root_started_at_utc'] and applying['publish_barrier'] and held.record['historyVerified']
-                assert inventory(folder,reader,module,content)==original
+                cut=inventory(folder,reader,module,content)
+                if post:
+                    unchanged_except_target(original,cut,'acl-file.bin',held.record['plan']['targetMode'])
+                    assert cut['acl-file.bin']['identity']==held.proof['changedIdentity'] and cut['acl-file.bin']['access']==held.record['plan']['command']['entries']
+                    baseline['cutPhysical']=cut;(directory/'baseline.json').write_text(json.dumps(baseline))
+                else:assert cut==original
+                (directory/'cut-physical.json').write_text(json.dumps(cut))
                 (directory/'cut-root.json').write_text(json.dumps(held.record));(directory/'bound-helper.json').write_text(json.dumps({'pid':held.pid,'unit':held.cgroup,'twoKernelFdProofs':True,'proof':held.proof}))
                 PHASE=kind+':visible-action-and-product-helper-exit';authority=None;restart=None;lease=None
                 if kind in ('group-removal','account-disable'):
@@ -263,14 +294,14 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                         with ThreadPoolExecutor(max_workers=1) as pool:
                             exit_observer=pool.submit(held.wait_exit_seconds,began,15);authority=native.change(kind)
                             (directory/'authority-change.json').write_text(json.dumps(authority));elapsed=exit_observer.result(timeout=16)
-                elif kind in ('worker-crash','agent-restart'):
+                elif behavior in ('worker-crash','agent-restart'):
                     write_signal(directory,'action.json',{'kind':kind});action=wait_signal(directory,'action-done.json',browser,30)
                     checks=restart_allowed(held,applying);host=host_snapshot(revision)
                     start_frame=snapshot(identifier);applying=start_frame['row'];assert applying['state']=='Applying' and applying['publish_barrier']
                     (directory/'restart-start-sql.json').write_text(json.dumps(start_frame))
                     began=time.monotonic()
                     with ThreadPoolExecutor(max_workers=2) as pool:
-                        if kind=='worker-crash':
+                        if behavior=='worker-crash':
                             exit_observer=pool.submit(held.wait_exit_seconds,began,15)
                             before=worker.current();lease=applying['lease_expires_at_utc'];observation_expiry(applying,dt.datetime.now(dt.timezone.utc))
                             worker.stopped=True;command('docker','kill','--signal','KILL',worker.id)
@@ -309,20 +340,30 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                 assert elapsed is not None and elapsed<15,'PRODUCT_DID_NOT_STOP_BOUND_ACL_HELPER'
                 held.release();held=None
                 if lease:
-                    PHASE=kind+':original-natural-lease';natural_lease(applying,folder,reader,module,content,original,directory)
+                    PHASE=kind+':original-natural-lease';natural_lease(applying,folder,reader,module,content,cut,directory,post=post)
                 PHASE=kind+':original-terminal-and-full-source-proof'
                 final=wait_settled(identifier);data,record,_,_=verify_terminal(identifier,ready['subject'],baseline,storage,module,directory)
-                assert final==data and bool(data['row']['cancel_requested_at_utc']) is (kind=='cancel')
+                assert final==data and bool(data['row']['cancel_requested_at_utc']) is (behavior=='cancel')
                 if lease:assert dt.datetime.fromisoformat(data['row']['completed_at_utc'])>=dt.datetime.fromisoformat(lease)
-                current=inventory(folder,reader,module,content);assert current==original
+                current=inventory(folder,reader,module,content);assert current==cut
+                if post:
+                    raw=(ROOT/(record['operationId']+'.json')).read_bytes()
+                    late=subprocess.run(['/usr/local/libexec/whaledeck-privileged','container-file-acl','apply',uuid.uuid4().hex],
+                        input=json.dumps({k:record[k] for k in ('operationId','owner','plan')})+'\n',capture_output=True,text=True,timeout=35)
+                    assert late.returncode==0 and len(late.stdout.encode())<=32768 and len(late.stderr.encode())<=32768
+                    replay=[json.loads(line) for line in late.stdout.splitlines() if line.strip()][-1]
+                    assert replay['operationId']==record['operationId'] and replay['state']=='Completed' and replay['aclConfirmed'] is True and replay['replayed']
+                    assert replay['version']==record['version'] and replay['historyDigest']==record['historyDigest']
+                    assert (ROOT/(record['operationId']+'.json')).read_bytes()==raw and inventory(folder,reader,module,content)==cut
+                    (directory/'late-apply.json').write_text(json.dumps(replay))
                 (directory/'physical-final.json').write_text(json.dumps(current));write_signal(directory,'settled.json',{'id':identifier,'state':terminal_state(kind)})
                 assert browser.wait(timeout=65)==0,'ACTUAL_ACL_TERMINAL_PAGE_NOT_VERIFIED'
                 ui=json.loads((directory/'browser.json').read_bytes());assert ui['actualUi'] and ui['id']==identifier and ui['subject']==ready['subject']
                 assert ui['authorityRevoked'] if authority else ui['normalDualLogout']
-                assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==(1 if kind=='cancel' else 0) and ui['bodies']==0
+                assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==(1 if behavior=='cancel' else 0) and ui['bodies']==0
                 result={'kind':kind,'id':identifier,'executionJobId':data['row']['execution_job_id'],'state':terminal_state(kind),'code':data['row']['result_code'],
                     'rootState':record['state'],'rootCutState':json.loads((directory/'cut-root.json').read_bytes())['state'],'productStoppedHelperSeconds':round(elapsed,3),
-                    'validatorKilledHelper':False,'originalFullBytesFingerprintAclsAndAttributesUnchanged':True,'actualUi':True,'normalDualLogout':authority is None,'authorityRevoked':authority is not None,'serviceRestart':restart}
+                    'validatorKilledHelper':False,'originalFullBytesFingerprintAclsAndAttributesUnchanged':not post,'postAclIdentityFullBytesAndAclsVerified':post,'actualUi':True,'normalDualLogout':authority is None,'authorityRevoked':authority is not None,'serviceRestart':restart}
                 (directory/'verified.json').write_text(json.dumps(result));proved=True
         finally:
             if held is not None:held.release()
@@ -342,8 +383,10 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
 
             registered=directory/'registered.json'
             if identifier is None and registered.exists():identifier=json.loads(registered.read_bytes())['id']
-            if proved:remove_proved(folder,reader,module,content,original)
-            else:cleanup_original_after_failure(identifier,directory,folder,reader,module,content,original,browser_started=browser is not None)
+            if proved:remove_proved(folder,reader,module,content,current)
+            else:
+                removed=cleanup_original_after_failure(identifier,directory,folder,reader,module,content,original,browser_started=browser is not None)
+                if post and not removed:cleanup_post_acl_failure(identifier,baseline,directory,folder,reader,module,storage,content)
 
     assert not folder.exists() and subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True,timeout=10).returncode!=0
     return result
@@ -354,8 +397,8 @@ def main():
     assert os.geteuid()==0 and len(sys.argv) in (2,3);os.umask(0o077)
     revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision);kinds=('cancel','logout')
     if len(sys.argv)==3:
-        assert sys.argv[2] in (*kinds,'group-removal','account-disable','revocation','worker-crash','agent-restart','restart')
-        kinds=('group-removal','account-disable') if sys.argv[2]=='revocation' else ('worker-crash','agent-restart') if sys.argv[2]=='restart' else (sys.argv[2],)
+        assert sys.argv[2] in (*kinds,'group-removal','account-disable','revocation','worker-crash','agent-restart','restart','post-acl-cancel','post-acl-worker-crash','post-change')
+        kinds=('group-removal','account-disable') if sys.argv[2]=='revocation' else ('worker-crash','agent-restart') if sys.argv[2]=='restart' else ('post-acl-cancel','post-acl-worker-crash') if sys.argv[2]=='post-change' else (sys.argv[2],)
     repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
     for name in SOURCES:
@@ -366,7 +409,7 @@ def main():
     with requests.Session() as session:
         session.trust_env=False;r=session.get('http://127.0.0.1:8080/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();evidence=repo/'deploy/artifacts'/('container-acl-faults-'+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
-    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':3,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision}))
+    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':4,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_fault_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_fault_module');files=reader.trusted_module('whaledeck-files.py','acl_fault_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_fault_hdd').FileBackups(files)
     print(json.dumps({'aclFaults':'started','evidence':str(evidence),'kinds':kinds}),flush=True);results=[]
     for kind in kinds:
