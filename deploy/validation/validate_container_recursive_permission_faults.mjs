@@ -78,7 +78,7 @@ try {
     if (kind === 'worker-crash') {
       const facts = dialog.getByLabel('实际逐项结果', { exact: true })
       for (const [label, key] of [['已完成核对', 'completedCount'], ['实际修改', 'changedCount'], ['已中止', 'abortedCount'], ['未开始', 'notStartedCount'], ['待证明', 'unknownCount']]) {
-        await expect(facts.locator('div').filter({ hasText: label }).locator('dd')).toHaveText(String(settled[key]))
+        await expect(facts.getByText(label, { exact: true }).locator('..').locator('dd')).toHaveText(String(settled[key]))
       }
       await facts.scrollIntoViewIfNeeded()
       await page.screenshot({ path: join(directory, 'partial-counts.png') })
