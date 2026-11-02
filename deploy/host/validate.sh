@@ -62,6 +62,28 @@ for module in /usr/local/libexec/whaledeck-container-recursive-ownership.py /usr
   assert_metadata "$module" '750:root:root'
   [[ ! -L "$module" && $(stat -c %h "$module") == 1 ]]
 done
+assert_metadata /var/lib/whaledeck-container-acl '700:root:root'
+[[ ! -L /var/lib/whaledeck-container-acl ]]
+for module in /usr/local/libexec/whaledeck-container-acl.py /usr/local/libexec/whaledeck-container-acl-transport.py; do
+  assert_metadata "$module" '750:root:root'
+  [[ ! -L "$module" && $(stat -c %h "$module") == 1 ]]
+done
+# Read-only dependency probe: exact FD mount identity, initial user namespace,
+# and actual POSIX ACL xattr support. A missing syscall is never assumed safe.
+python3 -I - <<'ACL_DEPENDENCIES'
+import errno, importlib.util, os
+spec = importlib.util.spec_from_file_location('whaledeck_acl_dependency_check', '/usr/local/libexec/whaledeck-container-acl-transport.py')
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+assert os.stat('/proc/1/ns/user').st_ino == os.stat('/proc/self/ns/user').st_ino
+fd = os.open('/data/WhaleDeck/apps', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    module.require_unmapped(fd)
+    try: os.getxattr(fd, 'system.posix_acl_access')
+    except OSError as error:
+        if error.errno != errno.ENODATA: raise
+finally: os.close(fd)
+ACL_DEPENDENCIES
+
 assert_metadata /var/lib/whaledeck-container-ownership '700:root:root'
 [[ ! -L /var/lib/whaledeck-container-ownership ]]
 for module in /usr/local/libexec/whaledeck-container-ownership.py /usr/local/libexec/whaledeck-container-ownership-transport.py; do

@@ -1322,3 +1322,33 @@ service ContainerRecursiveOwnershipService {
   rpc Inspect(ContainerRecursiveOwnershipRequest) returns (ContainerRecursiveOwnershipReceipt);
   rpc Discard(ContainerRecursiveOwnershipRequest) returns (ContainerRecursiveOwnershipReceipt);
 }
+
+// Independent POSIX ACL authority, protocol 1.51. No mode/owner/recursive action.
+// Named IDs and permissions have explicit presence; ID zero is a real qualifier.
+message ContainerAclEntry { string tag = 1; optional uint32 id = 2; optional uint32 permissions = 3; }
+message ContainerAclCommand {
+  ContainerFileLocation location = 1; string acl_type = 2; repeated ContainerAclEntry entries = 3; string expected_version = 4;
+}
+message ContainerAclPlan {
+  uint32 schema_version = 1; ContainerAclCommand command = 2; string target_proof = 3;
+  FileDirectoryIdentity parent_identity = 4; string parent_version = 5;
+  uint32 owner_uid = 6; uint32 owner_gid = 7; string fingerprint = 8;
+  string kind = 9; FileObjectIdentity source_identity = 10; int64 source_changed_at_unix_ns = 11;
+  string attributes_digest = 12; bool no_change = 13;
+  repeated ContainerAclEntry access_acl = 14; repeated ContainerAclEntry default_acl = 15; uint32 target_mode = 16;
+}
+message ContainerAclPlanRequest { ContainerAclCommand command = 1; RequestContext context = 2; }
+message ContainerAclRequest { string operation_id = 1; string owner = 2; ContainerAclPlan plan = 3; RequestContext context = 4; }
+message ContainerAclReceipt {
+  string operation_id = 1; string container_id = 2; string instance_id = 3; string fingerprint = 4;
+  string target_proof = 5; string state = 6; string version = 7; bool binding_current = 8; bool replayed = 9;
+  string kind = 10; optional bool acl_confirmed = 11; bool no_change = 12;
+  bool history_may_exist = 13; bool history_verified = 14; string history_digest = 15;
+  string acl_type = 16; uint32 target_mode = 17;
+}
+service ContainerAclService {
+  rpc Plan(ContainerAclPlanRequest) returns (ContainerAclPlan);
+  rpc Apply(ContainerAclRequest) returns (ContainerAclReceipt);
+  rpc Inspect(ContainerAclRequest) returns (ContainerAclReceipt);
+  rpc Discard(ContainerAclRequest) returns (ContainerAclReceipt);
+}

@@ -23,6 +23,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
             method.StartsWith(ContainerRecursivePermissionBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerPermissionBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerOwnershipBinding.Service, StringComparison.Ordinal) ||
+            method.StartsWith(ContainerAclBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerCopyBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerMoveBinding.Service, StringComparison.Ordinal)) return false;
         if (method.EndsWith("/GetCapabilities", StringComparison.Ordinal) ||
@@ -99,6 +100,11 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         method is ContainerPermissionBinding.Service + "Plan" or ContainerPermissionBinding.Service + "Apply" or
             ContainerPermissionBinding.Service + "Inspect" or ContainerPermissionBinding.Service + "Discard" &&
         ValidateContentBound(token, method, requestHash, ContainerPermissionBinding.Payload);
+
+    public bool ValidateContainerAcl(string? token, string method, string? requestHash) =>
+        method is ContainerAclBinding.Service + "Plan" or ContainerAclBinding.Service + "Apply" or
+            ContainerAclBinding.Service + "Inspect" or ContainerAclBinding.Service + "Discard" &&
+        ValidateContentBound(token, method, requestHash, ContainerAclBinding.Payload);
 
     public bool ValidateContainerOwnership(string? token, string method, string? requestHash) =>
         method is ContainerOwnershipBinding.Service + "Plan" or ContainerOwnershipBinding.Service + "Apply" or
@@ -179,7 +185,9 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     private void Authorize(ServerCallContext context)
     {
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");
-        var valid = context.Method.StartsWith(ContainerRecursiveOwnershipBinding.Service, StringComparison.Ordinal)
+        var valid = context.Method.StartsWith(ContainerAclBinding.Service, StringComparison.Ordinal)
+            ? validator.ValidateContainerAcl(token, context.Method, context.RequestHeaders.GetValue(ContainerAclBinding.Header))
+            : context.Method.StartsWith(ContainerRecursiveOwnershipBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerRecursiveOwnership(token, context.Method, context.RequestHeaders.GetValue(ContainerRecursiveOwnershipBinding.Header))
             : context.Method.StartsWith(ContainerRecursivePermissionBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerRecursivePermission(token, context.Method, context.RequestHeaders.GetValue(ContainerRecursivePermissionBinding.Header))

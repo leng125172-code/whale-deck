@@ -147,7 +147,7 @@ public sealed class ContainerPermissionPolicyTests
     public async Task PublishedAgentAdvertisesOnlyTheNewSpecificAdditiveCapability()
     {
         var capabilities = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
-        Assert.Equal(1U, capabilities.ProtocolMajor); Assert.Equal(50U, capabilities.ProtocolMinor);
+        Assert.Equal(1U, capabilities.ProtocolMajor); Assert.Equal(51U, capabilities.ProtocolMinor);
         Assert.Contains("docker.files.permission-intents", capabilities.Capabilities);
         Assert.Contains("docker.files.move-intents", capabilities.Capabilities);
     }
