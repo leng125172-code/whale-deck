@@ -90,6 +90,14 @@ try {
     if (fixture.kind === 'group-removal') { assert.equal(me.status(),200); assert.equal((await me.json()).isAdministrator,false) }
     else assert.ok([401,403].includes(me.status()))
     await page.reload()
+    await expect(page.getByRole('status', { name: '正在启动 WhaleDeck 协同平台', exact: true })).toHaveCount(0)
+    if (fixture.kind === 'group-removal') {
+      await expect(page).toHaveURL(base + '/forbidden')
+      await expect(page.getByRole('heading', { name: '没有管理权限', exact: true })).toBeVisible()
+    } else {
+      await expect(page).toHaveURL(new RegExp('^' + base + '/login(?:\\?|$)'))
+      await expect(page.getByRole('heading', { name: '使用工作站账号登录', exact: true })).toBeVisible()
+    }
     await expect(page.getByRole('region', { name: '容器所有者修改任务', exact: true })).toHaveCount(0)
     await expect.poll(() => page.evaluate(id => !(sessionStorage.getItem('whaledeck-container-ownership-hints-v1') ?? '').includes(id), intent.id)).toBe(true)
     await page.screenshot({ path: join(directory, 'authority-denied.png') })
@@ -104,7 +112,8 @@ try {
   }
   assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, fixture.kind === 'cancel' ? 1 : 0); assert.equal(bodies, 0)
   await writeSignal(directory, 'browser.json', { revision, kind: fixture.kind, id: intent.id, executionJobId: pending.executionJobId,
-    subject: profile.subject, registrations, confirmations, cancellations, bodies, finalState: final.state, normalDualLogout: !revoked, authorityRevoked: revoked, currentIdentityStatus, actualUi: true })
+    subject: profile.subject, registrations, confirmations, cancellations, bodies, finalState: final.state, normalDualLogout: !revoked, authorityRevoked: revoked,
+    renderedRevocationPage: revoked ? fixture.kind === 'group-removal' ? 'forbidden' : 'login' : null, currentIdentityStatus, actualUi: true })
   await context.close()
   console.log(JSON.stringify({ ownershipFaultBrowser: 'passed', kind: fixture.kind }))
 } catch (error) {

@@ -74,6 +74,7 @@ def verify(directory):
                 sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode()).hexdigest().upper()
             assert digest == history['historyDigest'] == record['historyDigest'] == row['history_digest']
         if kind in ('group-removal','account-disable'):
+            assert ui['renderedRevocationPage'] == ('forbidden' if kind=='group-removal' else 'login')
             proof = json.loads((p/'authority-change.json').read_bytes())
             before,after = proof['before'],proof['after']
             assert proof['kind']==kind and proof['onlyOwnedIdentityChanged'] and result['authorityRevoked']
