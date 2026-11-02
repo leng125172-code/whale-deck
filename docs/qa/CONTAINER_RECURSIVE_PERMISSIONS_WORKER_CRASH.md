@@ -1,5 +1,7 @@
 # 递归普通权限：Worker强杀、原自然租约与真实页面恢复
 
+> 后续2026-11-02：首项修改后真实Agent重启/原Partial观察恢复、维护PID不变及17次HTTP采样/当前管理员页面处置与独立核验已通过，见[后续Agent重启证据](CONTAINER_RECURSIVE_PERMISSIONS_AGENT_RESTART.md)。实际Agent PID已变，以下原批次PID稳定只属于当时，不重做或改写原证据。
+
 > 后续2026-11-02：目标消失后Unknown18与宿主实际1项修改分开保留、原账号删除后的另一管理员真实页面处置/迟到不续做和独立核验已通过，见[后续Unknown证据](CONTAINER_RECURSIVE_PERMISSIONS_UNKNOWN.md)。原实例保留的退出/撤权/Agent重启及其他组合仍待；以下原批次正文和失败记录保留。
 
 2026-11-02。运行产品保持`0dede0804a5f9d1847c23744b90c7e3bae5f7751`/Agent 1.49；本批仅新增验收与记录，没有发布、升级或回滚。冻结验收源码`23704b93f76f8d68132162c4bc92429d5327971a`，首次通过的完整门禁为本批第三轮；前两轮QA错误与准确清理保留，不改为通过。此前[页面取消及Partial不同管理员处置](CONTAINER_RECURSIVE_PERMISSIONS_PARTIAL.md)没有重做。
