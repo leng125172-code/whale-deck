@@ -1,5 +1,7 @@
 # 容器ACL：原登录实时移组与账号停用实机验收
 
+后续记录：[写入前Worker强杀/原自然租约与Agent重启](CONTAINER_ACL_RESTARTS.md)已实机及独立原件验收；当前Agent换为PID3288068，维护PID3122598不变。以下本批原身份、PID、当时待办与网络失败事实逐字保留。
+
 2026-11-03。运行保持 `633a2ca42012bbd6f388a67bd128fe3125bfab76`、Agent 1.51，没有重新发布或改生产schema。验证器冻结 `f3ca007`，27份验收依赖与11份安装模块逐字节核对。两套新独占容器/源目录/临时身份的真实Authentik→Vue→持久SQL/Worker→Agent→原文件/ACL/HDD门禁**首轮通过，独立只读核验通过**。不重复[原九常规场景](CONTAINER_ACL_REAL_UI.md)或[取消/正常退出](CONTAINER_ACL_FAULTS.md)。
 
 仅签收**Root Preparing/HistoryVerified、业务Applying且尚未实际写ACL**的两种原登录实时失权。不是实际ACL变更后的撤权、自然两小时过期、身份源失联、Worker/Agent重启、Unknown或递归恢复验收。59主项继续部分实现，17项移出不算完成，master未交付。
