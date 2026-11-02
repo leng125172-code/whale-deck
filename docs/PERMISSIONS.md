@@ -1,5 +1,9 @@
 # WhaleDeck 权限矩阵
 
+2026-11-02后续实机：递归所有者首项实际fchown后，只移除本轮新账号管理员组或停用本轮新账号；原正权限快照仍余7161/7162秒，产品3.951/4.255秒结束原helper、保留原Partial与五计数，不续做。旧任务403，移组me200非管理员/forbidden、停用me403/login；取消POST0，不以撤权或身份删除冒充正常退出。另一位新管理员真实页面五类dt/dd、先暂不处置再唯一确认及其正常双端退出通过；原Subject/Root/HDD不改。旧引用只签当前region/sessionStorage提示重载清理，不泛称其他标签页/路由/持久缓存；其他模块实时撤权仍待，默认User/Agent授权不扩大。[实际身份与页面证据](qa/CONTAINER_RECURSIVE_OWNERSHIP_REVOCATION.md)。
+
+下列各候选/实机记录保留当批“尚待”事实；递归所有者已验分支以本条及专项证据为准，目标消失Unknown/跨写入和其他切点仍待。
+
 2026-11-02后续实机：递归所有者原Worker SIGKILL后，原SQL租约/保护保持至自然到期，仅观察恢复原Partial；固定Agent重启后也不续做。两套当前另一管理员须实际页面先暂不处置再确认，原Root/五计数/历史/主体不改。宿主强杀/重启是本轮预检后QA权限操作，不授予普通面板用户停止受保护核心的能力。其余撤权/Unknown等继续。[进程与授权证据](qa/CONTAINER_RECURSIVE_OWNERSHIP_PROCESS_RESTARTS.md)。
 
 2026-11-02后续实机：递归所有者首项实际fchown后，页面取消及原身份/原实例保留的正常双端退出均通过；退出时原账号/组仍有效且权限快照未到期，取消POST0、旧任务401/引用清空，不以账号删除冒充正常退出。两个新管理员分别经真实页面先取消处置再明确确认，原五计数/历史与主体不改，原执行Failed/Acknowledged。其他实时撤权/故障仍待，不扩普通User权限。[实际证据](qa/CONTAINER_RECURSIVE_OWNERSHIP_PARTIAL.md)。

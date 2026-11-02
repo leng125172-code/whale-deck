@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_PROCESS_RESTARTS.md",
-  "nextStep": "b1fafed保持运行；递归所有者Worker强杀/原自然租约与Agent重启/维护入口两例实机及独立核验已通过，原Partial不续做/当前管理员处置/准确清理有证据。Agent现PID2542378，维护PID2380322不变。下一步实时组撤权/停用、目标消失Unknown/跨写入保护与其他回执组合，再ACL/删除/长期清理/P0-05与其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/PROGRESS_ESTIMATE.md；docs/qa/CONTAINER_RECURSIVE_OWNERSHIP_REVOCATION.md",
+  "nextStep": "b1fafed保持运行；递归所有者真实组撤权/账号停用、原Partial五计数/不同管理员页面处置与独立核验已通过，旧源/Root/HDD/迟到不改及准确清理有证据。接着目标消失Unknown/跨写入保护与其他回执组合，再ACL/删除/长期清理/P0-05及其余59项/UI/C#酒馆/统一供应商/AI Live2D。17项移出不算完成，不自动回滚dev。"
 }

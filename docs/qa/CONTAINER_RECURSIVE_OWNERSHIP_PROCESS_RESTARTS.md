@@ -1,5 +1,7 @@
 # 递归所有者：Worker强杀自然租约、Agent重启与维护入口
 
+后续更新（2026-11-02）：cf291aa两套新资源真实组撤权/账号停用与另一管理员Partial五计数页面处置及独立核验已通过，见[撤权证据与边界](CONTAINER_RECURSIVE_OWNERSHIP_REVOCATION.md)。以下Worker/Agent批次正文逐字保留，其“实时撤权仍待”仅是当批状态；Unknown/跨写入/其他切点及ACL/删除继续，未重做先前操作。
+
 2026-11-02。产品保持`b1fafedddfa1767d2d573bd94d2748f3cb5e7b44`/Agent1.50，不发布、不自动回滚。验收冻结`0442fb4ec7ff881ce13b5ec09f73cbaffab8b352`，两套新独占资源分别首次通过真实Worker SIGKILL/原自然租约恢复与Agent实际重启；两例均经真实页面和不同管理员处置、原SQL/Root/HDD及准确清理独立核验。
 
 此前[取消及同上下文正常双端退出](CONTAINER_RECURSIVE_OWNERSHIP_PARTIAL.md)与[常规六场景、旧退出失败及补证](CONTAINER_RECURSIVE_OWNERSHIP_REAL_UI.md)未重做或改写。此处只签收两种新故障，实时撤权、目标消失Unknown/跨写入互锁和其他回执组合、ACL/删除等仍待，59主项保持部分实现，17项移出不算完成，master未交付。
