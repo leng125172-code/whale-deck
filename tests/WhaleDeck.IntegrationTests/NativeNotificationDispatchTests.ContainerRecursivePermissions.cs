@@ -140,6 +140,10 @@ public sealed partial class NativeNotificationDispatchTests
             var apply = Assert.IsType<ContainerRecursivePermissionIntent>(await repo.ClaimAsync(clock.GetUtcNow(), default));
             Assert.Equal(ContainerFileUploadStartResult.Started, await repo.StartedAsync(apply, clock.GetUtcNow(), default));
             await Rejected($"UPDATE container_recursive_permission_intents SET root_started_at_utc=NULL WHERE id={apply.Id}", "container_recursive_permission_started_immutable");
+            var missingProof = await Assert.ThrowsAsync<PostgresException>(() => second.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE container_recursive_permission_intents SET state='Succeeded',completed_at_utc={clock.GetUtcNow()},publish_barrier=false WHERE id={apply.Id}"));
+            Assert.Equal(PostgresErrorCodes.CheckViolation, missingProof.SqlState);
+            Assert.Equal("ck_container_recursive_permission_result", missingProof.ConstraintName);
             Assert.True(await repo.FinishAsync(apply, "Succeeded", "CONTAINER_RECURSIVE_PERMISSION_COMPLETED", Receipt(apply, "Completed"), default));
             var complete = (await other.FindAsync(ready.Id, default))!; Assert.Equal("Completed", complete.RootState); Assert.Equal(4, complete.CompletedCount); Assert.Equal(2, complete.ChangedCount); Assert.True(complete.HistoryMayExist); Assert.True(complete.HistoryVerified); Assert.Equal(new string('8', 64), complete.HistoryDigest);
             await Rejected($"UPDATE container_recursive_permission_intents SET root_state='Aborted' WHERE id={ready.Id}", "container_recursive_permission_fact_immutable");
@@ -247,7 +251,7 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal("container_recursive_permission_downgrade_requires_empty_table", downgrade.MessageText); await db.Database.MigrateAsync();
             Assert.False(await db.ContainerRecursivePermissionIntents.AnyAsync(r => r.CompletedAtUtc == null || r.PublishBarrier || r.LeaseToken != null));
             Assert.DoesNotContain(await db.OperationJobs.Where(j => ids.Contains(j.Id) || db.ContainerRecursivePermissionIntents.Any(r => r.ExecutionJobId == j.Id && ids.Contains(r.Id))).ToArrayAsync(), j => j.State is "Queued" or "Running");
-            Console.WriteLine("INBOX_PHASE=container-ownership-persistent-jobs-facts-and-eight-way-fences");
+            Console.WriteLine("INBOX_PHASE=container-recursive-permission-persistent-jobs-facts-and-eight-way-fences");
         }
         finally
         {
