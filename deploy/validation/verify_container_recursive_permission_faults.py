@@ -17,6 +17,9 @@ from validate_container_file_staging import load
 from validate_container_recursive_permission_browser import snapshot, read_metadata, managed_plan
 from validate_container_recursive_permission_faults import PATHS, unchanged_except_modes, inactive_except
 from validate_container_recursive_permission_agent import no_active_work, host_identity
+from validate_container_recursive_permissions import NAMES
+from validate_metric_continuity import query
+import validate_container_file_publishing as owned
 from verify_container_recursive_permissions import digest, unsigned
 
 
@@ -56,6 +59,7 @@ def main():
     storage = load('/usr/local/libexec/whaledeck-file-backups.py','recursive_fault_verify_hdd').FileBackups(files)
     checked = []
     with storage.target(create_namespace=False,read_only=True) as (configuration,base):
+        hdd_device = os.fstat(base).st_dev
         fd = storage.f.open_at(base,'container-recursive-permissions-v1',os.O_RDONLY|os.O_DIRECTORY)
         try:
             for artifact in directory.glob('*.hdd.json'):
@@ -67,6 +71,34 @@ def main():
     assert history['plan'] == plan and plan['manifestDigest'] == digest(b'whaledeck-container-recursive-permission-manifest-v1\n',history['entries'])
     outcomes = saved('history-proof.json')['outcomes']
     assert record['outcomeDigest'] == digest(b'whaledeck-recursive-permission-outcomes-v1\n',outcomes)
+    audits = query('''SELECT json_build_object('rows',json_agg(json_build_object('actor',actor_subject,'action',action,'result',result,'detail',detail_json)))
+      FROM audit_events WHERE job_id IN (:'id'::uuid,:'execution'::uuid) AND action LIKE 'containers.files.recursive-permission.%';''', id=row['id'],execution=row['execution_job_id'])['rows']
+    assert audits and len([a for a in audits if a['action'].endswith('.partial-acknowledged')]) == 1
+    expected = {'intentId':row['id'],'containerId':row['container_id'],
+        'instanceHash':hashlib.sha256(row['instance_id'].encode()).hexdigest().upper(),
+        'pathHash':hashlib.sha256(row['relative_path'].encode()).hexdigest().upper()}
+    for audit in audits:
+        detail = json.loads(audit['detail']) if isinstance(audit['detail'],str) else audit['detail']
+        assert detail == expected
+        if audit['action'].endswith('.partial-acknowledged'):
+            assert audit['actor'] == row['acknowledged_by'] and audit['result'] == 'Partial'
+        else: assert audit['actor'] == row['actor_subject']
+    (directory/'audit-proof.json').write_text(json.dumps({'rows':len(audits),'differentAdminAcknowledgement':1,'originalSubjectPreserved':True,'onlyRecomputedHashedMetadata':True}))
+    repo = Path(__file__).resolve().parents[2]; installed = {}
+    for name in (*NAMES,'whaledeck-container-recursive-permission-transport.py','whaledeck-privileged'):
+        path = Path('/usr/local/libexec')/name; info = path.lstat()
+        assert stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o750
+        frozen = subprocess.check_output(['git','-C',str(repo),'show',baseline['revision']+':deploy/host/'+name])
+        assert path.read_bytes() == frozen; installed[name] = hashlib.sha256(frozen).hexdigest()
+    current_core = owned.common.core_snapshot()
+    assert current_core.keys() == baseline['coreBefore'].keys()
+    actual_containers = json.loads(owned.common.command(['docker','inspect',*owned.common.CORE_NAMES]))
+    assert len(actual_containers) == 11 and all(c['State']['Health']['Status'] == 'healthy' for c in actual_containers)
+    for name, before_core in baseline['coreBefore'].items():
+        observed_core = list(current_core[name])
+        if name == '/whaledeck-worker': assert observed_core[:3] == before_core[:3] and observed_core[3] != before_core[3]
+        else: assert observed_core == before_core
+    (directory/'installed-and-core-proof.json').write_text(json.dumps({'installedSha256':installed,'all11Healthy':True,'sameCoreContainersAndImages':True,'onlyWorkerStartedAtChanged':True,'databasePlatformEightUnchanged':True}))
     assert not Path(baseline['source']).exists() and not Path(baseline['root']).exists()
     assert subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True,timeout=15).returncode != 0
     assert host_identity(baseline['revision']) == baseline['hostBefore']
@@ -75,7 +107,9 @@ def main():
         raw = (directory/name).read_bytes(); assert raw.startswith(b'\x89PNG\r\n\x1a\n')
         assert int.from_bytes(raw[16:20],'big') == 320 and int.from_bytes(raw[20:24],'big') == 600
     observed = {'independentReadOnlyVerification':'passed','id':row['id'],'actualSqlAndRootAndHddUnchanged':True,'hddMetadataFiles':len(checked),
-        'sourceAndContainerAccuratelyRemoved':True,'deletedSourceBytesReRead':False,'screenshots':4,'productRevision':baseline['revision']}
+        'sourceAndContainerAccuratelyRemoved':True,'deletedSourceBytesReRead':False,'screenshots':4,'auditRows':len(audits),
+        'all11Healthy':True,'installedHelpersMatchProductRevision':True,'productRevision':baseline['revision'],
+        'sourceDevice':baseline['original'][''][0],'hddDevice':hdd_device}
     (directory/'independent-final.json').write_text(json.dumps(observed))
     print(json.dumps(observed))
 
