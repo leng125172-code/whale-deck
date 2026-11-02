@@ -95,11 +95,15 @@ def verify_case(result,baseline,subject,evidence,reader,module,storage,before,af
     assert re.fullmatch('[A-F0-9]{64}',row['receipt_hash'])
     operation=uuid.UUID(row['execution_job_id']).hex;path=STATE/(operation+'.json');info=trusted(path);assert stat.S_IMODE(info.st_mode)==0o600 and info.st_size<=16384
     raw=path.read_bytes();record=json.loads(raw);assert record['operationId']==operation and record['owner']==row['owner_hash'] and record['plan']==plan
+    assert type(record['schemaVersion']) is int and record['schemaVersion']==1
     assert record['state']=='Completed' and record['aclConfirmed'] is True and record['historyVerified'] and record['historyMayExist']
     unchanged_except_target(before,after,relative,plan['targetMode']);assert after[relative][kind]==plan['command']['entries']
     assert after[relative]['default' if kind=='access' else 'access']==before[relative]['default' if kind=='access' else 'access']
     assert record['actualIdentity']==after[relative]['identity'] and record['version']==row['published_version']==result['publishedVersion']==version(baseline,'work/'+relative,after[relative]['identity'])
     receipt=result['receipt'];sql_receipt=json.loads(row['receipt_json']);assert receipt['id']==sql_receipt['Id']==row['execution_job_id'] and receipt['state']==sql_receipt['State']=='Completed'
+    bindings={'containerId':baseline['containerId'],'instanceId':baseline['instanceId'],'fingerprint':plan['fingerprint'],'targetProof':plan['targetProof'],'kind':plan['kind'],'noChange':plan['noChange']}
+    for key,expected in bindings.items():assert receipt[key]==sql_receipt[key[0].upper()+key[1:]]==expected
+    assert receipt['historyVerified'] is sql_receipt['HistoryVerified'] is True and receipt['historyMayExist'] is sql_receipt['HistoryMayExist'] is True
     assert receipt['aclConfirmed'] is sql_receipt['AclConfirmed'] is True and receipt['bindingCurrent'] and receipt['aclType']==kind and receipt['targetMode']==plan['targetMode']
     assert record['historyDigest']==receipt['historyDigest']==sql_receipt['HistoryDigest']==row['history_digest']
     with storage.target(create_namespace=False,read_only=True) as (configuration,base_fd):

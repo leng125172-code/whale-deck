@@ -27,6 +27,11 @@ def verify(name):
     assert accepted['actualBrowserAndIdentity'] and accepted['cases']==len(proofs)==len(browser['completed'])==9
     assert browser['registrations']==browser['registrationRetries']==9 and browser['confirmations']==browser['confirmationRetries']==8 and browser['contentUploads']==0
     assert browser['logout']['normalUiLogout'] and browser['logout']['providerNavigationObserved'] and browser['logout']['bffStatus']==401 and browser['logout']['identityStatus'] in (401,403)
+    assert re.fullmatch('[a-f0-9]{40}',baseline['validationSourceRevision'])
+    subprocess.run(['git','-C',str(repo),'merge-base','--is-ancestor',baseline['revision'],baseline['validationSourceRevision']],check=True,capture_output=True,timeout=15)
+    for file,sha in baseline['installedSourceSha256'].items():
+        assert '/' not in file and re.fullmatch('[a-z0-9.-]+',file)
+        raw=subprocess.check_output(['git','-C',str(repo),'show',baseline['revision']+':deploy/host/'+file]);assert hashlib.sha256(raw).hexdigest()==sha and (Path('/usr/local/libexec')/file).read_bytes()==raw
     assert set(baseline['validationSourceSha256'])==set(SOURCES)
     for file,sha in baseline['validationSourceSha256'].items():assert hashlib.sha256(subprocess.check_output(['git','-C',str(repo),'show',baseline['validationSourceRevision']+':deploy/validation/'+file])).hexdigest()==sha
     content=hashlib.shake_256(('acl-browser:'+baseline['containerId']).encode()).digest(2*1024**2+7);assert baseline['bytesPerFile']==len(content) and baseline['sha256']==hashlib.sha256(content).hexdigest().upper()
