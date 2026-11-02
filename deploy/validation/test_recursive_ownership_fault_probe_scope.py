@@ -1,12 +1,13 @@
 """Offline rejection tests for the exact real-fault QA boundary, no live access."""
 import ast
 import copy
+import datetime as dt
 from pathlib import Path
 import unittest
 from unittest.mock import patch, Mock
 
 import bound_container_recursive_ownership_cut as cut
-from validate_container_recursive_ownership_faults import PATHS, unchanged_except_owners, same_operation, lease_held, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, maintenance_response, restore_fault_services, require_authority_change, require_logout_authority
+from validate_container_recursive_ownership_faults import observation_expiry, PATHS, unchanged_except_owners, same_operation, lease_held, require_unknown_counts, require_waiting_deferred, require_agent_restart, require_stopped_tree, maintenance_response, restore_fault_services, require_authority_change, require_logout_authority
 
 
 class RecursiveOwnershipFaultProbeScope(unittest.TestCase):
@@ -119,6 +120,16 @@ class RecursiveOwnershipFaultProbeScope(unittest.TestCase):
         for key in fields:
             changed = {**original,key:'replacement'}
             with self.subTest(key=key),self.assertRaises(AssertionError): same_operation(original,changed)
+
+    def test_natural_observation_refuses_expired_short_unbounded_or_naive_lease(self):
+        now=dt.datetime(2026,11,2,10,0,tzinfo=dt.timezone.utc)
+        row={'lease_token':'bound-token','lease_expires_at_utc':(now+dt.timedelta(seconds=90)).isoformat()}
+        self.assertEqual(now+dt.timedelta(seconds=90),observation_expiry(row,now))
+        for seconds in (-1,0,25,96,3600):
+            with self.subTest(seconds=seconds),self.assertRaises(AssertionError):
+                observation_expiry({**row,'lease_expires_at_utc':(now+dt.timedelta(seconds=seconds)).isoformat()},now)
+        with self.assertRaises(AssertionError):observation_expiry({**row,'lease_token':None},now)
+        with self.assertRaises(AssertionError):observation_expiry({**row,'lease_expires_at_utc':'2026-11-02T10:01:30'},now)
 
     def test_before_natural_expiry_new_lease_or_false_terminal_is_rejected(self):
         fields = ('id','execution_job_id','root_started_at_utc','actor_subject','owner_hash','container_id','instance_id','relative_path',

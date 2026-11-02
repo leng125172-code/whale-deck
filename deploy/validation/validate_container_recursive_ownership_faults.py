@@ -221,9 +221,15 @@ def lease_held(before, current):
     assert current['cancel_requested_at_utc'] is None
 
 
+def observation_expiry(row, now):
+    assert row['lease_token'] and now.utcoffset() is not None
+    expiry=dt.datetime.fromisoformat(row['lease_expires_at_utc'])
+    assert expiry.utcoffset() is not None and dt.timedelta(seconds=25)<expiry-now<=dt.timedelta(seconds=95), 'NATURAL_LEASE_OUTSIDE_BOUNDED_WINDOW'
+    return expiry
+
+
 def natural_lease(row, root, expected, directory):
-    expiry = dt.datetime.fromisoformat(row['lease_expires_at_utc'])
-    assert row['lease_token'] and expiry > dt.datetime.now(dt.timezone.utc)+dt.timedelta(seconds=25)
+    expiry = observation_expiry(row, dt.datetime.now(dt.timezone.utc))
     raw = (ROOT/(uuid.UUID(row['execution_job_id']).hex+'.json')).read_bytes()
     root_state = json.loads(raw)['state']; assert root_state in ('Applying','Partial')
     # The disconnected RPC may cooperatively save Partial while stopping the
@@ -232,6 +238,7 @@ def natural_lease(row, root, expected, directory):
     (directory/'after-helper-exit-root.json').write_bytes(raw)
     samples = []; began = time.monotonic(); wall = dt.datetime.now(dt.timezone.utc)
     while dt.datetime.now(dt.timezone.utc) < expiry:
+        assert time.monotonic()-began<100, 'NATURAL_LEASE_MONOTONIC_DEADLINE'
         current = snapshot(row['id']); observed = dt.datetime.now(dt.timezone.utc)
         if observed >= expiry: break
         lease_held(row,current['row'])
@@ -472,7 +479,7 @@ def main():
     global PHASE
     assert os.geteuid() == 0 and len(sys.argv) in (2,3); os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}',revision)
-    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','logout')
+    kind = sys.argv[2] if len(sys.argv) == 3 else 'cancel'; assert kind in ('cancel','logout','worker-crash','agent-restart')
     barrier_case = kind == 'target-disappearance-barrier'
     revoked = kind in ('group-removal','account-disable')
     logout_case = kind == 'logout'
