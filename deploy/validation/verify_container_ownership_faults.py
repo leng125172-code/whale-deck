@@ -39,28 +39,31 @@ def verify(directory):
     records = []
     current_core = healthy_core()
     for result in accepted['cases']:
-        kind = result['kind']; assert kind in ('cancel', 'logout', 'worker-crash', 'agent-restart', 'group-removal', 'account-disable')
+        kind = result['kind']; assert kind in ('cancel', 'logout', 'worker-crash', 'agent-restart', 'group-removal', 'account-disable', 'post-owner-cancel', 'post-owner-worker-crash')
+        post_owner = kind.startswith('post-owner-'); behavior = kind.removeprefix('post-owner-')
         p = directory / kind; trusted(p, True)
         baseline = json.loads((p / 'baseline.json').read_bytes()); ui = json.loads((p / 'browser.json').read_bytes())
         assert baseline['revision'] == ui['revision'] == accepted['revision'] and ui['id'] == result['id']
-        assert ui['registrations'] == ui['confirmations'] == 1 and ui['cancellations'] == (1 if kind == 'cancel' else 0) and ui['bodies'] == 0
+        assert ui['registrations'] == ui['confirmations'] == 1 and ui['cancellations'] == (1 if behavior == 'cancel' else 0) and ui['bodies'] == 0
         assert ui['actualUi'] and (ui['authorityRevoked'] if kind in ('group-removal','account-disable') else ui['normalDualLogout']) and result['actualUi'] and not result['validatorKilledHelper']
-        assert 0 <= result['productStoppedHelperSeconds'] < 15 and result['originalFullBytesAndFingerprintUnchanged']
+        assert 0 <= result['productStoppedHelperSeconds'] < 15
+        assert result['postOwnerIdentityAndFullBytesVerified'] if post_owner else result['originalFullBytesAndFingerprintUnchanged']
         expected_sha = hashlib.sha256(hashlib.shake_256(('owned-container-original:' + baseline['containerName']).encode()).digest(common.SIZE)).hexdigest().upper()
         assert baseline['sha256'] == expected_sha and baseline['bytes'] == common.SIZE
         value = snapshot(result['id']); row = value['row']
         assert value == json.loads((p / 'final-sql.json').read_bytes())
         assert row['actor_subject'] == ui['subject'] and row['execution_job_id'] == ui['executionJobId'] == result['executionJobId']
-        assert row['state'] == ui['finalState'] == value['executionJob']['state'] == ('Canceled' if kind in ('cancel', 'logout', 'group-removal', 'account-disable') else 'Failed')
+        assert row['state'] == ui['finalState'] == value['executionJob']['state'] == ('Succeeded' if post_owner else 'Canceled' if kind in ('cancel', 'logout', 'group-removal', 'account-disable') else 'Failed')
         assert value['planJob']['state'] == 'Succeeded' and value['accepted'] == value['confirmed'] == 1 and value['pending'] == 0
-        assert row['owner_confirmed'] is False and row['history_may_exist'] and row['history_verified'] and row['published_version'] is None
+        assert row['owner_confirmed'] is post_owner and row['history_may_exist'] and row['history_verified']
+        assert bool(row['published_version']) is post_owner
         assert row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is None and row['lease_expires_at_utc'] is None
         audit = query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result)) FROM audit_events WHERE job_id=:'id'::uuid AND action='containers.files.ownership.result';", id=row['execution_job_id'])
         assert audit == {'n': 1, 'actors': [ui['subject']], 'results': [row['state']]}
-        record = record_for(row); assert record['state'] == 'Aborted' and record['ownerConfirmed'] is False
+        record = record_for(row); assert record['state'] == ('Completed' if post_owner else 'Aborted') and record['ownerConfirmed'] is post_owner
         raw = (ROOT / (record['operationId'] + '.json')).read_bytes(); assert raw == (p / 'final-root.json').read_bytes()
         cut = json.loads((p / 'cut-root.json').read_bytes()); bound = json.loads((p / 'bound-helper.json').read_bytes())
-        assert cut['state'] in ('Preparing', 'Prepared') and cut['ownerConfirmed'] is None and cut['historyVerified']
+        assert cut['state'] in (('Applying',) if post_owner else ('Preparing', 'Prepared')) and cut['ownerConfirmed'] is None and cut['historyVerified']
         assert cut['plan']['sourceIdentity'] == record['plan']['sourceIdentity'] == baseline['original'] == bound['proof']['originalIdentity']
         assert cut['owner'] == record['owner'] and cut['operationId'] == record['operationId'] and bound['twoKernelFdProofs']
         with storage.target(create_namespace=False, read_only=True) as (configuration, base):
@@ -73,6 +76,26 @@ def verify(directory):
             digest = hashlib.sha256(b'whaledeck-container-ownership-history-v1\n' + json.dumps({k: v for k, v in history.items() if k != 'historyDigest'},
                 sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode()).hexdigest().upper()
             assert digest == history['historyDigest'] == record['historyDigest'] == row['history_digest']
+        if post_owner:
+            after = json.loads((p/'after.json').read_bytes()); actual = record['actualIdentity']
+            assert actual == bound['proof']['changedIdentity'] == after['actualIdentity']
+            desired = list(baseline['original']); desired[3:5] = [record['plan']['command']['uid'],record['plan']['command']['gid']]
+            assert actual[:8] == desired[:8] and actual[8] > baseline['original'][8]
+            assert after['fullBytesSha256'] == expected_sha and after['lateReplayDidNotChangeIdentity']
+            assert cut['actualIdentity'] is None and cut['version'] == '' and cut['plan']['noChange'] is False
+            assert bound['proof']['attributesDigest'] == record['plan']['attributesDigest']
+            version = hashlib.sha256(b'whaledeck-container-file-v1\n' + json.dumps([row['container_id'],row['instance_id'],row['relative_path'],*actual],ensure_ascii=False,separators=(',',':')).encode()).hexdigest().upper()
+            assert record['version'] == row['published_version'] == version
+            intent = ui['terminalIntent']
+            assert intent['id']==row['id'] and intent['executionJobId']==row['execution_job_id'] and intent['state']=='Succeeded'
+            assert intent['confirmation'] is None and intent['ownerConfirmed'] is True and intent['historyVerified']
+            assert intent['publishedVersion']==version and intent['historyDigest']==digest
+            assert [intent['originalUid'],intent['originalGid']]==baseline['original'][3:5]
+            assert [intent['executorUid'],intent['executorGid']]==[record['plan']['uid'],record['plan']['gid']]==[1000,1000]
+            late = json.loads((p/'late-apply.json').read_bytes())
+            assert late['operationId']==record['operationId'] and late['state']=='Completed' and late['ownerConfirmed'] is True and late['replayed']
+            assert late['version']==version and late['historyDigest']==digest
+            assert bool(row['cancel_requested_at_utc']) is (behavior=='cancel')
         if kind in ('group-removal','account-disable'):
             assert ui['renderedRevocationPage'] == ('forbidden' if kind=='group-removal' else 'login')
             proof = json.loads((p/'authority-change.json').read_bytes())
@@ -84,7 +107,7 @@ def verify(directory):
             assert row['cancel_requested_at_utc'] is None and ui['cancellations']==0
             if kind=='group-removal': assert after['groups']==[] and after['is_active'] is True and ui['currentIdentityStatus']==200
             else: assert after['is_active'] is False and after['groups']==before['groups'] and ui['currentIdentityStatus'] in (401,403)
-        if kind == 'worker-crash':
+        if behavior == 'worker-crash':
             service = result['serviceRestart']; assert service['sameWorkerContainerAndImage'] and service['signal'] == 'SIGKILL'
             assert dt.datetime.fromisoformat(row['completed_at_utc']) >= dt.datetime.fromisoformat(service['originalLeaseExpiresAtUtc'])
             samples = json.loads((p / 'natural-lease.json').read_bytes()); assert len(samples) == 3

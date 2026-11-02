@@ -19,7 +19,7 @@ import time
 import uuid
 
 import validate_container_file_publishing as owned
-from bound_container_ownership_cut import ROOT, freeze_before_owner, record_for, fingerprint
+from bound_container_ownership_cut import ROOT, freeze_before_owner, freeze_after_owner, record_for, fingerprint
 from validate_container_ownership_browser import snapshot
 from validate_container_directory_restart import Worker, command, preflight, agent_identity
 from validate_container_upload_bff import login, logout, request, temporary_user
@@ -130,6 +130,7 @@ def failure_acknowledge(identifier):
 def run_case(kind, revision, evidence):
     global PHASE
     PHASE = kind + ':preflight'; preflight(); worker = Worker()
+    post_owner = kind.startswith('post-owner-'); behavior = kind.removeprefix('post-owner-')
     directory = evidence / kind; directory.mkdir(mode=0o700)
     baseline = None; identifier = None; held = None; browser = None; proved = False
     with owned.fixture(restartable_core=('whaledeck-worker',)) as fixture, temporary_user(True) as (username, password):
@@ -152,19 +153,21 @@ def run_case(kind, revision, evidence):
                 accepted = wait_signal(directory, 'confirmed.json', browser, 30)
                 row = snapshot(identifier)['row']; assert row['state'] == 'Pending' and row['root_started_at_utc'] is None
                 assert row['execution_job_id'] == accepted['executionJobId'] and row['actor_subject'] == ready['subject']
-                PHASE = kind + ':exact-installed-helper-before-owner'
+                PHASE = kind + (':exact-installed-helper-after-owner' if post_owner else ':exact-installed-helper-before-owner')
                 with ThreadPoolExecutor(max_workers=1) as observers:
-                    watching = observers.submit(freeze_before_owner, row, fixture['folder'], baseline['containerPid'], 'HistoryVerified')
+                    watching = observers.submit(freeze_after_owner if post_owner else freeze_before_owner, row, fixture['folder'], baseline['containerPid'], 'HistoryVerified')
                     worker.start(wait_ready=False); held = watching.result(timeout=28)
                 assert held is not None, 'REAL_OWNERSHIP_CUT_MISSED_NOT_COUNTED'
                 applying = snapshot(identifier)['row']
                 assert applying['state'] == 'Applying' and applying['root_started_at_utc'] and applying['publish_barrier'] and held.record['historyVerified']
+                assert hashlib.sha256(source.read_bytes()).hexdigest().upper() == baseline['sha256']
+                if post_owner: assert fingerprint(source.stat()) == held.proof['changedIdentity']
                 (directory / 'cut-root.json').write_text(json.dumps(held.record))
                 (directory / 'bound-helper.json').write_text(json.dumps({'pid': held.pid, 'unit': held.cgroup, 'twoKernelFdProofs': True, 'proof': held.proof}))
                 restart = None; lease = None; elapsed = None; authority = None
                 PHASE = kind + ':real-action-and-product-helper-exit'
                 # Observe exit concurrently with actual page actions and service drain.
-                if kind in ('cancel', 'logout'):
+                if behavior in ('cancel', 'logout'):
                     began = time.monotonic()
                     with ThreadPoolExecutor(max_workers=1) as exits:
                         observing = exits.submit(held.wait_exit_seconds, began, 15)
@@ -191,7 +194,7 @@ def run_case(kind, revision, evidence):
                     began = time.monotonic()
                     with ThreadPoolExecutor(max_workers=1) as exits:
                         observing = exits.submit(held.wait_exit_seconds, began, 15)
-                        if kind == 'worker-crash':
+                        if behavior == 'worker-crash':
                             before = worker.current(); lease = applying['lease_expires_at_utc']; assert lease
                             worker.stopped = True; command('docker', 'kill', '--signal', 'KILL', worker.id)
                             automatic = worker.current()['State']['Running']; worker.start(wait_ready=False)
@@ -206,6 +209,7 @@ def run_case(kind, revision, evidence):
                             restart = {'oldAgentPid': before, 'newAgentPid': after, 'maintenancePidUnchanged': True, 'otherActiveWork': checks, 'totalRestartSeconds': round(time.monotonic() - began, 3)}
                         elapsed = observing.result(timeout=16)
                 assert elapsed is not None and elapsed < 15, 'PRODUCT_DID_NOT_STOP_BOUND_OWNERSHIP_HELPER'
+                held_proof = held.proof
                 held.release(); held = None
                 if lease:
                     PHASE = kind + ':original-natural-lease'
@@ -214,27 +218,39 @@ def run_case(kind, revision, evidence):
                         waiting = snapshot(identifier)['row']
                         assert waiting['state'] == 'Applying' and waiting['publish_barrier'] and waiting['lease_expires_at_utc'] == lease
                         assert dt.datetime.fromisoformat(lease) > dt.datetime.now(dt.timezone.utc)
-                        assert record_for(waiting)['state'] in ('Preparing', 'Prepared')
+                        assert record_for(waiting)['state'] in (('Applying',) if post_owner else ('Preparing', 'Prepared'))
                         samples.append({'state': waiting['state'], 'lease': lease}); time.sleep(1)
                     (directory / 'natural-lease.json').write_text(json.dumps(samples))
                 PHASE = kind + ':original-business-and-root-terminal'
-                final = wait_settled(identifier); row = final['row']; expected = 'Canceled' if kind in ('cancel', 'logout', 'group-removal', 'account-disable') else 'Failed'
+                final = wait_settled(identifier); row = final['row']; expected = 'Succeeded' if post_owner else 'Canceled' if kind in ('cancel', 'logout', 'group-removal', 'account-disable') else 'Failed'
                 assert row['state'] == final['executionJob']['state'] == expected and final['planJob']['state'] == 'Succeeded'
                 assert row['root_started_at_utc'] and row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is None and row['lease_expires_at_utc'] is None
-                assert row['owner_confirmed'] is False and row['history_verified'] and row['history_may_exist'] and row['published_version'] is None
+                assert row['owner_confirmed'] is post_owner and row['history_verified'] and row['history_may_exist']
+                assert bool(row['published_version']) is post_owner
                 assert final['accepted'] == final['confirmed'] == 1 and final['pending'] == 0
                 if lease: assert dt.datetime.fromisoformat(row['completed_at_utc']) >= dt.datetime.fromisoformat(lease)
-                record = save_history(row, directory, 'final'); assert record['state'] == 'Aborted'
-                prove_original(fixture, baseline, record)
+                record = save_history(row, directory, 'final'); assert record['state'] == ('Completed' if post_owner else 'Aborted')
+                prove_original(fixture, baseline, record, require_unchanged=not post_owner)
+                if post_owner:
+                    assert record['actualIdentity'] == fingerprint(source.stat()) == held_proof['changedIdentity']
+                    before_late = fingerprint(source.stat()); raw_root = (ROOT/(record['operationId']+'.json')).read_bytes()
+                    late = subprocess.run(['/usr/local/libexec/whaledeck-privileged','container-file-ownership','apply',uuid.uuid4().hex],
+                        input=json.dumps({k:record[k] for k in ('operationId','owner','plan')})+'\n',capture_output=True,text=True,timeout=35)
+                    assert late.returncode==0 and len(late.stdout.encode())<=32768 and len(late.stderr.encode())<=32768
+                    result = [json.loads(line) for line in late.stdout.splitlines() if line.strip()][-1]
+                    assert result['operationId']==record['operationId'] and result['state']=='Completed' and result['ownerConfirmed'] is True and result['replayed']
+                    assert (ROOT/(record['operationId']+'.json')).read_bytes()==raw_root and fingerprint(source.stat())==before_late
+                    (directory/'late-apply.json').write_text(json.dumps(result))
+                    (directory/'after.json').write_text(json.dumps({'actualIdentity':before_late,'fullBytesSha256':baseline['sha256'],'lateReplayDidNotChangeIdentity':True}))
                 (directory / 'final-sql.json').write_text(json.dumps(final))
                 write_signal(directory, 'settled.json', {'id': identifier, 'state': expected})
                 assert browser.wait(timeout=60) == 0, 'ACTUAL_OWNERSHIP_TERMINAL_PAGE_NOT_VERIFIED'
                 ui = json.loads((directory / 'browser.json').read_bytes()); assert ui['actualUi'] and ui['id'] == identifier
                 assert ui['authorityRevoked'] if authority else ui['normalDualLogout']
-                assert ui['registrations'] == ui['confirmations'] == 1 and ui['cancellations'] == (1 if kind == 'cancel' else 0) and ui['bodies'] == 0
+                assert ui['registrations'] == ui['confirmations'] == 1 and ui['cancellations'] == (1 if behavior == 'cancel' else 0) and ui['bodies'] == 0
                 result = {'kind': kind, 'id': identifier, 'executionJobId': row['execution_job_id'], 'state': expected, 'code': row['result_code'],
-                    'rootState': 'Aborted', 'rootCutState': json.loads((directory / 'cut-root.json').read_bytes())['state'],
-                    'productStoppedHelperSeconds': round(elapsed, 3), 'validatorKilledHelper': False, 'originalFullBytesAndFingerprintUnchanged': True,
+                    'rootState': record['state'], 'rootCutState': json.loads((directory / 'cut-root.json').read_bytes())['state'],
+                    'productStoppedHelperSeconds': round(elapsed, 3), 'validatorKilledHelper': False, 'originalFullBytesAndFingerprintUnchanged': not post_owner, 'postOwnerIdentityAndFullBytesVerified': post_owner,
                     'actualUi': True, 'serviceRestart': restart, 'authorityRevoked': authority is not None}
                 (directory / 'verified.json').write_text(json.dumps(result)); proved = True
         finally:
@@ -265,7 +281,7 @@ def main():
     os.environ['GIT_OPTIONAL_LOCKS'] = '0'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     kinds = ('cancel', 'logout', 'worker-crash', 'agent-restart')
-    if len(sys.argv) == 3: assert sys.argv[2] in kinds + ('group-removal','account-disable'); kinds = (sys.argv[2],)
+    if len(sys.argv) == 3: assert sys.argv[2] in kinds + ('group-removal','account-disable','post-owner-cancel','post-owner-worker-crash'); kinds = (sys.argv[2],)
     repo = Path(__file__).resolve().parents[2]
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(), 'FREEZE_VALIDATION_SOURCE_FIRST'
     validation_revision = subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()

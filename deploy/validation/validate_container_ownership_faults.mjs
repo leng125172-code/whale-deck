@@ -13,15 +13,17 @@ try {
   const fixture = JSON.parse(await readFile('/dev/stdin', 'utf8'))
   const revision = process.argv[2]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
-  assert.ok(['cancel', 'logout', 'worker-crash', 'agent-restart', 'group-removal', 'account-disable'].includes(fixture.kind))
+  assert.ok(['cancel', 'logout', 'worker-crash', 'agent-restart', 'group-removal', 'account-disable', 'post-owner-cancel', 'post-owner-worker-crash'].includes(fixture.kind))
   directory = fixture.evidence
   const prefix = fileURLToPath(new URL('../artifacts/', import.meta.url))
   assert.ok(directory.startsWith(prefix))
-  assert.match(directory.slice(prefix.length), /^container-ownership-faults-[a-f0-9]{32}\/(cancel|logout|worker-crash|agent-restart|group-removal|account-disable)$/)
+  assert.match(directory.slice(prefix.length), /^container-ownership-faults-[a-f0-9]{32}\/(cancel|logout|worker-crash|agent-restart|group-removal|account-disable|post-owner-cancel|post-owner-worker-crash)$/)
+  const behavior = fixture.kind.replace(/^post-owner-/, '')
+  const postOwner = fixture.kind.startsWith('post-owner-')
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
-  context = await browser.newContext({ viewport: { width: fixture.kind === 'cancel' || fixture.kind === 'agent-restart' ? 320 : 1440, height: 800 },
-    colorScheme: fixture.kind === 'cancel' || fixture.kind === 'worker-crash' ? 'dark' : 'light', reducedMotion: 'reduce' })
+  context = await browser.newContext({ viewport: { width: behavior === 'cancel' || fixture.kind === 'agent-restart' ? 320 : 1440, height: 800 },
+    colorScheme: behavior === 'cancel' || fixture.kind === 'worker-crash' ? 'dark' : 'light', reducedMotion: 'reduce' })
   context.setDefaultTimeout(20_000); page = await context.newPage()
   assert.equal((await (await context.request.get(base + '/api/v1/system/status')).json()).build.sourceRevision, revision)
   phase = 'normal-login'
@@ -64,7 +66,7 @@ try {
   await expect(dialog.getByRole('status')).toContainText('正在修改所有者')
   await expect(dialog.getByRole('button', { name: '请求取消所有者修改', exact: true })).toBeInViewport({ ratio: 1 })
   await page.screenshot({ path: join(directory, 'inflight.png') })
-  if (fixture.kind === 'cancel') {
+  if (behavior === 'cancel') {
     phase = 'visible-cancel'
     await dialog.getByRole('button', { name: '请求取消所有者修改', exact: true }).click()
     await page.getByRole('button', { name: '继续等待', exact: true }).click()
@@ -78,6 +80,7 @@ try {
     await expect(page.getByRole('region', { name: '容器所有者修改任务', exact: true })).toHaveCount(0)
   }
   await writeSignal(directory, 'action-done.json', { registrations, confirmations, cancellations, bodies, subject: profile.subject, dualLogout: fixture.kind === 'logout' })
+  let terminalIntent = null
   const final = await waitSignal(directory, 'settled.json')
   assert.equal(final.id, intent.id)
   const revoked = ['group-removal', 'account-disable'].includes(fixture.kind)
@@ -104,16 +107,21 @@ try {
   } else if (fixture.kind !== 'logout') {
     phase = 'visible-original-terminal'
     await dialog.getByRole('button', { name: '查询原所有者修改任务', exact: true }).click()
-    await expect(dialog.getByRole('status')).toHaveText(final.state === 'Canceled' ? '已取消' : '所有者修改未完成')
+    await expect(dialog.getByRole('status')).toHaveText(final.state === 'Succeeded' ? '所有者修改已完成' : final.state === 'Canceled' ? '已取消' : '所有者修改未完成')
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
     await page.screenshot({ path: join(directory, 'terminal.png') })
+    if (postOwner) {
+      const response = await context.request.get(ownEndpoint + '/' + intent.id); assert.equal(response.status(),200)
+      terminalIntent = await response.json(); assert.equal(terminalIntent.state,'Succeeded'); assert.equal(terminalIntent.confirmation,null)
+      assert.equal(terminalIntent.ownerConfirmed,true); assert.equal(terminalIntent.historyVerified,true)
+    }
     await closePermissionDetails(page, dialog)
     await logoutFromUserMenu(page, context, base)
   }
-  assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, fixture.kind === 'cancel' ? 1 : 0); assert.equal(bodies, 0)
+  assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, behavior === 'cancel' ? 1 : 0); assert.equal(bodies, 0)
   await writeSignal(directory, 'browser.json', { revision, kind: fixture.kind, id: intent.id, executionJobId: pending.executionJobId,
     subject: profile.subject, registrations, confirmations, cancellations, bodies, finalState: final.state, normalDualLogout: !revoked, authorityRevoked: revoked,
-    renderedRevocationPage: revoked ? fixture.kind === 'group-removal' ? 'forbidden' : 'login' : null, currentIdentityStatus, actualUi: true })
+    terminalIntent, renderedRevocationPage: revoked ? fixture.kind === 'group-removal' ? 'forbidden' : 'login' : null, currentIdentityStatus, actualUi: true })
   await context.close()
   console.log(JSON.stringify({ ownershipFaultBrowser: 'passed', kind: fixture.kind }))
 } catch (error) {

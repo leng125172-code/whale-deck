@@ -3,6 +3,7 @@
 No installed hooks, arbitrary PID/command, Root edits or host path input. A cut
 counts only while the named synthetic inode has its full original fingerprint.
 """
+import base64
 import hashlib
 import json
 import os
@@ -81,11 +82,53 @@ def bound_fds(pid, root_identity, lock_identity):
     except (FileNotFoundError, ProcessLookupError, PermissionError): return False
 
 
+def changed_proof(record, source):
+    """A real fchown already happened, while its permanent receipt is still Applying."""
+    if record['state'] != 'Applying': return None
+    plan = record['plan']; command = plan['command']; old = plan['sourceIdentity']
+    assert plan['kind'] == 'File' and plan['noChange'] is False
+    assert record['ownerConfirmed'] is None and record['actualIdentity'] is None and record['version'] == ''
+    assert record['historyMayExist'] and record['historyVerified'] and re.fullmatch('[A-F0-9]{64}', record['historyDigest'])
+    path = command['path']; leaf = path.removeprefix('work/')
+    assert leaf and '/' not in leaf and path == 'work/' + leaf
+    assert list(identity(source)) == plan['parentIdentity']
+    target = source / leaf; named = target.lstat()
+    assert stat.S_ISREG(named.st_mode) and not target.is_symlink() and named.st_nlink == 1
+    current = fingerprint(named)
+    if current == old: return None
+    wanted = list(old); wanted[3:5] = [command['uid'], command['gid']]
+    assert wanted[3:5] != old[3:5] and current[:8] == wanted[:8] and current[8] > old[8], 'OWNERSHIP_OBSERVER_CHANGED_SOURCE_INVALID'
+    descriptor = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        assert fingerprint(os.fstat(descriptor)) == current
+        names = os.listxattr(descriptor); assert len(names) <= 128
+        values = []; size = 0
+        for name in sorted(names):
+            assert not name.startswith(('system.posix_acl_', 'security.'))
+            value = os.getxattr(descriptor, name); size += len(name.encode('utf-8')) + len(value); assert size <= 65536
+            values.append([name, base64.b64encode(value).decode('ascii')])
+        digest = hashlib.sha256(b'whaledeck-container-ownership-attributes-v1\n' + json.dumps(values,
+            sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest().upper()
+        assert digest == plan['attributesDigest']
+        assert fingerprint(os.fstat(descriptor)) == fingerprint(target.lstat()) == current
+    finally: os.close(descriptor)
+    return {'originalIdentity': old, 'changedIdentity': current, 'attributesDigest': digest,
+        'rootPhase': 'Applying', 'historyMayExist': True, 'historyVerified': True}
+
+
 class HeldOwnership(HeldCopy):
     """Resume/close only; product cancellation is responsible for helper exit."""
 
 
 def freeze_before_owner(row, source, container_pid, phase='Any'):
+    return _freeze_owner(row, source, container_pid, phase, original_proof)
+
+
+def freeze_after_owner(row, source, container_pid, phase='HistoryVerified'):
+    return _freeze_owner(row, source, container_pid, phase, changed_proof)
+
+
+def _freeze_owner(row, source, container_pid, phase, prove):
     assert os.geteuid() == 0 and re.fullmatch('[a-f0-9]{64}', row['container_id'])
     assert phase in ('Any', 'HistoryVerified')
     source = Path(source)
@@ -115,7 +158,7 @@ def freeze_before_owner(row, source, container_pid, phase='Any'):
             try: record = record_for(row)
             except FileNotFoundError: record = None
             if record is not None and record['state'] in ('Completed', 'Aborted', 'Unknown'): return None
-            if descriptor is not None and record is not None and (phase == 'Any' or record['historyVerified']) and original_proof(record, source) is not None:
+            if descriptor is not None and record is not None and (phase == 'Any' or record['historyVerified']) and prove(record, source) is not None:
                 if not bound_fds(pid, root_identity, operation_lock(lock)): return None
                 try: signal.pidfd_send_signal(descriptor, signal.SIGSTOP)
                 except ProcessLookupError: return None
@@ -126,7 +169,7 @@ def freeze_before_owner(row, source, container_pid, phase='Any'):
                     if state == 'Z': return None
                     assert time.monotonic() < until, 'OWNERSHIP_STOP_NOT_OBSERVED'
                     time.sleep(0.0005)
-                frozen = record_for(row); proof = original_proof(frozen, source)
+                frozen = record_for(row); proof = prove(frozen, source)
                 if proof is not None and (phase == 'Any' or frozen['historyVerified']):
                     held = HeldOwnership(pid, descriptor, group, frozen, proof); descriptor = None; return held
                 signal.pidfd_send_signal(descriptor, signal.SIGCONT); return None
