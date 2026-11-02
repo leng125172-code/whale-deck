@@ -1,5 +1,7 @@
 # 容器递归普通权限：签名 RPC / 固定 helper / SDK 候选
 
+> 后续2026-11-02：宿主95c0787/1.49已安装，真实签名四RPC/HDD与旧协议兼容及独立核验通过，见[安装态证据](CONTAINER_RECURSIVE_PERMISSIONS_AGENT_RPC.md)。下文保留aead344候选阶段的原始测试与未安装边界；永久业务/API/Vue仍待。
+
 2026-11-02。本批接通递归普通模式的 Agent/Contracts/Application DTO/Infrastructure SDK 与安装候选，**尚未安装或通过真实签名 UDS 验收**。候选源码 `aead344ffa9a05e62220e0a51532e6b20c750c0a`。最后已记录运行产品仍 `d1fcca8` / Agent 1.48；本批协议候选为 1.49。59 项继续部分实现，17 项移出不算完成；没有新公开 HTTP/Vue 入口，没有部署、自动回滚或扩大开发 user NOPASSWD:ALL 的使用范围。
 
 ## 独立协议和回执

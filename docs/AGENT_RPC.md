@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+- **2026-11-02递归普通权限Agent1.49已安装，真实签名RPC通过**：宿主冻结95c0787正常覆盖，真实进程/10.0.13/UDS/权限/HDD/动态入口通过；API/Worker/Gateway仍d1fcca8，11核心容器未重建。原生四RPC在准确HDD树完成4操作（3完成/1执行前取消）、8预检/3执行绑定拒绝，完整2097159字节/原inode/属主/mtime/属性、逐次重放源九字段/Root原件不变、3聚合/12子项HDD与独立准确清理通过。旧单对象权限6操作兼容与独立核验通过，最终任务/终端/锁/屏障与未结束意图预检0、11核心healthy。安装正常重启两宿主，RPC期间PID稳定；未真实人类/永久业务/Worker/API/Vue，仍需完整链、进行中故障、ACL/删除及其余59项，17项移出不算完成。[实机证据及边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_AGENT_RPC.md)。
+
 - **2026-11-02递归普通权限签名RPC/SDK候选aead344通过，未安装**：独立完整请求签名与四RPC、强类型DTO/回执计数、能力1.49协商、固定stdin helper/准确Invocation停止及安装/校验已接，未新增HTTP/Vue入口。3678 Unit（93新专项）、258 Integration通过（7默认原生跳过），33递归/395关联Linux-root零跳过、12宿主artifact/8范围与Release零警告错误通过。复核补SIGTERM逐项取消与Unknown正计数，真实子进程信号后Partial不续做通过；非真实UDS/身份/实盘签名证据。运行仍最后记录d1fcca8/1.48，25281a1内部实盘保持原批次；继续宿主覆盖/原生RPC、永久业务/Worker/API/Vue及真实身份树/HDD全链、ACL/删除和其余59项，17项移出不算完成。[候选与边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_RPC.md)。
 
 - **2026-11-02递归普通权限内部候选25281a1通过真实HDD**：有界乐观清单/独立HDD聚合与子项历史、最深项先执行、逐项永久回执和Partial/Unknown只观察恢复已实现。20专项/382关联Linux-root零跳过、8范围与语法检查通过；冻结独占容器4操作（2完成/1部分/1中止）、2次候选真实SIGKILL、每文件完整2097159字节及原inode/属主/mtime/属性、4份聚合/9份子项HDD和迟到重放不变均通过，独立复核准确清理/11核心不变且healthy。失败与修复保留。未安装/helper/RPC/永久业务/Worker/API/Vue，不算真实身份页面或完整递归权限；运行仍d1fcca8/1.48，继续全链/更多故障、递归所有者/ACL/删除及其余59项，17移出不算完成。[证据与边界](qa/CONTAINER_RECURSIVE_PERMISSIONS_ENGINE.md)。
