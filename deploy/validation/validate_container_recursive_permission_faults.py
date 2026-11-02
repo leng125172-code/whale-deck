@@ -121,7 +121,11 @@ def natural_lease(row, root, expected, directory):
     expiry = dt.datetime.fromisoformat(row['lease_expires_at_utc'])
     assert row['lease_token'] and expiry > dt.datetime.now(dt.timezone.utc)+dt.timedelta(seconds=25)
     raw = (ROOT/(uuid.UUID(row['execution_job_id']).hex+'.json')).read_bytes()
-    assert json.loads(raw)['state'] == 'Applying'
+    root_state = json.loads(raw)['state']; assert root_state in ('Applying','Partial')
+    # The disconnected RPC may cooperatively save Partial while stopping the
+    # helper. Only SQL reclaim waits for the old lease; Root need not stay Applying.
+    assert json.loads(raw) == record_for(row)
+    (directory/'after-helper-exit-root.json').write_bytes(raw)
     samples = []; began = time.monotonic(); wall = dt.datetime.now(dt.timezone.utc)
     while dt.datetime.now(dt.timezone.utc) < expiry:
         current = snapshot(row['id']); observed = dt.datetime.now(dt.timezone.utc)
@@ -138,7 +142,7 @@ def natural_lease(row, root, expected, directory):
     assert len(samples) >= 3 and abs((ended-wall).total_seconds()-elapsed) < 3, 'NATURAL_LEASE_NOT_OBSERVED'
     proof = {'originalLeaseToken':row['lease_token'],'originalLeaseExpiresAtUtc':row['lease_expires_at_utc'],
         'waitBeganAtUtc':wall.isoformat(),'waitEndedAtUtc':ended.isoformat(),'monotonicWaitSeconds':round(elapsed,3),
-        'rootSha256':hashlib.sha256(raw).hexdigest(),'samples':samples,'clocksOrSqlModified':False}
+        'rootSha256':hashlib.sha256(raw).hexdigest(),'rootStateAfterHelperExit':root_state,'samples':samples,'clocksOrSqlModified':False}
     (directory/'natural-lease.json').write_text(json.dumps(proof))
     return proof
 

@@ -56,8 +56,10 @@ def main():
         assert ended >= expiry > began and abs((ended-began).total_seconds()-lease['monotonicWaitSeconds']) < 3
         samples = lease['samples']; assert len(samples) >= 3 and result['naturalLeaseSamples'] == len(samples)
         assert dt.datetime.fromisoformat(samples[-1]['atUtc'])-dt.datetime.fromisoformat(samples[0]['atUtc']) > dt.timedelta(seconds=15)
-        raw = (directory/'cut-root-original.json').read_bytes()
-        assert json.loads(raw)['state'] == 'Applying' and hashlib.sha256(raw).hexdigest() == lease['rootSha256']
+        cut_raw = (directory/'cut-root-original.json').read_bytes(); assert json.loads(cut_raw)['state'] == 'Applying'
+        raw = (directory/'after-helper-exit-root.json').read_bytes()
+        assert json.loads(raw)['state'] == lease['rootStateAfterHelperExit'] and lease['rootStateAfterHelperExit'] in ('Applying','Partial')
+        assert hashlib.sha256(raw).hexdigest() == lease['rootSha256']
         previous = began
         for sample in samples:
             at = dt.datetime.fromisoformat(sample['atUtc']); assert previous <= at < expiry; previous = at
