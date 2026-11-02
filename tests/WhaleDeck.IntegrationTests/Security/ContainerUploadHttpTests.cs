@@ -180,6 +180,7 @@ public sealed partial class ContainerUploadHttpTests
         public HistoryFixture History { get; }=new();
         public RecursiveHttpFixture Recursive { get; }=new();
         public RecursiveOwnerHttpFixture RecursiveOwner { get; }=new();
+        public AclHttpFixture Acl { get; }=new();
         public static async Task<Fixture> Start()
         {
             var fixture=new Fixture(); await File.WriteAllBytesAsync(fixture._key,RandomNumberGenerator.GetBytes(32));
@@ -205,6 +206,7 @@ public sealed partial class ContainerUploadHttpTests
             var uploads=new ContainerFileUploadService(authorization,sessions,fixture.Gateway,fixture.Repository,protector,TimeProvider.System,fixture.History);
             builder.Services.AddSingleton(uploads);
             builder.Services.AddSingleton(new ContainerRecursivePermissionWorkflowService(uploads,fixture.Recursive,protector,fixture.Recursive,TimeProvider.System,fixture.Recursive));
+            builder.Services.AddSingleton(new ContainerAclWorkflowService(uploads,fixture.Acl,protector,fixture.Acl,TimeProvider.System,fixture.Acl));
             builder.Services.AddSingleton(new ContainerRecursiveOwnershipWorkflowService(uploads,fixture.RecursiveOwner,protector,fixture.RecursiveOwner,TimeProvider.System,fixture.RecursiveOwner));
             builder.Services.AddSingleton(new ContainerFileHistoryService(uploads,fixture.History,fixture.History,fixture.History));
             builder.Services.AddSingleton(new ContainerFileRestoreService(uploads,fixture.Gateway,fixture.History,fixture.History,protector,fixture.Repository,TimeProvider.System));
