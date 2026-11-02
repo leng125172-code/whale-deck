@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-03后续ACL故障实机：633a2ca不重发，78479ec两新独占资源在Preparing/HistoryVerified、尚未写ACL时真实页面取消/正常双端退出通过；原任务Canceled/Aborted、全源/两类ACL不变、2HDD/4Job/9审计、独立只读与准确清理通过，320×600暗色按钮在视口内。22离线与语法通过、未知登记/活动/Unknown失败清理保留源；11核心healthy，仅Worker正常启停。其余变更后/撤权/重启/Unknown/跨写入、ACL递归恢复和删除继续，不计完整权限。[证据与边界](qa/CONTAINER_ACL_FAULTS.md)。
+
 2026-11-03 ACL实机更新：633a2ca已标准覆盖并应用生产迁移，0668215/21依赖的正常Authentik→Vue→SQL/Worker→Agent→实际ACL/HDD九场景及独立核验首轮通过。8成功/1预检取消、显式0/mask/default清空、原字节/inode/属主/另一ACL/子项、8HDD/35审计/17 Job、同上下文正常退出与实际普通/匿名拒绝通过。准确清理/11核心不变且healthy，开发sudo不改；不计异盘或完整ACL，进行中故障/Unknown/跨写入、递归/恢复、删除继续。[实际事实与边界](qa/CONTAINER_ACL_REAL_UI.md)。
 
 2026-11-03 ACL API/Vue候选更新：062e361已接实际永久业务的管理员端点/完整条目与mask预览/原登录/明确确认/取消/原key恢复及当前管理员Unknown处置；严格0/缺字段/重复与三态原回执检查、旧写入互斥和退出提示清理保留。4272 Unit/432 Integration（7默认原生跳过）、972前端Unit及43+156两组生产预览通过，页脚越界修复；未部署，无真实Authentik/ACL文件/HDD业务整链，不把前批机器RPC和隔离PG拼接作本批真人验收。[候选与边界](qa/CONTAINER_ACL_WEB_UI.md)。

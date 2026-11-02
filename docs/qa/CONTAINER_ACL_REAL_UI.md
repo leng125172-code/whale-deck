@@ -1,5 +1,7 @@
 # 容器 ACL：633a2ca 正常覆盖与真实页面/SQL/Root/HDD常规验收
 
+后续记录：已新增[进行中取消与正常双端退出实机证据](CONTAINER_ACL_FAULTS.md)，仅签收尚未写ACL的HistoryVerified切点。本页原九场景、当时待办与来源事实保留，不重复操作。
+
 2026-11-03。实际运行六组件 `633a2ca42012bbd6f388a67bd128fe3125bfab76`，Agent协议1.51；验收工具冻结 `0668215bc0f48e8d86d2567d9431fc5888f602ed`，21份验收依赖及11个安装模块逐字节核对。**九个常规真实页面场景首轮与独立只读核验均通过，同一原上下文正常BFF/Authentik双端退出也通过。** 不把前批[生产预览](CONTAINER_ACL_WEB_UI.md)、[隔离PG](CONTAINER_ACL_PERSISTENCE.md)或[机器RPC](CONTAINER_ACL_AGENT_RPC.md)拼接为本批证据。
 
 这里只签收单对象access/default常规链与预检取消、权限/CSRF/Origin/幂等和实盘历史保留。**进行中取消/退出/撤权/重启/丢回执/Unknown及跨写入故障矩阵、ACL递归与历史恢复、删除/长期清理仍待**，59主项继续部分实现，17项移出不算完成，master未交付。

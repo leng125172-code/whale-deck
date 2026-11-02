@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-03后续ACL故障实机：633a2ca不重发，78479ec两新独占资源在Preparing/HistoryVerified、尚未写ACL时真实页面取消/正常双端退出通过；原任务Canceled/Aborted、全源/两类ACL不变、2HDD/4Job/9审计、独立只读与准确清理通过，320×600暗色按钮在视口内。22离线与语法通过、未知登记/活动/Unknown失败清理保留源；11核心healthy，仅Worker正常启停。其余变更后/撤权/重启/Unknown/跨写入、ACL递归恢复和删除继续，不计完整权限。[证据与边界](qa/CONTAINER_ACL_FAULTS.md)。
+
 - **2026-11-03 ACL已正常覆盖633a2ca，真实页面九场景首轮及独立核验通过**：唯一发布Invocation5761b5620b27452d925f196bb134537e成功，六组件/HTTP/实际宿主映射同源、生产ACL迁移17 CHECK应用，11核心healthy且8数据库平台不变，user NOPASSWD保留。冻结0668215/21依赖，以正常Authentik→Vue→SQL/Worker→Agent→实际ACL/HDD完成8成功/1预检取消，显式ID/权限0、mask/NoChange/default清空、完整2097159字节/原inode-UID-GID-mtime/非目标ACL/子项逐轮核对，8份原HDD与35审计/17 Job、原key/确认重试不重做通过。同原上下文正常双端退出、普通8路403/匿名4路401、CSRF/Origin及缺字段拒绝、9真PNG、准确清理与独立原件核验通过；源/HDD同device不算异盘。14离线及语法通过，前批单元/预览不冒称复跑或新CI全绿；真实进行中故障/Unknown/跨写入、ACL递归/历史恢复、删除及其余59项继续，不计完整ACL。[实际部署、原件和未验边界](qa/CONTAINER_ACL_REAL_UI.md)。
 
 - **2026-11-03 ACL管理员API/Vue候选062e361已通过，尚未部署**：实际永久业务入口与容器文件/全局Unknown处置页面已接；access/default完整条目、显式ID/权限0、mask有效权限/模式、默认清空、原两类ACL/执行身份/不可变原回执与确认/取消/原key恢复齐接。根/条目/确认/处置严格拒绝缺失、重复、额外和错误类型，保留实时权威身份/原登录/CSRF/Origin与十方保护；首登记执行回复只允许原GET核实。4272 Unit/432 Integration（7默认原生跳过）、972前端Unit、Release零警告错误及类型/构建/lint/格式通过；43 ACL和156关联生产预览浏览器分两组全通过，18明暗PNG及5175实际字节来源核验通过。真实桌面页脚越界已修正，脚手架/断言失败保留；**测试身份/API/仓储/Agent不是Authentik/实际ACL/HDD业务证据，无发布或生产迁移**。下一步正常冻结覆盖与真实常规/故障整链，再ACL递归/恢复、删除和其余59项。[实现、失败和验收边界](qa/CONTAINER_ACL_WEB_UI.md)。
