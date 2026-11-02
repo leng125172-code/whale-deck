@@ -55,6 +55,7 @@ def main():
         authority = saved('authority-change.json'); require_authority_change(authority,saved('ready.json'),kind)
         assert original['authorityRevoked'] and not original['normalDualLogout'] and original['oldTaskAndHintRemoved']
         assert result['authorityRevoked'] and original['kind'] == kind and original['deniedIntentStatus'] in (401,403)
+        assert recovery['actualCountersVerified'] is True
         assert original['cancellations'] == original['bodies'] == 0 and original['registrations'] == original['confirmations'] == 1
         if kind == 'group-removal': assert original['currentIdentityStatus'] == 200 and original['currentIdentityAdministrator'] is False and original['renderedRevocationPage'] == 'forbidden'
         else: assert original['currentIdentityStatus'] in (401,403) and original['renderedRevocationPage'] == 'login'
@@ -241,7 +242,7 @@ def main():
         (directory/'waiting-independent.json').write_text(json.dumps({'originalIdExecutedOnce':True,'deferredSamples':4,'startedAfterOriginalAcknowledgement':True,'rootAndPhysicalInodeVerified':True,'bothFixturesRemoved':True,'actualDirectoryUi':True,'directoryAuditRows':len(directory_audits),'hashedMetadataAndCurrentAdminVerified':True}))
     no_active_work(); inactive_except()
     screenshots = (('inflight.png','logged-out.png','partial-recovery-confirm.png','partial-acknowledged.png') if logout_case else ('inflight.png','authority-denied.png','partial-recovery-confirm.png','partial-acknowledged.png') if revoked else ('inflight.png','unknown-counts.png','partial-recovery-confirm.png','partial-acknowledged.png') if unknown_case
-        else ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png')) + (('partial-counts.png',) if kind in ('cancel','worker-crash','agent-restart','logout') else ())
+        else ('inflight.png','partial.png','partial-recovery-confirm.png','partial-acknowledged.png')) + (('partial-counts.png',) if kind in ('cancel','worker-crash','agent-restart','logout','group-removal','account-disable') else ())
     if barrier_case: screenshots += ('waiting-directory.png',)
     for name in screenshots:
         raw = (directory/name).read_bytes(); assert raw.startswith(b'\x89PNG\r\n\x1a\n')

@@ -13,7 +13,7 @@ try {
   const revision = process.argv[2], role = process.argv[3]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
   assert.ok(['cancel', 'recovery'].includes(role))
-  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel','logout','worker-crash','agent-restart'].includes(kind))
+  const kind = fixture.kind ?? 'cancel'; assert.ok(['cancel','logout','worker-crash','agent-restart','group-removal','account-disable'].includes(kind))
   const barrierCase = kind === 'target-disappearance-barrier'
   const revoked = ['group-removal', 'account-disable'].includes(kind)
   const logoutCase = kind === 'logout'
@@ -155,7 +155,7 @@ try {
     const dialog = page.getByRole('dialog', { name: '容器递归所有者修改异常处置', exact: true })
     const row = dialog.locator('.recursive-ownership-recovery__row').filter({ hasText: currentId })
     await expect(row).toHaveCount(1); await expect(row).toContainText(unknownCase ? '结果未知，保护已保留' : '部分修改，保护已保留')
-    if (unknownCase || logoutCase || kind === 'cancel') {
+    if (unknownCase || logoutCase || revoked || kind === 'cancel') {
       const facts = row.getByLabel('实际逐项结果', { exact: true })
       for (const [label, key] of [['已完成核对', 'completedCount'], ['实际修改', 'changedCount'], ['已中止', 'abortedCount'], ['未开始', 'notStartedCount'], ['待证明', 'unknownCount']]) {
         await expect(facts.getByText(label, { exact: true }).locator('..').locator('dd')).toHaveText(String(fixture.counts[key]))
@@ -209,7 +209,7 @@ try {
     await logoutFromUserMenu(page, context, base)
     assert.equal(registrations, 0); assert.equal(confirmations, 0); assert.equal(cancellations, 0); assert.equal(acknowledgements, 1); assert.equal(bodies, 0); assert.equal(directoryRegistrations, 0)
     await writeSignal(directory, 'recovery-browser.json', { subject: profile.subject, result, acknowledgements, actualUi: true, normalDualLogout: true,
-      waitingState, waitingVisibleDirectory, waitingId: fixture.waitingId ?? null, directoryRegistrations, actualCountersVerified: unknownCase || logoutCase || kind === 'cancel' })
+      waitingState, waitingVisibleDirectory, waitingId: fixture.waitingId ?? null, directoryRegistrations, actualCountersVerified: unknownCase || logoutCase || revoked || kind === 'cancel' })
   }
   console.log(JSON.stringify({ recursiveFaultBrowser: 'passed', role }))
 } catch (error) {
