@@ -87,12 +87,16 @@ try {
     assert.notEqual(profile.subject, fixture.originalSubject)
     const root = '/api/v1/files/container-acls/recovery'
     let confirmations = 0, registrations = 0, bodies = 0
-    const sourceReads = []
+    const sourceReads = [], sourceEvents = []
     let sourceCardText, sourceTimeText, sourceConfirmationText
     const expectedSource = sourceUi ? Object.fromEntries(['captureId','changedAclType','kind','createdAtUnixMs','originalMode','accessEntryCount','defaultEntryCount'].map(key => [key, fixture.restoreSource.entry[key]])) : null
     if (sourceUi) page.on('response', response => {
-      if (new URL(response.url()).pathname === root + '/' + fixture.id + '/restore-source' && response.request().method() === 'GET')
+      const path = new URL(response.url()).pathname
+      if (path === root + '/' + fixture.id + '/acknowledge' && response.request().method() === 'POST') sourceEvents.push('ack-response')
+      if (path === root + '/' + fixture.id + '/restore-source' && response.request().method() === 'GET') {
+        sourceEvents.push('source-response')
         sourceReads.push(response.json().then(source => ({ status: response.status(), noStore: (response.headers()['cache-control'] ?? '').includes('no-store'), source })).catch(() => ({ invalidResponse: true })))
+      }
     })
     let jobReadsOnly = false
     async function inspectJob(stage) {
@@ -129,7 +133,11 @@ try {
     }
     page.on('request', request => {
       const path = new URL(request.url()).pathname
-      if (request.method() === 'POST' && path === root + '/' + fixture.id + '/acknowledge') confirmations++
+      if (sourceUi && request.method() === 'GET' && path === root + '/' + fixture.id + '/restore-source') sourceEvents.push('source-request')
+      if (request.method() === 'POST' && path === root + '/' + fixture.id + '/acknowledge') {
+        confirmations++
+        if (sourceUi) sourceEvents.push('ack-request')
+      }
       if (request.method() === 'POST' && /\/files\/(acls|directories)$/.test(path)) registrations++
       if (request.method() === 'PUT' && path.includes('/files/')) bodies++
     })
@@ -193,9 +201,10 @@ try {
     assert.equal(old.historyVerified, true); assert.equal(old.confirmation, null)
     if (sourceUi) {
       assert.equal(sourceReads.length, 3)
+      assert.deepEqual(sourceEvents, ['source-request', 'source-response', 'source-request', 'source-response', 'ack-request', 'ack-response', 'source-request', 'source-response'])
       const reads = await Promise.all(sourceReads)
       for (const read of reads) assert.deepEqual(read, { status: 200, noStore: true, source: expectedSource })
-      await writeSignal(directory, 'recovery-source-ui.json', { schemaVersion: 1, id: fixture.id, subject: profile.subject, reads,
+      await writeSignal(directory, 'recovery-source-ui.json', { schemaVersion: 1, id: fixture.id, subject: profile.subject, reads, events: sourceEvents,
         cardText: sourceCardText, timeText: sourceTimeText, confirmationText: sourceConfirmationText, cardInViewport: true, confirmationInViewport: true,
         horizontalOverflow: await page.evaluate(() => document.documentElement.scrollWidth > innerWidth) })
     }

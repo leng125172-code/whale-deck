@@ -57,10 +57,11 @@ def require_recovery_source_ui(baseline,recovery,proof):
     require_restore_unknown(baseline)
     assert type(baseline.get('recoverySourceUiVersion')) is int and baseline['recoverySourceUiVersion']==1
     assert type(recovery.get('recoverySourceUiVersion')) is int and recovery['recoverySourceUiVersion']==1
-    assert type(proof) is dict and set(proof)=={'schemaVersion','id','subject','reads','cardText','timeText','confirmationText','cardInViewport','confirmationInViewport','horizontalOverflow'}
+    assert type(proof) is dict and set(proof)=={'schemaVersion','id','subject','reads','events','cardText','timeText','confirmationText','cardInViewport','confirmationInViewport','horizontalOverflow'}
     assert type(proof['schemaVersion']) is int and proof['schemaVersion']==1
     assert proof['id']==baseline['id']==recovery['id'] and proof['subject']==recovery['subject']!=baseline['originalSubject']
     expected=recovery_source_summary(baseline)
+    typed_equal(proof['events'],['source-request','source-response','source-request','source-response','ack-request','ack-response','source-request','source-response'])
     assert type(proof['reads']) is list and len(proof['reads'])==3
     for read in proof['reads']:
         assert type(read) is dict and set(read)=={'status','noStore','source'}

@@ -71,3 +71,16 @@
 本轮126项相关检查全部通过且无跳过：22普通Unknown、14恢复Unknown、28恢复来源、44 Linux-root范围、10恢复浏览器证明、8范围；Python警告即错误编译、JS语法及git diff通过。首轮2个新测试因夹具未放入完整restoreSource而KeyError，修正夹具后通过；没有放宽产品或证明验证。边界脚本首次把固定history.lock当元数据拒绝，已改为显式核对其root/0600普通文件并排除计数；未知条目仍拒绝。以上均是候选工具和只读部署准备，**新source-ui实机门禁尚未执行**，不拼接旧9张实盘图冒充来源卡片。
 
 准确产品CI run41681017703目前backend/native-postgres/native-valkey/installer成功，frontend仍在运行，不签完整CI终态。下一步待准确成功后唯一标准覆盖，再用本批冻结工具和新资源进行真实来源UI整链。当前MD/阶段仍部分实现，59主项完成率不升。证据：`deploy/artifacts/acl-recovery-source-release-28062da/`，包含发布前/构建后只读边界、四镜像来源、构建日志及126检查；凭据只在原私有环境，不进仓库或日志。
+
+
+## 接续：确认前后真实网络顺序补强（2026-11-04，未发布）
+
+实机前只读复核发现，cf2df2d候选虽然要求首次1次、最终3次摘要GET且值一致，但累计数无法独立排除“第二次GET被错误挪到确认后”。尚无source-ui实机批次，不把旧计数候选写成完整顺序验收。
+
+现新增页面实际request/response事件序列，限定准确原任务的摘要GET及处置POST：加载GET请求/响应→确认前GET请求/响应→原ack请求/成功响应→确认后GET请求/响应。流程与独立只读证明均要求完整8事件精确顺序，累计3次值/类型及200/no-store仍逐项核对；把ack挪到第二次读取完成前、把第三次读取挪到ack成功响应前、重复/缺事件或三个GET全部放到ack前的反例均拒绝。没有修改产品28062da、权限或Root动作，旧真实proof5/6不要求新增来源字段。新source-ui证明仍只是候选，待准确CI与部署后新资源实测。
+
+本轮128项相关检查无跳过通过（22普通Unknown、16恢复Unknown、28恢复来源、44 Linux-root范围、10恢复浏览器证明、8范围），JS语法/Python警告即错误编译及git diff通过。没有重跑前批4368/490/1087/68项产品测试来虚增本批结果。
+
+另外保存了仅用于本次准确发布unit的只读观察器源码与SHA：9个状态分类检查通过，并以真实/maintenance/status验证200、healthy/Ready/no-store，确认whaledeck-dev-publish-28062da.service尚不存在。观察器不启动、停止或重发unit，不写生产状态/账本；计划在发布前进入就绪态，再按唯一Invocation记录全窗口HTTP样本与真实终态。特别拒绝把activating时的Result=success/ExecMainStatus=0判为结束；Invocation变化、unit提前消失和非终态也不能记通过。**本批观察器尚未运行发布窗口，不签持续可用**；隔离分类检查不算部署或维护故障实机验收。
+
+产品CI run41681017703仍4成功、frontend的容器布局回归进行中；运行仍b69302b、四候选镜像28062da，未触发发布或真实登录/文件写入。证据继续在root私有`deploy/artifacts/acl-recovery-source-release-28062da/`，新增checks-128-order.log、publication-observer-source.py及只读预检回执；旧126检查、预构建与失败记录不覆盖。待完整CI成功后标准覆盖及真实来源UI/文件HDD整链，再来源异常、递归ACL/恢复、删除等59项；17项移出不算完成。

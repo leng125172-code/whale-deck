@@ -21,7 +21,7 @@ class RestoreUnknownProofTests(unittest.TestCase):
         recovery={'id':'intent','subject':'new','recoverySourceUiVersion':1}
         source=recovery_source_summary(baseline)
         text='历史ACL恢复来源 '+source['captureId']+' '+source['changedAclType']+' '+('文件' if source['kind']=='File' else '目录')+' time 原模式 '+format(source['originalMode'],'04o')+' access '+str(source['accessEntryCount'])+' 项 default '+str(source['defaultEntryCount'])+' 项 这是登记时保存的历史来源摘要，不证明当前文件状态或恢复成功。'
-        proof={'schemaVersion':1,'id':'intent','subject':'new','reads':[{'status':200,'noStore':True,'source':copy.deepcopy(source)} for _ in range(3)],'cardText':text,'timeText':'time','confirmationText':'intent '+source['captureId']+' '+source['changedAclType'],'cardInViewport':True,'confirmationInViewport':True,'horizontalOverflow':False}
+        proof={'schemaVersion':1,'id':'intent','subject':'new','reads':[{'status':200,'noStore':True,'source':copy.deepcopy(source)} for _ in range(3)],'events':['source-request','source-response','source-request','source-response','ack-request','ack-response','source-request','source-response'],'cardText':text,'timeText':'time','confirmationText':'intent '+source['captureId']+' '+source['changedAclType'],'cardInViewport':True,'confirmationInViewport':True,'horizontalOverflow':False}
         return baseline,recovery,proof
 
     def test_source_ui_proof_seven_requires_explicit_marker_and_preserves_old_profiles(self):
@@ -65,6 +65,16 @@ class RestoreUnknownProofTests(unittest.TestCase):
             for extra in ('accessAcl','historyDigest','sourceInstanceId'):
                 changed=copy.deepcopy(proof);changed['reads'][index]['source'][extra]='private'
                 with self.subTest(index=index,extra=extra),self.assertRaises(AssertionError):require_recovery_source_ui(baseline,recovery,changed)
+
+    def test_three_equal_summaries_cannot_hide_write_before_second_read_completes(self):
+        baseline,recovery,proof=self.source_ui_fixture()
+        events=proof['events'].copy();events[3],events[4]=events[4],events[3]
+        with self.assertRaises(AssertionError):require_recovery_source_ui(baseline,recovery,{**proof,'events':events})
+
+    def test_post_ack_source_read_must_follow_success_response_without_extra_requests(self):
+        baseline,recovery,proof=self.source_ui_fixture()
+        for events in (proof['events'][:5]+proof['events'][6:]+[proof['events'][5]],proof['events'][:-1],proof['events']+['source-request'],['source-request','source-response']*3+['ack-request','ack-response']):
+            with self.subTest(events=events),self.assertRaises(AssertionError):require_recovery_source_ui(baseline,recovery,{**proof,'events':events})
 
     def test_source_summary_denials_require_actual_401_403_and_normal_http_logout(self):
         proof={'schemaVersion':1,'anonymousStatus':401,'ordinaryStatus':403,'ordinaryAdministrator':False,'anonymousIsolatedSession':True,'normalHttpDualLogout':True}
