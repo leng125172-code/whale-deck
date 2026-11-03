@@ -16,7 +16,7 @@ def report():
         scenes=[dict(width=w,colorScheme=c,actualBuildRevision=REVISION,noHorizontalOverflow=True) for w in (320,1440) for c in ('dark','light')],
         cancelled=[dict(action=a,width=w,colorScheme=c,cancelVisible=True,planStatus=200) for a in ('apply-update','rollback') for w,c in ((320,'dark'),(1440,'light'))])
     ordinary=dict(**copy.deepcopy(common),role='ordinary',planRequests=0,cancelled=[],forbidden=[dict(status=403)]*5,
-        scenes=[dict(width=w,colorScheme=c,forbiddenPage=True) for w,c in ((320,'dark'),(1440,'light'))])
+        scenes=[dict(width=w,colorScheme=c,forbiddenPage=True,buildCardAbsent=True) for w,c in ((320,'dark'),(1440,'light'))])
     return dict(revision=REVISION,actualUi=True,results=[admin,ordinary])
 
 class PlatformUiProofTests(unittest.TestCase):
@@ -41,5 +41,7 @@ class PlatformUiProofTests(unittest.TestCase):
         self.rejected(lambda v:v['results'][1]['forbidden'].__setitem__(0,dict(status=200)))
     def test_anonymous_success_is_not_logout(self):
         self.rejected(lambda v:v['results'][0]['anonymous'].__setitem__(0,200))
+    def test_missing_card_proof_cannot_be_inferred_from_forbidden_title(self):
+        self.rejected(lambda v:v['results'][1]['scenes'][0].update(buildCardAbsent=False))
 
 if __name__=='__main__':unittest.main()

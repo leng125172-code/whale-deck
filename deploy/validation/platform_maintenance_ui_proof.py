@@ -24,5 +24,4 @@ def prove_report(value, revision):
             assert result['planRequests'] == 0 and result['cancelled'] == []
             assert len(result['forbidden']) == 5 and all(s['status'] == 403 for s in result['forbidden'])
             assert len(result['scenes']) == 2 and {(s['width'], s['colorScheme']) for s in result['scenes']} == {(320, 'dark'), (1440, 'light')}
-            assert all(s['forbiddenPage'] is True for s in result['scenes'])
-
+            assert all(s['forbiddenPage'] is True and s['buildCardAbsent'] is True for s in result['scenes'])

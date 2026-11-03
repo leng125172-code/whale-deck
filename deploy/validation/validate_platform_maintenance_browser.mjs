@@ -80,9 +80,10 @@ try{
     phase='ordinary-forbidden';await page.setViewportSize({width,height:600});await page.emulateMedia({colorScheme})
     await page.goto(base+'/platform/maintenance');await expect(page).toHaveURL(base+'/forbidden')
     await expect(page.getByRole('heading',{name:'没有管理权限',exact:true})).toBeVisible()
-    for(const name of ['执行更新','回滚','实际构建版本'])await expect(page.getByRole('button',{name,exact:true})).toHaveCount(0)
+    for(const name of ['执行更新','回滚'])await expect(page.getByRole('button',{name,exact:true})).toHaveCount(0)
+    await expect(page.getByRole('article',{name:'实际构建版本',exact:true})).toHaveCount(0)
     const screenshot=`ordinary-${width}-${colorScheme}.png`;await page.screenshot({path:join(evidence,screenshot)})
-    scenes.push({width,colorScheme,screenshot,forbiddenPage:true})
+    scenes.push({width,colorScheme,screenshot,forbiddenPage:true,buildCardAbsent:true})
    }
    await page.goto(base+'/')
   }
