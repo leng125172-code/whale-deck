@@ -70,7 +70,7 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
 
     def test_both_restore_profiles_reach_source_verification_not_ordinary_acl(self):
         from validate_container_acl_faults import expected_fault_acl
-        for version,kind in ((1,'cancel'),(2,'group-removal'),(2,'account-disable'),(3,'worker-crash'),(3,'agent-restart')):
+        for version,kind in ((1,'cancel'),(2,'group-removal'),(2,'account-disable'),(3,'worker-crash'),(3,'agent-restart'),(4,'post-acl-cancel'),(4,'post-acl-worker-crash')):
             baseline={**self.baseline,'aclRestoreFaultVersion':version,'kind':kind}
             with self.subTest(version=version,kind=kind),patch('acl_restore_fault_proof.verify_restore_binding',return_value=['selected-source']) as check:
                 self.assertEqual(expected_fault_acl(self.row,baseline,None,None),['selected-source'])
@@ -89,7 +89,8 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
         self.assertEqual(restore_fault_version(('cancel','logout')),1)
         self.assertEqual(restore_fault_version(('group-removal','account-disable')),2)
         self.assertEqual(restore_fault_version(('worker-crash','agent-restart')),3)
-        for kinds in ((),('cancel','group-removal'),('post-acl-worker-crash',),('cancel','cancel')):
+        self.assertEqual(restore_fault_version(('post-acl-cancel','post-acl-worker-crash')),4)
+        for kinds in ((),('cancel','group-removal'),('post-acl-account-disable',),('cancel','cancel')):
             with self.subTest(kinds=kinds),self.assertRaises(AssertionError):restore_fault_version(kinds)
 
     def test_revocation_schema_cannot_be_mislabeled_as_cancel_or_ordinary_fault(self):
@@ -127,6 +128,27 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
         changed=copy.deepcopy(rows);changed[-1]['detail_json']['restoreSourceHash']='wrong-source'
         with self.assertRaises(AssertionError):verify_restore_audits(changed,row,baseline)
         with self.assertRaises(AssertionError):verify_restore_audits(rows+[rows[-1]],row,baseline)
+
+    def test_post_write_schema_is_distinct_and_still_binds_original_capture(self):
+        p=dict(schemaVersion=10,aclRestoreFaultVersion=4,sha256={n:'digest' for n in set(SOURCES)|set(RESTORE_SOURCES)})
+        validate_source_profile(p,['post-acl-cancel','post-acl-worker-crash'])
+        for kind in ('post-acl-cancel','post-acl-worker-crash'):
+            self.assertEqual(prove_binding(self.row,{**self.baseline,'aclRestoreFaultVersion':4,'kind':kind},self.source,self.proof),self.source['accessAcl'])
+        for delta,kinds in [({'schemaVersion':9},['post-acl-cancel']),({'aclRestoreFaultVersion':3},['post-acl-worker-crash']),({},['cancel']),({},['worker-crash'])]:
+            with self.subTest(delta=delta,kinds=kinds),self.assertRaises(AssertionError):validate_source_profile({**p,**delta},kinds)
+
+    def test_post_write_audit_truth_is_success_even_if_user_requested_cancel(self):
+        row,rows,baseline=self.audit_fixture();baseline.update(aclRestoreFaultVersion=4,kind='post-acl-worker-crash');rows[-1]['result']='Succeeded'
+        verify_restore_audits(rows,row,baseline)
+        for wrong in ('Failed','Canceled','Unknown'):
+            changed=copy.deepcopy(rows);changed[-1]['result']=wrong
+            with self.subTest(wrong=wrong),self.assertRaises(AssertionError):verify_restore_audits(changed,row,baseline)
+        baseline['kind']='post-acl-cancel'
+        with self.assertRaises(AssertionError):verify_restore_audits(rows,row,baseline)
+        cancel={**copy.deepcopy(rows[-1]),'action':'containers.files.acl.restore.cancel-requested','result':'Accepted'}
+        verify_restore_audits(rows+[cancel],row,baseline)
+        cancel['job_id']=row['id']
+        with self.assertRaises(AssertionError):verify_restore_audits(rows+[cancel],row,baseline)
 
     def test_existing_source_profile_cannot_claim_new_restore_sources(self):
         validate_source_profile(dict(schemaVersion=6,sha256={n:'digest' for n in SOURCES}),['cancel','logout'])

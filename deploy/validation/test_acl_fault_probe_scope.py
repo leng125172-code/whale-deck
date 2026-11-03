@@ -111,6 +111,18 @@ class AclFaultScopeTests(unittest.TestCase):
         self.assertGreater(proof['changedIdentity'][8],self.plan['sourceIdentity'][8]);self.assertEqual(proof['accessAcl'],self.plan['command']['entries'])
         self.assertEqual(self.file.read_bytes(),b'unchanged full content')
 
+    def test_post_acl_cut_accepts_real_removal_to_basic_acl_with_original_named_preimage(self):
+        original_named=copy.deepcopy(self.plan['command']['entries'])
+        os.setxattr(self.file,self.module.XATTRS['access'],self.module.encode_acl(original_named))
+        self.plan['accessAcl']=original_named;self.plan['sourceIdentity']=cut.fingerprint(self.file.stat())
+        self.plan['command']['entries']=self.module.base_acl(0o640);self.record['state']='Applying'
+        self.assertIsNone(cut.changed_proof(self.record,self.source))
+        os.removexattr(self.file,self.module.XATTRS['access'])
+        proof=cut.changed_proof(self.record,self.source)
+        self.assertEqual(proof['accessAcl'],self.module.base_acl(0o640))
+        self.assertGreater(proof['changedIdentity'][8],self.plan['sourceIdentity'][8])
+        self.assertEqual(self.file.read_bytes(),b'unchanged full content')
+
     def test_wrong_named_permissions_with_same_mode_are_not_a_post_acl_cut(self):
         entries=copy.deepcopy(self.plan['command']['entries']);entries[1]['permissions']=7;self.write_target_acl(entries)
         self.assertEqual(self.file.stat().st_mode,self.plan['sourceIdentity'][2])

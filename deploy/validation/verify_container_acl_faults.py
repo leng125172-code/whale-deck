@@ -18,13 +18,13 @@ from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, requi
 
 def validate_source_profile(provenance, kinds):
     schema=provenance.get('schemaVersion',1)
-    assert type(schema) is int and schema in (1,2,3,4,5,6,7,8,9)
+    assert type(schema) is int and schema in (1,2,3,4,5,6,7,8,9,10)
     if schema<6:assert 'post-acl-agent-restart' not in kinds
     if schema<5:assert not set(kinds)&{'post-acl-group-removal','post-acl-account-disable'}
     if schema<4:assert not set(kinds)&{'post-acl-cancel','post-acl-worker-crash'}
     if schema<3:assert not set(kinds)&{'worker-crash','agent-restart'}
     expected=set(SOURCES)
-    if schema in (7,8,9):
+    if schema in (7,8,9,10):
         from acl_restore_fault_proof import RESTORE_SOURCES,restore_fault_version
         assert type(provenance.get('aclRestoreFaultVersion')) is int and provenance['aclRestoreFaultVersion']==schema-6==restore_fault_version(kinds)
         expected.update(RESTORE_SOURCES)
@@ -92,7 +92,7 @@ def verify_worker_snapshot(service, baseline, observed):
 
 def verify_restart(kind, result, baseline, ui, final, start, read, directory, *, post=False):
     service=result['serviceRestart'];assert service and ui['normalDualLogout'] and ui['cancellations']==0 and final['cancel_requested_at_utc'] is None
-    if baseline.get('aclRestoreFaultVersion')==3:
+    if baseline.get('aclRestoreFaultVersion') in (3,4):
         from acl_history_browser_proof import typed_equal
         assert ui['intentReadPath']=='/api/v1/containers/'+final['container_id']+'/files/acls/restores/'+final['id']
         typed_equal(ui['restoreTerminalSource'],baseline['restoreSource'])
@@ -154,7 +154,7 @@ def verify(directory):
         baseline=read(p/'baseline.json');ui=read(p/'browser.json');cut=read(p/'cut-root.json');bound=read(p/'bound-helper.json')
         assert baseline['revision']==ui['revision']==accepted['revision'] and baseline['validationSourceRevision']==provenance['revision'] and baseline['kind']==ui['kind']==kind
         assert baseline.get('aclRestoreFaultVersion')==provenance.get('aclRestoreFaultVersion')
-        if provenance['schemaVersion'] in (7,8,9):assert baseline['evidence']==str(p)
+        if provenance['schemaVersion'] in (7,8,9,10):assert baseline['evidence']==str(p)
         post=kind.startswith('post-acl-');behavior=kind.removeprefix('post-acl-')
         revoked=behavior in ('group-removal','account-disable')
         if not revoked:
@@ -173,6 +173,10 @@ def verify(directory):
                 path=p/name;info=trusted(path);assert 1000<info.st_size<4*1024**2 and path.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
         assert data==read(p/'final-sql.json') and raw==(p/'final-root.json').read_bytes() and hdd_raw==(p/'final-hdd.json').read_bytes()
         physical=read(p/'physical-final.json')
+        if baseline.get('aclRestoreFaultVersion')==4:
+            from acl_history_browser_proof import typed_equal
+            assert ui['intentReadPath']=='/api/v1/containers/'+data['row']['container_id']+'/files/acls/restores/'+data['row']['id']
+            typed_equal(ui['restoreTerminalSource'],baseline['restoreSource'])
         if post:
             assert result['postAclIdentityFullBytesAndAclsVerified'] and physical==baseline['cutPhysical']==read(p/'cut-physical.json')
             unchanged_except_target(baseline['original'],physical,'acl-file.bin',record['plan']['targetMode'])
@@ -194,7 +198,7 @@ def verify(directory):
         proof=bound['proof'];assert bound['twoKernelFdProofs'] and re.fullmatch(r'whaledeck-container-acl-[a-f0-9]{32}\.service',bound['unit'])
         assert proof['originalIdentity']==cut['plan']['sourceIdentity']==baseline['original']['acl-file.bin']['identity']
         assert proof['accessAcl']==(cut['plan']['command']['entries'] if post else cut['plan']['accessAcl']) and proof['defaultAcl']==cut['plan']['defaultAcl'] and proof['attributesDigest']==cut['plan']['attributesDigest']
-        action='containers.files.acl.restore.result' if provenance['schemaVersion'] in (7,8,9) else 'containers.files.acl.result'
+        action='containers.files.acl.restore.result' if provenance['schemaVersion'] in (7,8,9,10) else 'containers.files.acl.result'
         audit=query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result)) FROM audit_events WHERE job_id=:'id'::uuid AND action=:'action';",id=ui['executionJobId'],action=action)
         assert audit=={'n':1,'actors':[ui['subject']],'results':[terminal_state(kind)]}
         source=Path(baseline['source']);assert source.parent==owned.common.APPS and source.name==baseline['containerName'] and not os.path.lexists(source)
