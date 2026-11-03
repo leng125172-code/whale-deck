@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/PLATFORM_REVISION_HISTORY.md；docs/qa/CONTAINER_ACL_STALE_PREFLIGHT.md；docs/qa/PLATFORM_CONTROL_RECOVERY.md；docs/qa/PLATFORM_CONTROL_INSTALLATION.md；docs/qa/PLATFORM_MAINTENANCE_REAL_UI.md；docs/qa/CONTAINER_ACL_HISTORY_READER.md；docs/qa/CONTAINER_ACL_HISTORY_RPC.md；docs/qa/CONTAINER_ACL_HISTORY_INSTALLED.md；docs/qa/CONTAINER_ACL_HISTORY_WEB.md",
-  "nextStep": "e83bad0已补ACL历史管理员只读业务/两GET/持久读取审计和Vue原ACL浏览，冻结4343 Unit/463 Integration(7默认原生跳过)/1042前端/89预览通过；夹具不是实际Authentik/PG/HDD页面。运行应用仍0478262、宿主2ef06f0/1.52，11核心healthy。正常冻结覆盖后验收真实身份→Vue→持久审计→Agent→HDD及撤权退出，再历史恢复新计划/确认/原件/永久意图Worker、故障对账、ACL递归/可恢复删除/长期清理及59项/UI/C#酒馆/供应商/AI Live2D；17项移出不算完成，开发sudo保留，不自动回滚或重启主机。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/PLATFORM_REVISION_HISTORY.md；docs/qa/CONTAINER_ACL_STALE_PREFLIGHT.md；docs/qa/PLATFORM_CONTROL_RECOVERY.md；docs/qa/PLATFORM_CONTROL_INSTALLATION.md；docs/qa/PLATFORM_MAINTENANCE_REAL_UI.md；docs/qa/CONTAINER_ACL_HISTORY_READER.md；docs/qa/CONTAINER_ACL_HISTORY_RPC.md；docs/qa/CONTAINER_ACL_HISTORY_INSTALLED.md；docs/qa/CONTAINER_ACL_HISTORY_WEB.md；docs/qa/CONTAINER_ACL_HISTORY_REAL_UI.md",
+  "nextStep": "六组件08b2bb8/1.52正常覆盖，工具17590e8严格真实2页/8快照/10 PG审计、原件不变、普通匿名拒绝/两上下文正常退出及独立通过；前两工具失败保留，11核心healthy。实现所选capture/digest绑定的新ACL恢复计划/确认/永久意图Worker与先留当前原件、故障对账，再查询中撤权/取消/依赖故障、ACL递归/可恢复删除/长期清理及59项/UI/C#酒馆/供应商/AI Live2D；17项移出不算完成，开发sudo保留，不自动回滚或重启主机。"
 }

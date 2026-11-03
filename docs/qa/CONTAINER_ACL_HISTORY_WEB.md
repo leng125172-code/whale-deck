@@ -1,5 +1,7 @@
 # ACL历史管理员API与Vue：e83bad0候选，真实业务页面待验
 
+**后续08b2bb8（2026-11-03）**：正常覆盖及真实身份/页面/持久PG审计/Agent-HDD常规整链、原两上下文退出与独立复核已通过；前两工具失败保留，恢复/进行中故障仍待。下方e83候选原始正文保留，见[实际部署验收](CONTAINER_ACL_HISTORY_REAL_UI.md)。
+
 2026-11-03。**候选`e83bad0e1e69c556e44cd997d1a3e1341006546c`已实现管理员只读历史业务/API与容器文件页面，尚未发布。** 运行应用仍0478262；Agent/MaintenanceHost仍已验收的2ef06f0/协议1.52、PID561098/561094。前批[实际签名RPC/HDD](CONTAINER_ACL_HISTORY_INSTALLED.md)保持其原来源；不能拿候选Cookie/HTTP夹具或浏览器测试接口补签真实Authentik→Vue→API→审计PG→Agent/HDD。
 
 ## 权威来源、业务与安全

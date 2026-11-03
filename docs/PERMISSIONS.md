@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+**2026-11-03 ACL历史真实权限常规整链通过**：运行08b2bb8/1.52，正常Authentik管理员Vue读取2页/8原快照，普通原会话两历史GET403且页面forbidden、原会话正常双端退出后两GET401；两个可见上下文正常退出及独立核验通过。读审计仅hash/摘要、原件不变，无新增Agent/恢复授权；实时撤权与进行中取消组合未补签。[严格事实与失败](qa/CONTAINER_ACL_HISTORY_REAL_UI.md)。
+
 **2026-11-03 ACL历史业务候选e83bad0，未部署**：两只读GET仅当前管理员及活跃原登录可用；实际RPC后和持久读取审计后再授权，坏证明/审计失败/撤权不返回ACL。拒绝重复或额外query、跨CID/实例/路径/摘要；普通用户零请求，UI关闭/身份变化丢弃迟到结果。无新Agent授权/恢复接口，31 HTTP夹具与89生产预览不算真实Authentik验收。[完整边界](qa/CONTAINER_ACL_HISTORY_WEB.md)。
 
 **2026-11-03 ACL历史1.52安装态已通过真实签名RPC/HDD与独立核验**：宿主及原生探针冻结2ef06f0，唯一正常安装Invocation0552122d971a42f8a925b5455217fa89成功，Agent561098/维护561094及映射来源同源；应用仍0478262、11核心ID/镜像/StartedAt不变且healthy，无迁移/全栈发布或回滚。新独占9旧ACL操作留8份HDD，真实List10页/Read8份、29边界拒绝、源/Root/HDD全字节与身份保持、精确清理及独立Passed；实际只读unit仅DAC_READ_SEARCH/SYS_PTRACE与读租约目录可写。错Invocation拒绝/准确停止及stdin EOF两控制分项、旧所有者/两递归签名能力主与独立兼容通过；58 C#专项/8探针proof/构建语法通过，无新前端/Authentik页面。HDD同device非异盘，控制前置不冒充进行中RPC取消；历史业务/API/Vue/恢复及其余59项继续，整项完成率不提升。[真实来源、原件与未验边界](qa/CONTAINER_ACL_HISTORY_INSTALLED.md)。
