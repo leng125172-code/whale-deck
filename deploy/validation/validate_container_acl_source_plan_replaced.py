@@ -17,7 +17,7 @@ import requests
 import validate_container_acl_browser as acl
 from validate_container_acl_faults import wait_signal,write_signal,wait_settled,host_snapshot
 from validate_container_acl_source_missing import denials,INSTALLED
-from acl_source_plan_replaced_proof import KIND,manifest,require_queued,require_failed,verify_audits,summary,require_replacement_observed,require_registration_attempt
+from acl_source_plan_replaced_proof import KIND,manifest,require_queued,require_failed,verify_audits,summary,require_replacement_observed,require_registration_attempt,require_queued_attempt
 from validate_container_acl_source_register_replaced import restore_registration_source
 from acl_source_register_replaced_proof import attempt_identifier
 from validate_container_acl_restore_browser import selected_source,audit_rows
@@ -95,7 +95,8 @@ def main():
                     acl.no_active_work();worker.stop();write_signal(evidence,'register.json',dict(workerStopped=True))
                     registered=wait_signal(evidence,'registered.json',browser,45);identifier=registered['id'];queued=acl.snapshot(identifier)
                     assert registered['subject']==baseline['subject'] and registered['original']['source']==baseline['restoreSource'] and registered['status']==202
-                    require_registration_attempt(baseline,capture_row,json.loads((evidence/'registration-attempt.json').read_bytes()),identifier)
+                    attempt=json.loads((evidence/'registration-attempt.json').read_bytes())
+                    require_registration_attempt(baseline,capture_row,attempt,identifier);require_queued_attempt(queued,attempt)
                     require_queued(queued,baseline);preflight([identifier])
                     no_operation_history(identifier,storage);(evidence/'queued-sql.json').write_text(json.dumps(queued))
                     (evidence/'worker-stopped.json').write_text(json.dumps(dict(id=worker.id,image=worker.original['Image'],running=worker.current()['State']['Running'])))

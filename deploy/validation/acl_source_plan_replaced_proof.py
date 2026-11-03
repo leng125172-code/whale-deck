@@ -30,3 +30,8 @@ def require_registration_attempt(baseline,capture_row,attempt,identifier):
     assert body['instanceId']==baseline['instanceId'] and body['path']=='work/acl-file.bin'
     assert body['captureId']==source['entry']['captureId'] and body['expectedHistoryDigest']==source['entry']['historyDigest']
     assert body['expectedVersion']==version(baseline,'work/acl-file.bin',baseline['original']['acl-file.bin']['identity'])
+
+
+def require_queued_attempt(data,attempt):
+    from acl_restore_browser_proof import unique_json
+    assert unique_json(data['row']['command_json'])['ExpectedVersion']==attempt['body']['expectedVersion']

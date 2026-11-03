@@ -10,7 +10,7 @@ import sys
 import traceback
 import requests
 import validate_container_acl_browser as acl
-from acl_source_plan_replaced_proof import KIND,CODE,manifest,require_queued,require_failed,summary,verify_audits,worker_unchanged_except_start,require_replacement_observed,require_registration_attempt
+from acl_source_plan_replaced_proof import KIND,CODE,manifest,require_queued,require_failed,summary,verify_audits,worker_unchanged_except_start,require_replacement_observed,require_registration_attempt,require_queued_attempt
 from owned_acl_source_replacement import OwnedSourceReplacement,changed_metadata
 from acl_source_register_replaced_proof import attempt_identifier
 from validate_container_acl_source_missing import INSTALLED
@@ -52,7 +52,8 @@ def verify(name):
     observed=read('replaced-observed.json');registered=read('registered.json');terminal=read('terminal.json')
     assert registered['id']==observed['id']==ui['id'] and registered['status']==202
     require_replacement_observed(b['restoreSource'],read('replacement-proof.json'),observed,ui['id'])
-    require_registration_attempt(b,read('capture/access.sql.json')['row'],read('registration-attempt.json'),ui['id'])
+    attempt=read('registration-attempt.json')
+    require_registration_attempt(b,read('capture/access.sql.json')['row'],attempt,ui['id']);require_queued_attempt(queued,attempt)
     assert observed['queued']==observed['byKey']['intent']==registered['original']['intent'] and observed['byKey']['source']==b['restoreSource']
     assert registered['original']['source']==b['restoreSource']
     assert read('selected.json')==dict(subject=b['subject'],source=b['restoreSource']) and read('register.json')==dict(workerStopped=True)
@@ -105,7 +106,7 @@ def verify(name):
         for prefix in ('whaledeck-validation-','whaledeck-upload-qa-'):
             r=api.get(AUTHENTIK_API+'core/users/',params={'search':prefix,'page_size':100},timeout=20)
             assert r.status_code==200 and not r.json().get('pagination',{}).get('next') and not any(str(u['username']).startswith(prefix) for u in r.json()['results'])
-    return dict(independentReadOnlyVerifier=True,kind=KIND,id=ui['id'],executionJobId=None,revision=b['revision'],noRootPlanOrExecution=True,originalDigestRead409=True,replacementDigestRead200=True,
+    return dict(independentReadOnlyVerifier=True,kind=KIND,id=ui['id'],executionJobId=None,revision=b['revision'],noRootPlanOrExecution=True,originalQueuedTargetVersionMatchesActualPost=True,originalDigestRead409=True,replacementDigestRead200=True,
         noRestoreRootOrHdd=True,oldCapturesUnchanged=len(old),originalCaptureRestored=True,actualTaskDrawers=2,coreHealthy=11,
         temporaryIdentitiesAbsent=True,physicalCheckedByParentBeforeCleanup=True,deletedSourceBytesReread=False)
 

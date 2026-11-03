@@ -1,9 +1,10 @@
 """Reject missing/corrupt/foreign replacements; no product or disk access."""
 import copy
 import hashlib
+import json
 import unittest
 from acl_source_confirm_replaced_proof import replacement_snapshot,verify_changed_snapshot
-from acl_source_plan_replaced_proof import require_replacement_observed,require_registration_attempt
+from acl_source_plan_replaced_proof import require_replacement_observed,require_registration_attempt,require_queued_attempt
 from acl_source_register_replaced_proof import intent_id
 from unittest.mock import patch
 from validate_container_acl_source_plan_replaced import fixture_bytes
@@ -79,6 +80,13 @@ class PlanReplacedSourceProofTests(unittest.TestCase):
                 changed=copy.deepcopy(attempt);changed['body'][key]=value
                 with self.subTest(key=key),self.assertRaises(AssertionError):require_registration_attempt(baseline,capture,changed,identifier)
             with self.assertRaises(AssertionError):require_registration_attempt(baseline,capture,attempt,'foreign-id')
+
+    def test_queued_sql_target_version_must_equal_the_actual_request(self):
+        queued=dict(row=dict(command_json=json.dumps(dict(ExpectedVersion='original-target'))))
+        attempt=dict(body=dict(expectedVersion='original-target'));require_queued_attempt(queued,attempt)
+        with self.assertRaises(AssertionError):require_queued_attempt(queued,dict(body=dict(expectedVersion='different-target')))
+        with self.assertRaises(KeyError):require_queued_attempt(dict(row=dict(command_json='{}')),attempt)
+        with self.assertRaises(AssertionError):require_queued_attempt(dict(row=dict(command_json='{"ExpectedVersion":"original-target","ExpectedVersion":"original-target"}')),attempt)
 
 
 if __name__=='__main__':unittest.main()
