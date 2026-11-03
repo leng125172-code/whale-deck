@@ -19,6 +19,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         if (method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerDirectoryBinding.Service, StringComparison.Ordinal) ||
+            method.StartsWith(ContainerRecursiveAclBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecursiveOwnershipBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecursivePermissionBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerPermissionBinding.Service, StringComparison.Ordinal) ||
@@ -96,6 +97,11 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         method is ContainerRecursiveOwnershipBinding.Service + "Plan" or ContainerRecursiveOwnershipBinding.Service + "Apply" or
             ContainerRecursiveOwnershipBinding.Service + "Inspect" or ContainerRecursiveOwnershipBinding.Service + "Discard" &&
         ValidateContentBound(token, method, requestHash, ContainerRecursiveOwnershipBinding.Payload);
+
+    public bool ValidateContainerRecursiveAcl(string? token, string method, string? requestHash) =>
+        method is ContainerRecursiveAclBinding.Service + "Plan" or ContainerRecursiveAclBinding.Service + "Apply" or
+            ContainerRecursiveAclBinding.Service + "Inspect" or ContainerRecursiveAclBinding.Service + "Discard" &&
+        ValidateContentBound(token, method, requestHash, ContainerRecursiveAclBinding.Payload);
 
     public bool ValidateContainerPermission(string? token, string method, string? requestHash) =>
         method is ContainerPermissionBinding.Service + "Plan" or ContainerPermissionBinding.Service + "Apply" or
@@ -190,7 +196,9 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     private void Authorize(ServerCallContext context)
     {
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");
-        var valid = context.Method.StartsWith(ContainerAclHistoryBinding.Service, StringComparison.Ordinal)
+        var valid = context.Method.StartsWith(ContainerRecursiveAclBinding.Service, StringComparison.Ordinal)
+            ? validator.ValidateContainerRecursiveAcl(token, context.Method, context.RequestHeaders.GetValue(ContainerRecursiveAclBinding.Header))
+            : context.Method.StartsWith(ContainerAclHistoryBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerAclHistory(token, context.Method, context.RequestHeaders.GetValue(ContainerAclHistoryBinding.Header))
             : context.Method.StartsWith(ContainerAclBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerAcl(token, context.Method, context.RequestHeaders.GetValue(ContainerAclBinding.Header))
