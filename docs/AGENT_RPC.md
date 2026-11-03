@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+**2026-11-03 历史恢复实时撤权RPC/HDD切点实机通过**：仍cad6182/1.52，无新增Agent安装或能力。两新资源恢复当前原件已备份、尚未写ACL时准确移组/停用原身份，产品4.938/4.858秒结束绑定helper，原执行Canceled/Aborted，旧来源/当前前像及源保持。独立核验、实际失权页面/准确清理通过，原Agent1214295/维护1214273保持；Worker/Agent重启、写后/Unknown、递归ACL等仍待。[证据与范围](qa/CONTAINER_ACL_RESTORE_REVOCATION.md)。
+
 **2026-11-03 恢复写入前取消/退出实际RPC/HDD故障分项通过**：仍cad6182/1.52，不新增RPC/安装/Agent授权；工具7990b84精确绑定已备份当前ACL而未写目标的自有helper，由产品5.434/5.575秒中止，两原执行Canceled/Aborted，旧来源/当前前像HDD分列保持，独立核验和准确清理通过。仅Worker正常停启，Agent1214295/维护1214273保持；其余恢复撤权/重启/写后/Unknown及递归ACL等继续。[严格证据](qa/CONTAINER_ACL_RESTORE_FAULTS.md)。
 
 **2026-11-03 ACL历史恢复cad6182已正常部署/真实常规整链签收**：复用原ACL写入/历史只读RPC与1.52能力，无新增Agent授权；六组件同源，Agent1214295/维护1214273，安装后宿主validator通过。新独占9基础+6恢复的真实Vue/Worker/签名Agent/HDD及独立核验通过，5新当前ACL原件与旧来源分列、23恢复审计保持。进行中恢复故障/递归ACL等仍待，不将普通页面签收替代故障验收。[本批事实](qa/CONTAINER_ACL_RESTORE_REAL_UI.md)。

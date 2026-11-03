@@ -36,3 +36,7 @@
 本批只签文件access恢复在上述“当前原件已备份、写ACL之前”切点的取消和正常退出。仍需恢复进行中实时移组/停用、Worker强杀/Agent重启与自然租约、写后中断、Unknown/实例变化、来源丢失或替换、磁盘异常、共享写入组合；目录default故障、递归ACL/恢复、可恢复删除/长期清理及其余目标继续。源与HDD同device不算异盘灾备，59主项完整签收数和25%–35%粗估不变，17项移出不算完成，master未交付。
 
 收尾8项范围检查及844条变动MD相对链接通过，目标第1节逐字保持、前批正常恢复QA完整原文保留后追加接续。项目图谱已确认事件`whale-deck.container-acl.7990b84.restore-inflight`归属原`whale-deck/container-acl`，阶段仍active；按原eventId从pending移入synced。
+
+## 后续实时撤权分项（2026-11-03）
+
+本文件以上取消/正常退出原文与原件保留。e77c1a6随后在全新资源完成恢复写入前实时移组/账号停用，独立核验通过；旧schema7证据只读兼容/81原件字节保持。详见[撤权切点与剩余](CONTAINER_ACL_RESTORE_REVOCATION.md)，不以新分项补签重启、写后、Unknown、递归ACL或删除。

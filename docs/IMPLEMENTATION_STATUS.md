@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-11-03 ACL恢复实时移组/账号停用实机通过**：产品仍cad6182/1.52不重发，工具e77c1a6/schema8/version2在两套新资源真实页面先留自有捕获再恢复，当前ACL原件HDD已验证且未写目标时仅撤销准确临时身份。旧正权限仍余7138.461/7137.025秒，产品4.938/4.858秒结束helper，Canceled/Aborted、完整源/两类ACL保持；原恢复GET均403，移组me200非管理员→forbidden、停用me403→login，引用null/取消POST0，不冒称正常退出。2旧来源+2当前HDD/8恢复审计/8Job、独立Passed/准确清理/4真PNG及73检查/语法通过；旧schema7只读兼容与81份原件保持。11核心healthy/8数据库/两宿主/7配置保持，e77CI四路成功/frontend待；其余恢复故障/递归ACL/删除与59项继续。[实际证据](qa/CONTAINER_ACL_RESTORE_REVOCATION.md)。
+
 - **2026-11-03 ACL恢复写入前取消/正常退出实机严格复验通过**：产品仍cad6182/1.52，无新发布；工具7990b84/40份来源在两套新资源先真实页面产生自有旧ACL捕获，再经历史恢复确认到Applying/Root Preparing且当前ACL原件HDD已验证。取消/原上下文正常双端退出由产品5.434/5.575秒结束准确helper，原任务Canceled/Root Aborted、完整源/两类ACL保持；严格轮2旧来源+2新当前HDD、9恢复审计/8Job、独立Passed/准确清理/3真实PNG通过。初轮物理与独立已过但状态出截图范围的边界保留，新增滚动/视口断言后用新资源复验，未重放旧操作。68相关检查与语法通过，11核心healthy/8数据库/两宿主/7配置保持；799 CI四路成功/frontend待，剩余恢复故障/递归ACL/删除和59项继续。[实盘事实与边界](qa/CONTAINER_ACL_RESTORE_FAULTS.md)。
 
 - **2026-11-03 cad6182 ACL历史恢复已部署且真实常规整链通过**：准确候选CI五路成功，唯一标准update Invocation0efd3714f17b44209562fc73c12e8ffd成功；六组件同源cad6182/1.52，Agent1214295/维护1214273，生产来源迁移入库/18CHECK，currentcad/previous08/pending空。工具冻结2880f7b的新独占资源完成9基础场景及6恢复（5执行/1预检取消），新增5当前ACL原件HDD、23恢复审计，所选旧Root/HDD保持；真实Authentik→Vue→永久PG/Worker→Agent→实际文件、普通/匿名拒绝、两原上下文正常双端退出和准确清理通过。独立只读Passed、22真实PNG、11核心healthy/8数据库与7受保护配置保持；不重跑旧任务抽屉、不算异盘，恢复故障/递归ACL/删除与其余59项继续，整项完成率不升。[实际发布、证据与未验边界](qa/CONTAINER_ACL_RESTORE_REAL_UI.md)。

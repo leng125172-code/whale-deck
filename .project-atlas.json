@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RESTORE_FAULTS.md",
-  "nextStep": "cad6182恢复常规六场景及写入前取消/原上下文正常退出已实机严格验收，旧来源/新当前原件HDD分列保持；继续恢复移组/停用、Worker强杀/Agent重启与自然租约、写后/Unknown/来源变化，再递归ACL/恢复、可恢复删除/长期清理与其余59项。7990b84 CI四路成功/frontend待终态；17项移出不算完成，不自动回滚dev或重启主机。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RESTORE_REVOCATION.md",
+  "nextStep": "cad6182恢复常规、写入前取消/原上下文退出及实时移组/停用均已实机验收，旧来源/新当前原件保持；继续恢复Worker强杀/Agent重启与原自然租约、写后/Unknown/实例或来源变化、磁盘与共享写入组合，再递归ACL/恢复、可恢复删除/长期清理及其余59项。e77c1a6 CI四路成功/frontend待；17项移出不算完成，不自动回滚dev或重启主机。"
 }
