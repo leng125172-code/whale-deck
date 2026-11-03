@@ -51,6 +51,8 @@ try{
   }
   await writeSignal(evidence,item.name+'-result.json',{subject:profile.subject,result:completed.at(-1)});const proof=await waitSignal(evidence,item.name+'-verified.json');assert.equal(proof.id,result.id);assert.equal(proof.physicalAndHistoryVerified,true);await closePermissionDetails(page,dialog)
  }
+ let aclHistory=null
+ if(fixture.aclHistoryVersion===1){phase='actual-acl-history';aclHistory=await(await import('./validate_container_acl_history_browser.mjs')).runHistoryBrowser(page,context,base,fixture,profile.subject,completed)}
  const taskCenter=[]
  if(fixture.jobResultsVersion===1){
   phase='actual-task-center-results';let jobWrites=0;page.on('request',r=>{const path=new URL(r.url()).pathname;if(path.startsWith('/api/v1/jobs')&&r.method()!=='GET')jobWrites++})
@@ -73,5 +75,7 @@ try{
   await page.locator('.jobs-page .el-table__body tr').nth(position).getByRole('button',{name:'详情',exact:true}).click();const drawer=page.getByRole('dialog',{name:'任务详情',exact:true}),region=drawer.getByRole('region',{name:'ACL 安全结果',exact:true});await expect(drawer.locator('.el-descriptions__content').first()).toHaveText(legacy.id);await expect(region).toContainText('此任务未记录可展示的 ACL 安全摘要');await expect(drawer).not.toContainText('任务成功后');await region.scrollIntoViewIfNeeded();await page.screenshot({path:join(evidence,'legacy-job.png')});taskCenter.push({id:legacy.id,legacy:true,resultJson:null,screenshot:'legacy-job.png'});await drawer.getByRole('button',{name:'Close this dialog',exact:true}).click();assert.equal(jobWrites,0)
  }
  assert.equal(registrations,9);assert.equal(confirmations,8);assert.equal(uploads,0);assert.ok((await Promise.all(headerChecks)).every(Boolean));phase='visible-dual-logout';const logout=await logoutFromUserMenu(page,context,base)
- await writeFile(join(evidence,'browser.json'),JSON.stringify({revision,containerId:fixture.containerId,subject:profile.subject,completed,registrations,confirmations,registrationRetries:9,confirmationRetries:8,contentUploads:uploads,actualUi:true,normalDualLogout:true,logout,jobResultsVersion:fixture.jobResultsVersion,taskCenter}),{mode:0o600});await context.close();await browser.close();browser=undefined;console.log(JSON.stringify({aclBrowser:'passed',actualUi:true,cases:9}))
+ let historyOrdinary=null
+ if(fixture.aclHistoryVersion===1){phase='ordinary-acl-history';historyOrdinary=await(await import('./validate_container_acl_history_browser.mjs')).ordinaryHistoryBrowser(browser,base,fixture,completed[0])}
+ await writeFile(join(evidence,'browser.json'),JSON.stringify({revision,containerId:fixture.containerId,subject:profile.subject,completed,registrations,confirmations,registrationRetries:9,confirmationRetries:8,contentUploads:uploads,actualUi:true,normalDualLogout:true,logout,jobResultsVersion:fixture.jobResultsVersion,taskCenter,...(fixture.aclHistoryVersion===1?{aclHistory,historyOrdinary}:{})}),{mode:0o600});await context.close();await browser.close();browser=undefined;console.log(JSON.stringify({aclBrowser:'passed',actualUi:true,cases:9}))
 }catch(error){const frame=error?.stack?.split('\n').find(line=>line.includes('validate_container_acl_browser.mjs:'))?.trim();if(page&&evidence&&!['startup','normal-visible-authentik-login'].includes(phase))await page.screenshot({path:join(evidence,'failed-product-page.png')}).catch(()=>{});console.error(JSON.stringify({aclBrowser:'failed',phase,failureType:error?.name,frame}));if(browser)await browser.close().catch(()=>{});process.exitCode=1}

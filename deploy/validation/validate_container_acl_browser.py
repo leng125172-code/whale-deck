@@ -5,6 +5,7 @@ Only a fresh exactly owned container/HDD fixture. Never inject Cookie/SQL/cache,
 repeat an unproved write, remove Root/HDD history or automatically roll back dev.
 """
 import hashlib
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
@@ -200,15 +201,21 @@ def remove_proved(folder,reader,module,content,current):
     directory.rmdir()
 
 
-def main():
+def main(history=False):
     global PHASE
     assert os.geteuid()==0 and len(sys.argv)==2;os.umask(0o077);revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision)
     repo=Path(__file__).resolve().parents[2];base='http://127.0.0.1:8080';assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
-    for name in SOURCES:
+    source_names=SOURCES
+    if history:
+        from validate_container_acl_history_browser import SOURCES as history_sources,exercise
+        source_names=(*SOURCES,*history_sources)
+    for name in source_names:
         raw=subprocess.check_output(['git','-C',str(repo),'show',source+':deploy/validation/'+name]);assert raw==(repo/'deploy/validation'/name).read_bytes();hashes[name]=hashlib.sha256(raw).hexdigest()
     installed_hashes={}
-    for name in (*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged'):
+    installed_names=(*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged')
+    if history:installed_names=(*installed_names,'whaledeck-container-acl-history.py','whaledeck-container-acl-history-transport.py')
+    for name in installed_names:
         path=Path('/usr/local/libexec')/name;trusted(path);raw=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name]);assert raw==path.read_bytes();installed_hashes[name]=hashlib.sha256(raw).hexdigest()
     public=__import__('requests').Session();public.trust_env=False
     try:
@@ -227,13 +234,17 @@ def main():
         inspected=json.loads(owned.common.command(['docker','inspect',fixture['identifier']]))[0];original=inventory(folder,reader,module,content)
         baseline={'revision':revision,'validationSourceRevision':source,'validationSourceSha256':hashes,'installedSourceSha256':installed_hashes,'containerId':fixture['identifier'],'containerName':inspected['Name'].lstrip('/'),'instanceId':str(inspected['State']['Pid'])+':'+inspected['State']['StartedAt'],'source':str(folder),'original':original,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'coreBefore':core,'evidence':str(evidence),'fixtureOriginal':{'identity':list(fixture['proofs']['original.bin'][0]),'sha256':fixture['proofs']['original.bin'][1]}}
         baseline['jobResultsVersion']=1
+        if history:baseline['aclHistoryVersion']=1
         baseline['legacyJob']=query("SELECT (SELECT to_jsonb(j) FROM operation_jobs j WHERE job_type='containers.files.acl' AND state='Succeeded' AND result_json IS NULL ORDER BY created_at_utc DESC LIMIT 1);")
         assert baseline['legacyJob'] and baseline['legacyJob']['result_json'] is None
         baseline['sourceVersion']=version(baseline,'work/acl-file.bin',original['acl-file.bin']['identity'])
         with storage.target(create_namespace=False,read_only=True) as (configuration,fd):storage.attest(configuration,fd,read_only=True);baseline['sourceDevice']=folder.stat().st_dev;baseline['hddDevice']=os.fstat(fd).st_dev
         (evidence/'baseline.json').write_text(json.dumps(baseline));results=[];current=original
-        with temporary_user(True) as (username,password):
+        with ExitStack() as accounts:
+            username,password=accounts.enter_context(temporary_user(True))
+            ordinary=accounts.enter_context(temporary_user(False)) if history else None
             env={**os.environ,'WHALEDECK_URL':base,'VALIDATION_USERNAME':username,'VALIDATION_PASSWORD':password}
+            if history:env.update(HISTORY_ORDINARY_USERNAME=ordinary[0],HISTORY_ORDINARY_PASSWORD=ordinary[1])
             with (evidence/'browser.stdout').open('w') as out,(evidence/'browser.stderr').open('w') as err:
                 process=subprocess.Popen(['node',str(repo/'deploy/validation/validate_container_acl_browser.mjs'),revision],stdin=subprocess.PIPE,stdout=out,stderr=err,env=env,text=True)
                 try:
@@ -243,6 +254,9 @@ def main():
                         after=inventory(folder,reader,module,content);proof=verify_case(result,baseline,signal['subject'],evidence,reader,module,storage,current,after);results.append(proof);current=after
                         (evidence/'results.json').write_text(json.dumps(results));(evidence/'physical-final.json').write_text(json.dumps(current))
                         pending=evidence/(name+'-verified.pending');pending.write_text(json.dumps({'id':result['id'],'physicalAndHistoryVerified':True}));pending.replace(evidence/(name+'-verified.json'))
+                    if history:
+                        PHASE='history-readonly-proof'
+                        history_result=exercise(process,evidence,baseline,results,reader,module,storage,folder,content,current)
                     assert process.wait(timeout=180 if baseline.get('jobResultsVersion')==1 else 75)==0,'ACTUAL_ACL_BROWSER_FAILED'
                 finally:
                     if process.poll() is None:
@@ -258,6 +272,7 @@ def main():
     assert browser['jobResultsVersion']==1 and len(browser['taskCenter'])==18
     assert query("SELECT to_jsonb(j) FROM operation_jobs j WHERE id=:'id'::uuid;",id=baseline['legacyJob']['id'])==baseline['legacyJob']
     verified.update(jobResultsVersion=1,newJobSummaries=17,actualTaskDrawers=18,legacyJobUnchanged=True,ordinaryDenied=11,anonymousDenied=7)
+    if history:verified.update(history_result)
     (evidence/'verified.json').write_text(json.dumps(verified));print(json.dumps({'actualAclBrowser':'passed','evidence':str(evidence),'cases':9}),flush=True)
 
 

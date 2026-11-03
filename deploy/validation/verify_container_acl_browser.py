@@ -20,7 +20,7 @@ from verify_container_recursive_permissions import private_json
 from validate_container_acl_browser import CASES,SOURCES,snapshot,verify_case,no_active_work
 
 
-def verify(name):
+def verify(name,history=False):
     assert re.fullmatch('container-acl-browser-[a-f0-9]{32}',name);repo=Path(__file__).resolve().parents[2];evidence=repo/'deploy/artifacts'/name;trusted(evidence,True)
     baseline=private_json(evidence/'baseline.json');proofs=private_json(evidence/'results.json');browser=private_json(evidence/'browser.json');accepted=private_json(evidence/'verified.json')
     assert baseline['revision']==browser['revision']==accepted['revision'] and browser['actualUi'] and browser['normalDualLogout']
@@ -32,7 +32,12 @@ def verify(name):
     for file,sha in baseline['installedSourceSha256'].items():
         assert '/' not in file and re.fullmatch('[a-z0-9.-]+',file)
         raw=subprocess.check_output(['git','-C',str(repo),'show',baseline['revision']+':deploy/host/'+file]);assert hashlib.sha256(raw).hexdigest()==sha and (Path('/usr/local/libexec')/file).read_bytes()==raw
-    assert set(baseline['validationSourceSha256'])==set(SOURCES)
+    source_names=SOURCES
+    if history:
+        from validate_container_acl_history_browser import SOURCES as history_sources
+        source_names=(*SOURCES,*history_sources)
+        assert baseline['aclHistoryVersion']==1
+    assert set(baseline['validationSourceSha256'])==set(source_names)
     for file,sha in baseline['validationSourceSha256'].items():assert hashlib.sha256(subprocess.check_output(['git','-C',str(repo),'show',baseline['validationSourceRevision']+':deploy/validation/'+file])).hexdigest()==sha
     content=hashlib.shake_256(('acl-browser:'+baseline['containerId']).encode()).digest(2*1024**2+7);assert baseline['bytesPerFile']==len(content) and baseline['sha256']==hashlib.sha256(content).hexdigest().upper()
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_browser_independent_reader');files=reader.trusted_module('whaledeck-files.py','acl_browser_independent_files');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_browser_independent_acl');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_browser_independent_storage').FileBackups(files)

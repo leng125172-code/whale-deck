@@ -109,8 +109,10 @@ jobs:
           python3 -m py_compile deploy/validation/validate_container_missing_target.py
           node --check deploy/validation/validate_container_restoration_publication.mjs
           python3 -W error::SyntaxWarning -m py_compile deploy/validation/validate_container_acl_browser.py deploy/validation/verify_container_acl_browser.py
-          python3 -m unittest discover -s deploy/validation -p test_acl_browser_proof.py
+          python3 -m unittest discover -s deploy/validation -p 'test_acl*browser_proof.py'
           node --check deploy/validation/validate_container_acl_browser.mjs
+          node --check deploy/validation/validate_container_acl_history_browser.mjs
+          python3 -W error -m py_compile deploy/validation/acl_history_browser_proof.py deploy/validation/validate_container_acl_history_browser.py deploy/validation/verify_container_acl_history_browser.py
           python3 -W error -m py_compile deploy/validation/bound_container_acl_cut.py deploy/validation/validate_container_acl_faults.py deploy/validation/verify_container_acl_faults.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_acl_fault_probe_scope.py
           node --check deploy/validation/validate_container_acl_faults.mjs
