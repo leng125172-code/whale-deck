@@ -1,5 +1,19 @@
 # ACL旧版本预检拒绝与摘要文案：源码候选，真实门禁待运行
 
+## 后续执行快照：唯一标准发布仍在运行，未取得成功终态
+
+2026-11-03 10:44 CST。运行checkout由所有者user从干净447070e快进至固定306f646（包含caa9c64产品改动），不由root写开发者Git索引、不读取或复制私密配置正文。唯一标准update单元`whaledeck-dev-publish-306f646.service`，Invocation`d38034cfaba24730ac1fe1acae325829`，10:22:12开始、TimeoutStartSec1800；本次快照仍activating/start、MainPID4127401。**运行中的Result=success/ExecMainStatus=0只是尚未退出，不能据此宣称发布成功。** 未重启或重复创建本次发布单元，不自动回滚dev。
+
+宿主安装阶段已经产生新Agent4135740与MaintenanceHost4135726，跟随实际进程exe的build-info均306f646/协议1.51；API/Gateway实际HTTP仍447070e。11核心原CID/镜像/StartedAt/healthy均保持，8数据库平台未重建。私密.env/.images.env与开发user NOPASSWD文件的SHA/owner/mode同原基线，未改密码、未扩大产品Agent权限。当前是维护中的混合版本，不能将新宿主版本当作六组件一致的新部署。
+
+镜像构建的Ubuntu源曾超时后继续安装，worker运行层安装步骤已实际DONE；NuGet多个固定包（Valkey.Glide1.1.0、Microsoft.CodeAnalysis5.0.0、Grpc.Tools2.84.0等）仍出现unexpected EOF重试。尚未取得整个镜像构建/迁移/容器替换终态，没有改包版本、源或TLS策略，也没有另起重复update。306f646的CI41565338163本轮查询为backend/installer/native-postgres/native-valkey成功、frontend运行中，未取得整条成功终态。
+
+正确8080维护/status入口从宿主安装后开始的1052次本段采样均HTTP200/updating，错误0；采样未覆盖发布开始至宿主重启的前段，不冒称全窗口无中断。一次额外探针误用18080的维护路径，响应无法按JSON解码，未将它当作既定维护入口；后续只使用8080路径。未启动新的真实旧版本预检门禁，未创建新业务验收源/身份或进行mtime改动；预期的无执行/Root/HDD仍不是本批真实结果。
+
+原件root私有0700目录`deploy/artifacts/acl-stale-deploy-306f646/`：baseline/launch/初始unit、progress-inflight/protection、部分journal和已准备但未执行的collect-final.py，7份静态文件SHA已保存；JSON/日志/脚本0600。`maintenance-observations.jsonl`由有界只读观察器继续追加，未将仍增长文件纳入静态SHA。旧候选和前批实机原件不改。89相关离线门禁本轮实际49＋40通过；不是新增真实BFF/Agent/磁盘或后端全量验收。
+
+接续时先检查**同一Invocation/单元**及该目录，不重发发布。只有原unit得到真正active/exited/MainPID0/Resultsuccess/ExecMainStatus0，才执行已准备的严格收尾：保存终态与完整journal、停止已结束单元、六组件CLI/镜像/HTTP及运行exe/DLL inode核对、数据库/配置/sudo保护及空闲检查；通过后才新独占资源运行`validate_container_acl_stale.py <实际运行完整revision>`，随后独立只读核验。若原发布失败，先保留准确终态和日志，再修复并覆盖，不把失败记成功或自动回滚。进度元数据首次范围检查因“不计完成”未匹配既定“不算完成”字面约束而1项失败，已恢复既定措辞后重验；未修改59项或范围测试。7份变动MD的781条相对链接无缺失，目标第1节及以下原候选正文逐字保留。发布中事件`whale-deck.container-acl.306f646.publishing-d38034cf`已核对projectId/key/eventId回执并移入synced，阶段仍active，不记通过。以下原候选正文逐字保留为历史。
+
 2026-11-03。固定源码候选`caa9c64`。**本批完成实现和本地候选验证，没有部署，也没有执行新的真实旧版本故障场景。** 运行仍447070e/协议1.51；Agent3947643、MaintenanceHost3947551，11核心healthy/所有活动计数0的只读复核通过。本批没有安装、EF/schema/依赖变更、服务重启、原生源文件变更、Root/HDD写入、回滚或sudo策略/密码修改。59主任务状态和现有25%–35%工作量粗估不因这些测试提高。
 
 ## 已复现并修正的问题

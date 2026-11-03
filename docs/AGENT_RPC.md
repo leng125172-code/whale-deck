@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+**2026-11-03 10:44标准覆盖发布进行中，尚未签收**：运行checkout已由user干净快进至306f646，仅启动一次`whaledeck-dev-publish-306f646.service`，Invocation`d38034cfaba24730ac1fe1acae325829`。宿主已为306f646（Agent4135740/维护4135726），API/Gateway仍447070e，11核心容器原ID/镜像/StartedAt保持且healthy，8数据库不变；私密配置与开发sudo摘要保持。容器镜像构建遭遇NuGet EOF与Ubuntu源超时，软件源安装已完成、NuGet仍重试；unit仍activating，运行中的Result=success/ExecMainStatus=0不等于发布成功。正确8080维护入口本段1052次采样均HTTP200/updating，未覆盖整个发布窗口。**无迁移/容器替换成功回执，新真实旧版本预检门禁未开始，不计部署或功能通过**。89离线边界/范围本轮重跑通过；目标59项不变。[唯一发布、原件和接续约束](qa/CONTAINER_ACL_STALE_PREFLIGHT.md)。
+
 **2026-11-03 ACL预检失败摘要候选caa9c64已验证，尚未部署**：修正planning/Failed误显示“执行失败”，改为“预检失败，未进入 ACL 修改执行”，执行失败仍保留原语义；版本冲突文案不再假定已完成预检。993前端单元、8生产预览浏览器、89相关离线门禁及类型/构建/lint/格式通过。新增独占文件FD仅改mtime→原Vue旧版本预检拒绝的真实门禁、无执行/Root/HDD断言与独立只读核验，已接CI；**新真实门禁未运行，测试接口/临时文件不能替代Authentik/实际Worker与磁盘整链**。运行仍447070e/1.51、Agent3947643/维护3947551及11核心healthy，无部署/迁移/服务重启；59主项和25%–35%粗估不变。[候选、失败与真实验收待办](qa/CONTAINER_ACL_STALE_PREFLIGHT.md)。
 
 **2026-11-03 ACL写后同CID实例变化已实机签收**：QA冻结d2ca69d/proofVersion4，产品仍447070e/1.51，无新增部署。仅重启本案容器一次，CID/镜像/绑定保持、PID4044343→4047348及StartedAt改变；旧计划/回执仍绑定旧实例、Root/SQL Unknown且aclConfirmed=null，实际已写ACL不回滚或续做。不同当前管理员真实320×600暗色页面先暂不处置再明确确认，两次任务摘要“未证明”完整入视口；跨容器目录四次自然延期[2,4,6,8]后同ID才发布。原Root/HDD/迟到Apply不变、3Job/7审计/9真实PNG、独立原件与准确清理、81相关门禁及11核心healthy通过。首轮Docker弃用提示导致断言失败和降级确认已保留，不计整体首轮通过；其他共享写入/磁盘/路径与摘要分支、ACL递归恢复/删除及59项继续。[实际失败、实例绑定与验收边界](qa/CONTAINER_ACL_INSTANCE_CHANGE.md)。
