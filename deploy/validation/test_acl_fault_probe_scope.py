@@ -327,6 +327,13 @@ class AclRestartEvidenceTests(unittest.TestCase):
         for key,value in [('id','other'),('lease_token','new'),('lease_expires_at_utc','changed'),('publish_barrier',False),('state','Failed'),('cancel_requested_at_utc','now')]:
             with self.subTest(key=key),self.assertRaises(AssertionError):self.driver.lease_held(before,{**before,key:value})
 
+    def test_restore_source_and_all_authority_hashes_stay_frozen_during_original_lease(self):
+        before={key:'original' for key in ('id','execution_job_id','container_id','instance_id','actor_subject','owner_hash','root_started_at_utc','plan_json','command_json','restore_source_json','request_hash','plan_hash','execution_hash','login_binding')}
+        before.update(state='Applying',publish_barrier=True,completed_at_utc=None,cancel_requested_at_utc=None,lease_token='lease',lease_expires_at_utc='future')
+        self.driver.lease_held(before,before)
+        for key in ('restore_source_json','request_hash','plan_hash','execution_hash','login_binding'):
+            with self.subTest(key=key),self.assertRaises(AssertionError):self.driver.lease_held(before,{**before,key:'changed'})
+
     def test_shortened_expired_unbounded_or_naive_lease_refused(self):
         import datetime as dt
         now=dt.datetime(2026,11,3,tzinfo=dt.timezone.utc)

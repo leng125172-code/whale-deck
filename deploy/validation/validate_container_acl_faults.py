@@ -266,6 +266,8 @@ def lease_held(before, current):
         assert current[key]==before[key]
     assert current['state']=='Applying' and current['publish_barrier'] and current['completed_at_utc'] is None and current['cancel_requested_at_utc'] is None
     assert current['lease_token']==before['lease_token'] and current['lease_expires_at_utc']==before['lease_expires_at_utc']
+    if before.get('restore_source_json') is not None:
+        for key in ('restore_source_json','request_hash','plan_hash','execution_hash','login_binding'):assert current[key]==before[key]
 
 
 def natural_lease(row, folder, reader, module, content, original, directory, *, post=False):
@@ -280,7 +282,8 @@ def natural_lease(row, folder, reader, module, content, original, directory, *, 
         lease_held(row,current['row']);assert current['executionJob']['state']=='Running' and current['executionJob']['cancel_requested_at_utc'] is None
         assert path.read_bytes()==raw and inventory(folder,reader,module,content)==original
         samples.append({'atUtc':observed.isoformat(),'state':'Applying','barrier':True,'leaseToken':row['lease_token'],'leaseExpiresAtUtc':row['lease_expires_at_utc'],
-            'rootSha256':hashlib.sha256(raw).hexdigest(),'sourceFullBytesAclsAndAttributesUnchanged':True})
+            'rootSha256':hashlib.sha256(raw).hexdigest(),'sourceFullBytesAclsAndAttributesUnchanged':True,
+            **({'restoreSourceHash':hashlib.sha256(row['restore_source_json'].encode()).hexdigest().upper()} if row.get('restore_source_json') is not None else {})})
         time.sleep(min(2,max(.001,(expiry-observed).total_seconds())))
     ended=dt.datetime.now(dt.timezone.utc);elapsed=time.monotonic()-began
     assert len(samples)>=3 and abs((ended-wall).total_seconds()-elapsed)<3,'NATURAL_LEASE_NOT_OBSERVED'

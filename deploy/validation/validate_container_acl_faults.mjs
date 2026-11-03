@@ -32,8 +32,8 @@ try {
   ownEndpoint = base + endpoint
   const restoration = fixture.aclRestoreFaultVersion !== undefined
   if (restoration) {
-    assert.ok([1, 2].includes(fixture.aclRestoreFaultVersion))
-    assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : ['group-removal', 'account-disable']).includes(fixture.kind))
+    assert.ok([1, 2, 3].includes(fixture.aclRestoreFaultVersion))
+    assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : fixture.aclRestoreFaultVersion === 2 ? ['group-removal', 'account-disable'] : ['worker-crash', 'agent-restart']).includes(fixture.kind))
   }
   const registrationEndpoint = restoration ? endpoint + '/restores' : endpoint
   const intentReadPath = registrationEndpoint + '/' // ID appended only after actual registration
@@ -46,9 +46,11 @@ try {
     if (request.method() === 'PUT' && path.includes('/files/')) bodies++
   })
   phase = 'visible-preflight'
-  let dialog, intent
+  let dialog, intent, restoreSource = null
   if (restoration) {
-    ({ dialog, intent } = await (await import('./acl_restore_fault_ui.mjs')).prepareRestoreFault(page, context, base, fixture, profile))
+    const prepared = await (await import('./acl_restore_fault_ui.mjs')).prepareRestoreFault(page, context, base, fixture, profile)
+    dialog = prepared.dialog; intent = prepared.intent
+    restoreSource = prepared.source
   } else {
     const files = await openPermissionFiles(page, fixture)
     await files.getByRole('button', { name: 'ACL acl-file.bin', exact: true }).click()
@@ -105,7 +107,7 @@ try {
   const final = await waitSignal(directory, 'settled.json')
   assert.equal(final.id, intent.id)
   const revoked = ['group-removal', 'account-disable'].includes(behavior)
-  let terminalIntent = null, currentIdentityStatus = null, originalIntentStatus = null, hintsCleared = false
+  let terminalIntent = null, restoreTerminalSource = null, currentIdentityStatus = null, originalIntentStatus = null, hintsCleared = false
   if (revoked) {
     phase = 'original-live-authority-denied'
     const denied = await context.request.get(base + intentReadPath + intent.id); originalIntentStatus = denied.status()
@@ -137,8 +139,14 @@ try {
       await expect(dialog.getByRole('status')).toBeInViewport({ ratio: 1 })
     }
     if (postAcl || ['worker-crash', 'agent-restart'].includes(fixture.kind)) {
-      const original = await context.request.get(ownEndpoint + '/' + intent.id); assert.equal(original.status(), 200)
-      terminalIntent = await original.json(); assert.equal(terminalIntent.state, postAcl ? 'Succeeded' : 'Failed'); assert.equal(terminalIntent.resultCode, postAcl ? 'CONTAINER_ACL_COMPLETED' : 'CONTAINER_ACL_INTERRUPTED')
+      const original = await context.request.get(base + intentReadPath + intent.id); assert.equal(original.status(), 200)
+      assert.ok((original.headers()['cache-control'] ?? '').includes('no-store'))
+      const value = await original.json()
+      if (restoration) {
+        assert.deepEqual(value.source, restoreSource); assert.equal(value.intent.id, intent.id)
+        terminalIntent = value.intent; restoreTerminalSource = value.source
+      } else terminalIntent = value
+      assert.equal(terminalIntent.state, postAcl ? 'Succeeded' : 'Failed'); assert.equal(terminalIntent.resultCode, postAcl ? 'CONTAINER_ACL_COMPLETED' : 'CONTAINER_ACL_INTERRUPTED')
       assert.equal(terminalIntent.confirmation, null); assert.equal(terminalIntent.aclConfirmed, postAcl); assert.equal(terminalIntent.historyVerified, true); assert.equal(terminalIntent.receipt.state, postAcl ? 'Completed' : 'Aborted')
     }
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
@@ -182,7 +190,7 @@ try {
   await writeSignal(directory, 'browser.json', { revision, kind: fixture.kind, id: intent.id, executionJobId: pending.executionJobId,
     subject: profile.subject, intentReadPath: intentReadPath + intent.id, registrations, confirmations, cancellations, bodies, finalState: final.state, normalDualLogout: !revoked, authorityRevoked: revoked,
     renderedRevocationPage: revoked ? behavior === 'group-removal' ? 'forbidden' : 'login' : null, currentIdentityStatus, originalIntentStatus, hintsCleared,
-    terminalIntent, logout: logoutReceipt, actualUi: true, jobResultsVersion: fixture.jobResultsVersion, jobReadsOnly })
+    terminalIntent, restoreTerminalSource, logout: logoutReceipt, actualUi: true, jobResultsVersion: fixture.jobResultsVersion, jobReadsOnly })
   await context.close()
   console.log(JSON.stringify({ aclFaultBrowser: 'passed', kind: fixture.kind }))
 } catch (error) {

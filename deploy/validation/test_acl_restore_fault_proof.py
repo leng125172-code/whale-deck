@@ -5,8 +5,8 @@ import unittest
 import uuid
 from unittest.mock import patch
 
-from acl_restore_fault_proof import prove_binding, RESTORE_SOURCES, restore_fault_version
-from acl_restore_browser_proof import source_json
+from acl_restore_fault_proof import prove_binding, RESTORE_SOURCES, restore_fault_version, verify_restore_audits
+from acl_restore_browser_proof import source_json, expected_metadata
 from verify_container_acl_faults import validate_source_profile, SOURCES
 
 
@@ -70,7 +70,7 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
 
     def test_both_restore_profiles_reach_source_verification_not_ordinary_acl(self):
         from validate_container_acl_faults import expected_fault_acl
-        for version,kind in ((1,'cancel'),(2,'group-removal'),(2,'account-disable')):
+        for version,kind in ((1,'cancel'),(2,'group-removal'),(2,'account-disable'),(3,'worker-crash'),(3,'agent-restart')):
             baseline={**self.baseline,'aclRestoreFaultVersion':version,'kind':kind}
             with self.subTest(version=version,kind=kind),patch('acl_restore_fault_proof.verify_restore_binding',return_value=['selected-source']) as check:
                 self.assertEqual(expected_fault_acl(self.row,baseline,None,None),['selected-source'])
@@ -88,7 +88,8 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
     def test_profile_selection_rejects_mixed_unknown_empty_or_duplicate_cases(self):
         self.assertEqual(restore_fault_version(('cancel','logout')),1)
         self.assertEqual(restore_fault_version(('group-removal','account-disable')),2)
-        for kinds in ((),('cancel','group-removal'),('worker-crash',),('cancel','cancel')):
+        self.assertEqual(restore_fault_version(('worker-crash','agent-restart')),3)
+        for kinds in ((),('cancel','group-removal'),('post-acl-worker-crash',),('cancel','cancel')):
             with self.subTest(kinds=kinds),self.assertRaises(AssertionError):restore_fault_version(kinds)
 
     def test_revocation_schema_cannot_be_mislabeled_as_cancel_or_ordinary_fault(self):
@@ -97,6 +98,35 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
         for delta,kinds in [({'schemaVersion':7},['group-removal']),({'aclRestoreFaultVersion':1},['group-removal']),({},['cancel']),({'aclRestoreFaultVersion':True},['account-disable'])]:
             with self.subTest(delta=delta,kinds=kinds),self.assertRaises(AssertionError):validate_source_profile({**p,**delta},kinds)
         with self.assertRaises(AssertionError):validate_source_profile(dict(schemaVersion=6,aclRestoreFaultVersion=2,sha256={n:'digest' for n in SOURCES}),['group-removal'])
+
+    def test_restart_profiles_require_new_schema_and_full_source_proof(self):
+        p=dict(schemaVersion=9,aclRestoreFaultVersion=3,sha256={n:'digest' for n in set(SOURCES)|set(RESTORE_SOURCES)})
+        validate_source_profile(p,['worker-crash','agent-restart'])
+        for kind in ('worker-crash','agent-restart'):
+            self.assertEqual(prove_binding(self.row,{**self.baseline,'aclRestoreFaultVersion':3,'kind':kind},self.source,self.proof),self.source['accessAcl'])
+        for delta,kinds in [({'schemaVersion':8},['worker-crash']),({'aclRestoreFaultVersion':2},['agent-restart']),({},['cancel']),({},['group-removal'])]:
+            with self.subTest(delta=delta,kinds=kinds),self.assertRaises(AssertionError):validate_source_profile({**p,**delta},kinds)
+
+    def audit_fixture(self):
+        row={**self.row,'actor_subject':'original-subject'}
+        events=[('plan-accepted','Accepted',row['id']),('plan-result','Ready',row['id']),('confirmed','Accepted',row['execution_job_id']),('result','Failed',row['execution_job_id'])]
+        rows=[dict(actor_subject=row['actor_subject'],target_type='container',target_id=row['container_id'],action='containers.files.acl.restore.'+action,result=result,job_id=job,trace_id='fixture-trace',detail_json=expected_metadata(row)) for action,result,job in events]
+        return row,rows,{**self.baseline,'aclRestoreFaultVersion':3,'kind':'worker-crash'}
+
+    def test_restart_audit_must_report_failed_not_canceled_or_success(self):
+        row,rows,baseline=self.audit_fixture();verify_restore_audits(rows,row,baseline)
+        for state in ('Canceled','Succeeded','Unknown'):
+            changed=copy.deepcopy(rows);changed[-1]['result']=state
+            with self.subTest(state=state),self.assertRaises(AssertionError):verify_restore_audits(changed,row,baseline)
+
+    def test_wrong_actor_operation_source_hash_or_audit_prefix_cannot_pass(self):
+        row,rows,baseline=self.audit_fixture()
+        for key,value in [('actor_subject','other'),('job_id',row['id']),('action','result'),('trace_id','')]:
+            changed=copy.deepcopy(rows);changed[-1][key]=value
+            with self.subTest(key=key),self.assertRaises(AssertionError):verify_restore_audits(changed,row,baseline)
+        changed=copy.deepcopy(rows);changed[-1]['detail_json']['restoreSourceHash']='wrong-source'
+        with self.assertRaises(AssertionError):verify_restore_audits(changed,row,baseline)
+        with self.assertRaises(AssertionError):verify_restore_audits(rows+[rows[-1]],row,baseline)
 
     def test_existing_source_profile_cannot_claim_new_restore_sources(self):
         validate_source_profile(dict(schemaVersion=6,sha256={n:'digest' for n in SOURCES}),['cancel','logout'])

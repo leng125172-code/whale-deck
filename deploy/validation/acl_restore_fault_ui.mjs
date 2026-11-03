@@ -4,8 +4,8 @@ import { expect } from '../../web/node_modules/@playwright/test/index.mjs'
 import { openPermissionFiles, closePermissionDetails, writeSignal, waitSignal } from './installed_ui_permission_session.mjs'
 
 export async function prepareRestoreFault(page, context, base, fixture, profile) {
-  assert.ok([1, 2].includes(fixture.aclRestoreFaultVersion))
-  assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : ['group-removal', 'account-disable']).includes(fixture.kind))
+  assert.ok([1, 2, 3].includes(fixture.aclRestoreFaultVersion))
+  assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : fixture.aclRestoreFaultVersion === 2 ? ['group-removal', 'account-disable'] : ['worker-crash', 'agent-restart']).includes(fixture.kind))
   const endpoint = `/api/v1/containers/${fixture.containerId}/files/acls`, directory = fixture.evidence
   let files = await openPermissionFiles(page, fixture)
   await files.getByRole('button', { name: 'ACL acl-file.bin', exact: true }).click()
@@ -58,5 +58,5 @@ export async function prepareRestoreFault(page, context, base, fixture, profile)
   assert.deepEqual(Object.keys(body).sort(), ['instanceId', 'path', 'captureId', 'expectedHistoryDigest', 'expectedVersion'].sort())
   assert.equal(body.captureId, captureId); assert.equal(body.expectedHistoryDigest, source.entry.historyDigest)
   assert.deepEqual(value.source, source); assert.equal(value.intent.executionJobId, null)
-  return { dialog, intent: value.intent }
+  return { dialog, intent: value.intent, source }
 }

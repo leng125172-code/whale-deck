@@ -11,7 +11,7 @@ if __name__=='__main__':
     try:
         assert os.geteuid()==0 and len(sys.argv)==2;os.umask(0o077)
         directory=Path(sys.argv[1]);provenance=json.loads((directory/'validation-source.json').read_bytes())
-        assert (provenance['schemaVersion'],provenance['aclRestoreFaultVersion']) in ((7,1),(8,2))
+        assert (provenance['schemaVersion'],provenance['aclRestoreFaultVersion']) in ((7,1),(8,2),(9,3))
         result=faults.verify(directory)
         result.update(independentAclRestorationFaults=True,sourceCaptures=len(result['cases']),
             currentAclPreimages=len(result['cases']),sourceBytesRereadAfterCleanup=False)

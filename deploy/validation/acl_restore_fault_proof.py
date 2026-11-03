@@ -13,7 +13,7 @@ RESTORE_SOURCES=tuple(dict.fromkeys((*RESTORE_BROWSER_SOURCES,'acl_restore_fault
     'verify_container_acl_restore_faults.py','test_acl_restore_fault_proof.py')))
 
 
-RESTORE_FAULT_KINDS={1:frozenset(('cancel','logout')),2:frozenset(('group-removal','account-disable'))}
+RESTORE_FAULT_KINDS={1:frozenset(('cancel','logout')),2:frozenset(('group-removal','account-disable')),3:frozenset(('worker-crash','agent-restart'))}
 
 def restore_fault_version(kinds):
     assert kinds and len(kinds)==len(set(kinds)), 'RESTORE_FAULT_KINDS_INVALID'
@@ -81,16 +81,23 @@ def verify_restore_binding(row,baseline,storage,module):
     signal=json.loads((directory/'source-captured.json').read_bytes());assert signal['subject']==row['actor_subject'] and signal['result']==proof['result']
     typed_equal(json.loads((directory/'source-verified.json').read_bytes()),dict(source=source,physicalAndOriginalHistoryVerified=True))
     desired=prove_binding(row,baseline,source,proof)
-    rows=audit_rows(row['id']);expected={'plan-accepted':('Accepted',row['id']),'plan-result':('Ready',row['id']),
-        'confirmed':('Accepted',row['execution_job_id']),'result':('Canceled',row['execution_job_id'])}
+    verify_restore_audits(audit_rows(row['id']),row,baseline)
+    return desired
+
+
+def verify_restore_audits(rows,row,baseline):
+    require_restore_profile(baseline)
+    expected={'plan-accepted':('Accepted',row['id']),'plan-result':('Ready',row['id']),
+        'confirmed':('Accepted',row['execution_job_id']),'result':('Failed' if baseline['aclRestoreFaultVersion']==3 else 'Canceled',row['execution_job_id'])}
     if baseline['kind']=='cancel':expected['cancel-requested']=('Accepted',row['execution_job_id'])
-    assert len(rows)==len(expected)
+    assert type(rows) is list and len(rows)==len(expected)
     seen=set()
     for audit in rows:
         assert audit['actor_subject']==row['actor_subject'] and audit['target_type']=='container' and audit['target_id']==row['container_id']
+        assert audit['action'].startswith('containers.files.acl.restore.')
+        assert type(audit['trace_id']) is str and 0<len(audit['trace_id'])<=64
         action=audit['action'].removeprefix('containers.files.acl.restore.')
         assert action in expected and action not in seen;seen.add(action)
         assert (audit['result'],audit['job_id'])==expected[action]
         typed_equal(unique_json(audit['detail_json']),expected_metadata(row))
     assert seen==expected.keys()
-    return desired
