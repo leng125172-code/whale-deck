@@ -92,7 +92,7 @@ try {
         const title = stage === 'unknown' ? '结果未知，仍保留写入保护' : '管理员已明确处置未知结果'; await expect(region.getByText(title, { exact: true })).toBeVisible()
         async function field(label, text) { const value = region.getByText(label, { exact: true }).locator('xpath=following-sibling::dd[1]'); await expect(value).toHaveText(text); return value }
         await field('历史回执', 'Unknown'); await field('历史已验证', '是'); await field('已记录发布版本', '否'); await field('回执对象绑定有效', '否')
-        const nullValue = await field('ACL 已确认', '未证明'); await nullValue.scrollIntoViewIfNeeded(); await expect(nullValue).toBeInViewport({ ratio: 1 }); await tab.screenshot({ path: join(directory, stage + '-job-facts.png') })
+        const nullValue = await field('ACL 已确认', '未证明'); await nullValue.evaluate(el => el.scrollIntoView({ block: 'center', inline: 'nearest' })); await expect(nullValue).toBeInViewport({ ratio: 1 }); await tab.screenshot({ path: join(directory, stage + '-job-facts.png') })
         if (stage === 'acknowledged') await expect(region).toContainText('处置仅解除业务保护，不证明 ACL 已恢复或重新执行。')
         await expect(drawer.getByRole('button', { name: '取消任务', exact: true })).toHaveCount(0); await expect(drawer.getByRole('button', { name: '重新预检并重试', exact: true })).toHaveCount(0)
         for (const secret of [fixture.containerId, fixture.instanceId, 'work/acl-file.bin', fixture.originalSubject, profile.subject]) assert.ok(!(await region.innerText()).includes(secret))
@@ -100,6 +100,10 @@ try {
         await tab.screenshot({ path: join(directory, stage + '-job.png') }); assert.equal(writes, 0)
         proof.taskCenter = { id: fixture.executionJobId, nullConfirmationVisible: true, noGenericWriteControls: true }
         await writeSignal(directory, stage + '-jobs.json', proof)
+      } catch (error) {
+        await tab.screenshot({ path: join(directory, 'failed-' + stage + '-job.png') }).catch(() => {})
+        await writeSignal(directory, stage + '-job-failure.json', { failureType: error?.name, field: 'ACL 已确认', nullFieldBox: await tab.getByRole('region', { name: 'ACL 安全结果', exact: true }).getByText('ACL 已确认', { exact: true }).locator('xpath=following-sibling::dd[1]').boundingBox().catch(() => null) }).catch(() => {})
+        throw error
       } finally { await tab.close() }
       jobReadsOnly = true
     }
