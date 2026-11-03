@@ -1,5 +1,8 @@
 # WhaleDeck 权限矩阵
 
+2026-11-03 实际接续：b69302b限定历史GET超时/软分页修复已标准覆盖，六组件与16helper同源、生产恢复列/18CHECK保持；公共8080完整128份读取及真实Vue恢复写后移组/停用、独立只读复核通过。Agent最小授权/user NOPASSWD保持；无新协议minor或数据库schema。失败探测和独立账号检查重叠分别保留，其他故障、递归ACL/恢复及删除仍待，见[实际发布与范围](qa/CONTAINER_ACL_HISTORY_TIMEOUT_RELEASE.md)。
+
+
 **2026-11-03 写后撤权保留移组分项，历史读取503阻断整批**：原写后移组真实403/forbidden/引用null，当前不同管理员Recovery GET200且原Owner恢复GET404，通过但不补签停用或任务中心UI。b69302b仅限定规范CID/capture历史GET的35秒代理与有界只读分页，不扩写请求、其他API、Authentik优先级或Agent权限；候选测试不代签部署/人类整链，原user NOPASSWD与7配置保持。待覆盖后新资源复验。[边界](qa/CONTAINER_ACL_HISTORY_TIMEOUT.md)。
 
 **2026-11-03 恢复写后取消和原Worker强杀实机通过**：实际已写目标时，页面明确一次取消或准确Worker SIGKILL，不改Root/SQL/时钟；产品结束helper并按真实完成事实保留Succeeded/Completed、新版本和ACL，不自动撤回。原当前ACL已先留HDD，来源/两类前像分列；原登录读取正确wrapper/来源并正常双端退出，4真PNG/独立核验/准确清理通过。两宿主和7配置/user NOPASSWD保持，剩余写后撤权/Unknown等继续。[边界](qa/CONTAINER_ACL_RESTORE_POST_CHANGE.md)。

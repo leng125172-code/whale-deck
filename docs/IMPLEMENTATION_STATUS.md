@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 2026-11-03 b69302b历史读取超时修复已部署并完成真实写后撤权复验：准确CI五路成功、唯一Invocation c7f46555dedd4db2a84c2e8e8fa46071退出0，六组件/16helper同源，Agent1688516/维护1688513，11核心healthy/8数据库/7配置保持、账本current b693/previous cad/pending空。公共8080真实签名读取128份两页3.597/2.368秒原件不改；全新Vue写后移组/停用分别4.786/4.736秒停helper、Succeeded/Completed，原403/引用清空/取消0、当前管理员Recovery200/Owner404，独立复核及准确清理通过。两探测脚本失败、一次并行账号检查失败及只读修正保留，不重放写入。恢复写后Agent候选/Unknown/递归ACL/删除和59项继续。[发布、实机与失败边界](qa/CONTAINER_ACL_HISTORY_TIMEOUT_RELEASE.md)。
+
 - 2026-11-03 ACL恢复写后Agent重启门禁候选已验证、未实机运行：新增profile6/schema12仅单场post-acl-agent-restart，绑定原恢复wrapper/来源与Succeeded审计，沿用准确切点、固定Agent重启、维护连续性、双原Job安全结果/正常退出/失败保留；旧profile及普通schema6兼容。25恢复证明+44Root范围+10浏览器证明+8范围共87通过及语法通过，均非新的实际重启或恢复整链。76cb825已推送、前批图谱重试成功；b69302b仍待frontend终态及标准覆盖，实际运行cad6182。[候选和未验边界](qa/CONTAINER_ACL_RESTORE_AGENT_RESTART_CANDIDATE.md)。
 
 - 2026-11-03 历史超时修复四镜像预构建完成、未发布：标准构建退出0，API/Worker/Migrator/Gateway实际ID、OCI revision与内部版本均b69302b；11核心healthy、两宿主/7配置/账本不变、活动预检0，公共8080及实际运行仍cad6182。准确CI四路成功，frontend在最后页面组；待成功终态后标准覆盖，再真实8080完整撤权复验。[本批基线与边界](qa/CONTAINER_ACL_HISTORY_RELEASE_PREPARATION.md)。

@@ -1,5 +1,8 @@
 # WhaleDeck 数据模型
 
+2026-11-03 实际接续：b69302b限定历史GET超时/软分页修复已标准覆盖，六组件与16helper同源、生产恢复列/18CHECK保持；公共8080完整128份读取及真实Vue恢复写后移组/停用、独立只读复核通过。Agent最小授权/user NOPASSWD保持；无新协议minor或数据库schema。失败探测和独立账号检查重叠分别保留，其他故障、递归ACL/恢复及删除仍待，见[实际发布与范围](qa/CONTAINER_ACL_HISTORY_TIMEOUT_RELEASE.md)。
+
+
 **2026-11-03 历史读取超时定位无schema/迁移/生产数据修改**：写后移组分项完成事实保留，失败停用CID仅有Succeeded普通来源捕获，无恢复意图/执行/撤权；新批也未登记恢复，两个失败源树与HDD保留。b69302b只改限定代理预算和只读分页，不减库存/条数上限或原件校验；真实124份候选只读保持，默认488Integration/7原生跳过分列。生产仍原18CHECK/cad，尚未覆盖或完成双场景签收。[事实](qa/CONTAINER_ACL_HISTORY_TIMEOUT.md)。
 
 **2026-11-03 恢复写后完成事实与取消/强杀实机通过**：无schema/迁移变化，4意图/8Job、2旧来源+2当前HDD和9条来源hash恢复审计保持。目标已写后两原恢复均Succeeded/Completed并发布实际新版本，取消时间仅取消场景非空；强杀原token/expiry/来源与全部权威hash、保护保持87.034秒/41采样，到期后原执行对账。完整新清单/迟到Apply保持，独立核验/原上下文退出和清理通过；旧schema9只读92原件不变。[实际事实](qa/CONTAINER_ACL_RESTORE_POST_CHANGE.md)。

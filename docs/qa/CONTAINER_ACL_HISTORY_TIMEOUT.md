@@ -47,3 +47,7 @@ MaintenanceHost的普通gateway cluster仅5秒ActivityTimeout，历史读取未�
 ## 后续接续：发布前冻结构建
 
 以上原文保留当时的失败与候选边界。本批运行源码已冻结到b69302b，标准四镜像预构建已退出0，API/Worker/Migrator/Gateway实际ID/内部版本/OCI来源均核验通过；准确frontend CI仍待终态。实际运行仍cad6182，无新发布或真实撤权签收，见[本批基线与未验边界](CONTAINER_ACL_HISTORY_RELEASE_PREPARATION.md)。
+
+## 后续接续：修复发布与写后撤权整链
+
+以上原时点候选/未部署和失败记录保留。b69302b随后取得准确CI五路成功、唯一标准覆盖与公共8080完整分页、全新Vue写后移组/停用及独立复核通过，见[实机发布记录](CONTAINER_ACL_HISTORY_TIMEOUT_RELEASE.md)。恢复写后Agent重启仍未执行，其他故障和59项继续。

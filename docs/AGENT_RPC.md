@@ -1,5 +1,8 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-03 实际接续：b69302b限定历史GET超时/软分页修复已标准覆盖，六组件与16helper同源、生产恢复列/18CHECK保持；公共8080完整128份读取及真实Vue恢复写后移组/停用、独立只读复核通过。Agent最小授权/user NOPASSWD保持；无新协议minor或数据库schema。失败探测和独立账号检查重叠分别保留，其他故障、递归ACL/恢复及删除仍待，见[实际发布与范围](qa/CONTAINER_ACL_HISTORY_TIMEOUT_RELEASE.md)。
+
+
 **2026-11-03 历史读取超时修复候选，未安装**：实际124份扫描经内部Gateway4.972秒200，经维护入口5秒被截503维护HTML。b69302b增加限定历史GET代理35秒预算与3秒软分页/原5秒硬截止，不改1.52协议、RPC字段或Agent授权；32Root与真实HDD候选两页保持原件通过，不是安装态RPC或真实页面。运行仍cad6182/1399935与维护1214273；写后移组只保留实机分项，停用与完整批次未过，待覆盖后复验。[证据](qa/CONTAINER_ACL_HISTORY_TIMEOUT.md)。
 
 **2026-11-03 历史恢复写后取消/Worker中断实机分项通过**：仍cad6182/1.52，无新增RPC/安装/权限。目标ACL已写但Root仍Applying时取消或强杀原Worker，产品5.278/0.114秒停helper，强杀等原租约87.034秒/41样本后原执行Succeeded/Completed；旧来源/新当前前像保持，固定helper迟到原Apply只重放原回执（非新签名RPC）。正确恢复wrapper/原上下文退出、独立核验和准确清理通过，Agent1399935/维护1214273保持；其余切点/故障继续。[证据](qa/CONTAINER_ACL_RESTORE_POST_CHANGE.md)。
