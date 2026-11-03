@@ -18,13 +18,13 @@ from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, requi
 
 def validate_source_profile(provenance, kinds):
     schema=provenance.get('schemaVersion',1)
-    assert type(schema) is int and schema in (1,2,3,4,5,6,7,8,9,10)
+    assert type(schema) is int and schema in (1,2,3,4,5,6,7,8,9,10,11)
     if schema<6:assert 'post-acl-agent-restart' not in kinds
     if schema<5:assert not set(kinds)&{'post-acl-group-removal','post-acl-account-disable'}
     if schema<4:assert not set(kinds)&{'post-acl-cancel','post-acl-worker-crash'}
     if schema<3:assert not set(kinds)&{'worker-crash','agent-restart'}
     expected=set(SOURCES)
-    if schema in (7,8,9,10):
+    if schema in (7,8,9,10,11):
         from acl_restore_fault_proof import RESTORE_SOURCES,restore_fault_version
         assert type(provenance.get('aclRestoreFaultVersion')) is int and provenance['aclRestoreFaultVersion']==schema-6==restore_fault_version(kinds)
         expected.update(RESTORE_SOURCES)
@@ -50,7 +50,7 @@ def verify_authority(baseline, ui, row, result, proof):
     expiry=dt.datetime.fromisoformat(baseline['permissionExpiresAtUtc']);changed=dt.datetime.fromisoformat(proof['confirmedAtUtc'])
     assert expiry.tzinfo is not None and changed.tzinfo is not None and expiry>changed+dt.timedelta(hours=1)
     assert row['cancel_requested_at_utc'] is None and ui['cancellations']==0
-    if baseline.get('aclRestoreFaultVersion')==2:
+    if baseline.get('aclRestoreFaultVersion') in (2,5):
         assert ui['intentReadPath']=='/api/v1/containers/'+row['container_id']+'/files/acls/restores/'+row['id']
 
 
@@ -61,6 +61,9 @@ def verify_current_admin(proof, row, record, old_subject):
     assert intent['publishedVersion']==record['version'] and intent['aclConfirmed'] is True and intent['confirmation'] is None
     assert intent['historyVerified'] and intent['historyDigest']==record['historyDigest'] and intent['receipt']['state']=='Completed'
     assert intent['receipt']['id']==row['execution_job_id'] and intent['receipt']['bindingCurrent'] is True
+    if row.get('restore_source_json') is not None:
+        assert proof['ownerRestoreStatus']==404 and proof['recoveryNoStore'] is True
+        assert proof['ownerRestorePath']=='/api/v1/containers/'+row['container_id']+'/files/acls/restores/'+row['id']
     return intent
 
 
@@ -154,7 +157,7 @@ def verify(directory):
         baseline=read(p/'baseline.json');ui=read(p/'browser.json');cut=read(p/'cut-root.json');bound=read(p/'bound-helper.json')
         assert baseline['revision']==ui['revision']==accepted['revision'] and baseline['validationSourceRevision']==provenance['revision'] and baseline['kind']==ui['kind']==kind
         assert baseline.get('aclRestoreFaultVersion')==provenance.get('aclRestoreFaultVersion')
-        if provenance['schemaVersion'] in (7,8,9,10):assert baseline['evidence']==str(p)
+        if provenance['schemaVersion'] in (7,8,9,10,11):assert baseline['evidence']==str(p)
         post=kind.startswith('post-acl-');behavior=kind.removeprefix('post-acl-')
         revoked=behavior in ('group-removal','account-disable')
         if not revoked:
@@ -198,7 +201,7 @@ def verify(directory):
         proof=bound['proof'];assert bound['twoKernelFdProofs'] and re.fullmatch(r'whaledeck-container-acl-[a-f0-9]{32}\.service',bound['unit'])
         assert proof['originalIdentity']==cut['plan']['sourceIdentity']==baseline['original']['acl-file.bin']['identity']
         assert proof['accessAcl']==(cut['plan']['command']['entries'] if post else cut['plan']['accessAcl']) and proof['defaultAcl']==cut['plan']['defaultAcl'] and proof['attributesDigest']==cut['plan']['attributesDigest']
-        action='containers.files.acl.restore.result' if provenance['schemaVersion'] in (7,8,9,10) else 'containers.files.acl.result'
+        action='containers.files.acl.restore.result' if provenance['schemaVersion'] in (7,8,9,10,11) else 'containers.files.acl.result'
         audit=query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result)) FROM audit_events WHERE job_id=:'id'::uuid AND action=:'action';",id=ui['executionJobId'],action=action)
         assert audit=={'n':1,'actors':[ui['subject']],'results':[terminal_state(kind)]}
         source=Path(baseline['source']);assert source.parent==owned.common.APPS and source.name==baseline['containerName'] and not os.path.lexists(source)

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from acl_restore_fault_proof import prove_binding, RESTORE_SOURCES, restore_fault_version, verify_restore_audits
 from acl_restore_browser_proof import source_json, expected_metadata
-from verify_container_acl_faults import validate_source_profile, SOURCES
+from verify_container_acl_faults import validate_source_profile, SOURCES, verify_current_admin
 
 
 class RestoreFaultProvenanceTests(unittest.TestCase):
@@ -70,7 +70,7 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
 
     def test_both_restore_profiles_reach_source_verification_not_ordinary_acl(self):
         from validate_container_acl_faults import expected_fault_acl
-        for version,kind in ((1,'cancel'),(2,'group-removal'),(2,'account-disable'),(3,'worker-crash'),(3,'agent-restart'),(4,'post-acl-cancel'),(4,'post-acl-worker-crash')):
+        for version,kind in ((1,'cancel'),(2,'group-removal'),(2,'account-disable'),(3,'worker-crash'),(3,'agent-restart'),(4,'post-acl-cancel'),(4,'post-acl-worker-crash'),(5,'post-acl-group-removal'),(5,'post-acl-account-disable')):
             baseline={**self.baseline,'aclRestoreFaultVersion':version,'kind':kind}
             with self.subTest(version=version,kind=kind),patch('acl_restore_fault_proof.verify_restore_binding',return_value=['selected-source']) as check:
                 self.assertEqual(expected_fault_acl(self.row,baseline,None,None),['selected-source'])
@@ -90,7 +90,8 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
         self.assertEqual(restore_fault_version(('group-removal','account-disable')),2)
         self.assertEqual(restore_fault_version(('worker-crash','agent-restart')),3)
         self.assertEqual(restore_fault_version(('post-acl-cancel','post-acl-worker-crash')),4)
-        for kinds in ((),('cancel','group-removal'),('post-acl-account-disable',),('cancel','cancel')):
+        self.assertEqual(restore_fault_version(('post-acl-group-removal','post-acl-account-disable')),5)
+        for kinds in ((),('cancel','group-removal'),('post-acl-agent-restart',),('cancel','cancel')):
             with self.subTest(kinds=kinds),self.assertRaises(AssertionError):restore_fault_version(kinds)
 
     def test_revocation_schema_cannot_be_mislabeled_as_cancel_or_ordinary_fault(self):
@@ -149,6 +150,31 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
         verify_restore_audits(rows+[cancel],row,baseline)
         cancel['job_id']=row['id']
         with self.assertRaises(AssertionError):verify_restore_audits(rows+[cancel],row,baseline)
+
+    def test_post_revocation_requires_its_own_schema_and_source_binding(self):
+        p=dict(schemaVersion=11,aclRestoreFaultVersion=5,sha256={n:'digest' for n in set(SOURCES)|set(RESTORE_SOURCES)})
+        validate_source_profile(p,['post-acl-group-removal','post-acl-account-disable'])
+        for kind in ('post-acl-group-removal','post-acl-account-disable'):
+            self.assertEqual(prove_binding(self.row,{**self.baseline,'aclRestoreFaultVersion':5,'kind':kind},self.source,self.proof),self.source['accessAcl'])
+        for delta,kinds in [({'schemaVersion':10},['post-acl-group-removal']),({'aclRestoreFaultVersion':4},['post-acl-account-disable']),({},['group-removal']),({},['post-acl-cancel'])]:
+            with self.subTest(delta=delta,kinds=kinds),self.assertRaises(AssertionError):validate_source_profile({**p,**delta},kinds)
+
+    def test_post_revocation_audit_retains_completed_fact_without_cancel_request(self):
+        row,rows,baseline=self.audit_fixture();baseline.update(aclRestoreFaultVersion=5,kind='post-acl-group-removal');rows[-1]['result']='Succeeded'
+        verify_restore_audits(rows,row,baseline)
+        for state in ('Failed','Canceled','Unknown'):
+            changed=copy.deepcopy(rows);changed[-1]['result']=state
+            with self.subTest(state=state),self.assertRaises(AssertionError):verify_restore_audits(changed,row,baseline)
+        with self.assertRaises(AssertionError):verify_restore_audits(rows+[rows[-1]],row,baseline)
+
+    def test_current_admin_read_does_not_inherit_original_owner_restore_access(self):
+        row={**self.row,'actor_subject':'original'};record=dict(version='new-version',historyDigest='new-history')
+        intent=dict(id=row['id'],executionJobId=row['execution_job_id'],state='Succeeded',publishedVersion=record['version'],aclConfirmed=True,confirmation=None,historyVerified=True,historyDigest=record['historyDigest'],receipt=dict(id=row['execution_job_id'],bindingCurrent=True,state='Completed'))
+        path='/api/v1/containers/'+row['container_id']+'/files/acls/restores/'+row['id']
+        proof=dict(subject='different-admin',currentlyAdministrator=True,readStatus=200,readOnlyOperation=True,normalHttpDualLogout=True,intent=intent,ownerRestoreStatus=404,ownerRestorePath=path,recoveryNoStore=True)
+        verify_current_admin(proof,row,record,'original')
+        for key,value in [('ownerRestoreStatus',200),('ownerRestorePath',path+'-other'),('recoveryNoStore',False),('subject','original')]:
+            with self.subTest(key=key),self.assertRaises(AssertionError):verify_current_admin({**proof,key:value},row,record,'original')
 
     def test_existing_source_profile_cannot_claim_new_restore_sources(self):
         validate_source_profile(dict(schemaVersion=6,sha256={n:'digest' for n in SOURCES}),['cancel','logout'])

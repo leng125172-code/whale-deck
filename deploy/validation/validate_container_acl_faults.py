@@ -129,7 +129,7 @@ def verify_terminal(identifier, subject, baseline, storage, module, directory=No
     return data,record,raw,hdd_raw
 
 
-def current_admin_terminal(identifier, original_subject, execution, version_value, directory):
+def current_admin_terminal(identifier, original_subject, execution, version_value, directory, *, baseline=None):
     """Read existing facts with a different currently authorized BFF identity."""
     base='http://127.0.0.1:8080'
     with temporary_user(True) as (name,password):
@@ -138,8 +138,14 @@ def current_admin_terminal(identifier, original_subject, execution, version_valu
             assert profile['subject']!=original_subject and profile['isAdministrator'] is True
             response=request(session,'GET',base+'/api/v1/files/container-acls/recovery/'+identifier,200);intent=response.json()
             assert intent['id']==identifier and intent['executionJobId']==execution and intent['state']=='Succeeded' and intent['publishedVersion']==version_value
+            extra={}
+            if baseline and baseline.get('aclRestoreFaultVersion')==5:
+                assert 'no-store' in response.headers.get('Cache-Control','')
+                path='/api/v1/containers/'+baseline['containerId']+'/files/acls/restores/'+identifier
+                denied=request(session,'GET',base+path,404)
+                extra=dict(ownerRestoreStatus=denied.status_code,ownerRestorePath=path,recoveryNoStore=True)
             logout(base,session)
-            proof={'subject':profile['subject'],'currentlyAdministrator':True,'readStatus':200,'intent':intent,'readOnlyOperation':True,'normalHttpDualLogout':True}
+            proof={'subject':profile['subject'],'currentlyAdministrator':True,'readStatus':200,'intent':intent,'readOnlyOperation':True,'normalHttpDualLogout':True,**extra}
             (directory/'current-admin-read.json').write_text(json.dumps(proof));return proof
         finally:session.close()
 
@@ -424,7 +430,7 @@ def run_case(kind, revision, evidence, source, reader, module, storage, *, resto
                 assert ui['authorityRevoked'] if authority else ui['normalDualLogout']
                 assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==(1 if behavior=='cancel' else 0) and ui['bodies']==0
                 if baseline.get('jobResultsVersion')==1:verify_task_results(data,baseline,ui,json.loads((directory/'task-results.json').read_bytes()))
-                if post and authority:current_admin_terminal(identifier,ready['subject'],data['row']['execution_job_id'],record['version'],directory)
+                if post and authority:current_admin_terminal(identifier,ready['subject'],data['row']['execution_job_id'],record['version'],directory,baseline=baseline)
                 result={'kind':kind,'id':identifier,'executionJobId':data['row']['execution_job_id'],'state':terminal_state(kind),'code':data['row']['result_code'],
                     'rootState':record['state'],'rootCutState':json.loads((directory/'cut-root.json').read_bytes())['state'],'productStoppedHelperSeconds':round(elapsed,3),
                     'validatorKilledHelper':False,'originalFullBytesFingerprintAclsAndAttributesUnchanged':not post,'postAclIdentityFullBytesAndAclsVerified':post,'actualUi':True,'normalDualLogout':authority is None,'authorityRevoked':authority is not None,'serviceRestart':restart}

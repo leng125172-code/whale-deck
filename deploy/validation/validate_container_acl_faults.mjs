@@ -32,8 +32,8 @@ try {
   ownEndpoint = base + endpoint
   const restoration = fixture.aclRestoreFaultVersion !== undefined
   if (restoration) {
-    assert.ok([1, 2, 3, 4].includes(fixture.aclRestoreFaultVersion))
-    assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : fixture.aclRestoreFaultVersion === 2 ? ['group-removal', 'account-disable'] : fixture.aclRestoreFaultVersion === 3 ? ['worker-crash', 'agent-restart'] : ['post-acl-cancel', 'post-acl-worker-crash']).includes(fixture.kind))
+    assert.ok([1, 2, 3, 4, 5].includes(fixture.aclRestoreFaultVersion))
+    assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : fixture.aclRestoreFaultVersion === 2 ? ['group-removal', 'account-disable'] : fixture.aclRestoreFaultVersion === 3 ? ['worker-crash', 'agent-restart'] : fixture.aclRestoreFaultVersion === 4 ? ['post-acl-cancel', 'post-acl-worker-crash'] : ['post-acl-group-removal', 'post-acl-account-disable']).includes(fixture.kind))
   }
   const registrationEndpoint = restoration ? endpoint + '/restores' : endpoint
   const intentReadPath = registrationEndpoint + '/' // ID appended only after actual registration
