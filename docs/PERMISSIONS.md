@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+**2026-11-03 恢复写入前原进程中断严格实机通过**：仅预检无其他任务/九类意图及无关transient后，准确原Worker SIGKILL或Agent服务重启；不变更身份/时钟/SQL，由产品结束helper。原恢复Failed/Interrupted而非用户Canceled，当前原件HDD和旧来源分列保持；原登录读取正确恢复wrapper/来源后正常双端退出，4真PNG/独立核验/准确清理通过。维护PID/7配置及user NOPASSWD保持，Agent最小权限未扩大；写后/Unknown/来源异常等仍待。[事实与边界](qa/CONTAINER_ACL_RESTORE_RESTARTS.md)。
+
 **2026-11-03 恢复写入前实时移组/停用真实签收**：原正权限仍余7138.461/7137.025秒，仅变更准确生成身份；产品4.938/4.858秒停原helper，原恢复路由均403，移组me200非管理员→forbidden、停用me403→login，引用清空、取消POST0/SQL取消时间null。原恢复Canceled/Aborted、旧来源/新当前HDD/完整源保持，4真PNG/独立核验/准确清理通过；被撤权上下文没有正常退出回执，Agent/开发sudo未扩或撤销，其他切点/故障仍待。[安全与证据](qa/CONTAINER_ACL_RESTORE_REVOCATION.md)。
 
 **2026-11-03 恢复原登录取消/正常退出写入前分项实机通过**：当前ACL备份已验证、尚未写目标时，真实管理员明确取消一次或从原上下文正常双端退出（取消POST0）；产品5.434/5.575秒结束绑定helper，Canceled/Aborted，全源/旧来源/新当前原件保持。严格3PNG/状态视口、独立复核/准确身份清理通过，配置与最小授权不变；本批不代签实时撤权、其他恢复切点/故障或递归ACL。[事实与剩余](qa/CONTAINER_ACL_RESTORE_FAULTS.md)。

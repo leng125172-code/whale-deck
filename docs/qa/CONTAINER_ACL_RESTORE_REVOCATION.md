@@ -40,3 +40,7 @@
 本批只签**单文件access历史恢复、当前原件已备份而目标尚未写入**时的两种实时撤权。仍需Worker强杀/Agent重启与原自然租约、写后中断/撤权、Unknown/实例变化、来源丢失/替换、磁盘异常与共享写入组合；目录default故障、递归ACL/恢复、可恢复删除/长期清理及其余目标继续。源与HDD同device不算异盘灾备，59主项完整签收和25%–35%粗估不变，17项移出不算完成，master未交付。
 
 收尾8项范围检查、847条变动MD相对链接通过；目标第1节逐字保持，前批取消/退出QA原文保留后追加接续。项目图谱已确认原`whale-deck/container-acl`的`whale-deck.container-acl.e77c1a6.restore-revocation`事件，阶段仍active，按原eventId从pending移入synced。
+
+## 后续进程中断分项（2026-11-03）
+
+本文件以上撤权原文及原件保持。12c789c随后在两套新资源完成恢复写入前Worker强杀/原自然租约及Agent重启，独立复核通过；新观察器只读兼容本批schema8证据且87文件字节保持。详见[重启与自然租约](CONTAINER_ACL_RESTORE_RESTARTS.md)，不以新分项补签写后、Unknown、来源异常、递归ACL或删除。

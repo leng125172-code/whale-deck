@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+**2026-11-03 恢复强杀/重启原租约与永久事实实机通过**：无新schema/迁移，4意图/8Job、2旧来源+2当前HDD及8条Failed恢复审计保持。Worker强杀原token/expiry/来源/请求-计划-执行hash及原登录绑定保留，86.846秒/41自然采样，到期后原执行Failed/Interrupted/Root Aborted，无发布版本，取消时间null、释放保护；Agent分项同样原失败终态。独立核验、正常原上下文退出和准确清理通过；旧schema8只读兼容87文件不变。[数据与范围](qa/CONTAINER_ACL_RESTORE_RESTARTS.md)。
+
 **2026-11-03 恢复实时移组/停用永久事实已实机验证**：无schema/迁移变化，两新资源各真实捕获旧ACL并新建恢复，切点当前原件HDD已验证/目标未写入时撤权。4意图/8Job、2旧来源+2当前HDD及8条来源hash恢复审计保持；原恢复Canceled/Aborted、取消时间null、无发布版本且释放保护/租约，完整源不变。独立核验通过，旧schema7只读兼容及81原件字节保持；其他故障/递归ACL/删除继续。[实际事实](qa/CONTAINER_ACL_RESTORE_REVOCATION.md)。
 
 **2026-11-03 恢复进行中取消/退出永久事实实机通过**：无新schema/迁移；两套严格资源各先完成真实普通ACL来源捕获，再执行恢复到已留当前原件/尚未修改ACL切点。共4意图/8Job、2旧来源与2新当前HDD，恢复cancel5/logout4共9条来源hash审计；原恢复Canceled/Aborted、保护/租约释放、全源保持，独立复核和准确清理通过。首次语义已过但截图状态未入视口记录保留，后用新资源严格复验。剩余故障/递归恢复/删除继续。[实际数据边界](qa/CONTAINER_ACL_RESTORE_FAULTS.md)。
