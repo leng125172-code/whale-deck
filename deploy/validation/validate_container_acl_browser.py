@@ -77,8 +77,8 @@ def expected_job_summary(row,plan,execution=False):
         'bindingCurrent':True if execution else None,'historyMayExist':execution,'historyVerified':execution,'hasPublishedVersion':execution}
 
 
-def validate_job_summary(job,expected,identifier):
-    assert job['id']==identifier and job['state']=='Succeeded'
+def validate_job_summary(job,expected,identifier,state='Succeeded'):
+    assert job['id']==identifier and job['state']==state
     assert job.get('jobType',job.get('job_type'))==('containers.files.acl' if expected['stage']=='execution' else 'containers.files.acl-plan')
     value=job.get('resultJson',job.get('result_json'))
     def unique(pairs):

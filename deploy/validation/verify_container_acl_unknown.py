@@ -11,12 +11,18 @@ import uuid
 import datetime as dt
 
 import requests
-from validate_container_acl_unknown import SOURCES, WAITING_PATH, save_facts, require_blocked, snapshot, directory_snapshot, no_active_work, load, owned, host_snapshot
+from validate_container_acl_unknown import SOURCES, WAITING_PATH, save_facts, require_blocked, snapshot, directory_snapshot, no_active_work, load, owned, host_snapshot, expected_physical, require_cut, verify_unknown_jobs
 from validate_metric_continuity import query
 from validate_container_upload_recovery_agent import trusted
 from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, require
 
 IMMUTABLE=('receipt_json','receipt_hash','acl_confirmed','history_may_exist','history_verified','history_digest','published_version','actor_subject','login_binding','execution_job_id','plan_json','command_json')
+
+
+def require_source_version(source,baseline):
+    version=source['proofVersion'];assert type(version) is int and version in (2,3)
+    if baseline.get('postAcl',False):assert baseline['postAcl'] is True and version==3
+    else:assert version==2
 
 
 def require_acknowledgement(original, final, old_subject, new_subject):
@@ -48,7 +54,7 @@ def verify(directory):
         info=trusted(path);assert info.st_size<=262144 and info.st_mode&0o777==0o600;return json.loads(path.read_bytes())
     baseline=read(directory/'baseline.json');accepted=read(directory/'verified.json');source=read(directory/'validation-source.json');owner=read(directory/'owner-browser.json');recovery=read(directory/'recovery-browser.json')
     assert accepted['revision']==baseline['revision']==owner['revision']==recovery['revision']==source['productRevision']
-    assert source['proofVersion']==2
+    require_source_version(source,baseline);post=baseline.get('postAcl',False)
     assert baseline['validationSourceRevision']==source['revision'] and set(source['sha256'])==set(SOURCES)
     subprocess.run(['git','-C',str(repo),'merge-base','--is-ancestor',baseline['revision'],source['revision']],check=True,capture_output=True,timeout=15)
     for name,sha in source['sha256'].items():
@@ -62,17 +68,26 @@ def verify(directory):
     assert owner['subject']==accepted['originalSubject']==baseline['originalSubject']!=recovery['subject']==accepted['recoverySubject'] and recovery['waitingVisibleInVue'] and recovery['waitingDirectoryInViewport']
     assert recovery['displayedContainerId']==baseline['containerId'] and recovery['displayedPath']=='/work/acl-file.bin'
     assert 0<=accepted['productStoppedHelperSeconds']<15 and accepted['validatorKilledHelper'] is False
-    removed=read(directory/'removed-owned.json');assert removed=={'containerId':baseline['containerId'],'onlyExactOwnedContainerRemoved':True,'helperAliveBeforeLogout':True,'sourceFullInventoryUnchanged':True}
+    removed=read(directory/'removed-owned.json');expected_removed={'containerId':baseline['containerId'],'onlyExactOwnedContainerRemoved':True,'helperAliveBeforeLogout':True,'sourceFullInventoryUnchanged':True}
+    if post:expected_removed['sourceInventoryReference']='post-acl-cut'
+    assert removed==expected_removed
     original=read(directory/'unknown-sql.json');final=snapshot(accepted['id']);assert final==read(directory/'final-sql.json')
     require_acknowledgement(original,final,owner['subject'],recovery['subject']);row=final['row'];assert row['id']==owner['id']==recovery['id']==baseline['id'] and row['execution_job_id']==owner['executionJobId']==baseline['executionJobId']
+    if post:
+        verify_unknown_jobs(original,read(directory/'unknown-jobs.json'),'unknown');verify_unknown_jobs(final,read(directory/'acknowledged-jobs.json'),'acknowledged')
+        assert recovery['jobReadsOnly'] is True
+        for stage in ('unknown','acknowledged'):
+            for suffix in ('-job.png','-job-facts.png'):
+                path=directory/(stage+suffix);info=trusted(path);assert 1000<info.st_size<4*1024**2 and path.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
     files=load('/usr/local/libexec/whaledeck-files.py','acl_unknown_independent_files');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_unknown_independent_module');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_unknown_independent_hdd').FileBackups(files)
     record,raw,hdd=save_facts(final,baseline,storage,module);assert raw==(directory/'unknown-root.json').read_bytes()==(directory/'final-root.json').read_bytes() and hdd==(directory/'unknown-hdd.json').read_bytes()==(directory/'final-hdd.json').read_bytes()
     assert hashlib.sha256(raw).hexdigest()==accepted['rootSha256'] and record['state']=='Unknown' and record['aclConfirmed'] is None
-    cut=read(directory/'cut-root.json');bound=read(directory/'bound-helper.json');assert cut['state'] in ('Preparing','Prepared') and cut['aclConfirmed'] is None and cut['historyVerified']
+    cut=read(directory/'cut-root.json');bound=read(directory/'bound-helper.json');assert cut['aclConfirmed'] is None and cut['historyVerified']
     assert cut['plan']==record['plan'] and cut['owner']==record['owner'] and cut['operationId']==record['operationId'] and cut['historyDigest']==record['historyDigest']
     proof=bound['proof'];assert bound['twoKernelFdProofs'] and re.fullmatch(r'whaledeck-container-acl-[a-f0-9]{32}\.service',bound['unit'])
-    assert proof['originalIdentity']==cut['plan']['sourceIdentity']==baseline['original']['acl-file.bin']['identity'] and proof['accessAcl']==cut['plan']['accessAcl'] and proof['defaultAcl']==cut['plan']['defaultAcl'] and proof['attributesDigest']==cut['plan']['attributesDigest']
-    assert read(directory/'physical-final.json')==baseline['original'] and accepted['originalFullBytesFingerprintAclsAndAttributesUnchanged']
+    require_cut(baseline,cut,proof,expected_physical(baseline))
+    assert read(directory/'physical-final.json')==expected_physical(baseline) and accepted['originalFullBytesFingerprintAclsAndAttributesUnchanged'] is (not post)
+    if post:assert accepted['postAclPhysicalInventoryPreserved'] is True
     content=hashlib.shake_256(('acl-unknown:'+baseline['containerId']).encode()).digest(2*1024**2+7);assert baseline['bytesPerFile']==len(content) and baseline['sha256']==hashlib.sha256(content).hexdigest().upper()
     late=read(directory/'late-apply.json');assert late['operationId']==record['operationId'] and late['state']=='Unknown' and late['aclConfirmed'] is None and late['replayed'] and late['version']=='' and late['historyDigest']==row['history_digest']
     audit=query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result),'targets',json_agg(target_id)) FROM audit_events WHERE job_id=:'id'::uuid AND action='containers.files.acl.unknown-acknowledged';",id=row['execution_job_id'])

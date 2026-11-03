@@ -74,6 +74,35 @@ try {
     assert.notEqual(profile.subject, fixture.originalSubject)
     const root = '/api/v1/files/container-acls/recovery'
     let confirmations = 0, registrations = 0, bodies = 0
+    let jobReadsOnly = false
+    async function inspectJob(stage) {
+      assert.equal(fixture.postAcl, true)
+      async function readJob(id) { const r = await context.request.get(base + '/api/v1/jobs/' + id); assert.equal(r.status(), 200); return r.json() }
+      const proof = { id: fixture.id, stage, plan: await readJob(fixture.id), execution: await readJob(fixture.executionJobId), readOnly: true }
+      assert.equal(proof.execution.id, fixture.executionJobId); assert.equal(proof.execution.state, stage === 'unknown' ? 'Running' : 'Failed')
+      const summary = JSON.parse(proof.execution.resultJson); assert.equal(summary.aclConfirmed, null); assert.equal(summary.receiptState, 'Unknown'); assert.equal(summary.hasPublishedVersion, false)
+      const tab = await context.newPage(); let writes = 0
+      tab.on('request', r => { if (new URL(r.url()).pathname.startsWith('/api/v1/jobs') && r.method() !== 'GET') writes++ })
+      try {
+        const listing = tab.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/jobs' && r.request().method() === 'GET')
+        await tab.goto(base + '/jobs'); const response = await listing; assert.equal(response.status(), 200); const jobs = await response.json(), index = jobs.findIndex(j => j.id === fixture.executionJobId); assert.ok(index >= 0)
+        await tab.locator('.jobs-page .el-table__body tr').nth(index).getByRole('button', { name: '详情', exact: true }).click()
+        const drawer = tab.getByRole('dialog', { name: '任务详情', exact: true }), region = drawer.getByRole('region', { name: 'ACL 安全结果', exact: true })
+        await expect(drawer.locator('.el-descriptions__content').first()).toHaveText(fixture.executionJobId); await expect(drawer.locator('.el-descriptions .el-tag')).toHaveText(stage === 'unknown' ? 'Running' : 'Failed')
+        const title = stage === 'unknown' ? '结果未知，仍保留写入保护' : '管理员已明确处置未知结果'; await expect(region.getByText(title, { exact: true })).toBeVisible()
+        async function field(label, text) { const value = region.getByText(label, { exact: true }).locator('xpath=following-sibling::dd[1]'); await expect(value).toHaveText(text); return value }
+        await field('历史回执', 'Unknown'); await field('历史已验证', '是'); await field('已记录发布版本', '否'); await field('回执对象绑定有效', '否')
+        const nullValue = await field('ACL 已确认', '未证明'); await nullValue.scrollIntoViewIfNeeded(); await expect(nullValue).toBeInViewport({ ratio: 1 }); await tab.screenshot({ path: join(directory, stage + '-job-facts.png') })
+        if (stage === 'acknowledged') await expect(region).toContainText('处置仅解除业务保护，不证明 ACL 已恢复或重新执行。')
+        await expect(drawer.getByRole('button', { name: '取消任务', exact: true })).toHaveCount(0); await expect(drawer.getByRole('button', { name: '重新预检并重试', exact: true })).toHaveCount(0)
+        for (const secret of [fixture.containerId, fixture.instanceId, 'work/acl-file.bin', fixture.originalSubject, profile.subject]) assert.ok(!(await region.innerText()).includes(secret))
+        await region.getByText(title, { exact: true }).scrollIntoViewIfNeeded(); await expect(region.getByText(title, { exact: true })).toBeInViewport({ ratio: 1 }); assert.ok(await tab.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        await tab.screenshot({ path: join(directory, stage + '-job.png') }); assert.equal(writes, 0)
+        proof.taskCenter = { id: fixture.executionJobId, nullConfirmationVisible: true, noGenericWriteControls: true }
+        await writeSignal(directory, stage + '-jobs.json', proof)
+      } finally { await tab.close() }
+      jobReadsOnly = true
+    }
     page.on('request', request => {
       const path = new URL(request.url()).pathname
       if (request.method() === 'POST' && path === root + '/' + fixture.id + '/acknowledge') confirmations++
@@ -98,6 +127,7 @@ try {
     await dialog.getByRole('button', { name: '暂不处置', exact: true }).click()
     assert.equal(confirmations, 0)
     const stillUnknown = await context.request.get(base + root + '/' + fixture.id); assert.equal(stillUnknown.status(), 200); assert.equal((await stillUnknown.json()).state, 'Unknown')
+    if (fixture.postAcl) await inspectJob('unknown')
     await writeSignal(directory, 'recovery-dismissed.json', { id: fixture.id, subject: profile.subject, confirmations: 0, stillUnknown: true })
     await waitSignal(directory, 'allow-ack.json', 40_000)
     await candidate.getByRole('button', { name: '处置历史结果', exact: true }).click()
@@ -113,6 +143,7 @@ try {
     const old = await (await context.request.get(base + root + '/' + fixture.id)).json()
     assert.equal(old.state, 'Acknowledged'); assert.equal(old.aclConfirmed, null); assert.equal(old.publishedVersion, null)
     assert.equal(old.historyVerified, true); assert.equal(old.confirmation, null)
+    if (fixture.postAcl) await inspectJob('acknowledged')
     phase = 'other-container-starts-only-after-release'
     let waiting
     for (let n = 0; n < 120; n++) {
@@ -138,7 +169,7 @@ try {
     phase = 'different-administrator-normal-dual-logout'
     const logoutReceipt = await logoutFromUserMenu(page, context, base)
     await writeSignal(directory, 'recovery-browser.json', { revision, id: fixture.id, subject: profile.subject, actualUi: true,
-      confirmations, registrations, bodies, originalState: old.state, waitingState: waiting.state, waitingVisibleInVue: true, waitingDirectoryInViewport: true, displayedContainerId: fixture.containerId, displayedPath: '/work/acl-file.bin', ackVersion: submitted.version, logout: logoutReceipt, normalDualLogout: true })
+      confirmations, registrations, bodies, originalState: old.state, waitingState: waiting.state, waitingVisibleInVue: true, waitingDirectoryInViewport: true, displayedContainerId: fixture.containerId, displayedPath: '/work/acl-file.bin', ackVersion: submitted.version, logout: logoutReceipt, normalDualLogout: true, jobReadsOnly })
   }
   await context.close()
   console.log(JSON.stringify({ aclUnknownBrowser: 'passed', mode }))
