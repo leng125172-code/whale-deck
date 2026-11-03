@@ -32,6 +32,7 @@ export interface ContainerAclHistorySnapshot {
   accessAcl: ContainerAclEntry[]
   defaultAcl: ContainerAclEntry[]
 }
+type HistoryTarget = Pick<ContainerFileTarget, 'containerId' | 'instanceId'>
 const hash = /^[A-F0-9]{64}$/
 function capture(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9]{32}$/.test(value) && value !== '0'.repeat(32)
@@ -48,7 +49,7 @@ function exact(value: unknown, fields: string[]): value is Record<string, unknow
 function integer(value: unknown, min: number, max: number): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max
 }
-function location(value: unknown, target: ContainerFileTarget, path: string) {
+function location(value: unknown, target: HistoryTarget, path: string) {
   return (
     exact(value, ['containerId', 'instanceId', 'path']) &&
     value.containerId === target.containerId &&
@@ -59,7 +60,7 @@ function location(value: unknown, target: ContainerFileTarget, path: string) {
 }
 export function validContainerAclHistoryEntry(
   value: unknown,
-  target: ContainerFileTarget,
+  target: HistoryTarget,
   path: string,
 ): value is ContainerAclHistoryEntry {
   return (
@@ -94,7 +95,7 @@ export function validContainerAclHistoryEntry(
 }
 export function assertContainerAclHistoryPage(
   value: unknown,
-  target: ContainerFileTarget,
+  target: HistoryTarget,
   path: string,
   after = '',
   version = '',
@@ -145,7 +146,7 @@ function sameEntry(value: ContainerAclHistoryEntry, expected: ContainerAclHistor
 }
 export function assertContainerAclHistorySnapshot(
   value: unknown,
-  target: ContainerFileTarget,
+  target: HistoryTarget,
   path: string,
   expected: ContainerAclHistoryEntry,
 ): ContainerAclHistorySnapshot {

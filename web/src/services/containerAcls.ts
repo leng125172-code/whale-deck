@@ -117,6 +117,8 @@ export function aclResult(code: string | null) {
   return (
     (
       {
+        CONTAINER_ACL_RESTORE_SOURCE_CHANGED:
+          '所选历史来源已变化或不存在，已阻止新写入；请核对原任务。',
         CONTAINER_ACL_PLAN_ACCEPTED: '预检任务已登记，尚未修改ACL。',
         CONTAINER_ACL_READY: '预检已完成，请核对原ACL与目标ACL后确认。',
         CONTAINER_ACL_ACCEPTED: '确认已登记，等待执行。',

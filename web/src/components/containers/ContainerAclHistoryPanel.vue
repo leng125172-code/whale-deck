@@ -5,7 +5,12 @@ import { ApiError } from '@/services/apiClient'
 import { filePath } from '@/services/fileManagement'
 import type { FileEntry } from '@/services/fileManagement'
 import type { ContainerFileTarget } from '@/services/containerFiles'
-import { aclBits, aclEntryLabel, aclModeLabel } from '@/services/containerAcls'
+import {
+  aclBits,
+  aclEntryLabel,
+  aclModeLabel,
+  canAclContainerEntry,
+} from '@/services/containerAcls'
 import type { ContainerAclEntry } from '@/services/containerAcls'
 import { listContainerAclHistory, readContainerAclHistory } from '@/services/containerAclHistory'
 import type {
@@ -13,7 +18,17 @@ import type {
   ContainerAclHistorySnapshot,
 } from '@/services/containerAclHistory'
 
-const props = defineProps<{ target: ContainerFileTarget; path: string; disabled: boolean }>()
+const props = defineProps<{
+  target: ContainerFileTarget
+  path: string
+  disabled: boolean
+  restoreDisabled?: boolean
+}>()
+const emit = defineEmits<{
+  restore: [value: ContainerAclHistorySnapshot, currentVersion: string]
+}>()
+const sourceVersion = ref('')
+const sourceCanRestore = ref(false)
 const allowed = computed(() => authSession.user.value?.isAdministrator === true)
 const opened = ref(false),
   busy = ref(false),
@@ -38,6 +53,8 @@ function clear() {
   stop()
   opened.value = false
   scope.value = ''
+  sourceVersion.value = ''
+  sourceCanRestore.value = false
   rows.value = []
   cursor.value = ''
   version.value = ''
@@ -145,9 +162,23 @@ async function open(entry: FileEntry) {
   )
     return
   clear()
+  sourceCanRestore.value = canAclContainerEntry(entry)
+  sourceVersion.value = entry.version
   scope.value = filePath(props.path, entry.name)
   opened.value = true
   await load()
+}
+function restore() {
+  if (
+    !allowed.value ||
+    busy.value ||
+    props.restoreDisabled ||
+    !snapshot.value ||
+    !sourceVersion.value
+  )
+    return
+  emit('restore', JSON.parse(JSON.stringify(snapshot.value)), sourceVersion.value)
+  clear()
 }
 function effective(entry: ContainerAclEntry, entries: ContainerAclEntry[]) {
   const mask = entries.find((v) => v.tag === 'mask')?.permissions ?? 7
@@ -271,6 +302,13 @@ defineExpose({ open })
     <template #footer>
       <el-button @click="clear">{{ busy ? '取消读取并关闭' : '关闭' }}</el-button>
       <el-button v-if="snapshot" :disabled="busy" @click="snapshot = null">返回历史列表</el-button>
+      <el-button
+        v-if="snapshot"
+        type="primary"
+        :disabled="busy || restoreDisabled || !sourceCanRestore"
+        @click="restore"
+        >从此历史生成恢复预检</el-button
+      >
       <el-button :disabled="busy" @click="load()">重新读取</el-button>
       <el-button
         v-if="!snapshot && cursor"

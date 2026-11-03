@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { assertAclRestore, getAclRestore, queueAclRestore } from '@/services/containerAclRestores'
+import type { ContainerAclRestore } from '@/services/containerAclRestores'
+import { assertContainerAclHistorySnapshot } from '@/services/containerAclHistory'
+import type { ContainerAclHistorySnapshot } from '@/services/containerAclHistory'
 import AclEntryList from './AclEntryList.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
@@ -52,6 +56,8 @@ const source = ref<ContainerAclCommand['location'] | null>(null),
 const hint = ref<ContainerAclHint | null>(null),
   intent = ref<ContainerAclIntent | null>(null),
   frozen = ref<ContainerAclCommand | null>(null)
+const restoreSource = ref<ContainerAclHistorySnapshot | null>(null)
+const restoring = computed(() => !!restoreSource.value || hint.value?.restore === true)
 const uncertain = ref(false)
 const active = computed(() => !!hint.value && (!intent.value || !aclTerminal(intent.value.state)))
 const expired = computed(
@@ -116,6 +122,7 @@ function clear() {
   source.value = null
   frozen.value = null
   sourceVersion.value = ''
+  restoreSource.value = null
   draft.value = []
   aclType.value = 'access'
   clearDefault.value = false
@@ -132,9 +139,11 @@ function failure(reason: unknown) {
   error.value =
     reason instanceof ApiError && reason.status === 404
       ? '尚未找到原登记，请继续查询同一引用；不会自动重新提交。'
-      : reason instanceof Error
-        ? reason.message
-        : 'ACL修改结果无法核实，请查询原任务'
+      : restoring.value
+        ? 'ACL恢复请求无法核实，请查询原任务；不会自动重新提交或修改历史来源。'
+        : reason instanceof Error
+          ? reason.message
+          : 'ACL修改结果无法核实，请查询原任务'
 }
 function accept(value: ContainerAclIntent) {
   const original = hint.value
@@ -165,6 +174,56 @@ function accept(value: ContainerAclIntent) {
     }
   }
 }
+function acceptRestore(value: ContainerAclRestore) {
+  const original = hint.value
+  if (!original || !original.restore) throw new Error('原ACL恢复引用已失效')
+  assertAclRestore(
+    value,
+    original.containerId,
+    original.id ?? undefined,
+    restoreSource.value ?? undefined,
+    frozen.value?.expectedVersion,
+  )
+  restoreSource.value = JSON.parse(JSON.stringify(value.source))
+  accept(value.intent)
+}
+function openRestore(value: ContainerAclHistorySnapshot, currentVersion: string) {
+  if (
+    !allowed.value ||
+    busy.value ||
+    props.disabled ||
+    active.value ||
+    !/^[A-F0-9]{64}$/.test(currentVersion)
+  )
+    return false
+  const snapshot = assertContainerAclHistorySnapshot(
+    value,
+    props.target,
+    value.location.path,
+    value.entry,
+  )
+  if (
+    !snapshot.location.path.startsWith(props.path ? props.path + '/' : '') ||
+    snapshot.location.path.slice(props.path ? props.path.length + 1 : 0).includes('/')
+  )
+    return false
+  clear()
+  restoreSource.value = JSON.parse(JSON.stringify(snapshot))
+  source.value = { ...snapshot.location }
+  sourceVersion.value = currentVersion
+  sourceKind.value = snapshot.entry.kind
+  frozen.value = {
+    location: { ...snapshot.location },
+    aclType: snapshot.entry.changedAclType,
+    entries: (snapshot.entry.changedAclType === 'access'
+      ? snapshot.accessAcl
+      : snapshot.defaultAcl
+    ).map((e) => ({ ...e })),
+    expectedVersion: currentVersion,
+  }
+  dialog.value = true
+  return true
+}
 function schedule(token: number) {
   if (token !== generation) return
   if (timer !== null) window.clearTimeout(timer)
@@ -192,7 +251,7 @@ function schedule(token: number) {
   }, 6000)
 }
 async function perform(
-  action: (signal: AbortSignal) => Promise<ContainerAclIntent>,
+  action: (signal: AbortSignal) => Promise<ContainerAclIntent | ContainerAclRestore>,
   received?: () => void,
 ) {
   if (!allowed.value || busy.value) return
@@ -205,7 +264,8 @@ async function perform(
   try {
     const value = await action(local.signal)
     if (token !== generation || local.signal.aborted || !allowed.value) return
-    accept(value)
+    if ('intent' in value) acceptRestore(value)
+    else accept(value)
     received?.()
   } catch (reason) {
     if (token === generation && !local.signal.aborted) failure(reason)
@@ -222,7 +282,14 @@ async function query() {
   if (!original || confirmingCancel.value) return
   await perform(
     (signal) =>
-      getAcl(original.containerId, original.id ?? original.key, signal, original.id === null),
+      original.restore
+        ? getAclRestore(
+            original.containerId,
+            original.id ?? original.key,
+            signal,
+            original.id === null,
+          )
+        : getAcl(original.containerId, original.id ?? original.key, signal, original.id === null),
     () => {
       uncertain.value = false
     },
@@ -274,6 +341,7 @@ async function prepare(retry = false) {
       containerId: props.target.containerId,
       key: createIdempotencyKey(),
       id: null,
+      ...(restoreSource.value ? { restore: true as const } : {}),
     }
     try {
       saveAclHint(original)
@@ -295,7 +363,23 @@ async function prepare(retry = false) {
     error.value = '容器实例已变化，请只查询原任务'
     return
   }
-  await perform((signal) => queueAcl(body, original.key, signal))
+  if (original.restore) {
+    const snapshot = restoreSource.value
+    if (!snapshot) return
+    await perform((signal) =>
+      queueAclRestore(
+        {
+          location: body.location,
+          captureId: snapshot.entry.captureId,
+          expectedHistoryDigest: snapshot.entry.historyDigest,
+          expectedVersion: body.expectedVersion,
+        },
+        original.key,
+        snapshot,
+        signal,
+      ),
+    )
+  } else await perform((signal) => queueAcl(body, original.key, signal))
 }
 async function confirm() {
   const original = intent.value
@@ -381,6 +465,7 @@ watch(dialog, (value) => {
     if (!hint.value) {
       source.value = null
       frozen.value = null
+      restoreSource.value = null
       error.value = ''
     } else schedule(generation)
   }
@@ -397,7 +482,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', visible)
   emit('locked', false)
 })
-defineExpose({ open })
+defineExpose({ open, openRestore })
 </script>
 
 <template>
@@ -413,7 +498,7 @@ defineExpose({ open })
   <el-dialog
     v-if="allowed"
     v-model="dialog"
-    title="修改容器文件或目录ACL"
+    :title="restoring ? '从历史恢复容器ACL' : '修改容器文件或目录ACL'"
     width="min(620px, calc(100vw - 24px))"
     class="container-acl-dialog"
     :close-on-click-modal="false"
@@ -421,7 +506,7 @@ defineExpose({ open })
   >
     <p v-if="command" class="container-acl__path">对象：/{{ command.location.path }}</p>
     <p v-else>原任务对象待核实，仅可查询原登记。</p>
-    <el-form v-if="!hint" label-position="top" @submit.prevent="prepare()">
+    <el-form v-if="!hint && !restoring" label-position="top" @submit.prevent="prepare()">
       <el-form-item label="修改的ACL类型"
         ><el-radio-group v-model="aclType" aria-label="ACL类型" :disabled="busy || !!hint"
           ><el-radio-button value="access">access 访问权限</el-radio-button
@@ -491,13 +576,36 @@ defineExpose({ open })
         </div>
       </div>
     </el-form>
+    <section v-if="restoreSource" aria-label="ACL恢复来源" class="container-acl__path">
+      <h3>所选历史 · {{ restoreSource.entry.changedAclType }}</h3>
+      <p>捕获标识：{{ restoreSource.entry.captureId }}</p>
+      <p>来源摘要：{{ restoreSource.entry.historyDigest }}</p>
+      <p>
+        留存时间：{{
+          new Date(restoreSource.entry.createdAtUnixMs).toLocaleString('zh-CN')
+        }}；原实例：{{ restoreSource.entry.sourceInstanceId }}
+      </p>
+      <AclEntryList
+        :entries="
+          restoreSource.entry.changedAclType === 'access'
+            ? restoreSource.accessAcl
+            : restoreSource.defaultAcl
+        "
+        label="所选历史目标ACL"
+      />
+      <el-alert
+        type="warning"
+        :closable="false"
+        :title="`仅恢复${restoreSource.entry.changedAclType} ACL，另一类ACL、属主、内容及现有子项保持；不递归。确认后执行前先留存当前ACL原件。历史ACL不是当前权限，必须核对新预检。`"
+      />
+    </section>
     <AclEntryList
       v-if="hint && !intent && command"
       :entries="command.entries"
       :label="`待核实目标${command.aclType} ACL`"
     />
     <el-alert
-      v-if="!intent"
+      v-if="!intent && !restoring"
       title="初始条目仅按普通权限填写，不代表原有ACL。此操作完整替换所选一类ACL，请在预检后逐条核对原ACL；named用户/组须显式mask，access的mask会改变普通权限组位。default仅影响后续继承，现有子项保持；不递归。"
       type="info"
       :closable="false"
@@ -584,8 +692,13 @@ defineExpose({ open })
     <p v-if="error" role="alert" class="container-acl__error">{{ error }}</p>
     <template #footer>
       <el-button @click="dialog = false">{{ hint ? '关闭' : '返回' }}</el-button>
-      <el-button v-if="!hint" type="primary" :loading="busy" :disabled="disabled" @click="prepare()"
-        >生成ACL修改预检</el-button
+      <el-button
+        v-if="!hint"
+        type="primary"
+        :loading="busy"
+        :disabled="disabled"
+        @click="prepare()"
+        >{{ restoring ? '生成ACL恢复预检' : '生成ACL修改预检' }}</el-button
       >
       <el-button v-if="hint" :disabled="busy || confirmingCancel" @click="query"
         >查询原ACL修改任务</el-button
@@ -602,7 +715,7 @@ defineExpose({ open })
         :loading="busy"
         :disabled="disabled || !canConfirm"
         @click="confirm"
-        >确认ACL修改</el-button
+        >{{ restoring ? '确认ACL历史恢复' : '确认ACL修改' }}</el-button
       >
       <el-button
         v-if="intent && !aclTerminal(intent.state) && intent.state !== 'Unknown'"

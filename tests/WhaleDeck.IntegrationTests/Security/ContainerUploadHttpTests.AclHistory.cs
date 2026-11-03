@@ -108,7 +108,7 @@ public sealed partial class ContainerUploadHttpTests
         var response=client.GetAsync(SnapshotUrl,stop.Token);await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));await stop.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async()=>await response);await canceled.Task.WaitAsync(TimeSpan.FromSeconds(5));Assert.Equal(0,f.AclHistory.Audits);
     }
-    private sealed class AclHistoryHttpFixture : IContainerAclHistoryGateway,IContainerFileReadAudit
+    private sealed class AclHistoryHttpFixture : IContainerAclHistoryGateway,IContainerFileReadAudit,IContainerAclRestoreSourceGateway
     {
         public int Requires,Lists,Reads,Audits;
         public bool BadOutput,AuditFailure;
@@ -121,6 +121,15 @@ public sealed partial class ContainerUploadHttpTests
         public List<string> Actions {get;}=[];
         private static readonly ContainerAclEntryDto[] Access=[new("user_obj",null,6),new("user",0,0),new("group_obj",null,4),new("mask",null,4),new("other",null,0)];
         private static ContainerAclHistoryEntryDto Entry=>new(new('a',32),new('B',64),0,"666:2026-10-26T01:02:03Z","access","File",416,5,0);
+        public ContainerAclHistoryEntryDto? RestoreEntry;
+        public async Task<ContainerAclHistorySnapshotDto> ReadContainerAclRestoreSourceAsync(TerminalActor actor,ContainerFileLocationDto location,string captureId,string expectedHistoryDigest,CancellationToken cancellationToken)
+        {
+            Requires++;
+            if(Failure is StatusCode.NotFound or StatusCode.Aborted) throw new ContainerAclRestoreSourceChangedException();
+            if(Failure is {} status)throw new RpcException(new(status,"private-must-not-leak"));
+            var result=await ReadContainerAclHistoryAsync(actor,location,captureId,expectedHistoryDigest,cancellationToken);
+            return RestoreEntry is null?result:result with {Entry=RestoreEntry};
+        }
         public Task RequireContainerAclHistoryAsync(CancellationToken token){Requires++;return Task.CompletedTask;}
         public async Task<ContainerAclHistoryPageDto> ListContainerAclHistoryAsync(TerminalActor actor,ContainerFileLocationDto location,string after,int take,string expectedVersion,CancellationToken cancellationToken)
         {Lists++;Actor=actor;if(Failure is {} status)throw new RpcException(new(status,"private-must-not-leak"));if(AfterQuery is not null)await AfterQuery();return new(location,new('C',64),PageEntries,"",1,0,true);}

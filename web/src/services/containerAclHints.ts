@@ -6,11 +6,16 @@ export interface ContainerAclHint {
   containerId: string
   key: string
   id: string | null
+  restore?: true
 }
 function valid(value: ContainerAclHint) {
   return (
     !!value &&
-    Object.keys(value).length === 4 &&
+    (Object.keys(value).length === 4 ||
+      (Object.keys(value).length === 5 && value.restore === true)) &&
+    Object.keys(value).every((key) =>
+      ['subject', 'containerId', 'key', 'id', 'restore'].includes(key),
+    ) &&
     typeof value.subject === 'string' &&
     !!value.subject &&
     value.subject.length <= 256 &&

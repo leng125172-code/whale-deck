@@ -5,6 +5,9 @@ namespace WhaleDeck.Application.Services;
 
 public sealed partial class ContainerAclWorkflowService
 {
+    public Task<ContainerAclRestoreIntentDto> GetRestoreByKeyAsync(TerminalActor actor, string containerId, string key, CancellationToken cancellationToken) =>
+        GetRestoreAsync(actor, containerId, ContainerAclWorkflowValidation.IntentId(actor.Subject, actor.LoginBinding, ContainerAclWorkflowValidation.Key(key)), cancellationToken);
+
     public async Task<ContainerAclRestoreIntentDto> QueueRestoreAsync(TerminalActor actor, ContainerAclRestoreCommand command,
         string key, CancellationToken cancellationToken)
     {

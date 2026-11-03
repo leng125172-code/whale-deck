@@ -329,6 +329,21 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="!!busy"
+      :restore-disabled="
+        !!busy ||
+        editorLocked ||
+        historyLocked ||
+        uploadLocked ||
+        directoryLocked ||
+        copyLocked ||
+        moveLocked ||
+        permissionLocked ||
+        ownershipLocked ||
+        recursivePermissionLocked ||
+        recursiveOwnershipLocked ||
+        aclLocked
+      "
+      @restore="(snapshot, version) => aclEditor?.openRestore(snapshot, version)"
     />
     <ContainerAclPanel
       v-if="target"

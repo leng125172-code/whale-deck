@@ -207,7 +207,7 @@ public sealed partial class ContainerUploadHttpTests
             var uploads=new ContainerFileUploadService(authorization,sessions,fixture.Gateway,fixture.Repository,protector,TimeProvider.System,fixture.History);
             builder.Services.AddSingleton(uploads);
             builder.Services.AddSingleton(new ContainerRecursivePermissionWorkflowService(uploads,fixture.Recursive,protector,fixture.Recursive,TimeProvider.System,fixture.Recursive));
-            builder.Services.AddSingleton(new ContainerAclWorkflowService(uploads,fixture.Acl,protector,fixture.Acl,TimeProvider.System,fixture.Acl));
+            builder.Services.AddSingleton(new ContainerAclWorkflowService(uploads,fixture.Acl,protector,fixture.Acl,TimeProvider.System,fixture.Acl,fixture.AclHistory));
             builder.Services.AddSingleton(new ContainerRecursiveOwnershipWorkflowService(uploads,fixture.RecursiveOwner,protector,fixture.RecursiveOwner,TimeProvider.System,fixture.RecursiveOwner));
             builder.Services.AddSingleton(new ContainerFileHistoryService(uploads,fixture.History,fixture.History,fixture.History));
             builder.Services.AddSingleton(new ContainerAclHistoryService(authorization,sessions,fixture.AclHistory,fixture.AclHistory));
