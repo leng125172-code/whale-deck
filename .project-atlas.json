@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md；docs/qa/CONTAINER_ACL_RESTORE_SOURCE_FAILURES.md；docs/qa/CONTAINER_ACL_SOURCE_QUARANTINE_CANDIDATE.md；docs/qa/CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md",
-  "nextStep": "Ready后来源缺失原确认409已通过新资源真实Vue/Authentik/Agent/HDD和独立核验，来源原inode还原后明确取消；旧137元数据保持/总138，运行28062da不重发。后续登记/异步预检/首次Apply来源丢失与替换、依赖中断、递归ACL/恢复、删除长期清理、维护发布连续性及其余59项；新CI终态待取。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md；docs/qa/CONTAINER_ACL_RESTORE_SOURCE_FAILURES.md；docs/qa/CONTAINER_ACL_SOURCE_QUARANTINE_CANDIDATE.md；docs/qa/CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md；docs/qa/CONTAINER_ACL_SOURCE_APPLY_MISSING.md",
+  "nextStep": "首次Apply前来源缺失已实机签收：原确认202/Pending后原执行Failed/SOURCE_CHANGED、Root永久Aborted/无当前前像，原件还原及迟到围栏、双主题详情和独立核验通过；旧138HDD保持/总139，运行28062da。继续登记/异步预检来源丢失、替换/依赖中断/期限回执组合、递归ACL/恢复、删除长期清理、维护发布连续性及其余59项；新CI终态待取。17项移出不算完成，不自动回滚dev。"
 }

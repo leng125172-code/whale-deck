@@ -10,7 +10,7 @@
 | 原幂等键重读 | 返回原存储来源，不重读已不可用HDD，不换ID、不延长过期时间；参数冲突拒绝 | 业务夹具、正常恢复原key重读；[Ready来源缺失时原key 200且完整SQL不变](CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md) | 更广依赖不可用、原期限到期及参数冲突实机组合仍待 |
 | 异步预检前 | 再读真实来源，逐字段比较完整冻结快照；变更则预检失败，不调用Root Plan/Apply | SourceChanged异常与同摘要不同时间戳的业务夹具 | 在实际Worker预检边界发生来源不可读/替换，核实SQL、原件、Root零调用 |
 | 原计划确认 | 无执行ID时先核实来源，再登记执行；来源变更拒绝且仍无执行Job | 三边界异常及替换夹具；原确认/登录绑定；[Ready后来源丢失实机确认409/无执行](CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md) | 来源真实替换及其它确认边界组合仍需验收 |
-| 第一次Apply前 | 先Inspect原执行；只有没有原回执且允许新写入时再验来源。变更时Discard原执行并失败，不调用Apply | SourceChanged/替换夹具；新测RootStarted为空、原来源字节保持 | 已确认任务被Worker阻止；Root仅留原ID的Discard/Aborted回执，目标ACL/字节不变、不新增当前ACL前像HDD |
+| 第一次Apply前 | 先Inspect原执行；只有没有原回执且允许新写入时再验来源。变更时Discard原执行并失败，不调用业务首次Apply | SourceChanged/替换夹具；[Pending来源缺失真实Worker→原Root Aborted/无前像及迟到围栏](CONTAINER_ACL_SOURCE_APPLY_MISSING.md) | 来源真实替换及更多依赖/期限/回执组合仍需验收 |
 | 临时不可用后恢复 | IO/传输不可用不等于来源已变更；不能提前写入。恢复可用后沿用原身份/执行ID/期限继续 | 本批plan/confirm/apply三处IO夹具：一次正确重续、一次Apply、无另建执行或Discard | 真实依赖不可用与恢复、原时限内同任务继续及真实文件/HDD证明 |
 | 已有原Root回执 | Completed/Unknown/Aborted先按原回执对账，不因旧来源失联重新Apply或改判历史事实 | 本批三态夹具；已有实盘写后目标/实例、撤权及重启组合各自记录 | 真实来源失联时原三态回执优先对账；不得用目标消失替代 |
 
@@ -19,6 +19,8 @@ IO夹具只表示来源读取通道故障，不证明整个Agent或HDD离线，�
 2026-11-04后续工具候选：新增仅本轮新普通捕获的HDD元数据隔离/同inode精确还原工具，22项隔离测试及真实安装态只读137份清单预检通过；未调用生产隔离，未增加任何本表真实故障完成项。进程强杀恢复、无覆盖/原件保留及ctime边界见[工具候选与后续真实门禁](CONTAINER_ACL_SOURCE_QUARANTINE_CANDIDATE.md)。
 
 2026-11-04再后续：c3dca1f新资源完成Ready后来源丢失确认拒绝实机门禁及独立只读核验。原历史404、确认409/OPERATION_CONFLICT、原键200/完整SQL不变且执行0，精确还原来源200后页面仅明确取消一次并正常双端退出；原137份字节九字段保持，总138，本轮新捕获ctime改变如实记录。只更新上表“原计划确认”的缺失来源分项，不补签替换、预检、首次Apply或整盘离线。[完整事实与边界](CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md)。
+
+2026-11-04后续bbd1b52完成已确认Pending、首次Apply前来源丢失：Worker停止时原确认202，仅隔离新捕获后真实404/原key200，再启动同一Worker；原执行Failed/SOURCE_CHANGED、Root Aborted/false、RootStarted始终空，原件还原后迟到同ID Root Apply仍Aborted且原字节保持。5实际PNG/两主题任务详情、4审计、双端退出/HTTP权限、实盘及独立复核、准确清理通过；旧138份字节九字段保持/总139，只有Worker StartedAt改变。仅新增上表该缺失来源分项，不补签其它阶段/替换/整盘不可用。[完整实机及边界](CONTAINER_ACL_SOURCE_APPLY_MISSING.md)。
 
 上表的“同摘要不同时间戳”是显式不可信gateway夹具，用于证明服务层比较完整快照；不是实际HDD可绕过digest校验的结论。实际Agent历史读取还必须检查元数据digest、存储证明、对象及数值presence。
 
