@@ -193,9 +193,9 @@ def main():
                 (directory/'cut-root.json').write_text(json.dumps(held.record));(directory/'bound-helper.json').write_text(json.dumps({'pid':held.pid,'unit':held.cgroup,'twoKernelFdProofs':True,'proof':held.proof}))
                 write_signal(directory,'held.json',{'rootPausedAfterAcl':True} if post else {'rootPausedBeforeAcl':True});wait_signal(directory,'owner-inflight.json',owner_browser,30)
                 PHASE='remove-exact-owned-container-then-normal-logout';original['remove_owned']();assert not select.select([held.descriptor],[],[],0)[0]
-                assert inventory(folder,reader,module,content)==expected_physical(baseline)
+                after_remove=inventory(folder,reader,module,content);assert after_remove==expected_physical(baseline)
                 removed={'containerId':baseline['containerId'],'onlyExactOwnedContainerRemoved':True,'helperAliveBeforeLogout':True,'sourceFullInventoryUnchanged':True}
-                if post:removed['sourceInventoryReference']='post-acl-cut'
+                if post:removed.update(sourceInventoryReference='post-acl-cut',sourceInventory=after_remove)
                 (directory/'removed-owned.json').write_text(json.dumps(removed))
                 began=time.monotonic()
                 with ThreadPoolExecutor(max_workers=1) as pool:

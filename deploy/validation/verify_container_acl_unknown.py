@@ -69,7 +69,7 @@ def verify(directory):
     assert recovery['displayedContainerId']==baseline['containerId'] and recovery['displayedPath']=='/work/acl-file.bin'
     assert 0<=accepted['productStoppedHelperSeconds']<15 and accepted['validatorKilledHelper'] is False
     removed=read(directory/'removed-owned.json');expected_removed={'containerId':baseline['containerId'],'onlyExactOwnedContainerRemoved':True,'helperAliveBeforeLogout':True,'sourceFullInventoryUnchanged':True}
-    if post:expected_removed['sourceInventoryReference']='post-acl-cut'
+    if post:expected_removed.update(sourceInventoryReference='post-acl-cut',sourceInventory=expected_physical(baseline))
     assert removed==expected_removed
     original=read(directory/'unknown-sql.json');final=snapshot(accepted['id']);assert final==read(directory/'final-sql.json')
     require_acknowledgement(original,final,owner['subject'],recovery['subject']);row=final['row'];assert row['id']==owner['id']==recovery['id']==baseline['id'] and row['execution_job_id']==owner['executionJobId']==baseline['executionJobId']
