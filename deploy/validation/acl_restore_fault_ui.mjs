@@ -37,7 +37,15 @@ export async function prepareMissingSourcePlan(page, context, base, fixture, pro
   })
 }
 
-async function prepareSelectedRestore(page, context, base, fixture, profile, beforeRegister = null) {
+export async function selectMissingSourceRegistration(page, context, base, fixture, profile) {
+  assert.equal(fixture.aclSourceFaultVersion, 4)
+  assert.equal(fixture.kind, 'source-register-missing')
+  assert.equal(fixture.aclRestoreFaultVersion, undefined)
+  assert.equal(fixture.jobResultsVersion, undefined)
+  return prepareSelectedRestore(page, context, base, fixture, profile, null, false)
+}
+
+async function prepareSelectedRestore(page, context, base, fixture, profile, beforeRegister = null, register = true) {
   const endpoint = `/api/v1/containers/${fixture.containerId}/files/acls`, directory = fixture.evidence
   let files = await openPermissionFiles(page, fixture)
   await files.getByRole('button', { name: 'ACL acl-file.bin', exact: true }).click()
@@ -112,6 +120,7 @@ async function prepareSelectedRestore(page, context, base, fixture, profile, bef
   await history.getByRole('button', { name: '从此历史生成恢复预检', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '从历史恢复容器ACL', exact: true })
   await expect(dialog.getByRole('region', { name: 'ACL恢复来源', exact: true })).toContainText(captureId)
+  if (!register) return { dialog, source }
   if (beforeRegister) await beforeRegister(source)
   const restoring = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/restores' && r.request().method() === 'POST')
   await dialog.getByRole('button', { name: '生成ACL恢复预检', exact: true }).click()
