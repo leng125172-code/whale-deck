@@ -25,6 +25,14 @@ export async function prepareMissingSourceApply(page, context, base, fixture, pr
   return prepareSelectedRestore(page, context, base, fixture, profile)
 }
 
+export async function prepareReplacedSourceConfirmation(page, context, base, fixture, profile) {
+  assert.equal(fixture.aclSourceFaultVersion, 5)
+  assert.equal(fixture.kind, 'source-confirm-replaced')
+  assert.equal(fixture.aclRestoreFaultVersion, undefined)
+  assert.equal(fixture.jobResultsVersion, undefined)
+  return prepareSelectedRestore(page, context, base, fixture, profile)
+}
+
 export async function prepareMissingSourcePlan(page, context, base, fixture, profile) {
   assert.equal(fixture.aclSourceFaultVersion, 3)
   assert.equal(fixture.kind, 'source-plan-missing')
