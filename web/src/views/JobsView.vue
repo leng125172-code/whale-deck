@@ -291,7 +291,7 @@ onBeforeUnmount(() => {
 
     <el-drawer v-model="drawerVisible" title="任务详情" size="min(560px, 94vw)" destroy-on-close>
       <template v-if="selected">
-        <el-descriptions :column="1" border>
+        <el-descriptions class="job-details" :column="1" border>
           <el-descriptions-item label="任务 ID">{{ selected.id }}</el-descriptions-item>
           <el-descriptions-item label="类型">{{ selected.jobType }}</el-descriptions-item>
           <el-descriptions-item label="状态"
@@ -435,6 +435,15 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
   margin: 0;
   white-space: pre-wrap;
+}
+.job-details :deep(.el-descriptions__table) {
+  table-layout: fixed;
+}
+.job-details :deep(.el-descriptions__label) {
+  width: 76px;
+}
+.job-details :deep(.el-descriptions__content) {
+  overflow-wrap: anywhere;
 }
 .job-events-title {
   margin: 24px 0 16px;

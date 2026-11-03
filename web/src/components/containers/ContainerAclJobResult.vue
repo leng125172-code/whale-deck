@@ -68,6 +68,8 @@ function fact(value: boolean | null) {
 <style scoped>
 .acl-job-result {
   overflow-wrap: anywhere;
+  min-width: 0;
+  max-width: 100%;
 }
 p {
   margin: 0 0 12px;

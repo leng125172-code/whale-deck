@@ -39,9 +39,19 @@ for (const width of [320, 1440])
         id,
         jobType,
         state,
-        phase: state,
+        phase:
+          state === 'Running'
+            ? 'AwaitingContainerAclReceipt'
+            : id === 'execution-acknowledged'
+              ? 'Acknowledged'
+              : state,
         progressPercent: state === 'Succeeded' ? 100 : null,
-        errorCode: null,
+        errorCode:
+          id === 'execution-acknowledged'
+            ? 'CONTAINER_ACL_UNKNOWN_ACKNOWLEDGED'
+            : state === 'Running'
+              ? 'CONTAINER_ACL_RESULT_UNKNOWN'
+              : null,
         createdAtUtc: '2026-11-03T01:00:00Z',
         completedAtUtc: state === 'Running' ? null : '2026-11-03T01:01:00Z',
         resultJson: result === null ? null : JSON.stringify(result),
@@ -145,6 +155,25 @@ for (const width of [320, 1440])
           if (i === 0) await expect(region).toContainText('0000')
           if (i === 2)
             await expect(region).toContainText('处置仅解除业务保护，不证明 ACL 已恢复或重新执行。')
+          if (i === 1 || i === 2) {
+            const value = region
+              .getByText('ACL 已确认', { exact: true })
+              .locator('xpath=following-sibling::dd[1]')
+            await expect(value).toHaveText('未证明')
+            await value.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest' }))
+            await expect(value).toBeInViewport({ ratio: 1 })
+            const body = await drawer.locator('.el-drawer__body').boundingBox()
+            expect(body).not.toBeNull()
+            for (const box of await region.locator('dd').evaluateAll((elements) =>
+              elements.map((el) => {
+                const b = el.getBoundingClientRect()
+                return { left: b.left, right: b.right }
+              }),
+            )) {
+              expect(box.left).toBeGreaterThanOrEqual(body!.x)
+              expect(box.right).toBeLessThanOrEqual(body!.x + body!.width)
+            }
+          }
         }
         await expect(drawer).not.toContainText('任务成功后')
         if (i === 1)
