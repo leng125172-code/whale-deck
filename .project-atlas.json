@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RESTORE_RELEASE_PREPARATION.md；docs/qa/CONTAINER_ACL_RESTORE_WEB.md；docs/qa/CONTAINER_ACL_RESTORE_PERSISTENCE.md",
-  "nextStep": "cad6182/run41619582863的安装、后端、真实PG/Valkey四路成功，前端待终态；本机原样安装门禁54组1533项与5CLI通过，丢响应单例5次通过。历史读取FD身份修复5423433与六场景真实恢复工具2fb2a40已推送，工具29证明通过但未实跑。取得五路成功后标准覆盖，再新独占资源的Authentik/实际ACL/写前当前原件HDD/独立清理及双端退出验收。运行仍08b2bb8/1.52、11核心healthy；故障/递归ACL/删除及其余59项/UI/C#酒馆/供应商/Live2D继续，17项移出不算完成，不自动回滚dev或重启主机。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RESTORE_PREBUILT.md；docs/qa/CONTAINER_ACL_RESTORE_RELEASE_PREPARATION.md；docs/qa/CONTAINER_ACL_RESTORE_WEB.md",
+  "nextStep": "运行源码已由user从08b2bb8快进cad6182，四镜像预构建成功且各ID的CLI/build-info/label同源；运行仍08b2bb8/1.52、11核心/两宿主PID/7配置摘要及账本保持，未迁移或发布。cad6182/run41619582863四路成功，前端已过ACL/容器组、最后授权文件终端组待终态。取得五路成功后标准维护update覆盖并再次核验六组件/生产来源迁移，再新独占资源真实恢复六场景及独立SQL/Root/HDD/退出清理。故障/递归ACL/删除及其余59项继续，17项移出不算完成，不自动回滚dev或重启主机。"
 }
