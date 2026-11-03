@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+**2026-11-03 P0-05可信发布记录候选463e19e/1811bd3已验证，尚未安装**：不再把checkout HEAD当上一版，新增root私有原子账本，从六组件实际来源初始化；只在发布完成且实际来源一致时晋升，失败/重试/同版重发保留原记录，手动恢复选择可信记录且不降级数据库。旧previous保留为legacy证据，兼容文件不再是权威；状态原子写入且不跟随目标符号链接，前置拒绝不改已有健康状态。30新隔离测试、11冻结构建/来源回归、5安装CLI及语法通过；包含两个真实临时子进程强杀，不是生产恢复演练。实际只读六组件探测通过，运行仍306f646/1.51、Agent4135740/维护4135726及11核心healthy，生产账本未创建/工具未安装/原记录未改。真实升级、手动恢复强杀/冷启动控制入口及完整P0-05仍待闭环。[实现、失败与真实验收边界](qa/PLATFORM_REVISION_HISTORY.md)。
+
 **2026-11-03 306f646覆盖及ACL旧版本预检拒绝已实机通过**：原唯一Invocation d38034cfaba24730ac1fe1acae325829在10:50:22成功结束（约1690秒），下载EOF/软件源超时后同次构建完成，无重复发布或回滚；六组件CLI/镜像/HTTP与实际宿主exe/DLL映射一致，Agent4135740/维护4135726、协议1.51，11核心healthy/8数据库不重建/无新迁移，配置和开发sudo保持。冻结2435d44/proofVersion1新资源只改准确FD的mtime，原Vue旧版本被真实预检拒绝：Failed/VERSION_CONFLICT、1规划Job/2审计，执行Job/Root/HDD均0，不能把null说成已修改或未修改的执行回执。15字段SQL/API、320暗色/1440亮色详情、5真PNG、正常双端退出、普通3路403/匿名2路401、独立核验及准确清理通过；89离线本轮通过。剩余执行摘要/共享写入/磁盘路径、ACL递归恢复/删除与59项继续，P0-05旧previous-revision缺陷未修。[部署、真实证据与范围](qa/CONTAINER_ACL_STALE_PREFLIGHT.md)。
 
 **2026-11-03 10:44标准覆盖发布进行中，尚未签收**：运行checkout已由user干净快进至306f646，仅启动一次`whaledeck-dev-publish-306f646.service`，Invocation`d38034cfaba24730ac1fe1acae325829`。宿主已为306f646（Agent4135740/维护4135726），API/Gateway仍447070e，11核心容器原ID/镜像/StartedAt保持且healthy，8数据库不变；私密配置与开发sudo摘要保持。容器镜像构建遭遇NuGet EOF与Ubuntu源超时，软件源安装已完成、NuGet仍重试；unit仍activating，运行中的Result=success/ExecMainStatus=0不等于发布成功。正确8080维护入口本段1052次采样均HTTP200/updating，未覆盖整个发布窗口。**无迁移/容器替换成功回执，新真实旧版本预检门禁未开始，不计部署或功能通过**。89离线边界/范围本轮重跑通过；目标59项不变。[唯一发布、原件和接续约束](qa/CONTAINER_ACL_STALE_PREFLIGHT.md)。

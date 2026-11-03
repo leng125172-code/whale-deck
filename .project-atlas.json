@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_STALE_PREFLIGHT.md；docs/qa/CONTAINER_ACL_INSTANCE_CHANGE.md",
-  "nextStep": "306f646/1.51已正常唯一覆盖并签收六组件/实际映射、11核心healthy/8数据库不重建、配置和开发sudo保持；Agent4135740/维护4135726。2435d44新资源旧Vue版本预检拒绝Failed/无执行-Root-HDD、两真实摘要/权限/退出/独立清理已通过，进行中旧快照保留。继续执行Unknown无回执/不可信绑定/Superseded等摘要与其他共享写入/磁盘路径，再ACL递归/历史恢复、可恢复删除/长期清理及P0-05旧previous-revision缺陷；59项/UI/C#酒馆/供应商/AI Live2D继续。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/PLATFORM_REVISION_HISTORY.md；docs/qa/CONTAINER_ACL_STALE_PREFLIGHT.md",
+  "nextStep": "P0-05可信发布记录候选463e19e/1811bd3已通过30隔离/11冻结构建/5安装CLI及实际六组件只读来源探测，尚未安装/创建生产账本或新发布；运行仍306f646/1.51、Agent4135740/维护4135726、11核心healthy，原错误记录保持。先补手动恢复SIGKILL/冷启动控制入口保留，再受控交接固定工具及正常覆盖验证真实上一版/权限UI/维护保护；不自动回滚dev。之后ACL其余矩阵/递归恢复/可恢复删除/长期清理及59项/UI/C#酒馆/供应商/AI Live2D继续。17项移出不算完成，开发sudo保留。"
 }
