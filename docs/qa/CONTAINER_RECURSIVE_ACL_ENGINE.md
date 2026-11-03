@@ -17,7 +17,7 @@ sudo -n env GIT_OPTIONAL_LOCKS=0 python3 -u deploy/validation/validate_container
 sudo -n env GIT_OPTIONAL_LOCKS=0 python3 -u deploy/validation/verify_container_recursive_acl.py container-recursive-acl-00c12076031b4785a0c5368d93ecb5f5
 ```
 
-私有证据`deploy/artifacts/container-recursive-acl-00c12076031b4785a0c5368d93ecb5f5/`为root:root/0700、文件0600，不入Git。冻结模块只复制到私有临时bundle，由新独占无网络/非root/只读根容器的固定bind、真实ContainerRoot进程/挂载/UID1000身份和注册HDD配置/UUID依赖运行；无系统安装、服务启停、签名capability/RPC、永久业务Job或真人UI。原用户NOPASSWD与产品Agent最小授权未改。
+私有证据`deploy/artifacts/container-recursive-acl-00c12076031b4785a0c5368d93ecb5f5/`为root:root/0700、文件0600，不入Git。冻结模块只复制到私有临时bundle，使用新独占无网络/非root/只读根容器的固定bind、真实ContainerRoot进程/挂载及容器配置UID/GID1000:1000绑定和注册HDD配置/UUID依赖运行；候选宿主进程以root运行，尚未验证受限unit授权；无系统安装、服务启停、签名capability/RPC、永久业务Job或真人UI。原用户NOPASSWD与产品Agent最小授权未改。
 
 | 本轮新操作 | 实际结果 | 目标修改事实 |
 |---|---|---|
