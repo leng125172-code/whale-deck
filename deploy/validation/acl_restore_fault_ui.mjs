@@ -27,6 +27,16 @@ export async function prepareRestoreFault(page, context, base, fixture, profile)
   const captured = await context.request.get(base + endpoint + '/' + capture.id); assert.equal(captured.status(), 200)
   const result = { name: 'access', ...await captured.json() }
   assert.equal(result.state, 'Succeeded'); assert.equal(result.confirmation, null)
+  if (fixture.jobResultsVersion === 1) {
+    assert.equal(fixture.aclRestoreFaultVersion, 6)
+    async function job(id, type) {
+      const response = await context.request.get(base + '/api/v1/jobs/' + id); assert.equal(response.status(), 200)
+      const value = await response.json(); assert.equal(value.id, id); assert.equal(value.jobType, type); assert.equal(value.state, 'Succeeded')
+      return value
+    }
+    await writeSignal(directory, 'source-capture-jobs.json', { schemaVersion: 1, intentId: result.id,
+      plan: await job(result.id, 'containers.files.acl-plan'), execution: await job(result.executionJobId, 'containers.files.acl') })
+  }
   await writeSignal(directory, 'source-captured.json', { subject: profile.subject, result })
   const trusted = await waitSignal(directory, 'source-verified.json')
   assert.equal(trusted.physicalAndOriginalHistoryVerified, true)

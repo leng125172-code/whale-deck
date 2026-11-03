@@ -2,6 +2,7 @@
 import copy
 import json
 from pathlib import Path
+import tempfile
 import unittest
 import uuid
 from unittest.mock import patch
@@ -10,6 +11,7 @@ from acl_restore_fault_proof import prove_binding, RESTORE_SOURCES, restore_faul
 from acl_restore_browser_proof import source_json, expected_metadata
 from verify_container_acl_faults import validate_source_profile, SOURCES, verify_current_admin, verify_restart
 from validate_container_acl_faults import RESTART_KEYS
+import acl_restore_fault_proof as capture_proof
 
 
 class RestoreFaultProvenanceTests(unittest.TestCase):
@@ -182,6 +184,47 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
     def test_existing_source_profile_cannot_claim_new_restore_sources(self):
         validate_source_profile(dict(schemaVersion=6,sha256={n:'digest' for n in SOURCES}),['cancel','logout'])
         with self.assertRaises(AssertionError):validate_source_profile(dict(schemaVersion=6,sha256={n:'digest' for n in set(SOURCES)|set(RESTORE_SOURCES)}),['cancel'])
+
+    def test_source_capture_requires_both_real_job_receipts_and_sql_summary_match(self):
+        from validate_container_acl_browser import expected_job_summary,verify_job_summaries
+        baseline=dict(aclRestoreFaultVersion=6,kind='post-acl-agent-restart',jobResultsVersion=1)
+        row=dict(id=str(uuid.uuid4()),execution_job_id=str(uuid.uuid4()))
+        plan=dict(command=dict(aclType='access'),kind='File',targetMode=416,noChange=False,fingerprint='F'*64,targetProof='T'*64)
+        data={'row':row};jobs=dict(schemaVersion=1,intentId=row['id'])
+        for execution in (False,True):
+            job=dict(id=row['execution_job_id'] if execution else row['id'],state='Succeeded',jobType='containers.files.acl' if execution else 'containers.files.acl-plan',resultJson=json.dumps(expected_job_summary(row,plan,execution)))
+            data['executionJob' if execution else 'planJob']=job;jobs['execution' if execution else 'plan']=copy.deepcopy(job)
+        with tempfile.TemporaryDirectory() as tmp:
+            directory=Path(tmp);evidence=directory/'capture';evidence.mkdir();path=directory/'source-capture-jobs.json'
+            with patch.object(capture_proof,'trusted',side_effect=lambda p:p.stat()),patch('validate_container_acl_browser.trusted',side_effect=lambda p:p.stat()):
+                with self.assertRaises(FileNotFoundError):capture_proof.source_job_evidence(baseline,directory,evidence,row['id'])
+                path.write_text(json.dumps(jobs));capture_proof.source_job_evidence(baseline,directory,evidence,row['id']);verify_job_summaries(data,plan,evidence,'access')
+                for key in ('plan','execution'):
+                    (evidence/'access-jobs.json').unlink(missing_ok=True);changed=copy.deepcopy(jobs);changed[key]['id']=str(uuid.uuid4());path.write_text(json.dumps(changed))
+                    with self.subTest(key=key),self.assertRaises(AssertionError):
+                        capture_proof.source_job_evidence(baseline,directory,evidence,row['id']);verify_job_summaries(data,plan,evidence,'access')
+                    if (evidence/'access-jobs.json').exists():(evidence/'access-jobs.json').unlink()
+                changed=copy.deepcopy(jobs);value=json.loads(changed['execution']['resultJson']);value['aclConfirmed']=False;changed['execution']['resultJson']=json.dumps(value);path.write_text(json.dumps(changed))
+                capture_proof.source_job_evidence(baseline,directory,evidence,row['id'])
+                with self.assertRaises(AssertionError):verify_job_summaries(data,plan,evidence,'access')
+                with self.assertRaises(AssertionError):capture_proof.source_job_evidence({**baseline,'jobResultsVersion':True},directory,evidence,row['id'])
+
+    def test_legacy_source_capture_does_not_require_new_job_sidecar(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(capture_proof,'trusted',side_effect=AssertionError('legacy must not read new sidecar')):
+            directory=Path(tmp)
+            capture_proof.source_job_evidence(dict(aclRestoreFaultVersion=5,kind='post-acl-group-removal'),directory,directory,str(uuid.uuid4()))
+            self.assertFalse((directory/'access-jobs.json').exists())
+
+    def test_independent_source_recheck_reads_capture_job_receipts_from_original_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory=Path(tmp)
+            baseline={**self.baseline,'aclRestoreFaultVersion':6,'jobResultsVersion':1,'kind':'post-acl-agent-restart','evidence':str(directory),'restoreSource':self.source,
+                'containerId':self.source['location']['containerId'],'instanceId':self.source['location']['instanceId'],'source':'owned-source','validationSourceRevision':'a'*40,'sha256':'D'*64,'bytesPerFile':7}
+            original={**baseline,'original':self.proof['before']};row={**self.row,'actor_subject':'source-actor'}
+            for name,value in [('source-capture-baseline.json',original),('source-capture-proof.json',self.proof),('source-captured.json',dict(subject=row['actor_subject'],result=self.proof['result'])),('source-verified.json',dict(source=self.source,physicalAndOriginalHistoryVerified=True))]:(directory/name).write_text(json.dumps(value))
+            with patch('validate_container_acl_browser.verify_case',return_value=self.proof) as verify,patch.object(capture_proof,'immutable',return_value={}),patch.object(capture_proof,'selected_source',return_value=self.source),patch.object(capture_proof,'audit_rows',return_value=[]),patch.object(capture_proof,'verify_restore_audits'):
+                self.assertEqual(capture_proof.verify_restore_binding(row,baseline,None,None),self.source['accessAcl'])
+                self.assertEqual(verify.call_args.kwargs['job_evidence'],directory/'capture')
 
     def test_post_agent_restart_requires_schema_twelve_and_original_capture(self):
         p=dict(schemaVersion=12,aclRestoreFaultVersion=6,sha256={n:'digest' for n in set(SOURCES)|set(RESTORE_SOURCES)})

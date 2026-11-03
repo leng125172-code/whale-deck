@@ -7,6 +7,7 @@ from validate_container_acl_restore_browser import SOURCES as RESTORE_BROWSER_SO
 from validate_container_acl_history_browser import immutable
 from acl_restore_browser_proof import source_json, unique_json, expected_metadata
 from acl_history_browser_proof import typed_equal
+from validate_container_upload_recovery_agent import trusted
 
 RESTORE_SOURCES=tuple(dict.fromkeys((*RESTORE_BROWSER_SOURCES,'acl_restore_fault_proof.py',
     'acl_restore_fault_ui.mjs','validate_container_acl_restore_faults.py',
@@ -25,6 +26,18 @@ def require_restore_profile(baseline):
     value=baseline['aclRestoreFaultVersion']
     assert type(value) is int and value==restore_fault_version((baseline['kind'],))
 
+def source_job_evidence(baseline,directory,evidence,intent_id):
+    if 'jobResultsVersion' not in baseline:return
+    require_restore_profile(baseline)
+    assert type(baseline['jobResultsVersion']) is int and baseline['jobResultsVersion']==1 and baseline['aclRestoreFaultVersion']==6
+    path=directory/'source-capture-jobs.json';info=trusted(path);assert info.st_size<=32768
+    raw=path.read_bytes();assert len(raw)==info.st_size
+    value=unique_json(raw.decode())
+    assert type(value) is dict and set(value)=={'schemaVersion','intentId','plan','execution'}
+    assert type(value['schemaVersion']) is int and value['schemaVersion']==1 and value['intentId']==intent_id
+    assert value['plan']['id']==intent_id and value['execution']['id']!=intent_id
+    with (evidence/'access-jobs.json').open('xb') as output:output.write(raw)
+
 def accept_source_capture(browser,directory,baseline,folder,reader,module,storage,content):
     from validate_container_acl_faults import wait_signal,write_signal
     from validate_container_acl_browser import inventory,verify_case
@@ -34,6 +47,7 @@ def accept_source_capture(browser,directory,baseline,folder,reader,module,storag
     assert captured['result']['name']=='access'
     after=inventory(folder,reader,module,content)
     evidence=directory/'capture';evidence.mkdir(mode=0o700)
+    source_job_evidence(baseline,directory,evidence,captured['result']['id'])
     proof=verify_case(captured['result'],baseline,captured['subject'],evidence,reader,module,storage,baseline['original'],after)
     (directory/'source-capture-proof.json').write_text(json.dumps(proof))
     metadata=immutable(evidence,baseline,[proof],storage)
@@ -73,7 +87,7 @@ def verify_restore_binding(row,baseline,storage,module):
     assert original['original']==proof['before']
     observed=directory/'capture-independent-observed';observed.mkdir(mode=0o700,exist_ok=True)
     actual=verify_case(proof['result'],original,row['actor_subject'],observed,
-        None,module,storage,proof['before'],proof['after'])
+        None,module,storage,proof['before'],proof['after'],job_evidence=directory/'capture')
     typed_equal(actual,proof)
     metadata=immutable(directory/'capture',original,[proof],storage)
     source=selected_source(original,proof,metadata)
