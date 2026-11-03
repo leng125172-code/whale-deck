@@ -181,6 +181,7 @@ public sealed partial class ContainerUploadHttpTests
         public RecursiveHttpFixture Recursive { get; }=new();
         public RecursiveOwnerHttpFixture RecursiveOwner { get; }=new();
         public AclHttpFixture Acl { get; }=new();
+        public AclHistoryHttpFixture AclHistory { get; }=new();
         public static async Task<Fixture> Start()
         {
             var fixture=new Fixture(); await File.WriteAllBytesAsync(fixture._key,RandomNumberGenerator.GetBytes(32));
@@ -209,6 +210,7 @@ public sealed partial class ContainerUploadHttpTests
             builder.Services.AddSingleton(new ContainerAclWorkflowService(uploads,fixture.Acl,protector,fixture.Acl,TimeProvider.System,fixture.Acl));
             builder.Services.AddSingleton(new ContainerRecursiveOwnershipWorkflowService(uploads,fixture.RecursiveOwner,protector,fixture.RecursiveOwner,TimeProvider.System,fixture.RecursiveOwner));
             builder.Services.AddSingleton(new ContainerFileHistoryService(uploads,fixture.History,fixture.History,fixture.History));
+            builder.Services.AddSingleton(new ContainerAclHistoryService(authorization,sessions,fixture.AclHistory,fixture.AclHistory));
             builder.Services.AddSingleton(new ContainerFileRestoreService(uploads,fixture.Gateway,fixture.History,fixture.History,protector,fixture.Repository,TimeProvider.System));
             fixture._app=builder.Build(); fixture._app.UseExceptionHandler(error=>error.Run(TraceAndErrors.WriteProblemAsync));
             fixture._app.UseAuthentication(); fixture._app.Use(SameOriginWriteProtection.InvokeAsync); fixture._app.UseAuthorization(); fixture._app.UseAntiforgery();

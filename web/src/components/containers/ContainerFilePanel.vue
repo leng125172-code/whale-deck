@@ -11,6 +11,7 @@ import ContainerDirectoryPanel from '@/components/containers/ContainerDirectoryP
 import ContainerCopyPanel from '@/components/containers/ContainerCopyPanel.vue'
 import ContainerPermissionPanel from '@/components/containers/ContainerPermissionPanel.vue'
 import ContainerAclPanel from '@/components/containers/ContainerAclPanel.vue'
+import ContainerAclHistoryPanel from '@/components/containers/ContainerAclHistoryPanel.vue'
 import { canAclContainerEntry } from '@/services/containerAcls'
 import ContainerOwnershipPanel from '@/components/containers/ContainerOwnershipPanel.vue'
 import ContainerRecursivePermissionPanel from '@/components/containers/ContainerRecursivePermissionPanel.vue'
@@ -52,6 +53,7 @@ const history = ref<InstanceType<typeof ContainerHistoryPanel> | null>(null)
 const copier = ref<InstanceType<typeof ContainerCopyPanel> | null>(null)
 const permissionEditor = ref<InstanceType<typeof ContainerPermissionPanel> | null>(null)
 const aclEditor = ref<InstanceType<typeof ContainerAclPanel> | null>(null)
+const aclHistory = ref<InstanceType<typeof ContainerAclHistoryPanel> | null>(null)
 const ownershipEditor = ref<InstanceType<typeof ContainerOwnershipPanel> | null>(null)
 const recursivePermissionEditor = ref<InstanceType<
   typeof ContainerRecursivePermissionPanel
@@ -320,6 +322,13 @@ onBeforeUnmount(() => {
       "
       @refresh="load(path)"
       @locked="permissionLocked = $event"
+    />
+    <ContainerAclHistoryPanel
+      v-if="target"
+      ref="aclHistory"
+      :target="target"
+      :path="path"
+      :disabled="!!busy"
     />
     <ContainerAclPanel
       v-if="target"
@@ -633,6 +642,14 @@ onBeforeUnmount(() => {
             title="完整预检后明确确认access或default ACL，不递归"
             @click="aclEditor?.open(entry)"
             >ACL</el-button
+          >
+          <el-button
+            v-if="!entry.isProtected && ['File', 'Directory'].includes(entry.kind)"
+            link
+            :disabled="!!busy"
+            :aria-label="`ACL历史 ${entry.name}`"
+            @click="aclHistory?.open(entry)"
+            >ACL历史</el-button
           >
           <el-button
             v-if="!entry.isProtected && entry.kind === 'Directory'"
