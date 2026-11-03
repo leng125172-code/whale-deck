@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+**2026-11-03 e83bad0只读业务/API/Vue候选已接入，未部署**：管理员两GET继续调用已安装1.52独立签名List/Read，不新增Agent方法、写权限或恢复动作；RPC前/后及审计后重新检查人类权限与原登录。冻结4343 Unit/463 Integration（7原生跳过）、1042前端Unit/89夹具页面通过，不冒充真实人类页面或HDD业务整链。[候选与下一步](qa/CONTAINER_ACL_HISTORY_WEB.md)。
+
 **2026-11-03 ACL历史1.52安装态已通过真实签名RPC/HDD与独立核验**：宿主及原生探针冻结2ef06f0，唯一正常安装Invocation0552122d971a42f8a925b5455217fa89成功，Agent561098/维护561094及映射来源同源；应用仍0478262、11核心ID/镜像/StartedAt不变且healthy，无迁移/全栈发布或回滚。新独占9旧ACL操作留8份HDD，真实List10页/Read8份、29边界拒绝、源/Root/HDD全字节与身份保持、精确清理及独立Passed；实际只读unit仅DAC_READ_SEARCH/SYS_PTRACE与读租约目录可写。错Invocation拒绝/准确停止及stdin EOF两控制分项、旧所有者/两递归签名能力主与独立兼容通过；58 C#专项/8探针proof/构建语法通过，无新前端/Authentik页面。HDD同device非异盘，控制前置不冒充进行中RPC取消；历史业务/API/Vue/恢复及其余59项继续，整项完成率不提升。[真实来源、原件与未验边界](qa/CONTAINER_ACL_HISTORY_INSTALLED.md)。
 
 **2026-11-03 ACL历史1.52签名RPC/SDK与受限只读传输候选6013aa1通过，未安装**：新增独立List/Read、全请求/方法/Subject/Trace与分页/捕获绑定、一次性短时能力；显式0/false存在位及严格输出校验，SDK必须minor≥52/专属能力，无写入降级。固定helper仅两读取动作，只有读租约目录可写、cap仅DAC_READ_SEARCH/SYS_PTRACE，安装/校验源码接入但生产未运行。冻结Release零警告错误/来源6013、4343 Unit/432 Integration（7默认原生跳过）、58新C#专项/28历史传输root/431旧文件/57维护/5安装预览通过，初编译/旧51断言/无匹配及收集器PATH失败保留。运行仍0478262/1.51、315250/315245及11核心healthy；无新实际RPC/HDD/业务/UI，不复用前批实盘补签。[候选、安全与后续](qa/CONTAINER_ACL_HISTORY_RPC.md)。

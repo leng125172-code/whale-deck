@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- **2026-11-03 ACL历史管理员API/Vue只读候选e83bad0已验证并推送，未部署**：新增准确容器/实例/路径的历史List/Read两GET，实时管理员与原登录在RPC前/输出后/持久审计后复核，严格query/NoStore/数组冻结；复用现有审计表，仅记录路径与实例hash/元数据摘要，无新schema或恢复入口。Vue完整原两类ACL/显式0/mask有效权限、版本分页/空部分页、错误/迟到/退出清理及320小屏明暗滚动齐接。冻结Release零警告错误/API来源e83、4343 Unit/463 Integration（7默认原生跳过）、1042前端Unit、89生产预览（22新+67关联）及类型/构建/lint/格式通过；测试目录/Agent/审计和页面API均为夹具，不算实际Authentik/PG/HDD页面。应用仍0478262、宿主2ef06f0/1.52及561098/561094，11核心healthy不变；下一步正常覆盖与真实业务整链，再历史恢复/递归ACL/删除及其余59项，不提升整项完成率。[候选、失败与验收边界](qa/CONTAINER_ACL_HISTORY_WEB.md)。
+
 - **2026-11-03 ACL历史1.52安装态已通过真实签名RPC/HDD与独立核验**：宿主及原生探针冻结2ef06f0，唯一正常安装Invocation0552122d971a42f8a925b5455217fa89成功，Agent561098/维护561094及映射来源同源；应用仍0478262、11核心ID/镜像/StartedAt不变且healthy，无迁移/全栈发布或回滚。新独占9旧ACL操作留8份HDD，真实List10页/Read8份、29边界拒绝、源/Root/HDD全字节与身份保持、精确清理及独立Passed；实际只读unit仅DAC_READ_SEARCH/SYS_PTRACE与读租约目录可写。错Invocation拒绝/准确停止及stdin EOF两控制分项、旧所有者/两递归签名能力主与独立兼容通过；58 C#专项/8探针proof/构建语法通过，无新前端/Authentik页面。HDD同device非异盘，控制前置不冒充进行中RPC取消；历史业务/API/Vue/恢复及其余59项继续，整项完成率不提升。[真实来源、原件与未验边界](qa/CONTAINER_ACL_HISTORY_INSTALLED.md)。
 
 - **2026-11-03 ACL历史1.52签名RPC/SDK与受限只读传输候选6013aa1通过，未安装**：新增独立List/Read、全请求/方法/Subject/Trace与分页/捕获绑定、一次性短时能力；显式0/false存在位及严格输出校验，SDK必须minor≥52/专属能力，无写入降级。固定helper仅两读取动作，只有读租约目录可写、cap仅DAC_READ_SEARCH/SYS_PTRACE，安装/校验源码接入但生产未运行。冻结Release零警告错误/来源6013、4343 Unit/432 Integration（7默认原生跳过）、58新C#专项/28历史传输root/431旧文件/57维护/5安装预览通过，初编译/旧51断言/无匹配及收集器PATH失败保留。运行仍0478262/1.51、315250/315245及11核心healthy；无新实际RPC/HDD/业务/UI，不复用前批实盘补签。[候选、安全与后续](qa/CONTAINER_ACL_HISTORY_RPC.md)。
