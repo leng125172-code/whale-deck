@@ -72,6 +72,9 @@ def verify(directory):
     assert 0<=accepted['productStoppedHelperSeconds']<15 and accepted['validatorKilledHelper'] is False
     if baseline.get('instanceChanged',False):
         transition=read(directory/'instance-transition.json');require_instance_transition(baseline,transition)
+        assert transition['commandAcknowledgement']==baseline['containerId']
+        response=read(directory/'instance-restart-response.json');assert response=={k:v for k,v in transition.items() if k!='otherActiveWork'}
+        assert read(directory/'instance-restart-request.json')=={'containerId':baseline['containerId'],'before':transition['before'],'restartAttemptedOnce':True}
         assert read(directory/'instance-after-ack.json')==transition['after']
         assert not (directory/'removed-owned.json').exists() and read(directory/'logout.json')=={'ownedContainerRestarted':True}
         assert RESTART_KEYS<=set(transition['otherActiveWork']) and all(type(n) is int and n==0 for n in transition['otherActiveWork'].values())

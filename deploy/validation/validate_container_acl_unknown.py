@@ -63,18 +63,23 @@ def require_instance_transition(baseline,proof):
     assert proof['sourceInventory']==expected_physical(baseline)
 
 
-def restart_exact_owned(original,baseline,reader,module,content):
+def restart_exact_owned(original,baseline,reader,module,content,directory=None):
     assert original['identifier']==baseline['containerId'] and original['folder']==Path(baseline['source']) and not original.get('instanceRestartAttempted',False)
     before=json.loads(command('docker','inspect',original['identifier']))[0]
     owned.verify_container(before,original['identifier'],baseline['containerName'],original['folder'])
     assert before['State']['Running'] and before['State']['Pid']==baseline['containerPid'] and str(before['State']['Pid'])+':'+before['State']['StartedAt']==baseline['instanceId']
     assert inventory(original['folder'],reader,module,content)==expected_physical(baseline)
     original['instanceRestartAttempted']=True
-    assert command('docker','restart','--time','1',original['identifier'])==original['identifier']
+    if directory:
+        with (directory/'instance-restart-request.json').open('x') as out:json.dump({'containerId':original['identifier'],'before':instance_frame(before),'restartAttemptedOnce':True},out)
+    acknowledgement=command('docker','restart','--timeout','1',original['identifier'])
     after=json.loads(command('docker','inspect',original['identifier']))[0];owned.verify_container(after,original['identifier'],baseline['containerName'],original['folder'])
     proof={'before':instance_frame(before),'after':instance_frame(after),'oldInstanceId':baseline['instanceId'],
         'newInstanceId':str(after['State']['Pid'])+':'+after['State']['StartedAt'],'sameCidImageAndOwnedBind':True,
-        'sourceInventory':inventory(original['folder'],reader,module,content),'newInstanceInventory':inventory(Path('/proc')/str(after['State']['Pid'])/'root/work',reader,module,content)}
+        'sourceInventory':inventory(original['folder'],reader,module,content),'newInstanceInventory':inventory(Path('/proc')/str(after['State']['Pid'])/'root/work',reader,module,content),
+        'commandAcknowledgement':acknowledgement}
+    if directory:(directory/'instance-restart-response.json').write_text(json.dumps(proof))
+    assert acknowledgement==original['identifier']
     require_instance_transition(baseline,proof);return proof
 
 
@@ -235,7 +240,7 @@ def main():
                 with ThreadPoolExecutor(max_workers=1) as pool:
                     if instance:
                         checks=restart_allowed(held,snapshot(identifier)['row']);began=time.monotonic();observing=pool.submit(held.wait_exit_seconds,began,15)
-                        transition=restart_exact_owned(original,baseline,reader,module,content);transition['otherActiveWork']=checks;(directory/'instance-transition.json').write_text(json.dumps(transition))
+                        transition=restart_exact_owned(original,baseline,reader,module,content,directory);transition['otherActiveWork']=checks;(directory/'instance-transition.json').write_text(json.dumps(transition))
                         write_signal(directory,'logout.json',{'ownedContainerRestarted':True})
                     else:
                         original['remove_owned']();assert not select.select([held.descriptor],[],[],0)[0]

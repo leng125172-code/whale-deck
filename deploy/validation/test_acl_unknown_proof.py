@@ -4,6 +4,7 @@ import datetime as dt
 import unittest
 import json
 import uuid
+import tempfile
 from unittest.mock import patch
 from verify_container_acl_unknown import require_acknowledgement, require_deferrals, IMMUTABLE
 from validate_container_acl_unknown import require_blocked, WAITING_PATH, require_cut, expected_physical, verify_unknown_jobs, expected_job_summary, require_instance_transition, instance_frame, restart_exact_owned, owned
@@ -75,6 +76,13 @@ class InstanceTransitionProofTests(unittest.TestCase):
         with patch('validate_container_acl_unknown.command') as command:
             with self.assertRaises(AssertionError):restart_exact_owned(original,self.base,None,None,None)
             command.assert_not_called()
+    def test_current_cli_timeout_and_single_restart_are_bound_and_archived(self):
+        original={'identifier':self.base['containerId'],'folder':Path(self.base['source'])}
+        with tempfile.TemporaryDirectory() as tmp,patch('validate_container_acl_unknown.instance_frame',side_effect=lambda v:v),patch.object(owned,'verify_container'),patch('validate_container_acl_unknown.inventory',return_value=self.base['cutPhysical']),patch('validate_container_acl_unknown.command',side_effect=[json.dumps([self.before]),self.base['containerId'],json.dumps([self.proof['after']])]) as command:
+            directory=Path(tmp);proof=restart_exact_owned(original,self.base,None,None,None,directory)
+            self.assertEqual(command.call_args_list[1].args,('docker','restart','--timeout','1',self.base['containerId']))
+            self.assertEqual(json.loads((directory/'instance-restart-response.json').read_text()),proof)
+            self.assertTrue(json.loads((directory/'instance-restart-request.json').read_text())['restartAttemptedOnce'])
 
 
 class UnknownJobEvidenceTests(unittest.TestCase):
