@@ -30,6 +30,7 @@ def fixture_bytes(identifier):
 def main():
     global PHASE
     assert os.geteuid()==0 and len(sys.argv)==2;os.umask(0o077)
+    os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision)
     repo=Path(__file__).resolve().parents[2]
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(), 'FREEZE_VALIDATION_SOURCE_FIRST'

@@ -13,3 +13,4 @@
 - Keep secrets out of Git and use environment variables or mounted secret files.
 - Pin application dependencies and container images; production images require immutable digests.
 - Work on `dev` or a feature branch. `master` must remain deployable.
+- Set `GIT_OPTIONAL_LOCKS=0` for read-only Git checks run as root during QA, so index refresh does not replace the user's Git index with a root-owned file. Keep repository index ownership with the repository user; do not recursively change ownership of private evidence or the repository.
