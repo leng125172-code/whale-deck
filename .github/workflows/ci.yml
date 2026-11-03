@@ -110,6 +110,9 @@ jobs:
           python3 -W error -m py_compile deploy/validation/validate_container_acl_unknown.py deploy/validation/verify_container_acl_unknown.py
           node --check deploy/validation/validate_container_acl_unknown.mjs
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_acl_unknown_proof.py
+          python3 -W error -m py_compile deploy/validation/validate_container_acl_stale.py deploy/validation/verify_container_acl_stale.py
+          node --check deploy/validation/validate_container_acl_stale.mjs
+          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_acl_stale_proof.py
           node --check deploy/validation/installed_ui_logout.mjs
           node --check deploy/validation/validate_container_restore_browser.mjs
           python3 -m py_compile deploy/validation/validate_container_upload_bff.py

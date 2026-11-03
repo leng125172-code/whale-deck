@@ -90,4 +90,44 @@ describe('ACL task historical facts', () => {
       readAclJobResult(JSON.stringify(incomplete), 'containers.files.acl', 'Succeeded'),
     ).toBeNull()
   })
+  it('distinguishes a rejected preflight with no receipt from an interrupted execution', () => {
+    const rejected = render(
+      {
+        ...facts,
+        stage: 'planning',
+        state: 'Failed',
+        code: 'CONTAINER_ACL_VERSION_CONFLICT',
+        kind: null,
+        targetMode: null,
+        noChange: null,
+        aclConfirmed: null,
+        receiptState: null,
+        bindingCurrent: null,
+        historyMayExist: false,
+        historyVerified: false,
+        hasPublishedVersion: false,
+      },
+      'Failed',
+      'containers.files.acl-plan',
+    )
+    expect(rejected.text()).toContain('预检失败，未进入 ACL 修改执行')
+    expect(rejected.text()).not.toContain('执行失败')
+    expect(rejected.text()).toContain('未取得')
+    expect(rejected.text()).toContain('未证明')
+    const interrupted = render(
+      {
+        ...facts,
+        state: 'Failed',
+        code: 'CONTAINER_ACL_INTERRUPTED',
+        aclConfirmed: false,
+        receiptState: 'Aborted',
+        bindingCurrent: false,
+        hasPublishedVersion: false,
+      },
+      'Failed',
+    )
+    expect(interrupted.text()).toContain('执行失败')
+    expect(interrupted.text()).not.toContain('未进入 ACL 修改执行')
+    expect(interrupted.text()).toContain('Aborted')
+  })
 })

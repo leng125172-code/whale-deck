@@ -123,7 +123,7 @@ export function aclResult(code: string | null) {
         CONTAINER_ACL_COMPLETED: 'ACL修改已完成，HDD元数据已验证留存。',
         CONTAINER_ACL_CANCELED: '任务已取消。',
         CONTAINER_ACL_PLAN_EXPIRED: '预检计划已过期，请重新选择对象并预检。',
-        CONTAINER_ACL_VERSION_CONFLICT: '对象在预检后发生变化，请重新读取后预检。',
+        CONTAINER_ACL_VERSION_CONFLICT: '对象版本已变化，请重新读取后预检。',
         CONTAINER_ACL_SOURCE_UNSUPPORTED: '该对象类型、链接或特殊ACL暂不支持此操作。',
         CONTAINER_ACL_EXTENDED_METADATA_REQUIRED: '该对象带有不支持的安全属性，无法安全修改ACL。',
         CONTAINER_ACL_UNSUPPORTED: '文件系统或内核不支持ACL；不能当空ACL处理。',

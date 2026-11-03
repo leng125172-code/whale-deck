@@ -98,6 +98,41 @@ for (const width of [320, 1440])
         make('legacy-completed', 'Succeeded', null),
         make('legacy-failed', 'Failed', null, 'containers.stop'),
         make('invalid-result', 'Succeeded', { ...facts, path: '/private-do-not-render' }),
+        make(
+          'planning-failed',
+          'Failed',
+          {
+            ...facts,
+            stage: 'planning',
+            state: 'Failed',
+            code: 'CONTAINER_ACL_VERSION_CONFLICT',
+            kind: null,
+            targetMode: null,
+            noChange: null,
+            aclConfirmed: null,
+            receiptState: null,
+            bindingCurrent: null,
+            historyMayExist: false,
+            historyVerified: false,
+            hasPublishedVersion: false,
+          },
+          'containers.files.acl-plan',
+        ),
+        make('execution-failed', 'Failed', {
+          ...facts,
+          state: 'Failed',
+          code: 'CONTAINER_ACL_INTERRUPTED',
+          aclConfirmed: false,
+          receiptState: 'Aborted',
+          bindingCurrent: false,
+          hasPublishedVersion: false,
+        }),
+        make('execution-superseded', 'Failed', {
+          ...facts,
+          state: 'Superseded',
+          code: 'CONTAINER_ACL_TARGET_CHANGED',
+          bindingCurrent: false,
+        }),
       ]
       await page.route('**/api/v1/**', async (route) => {
         const request = route.request(),
@@ -148,6 +183,9 @@ for (const width of [320, 1440])
             '此任务未记录可展示的 ACL 安全摘要，请结合任务状态与原文件任务核对。',
             '',
             '此任务未记录可展示的 ACL 安全摘要，请结合任务状态与原文件任务核对。',
+            '预检失败，未进入 ACL 修改执行',
+            '执行失败',
+            '已有完成回执，实例绑定已变化',
           ][i]!
           await expect(region).toContainText(expected)
           await region.getByText(expected, { exact: true }).scrollIntoViewIfNeeded()
@@ -155,7 +193,23 @@ for (const width of [320, 1440])
           if (i === 0) await expect(region).toContainText('0000')
           if (i === 2)
             await expect(region).toContainText('处置仅解除业务保护，不证明 ACL 已恢复或重新执行。')
-          if (i === 1 || i === 2) {
+          if (i === 7) {
+            await expect(region).not.toContainText('执行失败')
+            for (const label of ['目标对象', '目标普通模式', '预检无需变更', '回执对象绑定有效'])
+              await expect(
+                region.getByText(label, { exact: true }).locator('xpath=following-sibling::dd[1]'),
+              ).toHaveText('未证明')
+            await expect(region).toContainText('未取得')
+          }
+          if (i === 8 || i === 9) {
+            await expect(
+              region
+                .getByText('ACL 已确认', { exact: true })
+                .locator('xpath=following-sibling::dd[1]'),
+            ).toHaveText(i === 8 ? '否' : '是')
+            await expect(region).toContainText(i === 8 ? 'Aborted' : 'Completed')
+          }
+          if (i === 1 || i === 2 || i === 7) {
             const value = region
               .getByText('ACL 已确认', { exact: true })
               .locator('xpath=following-sibling::dd[1]')
@@ -186,7 +240,7 @@ for (const width of [320, 1440])
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         )
-        if (i < 4)
+        if (i < 4 || i >= 7)
           await page.screenshot({
             path: `../deploy/artifacts/ui-candidates/acl-job-summary/acl-job-result-${i}-${width}-${colorScheme}.png`,
             scale: 'css',

@@ -13,6 +13,11 @@ const states: Record<string, string> = {
   Unknown: '结果未知，仍保留写入保护',
   Acknowledged: '管理员已明确处置未知结果',
 }
+const title = computed(() =>
+  result.value?.state === 'Failed' && result.value.stage === 'planning'
+    ? '预检失败，未进入 ACL 修改执行'
+    : states[result.value?.state ?? ''],
+)
 function fact(value: boolean | null) {
   return value === null ? '未证明' : value ? '是' : '否'
 }
@@ -21,7 +26,7 @@ function fact(value: boolean | null) {
 <template>
   <section aria-label="ACL 安全结果" class="acl-job-result">
     <template v-if="result">
-      <p>{{ states[result.state] }}</p>
+      <p>{{ title }}</p>
       <dl>
         <dt>原意图</dt>
         <dd>{{ result.intentId }}</dd>
