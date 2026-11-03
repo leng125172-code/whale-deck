@@ -460,7 +460,7 @@ public sealed partial class ContainerAclWorkflowTests
         public ContainerAclIntent? Row; public int Enqueues, Deferrals, Confirms; public bool Canceled; public bool Renewal = true; public Action? AfterStart; public Action? AfterRead;
         public ContainerFileUploadStartResult Start = ContainerFileUploadStartResult.Started;
         public Task<ContainerAclIntent?> OwnedAsync(TerminalActor actor, Guid id, CancellationToken token) { var r = Row?.Id == id && Row.ActorSubject == actor.Subject && Row.LoginBinding == actor.LoginBinding ? Row : null; AfterRead?.Invoke(); return Task.FromResult(r); }
-        public Task<ContainerAclIntent?> FindAsync(Guid id, CancellationToken token) => Task.FromResult(Row?.Id == id ? Row : null);
+        public Task<ContainerAclIntent?> FindAsync(Guid id, CancellationToken token) { var row = Row?.Id == id ? Row : null; AfterRead?.Invoke(); return Task.FromResult(row); }
         public Task<IReadOnlyList<ContainerAclIntent>> UnknownAsync(int take, CancellationToken token) => Task.FromResult<IReadOnlyList<ContainerAclIntent>>(Row?.State == "Unknown" ? [Row] : []);
         public Task<ContainerAclIntent> EnqueueAsync(ContainerAclIntent row, CancellationToken token) { Enqueues++; Row = row; return Task.FromResult(row); }
         public Task<ContainerAclIntent> ConfirmAsync(TerminalActor actor, ContainerAclConfirmation claims, long version, CancellationToken token)

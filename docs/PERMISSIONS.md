@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-04 新增候选权限边界（未部署）：GET /api/v1/files/container-acls/recovery/{id}/restore-source 仅当前实时管理员可读，服务在仓储读取前后验证身份，校验已存请求/计划/回执绑定后投影7字段；另一管理员可读有限历史摘要，仍不能访问原owner /restores/{id}。匿名401/普通403/当前撤权403；200 JSON null仅合法普通ACL，损坏、缺失与来源依赖失败不得降级为null。没有完整ACL、Location、SourceInstanceId、digest或授权hash输出，也不改变确认/处置写入授权。 见[候选与验收边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_UI.md)。
+
 2026-11-04 实机接续：b69302b不重发，恢复写后同CID实例变化与原正常退出组合、不同管理员明确处置和跨容器目录保护通过；PID/StartedAt变化但原实例/来源及Root Unknown/null确认不改，133旧HDD原件保持。无新生产schema、RPC或授权扩大，见[实例变化事实与未验](qa/CONTAINER_ACL_RESTORE_INSTANCE_CHANGE.md)。
 
 

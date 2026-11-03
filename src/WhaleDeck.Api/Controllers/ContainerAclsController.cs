@@ -69,6 +69,11 @@ public sealed class ContainerAclRecoveryController(ContainerAclWorkflowService a
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ContainerAclIntentDto>> Status(Guid id, CancellationToken cancellationToken) =>
         Ok(await acls.RecoveryGetAsync((await identity.ReadAsync(HttpContext)).Actor, id, cancellationToken));
+    /// <summary>Minimal frozen restore-source metadata for recovery. JSON null explicitly identifies an ordinary ACL operation.</summary>
+    [HttpGet("{id:guid}/restore-source")]
+    public async Task<IActionResult> RestoreSource(Guid id, CancellationToken cancellationToken) =>
+        new JsonResult(await acls.RecoveryRestoreSourceAsync((await identity.ReadAsync(HttpContext)).Actor, id, cancellationToken))
+        { StatusCode = StatusCodes.Status200OK };
     /// <summary>Accept historical uncertainty only after the exact original Root operation is permanently fenced. Never deletes HDD metadata or reports them as successful.</summary>
     [HttpPost("{id:guid}/acknowledge"), ProducesResponseType<FileCancelDto>(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Acknowledge(Guid id, ContainerAclAcknowledgeBody command, CancellationToken cancellationToken)

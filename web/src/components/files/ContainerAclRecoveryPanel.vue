@@ -11,6 +11,12 @@ import {
   aclModeLabel,
 } from '@/services/containerAcls'
 import type { ContainerAclIntent } from '@/services/containerAcls'
+import {
+  getAclRecoverySource,
+  loadAclRecoverySources,
+  assertSameAclRecoverySource,
+} from '@/services/containerAclRecovery'
+import type { ContainerAclRestoreSourceSummary } from '@/services/containerAclRecovery'
 
 const allowed = computed(() => authSession.user.value?.isAdministrator === true)
 const opened = ref(false),
@@ -20,6 +26,17 @@ const opened = ref(false),
   uncertain = ref(false)
 const rows = ref<ContainerAclIntent[]>([]),
   selected = ref<ContainerAclIntent | null>(null)
+const sources = ref<Record<string, ContainerAclRestoreSourceSummary | null>>({})
+const selectedSource = computed(() => (selected.value ? sources.value[selected.value.id] : null))
+function sourceTime(value: number) {
+  return new Date(value).toLocaleString('zh-CN', { hour12: false })
+}
+async function verifySource(row: ContainerAclIntent, signal: AbortSignal) {
+  const expected = sources.value[row.id]
+  if (expected === undefined) throw new Error('历史ACL恢复来源摘要尚未核实')
+  const observed = await getAclRecoverySource(row, signal)
+  assertSameAclRecoverySource(expected, observed)
+}
 let generation = 0,
   controller: AbortController | null = null
 function stop(clear = false) {
@@ -30,6 +47,7 @@ function stop(clear = false) {
   if (clear) {
     opened.value = false
     rows.value = []
+    sources.value = {}
     selected.value = null
     error.value = ''
     completed.value = ''
@@ -50,6 +68,8 @@ async function load() {
   error.value = ''
   selected.value = null
   rows.value = []
+  sources.value = {}
+  completed.value = ''
   uncertain.value = false
   try {
     const values = await apiRequest<ContainerAclIntent[]>(aclRecoveryBase, {
@@ -63,6 +83,9 @@ async function load() {
     }
     if (new Set(values.map((value) => value.id)).size !== values.length)
       throw new Error('异常ACL修改任务清单无法核实')
+    const summaries = await loadAclRecoverySources(values, local.signal)
+    if (token !== generation || local.signal.aborted) return
+    sources.value = summaries
     rows.value = values
   } catch (reason) {
     if (token === generation && !local.signal.aborted) failure(reason)
@@ -84,6 +107,8 @@ async function acknowledge() {
   busy.value = true
   error.value = ''
   try {
+    await verifySource(original, local.signal)
+    if (token !== generation || local.signal.aborted) return
     await apiRequest(`${aclRecoveryBase}/${original.id}/acknowledge`, {
       method: 'POST',
       headers: { 'Idempotency-Key': original.id },
@@ -97,6 +122,8 @@ async function acknowledge() {
     if (token !== generation || local.signal.aborted) return
     assertAclIntent(result, original.command.location.containerId, original.id, original.command)
     assertAclAdvance(original, result)
+    await verifySource(result, local.signal)
+    if (token !== generation || local.signal.aborted) return
     if (result.state !== 'Acknowledged' || result.version <= original.version)
       throw new Error('处置回执尚未核实，请刷新原任务，不能推断已成功')
     completed.value =
@@ -107,6 +134,7 @@ async function acknowledge() {
   } catch (reason) {
     if (token === generation && !local.signal.aborted) {
       failure(reason)
+      if (token !== generation) return
       error.value += '；请刷新核对原任务，未自动重试处置确认。'
     }
   } finally {
@@ -131,6 +159,8 @@ async function verifyOriginal() {
     if (token !== generation || local.signal.aborted) return
     assertAclIntent(result, original.command.location.containerId, original.id, original.command)
     assertAclAdvance(original, result)
+    await verifySource(result, local.signal)
+    if (token !== generation || local.signal.aborted) return
     if (result.state === 'Acknowledged' && result.version > original.version) {
       completed.value = '已核实原处置回执；不代表ACL修改成功，没有再次发送确认。'
       rows.value = rows.value.filter((value) => value.id !== original.id)
@@ -182,6 +212,24 @@ onBeforeUnmount(() => stop(true))
         <strong>{{ aclState(row.state) }}</strong>
         <p>{{ row.command.location.containerId }}</p>
         <p>对象：/{{ row.command.location.path }}</p>
+        <section v-if="sources[row.id]" class="acl-recovery__source" aria-label="历史ACL恢复来源">
+          <strong>历史ACL恢复来源</strong>
+          <p>
+            捕获编号：<code>{{ sources[row.id]!.captureId }}</code>
+          </p>
+          <p>
+            {{ sources[row.id]!.changedAclType }} ·
+            {{ sources[row.id]!.kind === 'File' ? '文件' : '目录' }} ·
+            {{ sourceTime(sources[row.id]!.createdAtUnixMs) }}
+          </p>
+          <p>
+            原模式 {{ aclModeLabel(sources[row.id]!.originalMode) }}；access
+            {{ sources[row.id]!.accessEntryCount }} 项，default
+            {{ sources[row.id]!.defaultEntryCount }} 项
+          </p>
+          <p>这是登记时保存的历史来源摘要，不证明当前文件状态或恢复成功。</p>
+        </section>
+        <p v-else>普通ACL修改（没有历史恢复来源）</p>
         <p>
           原UID/GID：{{ row.originalUid }}:{{ row.originalGid }}，目标{{ row.command.aclType }}模式
           {{ aclModeLabel(row.targetMode) }}。
@@ -219,6 +267,10 @@ onBeforeUnmount(() => stop(true))
       />
       <p v-if="selected" class="acl-recovery__reference">
         原任务：<code>{{ selected.id }}</code>
+        <span v-if="selectedSource"
+          ><br />恢复来源：<code>{{ selectedSource.captureId }}</code> ·
+          {{ selectedSource.changedAclType }}</span
+        >
       </p>
       <div class="acl-recovery__actions">
         <el-button @click="opened = false">关闭</el-button>
@@ -280,6 +332,12 @@ onBeforeUnmount(() => stop(true))
 }
 .acl-recovery__row p {
   margin: 4px 0;
+}
+.acl-recovery__source {
+  padding: 8px;
+  margin-block: 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--el-border-radius-base);
 }
 .acl-recovery__actions {
   display: flex;

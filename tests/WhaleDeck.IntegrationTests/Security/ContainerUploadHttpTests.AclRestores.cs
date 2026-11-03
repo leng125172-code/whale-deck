@@ -11,8 +11,34 @@ namespace WhaleDeck.IntegrationTests.Security;
 /// <summary>Actual MVC/Cookie/CSRF, synthetic identity/history/repository; never claims installed recovery.</summary>
 public sealed partial class ContainerUploadHttpTests
 {
+    private static readonly string[] RecoverySourceFields = ["accessEntryCount", "captureId", "changedAclType", "createdAtUnixMs", "defaultEntryCount", "kind", "originalMode"];
     private static string AclRestoreBase => AclBase+"/restores";
     private static object RestoreBody => new {instanceId=Instance,path="work/acl-file.bin",captureId=new string('a',32),expectedHistoryDigest=new string('B',64),expectedVersion=new string('A',64)};
+    [Theory][InlineData(false)][InlineData(true)]
+    public async Task RecoverySourceIsMinimalNoStoreAndDoesNotExpandOwnerAccess(bool restore)
+    {
+        await using var f = await Fixture.Start(); using var owner = await f.Client("admin-subject", true);
+        using var request = Write(owner, HttpMethod.Post, restore ? AclRestoreBase : AclBase, await Csrf(owner),
+            restore ? JsonContent.Create(RestoreBody) : JsonContent.Create(AclBody), Guid.NewGuid().ToString("D"));
+        using var accepted = await owner.SendAsync(request); Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+        using var body = JsonDocument.Parse(await accepted.Content.ReadAsStringAsync());
+        var id = (restore ? body.RootElement.GetProperty("intent") : body.RootElement).GetProperty("id").GetGuid();
+        f.Directory.AdditionalAdmin = "another-admin"; using var other = await f.Client("another-admin", true); f.AclHistory.Failure = StatusCode.Unavailable;
+        using var response = await other.GetAsync($"/api/v1/files/container-acls/recovery/{id:D}/restore-source");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode); Assert.True(response.Headers.CacheControl!.NoStore);
+        using var summary = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        if (restore)
+        {
+            Assert.Equal(RecoverySourceFields,
+                summary.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+            Assert.Equal(new string('a', 32), summary.RootElement.GetProperty("captureId").GetString());
+        }
+        else Assert.Equal(JsonValueKind.Null, summary.RootElement.ValueKind);
+        using var foreign = await other.GetAsync($"{(restore ? AclRestoreBase : AclBase)}/{id:D}"); Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+        f.Acl.Allowed = false;
+        using var revoked = await other.GetAsync($"/api/v1/files/container-acls/recovery/{id:D}/restore-source"); Assert.Equal(HttpStatusCode.Forbidden, revoked.StatusCode);
+        Assert.Equal(restore ? 1 : 0, f.AclHistory.Reads); Assert.Equal(0, f.Acl.Mutations);
+    }
     [Theory][InlineData("anonymous",false,401)][InlineData("ordinary",false,403)]
     public async Task RestoreEverySurfaceRequiresAdministratorBeforeSourceAccess(string subject,bool admin,int expected)
     {

@@ -8,3 +8,8 @@ public sealed record ContainerAclHistoryPageDto(ContainerFileLocationDto Locatio
 public sealed record ContainerAclHistorySnapshotDto(ContainerFileLocationDto Location, ContainerAclHistoryEntryDto Entry,
     IReadOnlyList<ContainerAclEntryDto> AccessAcl, IReadOnlyList<ContainerAclEntryDto> DefaultAcl)
 { public override string ToString() => nameof(ContainerAclHistorySnapshotDto); }
+
+/// <summary>Administrator recovery metadata only; never exposes the private source snapshot or an authorization proof.</summary>
+public sealed record ContainerAclRestoreSourceSummaryDto(string CaptureId, string ChangedAclType, string Kind,
+    long CreatedAtUnixMs, uint OriginalMode, uint AccessEntryCount, uint DefaultEntryCount)
+{ public override string ToString() => nameof(ContainerAclRestoreSourceSummaryDto); }

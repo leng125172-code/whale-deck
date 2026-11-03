@@ -22,6 +22,50 @@ public sealed partial class ContainerAclWorkflowTests
         var command=f.Command;var entries=clear?[]:command.Entries.ToArray();var access=command.AclType=="access"?entries:f.Gateway.PlanValue.AccessAcl.ToArray();var defaults=command.AclType=="default"?entries:Array.Empty<ContainerAclEntryDto>();
         return new(){Value=new(command.Location,new(Guid.NewGuid().ToString("N"),new('B',64),0,"666:2026-10-26T01:02:03Z",command.AclType,f.Gateway.PlanValue.Kind,ContainerAclValidation.Mode(access),(uint)access.Length,(uint)defaults.Length),access,defaults)};
     }
+    [Fact]
+    public async Task RecoverySummaryIsStoredReadOnlyAndSeparateFromOwnerSourceAcrossAcknowledgement()
+    {
+        var source = new RestoreSource(); using var f = new Fixture(false, source); source.Value = SourceFor(f).Value;
+        var queued = await f.Service.QueueRestoreAsync(f.Actor, RestoreCommand(f, source), f.Key, default);
+        var admin = f.Actor with { Subject = "another-current-admin", LoginBinding = new('F', 64) };
+        await f.Dispatcher.TickAsync(default); await f.Confirm();
+        f.Gateway.ApplyHandler = op => Gateway.ReceiptFor(op, "Unknown"); await f.Dispatcher.TickAsync(default);
+        source.Failure = new IOException("HDD unavailable"); var stored = f.Repository.Row!.RestoreSourceJson; var reads = source.Reads;
+        var summary = await f.Service.RecoveryRestoreSourceAsync(admin, queued.Intent.Id, default);
+        Assert.Equal(new ContainerAclRestoreSourceSummaryDto(queued.Source.Entry.CaptureId, "access", "File", 0,
+            queued.Source.Entry.OriginalMode, queued.Source.Entry.AccessEntryCount, 0), summary);
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => f.Service.GetRestoreAsync(admin, f.Command.Location.ContainerId, queued.Intent.Id, default));
+        await f.Service.AcknowledgeAsync(admin, queued.Intent.Id, new(f.Repository.Row.Version, true), default);
+        Assert.Equal("Acknowledged", f.Repository.Row.State);
+        Assert.Equal(summary, await f.Service.RecoveryRestoreSourceAsync(admin, queued.Intent.Id, default));
+        Assert.Equal(stored, f.Repository.Row.RestoreSourceJson); Assert.Equal(reads, source.Reads);
+        Assert.Equal(1, f.Gateway.Applies); Assert.Equal(1, f.Gateway.Discards);
+    }
+    [Fact]
+    public async Task RecoverySummaryReturnsNullOnlyForValidOrdinaryRequestAndRejectsTampering()
+    {
+        using var f = new Fixture(); await f.Queue(); var row = f.Repository.Row!;
+        Assert.Null(await f.Service.RecoveryRestoreSourceAsync(f.Actor, row.Id, default));
+        typeof(ContainerAclIntent).GetProperty(nameof(row.RestoreSourceJson))!.SetValue(row, "null");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.Service.RecoveryRestoreSourceAsync(f.Actor, row.Id, default));
+        Assert.Equal(0, f.Gateway.Plans + f.Gateway.Applies + f.Gateway.Discards);
+    }
+    [Theory][InlineData(false)][InlineData(true)]
+    public async Task RecoverySourceRejectsRevokedAuthorityBeforeAndAfterRepositoryRead(bool afterRead)
+    {
+        using var f = new Fixture(); await f.Queue();
+        if (afterRead) f.Repository.AfterRead = () => f.Identity.LiveAdmin = false;
+        else f.Identity.LiveAdmin = false;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => f.Service.RecoveryRestoreSourceAsync(f.Actor, f.Repository.Row!.Id, default));
+    }
+    [Fact]
+    public async Task RecoverySourceRejectsEmptyAndMissingIntentWithoutGatewayCalls()
+    {
+        using var f = new Fixture();
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Service.RecoveryRestoreSourceAsync(f.Actor, Guid.Empty, default));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => f.Service.RecoveryRestoreSourceAsync(f.Actor, Guid.NewGuid(), default));
+        Assert.Equal(0, f.Gateway.Requires + f.Gateway.Plans + f.Gateway.Inspects + f.Gateway.Applies + f.Gateway.Discards);
+    }
     [Theory][InlineData(false)][InlineData(true)]
     public async Task ExplicitEmptyDefaultAndNoChangeRestoreStillRequireANewConfirmedExecution(bool noChange)
     {

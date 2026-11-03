@@ -8,7 +8,7 @@ export async function installContainerAclFixture(page,options={}){
  const named=()=>[{tag:'user_obj',id:null,permissions:6},{tag:'user',id:0,permissions:0},{tag:'group_obj',id:null,permissions:4},{tag:'mask',id:null,permissions:6},{tag:'other',id:null,permissions:0}]
  const mode=e=>e.find(v=>v.tag==='user_obj').permissions*64+(e.find(v=>v.tag==='mask')??e.find(v=>v.tag==='group_obj')).permissions*8+e.find(v=>v.tag==='other').permissions
  const row={id,planningJobId:id,executionJobId:null,command:null,state:'Queued',kind:null,originalUid:null,originalGid:null,executorUid:null,executorGid:null,originalAccessAcl:null,originalDefaultAcl:null,targetMode:null,noChange:null,readyExpiresAtUtc:null,resultCode:null,version:0,publishedVersion:null,aclConfirmed:null,historyMayExist:false,historyVerified:false,historyDigest:null,receipt:null,confirmation:null}
- const state={writes:[],reads:[],registered:false,holdPlan:false,holdAcl:false,status:200,canceled:false,lostQueue:false,lostConfirm:false,lostAck:false,key:'',malformed:false,pause:false,waiting:false,release:()=>{}}
+ const state={restoreSource:null,writes:[],reads:[],registered:false,holdPlan:false,holdAcl:false,status:200,canceled:false,lostQueue:false,lostConfirm:false,lostAck:false,key:'',malformed:false,pause:false,waiting:false,release:()=>{}}
  function planned(){
   row.state='Ready';row.kind=row.command.location.path.endsWith('资料')?'Directory':'File';row.originalUid=1000;row.originalGid=1001;row.executorUid=5100;row.executorGid=5101
   row.originalAccessAcl=basic();row.originalDefaultAcl=row.command.aclType==='default'?named():[];row.targetMode=row.command.aclType==='access'?mode(row.command.entries):mode(row.originalAccessAcl)
@@ -59,7 +59,7 @@ export async function installContainerAclFixture(page,options={}){
   row.command={location:{containerId:cid,instanceId:'777:2026-10-28T01:02:03.123456789Z',path:'work/old.txt'},aclType:'access',entries:named(),expectedVersion:'A'.repeat(64)};planned();row.executionJobId=execution;row.confirmation=null;row.state='Unknown';row.historyMayExist=true;row.resultCode='CONTAINER_ACL_RESULT_UNKNOWN';row.receipt=receipt('Unknown')
   await page.route('**/api/v1/files/container-acls/recovery**',async route=>{
    const request=route.request(),path=new URL(request.url()).pathname.split('/recovery')[1]||''
-   if(request.method()==='GET'){state.reads.push('recovery'+path);if(state.status!==200)return route.fulfill({status:state.status,json:{status:state.status}});return route.fulfill({json:path?response():row.state==='Unknown'?[response()]:[]})}
+   if(request.method()==='GET'){state.reads.push('recovery'+path);if(state.status!==200)return route.fulfill({status:state.status,json:{status:state.status}});return route.fulfill({json:path.endsWith('/restore-source')?state.restoreSource:path?response():row.state==='Unknown'?[response()]:[]})}
    state.writes.push({path:'recovery'+path,body:request.postDataJSON(),key:request.headers()['idempotency-key']});row.state='Acknowledged';row.version++;row.resultCode='CONTAINER_ACL_UNKNOWN_ACKNOWLEDGED'
    if(options.loseAck&&!state.lostAck){state.lostAck=true;return route.abort('failed')}return route.fulfill({status:202,json:{id,state:'Acknowledged'}})
   })

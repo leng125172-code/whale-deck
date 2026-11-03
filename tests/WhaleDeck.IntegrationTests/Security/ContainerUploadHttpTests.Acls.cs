@@ -25,7 +25,7 @@ public sealed partial class ContainerUploadHttpTests
             using var response = await client.SendAsync(request); Assert.Equal(expected,response.StatusCode);
         }
         const string recovery = "/api/v1/files/container-acls/recovery";
-        foreach (var suffix in new[] { "", "/aa0a8865-343e-49bd-b01a-72680131bf39", "/aa0a8865-343e-49bd-b01a-72680131bf39/acknowledge" })
+        foreach (var suffix in new[] { "", "/aa0a8865-343e-49bd-b01a-72680131bf39", "/aa0a8865-343e-49bd-b01a-72680131bf39/acknowledge", "/aa0a8865-343e-49bd-b01a-72680131bf39/restore-source" })
         {
             using var request = suffix.EndsWith("acknowledge",StringComparison.Ordinal) ? Write(client,HttpMethod.Post,recovery+suffix,token,JsonContent.Create(new { version=0,confirmed=true })) : new HttpRequestMessage(HttpMethod.Get,recovery+suffix);
             using var response = await client.SendAsync(request); Assert.Equal(expected,response.StatusCode);

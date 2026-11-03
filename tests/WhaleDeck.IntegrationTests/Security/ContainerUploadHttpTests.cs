@@ -235,9 +235,9 @@ public sealed partial class ContainerUploadHttpTests
     }
     private sealed class Directory : IIdentityDirectory
     {
-        public bool Admin { get; set; }=true;
+        public bool Admin { get; set; }=true; public string? AdditionalAdmin { get; set; }
         public Task<CurrentUserDto> ResolveCurrentAsync(string subject,string? name,IReadOnlyCollection<string> groups,CancellationToken cancellationToken)=>
-            Task.FromResult(new CurrentUserDto(subject,name,groups,Admin&&subject=="admin-subject",DateTimeOffset.UtcNow.AddHours(1)));
+            Task.FromResult(new CurrentUserDto(subject,name,groups,Admin&&(subject=="admin-subject"||subject==AdditionalAdmin),DateTimeOffset.UtcNow.AddHours(1)));
         public Task<IReadOnlyCollection<ManagedResourceDto>> ListUsersAsync(CancellationToken cancellationToken)=>throw new NotSupportedException();
         public Task<IReadOnlyCollection<ManagedResourceDto>> ListGroupsAsync(CancellationToken cancellationToken)=>throw new NotSupportedException();
         public Task<IReadOnlyCollection<ManagedResourceDto>> ListSsoApplicationsAsync(CancellationToken cancellationToken)=>throw new NotSupportedException();

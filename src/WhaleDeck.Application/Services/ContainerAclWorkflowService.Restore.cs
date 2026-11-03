@@ -48,6 +48,21 @@ public sealed partial class ContainerAclWorkflowService
         await AuthorizeAsync(actor, cancellationToken); return new(Map(row), source);
     }
 
+    /// <summary>Stored immutable metadata for current administrators, including after acknowledgement. Never rereads HDD or authorizes a write.</summary>
+    public async Task<ContainerAclRestoreSourceSummaryDto?> RecoveryRestoreSourceAsync(TerminalActor actor, Guid id, CancellationToken cancellationToken)
+    {
+        await AuthorizeAsync(actor, cancellationToken);
+        if (id == Guid.Empty) throw new ArgumentException("CONTAINER_ACL_ID_REQUIRED");
+        var row = await repository.FindAsync(id, cancellationToken) ?? throw new KeyNotFoundException("CONTAINER_ACL_NOT_FOUND");
+        Validate(row);
+        var source = ContainerAclRestoreValidation.Read(row);
+        var entry = source?.Entry;
+        var summary = entry is null ? null : new ContainerAclRestoreSourceSummaryDto(entry.CaptureId, entry.ChangedAclType,
+            entry.Kind, entry.CreatedAtUnixMs, entry.OriginalMode, entry.AccessEntryCount, entry.DefaultEntryCount);
+        await AuthorizeAsync(actor, cancellationToken);
+        return summary;
+    }
+
     /// <summary>Only before a new write. Inspect/discard of the original execution never depend on source availability.</summary>
     internal async Task ValidateRestoreSourceAsync(TerminalActor actor, ContainerAclIntent row, CancellationToken cancellationToken)
     {
