@@ -27,6 +27,19 @@ class NativeValidationStatusTests(unittest.TestCase):
                     report.update(**fields)
                 self.assertEqual(original, report.path.read_bytes())
 
+    def test_public_phase_markers_are_bounded_and_never_store_raw_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = NativeValidationStatus(Path(directory), 'dispatch', 'c' * 40)
+            phase = 'container-acl-restore-source-mac-immutable-audited-new-jobs'
+            report.update(nativePhases=[phase])
+            self.assertEqual([phase], json.loads(report.path.read_text())['nativePhases'])
+            original = report.path.read_bytes()
+            for value in (phase, [None], ['Connection=secret'], ['bad\nvalue'],
+                          ['x' * 161], ['ok'] * 129):
+                with self.assertRaises(ValueError):
+                    report.update(nativePhases=value)
+                self.assertEqual(original, report.path.read_bytes())
+
 
 if __name__ == '__main__':
     unittest.main()

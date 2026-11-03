@@ -10,7 +10,7 @@ import uuid
 
 class NativeValidationStatus:
     allowed = frozenset(('state', 'stage', 'sdkImageId', 'containerName', 'executedTests',
-        'passedTests', 'cleanupConfirmed', 'failureType', 'finishedAtUtc'))
+        'passedTests', 'cleanupConfirmed', 'failureType', 'finishedAtUtc', 'nativePhases'))
 
     def __init__(self, root: Path, suite: str, source_sha: str):
         if suite not in ('capacity', 'metrics', 'alerts', 'notifications', 'dispatch', 'snapshots'):
@@ -31,6 +31,12 @@ class NativeValidationStatus:
         if fields.keys() - self.allowed:
             raise ValueError('Non-public native status field')
         for key, value in fields.items():
+            if key == 'nativePhases':
+                if not isinstance(value, list) or len(value) > 128 or any(
+                        not isinstance(phase, str) or not re.fullmatch(r'[a-z-]{1,160}', phase)
+                        for phase in value):
+                    raise ValueError('Invalid public native phases')
+                continue
             if not isinstance(value, (str, bool, int)) or isinstance(value, str) and (
                     len(value) > 160 or any(ord(char) < 32 for char in value)):
                 raise ValueError('Invalid native status value')
