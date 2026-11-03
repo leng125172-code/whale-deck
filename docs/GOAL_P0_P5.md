@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-04 来源首次登记缺失分项实机通过：1537d6a冻结79源码闭包/13安装helper，新资源真实选源后仅隔离新原件，历史404、登记409/OPERATION_CONFLICT、同key/预期Job404，SQL意图/Job/outbox/事件/恢复审计五项0，Root/HDD缺席。原inode字节还原后仅查询仍无登记；3真PNG/两主题未找到、正常双端退出/引用清空、HTTP权限、实盘及独立核验/准确清理通过。派生ID不冒充实际任务，旧140HDD字节九字段保持/总141，新捕获ctime改变保留；六组件28062da/两宿主/全部11核心标识/7配置/账本保持、活动0，无服务启停发布。8+8+11+5+22+28+8离线通过；四个缺失来源边界分项已实机，替换/依赖中断/期限回执、递归ACL/删除及维护连续性和其余59项继续。[实机事实与边界](qa/CONTAINER_ACL_SOURCE_REGISTER_MISSING.md)。
+
 2026-11-04 来源异步预检缺失分项实机通过：4d38a51冻结74源码闭包/13安装helper，新资源真实选源后仅停原Worker，来源可读时登记202/Queued；隔离新原件取得404/原key200后再启动同Worker，原规划Failed/RESTORE_SOURCE_CHANGED，无计划/确认/执行/Root和当前前像。原inode字节还原后只查询原失败任务，5真PNG/两主题“未证明”摘要、2审计、正常双端退出/HTTP拒绝、完整实盘及独立核验/准确清理通过。旧139HDD字节九字段保持/总140，新捕获ctime变化保留；六组件28062da/两宿主/11核心/7配置账本保持、仅Worker StartedAt改变、活动0。8+11+22+28+5+8离线通过；首次登记拒绝/替换/依赖中断、递归ACL/删除及维护连续性和其余59项继续。[实机事实与边界](qa/CONTAINER_ACL_SOURCE_PLAN_MISSING.md)。
 
 2026-11-04 来源首次Apply缺失分项实机通过：bbd1b52运行前冻结69源码闭包/13安装helper，新资源真实捕获/选源/Ready后仅停原Worker，原确认202→Pending；隔离新原件取得404/原key200后再启动同Worker，原执行Failed/RESTORE_SOURCE_CHANGED、Root Aborted/false、RootStarted空/无当前前像。原inode字节还原后迟到同ID Root Apply仍Aborted；5真PNG/两主题执行摘要、4审计、正常双端退出/HTTP拒绝、实盘及独立核验/准确清理通过。旧138HDD字节九字段保持/总139，新捕获ctime改变保留；六组件28062da/两宿主/11核心/7配置账本保持，只有Worker StartedAt改变、活动0。11+5+22+28+8离线通过；登记/预检/替换/依赖中断、递归ACL/删除及维护连续性和其余59项继续。[实机事实与边界](qa/CONTAINER_ACL_SOURCE_APPLY_MISSING.md)。
