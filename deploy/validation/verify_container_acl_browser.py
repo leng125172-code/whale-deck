@@ -20,7 +20,7 @@ from verify_container_recursive_permissions import private_json
 from validate_container_acl_browser import CASES,SOURCES,snapshot,verify_case,no_active_work
 
 
-def verify(name,history=False):
+def verify(name,history=False,restore=False):
     assert re.fullmatch('container-acl-browser-[a-f0-9]{32}',name);repo=Path(__file__).resolve().parents[2];evidence=repo/'deploy/artifacts'/name;trusted(evidence,True)
     baseline=private_json(evidence/'baseline.json');proofs=private_json(evidence/'results.json');browser=private_json(evidence/'browser.json');accepted=private_json(evidence/'verified.json')
     assert baseline['revision']==browser['revision']==accepted['revision'] and browser['actualUi'] and browser['normalDualLogout']
@@ -37,6 +37,9 @@ def verify(name,history=False):
         from validate_container_acl_history_browser import SOURCES as history_sources
         source_names=(*SOURCES,*history_sources)
         assert baseline['aclHistoryVersion']==1
+    if restore:
+        from validate_container_acl_restore_browser import SOURCES as restore_sources
+        source_names=(*SOURCES,*restore_sources);assert baseline['aclRestoreVersion']==1
     assert set(baseline['validationSourceSha256'])==set(source_names)
     for file,sha in baseline['validationSourceSha256'].items():assert hashlib.sha256(subprocess.check_output(['git','-C',str(repo),'show',baseline['validationSourceRevision']+':deploy/validation/'+file])).hexdigest()==sha
     content=hashlib.shake_256(('acl-browser:'+baseline['containerId']).encode()).digest(2*1024**2+7);assert baseline['bytesPerFile']==len(content) and baseline['sha256']==hashlib.sha256(content).hexdigest().upper()
@@ -53,8 +56,8 @@ def verify(name,history=False):
             for suffix in ('.root.json','.hdd.json'):assert (observed/(label+suffix)).read_bytes()==(evidence/(label+suffix)).read_bytes()
             count+=1
         previous=proof['after']
-    assert count==8 and previous==private_json(evidence/'physical-final.json')
-    if baseline.get('jobResultsVersion')==1:
+    assert count==8 and previous==private_json(evidence/('physical-base-final.json' if restore else 'physical-final.json'))
+    if baseline.get('jobResultsVersion')==1 and not restore:
         assert accepted['jobResultsVersion']==browser['jobResultsVersion']==1
         assert accepted['newJobSummaries']==17 and accepted['actualTaskDrawers']==18 and accepted['legacyJobUnchanged']
         expected=[(item['executionJobId'] if execution else item['planningJobId'],item['id'],execution) for item in browser['completed'] for execution in (False,True) if not execution or item['executionJobId']]
@@ -74,7 +77,7 @@ def verify(name,history=False):
             response=api.get(AUTHENTIK_API+'core/users/',params={'search':prefix,'page_size':100},timeout=20);assert response.status_code==200 and not response.json().get('pagination',{}).get('next');assert not any(str(u['username']).startswith(prefix) for u in response.json()['results'])
     finally:api.close()
     result={'revision':baseline['revision'],'independentReadOnlyVerifier':True,'cases':9,'hddRecords':8,'temporaryIdentitiesAbsent':True,'exactSourceAndContainerAbsent':True,'coreUnchanged':11,'physicalBytesCheckedByParentPerCase':True,'sourceBytesRereadAfterCleanup':False,'normalDualLogoutFromOriginalContext':True}
-    if baseline.get('jobResultsVersion')==1:result.update(newJobSummaries=17,actualTaskDrawers=18,legacyJobUnchanged=True)
+    if baseline.get('jobResultsVersion')==1 and not restore:result.update(newJobSummaries=17,actualTaskDrawers=18,legacyJobUnchanged=True)
     return result
 
 

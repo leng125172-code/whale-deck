@@ -20,8 +20,8 @@ try{
  assert.equal((await context.request.post(base+endpoint,{headers:{Origin:base,'Idempotency-Key':crypto.randomUUID()},data:forbidden})).status(),400)
  assert.equal((await context.request.post(base+endpoint,{headers:{...headers,Origin:'http://example.invalid','Idempotency-Key':crypto.randomUUID()},data:forbidden})).status(),403)
  const missing=structuredClone(forbidden);delete missing.entries[0].permissions;const rejected=await context.request.post(base+endpoint,{headers:{...headers,'Idempotency-Key':crypto.randomUUID()},data:missing});assert.equal(rejected.status(),400);assert.equal((await rejected.json()).code,'CONTAINER_ACL_INPUT_INVALID')
- let registrations=0,confirmations=0,uploads=0;const headerChecks=[],completed=[]
- page.on('request',request=>{const path=new URL(request.url()).pathname;if(request.method()==='POST'&&(path===endpoint||path.startsWith(endpoint+'/')&&path.endsWith('/confirm'))){if(path===endpoint)registrations++;else confirmations++;headerChecks.push(request.allHeaders().then(h=>h.origin===base&&!!h['idempotency-key']))}if(request.method()==='PUT'&&path.includes('/files/'))uploads++})
+ let recordingBase=true,registrations=0,confirmations=0,uploads=0;const headerChecks=[],completed=[]
+ page.on('request',request=>{const path=new URL(request.url()).pathname;if(recordingBase&&request.method()==='POST'&&(path===endpoint||path.startsWith(endpoint+'/')&&path.endsWith('/confirm'))){if(path===endpoint)registrations++;else confirmations++;headerChecks.push(request.allHeaders().then(h=>h.origin===base&&!!h['idempotency-key']))}if(request.method()==='PUT'&&path.includes('/files/'))uploads++})
  async function query(id){const r=await context.request.get(base+endpoint+'/'+id);assert.equal(r.status(),200);return r.json()}
  const cases=[{name:'access',mask:4},{name:'noop',mask:4},{name:'mask',mask:6},{name:'root',mask:6,id:0,permission:0},{name:'base',base:true},{name:'default',mask:4,directory:true},{name:'default-noop',mask:4,directory:true},{name:'clear-default',directory:true,clear:true},{name:'cancel',mask:7,cancel:true}]
  for(const [index,item] of cases.entries()){
@@ -53,8 +53,10 @@ try{
  }
  let aclHistory=null
  if(fixture.aclHistoryVersion===1){phase='actual-acl-history';aclHistory=await(await import('./validate_container_acl_history_browser.mjs')).runHistoryBrowser(page,context,base,fixture,profile.subject,completed)}
+ let aclRestores=null
+ if(fixture.aclRestoreVersion===1){recordingBase=false;phase='actual-acl-restoration';aclRestores=await(await import('./validate_container_acl_restore_browser.mjs')).runRestoreBrowser(page,context,base,fixture,profile.subject,completed)}
  const taskCenter=[]
- if(fixture.jobResultsVersion===1){
+ if(fixture.jobResultsVersion===1&&fixture.aclRestoreVersion!==1){
   phase='actual-task-center-results';let jobWrites=0;page.on('request',r=>{const path=new URL(r.url()).pathname;if(path.startsWith('/api/v1/jobs')&&r.method()!=='GET')jobWrites++})
   for(const [index,item] of completed.entries())for(const execution of [false,true]){
    if(execution&&!item.executionJobId)continue
@@ -75,7 +77,9 @@ try{
   await page.locator('.jobs-page .el-table__body tr').nth(position).getByRole('button',{name:'详情',exact:true}).click();const drawer=page.getByRole('dialog',{name:'任务详情',exact:true}),region=drawer.getByRole('region',{name:'ACL 安全结果',exact:true});await expect(drawer.locator('.el-descriptions__content').first()).toHaveText(legacy.id);await expect(region).toContainText('此任务未记录可展示的 ACL 安全摘要');await expect(drawer).not.toContainText('任务成功后');await region.scrollIntoViewIfNeeded();await page.screenshot({path:join(evidence,'legacy-job.png')});taskCenter.push({id:legacy.id,legacy:true,resultJson:null,screenshot:'legacy-job.png'});await drawer.getByRole('button',{name:'Close this dialog',exact:true}).click();assert.equal(jobWrites,0)
  }
  assert.equal(registrations,9);assert.equal(confirmations,8);assert.equal(uploads,0);assert.ok((await Promise.all(headerChecks)).every(Boolean));phase='visible-dual-logout';const logout=await logoutFromUserMenu(page,context,base)
+ let restoreOrdinary=null
+ if(fixture.aclRestoreVersion===1){phase='ordinary-acl-restoration';restoreOrdinary=await(await import('./validate_container_acl_restore_browser.mjs')).ordinaryRestoreBrowser(browser,base,fixture,aclRestores.completed[0])}
  let historyOrdinary=null
  if(fixture.aclHistoryVersion===1){phase='ordinary-acl-history';historyOrdinary=await(await import('./validate_container_acl_history_browser.mjs')).ordinaryHistoryBrowser(browser,base,fixture,completed[0])}
- await writeFile(join(evidence,'browser.json'),JSON.stringify({revision,containerId:fixture.containerId,subject:profile.subject,completed,registrations,confirmations,registrationRetries:9,confirmationRetries:8,contentUploads:uploads,actualUi:true,normalDualLogout:true,logout,jobResultsVersion:fixture.jobResultsVersion,taskCenter,...(fixture.aclHistoryVersion===1?{aclHistory,historyOrdinary}:{})}),{mode:0o600});await context.close();await browser.close();browser=undefined;console.log(JSON.stringify({aclBrowser:'passed',actualUi:true,cases:9}))
+ await writeFile(join(evidence,'browser.json'),JSON.stringify({revision,containerId:fixture.containerId,subject:profile.subject,completed,registrations,confirmations,registrationRetries:9,confirmationRetries:8,contentUploads:uploads,actualUi:true,normalDualLogout:true,logout,jobResultsVersion:fixture.jobResultsVersion,taskCenter,...(fixture.aclRestoreVersion===1?{aclRestores,restoreOrdinary}:{}),...(fixture.aclHistoryVersion===1?{aclHistory,historyOrdinary}:{})}),{mode:0o600});await context.close();await browser.close();browser=undefined;console.log(JSON.stringify({aclBrowser:'passed',actualUi:true,cases:9}))
 }catch(error){const frame=error?.stack?.split('\n').find(line=>line.includes('validate_container_acl_browser.mjs:'))?.trim();if(page&&evidence&&!['startup','normal-visible-authentik-login'].includes(phase))await page.screenshot({path:join(evidence,'failed-product-page.png')}).catch(()=>{});console.error(JSON.stringify({aclBrowser:'failed',phase,failureType:error?.name,frame}));if(browser)await browser.close().catch(()=>{});process.exitCode=1}

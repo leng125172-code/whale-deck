@@ -46,8 +46,8 @@ def snapshot(identifier):
     assert str(uuid.UUID(identifier))==identifier
     return query('''SELECT json_build_object('row',to_jsonb(c),'planJob',to_jsonb(p),'executionJob',to_jsonb(e),
       'pending',(SELECT count(*) FROM outbox_messages o WHERE o.payload_json->>'jobId' IN(c.id::text,c.execution_job_id::text) AND o.processed_at_utc IS NULL),
-      'accepted',(SELECT count(*) FROM audit_events a WHERE a.job_id=c.id AND a.action='containers.files.acl.plan-accepted'),
-      'confirmed',(SELECT count(*) FROM audit_events a WHERE a.job_id=c.execution_job_id AND a.action='containers.files.acl.confirmed'),
+      'accepted',(SELECT count(*) FROM audit_events a WHERE a.job_id=c.id AND a.action IN ('containers.files.acl.plan-accepted','containers.files.acl.restore.plan-accepted')),
+      'confirmed',(SELECT count(*) FROM audit_events a WHERE a.job_id=c.execution_job_id AND a.action IN ('containers.files.acl.confirmed','containers.files.acl.restore.confirmed')),
       'events',(SELECT count(*) FROM operation_job_events j WHERE j.job_id IN(c.id,c.execution_job_id)))
       FROM container_acl_intents c JOIN operation_jobs p ON p.id=c.id LEFT JOIN operation_jobs e ON e.id=c.execution_job_id WHERE c.id=:'id'::uuid;''',id=identifier)
 
@@ -107,25 +107,34 @@ def verify_job_summaries(data,plan,evidence,label):
         for secret in (plan['fingerprint'],plan['targetProof']):assert secret not in encoded
 
 
-def verify_case(result,baseline,subject,evidence,reader,module,storage,before,after,job_evidence=None):
-    label=result['name'];assert label in CASES;relative='acl-directory' if label in ('default','default-noop','clear-default') else 'acl-file.bin'
-    kind='default' if relative=='acl-directory' else 'access';data=snapshot(result['id']);row=data['row'];plan=managed_plan(json.loads(row['plan_json']))
+def verify_case(result,baseline,subject,evidence,reader,module,storage,before,after,job_evidence=None,restore_source=None):
+    label=result['name']
+    if restore_source is None:
+        assert label in CASES;relative='acl-directory' if label in ('default','default-noop','clear-default') else 'acl-file.bin'
+        kind='default' if relative=='acl-directory' else 'access';desired=profile(label);canceled=label=='cancel'
+    else:
+        from acl_restore_browser_proof import restore_spec,prove_source
+        spec=restore_spec(label);relative=spec['relative'];kind=restore_source['entry']['changedAclType']
+        assert kind==('default' if relative=='acl-directory' else 'access')
+        desired=restore_source['accessAcl' if kind=='access' else 'defaultAcl'];canceled=spec['cancel']
+    data=snapshot(result['id']);row=data['row'];plan=managed_plan(json.loads(row['plan_json']))
+    if restore_source is not None:prove_source(row,restore_source,result)
     assert type(plan['schemaVersion']) is int and plan['schemaVersion']==1 and type(plan['targetMode']) is int and 0<=plan['targetMode']<=511 and type(plan['noChange']) is bool
     module.validate_entries(plan['command']['entries'],empty=kind=='default');module.validate_entries(plan['accessAcl']);module.validate_entries(plan['defaultAcl'],empty=True)
     assert row['actor_subject']==subject and row['container_id']==baseline['containerId'] and row['instance_id']==baseline['instanceId']
     assert row['relative_path']==plan['command']['path']==result['command']['location']['path']=='work/'+relative
     assert row['state']==result['state'] and row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is None and row['lease_expires_at_utc'] is None
     assert data['pending']==0 and data['accepted']==1 and data['planJob']['state']=='Succeeded'
-    assert plan['command']['aclType']==kind and plan['command']['entries']==profile(label)
+    assert plan['command']['aclType']==kind and plan['command']['entries']==desired
     assert plan['sourceIdentity']==before[relative]['identity'] and plan['accessAcl']==before[relative]['access'] and plan['defaultAcl']==before[relative]['default']
     assert plan['command']['expectedVersion']==version(baseline,'work/'+relative,before[relative]['identity'])
     assert plan['fingerprint']==hashlib.sha256(b'whaledeck-container-acl-plan-v1\n'+module.encode({k:v for k,v in plan.items() if k!='fingerprint'})).hexdigest().upper()
     assert plan['uid']==plan['gid']==result['executorUid']==result['executorGid']==1000
     assert [result['originalUid'],result['originalGid']]==before[relative]['identity'][3:5]
-    assert plan['noChange']==result['noChange']==(label in ('noop','default-noop')) and plan['targetMode']==result['targetMode']
+    assert plan['noChange']==result['noChange']==(before[relative][kind]==desired) and plan['targetMode']==result['targetMode']
     (evidence/(label+'.sql.json')).write_text(json.dumps(data))
     if baseline.get('jobResultsVersion')==1:verify_job_summaries(data,plan,evidence if job_evidence is None else job_evidence,label)
-    if label=='cancel':
+    if canceled:
         assert row['state']=='Canceled' and row['execution_job_id'] is None and row['root_started_at_utc'] is None and data['executionJob'] is None and data['confirmed']==0
         assert row['receipt_json'] is None and row['receipt_hash'] is None and row['acl_confirmed'] is None and not row['history_may_exist'] and not row['history_verified'] and row['history_digest'] is None
         assert result['receipt'] is None and after==before;return {'result':result,'before':before,'after':after,'hddRecords':0}
@@ -153,7 +162,7 @@ def verify_case(result,baseline,subject,evidence,reader,module,storage,before,af
     hdd=json.loads(hdd_raw);assert hdd['resourceType']=='ContainerAclMetadata' and hdd['storageId']=='database-platform.backup.hdd'
     assert hdd['operationId']==operation and hdd['owner']==row['owner_hash'] and hdd['plan']==plan
     assert hdd['historyDigest']==record['historyDigest']==hashlib.sha256(b'whaledeck-container-acl-history-v1\n'+module.encode({k:v for k,v in hdd.items() if k!='historyDigest'})).hexdigest().upper()
-    if label in ('noop','default-noop'):assert before==after
+    if plan['noChange']:assert before==after
     (evidence/(label+'.root.json')).write_bytes(raw);(evidence/(label+'.hdd.json')).write_bytes(hdd_raw)
     return {'result':result,'before':before,'after':after,'hddRecords':1,'rootSha256':hashlib.sha256(raw).hexdigest(),'hddSha256':hashlib.sha256(hdd_raw).hexdigest()}
 
@@ -201,7 +210,7 @@ def remove_proved(folder,reader,module,content,current):
     directory.rmdir()
 
 
-def main(history=False):
+def main(history=False,restore=False):
     global PHASE
     assert os.geteuid()==0 and len(sys.argv)==2;os.umask(0o077);revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision)
     repo=Path(__file__).resolve().parents[2];base='http://127.0.0.1:8080';assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
@@ -210,11 +219,14 @@ def main(history=False):
     if history:
         from validate_container_acl_history_browser import SOURCES as history_sources,exercise
         source_names=(*SOURCES,*history_sources)
+    if restore:
+        from validate_container_acl_restore_browser import SOURCES as restore_sources,exercise as restore_exercise
+        source_names=(*SOURCES,*restore_sources)
     for name in source_names:
         raw=subprocess.check_output(['git','-C',str(repo),'show',source+':deploy/validation/'+name]);assert raw==(repo/'deploy/validation'/name).read_bytes();hashes[name]=hashlib.sha256(raw).hexdigest()
     installed_hashes={}
     installed_names=(*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged')
-    if history:installed_names=(*installed_names,'whaledeck-container-acl-history.py','whaledeck-container-acl-history-transport.py')
+    if history or restore:installed_names=(*installed_names,'whaledeck-container-acl-history.py','whaledeck-container-acl-history-transport.py')
     for name in installed_names:
         path=Path('/usr/local/libexec')/name;trusted(path);raw=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name]);assert raw==path.read_bytes();installed_hashes[name]=hashlib.sha256(raw).hexdigest()
     public=__import__('requests').Session();public.trust_env=False
@@ -235,16 +247,17 @@ def main(history=False):
         baseline={'revision':revision,'validationSourceRevision':source,'validationSourceSha256':hashes,'installedSourceSha256':installed_hashes,'containerId':fixture['identifier'],'containerName':inspected['Name'].lstrip('/'),'instanceId':str(inspected['State']['Pid'])+':'+inspected['State']['StartedAt'],'source':str(folder),'original':original,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'coreBefore':core,'evidence':str(evidence),'fixtureOriginal':{'identity':list(fixture['proofs']['original.bin'][0]),'sha256':fixture['proofs']['original.bin'][1]}}
         baseline['jobResultsVersion']=1
         if history:baseline['aclHistoryVersion']=1
+        if restore:baseline['aclRestoreVersion']=1
         baseline['legacyJob']=query("SELECT (SELECT to_jsonb(j) FROM operation_jobs j WHERE job_type='containers.files.acl' AND state='Succeeded' AND result_json IS NULL ORDER BY created_at_utc DESC LIMIT 1);")
-        assert baseline['legacyJob'] and baseline['legacyJob']['result_json'] is None
+        if not restore:assert baseline['legacyJob'] and baseline['legacyJob']['result_json'] is None
         baseline['sourceVersion']=version(baseline,'work/acl-file.bin',original['acl-file.bin']['identity'])
         with storage.target(create_namespace=False,read_only=True) as (configuration,fd):storage.attest(configuration,fd,read_only=True);baseline['sourceDevice']=folder.stat().st_dev;baseline['hddDevice']=os.fstat(fd).st_dev
         (evidence/'baseline.json').write_text(json.dumps(baseline));results=[];current=original
         with ExitStack() as accounts:
             username,password=accounts.enter_context(temporary_user(True))
-            ordinary=accounts.enter_context(temporary_user(False)) if history else None
+            ordinary=accounts.enter_context(temporary_user(False)) if history or restore else None
             env={**os.environ,'WHALEDECK_URL':base,'VALIDATION_USERNAME':username,'VALIDATION_PASSWORD':password}
-            if history:env.update(HISTORY_ORDINARY_USERNAME=ordinary[0],HISTORY_ORDINARY_PASSWORD=ordinary[1])
+            if history or restore:env.update(HISTORY_ORDINARY_USERNAME=ordinary[0],HISTORY_ORDINARY_PASSWORD=ordinary[1])
             with (evidence/'browser.stdout').open('w') as out,(evidence/'browser.stderr').open('w') as err:
                 process=subprocess.Popen(['node',str(repo/'deploy/validation/validate_container_acl_browser.mjs'),revision],stdin=subprocess.PIPE,stdout=out,stderr=err,env=env,text=True)
                 try:
@@ -257,6 +270,10 @@ def main(history=False):
                     if history:
                         PHASE='history-readonly-proof'
                         history_result=exercise(process,evidence,baseline,results,reader,module,storage,folder,content,current)
+                    if restore:
+                        PHASE='history-restoration-proof'
+                        (evidence/'physical-base-final.json').write_text(json.dumps(current))
+                        restore_result,current=restore_exercise(process,evidence,baseline,results,reader,module,storage,folder,content,current)
                     assert process.wait(timeout=180 if baseline.get('jobResultsVersion')==1 else 75)==0,'ACTUAL_ACL_BROWSER_FAILED'
                 finally:
                     if process.poll() is None:
@@ -269,9 +286,14 @@ def main(history=False):
     no_active_work();assert owned.common.core_snapshot()==core and not fixture['folder'].exists()
     assert not subprocess.check_output(['systemctl','list-units','--all','--no-legend','whaledeck-container-acl-*'],text=True).strip()
     verified={'revision':revision,'actualBrowserAndIdentity':True,'cases':9,'completed':8,'canceledBeforeExecution':1,'hddRecords':8,'perCasePhysicalBytesAndMetadata':True,'ordinaryDenied':8,'anonymousDenied':4,'normalDualLogout':True,'exactSourceAndContainerAbsent':True,'coreUnchanged':11,'permanentHistoryRetained':True}
-    assert browser['jobResultsVersion']==1 and len(browser['taskCenter'])==18
-    assert query("SELECT to_jsonb(j) FROM operation_jobs j WHERE id=:'id'::uuid;",id=baseline['legacyJob']['id'])==baseline['legacyJob']
-    verified.update(jobResultsVersion=1,newJobSummaries=17,actualTaskDrawers=18,legacyJobUnchanged=True,ordinaryDenied=11,anonymousDenied=7)
+    assert browser['jobResultsVersion']==1
+    if not restore:
+        assert len(browser['taskCenter'])==18
+        assert query("SELECT to_jsonb(j) FROM operation_jobs j WHERE id=:'id'::uuid;",id=baseline['legacyJob']['id'])==baseline['legacyJob']
+        verified.update(jobResultsVersion=1,newJobSummaries=17,actualTaskDrawers=18,legacyJobUnchanged=True,ordinaryDenied=11,anonymousDenied=7)
+    else:
+        assert browser['taskCenter']==[]
+        verified.update(jobResultsVersion=1,newJobSummaries=17,actualTaskDrawers=0,ordinaryDenied=11,anonymousDenied=7,**restore_result)
     if history:verified.update(history_result)
     (evidence/'verified.json').write_text(json.dumps(verified));print(json.dumps({'actualAclBrowser':'passed','evidence':str(evidence),'cases':9}),flush=True)
 
