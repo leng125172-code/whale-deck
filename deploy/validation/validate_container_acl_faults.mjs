@@ -30,30 +30,38 @@ try {
   const profile = await loginVisible(page, context, base)
   const endpoint = `/api/v1/containers/${fixture.containerId}/files/acls`
   ownEndpoint = base + endpoint
+  const restoration = fixture.aclRestoreFaultVersion === 1
+  if (restoration) assert.ok(['cancel', 'logout'].includes(fixture.kind))
+  const registrationEndpoint = restoration ? endpoint + '/restores' : endpoint
   let registrations = 0, confirmations = 0, cancellations = 0, bodies = 0
   page.on('request', request => {
     const path = new URL(request.url()).pathname
-    if (request.method() === 'POST' && path === endpoint) registrations++
-    if (request.method() === 'POST' && path.endsWith('/confirm') && path.startsWith(endpoint + '/')) confirmations++
-    if (request.method() === 'POST' && path.endsWith('/cancel') && path.startsWith(endpoint + '/')) cancellations++
+    if (request.method() === 'POST' && path === registrationEndpoint) registrations++
+    if (request.method() === 'POST' && currentIntent && path === endpoint + '/' + currentIntent + '/confirm') confirmations++
+    if (request.method() === 'POST' && currentIntent && path === endpoint + '/' + currentIntent + '/cancel') cancellations++
     if (request.method() === 'PUT' && path.includes('/files/')) bodies++
   })
   phase = 'visible-preflight'
-  const files = await openPermissionFiles(page, fixture)
-  await files.getByRole('button', { name: 'ACL acl-file.bin', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: '修改容器文件或目录ACL', exact: true })
-  async function select(label, value) {
-    await dialog.getByRole('combobox', { name: label, exact: true }).press('ArrowDown')
-    await page.getByRole('listbox', { name: label, exact: true }).getByRole('option', { name: value, exact: true }).click()
+  let dialog, intent
+  if (restoration) {
+    ({ dialog, intent } = await (await import('./acl_restore_fault_ui.mjs')).prepareRestoreFault(page, context, base, fixture, profile))
+  } else {
+    const files = await openPermissionFiles(page, fixture)
+    await files.getByRole('button', { name: 'ACL acl-file.bin', exact: true }).click()
+    dialog = page.getByRole('dialog', { name: '修改容器文件或目录ACL', exact: true })
+    async function select(label, value) {
+      await dialog.getByRole('combobox', { name: label, exact: true }).press('ArrowDown')
+      await page.getByRole('listbox', { name: label, exact: true }).getByRole('option', { name: value, exact: true }).click()
+    }
+    await select('条目1 权限', '6 · rw-'); await select('条目2 权限', '0 · ---'); await select('条目3 权限', '0 · ---')
+    await dialog.getByRole('button', { name: '添加ACL条目', exact: true }).click()
+    await dialog.getByLabel('条目4 数值ID', { exact: true }).fill('2201'); await select('条目4 权限', '6 · rw-')
+    await select('新增条目类型', 'mask'); await dialog.getByRole('button', { name: '添加ACL条目', exact: true }).click(); await select('条目5 权限', '4 · r--')
+    const queued = page.waitForResponse(r => new URL(r.url()).pathname === endpoint && r.request().method() === 'POST')
+    await dialog.getByRole('button', { name: '生成ACL修改预检', exact: true }).click()
+    const response = await queued; assert.equal(response.status(), 202)
+    intent = await response.json()
   }
-  await select('条目1 权限', '6 · rw-'); await select('条目2 权限', '0 · ---'); await select('条目3 权限', '0 · ---')
-  await dialog.getByRole('button', { name: '添加ACL条目', exact: true }).click()
-  await dialog.getByLabel('条目4 数值ID', { exact: true }).fill('2201'); await select('条目4 权限', '6 · rw-')
-  await select('新增条目类型', 'mask'); await dialog.getByRole('button', { name: '添加ACL条目', exact: true }).click(); await select('条目5 权限', '4 · r--')
-  const queued = page.waitForResponse(r => new URL(r.url()).pathname === endpoint && r.request().method() === 'POST')
-  await dialog.getByRole('button', { name: '生成ACL修改预检', exact: true }).click()
-  const response = await queued; assert.equal(response.status(), 202)
-  const intent = await response.json()
   currentIntent = intent.id
   await writeSignal(directory, 'registered.json', { id: intent.id, subject: profile.subject })
   await expect(dialog.getByText('预检已完成，尚未修改ACL', { exact: true })).toBeVisible({ timeout: 45_000 })
@@ -61,7 +69,7 @@ try {
   await waitSignal(directory, 'confirm.json', 30_000)
   phase = 'visible-confirmation-with-worker-stopped'
   const confirming = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/' + intent.id + '/confirm' && r.request().method() === 'POST')
-  await dialog.getByRole('button', { name: '确认ACL修改', exact: true }).click()
+  await dialog.getByRole('button', { name: restoration ? '确认ACL历史恢复' : '确认ACL修改', exact: true }).click()
   const accepted = await confirming; assert.equal(accepted.status(), 202)
   const pending = await accepted.json(); assert.equal(pending.state, 'Pending'); assert.ok(pending.executionJobId); assert.equal(pending.confirmation, null)
   await writeSignal(directory, 'confirmed.json', pending)

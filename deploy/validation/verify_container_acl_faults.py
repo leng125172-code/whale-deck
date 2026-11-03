@@ -18,12 +18,16 @@ from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, requi
 
 def validate_source_profile(provenance, kinds):
     schema=provenance.get('schemaVersion',1)
-    assert type(schema) is int and schema in (1,2,3,4,5,6)
+    assert type(schema) is int and schema in (1,2,3,4,5,6,7)
     if schema<6:assert 'post-acl-agent-restart' not in kinds
     if schema<5:assert not set(kinds)&{'post-acl-group-removal','post-acl-account-disable'}
     if schema<4:assert not set(kinds)&{'post-acl-cancel','post-acl-worker-crash'}
     if schema<3:assert not set(kinds)&{'worker-crash','agent-restart'}
     expected=set(SOURCES)
+    if schema==7:
+        from acl_restore_fault_proof import RESTORE_SOURCES
+        assert type(provenance.get('aclRestoreFaultVersion')) is int and provenance['aclRestoreFaultVersion']==1 and set(kinds)<=set(('cancel','logout'))
+        expected.update(RESTORE_SOURCES)
     if schema==1:
         assert not set(kinds)&{'group-removal','account-disable'}
         expected.remove('owned_authentik_revocation.py')
@@ -139,6 +143,8 @@ def verify(directory):
         kind=result['kind'];assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash','post-acl-group-removal','post-acl-account-disable','post-acl-agent-restart');p=directory/kind;trusted(p,True)
         baseline=read(p/'baseline.json');ui=read(p/'browser.json');cut=read(p/'cut-root.json');bound=read(p/'bound-helper.json')
         assert baseline['revision']==ui['revision']==accepted['revision'] and baseline['validationSourceRevision']==provenance['revision'] and baseline['kind']==ui['kind']==kind
+        assert baseline.get('aclRestoreFaultVersion')==provenance.get('aclRestoreFaultVersion')
+        if provenance['schemaVersion']==7:assert baseline['evidence']==str(p)
         post=kind.startswith('post-acl-');behavior=kind.removeprefix('post-acl-')
         revoked=behavior in ('group-removal','account-disable')
         if not revoked:
@@ -178,7 +184,8 @@ def verify(directory):
         proof=bound['proof'];assert bound['twoKernelFdProofs'] and re.fullmatch(r'whaledeck-container-acl-[a-f0-9]{32}\.service',bound['unit'])
         assert proof['originalIdentity']==cut['plan']['sourceIdentity']==baseline['original']['acl-file.bin']['identity']
         assert proof['accessAcl']==(cut['plan']['command']['entries'] if post else cut['plan']['accessAcl']) and proof['defaultAcl']==cut['plan']['defaultAcl'] and proof['attributesDigest']==cut['plan']['attributesDigest']
-        audit=query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result)) FROM audit_events WHERE job_id=:'id'::uuid AND action='containers.files.acl.result';",id=ui['executionJobId'])
+        action='containers.files.acl.restore.result' if provenance['schemaVersion']==7 else 'containers.files.acl.result'
+        audit=query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result)) FROM audit_events WHERE job_id=:'id'::uuid AND action=:'action';",id=ui['executionJobId'],action=action)
         assert audit=={'n':1,'actors':[ui['subject']],'results':[terminal_state(kind)]}
         source=Path(baseline['source']);assert source.parent==owned.common.APPS and source.name==baseline['containerName'] and not os.path.lexists(source)
         missing=subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True,timeout=10);assert missing.returncode!=0 and b'no such' in missing.stderr.lower()

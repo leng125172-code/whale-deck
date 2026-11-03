@@ -1,0 +1,84 @@
+"""Selected historical source and current-preimage proof for restore fault cases."""
+import json
+from pathlib import Path
+import uuid
+
+from validate_container_acl_restore_browser import SOURCES as RESTORE_BROWSER_SOURCES, selected_source, audit_rows
+from validate_container_acl_history_browser import immutable
+from acl_restore_browser_proof import source_json, unique_json, expected_metadata
+from acl_history_browser_proof import typed_equal
+
+RESTORE_SOURCES=tuple(dict.fromkeys((*RESTORE_BROWSER_SOURCES,'acl_restore_fault_proof.py',
+    'acl_restore_fault_ui.mjs','validate_container_acl_restore_faults.py',
+    'verify_container_acl_restore_faults.py','test_acl_restore_fault_proof.py')))
+
+
+def accept_source_capture(browser,directory,baseline,folder,reader,module,storage,content):
+    from validate_container_acl_faults import wait_signal,write_signal
+    from validate_container_acl_browser import inventory,verify_case
+    assert type(baseline['aclRestoreFaultVersion']) is int and baseline['aclRestoreFaultVersion']==1
+    (directory/'source-capture-baseline.json').write_text(json.dumps(baseline))
+    captured=wait_signal(directory,'source-captured.json',browser,120)
+    assert captured['result']['name']=='access'
+    after=inventory(folder,reader,module,content)
+    evidence=directory/'capture';evidence.mkdir(mode=0o700)
+    proof=verify_case(captured['result'],baseline,captured['subject'],evidence,reader,module,storage,baseline['original'],after)
+    (directory/'source-capture-proof.json').write_text(json.dumps(proof))
+    metadata=immutable(evidence,baseline,[proof],storage)
+    source=selected_source(baseline,proof,metadata)
+    assert source['entry']['changedAclType']=='access' and source['accessAcl']!=after['acl-file.bin']['access']
+    baseline['restoreSource']=source
+    (directory/'baseline.json').write_text(json.dumps({**baseline,'original':after}))
+    write_signal(directory,'source-verified.json',dict(source=source,physicalAndOriginalHistoryVerified=True))
+    return after
+
+
+def prove_binding(row,baseline,source,proof):
+    assert type(baseline['aclRestoreFaultVersion']) is int and baseline['aclRestoreFaultVersion']==1 and baseline['kind'] in ('cancel','logout')
+    item=proof['result'];loc=source['location'];entry=source['entry']
+    assert loc==dict(containerId=row['container_id'],instanceId=row['instance_id'],path=row['relative_path'])
+    assert loc['path']=='work/acl-file.bin' and entry['changedAclType']=='access'
+    assert entry['captureId']==uuid.UUID(item['executionJobId']).hex
+    assert row['id']!=item['id'] and row['execution_job_id']!=item['executionJobId']
+    assert type(row['restore_source_json']) is str
+    typed_equal(unique_json(row['restore_source_json']),source_json(source))
+    plan=json.loads(row['plan_json']);command=plan['Command']
+    assert command['AclType']=='access' and plan['NoChange'] is False
+    typed_equal(command['Entries'],[dict(Tag=e['tag'],Id=e['id'],Permissions=e['permissions']) for e in source['accessAcl']])
+    assert proof['after']==baseline['original'] and proof['before']!=proof['after']
+    assert source['accessAcl']==proof['before']['acl-file.bin']['access']
+    assert source['accessAcl']!=baseline['original']['acl-file.bin']['access']
+    assert row['history_digest']!=entry['historyDigest']
+    return source['accessAcl']
+
+
+def verify_restore_binding(row,baseline,storage,module):
+    from validate_container_acl_browser import verify_case
+    directory=Path(baseline['evidence']);proof=json.loads((directory/'source-capture-proof.json').read_bytes())
+    original=json.loads((directory/'source-capture-baseline.json').read_bytes())
+    for key in ('containerId','instanceId','source','validationSourceRevision','kind','sha256','bytesPerFile'):
+        assert original[key]==baseline[key]
+    assert original['original']==proof['before']
+    observed=directory/'capture-independent-observed';observed.mkdir(mode=0o700,exist_ok=True)
+    actual=verify_case(proof['result'],original,row['actor_subject'],observed,
+        None,module,storage,proof['before'],proof['after'])
+    typed_equal(actual,proof)
+    metadata=immutable(directory/'capture',original,[proof],storage)
+    source=selected_source(original,proof,metadata)
+    typed_equal(source,baseline['restoreSource'])
+    signal=json.loads((directory/'source-captured.json').read_bytes());assert signal['subject']==row['actor_subject'] and signal['result']==proof['result']
+    typed_equal(json.loads((directory/'source-verified.json').read_bytes()),dict(source=source,physicalAndOriginalHistoryVerified=True))
+    desired=prove_binding(row,baseline,source,proof)
+    rows=audit_rows(row['id']);expected={'plan-accepted':('Accepted',row['id']),'plan-result':('Ready',row['id']),
+        'confirmed':('Accepted',row['execution_job_id']),'result':('Canceled',row['execution_job_id'])}
+    if baseline['kind']=='cancel':expected['cancel-requested']=('Accepted',row['execution_job_id'])
+    assert len(rows)==len(expected)
+    seen=set()
+    for audit in rows:
+        assert audit['actor_subject']==row['actor_subject'] and audit['target_type']=='container' and audit['target_id']==row['container_id']
+        action=audit['action'].removeprefix('containers.files.acl.restore.')
+        assert action in expected and action not in seen;seen.add(action)
+        assert (audit['result'],audit['job_id'])==expected[action]
+        typed_equal(unique_json(audit['detail_json']),expected_metadata(row))
+    assert seen==expected.keys()
+    return desired
