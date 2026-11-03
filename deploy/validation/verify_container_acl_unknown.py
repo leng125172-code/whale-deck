@@ -11,17 +11,19 @@ import uuid
 import datetime as dt
 
 import requests
-from validate_container_acl_unknown import SOURCES, WAITING_PATH, save_facts, require_blocked, snapshot, directory_snapshot, no_active_work, load, owned, host_snapshot, expected_physical, require_cut, verify_unknown_jobs
+from validate_container_acl_unknown import SOURCES, WAITING_PATH, save_facts, require_blocked, snapshot, directory_snapshot, no_active_work, load, owned, host_snapshot, expected_physical, require_cut, verify_unknown_jobs, require_instance_transition
 from validate_metric_continuity import query
 from validate_container_upload_recovery_agent import trusted
 from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, require
+from validate_container_acl_faults import RESTART_KEYS
 
 IMMUTABLE=('receipt_json','receipt_hash','acl_confirmed','history_may_exist','history_verified','history_digest','published_version','actor_subject','login_binding','execution_job_id','plan_json','command_json')
 
 
 def require_source_version(source,baseline):
-    version=source['proofVersion'];assert type(version) is int and version in (2,3)
-    if baseline.get('postAcl',False):assert baseline['postAcl'] is True and version==3
+    version=source['proofVersion'];assert type(version) is int and version in (2,3,4)
+    if baseline.get('instanceChanged',False):assert baseline['instanceChanged'] is True and baseline['postAcl'] is True and version==4
+    elif baseline.get('postAcl',False):assert baseline['postAcl'] is True and version==3
     else:assert version==2
 
 
@@ -68,9 +70,16 @@ def verify(directory):
     assert owner['subject']==accepted['originalSubject']==baseline['originalSubject']!=recovery['subject']==accepted['recoverySubject'] and recovery['waitingVisibleInVue'] and recovery['waitingDirectoryInViewport']
     assert recovery['displayedContainerId']==baseline['containerId'] and recovery['displayedPath']=='/work/acl-file.bin'
     assert 0<=accepted['productStoppedHelperSeconds']<15 and accepted['validatorKilledHelper'] is False
-    removed=read(directory/'removed-owned.json');expected_removed={'containerId':baseline['containerId'],'onlyExactOwnedContainerRemoved':True,'helperAliveBeforeLogout':True,'sourceFullInventoryUnchanged':True}
-    if post:expected_removed.update(sourceInventoryReference='post-acl-cut',sourceInventory=expected_physical(baseline))
-    assert removed==expected_removed
+    if baseline.get('instanceChanged',False):
+        transition=read(directory/'instance-transition.json');require_instance_transition(baseline,transition)
+        assert read(directory/'instance-after-ack.json')==transition['after']
+        assert not (directory/'removed-owned.json').exists() and read(directory/'logout.json')=={'ownedContainerRestarted':True}
+        assert RESTART_KEYS<=set(transition['otherActiveWork']) and all(type(n) is int and n==0 for n in transition['otherActiveWork'].values())
+        assert accepted['instanceChanged'] is True
+    else:
+        removed=read(directory/'removed-owned.json');expected_removed={'containerId':baseline['containerId'],'onlyExactOwnedContainerRemoved':True,'helperAliveBeforeLogout':True,'sourceFullInventoryUnchanged':True}
+        if post:expected_removed.update(sourceInventoryReference='post-acl-cut',sourceInventory=expected_physical(baseline))
+        assert removed==expected_removed
     original=read(directory/'unknown-sql.json');final=snapshot(accepted['id']);assert final==read(directory/'final-sql.json')
     require_acknowledgement(original,final,owner['subject'],recovery['subject']);row=final['row'];assert row['id']==owner['id']==recovery['id']==baseline['id'] and row['execution_job_id']==owner['executionJobId']==baseline['executionJobId']
     if post:
@@ -112,7 +121,7 @@ def verify(directory):
         api.trust_env=False;api.headers['Authorization']='Bearer '+require(container_environment(),'Authentication__Authentik__ApiToken')
         for prefix in ('whaledeck-validation-','whaledeck-upload-qa-'):
             r=api.get(AUTHENTIK_API+'core/users/',params={'search':prefix,'page_size':100},timeout=20);assert r.status_code==200 and not r.json().get('pagination',{}).get('next') and not any(str(u['username']).startswith(prefix) for u in r.json()['results'])
-    return {'independentReadOnlyVerifier':True,'revision':baseline['revision'],'id':row['id'],'aclConfirmed':None,'originalExecutionFailed':True,'rootUnknownUnchanged':True,'originalHddUnchanged':True,
+    return {'independentReadOnlyVerifier':True,'revision':baseline['revision'],'id':row['id'],'aclConfirmed':None,'originalExecutionFailed':True,'rootUnknownUnchanged':True,'originalHddUnchanged':True,'sameCidInstanceChanged':baseline.get('instanceChanged',False),
         'differentAdministratorActualPage':True,'fourNaturalDeferrals':True,'actualWaitingDirectoryVisibleInVue':True,'lateApplyRemainsUnknown':True,'exactSourcesAndContainersAbsent':True,'temporaryIdentitiesAbsent':True,'coreHealthy':11,'physicalFullBytesAndAclsVerifiedByParentBeforeCleanup':True}
 
 

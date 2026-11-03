@@ -21,7 +21,7 @@ import uuid
 import requests
 import validate_container_file_publishing as owned
 from bound_container_acl_cut import ROOT, freeze_before_acl, freeze_after_acl, record_for
-from validate_container_acl_faults import SOURCES as FAULT_SOURCES, wait_signal, write_signal, wait_settled, snapshot, managed_plan, no_active_work, read_metadata, inventory, PATHS, NAMES, remove_proved, host_snapshot, load
+from validate_container_acl_faults import SOURCES as FAULT_SOURCES, wait_signal, write_signal, wait_settled, snapshot, managed_plan, no_active_work, read_metadata, inventory, PATHS, NAMES, remove_proved, host_snapshot, load, restart_allowed
 from validate_container_acl_browser import profile as acl_profile, version, expected_job_summary, validate_job_summary
 from validate_container_acl import unchanged_except_target
 from validate_container_directory_restart import Worker, preflight, command, clean_success
@@ -38,6 +38,44 @@ WAITING_PATH='work/ACL未知保护后的目录'
 
 def expected_physical(baseline):
     return baseline['cutPhysical'] if baseline.get('postAcl',False) else baseline['original']
+
+
+def instance_frame(value):
+    # Never archive Docker environment or unrelated labels.
+    return {**{k:value[k] for k in ('Id','Name','Image','Mounts')},
+        'State':{k:value['State'][k] for k in ('Running','Pid','StartedAt')},
+        'Config':{'User':value['Config']['User'],'Labels':{'io.whaledeck.validation':value['Config']['Labels'].get('io.whaledeck.validation')}},
+        'HostConfig':{k:value['HostConfig'].get(k) for k in ('NetworkMode','ReadonlyRootfs','Binds','Mounts','CapDrop','SecurityOpt','Privileged','PidMode','IpcMode','PidsLimit','Memory','NanoCpus','RestartPolicy')}}
+
+
+def require_instance_transition(baseline,proof):
+    assert baseline.get('instanceChanged') is True and baseline['postAcl'] is True
+    before,after=proof['before'],proof['after'];folder=Path(baseline['source'])
+    for frame in (before,after):
+        owned.verify_container(frame,baseline['containerId'],baseline['containerName'],folder)
+        assert frame['State']['Running'] is True and type(frame['State']['Pid']) is int and frame['State']['Pid']>1
+    for key in ('Id','Name','Image','Mounts','Config','HostConfig'):assert before[key]==after[key]
+    a,z=before['State'],after['State'];assert a['Pid']==baseline['containerPid'] and a['Pid']!=z['Pid'] and a['StartedAt']!=z['StartedAt']
+    assert a['StartedAt']<z['StartedAt']
+    assert str(a['Pid'])+':'+a['StartedAt']==baseline['instanceId']
+    assert proof['oldInstanceId']==baseline['instanceId'] and proof['newInstanceId']==str(z['Pid'])+':'+z['StartedAt']
+    assert proof['sameCidImageAndOwnedBind'] is True and proof['newInstanceInventory']==expected_physical(baseline)
+    assert proof['sourceInventory']==expected_physical(baseline)
+
+
+def restart_exact_owned(original,baseline,reader,module,content):
+    assert original['identifier']==baseline['containerId'] and original['folder']==Path(baseline['source']) and not original.get('instanceRestartAttempted',False)
+    before=json.loads(command('docker','inspect',original['identifier']))[0]
+    owned.verify_container(before,original['identifier'],baseline['containerName'],original['folder'])
+    assert before['State']['Running'] and before['State']['Pid']==baseline['containerPid'] and str(before['State']['Pid'])+':'+before['State']['StartedAt']==baseline['instanceId']
+    assert inventory(original['folder'],reader,module,content)==expected_physical(baseline)
+    original['instanceRestartAttempted']=True
+    assert command('docker','restart','--time','1',original['identifier'])==original['identifier']
+    after=json.loads(command('docker','inspect',original['identifier']))[0];owned.verify_container(after,original['identifier'],baseline['containerName'],original['folder'])
+    proof={'before':instance_frame(before),'after':instance_frame(after),'oldInstanceId':baseline['instanceId'],
+        'newInstanceId':str(after['State']['Pid'])+':'+after['State']['StartedAt'],'sameCidImageAndOwnedBind':True,
+        'sourceInventory':inventory(original['folder'],reader,module,content),'newInstanceInventory':inventory(Path('/proc')/str(after['State']['Pid'])/'root/work',reader,module,content)}
+    require_instance_transition(baseline,proof);return proof
 
 
 def require_cut(baseline,record,proof,physical):
@@ -150,7 +188,8 @@ def main():
     global PHASE
     assert os.geteuid()==0 and len(sys.argv) in (2,3);os.umask(0o077);revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision)
     post=len(sys.argv)==3
-    if post:assert sys.argv[2]=='post-acl'
+    if post:assert sys.argv[2] in ('post-acl','post-instance')
+    instance=post and sys.argv[2]=='post-instance'
     repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source_revision=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
     for name in SOURCES:
@@ -162,11 +201,11 @@ def main():
     with requests.Session() as public:
         public.trust_env=False;r=public.get(base+'/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();hosts=host_snapshot(revision);worker=Worker();directory=repo/'deploy/artifacts'/('container-acl-unknown-'+uuid.uuid4().hex);directory.mkdir(mode=0o700)
-    (directory/'validation-source.json').write_text(json.dumps({'proofVersion':3 if post else 2,'revision':source_revision,'productRevision':revision,'sha256':hashes,'installedSha256':installed}))
+    (directory/'validation-source.json').write_text(json.dumps({'proofVersion':4 if instance else 3 if post else 2,'revision':source_revision,'productRevision':revision,'sha256':hashes,'installedSha256':installed}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_unknown_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_unknown_module');files=reader.trusted_module('whaledeck-files.py','acl_unknown_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_unknown_hdd').FileBackups(files)
     print(json.dumps({'aclUnknown':'started','evidence':str(directory)}),flush=True)
     held=owner_browser=recovery_browser=None;identifier=waiting=None;client=profile=None;original_proved=waiting_proved=False
-    with owned.fixture(restartable_core=('whaledeck-worker',),removable=True) as original,owned.fixture(restartable_core=('whaledeck-worker',)) as other:
+    with owned.fixture(restartable_core=('whaledeck-worker',),removable=not instance) as original,owned.fixture(restartable_core=('whaledeck-worker',)) as other:
         folder=original['folder'];(folder/'acl-directory').mkdir(mode=0o750);content=hashlib.shake_256(('acl-unknown:'+original['identifier']).encode()).digest(2*1024**2+7)
         for relative,kind in PATHS.items():
             p=folder/relative
@@ -176,7 +215,7 @@ def main():
         actual=json.loads(command('docker','inspect',original['identifier']))[0];other_actual=json.loads(command('docker','inspect',other['identifier']))[0]
         baseline={'revision':revision,'validationSourceRevision':source_revision,'containerId':original['identifier'],'containerName':actual['Name'].lstrip('/'),
             'instanceId':str(actual['State']['Pid'])+':'+actual['State']['StartedAt'],'containerPid':actual['State']['Pid'],'source':str(folder),'original':inventory(folder,reader,module,content),
-            'bytesPerFile':len(content),'sha256':hashlib.sha256(content).hexdigest().upper(),'coreBefore':owned.common.core_snapshot(),'hostsBefore':hosts,'evidence':str(directory),'postAcl':post}
+            'bytesPerFile':len(content),'sha256':hashlib.sha256(content).hexdigest().upper(),'coreBefore':owned.common.core_snapshot(),'hostsBefore':hosts,'evidence':str(directory),'postAcl':post,'instanceChanged':instance}
         (directory/'baseline.json').write_text(json.dumps(baseline))
         try:
             PHASE='original-real-page-preflight'
@@ -192,14 +231,19 @@ def main():
                 if post:baseline['cutPhysical']=physical;(directory/'baseline.json').write_text(json.dumps(baseline))
                 (directory/'cut-root.json').write_text(json.dumps(held.record));(directory/'bound-helper.json').write_text(json.dumps({'pid':held.pid,'unit':held.cgroup,'twoKernelFdProofs':True,'proof':held.proof}))
                 write_signal(directory,'held.json',{'rootPausedAfterAcl':True} if post else {'rootPausedBeforeAcl':True});wait_signal(directory,'owner-inflight.json',owner_browser,30)
-                PHASE='remove-exact-owned-container-then-normal-logout';original['remove_owned']();assert not select.select([held.descriptor],[],[],0)[0]
-                after_remove=inventory(folder,reader,module,content);assert after_remove==expected_physical(baseline)
-                removed={'containerId':baseline['containerId'],'onlyExactOwnedContainerRemoved':True,'helperAliveBeforeLogout':True,'sourceFullInventoryUnchanged':True}
-                if post:removed.update(sourceInventoryReference='post-acl-cut',sourceInventory=after_remove)
-                (directory/'removed-owned.json').write_text(json.dumps(removed))
-                began=time.monotonic()
+                PHASE='owned-instance-change-then-normal-logout' if instance else 'remove-exact-owned-container-then-normal-logout'
                 with ThreadPoolExecutor(max_workers=1) as pool:
-                    observing=pool.submit(held.wait_exit_seconds,began,15);write_signal(directory,'logout.json',{'ownedContainerRemoved':True})
+                    if instance:
+                        checks=restart_allowed(held,snapshot(identifier)['row']);began=time.monotonic();observing=pool.submit(held.wait_exit_seconds,began,15)
+                        transition=restart_exact_owned(original,baseline,reader,module,content);transition['otherActiveWork']=checks;(directory/'instance-transition.json').write_text(json.dumps(transition))
+                        write_signal(directory,'logout.json',{'ownedContainerRestarted':True})
+                    else:
+                        original['remove_owned']();assert not select.select([held.descriptor],[],[],0)[0]
+                        after_remove=inventory(folder,reader,module,content);assert after_remove==expected_physical(baseline)
+                        removed={'containerId':baseline['containerId'],'onlyExactOwnedContainerRemoved':True,'helperAliveBeforeLogout':True,'sourceFullInventoryUnchanged':True}
+                        if post:removed.update(sourceInventoryReference='post-acl-cut',sourceInventory=after_remove)
+                        (directory/'removed-owned.json').write_text(json.dumps(removed))
+                        began=time.monotonic();observing=pool.submit(held.wait_exit_seconds,began,15);write_signal(directory,'logout.json',{'ownedContainerRemoved':True})
                     assert owner_browser.wait(timeout=35)==0,'ORIGINAL_NORMAL_LOGOUT_FAILED';elapsed=observing.result(timeout=16)
                 assert elapsed is not None and elapsed<15,'PRODUCT_DID_NOT_STOP_UNKNOWN_ACL_HELPER';held.release();held=None
                 owner_ui=json.loads((directory/'owner-browser.json').read_bytes());assert owner_ui['subject']==ready['subject'] and owner_ui['actualUi'] and owner_ui['normalDualLogout']
@@ -223,6 +267,10 @@ def main():
                 if post:verify_unknown_jobs(final,json.loads((directory/'acknowledged-jobs.json').read_bytes()),'acknowledged')
                 for key in ('receipt_json','receipt_hash','acl_confirmed','history_may_exist','history_verified','history_digest','published_version','actor_subject','login_binding','execution_job_id','plan_json','command_json'):assert final['row'][key]==unknown['row'][key]
                 assert final_root==raw_root and final_hdd==raw_hdd and final_record==record
+                if instance:
+                    latest=json.loads(command('docker','inspect',original['identifier']))[0];assert instance_frame(latest)==transition['after']
+                    assert inventory(Path('/proc')/str(latest['State']['Pid'])/'root/work',reader,module,content)==expected_physical(baseline)
+                    (directory/'instance-after-ack.json').write_text(json.dumps(instance_frame(latest)))
                 waiting_final=settle_waiting(waiting['id']);assert waiting_final['row']['state']=='Succeeded' and waiting_final['row']['root_started_at_utc']>=final['row']['completed_at_utc'];(directory/'waiting-final-sql.json').write_text(json.dumps(waiting_final))
                 PHASE='late-original-apply-remains-unknown';late=subprocess.run(['/usr/local/libexec/whaledeck-privileged','container-file-acl','apply',uuid.uuid4().hex],input=json.dumps({k:record[k] for k in ('operationId','owner','plan')})+'\n',capture_output=True,text=True,timeout=35)
                 assert late.returncode==0 and len(late.stdout.encode())<=32768 and len(late.stderr.encode())<=32768
@@ -235,7 +283,7 @@ def main():
                 'businessState':'Acknowledged','executionJobState':'Failed','rootState':'Unknown','aclConfirmed':None,'historyVerified':True,
                 'actualOriginalAndRecoveryPages':True,'normalOriginalAndRecoveryLogout':True,'originalIdentityDeletedBeforeRecovery':True,
                 'productStoppedHelperSeconds':round(elapsed,3),'validatorKilledHelper':False,'otherWriteDeferredUntilRelease':True,'actualDirectoryVisibleInVue':True,
-                'originalFullBytesFingerprintAclsAndAttributesUnchanged':not post,'postAclPhysicalInventoryPreserved':post,'lateOriginalApplyRemainsUnknown':True,'rootSha256':hashlib.sha256(raw_root).hexdigest()}
+                'originalFullBytesFingerprintAclsAndAttributesUnchanged':not post,'postAclPhysicalInventoryPreserved':post,'instanceChanged':instance,'lateOriginalApplyRemainsUnknown':True,'rootSha256':hashlib.sha256(raw_root).hexdigest()}
             (directory/'verified.json').write_text(json.dumps(summary))
         finally:
             if held is not None:held.release()

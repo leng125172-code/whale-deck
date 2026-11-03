@@ -6,7 +6,8 @@ import json
 import uuid
 from unittest.mock import patch
 from verify_container_acl_unknown import require_acknowledgement, require_deferrals, IMMUTABLE
-from validate_container_acl_unknown import require_blocked, WAITING_PATH, require_cut, expected_physical, verify_unknown_jobs, expected_job_summary
+from validate_container_acl_unknown import require_blocked, WAITING_PATH, require_cut, expected_physical, verify_unknown_jobs, expected_job_summary, require_instance_transition, instance_frame, restart_exact_owned, owned
+from pathlib import Path
 from verify_container_acl_unknown import require_source_version
 
 
@@ -35,6 +36,45 @@ class PostWriteEvidenceTests(unittest.TestCase):
         require_source_version({'proofVersion':3},{'postAcl':True})
         for version,base in ((2,{'postAcl':True}),(3,{}),(True,{}),(4,{'postAcl':True})):
             with self.subTest(version=version),self.assertRaises(AssertionError):require_source_version({'proofVersion':version},base)
+
+
+class InstanceTransitionProofTests(unittest.TestCase):
+    def setUp(self):
+        self.base={'postAcl':True,'instanceChanged':True,'containerId':'a'*64,'containerName':'wdv-container-publish-'+'b'*32,'containerPid':101,
+            'instanceId':'101:2026-11-03T01:00:00Z','source':'/data/apps/fixture','cutPhysical':{'actual':'unchanged'}}
+        self.before={'Id':'a'*64,'Name':'/'+self.base['containerName'],'Image':'image','Mounts':[],'Config':{},'HostConfig':{},'State':{'Pid':101,'Running':True,'StartedAt':'2026-11-03T01:00:00Z'}}
+        after=copy.deepcopy(self.before);after['State'].update(Pid=102,StartedAt='2026-11-03T01:01:00Z')
+        self.proof={'before':self.before,'after':after,'oldInstanceId':self.base['instanceId'],'newInstanceId':'102:2026-11-03T01:01:00Z',
+            'sameCidImageAndOwnedBind':True,'sourceInventory':self.base['cutPhysical'],'newInstanceInventory':self.base['cutPhysical']}
+    def check(self):
+        with patch.object(owned,'verify_container') as guard:
+            require_instance_transition(self.base,self.proof);self.assertEqual(guard.call_count,2)
+    def test_same_cid_new_pid_started_at_and_both_inventories_are_required(self):self.check()
+    def test_old_proof_or_old_instance_cannot_claim_same_cid_restart(self):
+        require_source_version({'proofVersion':4},self.base)
+        for version in (2,3):
+            with self.subTest(version=version),self.assertRaises(AssertionError):require_source_version({'proofVersion':version},self.base)
+        for changed in ({'Pid':101},{'StartedAt':self.before['State']['StartedAt']},{'Running':False}):
+            proof=copy.deepcopy(self.proof);proof['after']['State'].update(changed)
+            with self.subTest(changed=changed),patch.object(owned,'verify_container'),self.assertRaises(AssertionError):require_instance_transition(self.base,proof)
+    def test_recreated_container_different_mount_or_new_plan_is_not_instance_change_proof(self):
+        for key,value in (('Id','foreign'),('Image','different'),('Mounts',[{'Source':'elsewhere'}])):
+            proof=copy.deepcopy(self.proof);proof['after'][key]=value
+            with self.subTest(key=key),patch.object(owned,'verify_container'),self.assertRaises(AssertionError):require_instance_transition(self.base,proof)
+        proof=copy.deepcopy(self.proof);proof['newInstanceInventory']={'rewritten':True}
+        with patch.object(owned,'verify_container'),self.assertRaises(AssertionError):require_instance_transition(self.base,proof)
+    def test_environment_and_unrelated_labels_are_never_archived(self):
+        source={**self.before,'Config':{'User':'1000:1000','Labels':{'io.whaledeck.validation':'owned','private':'not-exported'},'Env':['SECRET=never-export']},'HostConfig':{'NetworkMode':'none'}}
+        value=instance_frame(source);self.assertNotIn('never-export',json.dumps(value));self.assertNotIn('not-exported',json.dumps(value))
+    def test_wrong_owner_or_repeated_transition_refuses_before_mutation(self):
+        original={'identifier':self.base['containerId'],'folder':Path(self.base['source'])}
+        with patch('validate_container_acl_unknown.command',return_value=json.dumps([self.before])) as command,patch.object(owned,'verify_container',side_effect=AssertionError):
+            with self.assertRaises(AssertionError):restart_exact_owned(original,self.base,None,None,None)
+            self.assertEqual(command.call_count,1);self.assertEqual(command.call_args.args[:2],('docker','inspect'))
+        original['instanceRestartAttempted']=True
+        with patch('validate_container_acl_unknown.command') as command:
+            with self.assertRaises(AssertionError):restart_exact_owned(original,self.base,None,None,None)
+            command.assert_not_called()
 
 
 class UnknownJobEvidenceTests(unittest.TestCase):
