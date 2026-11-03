@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_HISTORY_TIMEOUT.md；docs/qa/CONTAINER_ACL_HISTORY_RELEASE_PREPARATION.md；docs/qa/CONTAINER_ACL_RESTORE_AGENT_RESTART_CANDIDATE.md",
-  "nextStep": "b69302b四镜像已预构建核验、前批提交已推送和图谱已确认。等待准确CI五路成功终态后标准覆盖，核对六组件/安装helper/健康/账本，再经8080新资源完整写后移组停用；之后冻结profile6/schema12工具验恢复写后Agent重启及双Job页面。当前运行cad6182，本批86检查不算实机签收；继续剩余故障、递归ACL/恢复、删除和其余59项，17项移出不算完成，不自动回滚dev或重启主机。"
+  "nextStep": "b69302b四镜像已预构建核验、前批提交已推送和图谱已确认。等待准确CI五路成功终态后标准覆盖，核对六组件/安装helper/健康/账本，再经8080新资源完整写后移组停用；之后冻结profile6/schema12工具验恢复写后Agent重启及双Job页面。当前运行cad6182，本批87检查不算实机签收；继续剩余故障、递归ACL/恢复、删除和其余59项，17项移出不算完成，不自动回滚dev或重启主机。"
 }

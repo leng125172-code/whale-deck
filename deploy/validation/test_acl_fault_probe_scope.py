@@ -294,6 +294,14 @@ class AclPostAgentJobEvidenceTests(unittest.TestCase):
     def test_two_original_api_and_sql_summaries_are_required(self):
         self.check();self.proof['execution']['id']=str(uuid.uuid4())
         with self.assertRaises(AssertionError):self.check()
+    def test_restore_post_agent_uses_original_safe_acl_job_summary_contract(self):
+        self.base.update(aclRestoreFaultVersion=6,restoreSource={'entry':{'captureId':'original-capture'}})
+        self.row['restore_source_json']='private-canonical-restore-source'
+        self.check()
+        for name in ('plan','execution'):
+            self.assertNotIn(self.row['restore_source_json'],self.proof[name]['resultJson'])
+        self.proof['execution']['jobType']='containers.files.acl.restore'
+        with self.assertRaises(AssertionError):self.check()
     def test_missing_or_wrong_summary_facts_cannot_prove_completed_write(self):
         self.check();value=json.loads(self.proof['execution']['resultJson']);value['aclConfirmed']=False;self.proof['execution']['resultJson']=json.dumps(value)
         with self.assertRaises(AssertionError):self.check()
