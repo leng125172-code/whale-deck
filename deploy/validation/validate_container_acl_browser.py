@@ -119,6 +119,7 @@ def verify_case(result,baseline,subject,evidence,reader,module,storage,before,af
         desired=restore_source['accessAcl' if kind=='access' else 'defaultAcl'];canceled=spec['cancel']
     data=snapshot(result['id']);row=data['row'];plan=managed_plan(json.loads(row['plan_json']))
     if restore_source is not None:prove_source(row,restore_source,result)
+    else:assert row.get('restore_source_json') is None
     assert type(plan['schemaVersion']) is int and plan['schemaVersion']==1 and type(plan['targetMode']) is int and 0<=plan['targetMode']<=511 and type(plan['noChange']) is bool
     module.validate_entries(plan['command']['entries'],empty=kind=='default');module.validate_entries(plan['accessAcl']);module.validate_entries(plan['defaultAcl'],empty=True)
     assert row['actor_subject']==subject and row['container_id']==baseline['containerId'] and row['instance_id']==baseline['instanceId']
@@ -212,6 +213,7 @@ def remove_proved(folder,reader,module,content,current):
 
 def main(history=False,restore=False):
     global PHASE
+    assert not (history and restore),'SEPARATE_READ_AND_RESTORE_ACCEPTANCE_MODES'
     assert os.geteuid()==0 and len(sys.argv)==2;os.umask(0o077);revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision)
     repo=Path(__file__).resolve().parents[2];base='http://127.0.0.1:8080';assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}

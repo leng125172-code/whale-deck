@@ -114,7 +114,7 @@ jobs:
           node --check deploy/validation/validate_container_acl_history_browser.mjs
           node --check deploy/validation/validate_container_acl_restore_browser.mjs
           python3 -W error -m py_compile deploy/validation/acl_restore_browser_proof.py deploy/validation/validate_container_acl_restore_browser.py deploy/validation/verify_container_acl_restore_browser.py
-          node --test deploy/validation/test_acl_history_request_binding.mjs
+          node --check deploy/validation/test_acl_history_request_binding.mjs
           python3 -W error -m py_compile deploy/validation/acl_history_browser_proof.py deploy/validation/validate_container_acl_history_browser.py deploy/validation/verify_container_acl_history_browser.py
           python3 -W error -m py_compile deploy/validation/bound_container_acl_cut.py deploy/validation/validate_container_acl_faults.py deploy/validation/verify_container_acl_faults.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_acl_fault_probe_scope.py
@@ -309,6 +309,8 @@ jobs:
       - run: corepack enable
       - name: Install pinned frontend dependencies with bounded download retry
         run: bash ../deploy/ci/install-frontend-dependencies.sh
+      - name: Verify exact task-page request binding with installed frontend dependencies
+        run: node --test ../deploy/validation/test_acl_history_request_binding.mjs
       - name: Verify bounded browser download evidence observer
         run: node --test ../deploy/validation/test_browser_download_probe.mjs
       - name: Verify scoped browser upload transport evidence observer

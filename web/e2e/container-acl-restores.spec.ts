@@ -29,7 +29,7 @@ test('default history explicitly clears only default while current access stays 
  await modal(page).getByRole('button',{name:'确认ACL历史恢复',exact:true}).click();await modal(page).getByRole('button',{name:'查询原ACL修改任务',exact:true}).click();await expect(modal(page).getByText('ACL修改已完成',{exact:true})).toBeVisible()
 })
 test('lost registration survives reload and queries original restore key only',async({page})=>{
- const c=await setup(page,{loseQueue:true});await c.open();await modal(page).getByRole('button',{name:'生成ACL恢复预检',exact:true}).click();await expect(modal(page).getByRole('alert')).toBeVisible();const key=c.state.key
+ const c=await setup(page,{loseQueue:true});await c.open();await modal(page).getByRole('button',{name:'生成ACL恢复预检',exact:true}).click();await expect(modal(page).locator('.container-acl__error')).toBeVisible();await expect.poll(()=>c.state.key).not.toBe('');expect(c.state.registered).toBe(true);const key=c.state.key
  await page.reload();await page.locator('.container-card').filter({hasText:'demo-web'}).getByRole('button',{name:'详情',exact:true}).click();await page.getByRole('button',{name:'容器文件',exact:true}).click();await page.getByRole('button',{name:'查看ACL修改任务',exact:true}).click()
  await expect(modal(page).getByText('预检已完成，尚未修改ACL',{exact:true})).toBeVisible();expect(c.state.writes).toHaveLength(1);expect(c.state.reads).toContain('/restores/by-key/'+key)
  const hint=await page.evaluate(()=>sessionStorage.getItem('whaledeck-container-acl-hints-v1'));expect(hint).toContain('"restore":true');expect(hint).not.toContain('captureId')
