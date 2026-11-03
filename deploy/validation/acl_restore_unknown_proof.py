@@ -10,8 +10,9 @@ def restore_unknown_sources():
 
 def require_restore_unknown(baseline):
     require_restore_profile(baseline)
-    assert baseline['aclRestoreFaultVersion']==7 and baseline['kind']=='post-acl-target-removed'
-    assert baseline['postAcl'] is True and baseline.get('instanceChanged',False) is False
+    version=baseline['aclRestoreFaultVersion'];assert version in (7,8)
+    assert baseline['kind']==('post-acl-instance-change' if version==8 else 'post-acl-target-removed')
+    assert baseline['postAcl'] is True and baseline.get('instanceChanged',False) is (version==8)
 
 def verify_restore_unknown_audits(rows,row,baseline):
     require_restore_unknown(baseline)

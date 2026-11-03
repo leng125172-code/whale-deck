@@ -4,8 +4,9 @@ import unittest
 import test_acl_restore_fault_proof as restoration_fixtures
 import test_acl_unknown_proof as unknown_fixtures
 from acl_restore_unknown_proof import require_restore_unknown,verify_restore_unknown_audits,restore_unknown_sources
-from acl_restore_fault_proof import prove_binding,verify_restore_audits
+from acl_restore_fault_proof import prove_binding,verify_restore_audits,restore_fault_version
 from verify_container_acl_unknown import require_source_version,require_acknowledgement
+from validate_container_acl_unknown import unknown_mode
 
 class RestoreUnknownProofTests(unittest.TestCase):
     def setUp(self):
@@ -66,5 +67,42 @@ class RestoreUnknownProofTests(unittest.TestCase):
         self.assertEqual(len(sources),len(set(sources)))
         for name in ('acl_restore_fault_ui.mjs','acl_restore_fault_proof.py','validate_container_acl_restore_unknown.py','verify_container_acl_restore_unknown.py','validate_container_directory_unknown.py','bound_container_directory_cut.py','test_acl_restore_unknown_proof.py'):
             self.assertIn(name,sources)
+
+    def test_same_cid_instance_change_is_exact_profile_eight_with_proof_six(self):
+        baseline={**self.baseline,'aclRestoreFaultVersion':8,'kind':'post-acl-instance-change','instanceChanged':True}
+        source=dict(proofVersion=6,aclRestoreFaultVersion=8)
+        require_restore_unknown(baseline);require_source_version(source,baseline)
+        self.assertEqual(restore_fault_version(('post-acl-target-removed',)),7)
+        self.assertEqual(restore_fault_version(('post-acl-instance-change',)),8)
+        self.assertEqual(prove_binding(self.fixture.row,baseline,self.fixture.source,self.fixture.proof),self.fixture.source['accessAcl'])
+        for delta in ({'proofVersion':5},{'aclRestoreFaultVersion':7},{'proofVersion':True},{'aclRestoreFaultVersion':True}):
+            with self.subTest(delta=delta),self.assertRaises(AssertionError):require_source_version({**source,**delta},baseline)
+        for delta in ({'instanceChanged':False},{'instanceChanged':1},{'postAcl':False},{'kind':'post-acl-target-removed'},{'aclRestoreFaultVersion':7}):
+            with self.subTest(delta=delta),self.assertRaises(AssertionError):require_source_version(source,{**baseline,**delta})
+        with self.assertRaises(AssertionError):restore_fault_version(('post-acl-target-removed','post-acl-instance-change'))
+        with self.assertRaises(AssertionError):require_source_version(source,dict(postAcl=True,instanceChanged=True))
+        from verify_container_acl_faults import validate_source_profile
+        from validate_container_acl_faults import terminal_state
+        with self.assertRaises(AssertionError):validate_source_profile(dict(schemaVersion=14,aclRestoreFaultVersion=8,sha256={}),['post-acl-instance-change'])
+        with self.assertRaises(AssertionError):terminal_state('post-acl-instance-change')
+
+    def test_explicit_instance_cli_cannot_fall_through_to_removal_or_prewrite(self):
+        self.assertEqual(unknown_mode([],True),(True,False))
+        self.assertEqual(unknown_mode(['post-instance'],True),(True,True))
+        self.assertEqual(unknown_mode([],False),(False,False))
+        self.assertEqual(unknown_mode(['post-acl'],False),(True,False))
+        self.assertEqual(unknown_mode(['post-instance'],False),(True,True))
+        for args in (['post-acl'],['unknown'],['post-instance','post-acl'],'post-instance',[True]):
+            with self.subTest(args=args),self.assertRaises(AssertionError):unknown_mode(args,True)
+        with self.assertRaises(AssertionError):unknown_mode([],1)
+
+    def test_instance_profile_preserves_unknown_audit_and_explicit_ack_truth(self):
+        baseline={**self.baseline,'aclRestoreFaultVersion':8,'kind':'post-acl-instance-change','instanceChanged':True}
+        verify_restore_audits(self.audits,self.row,baseline)
+        row={**self.row,'state':'Acknowledged','acknowledged_by':'new-admin'}
+        ack={**copy.deepcopy(self.audits[-1]),'action':'containers.files.acl.restore.unknown-acknowledged','actor_subject':'new-admin'}
+        verify_restore_audits(self.audits+[ack],row,baseline)
+        changed=copy.deepcopy(self.audits);changed[-1]['result']='Succeeded'
+        with self.assertRaises(AssertionError):verify_restore_audits(changed,self.row,baseline)
 
 if __name__=='__main__':unittest.main()

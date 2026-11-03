@@ -21,13 +21,13 @@ IMMUTABLE=('receipt_json','receipt_hash','acl_confirmed','history_may_exist','hi
 
 
 def require_source_version(source,baseline):
-    version=source['proofVersion'];assert type(version) is int and version in (2,3,4,5)
+    version=source['proofVersion'];assert type(version) is int and version in (2,3,4,5,6)
     if 'aclRestoreFaultVersion' in baseline:
         from acl_restore_unknown_proof import require_restore_unknown
         require_restore_unknown(baseline)
-        assert version==5 and type(source.get('aclRestoreFaultVersion')) is int and source['aclRestoreFaultVersion']==7
+        assert version==(6 if baseline['aclRestoreFaultVersion']==8 else 5) and type(source.get('aclRestoreFaultVersion')) is int and source['aclRestoreFaultVersion']==baseline['aclRestoreFaultVersion']
         return
-    assert 'aclRestoreFaultVersion' not in source and version!=5
+    assert 'aclRestoreFaultVersion' not in source and version not in (5,6)
     if baseline.get('instanceChanged',False):assert baseline['instanceChanged'] is True and baseline['postAcl'] is True and version==4
     elif baseline.get('postAcl',False):assert baseline['postAcl'] is True and version==3
     else:assert version==2
@@ -66,6 +66,9 @@ def verify(directory):
     baseline=read(directory/'baseline.json');accepted=read(directory/'verified.json');source=read(directory/'validation-source.json');owner=read(directory/'owner-browser.json');recovery=read(directory/'recovery-browser.json')
     assert accepted['revision']==baseline['revision']==owner['revision']==recovery['revision']==source['productRevision']
     require_source_version(source,baseline);post=baseline.get('postAcl',False)
+    if 'aclRestoreFaultVersion' in baseline:
+        assert accepted['instanceChanged'] is baseline['instanceChanged']
+        assert owner.get('instanceChanged',False) is baseline['instanceChanged'] and recovery.get('instanceChanged',False) is baseline['instanceChanged']
     expected_sources=SOURCES
     if 'aclRestoreFaultVersion' in baseline:
         from acl_restore_unknown_proof import restore_unknown_sources

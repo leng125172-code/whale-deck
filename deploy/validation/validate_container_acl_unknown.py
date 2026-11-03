@@ -36,6 +36,13 @@ SOURCES=tuple(dict.fromkeys((*FAULT_SOURCES,'validate_container_acl_unknown.py',
 WAITING_PATH='work/ACL未知保护后的目录'
 
 
+def unknown_mode(arguments,restore=False):
+    assert type(restore) is bool and type(arguments) is list
+    allowed=([],['post-instance']) if restore else ([],['post-acl'],['post-instance'])
+    assert arguments in allowed
+    return restore or bool(arguments),arguments==['post-instance']
+
+
 def expected_physical(baseline):
     return baseline['cutPhysical'] if baseline.get('postAcl',False) else baseline['original']
 
@@ -196,11 +203,7 @@ def failure_ack(identifier):
 def main(restore=False):
     global PHASE
     assert os.geteuid()==0 and len(sys.argv) in (2,3);os.umask(0o077);revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision)
-    assert type(restore) is bool
-    if restore:assert len(sys.argv)==2
-    post=restore or len(sys.argv)==3
-    if not restore and post:assert sys.argv[2] in ('post-acl','post-instance')
-    instance=not restore and post and sys.argv[2]=='post-instance'
+    post,instance=unknown_mode(sys.argv[2:],restore)
     repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source_revision=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
     source_names=SOURCES
@@ -218,7 +221,7 @@ def main(restore=False):
     with requests.Session() as public:
         public.trust_env=False;r=public.get(base+'/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();hosts=host_snapshot(revision);worker=Worker();directory=repo/'deploy/artifacts'/('container-acl-unknown-'+uuid.uuid4().hex);directory.mkdir(mode=0o700)
-    (directory/'validation-source.json').write_text(json.dumps({'proofVersion':5 if restore else 4 if instance else 3 if post else 2,'revision':source_revision,'productRevision':revision,'sha256':hashes,'installedSha256':installed,**({'aclRestoreFaultVersion':7} if restore else {})}))
+    (directory/'validation-source.json').write_text(json.dumps({'proofVersion':(6 if instance else 5) if restore else 4 if instance else 3 if post else 2,'revision':source_revision,'productRevision':revision,'sha256':hashes,'installedSha256':installed,**({'aclRestoreFaultVersion':8 if instance else 7} if restore else {})}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_unknown_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_unknown_module');files=reader.trusted_module('whaledeck-files.py','acl_unknown_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_unknown_hdd').FileBackups(files)
     print(json.dumps({'aclUnknown':'started','evidence':str(directory)}),flush=True)
     held=owner_browser=recovery_browser=None;identifier=waiting=None;client=profile=None;original_proved=waiting_proved=False
@@ -233,7 +236,7 @@ def main(restore=False):
         baseline={'revision':revision,'validationSourceRevision':source_revision,'containerId':original['identifier'],'containerName':actual['Name'].lstrip('/'),
             'instanceId':str(actual['State']['Pid'])+':'+actual['State']['StartedAt'],'containerPid':actual['State']['Pid'],'source':str(folder),'original':inventory(folder,reader,module,content),
             'bytesPerFile':len(content),'sha256':hashlib.sha256(content).hexdigest().upper(),'coreBefore':owned.common.core_snapshot(),'hostsBefore':hosts,'evidence':str(directory),'postAcl':post,'instanceChanged':instance}
-        if restore:baseline.update(aclRestoreFaultVersion=7,kind='post-acl-target-removed')
+        if restore:baseline.update(aclRestoreFaultVersion=8 if instance else 7,kind='post-acl-instance-change' if instance else 'post-acl-target-removed')
         (directory/'baseline.json').write_text(json.dumps(baseline))
         try:
             PHASE='original-real-page-preflight'

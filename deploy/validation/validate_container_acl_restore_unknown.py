@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in new-capture restore Unknown/explicit-ack/shared-barrier real gate."""
+"""Opt-in restore Unknown/ack gate; optional post-instance restarts only its owned container."""
 from pathlib import Path
 import json
 import traceback

@@ -16,7 +16,7 @@ try {
   const prefix = fileURLToPath(new URL('../artifacts/', import.meta.url))
   assert.ok(directory.startsWith(prefix)); assert.match(directory.slice(prefix.length), /^container-acl-unknown-[a-f0-9]{32}$/)
   const restoration = fixture.aclRestoreFaultVersion !== undefined
-  if (restoration) { assert.equal(fixture.aclRestoreFaultVersion, 7); assert.equal(fixture.kind, 'post-acl-target-removed'); assert.equal(fixture.postAcl, true); assert.equal(fixture.instanceChanged, false) }
+  if (restoration) { assert.ok([7, 8].includes(fixture.aclRestoreFaultVersion)); assert.equal(fixture.kind, fixture.aclRestoreFaultVersion === 8 ? 'post-acl-instance-change' : 'post-acl-target-removed'); assert.equal(fixture.postAcl, true); assert.equal(fixture.instanceChanged, fixture.aclRestoreFaultVersion === 8) }
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
   context = await browser.newContext({ viewport: { width: mode === 'owner' ? 1440 : 320, height: 600 }, colorScheme: mode === 'owner' ? 'light' : 'dark', reducedMotion: 'reduce' })
@@ -61,7 +61,7 @@ try {
     currentIntent = intent.id
     await writeSignal(directory, 'owner-registered.json', { id: intent.id, subject: profile.subject })
     await expect(dialog.getByText('预检已完成，尚未修改ACL', { exact: true })).toBeVisible({ timeout: 45_000 })
-    await writeSignal(directory, 'owner-ready.json', { id: intent.id, subject: profile.subject, ...(restoration ? { restoreSource } : {}) })
+    await writeSignal(directory, 'owner-ready.json', { id: intent.id, subject: profile.subject, ...(restoration ? { restoreSource, instanceChanged: fixture.instanceChanged } : {}) })
     await waitSignal(directory, 'confirm.json', 30_000)
     const confirmed = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/' + intent.id + '/confirm' && r.request().method() === 'POST')
     await dialog.getByRole('button', { name: restoration ? '确认ACL历史恢复' : '确认ACL修改', exact: true }).click()
@@ -80,7 +80,7 @@ try {
     const logoutReceipt = await logoutFromUserMenu(page, context, base)
     assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(bodies, 0)
     await writeSignal(directory, 'owner-browser.json', { revision, id: intent.id, executionJobId: pending.executionJobId, subject: profile.subject,
-      actualUi: true, registrations, confirmations, bodies, logout: logoutReceipt, normalDualLogout: true, ...(restoration ? { restoreSource } : {}) })
+      actualUi: true, registrations, confirmations, bodies, logout: logoutReceipt, normalDualLogout: true, ...(restoration ? { restoreSource, instanceChanged: fixture.instanceChanged } : {}) })
   } else {
     assert.notEqual(profile.subject, fixture.originalSubject)
     const root = '/api/v1/files/container-acls/recovery'
@@ -189,7 +189,7 @@ try {
     phase = 'different-administrator-normal-dual-logout'
     const logoutReceipt = await logoutFromUserMenu(page, context, base)
     await writeSignal(directory, 'recovery-browser.json', { revision, id: fixture.id, subject: profile.subject, actualUi: true,
-      confirmations, registrations, bodies, originalState: old.state, waitingState: waiting.state, waitingVisibleInVue: true, waitingDirectoryInViewport: true, displayedContainerId: fixture.containerId, displayedPath: '/work/acl-file.bin', ackVersion: submitted.version, logout: logoutReceipt, normalDualLogout: true, jobReadsOnly, ...(restoration ? { ownerRestoreStatus: 404, recoveryNoStore: true } : {}) })
+      confirmations, registrations, bodies, originalState: old.state, waitingState: waiting.state, waitingVisibleInVue: true, waitingDirectoryInViewport: true, displayedContainerId: fixture.containerId, displayedPath: '/work/acl-file.bin', ackVersion: submitted.version, logout: logoutReceipt, normalDualLogout: true, jobReadsOnly, ...(restoration ? { ownerRestoreStatus: 404, recoveryNoStore: true, instanceChanged: fixture.instanceChanged } : {}) })
   }
   await context.close()
   console.log(JSON.stringify({ aclUnknownBrowser: 'passed', mode }))
