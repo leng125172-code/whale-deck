@@ -1,6 +1,6 @@
 # ACL历史恢复来源故障矩阵：现有事实与待实机范围
 
-2026-11-04，本矩阵初版接续候选28062da及来源UI工具bb51f4d，当时仅有源码/夹具覆盖，不能作为来源故障实机签收。后续28062da已标准覆盖并完成[来源UI实机签收](CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)，再以新资源分别签收下表四个缺失来源边界及首次登记、Ready后、首次Apply前有效替换；其它替换、依赖不可用、期限及回执优先组合仍有缺口，不能把这些分项或页面展示推广为整个矩阵完成。原候选和发布准备事实保留在[历史记录](CONTAINER_ACL_RECOVERY_SOURCE_UI.md)。
+2026-11-04，本矩阵初版接续候选28062da及来源UI工具bb51f4d，当时仅有源码/夹具覆盖，不能作为来源故障实机签收。后续28062da已标准覆盖并完成[来源UI实机签收](CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)，再以新资源分别签收下表四个缺失来源边界及首次登记、异步预检前、Ready后、首次Apply前有效时间/摘要替换；其它内容替换、依赖不可用、期限及回执优先组合仍有缺口，不能把这些分项或页面展示推广为整个矩阵完成。原候选和发布准备事实保留在[历史记录](CONTAINER_ACL_RECOVERY_SOURCE_UI.md)。
 
 ## 边界与预期
 
@@ -8,7 +8,7 @@
 |---|---|---|---|
 | 首次登记 | 从Agent历史读取并校验规范快照，冻结完整来源及命令；缺来源/版本不符不登记 | MVC/gRPC夹具；[真实选源后丢失，首次POST409/同键404及SQL五项0](CONTAINER_ACL_SOURCE_REGISTER_MISSING.md)；[有效替换新摘要200/旧409、首次POST409且SQL五项0](CONTAINER_ACL_SOURCE_REGISTER_REPLACED.md) | 更多内容变化、依赖/期限等首次登记组合仍待实机 |
 | 原幂等键重读 | 返回原存储来源，不重读已不可用HDD，不换ID、不延长过期时间；参数冲突拒绝 | 业务夹具、正常恢复原key重读；[Ready来源缺失时原key 200且完整SQL不变](CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md) | 更广依赖不可用、原期限到期及参数冲突实机组合仍待 |
-| 异步预检前 | 再读真实来源，逐字段比较完整冻结快照；变更则预检失败，不调用Root Plan/Apply | SourceChanged/替换夹具；[Queued来源缺失真实Worker预检失败、无计划/执行及原件保持](CONTAINER_ACL_SOURCE_PLAN_MISSING.md) | 来源真实替换及其它依赖/期限/回执组合仍待实机 |
+| 异步预检前 | 再读真实来源，逐字段比较完整冻结快照；变更则预检失败，不调用Root Plan/Apply | SourceChanged/替换夹具；[Queued来源缺失真实Worker预检失败、无计划/执行及原件保持](CONTAINER_ACL_SOURCE_PLAN_MISSING.md)；[有效替换新摘要200/旧409、原Queued来源/版本保持且预检失败无Root](CONTAINER_ACL_SOURCE_PLAN_REPLACED.md) | 更多内容变化及依赖/期限/回执组合仍待实机 |
 | 原计划确认 | 无执行ID时先核实来源，再登记执行；来源变更拒绝且仍无执行Job | 三边界夹具；原确认/登录绑定；[Ready后来源缺失409](CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md)及[同capture有效替换409/新摘要200](CONTAINER_ACL_SOURCE_CONFIRM_REPLACED.md)，均无新执行 | 更多确认内容变化、依赖/期限及其它组合仍待 |
 | 第一次Apply前 | 先Inspect原执行；只有没有原回执且允许新写入时再验来源。变更时Discard原执行并失败，不调用业务首次Apply | SourceChanged/替换夹具；[Pending来源缺失真实Worker→原Root Aborted/无前像及迟到围栏](CONTAINER_ACL_SOURCE_APPLY_MISSING.md)；[有效替换新摘要200/旧409、原执行Aborted与原件保持](CONTAINER_ACL_SOURCE_APPLY_REPLACED.md) | 更多来源内容变化及依赖/期限/回执组合仍需验收 |
 | 临时不可用后恢复 | IO/传输不可用不等于来源已变更；不能提前写入。恢复可用后沿用原身份/执行ID/期限继续 | 本批plan/confirm/apply三处IO夹具：一次正确重续、一次Apply、无另建执行或Discard | 真实依赖不可用与恢复、原时限内同任务继续及真实文件/HDD证明 |
@@ -31,6 +31,8 @@ IO夹具只表示来源读取通道故障，不证明整个Agent或HDD离线，�
 2026-11-04 首次Apply前有效来源替换实机分项通过：fd23d93冻结92源码/13安装helper，新资源Ready后仅停原Worker，确认202/Pending后发布同capture独立inode的时间+1/自洽digest替换；旧摘要409/新摘要200、原key及Pending SQL保持。同Worker启动后原执行Failed/SOURCE_CHANGED、Root Aborted/false、RootStarted空/无当前前像；原件还原后迟到原ID Root Apply仍Aborted。5真PNG/两主题任务详情、4审计、正常双端退出/HTTP拒绝、独立只读及准确清理通过，旧142HDD字节九字段保持/总143、新原件ctime改变保留。11核心healthy/同ID镜像保持、仅Worker StartedAt变，两宿主/7配置账本与root只读Git索引保持；142离线检查0跳过，无发布宿主重启。其它替换/依赖/期限/回执、递归ACL/删除、维护连续性及59项继续。[实机与验收边界](CONTAINER_ACL_SOURCE_APPLY_REPLACED.md)。
 
 2026-11-04 首次登记前有效来源替换实机分项通过：c0245ed冻结97源码/13安装helper，新资源真实选源后发布同capture独立inode的时间+1/自洽digest替换，旧摘要409/新摘要200；原POST仍原摘要/当前目标版本，登记409/同key及两个预期Job404，SQL意图/Job/outbox/事件/恢复审计五项0、Root/HDD缺席。原件还原后只查询仍无登记，3真PNG/两主题、正常双端退出/HTTP拒绝、独立只读与准确清理通过，旧143HDD字节九字段保持/总144、新原件ctime改变保留。11核心/两宿主/7配置账本与root只读Git索引保持，无发布启停；9202339另补异常请求查账与未写成日志stage保留告警，仅离线4新项，最终154检查0跳过，不重放。异步预检替换/依赖/期限/回执、递归ACL/删除和维护连续性及其余59项继续。[实机与工具修复边界](CONTAINER_ACL_SOURCE_REGISTER_REPLACED.md)。
+
+2026-11-04 异步预检前有效来源替换实机分项通过：bd72c45冻结102源码/13安装helper，新资源真实选源后只停原Worker，正常登记202/Queued后发布同capture独立inode时间+1/自洽digest替换；旧摘要409/新200、原key/完整Queued SQL保持。同Worker启动后原规划Failed/SOURCE_CHANGED，原来源/命令/期限不变，无计划/确认/执行/Root及当前恢复HDD；原件还原后仅查询原失败。0d44e15追加POST与SQL目标版本直接比较/1专项，冻结102源码仅独立只读通过，不重放。5真PNG/两主题、2审计、正常双端退出/HTTP拒绝及准确清理，旧144HDD字节九字段保持/总145、新原件ctime改变保留；11核心healthy/仅Worker StartedAt变、两宿主/7配置账本保持，最终163检查0跳过。四缺失/四同capture时间摘要替换各有证据，其它内容/依赖/期限/回执、递归ACL/删除和维护连续性及其余59项继续。[实机与版本边界](CONTAINER_ACL_SOURCE_PLAN_REPLACED.md)。
 
 上表的“同摘要不同时间戳”是显式不可信gateway夹具，用于证明服务层比较完整快照；不是实际HDD可绕过digest校验的结论。实际Agent历史读取还必须检查元数据digest、存储证明、对象及数值presence。
 
