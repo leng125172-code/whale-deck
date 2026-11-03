@@ -1352,3 +1352,27 @@ service ContainerAclService {
   rpc Inspect(ContainerAclRequest) returns (ContainerAclReceipt);
   rpc Discard(ContainerAclRequest) returns (ContainerAclReceipt);
 }
+
+// Independent read-only ACL preimage authority, protocol 1.52.
+message ContainerAclHistoryListRequest {
+  ContainerFileLocation location = 1; string after = 2; uint32 take = 3; string expected_version = 4; RequestContext context = 5;
+}
+message ContainerAclHistoryReadRequest {
+  ContainerFileLocation location = 1; string capture_id = 2; string expected_history_digest = 3; RequestContext context = 4;
+}
+message ContainerAclHistoryEntry {
+  string capture_id = 1; string history_digest = 2; optional int64 created_at_unix_ms = 3; string source_instance_id = 4;
+  string changed_acl_type = 5; string kind = 6; optional uint32 original_mode = 7; optional uint32 access_entry_count = 8; optional uint32 default_entry_count = 9;
+}
+message ContainerAclHistoryPage {
+  ContainerFileLocation location = 1; string version = 2; repeated ContainerAclHistoryEntry entries = 3;
+  string next_after = 4; optional uint32 scanned_count = 5; optional uint32 invalid_count = 6; optional bool complete = 7;
+}
+message ContainerAclHistorySnapshot {
+  ContainerFileLocation location = 1; ContainerAclHistoryEntry entry = 2;
+  repeated ContainerAclEntry access_acl = 3; repeated ContainerAclEntry default_acl = 4;
+}
+service ContainerAclHistoryService {
+  rpc List(ContainerAclHistoryListRequest) returns (ContainerAclHistoryPage);
+  rpc Read(ContainerAclHistoryReadRequest) returns (ContainerAclHistorySnapshot);
+}

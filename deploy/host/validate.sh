@@ -76,7 +76,7 @@ for module in /usr/local/libexec/whaledeck-container-recursive-ownership.py /usr
 done
 assert_metadata /var/lib/whaledeck-container-acl '700:root:root'
 [[ ! -L /var/lib/whaledeck-container-acl ]]
-for module in /usr/local/libexec/whaledeck-container-acl.py /usr/local/libexec/whaledeck-container-acl-transport.py; do
+for module in /usr/local/libexec/whaledeck-container-acl.py /usr/local/libexec/whaledeck-container-acl-history.py /usr/local/libexec/whaledeck-container-acl-history-transport.py /usr/local/libexec/whaledeck-container-acl-transport.py; do
   assert_metadata "$module" '750:root:root'
   [[ ! -L "$module" && $(stat -c %h "$module") == 1 ]]
 done

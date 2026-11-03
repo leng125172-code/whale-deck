@@ -122,7 +122,8 @@ class ContainerAclHistoryReader:
         self.current(request, session, proof, deadline)
         with self.namespace() as (configuration, base, descriptor):
             if descriptor is None: self.reject('NOT_FOUND')
-            value = self.metadata(descriptor, request['captureId'])
+            try: value = self.metadata(descriptor, request['captureId'])
+            except FileNotFoundError: self.reject('NOT_FOUND')
             if not self.matches(value, request): self.reject('NOT_FOUND')
             if value['historyDigest'] != request['expectedHistoryDigest']: self.reject('VERSION_CONFLICT')
             self.h.storage.attest(configuration, descriptor, read_only=True)
