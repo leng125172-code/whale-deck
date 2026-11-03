@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+**2026-11-03 ACL历史路径身份边界修复候选，生产仍旧版**：CI证明旧helper读完后仅比dev/inode不足，5423433 pin原FD并双重九字段/namespace/映射复核，避免回收inode漏检并检查同inode变更；只读CAP/Root隔离不扩。30历史/469文件临时目录检查通过，新恢复普通/匿名/真实退出/当前ACL先留原件门禁已写，未运行，仍需CI、正常覆盖及实机证明。[失败、修复与边界](qa/CONTAINER_ACL_RESTORE_RELEASE_PREPARATION.md)。
+
 **2026-11-03 ACL历史恢复API/Vue候选3fd7f5f，未部署**：Administrator/BFF/CSRF/Origin、实时管理员/原登录及严格来源选择字段齐接；返回来源前复核、跨登录/容器拒绝和读取中止不登记，确认/取消原新执行ID。Vue只恢复所选单ACL类型，明确新预检和确认，源变化/旧实例/过期禁确认、原引用接续/退出清理和其他写入互锁；不保存ACL正文。4361 Unit/488 Integration（7默认跳过）及1059前端Unit通过，身份/Agent/仓储均夹具；没有真实人类/当前ACL原件HDD恢复证据，运行08b2bb8/1.52保持。[安全与验收边界](qa/CONTAINER_ACL_RESTORE_WEB.md)。
 
 **2026-11-03 ACL历史恢复内部候选47e3ba1，未部署**：实时管理员和原登录前后复核；输入只选capture/digest及当前版本，目标ACL由权威源派生，每次仅access或default，不递归。完整来源冻结并受MAC/SQL不可变保护，登记/规划/确认/首次写入复核；源变更阻止新写入，已有原执行回执优先观察，不把Unavailable当不存在。沿用原Agent最小能力/共享写入锁与当前ACL先备份规则；没有新管理员恢复API/Vue或真实人类/文件/HDD恢复证据。冻结4361 Unit/463 Integration（7默认跳过）和双隔离PG门禁通过，身份/源/Root仍夹具；生产保持08b2bb8/1.52及原11核心。[安全与未验边界](qa/CONTAINER_ACL_RESTORE_PERSISTENCE.md)。
