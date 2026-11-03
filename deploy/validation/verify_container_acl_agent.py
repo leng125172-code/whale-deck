@@ -23,7 +23,7 @@ from validate_container_recursive_ownership_browser import no_active_work
 from validate_container_recursive_ownership_agent import host_identity
 
 
-def main():
+def main(history=False):
     assert os.geteuid()==0 and len(sys.argv)==2;os.umask(0o077)
     assert re.fullmatch('container-acl-agent-[a-f0-9]{32}',sys.argv[1]);repo=Path(__file__).resolve().parents[2];evidence=repo/'deploy/artifacts'/sys.argv[1]
     assert stat.S_IMODE(trusted(evidence,True).st_mode)==0o700
@@ -31,7 +31,12 @@ def main():
         p=evidence/name;info=trusted(p);assert stat.S_IMODE(info.st_mode)==0o600 and info.st_size<=16*1024**2;return json.loads(p.read_bytes())
     baseline=saved('baseline.json');verified=saved('verified.json');rows=saved('results.json');assert verified['installedAclRpc']=='passed' and not verified['humanBffOrUi']
     assert len(rows)==verified['operations']==9 and [r['label'] for r in rows]==['access','noop','mask','root','base','default','default-noop','clear-default','cancel']
-    names=(*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged');assert set(baseline['installedSourceSha256'])==set(names)
+    names=(*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged')
+    if history:
+        from validate_container_acl_history_agent import NAMES as history_names
+        names=(*names,*history_names)
+        assert verified['installedAclHistoryRpc']=='passed'
+    assert set(baseline['installedSourceSha256'])==set(names)
     for name,sha in baseline['installedSourceSha256'].items():
         path=Path('/usr/local/libexec')/name;assert stat.S_IMODE(trusted(path).st_mode)==0o750
         raw=subprocess.check_output(['git','-C',str(repo),'show',baseline['revision']+':deploy/host/'+name]);assert raw==path.read_bytes() and hashlib.sha256(raw).hexdigest()==sha
@@ -84,6 +89,9 @@ def main():
     observed={'independentInstalledAclVerification':'passed','operations':9,'completed':8,'aborted':1,'hddMetadata':count,'all11HealthyUnchanged':True,
               'hostsUnchanged':True,'exactSourceAndContainerRemoved':True,'deletedSourceBytesReRead':False,'sourceDevice':baseline['original']['acl-file.bin']['identity'][0],
               'hddDevice':hdd_device,'lateReplayWasSignedRpc':True,'humanBffOrUi':False}
+    if history:
+        from verify_container_acl_history_agent import verify
+        observed.update(verify(evidence,baseline,rows,storage))
     (evidence/'independent-final.json').write_text(json.dumps(observed));print(json.dumps(observed))
 
 

@@ -98,17 +98,24 @@ def archive(evidence,operation,storage):
     return record,hashlib.sha256(raw).hexdigest()
 
 
-def main():
+def main(history=False):
     global PHASE
     assert os.geteuid()==0 and len(sys.argv) in (3,4);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision);probe_revision=sys.argv[3] if len(sys.argv)==4 else revision;assert re.fullmatch('[a-f0-9]{40}',probe_revision);repo=Path(__file__).resolve().parents[2];binary=Path(sys.argv[2])
     assert binary.parent.parent==repo/'deploy/artifacts' and re.fullmatch(r'terminal-probe\.[A-Za-z0-9]+',binary.parent.name) and binary.name=='TerminalProbe'
     trusted(binary);trusted(binary.parent,True);subprocess.run(['sha256sum','--quiet','-c','SHA256SUMS'],cwd=binary.parent,check=True,capture_output=True,timeout=20)
-    names=(*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged');hashes={}
+    names=(*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged')
+    if history:
+        from validate_container_acl_history_agent import NAMES as history_names, exercise
+        names=(*names,*history_names)
+    hashes={}
     for name in names:
         path=Path('/usr/local/libexec')/name;info=trusted(path);assert stat.S_IMODE(info.st_mode)==0o750
         raw=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name]);assert raw==path.read_bytes();hashes[name]=hashlib.sha256(raw).hexdigest()
     assert stat.S_IMODE(trusted(STATE,True).st_mode)==0o700
+    if history:
+        from validate_container_acl_browser import no_active_work as history_idle
+        history_idle()
     no_active_work();core=owned.common.core_snapshot();hosts=host_identity(revision)
     evidence=repo/'deploy/artifacts'/('container-acl-agent-'+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
     print(json.dumps({'installedAclRpc':'started','evidence':evidence.name}),flush=True)
@@ -164,15 +171,22 @@ def main():
             assert hashlib.sha256((STATE/(first['request']['operationId']+'.json')).read_bytes()).hexdigest()==first['rootSha256']
             (evidence/'late-signed-rpc.json').write_text(json.dumps(late));(evidence/'physical-final.json').write_text(json.dumps(final))
             closing=probe;probe=None;closing.close(True)
+            if history:
+                PHASE='history-readonly-rpc'
+                exercise(binary,evidence,{'revision':revision,'probeRevision':probe_revision,**location,'coreId':core['/whaledeck-api'][0]},rows,
+                    lambda: inventory(folder,reader,module,content),lambda operation: archive(evidence,operation,storage),storage)
+                assert inventory(folder,reader,module,content)==final
             (evidence/'getfacl-final.txt').write_text(subprocess.check_output(['/usr/bin/getfacl','--absolute-names','--numeric',str(folder/'acl-file.bin'),str(folder/'acl-directory')],text=True))
             PHASE='proved-cleanup';assert {p.name for p in folder.iterdir()}=={'original.bin','acl-file.bin','acl-directory'}
             for relative in ('acl-directory/existing.bin','acl-file.bin'):
                 assert list(reader.fingerprint((folder/relative).lstat()))==final[relative]['identity'];(folder/relative).unlink()
             directory=folder/'acl-directory';assert not list(directory.iterdir()) and list(reader.fingerprint(directory.lstat()))[:5]==final['acl-directory']['identity'][:5];directory.rmdir()
         assert not folder.exists() and owned.common.core_snapshot()==core and host_identity(revision)==hosts;no_active_work()
+        if history:history_idle()
         units=subprocess.check_output(['systemctl','list-units','--all','--no-legend','whaledeck-container-acl-*'],text=True,timeout=10);assert not units.strip()
         result={'installedAclRpc':'passed','revision':revision,'probeRevision':probe_revision,'operations':9,'completed':8,'aborted':1,'hddMetadata':8,'planBoundaryRefusals':13,'executionBoundaryRefusals':4,
                 'fullBytesOriginalInodesOwnersMtimeOrdinaryAttributes':True,'nonselectedAclAndChildrenPreserved':True,'lateSignedRpcDidNotReapply':True,'exactSourceAndContainerRemoved':True,'coreAndHostsUnchanged':True,'humanBffOrUi':False}
+        if history:result['installedAclHistoryRpc']='passed'
         (evidence/'verified.json').write_text(json.dumps(result));print(json.dumps({**result,'evidence':evidence.name}),flush=True)
     except BaseException as error:
         (evidence/'failure.json').write_text(json.dumps({'phase':PHASE,'type':type(error).__name__,'completedOperations':len(rows)}));raise
