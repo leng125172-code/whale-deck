@@ -61,8 +61,41 @@ class AclHistoryTransportTests(unittest.TestCase):
     def test_path_replacement_after_query_does_not_return_history(self):
         original=self.reader.listing
         def replace(*args):
-            result=original(*args);self.base.leaf.unlink();self.base.leaf.write_bytes(b'new identity');return result
+            result=original(*args);identity=self.base.leaf.stat().st_ino
+            self.base.leaf.unlink();self.base.leaf.write_bytes(b'new identity')
+            # An open original inode cannot be recycled, on either ext4 or overlayfs.
+            self.assertNotEqual(identity,self.base.leaf.stat().st_ino)
+            return result
         with patch.object(self.reader,'listing',side_effect=replace),self.assertRaisesRegex(transport.Rejected,'VERSION_CONFLICT'):self.execute('list',self.listing())
+    def test_same_inode_content_mode_and_acl_changes_during_either_query_are_refused(self):
+        request=self.base.request();receipt=self.base.engine.apply(request,self.base.session)
+        read={**self.base.session.request,'path':self.base.leaf.name,'captureId':request['operationId'],'expectedHistoryDigest':receipt['historyDigest']}
+        for action in ('list','read'):
+            for mutation in ('content','mode','attribute'):
+                with self.subTest(action=action,mutation=mutation):
+                    self.base.leaf.chmod(0o640)
+                    method='listing' if action=='list' else 'read';original=getattr(self.reader,method)
+                    def change(*args):
+                        result=original(*args);prior=self.base.leaf.stat()
+                        if mutation=='content':self.base.leaf.write_bytes(b'changed without replacing inode')
+                        elif mutation=='mode':self.base.leaf.chmod(0o600)
+                        else:os.setxattr(self.base.leaf,'user.query-cut',os.urandom(16))
+                        self.assertEqual(prior.st_ino,self.base.leaf.stat().st_ino)
+                        return result
+                    with patch.object(self.reader,method,side_effect=change),self.assertRaisesRegex(transport.Rejected,'VERSION_CONFLICT'):
+                        self.execute(action,self.listing() if action=='list' else read)
+    def test_failure_and_second_mapping_rejection_close_both_pinned_descriptors(self):
+        before=set(os.listdir('/proc/self/fd'))
+        with patch.object(self.reader,'listing',side_effect=OSError(errno.EIO,'private')):
+            with self.assertRaises(OSError):self.execute('list',self.listing())
+        self.assertEqual(before,set(os.listdir('/proc/self/fd')))
+        calls=[0]
+        def reject_second(_):
+            calls[0]+=1
+            if calls[0]==2:raise transport.Rejected('CONTAINER_ACL_MAPPING_UNPROVEN')
+        self.bridge.require_unmapped=reject_second
+        with self.assertRaisesRegex(transport.Rejected,'MAPPING_UNPROVEN'):self.execute('list',self.listing())
+        self.assertEqual(before,set(os.listdir('/proc/self/fd')))
     def test_lost_hdd_or_base_is_unavailable_not_missing_capture(self):
         self.assertEqual(transport.error_code(FileNotFoundError()),'CONTAINER_ACL_HISTORY_UNAVAILABLE')
         self.assertEqual(transport.error_code(OSError(errno.EIO,'not logged')),'CONTAINER_ACL_HISTORY_UNAVAILABLE')

@@ -40,13 +40,24 @@ def execute(action, request, reader, files, docker, engine, bridge):
                 info = os.fstat(fd)
                 if not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)): raise Rejected('CONTAINER_ACL_HISTORY_PROTECTED')
                 bridge.require_unmapped(fd)
-                return (info.st_dev, info.st_ino)
-            finally: os.close(fd)
+                return fd, reader.fingerprint(info)
+            except BaseException:
+                os.close(fd)
+                raise
         original = target()
-        result = engine.listing(request, session) if action == 'list' else engine.read(request, session)
-        bridge.namespace_current(reader, session)
-        if target() != original: raise Rejected('CONTAINER_ACL_HISTORY_VERSION_CONFLICT')
-        return result
+        # Pin the original inode across the read: close/unlink/recreate can
+        # otherwise recycle dev+ino and defeat a path identity comparison.
+        try:
+            result = engine.listing(request, session) if action == 'list' else engine.read(request, session)
+            bridge.namespace_current(reader, session)
+            current = target()
+            try:
+                info = os.fstat(original[0])
+                if reader.fingerprint(info) != original[1] or current[1] != original[1]:
+                    raise Rejected('CONTAINER_ACL_HISTORY_VERSION_CONFLICT')
+            finally: os.close(current[0])
+            return result
+        finally: os.close(original[0])
 
 def main():
     if os.geteuid() != 0 or len(sys.argv) != 2 or sys.argv[1] not in ('list','read'): raise Rejected('CONTAINER_ACL_HISTORY_REQUEST_INVALID')
