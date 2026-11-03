@@ -6,6 +6,18 @@ import { openPermissionFiles, closePermissionDetails, writeSignal, waitSignal } 
 export async function prepareRestoreFault(page, context, base, fixture, profile) {
   assert.ok([1, 2, 3, 4, 5, 6, 7, 8].includes(fixture.aclRestoreFaultVersion))
   assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : fixture.aclRestoreFaultVersion === 2 ? ['group-removal', 'account-disable'] : fixture.aclRestoreFaultVersion === 3 ? ['worker-crash', 'agent-restart'] : fixture.aclRestoreFaultVersion === 4 ? ['post-acl-cancel', 'post-acl-worker-crash'] : fixture.aclRestoreFaultVersion === 5 ? ['post-acl-group-removal', 'post-acl-account-disable'] : fixture.aclRestoreFaultVersion === 6 ? ['post-acl-agent-restart'] : fixture.aclRestoreFaultVersion === 7 ? ['post-acl-target-removed'] : ['post-acl-instance-change']).includes(fixture.kind))
+  return prepareSelectedRestore(page, context, base, fixture, profile)
+}
+
+export async function prepareMissingSourceConfirmation(page, context, base, fixture, profile) {
+  assert.equal(fixture.aclSourceFaultVersion, 1)
+  assert.equal(fixture.kind, 'source-confirm-missing')
+  assert.equal(fixture.aclRestoreFaultVersion, undefined)
+  assert.equal(fixture.jobResultsVersion, undefined)
+  return prepareSelectedRestore(page, context, base, fixture, profile)
+}
+
+async function prepareSelectedRestore(page, context, base, fixture, profile) {
   const endpoint = `/api/v1/containers/${fixture.containerId}/files/acls`, directory = fixture.evidence
   let files = await openPermissionFiles(page, fixture)
   await files.getByRole('button', { name: 'ACL acl-file.bin', exact: true }).click()
