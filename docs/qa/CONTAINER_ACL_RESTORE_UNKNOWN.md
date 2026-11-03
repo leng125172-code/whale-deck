@@ -33,3 +33,7 @@
 本批仅签**写后移除目标容器**、不同管理员处置及跨容器目录延期/释放。写前、同CID实例变化、来源丢失/替换、磁盘/其它共享写入、恢复来源专属管理员UI、递归ACL/恢复与删除/长期清理仍待。源和HDD同device，不算异盘灾备；59主项及六阶段完整签收数不提升，17项移出不算完成，master未交付。
 
 收尾8项范围测试、878条变动MD相对链接通过，目标第1节逐字保持，2份QA原文仅追加。准确工具[CI run41670846073](https://github.com/leng125172-code/whale-deck/actions/runs/41670846073)查询首次EOF、重试确认in_progress，未签成功终态；本机118检查和本批实机通过分别记录。项目图谱接口两次传输失败，稳定事件`whale-deck.container-acl.f0226dd.restore-unknown-shared-barrier`保存在本地pending待同步，未声称网站更新成功。
+
+## 后续接续：同CID实例变化
+
+以上移除目标组合与当时图谱连接失败记录保留。图谱原事件随后确认成功、按同一eventId移入synced。b33ad69再以全新资源完成写后同CID实例变化加正常退出、不同管理员处置/目录自然延期释放、真实页面及独立复核，见[本轮实例变化](CONTAINER_ACL_RESTORE_INSTANCE_CHANGE.md)；来源异常、来源专属UI及其它目标仍待。

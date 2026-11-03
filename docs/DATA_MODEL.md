@@ -1,5 +1,8 @@
 # WhaleDeck 数据模型
 
+2026-11-04 实机接续：b69302b不重发，恢复写后同CID实例变化与原正常退出组合、不同管理员明确处置和跨容器目录保护通过；PID/StartedAt变化但原实例/来源及Root Unknown/null确认不改，133旧HDD原件保持。无新生产schema、RPC或授权扩大，见[实例变化事实与未验](qa/CONTAINER_ACL_RESTORE_INSTANCE_CHANGE.md)。
+
+
 2026-11-04 接续实机：b69302b不重发，恢复写后目标消失的Unknown/不同管理员明确处置与跨容器目录延期释放已验收；canonical来源和恢复专属审计/原执行Failed、Root Unknown与null确认保持，管理员通用面板尚无来源专属展示。无新协议/生产schema/授权，见[实际证据与范围](qa/CONTAINER_ACL_RESTORE_UNKNOWN.md)。
 
 
