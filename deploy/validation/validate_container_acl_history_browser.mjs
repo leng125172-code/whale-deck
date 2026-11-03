@@ -65,6 +65,7 @@ export async function ordinaryHistoryBrowser(browser,base,fixture,example) {
   let pageRequests=0;page.on('request',r=>{if(new URL(r.url()).pathname.startsWith(endpoint))pageRequests++})
   await page.goto(base+'/containers');await expect(page).toHaveURL(base+'/forbidden');await expect(page.getByRole('button',{name:/^ACL历史 /})).toHaveCount(0);assert.equal(pageRequests,0)
   await page.screenshot({path:join(fixture.evidence,'history-ordinary.png')})
+  await page.goto(base+'/');await expect(page).toHaveURL(base+'/');assert.equal((await(await context.request.get(base+'/api/v1/auth/me')).json()).isAdministrator,false)
   const logout=await logoutFromUserMenu(page,context,base),anonymous=[]
   for(const url of urls)anonymous.push((await context.request.get(url)).status());assert.deepEqual(anonymous,[401,401])
   const result={subject:profile.subject,denied,anonymous,normalDualLogout:logout,uiHistoryRequests:0}
