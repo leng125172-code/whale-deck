@@ -67,7 +67,7 @@ test('Unknown retains original restore source and offers only original observati
 })
 test('a new container instance cannot confirm the old historical plan',async({page})=>{
  const c=await setup(page);await c.prepare();await modal(page).getByRole('button',{name:'关闭',exact:true}).click();c.base.state.target.instanceId='778:2026-11-03T01:02:03Z'
- await page.getByRole('region',{name:'容器文件',exact:true}).getByRole('button',{name:'重新读取',exact:true}).click();await page.getByRole('button',{name:'查看ACL修改任务',exact:true}).click();await expect(modal(page).getByRole('button',{name:'确认ACL历史恢复',exact:true})).toBeDisabled();await expect(modal(page)).toContainText('容器实例已变化');expect(c.state.writes).toHaveLength(1)
+ await page.reload();await page.locator('.container-card').filter({hasText:'demo-web'}).getByRole('button',{name:'详情',exact:true}).click();await page.getByRole('button',{name:'容器文件',exact:true}).click();await page.getByRole('button',{name:'查看ACL修改任务',exact:true}).click();await expect(modal(page).getByRole('button',{name:'确认ACL历史恢复',exact:true})).toBeDisabled();await expect(modal(page)).toContainText('容器实例已变化');expect(c.state.writes).toHaveLength(1)
 })
 test('503 registration keeps its reference and cannot become a new unprompted restore',async({page})=>{
  const c=await setup(page);await c.open();c.state.queueStatus=503;await modal(page).getByRole('button',{name:'生成ACL恢复预检',exact:true}).click();await expect(modal(page).locator('.container-acl__error')).toBeVisible();const key=c.state.writes[0].key
