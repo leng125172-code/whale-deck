@@ -69,9 +69,9 @@ public static class ContainerRecursiveAclWorkflowValidation
     // Capture caller-owned lists before the first await; comparisons use values,
     // never record equality of independently deserialized list references.
     public static ContainerRecursiveAclCommandDto SnapshotCommand(ContainerRecursiveAclCommandDto command)
-    { var value = Read<ContainerRecursiveAclCommandDto>(Serialize(command)); ContainerRecursiveAclValidation.Command(value); return value; }
+    { ContainerRecursiveAclValidation.Command(command); var value = Read<ContainerRecursiveAclCommandDto>(Serialize(command)); ContainerRecursiveAclValidation.Command(value); return value; }
     public static ContainerRecursiveAclPlanDto SnapshotPlan(ContainerRecursiveAclPlanDto plan)
-    { var value = Read<ContainerRecursiveAclPlanDto>(Serialize(plan)); ContainerRecursiveAclValidation.Plan(value); return value; }
+    { ContainerRecursiveAclValidation.Plan(plan); var value = Read<ContainerRecursiveAclPlanDto>(Serialize(plan)); ContainerRecursiveAclValidation.Plan(value); return value; }
     public static ContainerRecursiveAclCommandDto ReadCommand(ContainerRecursiveAclIntent row)
     {
         var value = Read<ContainerRecursiveAclCommandDto>(row.CommandJson); ContainerRecursiveAclValidation.Command(value);

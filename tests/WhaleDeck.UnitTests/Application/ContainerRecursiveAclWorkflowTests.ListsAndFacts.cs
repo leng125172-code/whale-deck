@@ -101,4 +101,28 @@ public sealed partial class ContainerRecursiveAclWorkflowTests
         Assert.Equal(0U,clone.FileEntries![1].Id);Assert.Equal(0U,clone.FileEntries[1].Permissions);
         Assert.False(ContainerRecursiveAclValidation.SameCommand(command,clone));
     }
+    [Theory][InlineData(false,false)][InlineData(false,true)][InlineData(true,false)][InlineData(true,true)]
+    public void SnapshotRejectsOversizedTargetsBeforeSerializationCanEnumerateThem(bool plan,bool directory)
+    {
+        var original=Plan();var command=directory?original.Command with {DirectoryEntries=new OversizedEntries()}:original.Command with {FileEntries=new OversizedEntries()};
+        Assert.Throws<ArgumentException>(()=>{
+            if(plan)ContainerRecursiveAclWorkflowValidation.SnapshotPlan(original with {Command=command});
+            else ContainerRecursiveAclWorkflowValidation.SnapshotCommand(command);
+        });
+    }
+    [Theory][InlineData(false)][InlineData(true)]
+    public async Task OversizedListsNeverReachIdentityRepositoryOrAgent(bool directory)
+    {
+        using var f=new Fixture();f.Identity.LiveUnavailable=true;
+        var command=directory?f.Command with {DirectoryEntries=new OversizedEntries()}:f.Command with {FileEntries=new OversizedEntries()};
+        await Assert.ThrowsAsync<ArgumentException>(()=>f.Service.QueueAsync(f.Actor,command,f.Key,default));
+        Assert.Equal(0,f.Repository.Enqueues);Assert.Equal(0,f.Gateway.Requires);Assert.Null(f.Repository.Row);
+    }
+    private sealed class OversizedEntries:IReadOnlyList<ContainerAclEntryDto>
+    {
+        public int Count=>65;
+        public ContainerAclEntryDto this[int index]=>throw new InvalidOperationException("OVERSIZED_ACL_ENUMERATED");
+        public IEnumerator<ContainerAclEntryDto> GetEnumerator()=>throw new InvalidOperationException("OVERSIZED_ACL_ENUMERATED");
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()=>GetEnumerator();
+    }
 }
