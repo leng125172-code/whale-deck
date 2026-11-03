@@ -106,7 +106,7 @@ def verify_job_summaries(data,plan,evidence,label):
         for secret in (plan['fingerprint'],plan['targetProof']):assert secret not in encoded
 
 
-def verify_case(result,baseline,subject,evidence,reader,module,storage,before,after):
+def verify_case(result,baseline,subject,evidence,reader,module,storage,before,after,job_evidence=None):
     label=result['name'];assert label in CASES;relative='acl-directory' if label in ('default','default-noop','clear-default') else 'acl-file.bin'
     kind='default' if relative=='acl-directory' else 'access';data=snapshot(result['id']);row=data['row'];plan=managed_plan(json.loads(row['plan_json']))
     assert type(plan['schemaVersion']) is int and plan['schemaVersion']==1 and type(plan['targetMode']) is int and 0<=plan['targetMode']<=511 and type(plan['noChange']) is bool
@@ -123,7 +123,7 @@ def verify_case(result,baseline,subject,evidence,reader,module,storage,before,af
     assert [result['originalUid'],result['originalGid']]==before[relative]['identity'][3:5]
     assert plan['noChange']==result['noChange']==(label in ('noop','default-noop')) and plan['targetMode']==result['targetMode']
     (evidence/(label+'.sql.json')).write_text(json.dumps(data))
-    if baseline.get('jobResultsVersion')==1:verify_job_summaries(data,plan,evidence,label)
+    if baseline.get('jobResultsVersion')==1:verify_job_summaries(data,plan,evidence if job_evidence is None else job_evidence,label)
     if label=='cancel':
         assert row['state']=='Canceled' and row['execution_job_id'] is None and row['root_started_at_utc'] is None and data['executionJob'] is None and data['confirmed']==0
         assert row['receipt_json'] is None and row['receipt_hash'] is None and row['acl_confirmed'] is None and not row['history_may_exist'] and not row['history_verified'] and row['history_digest'] is None

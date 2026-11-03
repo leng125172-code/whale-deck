@@ -42,7 +42,7 @@ def verify(name):
         assert private_json(evidence/(label+'-result.json'))=={'subject':browser['subject'],'result':item}
         assert private_json(evidence/(label+'-verified.json'))=={'id':item['id'],'physicalAndHistoryVerified':True}
         assert snapshot(item['id'])==private_json(evidence/(label+'.sql.json'))
-        current=verify_case(item,baseline,browser['subject'],observed,reader,module,storage,proof['before'],proof['after']);assert current==proof
+        current=verify_case(item,baseline,browser['subject'],observed,reader,module,storage,proof['before'],proof['after'],job_evidence=evidence);assert current==proof
         assert (observed/(label+'.sql.json')).read_bytes()==(evidence/(label+'.sql.json')).read_bytes()
         if label!='cancel':
             for suffix in ('.root.json','.hdd.json'):assert (observed/(label+suffix)).read_bytes()==(evidence/(label+suffix)).read_bytes()
@@ -68,7 +68,9 @@ def verify(name):
         for prefix in ('whaledeck-validation-','whaledeck-upload-qa-'):
             response=api.get(AUTHENTIK_API+'core/users/',params={'search':prefix,'page_size':100},timeout=20);assert response.status_code==200 and not response.json().get('pagination',{}).get('next');assert not any(str(u['username']).startswith(prefix) for u in response.json()['results'])
     finally:api.close()
-    return {'revision':baseline['revision'],'independentReadOnlyVerifier':True,'cases':9,'hddRecords':8,'temporaryIdentitiesAbsent':True,'exactSourceAndContainerAbsent':True,'coreUnchanged':11,'physicalBytesCheckedByParentPerCase':True,'sourceBytesRereadAfterCleanup':False,'normalDualLogoutFromOriginalContext':True}
+    result={'revision':baseline['revision'],'independentReadOnlyVerifier':True,'cases':9,'hddRecords':8,'temporaryIdentitiesAbsent':True,'exactSourceAndContainerAbsent':True,'coreUnchanged':11,'physicalBytesCheckedByParentPerCase':True,'sourceBytesRereadAfterCleanup':False,'normalDualLogoutFromOriginalContext':True}
+    if baseline.get('jobResultsVersion')==1:result.update(newJobSummaries=17,actualTaskDrawers=18,legacyJobUnchanged=True)
+    return result
 
 
 if __name__=='__main__':
