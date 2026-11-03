@@ -53,6 +53,14 @@ export async function prepareMissingSourcePlan(page, context, base, fixture, pro
   })
 }
 
+export async function selectReplacedSourceRegistration(page, context, base, fixture, profile) {
+  assert.equal(fixture.aclSourceFaultVersion, 7)
+  assert.equal(fixture.kind, 'source-register-replaced')
+  assert.equal(fixture.aclRestoreFaultVersion, undefined)
+  assert.equal(fixture.jobResultsVersion, undefined)
+  return prepareSelectedRestore(page, context, base, fixture, profile, null, false)
+}
+
 export async function selectMissingSourceRegistration(page, context, base, fixture, profile) {
   assert.equal(fixture.aclSourceFaultVersion, 4)
   assert.equal(fixture.kind, 'source-register-missing')
