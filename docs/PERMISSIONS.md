@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+**2026-11-03 ACL历史恢复内部候选47e3ba1，未部署**：实时管理员和原登录前后复核；输入只选capture/digest及当前版本，目标ACL由权威源派生，每次仅access或default，不递归。完整来源冻结并受MAC/SQL不可变保护，登记/规划/确认/首次写入复核；源变更阻止新写入，已有原执行回执优先观察，不把Unavailable当不存在。沿用原Agent最小能力/共享写入锁与当前ACL先备份规则；没有新管理员恢复API/Vue或真实人类/文件/HDD恢复证据。冻结4361 Unit/463 Integration（7默认跳过）和双隔离PG门禁通过，身份/源/Root仍夹具；生产保持08b2bb8/1.52及原11核心。[安全与未验边界](qa/CONTAINER_ACL_RESTORE_PERSISTENCE.md)。
+
 **2026-11-03 ACL历史真实权限常规整链通过**：运行08b2bb8/1.52，正常Authentik管理员Vue读取2页/8原快照，普通原会话两历史GET403且页面forbidden、原会话正常双端退出后两GET401；两个可见上下文正常退出及独立核验通过。读审计仅hash/摘要、原件不变，无新增Agent/恢复授权；实时撤权与进行中取消组合未补签。[严格事实与失败](qa/CONTAINER_ACL_HISTORY_REAL_UI.md)。
 
 **2026-11-03 ACL历史业务候选e83bad0，未部署**：两只读GET仅当前管理员及活跃原登录可用；实际RPC后和持久读取审计后再授权，坏证明/审计失败/撤权不返回ACL。拒绝重复或额外query、跨CID/实例/路径/摘要；普通用户零请求，UI关闭/身份变化丢弃迟到结果。无新Agent授权/恢复接口，31 HTTP夹具与89生产预览不算真实Authentik验收。[完整边界](qa/CONTAINER_ACL_HISTORY_WEB.md)。

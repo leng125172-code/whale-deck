@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+**2026-11-03 ACL历史恢复永久化候选47e3ba1，生产未迁移**：迁移20261103085710在原container_acl_intents新增可空restore_source_json及第18个CHECK，完整选定来源绑定请求/计划/执行MAC；独立触发器禁止改变/移除/后加来源，原不可变与共享保护保留。原普通请求null不改变旧规范JSON；恢复仍原ACL JobType/两Job/Outbox，固定restore审计只放来源hash，无ACL正文或capture。任何恢复意图存在时Down拒绝丢失来源。双隔离真实PG1执行/1通过/0跳过验证约束/事务/旧MAC/锁/降级拒绝及准确清理，Root和来源合成；运行列仍不存在、17 CHECK、未发布，API/Vue和实盘恢复待验。[详情](qa/CONTAINER_ACL_RESTORE_PERSISTENCE.md)。
+
 **2026-11-03 ACL历史实际PG审计已随08b2bb8页面整链验证**：严格轮2 List+8 Read的10条audit_events与真实actor/资源、唯一Trace、路径/实例hash及元数据version/digest匹配，无原ACL/plan或字节摘要。真实jsonb为对象，工具文本假设失败已修正；原失败与两轮原件保留。无新schema/缓存表/历史恢复意图，源与HDD同device不算异盘。[实际数据与剩余](qa/CONTAINER_ACL_HISTORY_REAL_UI.md)。
 
 **2026-11-03 ACL历史浏览候选e83bad0，未部署**：实际HDD元数据继续作为权威，不新增SQL历史缓存、重复账户或schema迁移；读取审计复用audit_events及现有EF提交，两项固定action只留路径/实例hash与库存version或ACL摘要，不留ACL正文/原plan/key。冻结数组后再await审计，审计后仍重新授权；31新增HTTP案例使用合成审计，不补签真实PG审计或恢复持久意图。[候选与实际边界](qa/CONTAINER_ACL_HISTORY_WEB.md)。

@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+**2026-11-03 ACL历史恢复内部候选47e3ba1，未部署**：不新增protobuf/minor/Root权限；恢复来源适配器沿用1.52签名Read并严格区分来源NotFound/Aborted与依赖/权限错误，新的ACL规划/确认/执行仍调用原Plan/Apply/Inspect/Discard。完整来源进请求MAC，首次写入前重新核验，原执行回执观察不依赖历史在线；先留当前ACL原件仍须由真实Root/HDD恢复整链证明。4361 Unit/463 Integration（7默认跳过）及双隔离PG完整门禁通过，快照/回执为合成，非新安装态RPC或真实恢复；产品仍08b2bb8/1.52与原PID。[候选和边界](qa/CONTAINER_ACL_RESTORE_PERSISTENCE.md)。
+
 **2026-11-03 08b2bb8/1.52历史业务常规页面已真实签收**：正常覆盖六组件同源，真实Vue两List/八Read经独立签名Agent/HDD与10持久审计逐轮验证，原件不变，普通/匿名各两路拒绝及原两上下文正常退出/独立核验通过。无新Agent方法、权限或历史恢复，进行中故障仍待；前两工具失败保留。[实际整链与边界](qa/CONTAINER_ACL_HISTORY_REAL_UI.md)。
 
 **2026-11-03 e83bad0只读业务/API/Vue候选已接入，未部署**：管理员两GET继续调用已安装1.52独立签名List/Read，不新增Agent方法、写权限或恢复动作；RPC前/后及审计后重新检查人类权限与原登录。冻结4343 Unit/463 Integration（7原生跳过）、1042前端Unit/89夹具页面通过，不冒充真实人类页面或HDD业务整链。[候选与下一步](qa/CONTAINER_ACL_HISTORY_WEB.md)。
