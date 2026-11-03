@@ -1,7 +1,8 @@
 namespace WhaleDeck.Application.Models;
 
 public sealed record ContainerAclRequestBinding(Guid Id, Guid IdempotencyKey, string Actor, string LoginBinding, string TraceId,
-    string Owner, ContainerAclCommandDto Command, DateTimeOffset CreatedAtUtc, DateTimeOffset PlanningExpiresAtUtc)
+    string Owner, ContainerAclCommandDto Command, DateTimeOffset CreatedAtUtc, DateTimeOffset PlanningExpiresAtUtc,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] ContainerAclHistorySnapshotDto? RestoreSource = null)
 { public override string ToString() => nameof(ContainerAclRequestBinding); }
 public sealed record ContainerAclPlanBinding(ContainerAclRequestBinding Request, ContainerAclPlanDto Plan, DateTimeOffset ReadyExpiresAtUtc)
 { public override string ToString() => nameof(ContainerAclPlanBinding); }

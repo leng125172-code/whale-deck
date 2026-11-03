@@ -37,10 +37,12 @@ public static class ContainerAclWorkflowValidation
             string.IsNullOrWhiteSpace(value.TraceId) || value.TraceId.Length > 128 || value.TraceId.Any(char.IsControl) ||
             value.PlanningExpiresAtUtc != value.CreatedAtUtc.AddMinutes(15)) throw Invalid();
         ContainerAclValidation.Command(value.Command);
+        if (value.RestoreSource is not null) ContainerAclRestoreValidation.Source(value.RestoreSource, value.Command);
     }
     public static void Plan(ContainerAclPlanBinding value)
     {
         if (value is null) throw Invalid(); Request(value.Request); ContainerAclValidation.Plan(value.Plan); Timestamp(value.ReadyExpiresAtUtc);
+        if (value.Request.RestoreSource is {} source && source.Entry.Kind != value.Plan.Kind) throw Invalid();
         if (!ContainerAclValidation.SameCommand(value.Plan.Command, value.Request.Command) || value.ReadyExpiresAtUtc <= value.Request.CreatedAtUtc ||
             value.ReadyExpiresAtUtc > value.Request.PlanningExpiresAtUtc.AddMinutes(5)) throw Invalid();
     }
@@ -116,7 +118,7 @@ public static class ContainerAclWorkflowValidation
         if (!ContainerAclValidation.SameCommand(value.Command, ReadCommand(row))) throw Invalid(); return value;
     }
     public static ContainerAclRequestBinding RequestBinding(ContainerAclIntent row) => new(row.Id, row.IdempotencyKey, row.ActorSubject, row.LoginBinding,
-        row.TraceId, row.OwnerHash, ReadCommand(row), row.CreatedAtUtc, row.PlanningExpiresAtUtc);
+        row.TraceId, row.OwnerHash, ReadCommand(row), row.CreatedAtUtc, row.PlanningExpiresAtUtc, ContainerAclRestoreValidation.Read(row));
     public static ContainerAclPlanBinding PlanBinding(ContainerAclIntent row) => new(RequestBinding(row), ReadPlan(row), row.ReadyExpiresAtUtc ?? throw Invalid());
     public static ContainerAclExecutionBinding ExecutionBinding(ContainerAclIntent row) => new(row.Id, row.ActorSubject, row.LoginBinding,
         row.PlanHash ?? throw Invalid(), row.ExecutionJobId ?? throw Invalid(), row.ConfirmedAtUtc ?? throw Invalid(), row.ExecutionExpiresAtUtc ?? throw Invalid());

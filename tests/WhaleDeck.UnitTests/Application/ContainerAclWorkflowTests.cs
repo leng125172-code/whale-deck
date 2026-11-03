@@ -13,7 +13,7 @@ using WhaleDeck.UnitTests.Agent;
 namespace WhaleDeck.UnitTests.Application;
 
 /// <summary>Business/cryptographic boundaries with an explicit in-memory repository; not SQL or installed evidence.</summary>
-public sealed class ContainerAclWorkflowTests
+public sealed partial class ContainerAclWorkflowTests
 {
     [Theory][InlineData(false, true)][InlineData(true, false)]
     public async Task OrdinaryUserAndRevokedLoginCannotQueueOrReachAgent(bool admin, bool login)
@@ -401,14 +401,14 @@ public sealed class ContainerAclWorkflowTests
         public TerminalActor Actor { get; } = new("copy-test-admin", null, [], new('A', 64), "copy-test-trace", null);
         public string Key { get; } = Guid.NewGuid().ToString("D"); public ContainerAclCommandDto Command => Gateway.PlanValue.Command;
         public ContainerAclWorkflowService Service { get; } public ContainerAclDispatcher Dispatcher { get; }
-        public Fixture(bool directory = false)
+        public Fixture(bool directory = false, IContainerAclRestoreSourceGateway? restoreSource = null)
         {
             File.WriteAllBytes(_key, RandomNumberGenerator.GetBytes(32));
             Protector = new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Agent:CapabilityKeyFile"] = _key }).Build());
             Identity = new(Clock); Gateway = new(directory); Repository = new(Protector, Clock);
             var files = new FileManagementService(Unused<IFileGateway>(), Unused<IFileUploadRepository>(), Protector, Identity, Clock);
             var auth = new ContainerFileUploadService(files, Logins, Unused<IContainerFileWriteGateway>(), Unused<IContainerFileUploadRepository>(), Protector, Clock);
-            Service = new(auth, Repository, Protector, Gateway, Clock, Identity); Dispatcher = new(Repository, Gateway, Service, Protector, Clock);
+            Service = new(auth, Repository, Protector, Gateway, Clock, Identity, restoreSource); Dispatcher = new(Repository, Gateway, Service, Protector, Clock);
         }
         private static T Unused<T>() where T : class => DispatchProxy.Create<T, ContainerUploadServiceTests.Unused>();
         public Task<ContainerAclIntentDto> Queue() => Service.QueueAsync(Actor, Command, Key, default);

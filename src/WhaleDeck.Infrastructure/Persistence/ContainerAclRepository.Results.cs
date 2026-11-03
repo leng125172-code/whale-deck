@@ -102,8 +102,10 @@ public sealed partial class ContainerAclRepository
             job.IdempotencyKey != (execution ? id : row.IdempotencyKey).ToString("D")) throw new InvalidOperationException("CONTAINER_ACL_JOB_CHANGED");
         return job;
     }
-    private static string Metadata(ContainerAclIntent row) => JsonSerializer.Serialize(new { intentId = row.Id, containerId = row.ContainerId,
-        instanceHash = FileManagementService.Hash(row.InstanceId), pathHash = FileManagementService.Hash(row.RelativePath) });
+    private static string Metadata(ContainerAclIntent row) => row.RestoreSourceJson is null
+        ? JsonSerializer.Serialize(new { intentId = row.Id, containerId = row.ContainerId, instanceHash = FileManagementService.Hash(row.InstanceId), pathHash = FileManagementService.Hash(row.RelativePath) })
+        : JsonSerializer.Serialize(new { intentId = row.Id, containerId = row.ContainerId, instanceHash = FileManagementService.Hash(row.InstanceId), pathHash = FileManagementService.Hash(row.RelativePath),
+            historyRestore = true, restoreSourceHash = FileManagementService.Hash(row.RestoreSourceJson) });
     private void Message(Guid id, string type) => db.OutboxMessages.Add(new() { MessageType = type, PayloadJson = JsonSerializer.Serialize(new { jobId = id }) });
     private Task<int> Processed(Guid id, DateTimeOffset now, CancellationToken cancellationToken) => db.Database.ExecuteSqlInterpolatedAsync(
         $"UPDATE outbox_messages SET processed_at_utc={now} WHERE message_type IN ('ContainerAclRequested','ContainerAclCancellationRequested') AND payload_json->>'jobId'={id.ToString("D")}", cancellationToken);
@@ -121,7 +123,7 @@ public sealed partial class ContainerAclRepository
         job.ProgressPercent = state == "Succeeded" ? (short)100 : null; job.Version++; await Event(job, code, cancellationToken);
     }
     private void Audit(ContainerAclIntent row, Guid jobId, string actor, string trace, string action, string result) => db.AuditEvents.Add(new()
-    { ActorSubject = actor, TraceId = trace, JobId = jobId, Action = "containers.files.acl." + action, TargetType = "container", TargetId = row.ContainerId, Result = result, DetailJson = Metadata(row) });
+    { ActorSubject = actor, TraceId = trace, JobId = jobId, Action = "containers.files.acl." + (row.RestoreSourceJson is null ? "" : "restore.") + action, TargetType = "container", TargetId = row.ContainerId, Result = result, DetailJson = Metadata(row) });
     private Task<T> Transaction<T>(Func<Task<T>> action, CancellationToken cancellationToken) => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
     {
         db.ChangeTracker.Clear(); await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);

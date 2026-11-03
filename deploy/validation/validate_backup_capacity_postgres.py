@@ -144,7 +144,10 @@ def run_native(suite, report):
             assert counters is not None and all(counters.get(key) == '1' for key in ('total', 'executed', 'passed')), 'Native test execution/pass count differs'
             assert all(counters.get(key, '0') == '0' for key in ('failed', 'error', 'timeout', 'aborted', 'notExecuted', 'notRunnable', 'pending')), 'Native test was skipped/failed/incomplete'
             assert len(runs) == 1 and runs[0].get('outcome') == 'Passed', 'Native result is not one complete passed execution'
-            report.update(executedTests=1, passedTests=1, stage='cleanup')
+            phases = re.findall(r'INBOX_PHASE=([a-z-]{1,160})', output)
+            if suite == 'dispatch':
+                assert 'container-acl-restore-source-mac-immutable-audited-new-jobs' in phases, 'ACL restore persistence boundaries were not executed'
+            report.update(executedTests=1, passedTests=1, nativePhases=phases, stage='cleanup')
             if suite == 'capacity':
                 print(json.dumps({'nativeBackupCapacityPostgres': 'passed', 'database': 'isolated-and-migrated',
                     'capacitySamples': 'synthetic-not-production-disk-saturation', 'dedupEscalationSilenceExpiryUnknownRecoveryDisable': 'passed'}))

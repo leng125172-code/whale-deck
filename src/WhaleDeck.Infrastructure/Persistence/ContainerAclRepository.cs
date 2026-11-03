@@ -24,7 +24,7 @@ public sealed partial class ContainerAclRepository(PlatformDbContext db, IContai
         if (prior is not null)
         {
             Validate(prior);
-            if (prior.ActorSubject != row.ActorSubject || prior.LoginBinding != row.LoginBinding || prior.IdempotencyKey != row.IdempotencyKey || prior.CommandJson != row.CommandJson)
+            if (prior.ActorSubject != row.ActorSubject || prior.LoginBinding != row.LoginBinding || prior.IdempotencyKey != row.IdempotencyKey || prior.CommandJson != row.CommandJson || prior.RestoreSourceJson != row.RestoreSourceJson)
                 throw new InvalidOperationException("CONTAINER_ACL_IDEMPOTENCY_CONFLICT");
             return prior;
         }

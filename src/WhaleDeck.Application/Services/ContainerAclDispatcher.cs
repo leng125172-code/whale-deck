@@ -26,6 +26,8 @@ public sealed class ContainerAclDispatcher(IContainerAclRepository repository, I
                     await repository.FinishPlanningAsync(row, null, "CONTAINER_ACL_PLAN_EXPIRED", cancellationToken);
                 else if (await repository.MarkPlanningAsync(row, cancellationToken))
                 {
+                    if (row.RestoreSourceJson is not null)
+                        await Guarded(row, true, async token => { await authorization.ValidateRestoreSourceAsync(Actor(row), row, token); return true; }, cancellationToken);
                     await gateway.RequireContainerAclWorkflowAsync(cancellationToken);
                     var observedPlan = await Guarded(row, true, token => gateway.PlanContainerAclAsync(Actor(row), ContainerAclWorkflowValidation.ReadCommand(row), token), cancellationToken);
                     ContainerAclPlanDto plan;
@@ -33,6 +35,7 @@ public sealed class ContainerAclDispatcher(IContainerAclRepository repository, I
                     catch (Exception error) when (error is ArgumentException or System.Text.Json.JsonException or InvalidOperationException)
                     { throw ContainerAclValidation.Invalid(); }
                     if (!ContainerAclValidation.SameCommand(plan.Command, ContainerAclWorkflowValidation.ReadCommand(row))) throw ContainerAclValidation.Invalid();
+                    if (ContainerAclRestoreValidation.Read(row) is {} source && source.Entry.Kind != plan.Kind) throw new ContainerAclRestoreSourceChangedException();
                     await repository.FinishPlanningAsync(row, plan, "CONTAINER_ACL_READY", cancellationToken);
                 }
                 else await repository.DeferAsync(row, cancellationToken);
@@ -43,12 +46,18 @@ public sealed class ContainerAclDispatcher(IContainerAclRepository repository, I
             if (observed is not null) { await Finish(observed); return true; }
             if (await Canceled(row, cancellationToken) || !await Allowed(row, cancellationToken) || row.ExecutionExpiresAtUtc <= clock.GetUtcNow() || row.RootStartedAtUtc is not null)
             { await Finish(await Guarded(row, false, token => gateway.DiscardContainerAclAsync(operation, token), cancellationToken)); return true; }
+            try { if (row.RestoreSourceJson is not null) await Guarded(row, true, async token => { await authorization.ValidateRestoreSourceAsync(Actor(row), row, token); return true; }, cancellationToken); }
+            catch (ContainerAclRestoreSourceChangedException)
+            {
+                await Finish(await Guarded(row, false, token => gateway.DiscardContainerAclAsync(operation, token), cancellationToken), "CONTAINER_ACL_RESTORE_SOURCE_CHANGED");
+                return true;
+            }
             await gateway.RequireContainerAclWorkflowAsync(cancellationToken);
             if (await repository.StartedAsync(row, clock.GetUtcNow(), cancellationToken) != ContainerFileUploadStartResult.Started)
             { await repository.DeferAsync(row, cancellationToken); return true; }
             await Finish(await Guarded(row, true, token => gateway.ApplyContainerAclAsync(operation, token), cancellationToken));
 
-            async Task Finish(ContainerAclReceiptDto receipt)
+            async Task Finish(ContainerAclReceiptDto receipt, string? abortCode = null)
             {
                 ContainerAclWorkflowValidation.RequireCompatibleReceipt(row, receipt);
                 // Observe-only reconciliation must retain trusted Unknown/Aborted facts during identity outages.
@@ -65,9 +74,11 @@ public sealed class ContainerAclDispatcher(IContainerAclRepository repository, I
                 var state = receipt.State == "Completed" ? receipt.BindingCurrent ? "Succeeded" : "Superseded" : receipt.State == "Unknown" ? "Unknown" : canceled ? "Canceled" : "Failed";
                 var code = state switch { "Succeeded" => "CONTAINER_ACL_COMPLETED", "Superseded" => "CONTAINER_ACL_TARGET_CHANGED",
                     "Unknown" => "CONTAINER_ACL_RESULT_UNKNOWN", "Canceled" => "CONTAINER_ACL_CANCELED", _ => "CONTAINER_ACL_INTERRUPTED" };
-                await repository.FinishAsync(row, state, code, receipt, cancellationToken);
+                await repository.FinishAsync(row, state, receipt.State == "Aborted" && abortCode is not null ? abortCode : code, receipt, cancellationToken);
             }
         }
+        catch (ContainerAclRestoreSourceChangedException) when (row.ExecutionJobId is null)
+        { await repository.FinishPlanningAsync(row, null, "CONTAINER_ACL_RESTORE_SOURCE_CHANGED", cancellationToken); }
         catch (ContainerAclPreflightRejectedException error) when (row.ExecutionJobId is null)
         { await repository.FinishPlanningAsync(row, null, error.Code, cancellationToken); }
         catch (InvalidOperationException error) when (error.Message is "CONTAINER_ACL_OUTPUT_INVALID" or "CONTAINER_ACL_FACT_CHANGED")

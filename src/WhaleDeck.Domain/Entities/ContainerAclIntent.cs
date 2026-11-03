@@ -14,6 +14,7 @@ public sealed class ContainerAclIntent
     public required string RelativePath { get; init; }
     public required string CommandJson { get; init; }
     public required string RequestHash { get; init; }
+    public string? RestoreSourceJson { get; init; }
     public DateTimeOffset CreatedAtUtc { get; init; }
     public DateTimeOffset PlanningExpiresAtUtc { get; init; }
     public string? PlanJson { get; set; }

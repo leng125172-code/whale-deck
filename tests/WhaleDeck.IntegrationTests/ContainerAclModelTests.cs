@@ -19,7 +19,8 @@ public sealed class ContainerAclModelTests
         Assert.Equal(2, type.GetForeignKeys().Count());
         Assert.All(type.GetForeignKeys(), fk => Assert.Equal(DeleteBehavior.Restrict, fk.DeleteBehavior));
         Assert.Contains(type.GetIndexes(), i => i.IsUnique && i.GetFilter() == "publish_barrier");
-        Assert.Equal(17, type.GetCheckConstraints().Count());
+        Assert.Equal(18, type.GetCheckConstraints().Count());
+        Assert.True(type.FindProperty(nameof(ContainerAclIntent.RestoreSourceJson))!.IsNullable);
         Assert.NotNull(type.FindProperty(nameof(ContainerAclIntent.AclConfirmed)));
         Assert.Null(type.FindProperty("ModeConfirmed"));
         Assert.NotNull(type.FindProperty(nameof(ContainerAclIntent.ReceiptHash)));

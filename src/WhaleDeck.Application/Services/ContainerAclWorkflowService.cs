@@ -5,8 +5,8 @@ using WhaleDeck.Domain.Entities;
 namespace WhaleDeck.Application.Services;
 
 /// <summary>HTTP-sized transitions only. Metadata attestation and ACL changes belong to the dispatcher.</summary>
-public sealed class ContainerAclWorkflowService(ContainerFileUploadService authorization, IContainerAclRepository repository,
-    IContainerAclProtector protector, IContainerAclGateway gateway, TimeProvider clock, IPrivilegedIdentityDirectory liveIdentity)
+public sealed partial class ContainerAclWorkflowService(ContainerFileUploadService authorization, IContainerAclRepository repository,
+    IContainerAclProtector protector, IContainerAclGateway gateway, TimeProvider clock, IPrivilegedIdentityDirectory liveIdentity, IContainerAclRestoreSourceGateway? restoreSource = null)
 {
     public async Task AuthorizeAsync(TerminalActor actor, CancellationToken cancellationToken)
     {
@@ -25,7 +25,7 @@ public sealed class ContainerAclWorkflowService(ContainerFileUploadService autho
         if (prior is not null)
         {
             Validate(prior);
-            if (!ContainerAclValidation.SameCommand(ContainerAclWorkflowValidation.ReadCommand(prior), command)) throw new InvalidOperationException("CONTAINER_ACL_IDEMPOTENCY_CONFLICT");
+            if (prior.RestoreSourceJson is not null || !ContainerAclValidation.SameCommand(ContainerAclWorkflowValidation.ReadCommand(prior), command)) throw new InvalidOperationException("CONTAINER_ACL_IDEMPOTENCY_CONFLICT");
             await AuthorizeAsync(actor, cancellationToken); return Map(prior);
         }
         await gateway.RequireContainerAclWorkflowAsync(cancellationToken); await AuthorizeAsync(actor, cancellationToken);
@@ -52,6 +52,7 @@ public sealed class ContainerAclWorkflowService(ContainerFileUploadService autho
         var claims = protector.VerifyAclConfirmation(command.PlanHash); ContainerAclWorkflowValidation.Confirmation(claims);
         if (claims.Id != id || claims.Actor != actor.Subject || claims.LoginBinding != actor.LoginBinding) throw new UnauthorizedAccessException("CONTAINER_ACL_PLAN_OWNER_REQUIRED");
         if (row.PlanHash != claims.PlanHash || row.ReadyExpiresAtUtc != claims.ExpiresAtUtc) throw new InvalidOperationException("CONTAINER_ACL_PLAN_CHANGED");
+        if (row.RestoreSourceJson is not null && row.ExecutionJobId is null) await ValidateRestoreSourceAsync(actor, row, cancellationToken);
         await AuthorizeAsync(actor, cancellationToken);
         var confirmed = await repository.ConfirmAsync(actor, claims, command.Version, cancellationToken);
         await AuthorizeAsync(actor, cancellationToken); return Map(confirmed);
@@ -105,7 +106,7 @@ public sealed class ContainerAclWorkflowService(ContainerFileUploadService autho
         Validate(row); var plan = row.PlanJson is null ? null : ContainerAclWorkflowValidation.ReadPlan(row);
         var ready = row.State == "Ready" && row.CancelRequestedAtUtc is null && row.ReadyExpiresAtUtc > clock.GetUtcNow();
         var confirmation = ready ? new ContainerAclConfirmationDto(protector.SignAclConfirmation(new(row.Id, row.ActorSubject, row.LoginBinding, row.PlanHash!, row.ReadyExpiresAtUtc!.Value)),
-            row.ReadyExpiresAtUtc.Value, "预检不修改ACL。确认后校验原实例、inode版本及属性，先保留HDD旧ACL元数据，再仅修改当前对象的access或default ACL；default空条目明确表示清空，仅限目录。named ID=0有效且必须显式提供mask，access的mask会改变普通权限的组位。保留另一类ACL、UID/GID及目录子项，不递归。断线后查询原任务；Unknown保留保护，不自动重做或恢复ACL。") : null;
+            row.ReadyExpiresAtUtc.Value, (row.RestoreSourceJson is null ? "" : "这是历史ACL恢复：" + ContainerAclRestoreValidation.Read(row)!.Entry.CaptureId + "，将恢复该原件对应的单一ACL类型，不恢复另一类当前ACL。") + "预检不修改ACL。确认后校验原实例、inode版本及属性，先保留HDD旧ACL元数据，再仅修改当前对象的access或default ACL；default空条目明确表示清空，仅限目录。named ID=0有效且必须显式提供mask，access的mask会改变普通权限的组位。保留另一类ACL、UID/GID及目录子项，不递归。断线后查询原任务；Unknown保留保护，不自动重做或恢复ACL。") : null;
         return new(row.Id, row.Id, row.ExecutionJobId, ContainerAclWorkflowValidation.ReadCommand(row), row.State == "Ready" && !ready ? "Expired" : row.State,
             plan?.Kind, plan?.SourceIdentity.OwnerUid, plan?.SourceIdentity.OwnerGid, plan?.OwnerUid, plan?.OwnerGid, plan?.AccessAcl, plan?.DefaultAcl, plan?.TargetMode, plan?.NoChange, row.ReadyExpiresAtUtc, row.ResultCode, row.Version,
             row.PublishedVersion, row.AclConfirmed, row.HistoryMayExist, row.HistoryVerified, row.HistoryDigest, ContainerAclWorkflowValidation.ReadReceipt(row), confirmation);

@@ -50,6 +50,14 @@ public sealed class ContainerAclHistoryGatewayTests
         using var h=new Harness(){Corrupt=corruption,EmptyPage=true};
         await Assert.ThrowsAnyAsync<Exception>(()=>h.Gateway.ListContainerAclHistoryAsync(Actor,Location,"",10,"",default));
     }
+    [Theory][InlineData(StatusCode.NotFound,true)][InlineData(StatusCode.Aborted,true)][InlineData(StatusCode.Unavailable,false)][InlineData(StatusCode.PermissionDenied,false)][InlineData(StatusCode.Unimplemented,false)]
+    public async Task RestoreSourceAdapterDistinguishesChangedSourceFromOutagesAndPermissionDenial(StatusCode status,bool changed)
+    {
+        using var h=new Harness(){Failure=status};
+        if(changed)await Assert.ThrowsAsync<App.ContainerAclRestoreSourceChangedException>(()=>h.Gateway.ReadContainerAclRestoreSourceAsync(Actor,Location,new('2',32),new('C',64),default));
+        else{var error=await Assert.ThrowsAsync<RpcException>(()=>h.Gateway.ReadContainerAclRestoreSourceAsync(Actor,Location,new('2',32),new('C',64),default));Assert.Equal(status,error.StatusCode);}
+        h.AssertSignature();
+    }
     private sealed class Harness:HttpMessageHandler
     {
         private readonly string _file=Path.GetTempFileName();private readonly byte[] _key=RandomNumberGenerator.GetBytes(32);
@@ -57,6 +65,7 @@ public sealed class ContainerAclHistoryGatewayTests
         public AgentGateway Gateway{get;}
         public string? Corrupt{get;init;}
         public bool EmptyPage{get;init;}
+        public StatusCode? Failure{get;init;}
         public IMessage? Request{get;private set;}
         private string _token="",_hash="",_method="";
         public Harness(uint major=1,uint minor=52,bool capability=true)
@@ -91,7 +100,7 @@ public sealed class ContainerAclHistoryGatewayTests
                 }
             }
             var bytes=frame.ToByteArray();var payload=new byte[bytes.Length+5];BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(1,4),bytes.Length);bytes.CopyTo(payload,5);
-            var response=new HttpResponseMessage(HttpStatusCode.OK){Version=new(2,0),Content=new ByteArrayContent(payload)};response.Content.Headers.ContentType=new MediaTypeHeaderValue("application/grpc");response.TrailingHeaders.Add("grpc-status","0");return response;
+            var response=new HttpResponseMessage(HttpStatusCode.OK){Version=new(2,0),Content=new ByteArrayContent(payload)};response.Content.Headers.ContentType=new MediaTypeHeaderValue("application/grpc");response.TrailingHeaders.Add("grpc-status",Request is not null && Failure is {} status?((int)status).ToString(CultureInfo.InvariantCulture):"0");return response;
         }
         protected override void Dispose(bool disposing){if(disposing){Gateway.Dispose();File.Delete(_file);CryptographicOperations.ZeroMemory(_key);}base.Dispose(disposing);}
     }
