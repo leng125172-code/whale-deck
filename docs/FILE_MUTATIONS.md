@@ -1,5 +1,7 @@
 # 文件操作、编辑与回收站实施契约
 
+**2026-11-03 写后目标消失Unknown/处置摘要与447070e小屏修复已实机通过**：前两新资源在612f77c真实写后/Unknown/明确处置已发生，但Ack字段完整视口失败，原件与准确清理保留、不记通过。已补真实长错误码复现，447070e固定详情表格与长值换行并正常覆盖，六组件/HTTP/实际进程映射一致，Agent3947643/维护3947551、协议1.51，无新迁移。第三套全新资源严格门禁及独立复核通过：ACL已变后原容器移除，原Unknown/null/Root/HDD保持，另一管理员先暂不处置再确认，原Job Failed/Acknowledged，Unknown→Ack两任务摘要及“未证明”完整入视口，另一容器目录四次真实延期后同ID发布。75边界、27前端单元与8浏览器、9实际PNG/准确清理/11核心healthy通过；不记整体首轮通过。其他实例/磁盘/共享写入与摘要分支、ACL递归恢复/删除和59项继续。[失败、修复与真实证据](qa/CONTAINER_ACL_POST_UNKNOWN.md)。
+
 **2026-11-03 ACL写后Agent重启及原任务摘要实机通过**：运行612f77c/1.51不重发，冻结47a1769/schema6的新独占资源在目标ACL已写/Root Applying且未回执时实际重启Agent；产品0.013秒停原helper，Agent3747527→3835700，维护3747520不变/153次HTTP200 healthy-Ready。原任务Succeeded/Completed、完整写后清单/1HDD与迟到同操作Apply不再变化；原预检Ready及执行Succeeded两份SQL/API摘要、320×600暗色真实详情和同上下文正常双端退出通过。独立原件/准确清理、48边界/范围与语法通过，11核心healthy。其余Unknown/实例/共享写入/摘要分支、递归恢复/删除与59项继续。[实机证据与界限](qa/CONTAINER_ACL_POST_AGENT_RESTART.md)。
 
 **2026-11-03 612f77c已覆盖，ACL任务摘要真实常规整链通过**：标准update唯一Invocation689e10e7f8ba479ba2b0e97de386f33c成功，六组件/HTTP/实际宿主进程映射同源，11核心healthy、8数据库平台不重建；Agent3747527/维护3747520，协议1.51不变，无新迁移。冻结8c39d09的新独占资源九场景8完成/1预检后取消，17新摘要SQL/API/真实任务详情及1旧任务空态通过，原字节/两类ACL/xattr/8HDD、同上下文双端退出与准确清理通过。首轮独立观察器误读输出目录的FileNotFoundError保留，64f6d8b修正证据输入路径后只读复核通过，未重做真实写入。19边界/范围与语法通过；Unknown/处置等摘要分支及写后Agent/实例/跨写入剩余组合、ACL递归恢复/删除与59项继续。[实机证据与界限](qa/CONTAINER_ACL_JOB_RESULTS_REAL_UI.md)。

@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_POST_AGENT_RESTART.md；docs/qa/CONTAINER_ACL_JOB_RESULTS_REAL_UI.md",
-  "nextStep": "运行612f77c/1.51，Agent3835700/维护3747520。47a1769的ACL写后Agent真实重启与两原任务摘要已实机签收，0.013秒停helper、153次维护HTTP/1HDD/独立原件/正常退出通过。继续写后或实例Unknown、其他共享写入和各摘要分支，再ACL递归恢复、可恢复删除/长期清理、P0-05及其余59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，开发sudo保留，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_POST_UNKNOWN.md；docs/qa/CONTAINER_ACL_POST_AGENT_RESTART.md",
+  "nextStep": "运行447070e/1.51，Agent3947643/维护3947551。两旧新资源因Ack字段视口失败保留；补真实长错误码并修复表格宽度后，第三套新资源写后目标消失Unknown/null、不同管理员确认、两次任务摘要、目录四次延期/释放及独立原件均已签收。继续实例变化Unknown、其他共享写入/磁盘/路径及无回执等摘要，再ACL递归恢复、可恢复删除/长期清理、P0-05与59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，开发sudo保留，不自动回滚dev。"
 }
