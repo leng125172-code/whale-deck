@@ -43,3 +43,7 @@ MaintenanceHost的普通gateway cluster仅5秒ActivityTimeout，历史读取未�
 下一步取得准确CI终态后标准覆盖新候选，核对六组件/实际安装字节，再经8080真实历史分页与完整写后移组/停用、正常身份/文件/HDD整链及独立复核。此前单场移组只保留分项通过；账号停用写后整链、进一步超时/失败恢复组合、Agent写后重启、Unknown/实例或来源变化、磁盘/共享写入、递归ACL/恢复、删除/长期清理及其余59项继续。59主项完整签收和25%–35%粗估不变，17项移出不算完成，master未交付。
 
 收尾8项范围检查、860条变动MD相对链接通过，目标第1节逐字保持，前批写后取消/强杀QA原文保留后追加接续。项目图谱已确认原`whale-deck/container-acl`的`whale-deck.container-acl.b69302b.history-read-timeout`事件，阶段active；按原eventId从pending移入synced，未将候选或失败批次标作完成。
+
+## 后续接续：发布前冻结构建
+
+以上原文保留当时的失败与候选边界。本批运行源码已冻结到b69302b，标准四镜像预构建已退出0，API/Worker/Migrator/Gateway实际ID/内部版本/OCI来源均核验通过；准确frontend CI仍待终态。实际运行仍cad6182，无新发布或真实撤权签收，见[本批基线与未验边界](CONTAINER_ACL_HISTORY_RELEASE_PREPARATION.md)。

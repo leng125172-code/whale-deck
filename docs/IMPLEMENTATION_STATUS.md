@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 2026-11-03 历史超时修复四镜像预构建完成、未发布：标准构建退出0，API/Worker/Migrator/Gateway实际ID、OCI revision与内部版本均b69302b；11核心healthy、两宿主/7配置/账本不变、活动预检0，公共8080及实际运行仍cad6182。准确CI四路成功，frontend在最后页面组；待成功终态后标准覆盖，再真实8080完整撤权复验。[本批基线与边界](qa/CONTAINER_ACL_HISTORY_RELEASE_PREPARATION.md)。
+
 - **2026-11-03 历史读取维护代理超时已定位，b69302b修复候选未部署**：写后移组分项dc243实机Succeeded/Completed、原403/引用清空/当前管理员Recovery200而原Owner接口404通过；同批停用及新批ea30重读均在历史列表503前置失败，未登记恢复/撤权，两失败树保留，不签整批。实际同请求内部Gateway4.972秒200/124份、维护入口5.007秒503维护HTML，定位普通5秒代理预算。候选新增仅规范历史GET的35秒路由及保留5秒硬截止的3秒软分页，Release零警告错误/4363Unit/488Integration（7原生跳过）/32Root通过，真实HDD候选82/42两页3.085/1.604秒读完124份不改原件；不是安装态RPC或UI签收。CI四路成功/frontend待，生产仍cad6182/1.52、1399935/1214273、11核心healthy/8数据库/7配置及账本保持；须标准覆盖与8080整链复验，59项不升完成率。[失败、根因、候选与未验](qa/CONTAINER_ACL_HISTORY_TIMEOUT.md)。
 
 - **2026-11-03 ACL恢复写后取消/Worker回执中断实机通过**：产品仍cad6182/1.52不重发，工具3957cd7/schema10/version4两新资源在目标基本ACL已写/Root Applying时真实页面取消或准确原Worker SIGKILL。产品5.278/0.114秒结束helper，强杀原租约87.034秒/41采样后以原执行ID对账；两原任务Succeeded/Completed、aclConfirmed=true及新版本保持，取消请求未冒充已撤回。2旧来源+2当前HDD/9恢复审计/8Job、完整已写清单及迟到原Apply不变，正确wrapper/原上下文退出/独立核验/准确清理/4真PNG及80检查通过；旧schema9只读92原件保持。11核心healthy/8数据库/两宿主/7配置保持，395CI四成功/frontend待；写后撤权/Agent、Unknown/来源、递归ACL/删除及59项继续。[证据与边界](qa/CONTAINER_ACL_RESTORE_POST_CHANGE.md)。
