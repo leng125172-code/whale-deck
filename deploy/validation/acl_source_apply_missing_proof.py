@@ -20,12 +20,12 @@ FROZEN=('id','actor_subject','login_binding','container_id','instance_id','relat
         'command_json','plan_json','plan_hash','restore_source_json','planning_expires_at_utc','ready_expires_at_utc')
 
 
-def source_closure(repo,revision):
+def source_closure(repo,revision,*,seeds=None):
     """Freeze the whole local Python/MJS static import closure BEFORE running."""
     assert re.fullmatch('[a-f0-9]{40}',revision)
     prefix=revision+':deploy/validation/'
     available=set(subprocess.check_output(['git','-C',str(repo),'ls-tree','--name-only',revision+':deploy/validation'],text=True).splitlines())
-    seen=set(SEEDS);todo=list(seen)
+    seen=set(SEEDS if seeds is None else seeds);todo=list(seen)
     while todo:
         name=todo.pop();assert name in available and re.fullmatch(r'[A-Za-z0-9_.-]+\.(py|mjs)',name)
         raw=subprocess.check_output(['git','-C',str(repo),'show',prefix+name])
