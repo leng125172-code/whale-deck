@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RESTORE_POST_CHANGE.md",
-  "nextStep": "cad6182恢复写前取消/退出/撤权/重启及写后取消/Worker强杀已实机验收，原执行按真实事实对账，Agent1399935/维护1214273保持。继续恢复写后实时移组/停用及Agent重启、Unknown/实例或来源变化、来源离线/磁盘/共享写入组合，再递归ACL/恢复、可恢复删除/长期清理与其余59项。3957cd7 CI四路成功/frontend待；17项移出不算完成，不自动回滚dev或重启主机。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_HISTORY_TIMEOUT.md",
+  "nextStep": "优先取得b69302b准确CI终态后标准覆盖，核验限定历史GET代理/分页实际安装及六组件来源，再经8080真实历史与完整写后移组/停用及独立复核。生产仍cad6182/1399935/维护1214273；失败原件/两源树保留，未签整批。继续写后Agent/Unknown/来源与磁盘组合、递归ACL/恢复、删除/长期清理及其余59项。17项移出不算完成，不自动回滚dev或重启主机。"
 }

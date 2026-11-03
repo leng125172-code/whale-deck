@@ -42,3 +42,7 @@ Worker等待期间保留原token/expiry、发布保护、来源全文/请求-计
 本批只签单文件access恢复在“目标已写、Root仍Applying”切点的取消和Worker强杀。仍需写后实时撤权/Agent重启、Unknown/实例或来源变化、来源离线/替换、磁盘与共享写入组合；目录default故障、递归ACL/恢复、可恢复删除/长期清理及其余目标继续。源与HDD同device不算异盘灾备，59主项完整签收和25%–35%粗估不变，17项移出不算完成，master未交付。
 
 收尾8项范围检查、858条变动MD相对链接通过；目标第1节逐字保持，前批写前重启QA原文保留后追加接续。项目图谱已确认原`whale-deck/container-acl`的`whale-deck.container-acl.3957cd7.restore-post-change`事件，阶段仍active，按原eventId从pending移入synced。
+
+## 后续撤权与历史读取故障（2026-11-03）
+
+以上写后取消/Worker强杀原文保持。随后写后移组仅一个分项实机通过，停用及新批在历史列表503时失败，未签整批；已定位维护入口5秒预算截断并提交b69302b限定代理/软分页候选，未部署。见[实际失败、根因与剩余](CONTAINER_ACL_HISTORY_TIMEOUT.md)，不将候选、内部直达诊断或重试算真实入口通过。
