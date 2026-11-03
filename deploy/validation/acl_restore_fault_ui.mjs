@@ -37,16 +37,36 @@ export async function prepareRestoreFault(page, context, base, fixture, profile)
   const history = page.getByRole('dialog', { name: 'ACL历史', exact: true })
   let listing = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/history' && r.request().method() === 'GET')
   await files.getByRole('button', { name: 'ACL历史 acl-file.bin', exact: true }).click()
-  for (let index = 0; index < 100; index++) {
-    const response = await listing; assert.equal(response.status(), 200); const value = await response.json()
-    if (value.entries.some(v => v.captureId === captureId)) break
-    assert.equal(value.complete, false); assert.ok(index < 99)
-    listing = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/history' && r.request().method() === 'GET')
-    await history.getByRole('button', { name: '继续扫描', exact: true }).click()
+  let failures = 0
+  async function historyResult(response, phase) {
+    if (response.status() === 200) return response.json()
+    const problem = await response.json().catch(() => ({}))
+    const code = /^[A-Z0-9_]{1,128}$/.test(problem.code ?? '') ? problem.code : 'UNRECOGNIZED'
+    const label = ['first', 'second', 'third'][failures] ?? 'third'
+    await writeSignal(directory, 'history-unavailable-' + label + '.json', { phase, status: response.status(), code, manualReadRetry: failures < 2 })
+    assert.ok([502, 503, 504].includes(response.status()), 'HISTORY_FAILURE_IS_NOT_TRANSIENT_AVAILABILITY')
+    assert.ok(failures++ < 2, 'HISTORY_AVAILABILITY_RETRY_BUDGET_EXHAUSTED')
+    return null
   }
-  const reading = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/history/' + captureId && r.request().method() === 'GET')
-  await history.getByRole('button', { name: '查看原ACL ' + captureId, exact: true }).click()
-  const response = await reading; assert.equal(response.status(), 200); assert.deepEqual(await response.json(), source)
+  for (;;) {
+    let found = false
+    for (let index = 0; index < 100; index++) {
+      const value = await historyResult(await listing, 'list')
+      if (value === null) break
+      if (value.entries.some(v => v.captureId === captureId)) { found = true; break }
+      assert.equal(value.complete, false); assert.ok(index < 99)
+      listing = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/history' && r.request().method() === 'GET')
+      await history.getByRole('button', { name: '继续扫描', exact: true }).click()
+    }
+    if (found) {
+      const reading = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/history/' + captureId && r.request().method() === 'GET')
+      await history.getByRole('button', { name: '查看原ACL ' + captureId, exact: true }).click()
+      const value = await historyResult(await reading, 'read')
+      if (value !== null) { assert.deepEqual(value, source); break }
+    }
+    listing = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/history' && r.request().method() === 'GET')
+    await history.getByRole('button', { name: '重新读取', exact: true }).click()
+  }
   await history.getByRole('button', { name: '从此历史生成恢复预检', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '从历史恢复容器ACL', exact: true })
   await expect(dialog.getByRole('region', { name: 'ACL恢复来源', exact: true })).toContainText(captureId)
