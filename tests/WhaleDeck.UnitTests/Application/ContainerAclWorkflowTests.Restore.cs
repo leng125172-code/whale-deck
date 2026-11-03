@@ -180,6 +180,26 @@ public sealed partial class ContainerAclWorkflowTests
         Assert.Equal(1, f.Gateway.Plans); Assert.Equal(1, f.Gateway.Applies); Assert.Equal(0, f.Gateway.Discards);
         Assert.Equal(frozen, row.RestoreSourceJson);
     }
+    [Theory][InlineData(false)][InlineData(true)]
+    public async Task SourceOutageCannotRenewOriginalDeadlineOrAuthorizeWriteAfterExpiry(bool execution)
+    {
+        var source = new RestoreSource(); using var f = new Fixture(false, source); source.Value = SourceFor(f).Value;
+        await f.Service.QueueRestoreAsync(f.Actor, RestoreCommand(f, source), f.Key, default);
+        if (execution) { await f.Dispatcher.TickAsync(default); await f.Confirm(); }
+        var row = f.Repository.Row!; var id = row.Id; var originalExecution = row.ExecutionJobId;
+        var frozen = row.RestoreSourceJson; var planningExpiry = row.PlanningExpiresAtUtc;
+        var deadline = execution ? row.ExecutionExpiresAtUtc!.Value : row.PlanningExpiresAtUtc;
+        source.Failure = new IOException("synthetic history transport outage");
+        await f.Dispatcher.TickAsync(default); Assert.Equal(1, f.Repository.Deferrals);
+        var reads = source.Reads; f.Clock.Now = deadline.AddTicks(1);
+        await f.Dispatcher.TickAsync(default);
+        Assert.Equal("Failed", (await f.Get()).State);
+        Assert.Equal(execution ? "CONTAINER_ACL_INTERRUPTED" : "CONTAINER_ACL_PLAN_EXPIRED", row.ResultCode);
+        Assert.Equal(reads, source.Reads); Assert.Equal(id, row.Id); Assert.Equal(originalExecution, row.ExecutionJobId);
+        Assert.Equal(frozen, row.RestoreSourceJson); Assert.Equal(planningExpiry, row.PlanningExpiresAtUtc);
+        Assert.Null(row.RootStartedAtUtc); Assert.Equal(0, f.Gateway.Applies); Assert.Equal(execution ? 1 : 0, f.Gateway.Discards);
+        if (execution) Assert.Equal("Aborted", ContainerAclWorkflowValidation.ReadReceipt(row)!.State);
+    }
     [Theory][InlineData("Completed", "Succeeded")][InlineData("Unknown", "Unknown")][InlineData("Aborted", "Failed")]
     public async Task AnOriginalExecutionReceiptReconcilesEvenWhenHistoryIsGone(string receiptState, string expectedState)
     {

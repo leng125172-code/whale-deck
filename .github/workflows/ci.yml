@@ -31,6 +31,7 @@ jobs:
           python3 -W error::ResourceWarning -m unittest discover -s tests -p 'test_platform_*.py'
           bash -n deploy/ci/install-frontend-dependencies.sh
           python3 -m unittest discover -s tests -p test_ci_frontend_install.py
+          python3 -m unittest discover -s tests -p test_ci_frontend_shards.py
           bash -n deploy/host/whaledeck-privileged
           python3 -m unittest discover -s deploy/validation -p test_container_terminal.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_file*.py'
@@ -297,13 +298,15 @@ jobs:
           assert all(counters[k]=='1' for k in ('total','executed','passed')) and counters['notExecuted']=='0', 'Native Valkey test skipped or failed'
           PY
 
-  frontend:
+  frontend_checks:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: 24.15.0
@@ -330,21 +333,55 @@ jobs:
       - run: corepack pnpm format:check
       - run: corepack pnpm test:unit
       - run: corepack pnpm build
-      - name: Install Chromium for production authorization regression
+      - name: Verify frontend shard safety and aggregation
+        run: python3 -m unittest discover -s ../tests -p 'test_ci_frontend*.py'
+      - name: Verify complete original browser coverage across six shards
+        run: python3 ../deploy/ci/verify-frontend-layout-shards.py
+
+  frontend_browser:
+    name: frontend-browser (${{ matrix.shard }}/6)
+    needs: frontend_checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.15.0
+          # setup-node probes pnpm from the repository root, which has no
+          # packageManager pin. Do not fetch an unpinned manager before the
+          # bounded, web-directory install step below.
+          package-manager-cache: false
+      - run: corepack enable
+      - name: Install pinned frontend dependencies with bounded download retry
+        run: bash ../deploy/ci/install-frontend-dependencies.sh
+      - run: corepack pnpm build
+      - name: Install Chromium for complete production preview regression
         run: corepack pnpm exec playwright install chromium --with-deps
-      - name: Check ACL task results and terminal event refresh
+      - name: Run original complete browser suite shard
         env:
           WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
-        run: corepack pnpm exec playwright test e2e/acl-job-results.spec.ts e2e/job-events.spec.ts --reporter=line
-      - name: Check container ACL history, explicit restoration and write reservations
+        run: python3 ../deploy/ci/run-frontend-layout-shard.py ${{ matrix.shard }}
+
+  frontend:
+    # Preserve the single required frontend check; every shard must succeed.
+    if: ${{ always() }}
+    needs: [frontend_checks, frontend_browser]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - name: Require preflight and every browser shard
         env:
-          WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
-        run: corepack pnpm exec playwright test e2e/container-acl-history.spec.ts e2e/container-acl-restores.spec.ts e2e/container-acls.spec.ts --reporter=line
-      - name: Check bounded container detail and relationship layouts
-        env:
-          WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
-        run: corepack pnpm exec playwright test e2e/container-detail.spec.ts e2e/container-relationships.spec.ts e2e/container-files.spec.ts e2e/container-uploads.spec.ts e2e/container-text.spec.ts e2e/container-history.spec.ts e2e/container-directories.spec.ts e2e/container-copies.spec.ts e2e/container-moves.spec.ts e2e/container-permissions.spec.ts e2e/container-ownerships.spec.ts e2e/container-recursive-permissions.spec.ts --reporter=line
-      - name: Check production authorization, file transfers and host/container terminal UI
-        env:
-          WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
-        run: corepack pnpm exec playwright test e2e/auth-deep-link.production.spec.ts e2e/session-expiry.production.spec.ts e2e/host-terminal.spec.ts e2e/container-terminal.spec.ts e2e/files.spec.ts e2e/file-mutations.spec.ts e2e/file-browser.spec.ts e2e/file-location.spec.ts e2e/file-text.spec.ts e2e/file-archives.spec.ts e2e/tree-copies.spec.ts e2e/tree-moves.spec.ts e2e/tree-packings.spec.ts e2e/tree-unpackings.spec.ts e2e/tree-recyclings.spec.ts e2e/tree-restorings.spec.ts e2e/tree-overwrite-restorings.spec.ts e2e/tree-purgings.spec.ts e2e/capture-cleanup.spec.ts e2e/file-recovery.spec.ts e2e/topbar-badges.spec.ts e2e/platform-build.spec.ts e2e/file-content-search.spec.ts e2e/host-logs.spec.ts --reporter=line
+          FRONTEND_CHECKS_RESULT: ${{ needs.frontend_checks.result }}
+          FRONTEND_BROWSER_RESULT: ${{ needs.frontend_browser.result }}
+        run: bash deploy/ci/require-frontend-success.sh

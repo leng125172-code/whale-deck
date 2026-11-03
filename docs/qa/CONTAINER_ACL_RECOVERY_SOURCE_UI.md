@@ -95,3 +95,10 @@
 预构建后继续核对运行五组件b69302b、11核心healthy及原ID/镜像/StartedAt、宿主1772448/1688513、7受保护配置/账本/135HDD九字段字节保持，所有活动项0；无发布/迁移/服务重启或真实来源故障。产品CI四路成功，前端已进入最后的生产权限/文件/终端回归组，仍未终态成功，发布unit尚未启动。后续先完成来源UI部署/实机，再执行新来源故障矩阵，不以这些夹具测试替代。
 
 原件仍在`deploy/artifacts/acl-recovery-source-release-28062da/`，新增host-prebuild.log、host-prebuild-provenance.json及after-host-prebuild.json，原预构建、126/128检查和失败记录保持；新业务测试日志另存。目标第1节与59项不变，17项移出不算完成。
+
+
+## 后续：准确CI成功与发布前接续
+
+2026-11-04，准确产品28062da的CI41681017703已完成，backend/frontend/installer/native-postgres/native-valkey全部completed/success，完整JSON回执保存后逐headSha与五个名称核对。前述各时点“前端仍运行”保留历史事实。四镜像与两宿主候选仍冻结28062da；尚未启动标准发布时不能提前签已部署或六组件实际一致。
+
+原串行前端持续较久，后续CI候选改为原41文件的6个独立分片，保留单一frontend汇总及全部检查，覆盖与失败门禁见[CI分片证明](FRONTEND_CI_SHARDS.md)。本地原409项末组额外完整回归正在运行；新分片只收集749项/六片无重无漏，不冒充执行通过。来源故障另新增2个原deadline到期用例，相关业务123通过，详见[来源矩阵接续](CONTAINER_ACL_RESTORE_SOURCE_FAILURES.md)。这些改动没有修改产品28062da，下一步唯一标准覆盖及新资源真实来源UI整链。

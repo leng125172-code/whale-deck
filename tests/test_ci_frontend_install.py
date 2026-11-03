@@ -12,7 +12,8 @@ SCRIPT = Path(__file__).resolve().parents[1] / 'deploy/ci/install-frontend-depen
 class FrontendWorkflowTests(unittest.TestCase):
     def test_setup_does_not_resolve_an_unpinned_root_package_manager(self):
         root = SCRIPT.parents[2]
-        frontend = (root/'.github/workflows/ci.yml').read_text(encoding='utf-8').split('  frontend:\n', 1)[1]
+        workflow = (root/'.github/workflows/ci.yml').read_text(encoding='utf-8')
+        frontend = workflow.split('  frontend_checks:\n', 1)[1].split('  frontend:\n', 1)[0]
         self.assertNotIn('cache: pnpm', frontend)
         self.assertIn('package-manager-cache: false', frontend)
         self.assertLess(frontend.index('uses: actions/setup-node@v5'), frontend.index('run: corepack enable'))
