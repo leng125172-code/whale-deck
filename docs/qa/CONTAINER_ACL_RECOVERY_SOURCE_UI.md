@@ -84,3 +84,14 @@
 另外保存了仅用于本次准确发布unit的只读观察器源码与SHA：9个状态分类检查通过，并以真实/maintenance/status验证200、healthy/Ready/no-store，确认whaledeck-dev-publish-28062da.service尚不存在。观察器不启动、停止或重发unit，不写生产状态/账本；计划在发布前进入就绪态，再按唯一Invocation记录全窗口HTTP样本与真实终态。特别拒绝把activating时的Result=success/ExecMainStatus=0判为结束；Invocation变化、unit提前消失和非终态也不能记通过。**本批观察器尚未运行发布窗口，不签持续可用**；隔离分类检查不算部署或维护故障实机验收。
 
 产品CI run41681017703仍4成功、frontend的容器布局回归进行中；运行仍b69302b、四候选镜像28062da，未触发发布或真实登录/文件写入。证据继续在root私有`deploy/artifacts/acl-recovery-source-release-28062da/`，新增checks-128-order.log、publication-observer-source.py及只读预检回执；旧126检查、预构建与失败记录不覆盖。待完整CI成功后标准覆盖及真实来源UI/文件HDD整链，再来源异常、递归ACL/恢复、删除等59项；17项移出不算完成。
+
+
+## 接续：两宿主预构建与来源故障缺口（2026-11-04，未安装）
+
+对冻结28062da另行执行标准`deploy/host/publish.sh`，退出0，仅输出至`/data/GitRepos/whale-deck/deploy/artifacts/source-ui-host-prebuild-28062da/`，**未调用install.sh或publish-and-install.sh**。Agent/MaintenanceHost实际自包含CLI内部来源均28062da，SHA256SUMS严格核对通过；标准运行库校验器确认两者Microsoft.NETCore.App/Microsoft.AspNetCore.App及PKCS均10.0.13。结合前批四镜像，六个候选产物分别已核对；这不是六组件实际安装一致，总probe也未改写为成功。
+
+新来源故障矩阵明确Queue/原key、plan、confirm、首次apply及已有原回执的边界。新增同digest但完整来源时间戳被替换的三边界拒绝、IO读取暂不可用后三处原身份/执行ID/期限继续，以及Completed/Unknown/Aborted优先对账；相关业务121项全通过（净增8），没有扩大权限或修改产品代码。**身份、仓储、来源及Agent均为显式夹具，无新增真实PG、Authentik或HDD来源丢失/替换证据**。源失联不等于源已变更，已有原回执不因源不可读重做；Discard原ID可留Aborted记录，不能误记为没有Root调用。详见[事实、预期与待实机矩阵](CONTAINER_ACL_RESTORE_SOURCE_FAILURES.md)。
+
+预构建后继续核对运行五组件b69302b、11核心healthy及原ID/镜像/StartedAt、宿主1772448/1688513、7受保护配置/账本/135HDD九字段字节保持，所有活动项0；无发布/迁移/服务重启或真实来源故障。产品CI四路成功，前端已进入最后的生产权限/文件/终端回归组，仍未终态成功，发布unit尚未启动。后续先完成来源UI部署/实机，再执行新来源故障矩阵，不以这些夹具测试替代。
+
+原件仍在`deploy/artifacts/acl-recovery-source-release-28062da/`，新增host-prebuild.log、host-prebuild-provenance.json及after-host-prebuild.json，原预构建、126/128检查和失败记录保持；新业务测试日志另存。目标第1节与59项不变，17项移出不算完成。

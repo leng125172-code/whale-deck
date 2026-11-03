@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RECOVERY_SOURCE_UI.md",
-  "nextStep": "来源UI实机网络顺序已补强，128相关检查通过；只读发布观察器9分类及真实200/Ready预检通过，尚未启动发布或实机来源UI。28062da四镜像已预构建，待准确产品CI前端成功终态后唯一标准覆盖与新资源实机整链；实际运行仍b69302b。再来源异常、递归ACL/恢复、删除及其余59项；17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RECOVERY_SOURCE_UI.md；docs/qa/CONTAINER_ACL_RESTORE_SOURCE_FAILURES.md",
+  "nextStep": "28062da四镜像及两宿主候选已分别标准预构建/.NET10.0.13与来源核验，尚未安装；运行仍b69302b。产品CI前端最后一组未结束，待准确成功后唯一标准覆盖/来源UI新资源整链；来源故障矩阵真实缺口已登记，121相关业务夹具通过不算HDD故障验收。再递归ACL/恢复、删除及其余59项；17项移出不算完成，不自动回滚dev。"
 }

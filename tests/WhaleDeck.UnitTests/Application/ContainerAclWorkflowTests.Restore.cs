@@ -135,13 +135,58 @@ public sealed partial class ContainerAclWorkflowTests
         else{await f.Dispatcher.TickAsync(default);Assert.Equal("Failed",f.Repository.Row!.State);Assert.Equal("CONTAINER_ACL_RESTORE_SOURCE_CHANGED",f.Repository.Row.ResultCode);}
         Assert.Equal(0,f.Gateway.Applies);Assert.Equal(boundary=="apply"?1:0,f.Gateway.Discards);
     }
-    [Fact]
-    public async Task ACompletedOriginalExecutionReconcilesEvenWhenHistoryIsGone()
+    [Theory][InlineData("plan")][InlineData("confirm")][InlineData("apply")]
+    public async Task SameDigestButReplacedSourceAtEachFreshBoundaryCannotApply(string boundary)
+    {
+        var source = new RestoreSource(); using var f = new Fixture(false, source); source.Value = SourceFor(f).Value;
+        await f.Service.QueueRestoreAsync(f.Actor, RestoreCommand(f, source), f.Key, default);
+        if (boundary != "plan") await f.Dispatcher.TickAsync(default);
+        if (boundary == "apply") await f.Confirm();
+        var frozen = f.Repository.Row!.RestoreSourceJson;
+        source.Value = source.Value with { Entry = source.Value.Entry with { CreatedAtUnixMs = 1 } };
+        if (boundary == "confirm")
+        {
+            await Assert.ThrowsAsync<ContainerAclRestoreSourceChangedException>(() => f.Confirm());
+            Assert.Equal("Ready", f.Repository.Row.State); Assert.Null(f.Repository.Row.ExecutionJobId);
+        }
+        else
+        {
+            await f.Dispatcher.TickAsync(default); Assert.Equal("Failed", f.Repository.Row.State);
+            Assert.Equal("CONTAINER_ACL_RESTORE_SOURCE_CHANGED", f.Repository.Row.ResultCode);
+        }
+        Assert.Equal(frozen, f.Repository.Row.RestoreSourceJson); Assert.Null(f.Repository.Row.RootStartedAtUtc);
+        Assert.Equal(0, f.Gateway.Applies); Assert.Equal(boundary == "apply" ? 1 : 0, f.Gateway.Discards);
+    }
+    [Theory][InlineData("plan")][InlineData("confirm")][InlineData("apply")]
+    public async Task TemporarySourceOutagePreservesOriginalIdentityAndExpiryAndCanResumeBeforeAnyRootWrite(string boundary)
+    {
+        var source = new RestoreSource(); using var f = new Fixture(false, source); source.Value = SourceFor(f).Value;
+        await f.Service.QueueRestoreAsync(f.Actor, RestoreCommand(f, source), f.Key, default);
+        if (boundary != "plan") await f.Dispatcher.TickAsync(default);
+        if (boundary == "apply") await f.Confirm();
+        var row = f.Repository.Row!; var frozen = row.RestoreSourceJson;
+        var expiry = row.PlanningExpiresAtUtc; var readyExpiry = row.ReadyExpiresAtUtc; var execution = row.ExecutionJobId;
+        source.Failure = new IOException("synthetic history transport outage");
+        if (boundary == "confirm") await Assert.ThrowsAsync<IOException>(() => f.Confirm());
+        else { await f.Dispatcher.TickAsync(default); Assert.Equal(1, f.Repository.Deferrals); }
+        Assert.Equal(frozen, row.RestoreSourceJson); Assert.Equal(expiry, row.PlanningExpiresAtUtc);
+        Assert.Equal(readyExpiry, row.ReadyExpiresAtUtc); Assert.Equal(execution, row.ExecutionJobId);
+        Assert.Null(row.RootStartedAtUtc); Assert.Equal(0, f.Gateway.Applies + f.Gateway.Discards);
+        source.Failure = null;
+        if (boundary == "plan") await f.Dispatcher.TickAsync(default);
+        if (boundary != "apply") await f.Confirm();
+        var originalExecution = row.ExecutionJobId; await f.Dispatcher.TickAsync(default);
+        Assert.Equal("Succeeded", (await f.Get()).State); Assert.Equal(originalExecution, row.ExecutionJobId);
+        Assert.Equal(1, f.Gateway.Plans); Assert.Equal(1, f.Gateway.Applies); Assert.Equal(0, f.Gateway.Discards);
+        Assert.Equal(frozen, row.RestoreSourceJson);
+    }
+    [Theory][InlineData("Completed", "Succeeded")][InlineData("Unknown", "Unknown")][InlineData("Aborted", "Failed")]
+    public async Task AnOriginalExecutionReceiptReconcilesEvenWhenHistoryIsGone(string receiptState, string expectedState)
     {
         var source=new RestoreSource();using var f=new Fixture(false,source);source.Value=SourceFor(f).Value;await f.Service.QueueRestoreAsync(f.Actor,RestoreCommand(f,source),f.Key,default);
         await f.Dispatcher.TickAsync(default);await f.Confirm();var op=ContainerAclWorkflowValidation.Reference(f.Repository.Row!);
-        f.Gateway.Receipt=Gateway.ReceiptFor(op,"Completed");source.Failure=new ContainerAclRestoreSourceChangedException();var reads=source.Reads;
-        await f.Dispatcher.TickAsync(default);Assert.Equal("Succeeded",(await f.Get()).State);Assert.Equal(reads,source.Reads);Assert.Equal(0,f.Gateway.Applies);
+        f.Gateway.Receipt=Gateway.ReceiptFor(op,receiptState);source.Failure=new ContainerAclRestoreSourceChangedException();var reads=source.Reads;
+        await f.Dispatcher.TickAsync(default);Assert.Equal(expectedState,(await f.Get()).State);Assert.Equal(reads,source.Reads);Assert.Equal(0,f.Gateway.Applies + f.Gateway.Discards);
     }
     [Theory][InlineData(false)][InlineData(true)]
     public async Task SourceArraysAreFrozenBeforeAwaitAndReturnedSourceCannotRewriteStoredIntent(bool revoke)
