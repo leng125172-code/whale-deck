@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_INSTANCE_CHANGE.md；docs/qa/CONTAINER_ACL_POST_UNKNOWN.md",
-  "nextStep": "运行447070e/1.51，Agent3947643/维护3947551不变；d2ca69d新资源写后同CID新实例Unknown/null、不同管理员明确处置、两次真实摘要与跨容器目录四次延期/释放已独立签收，首轮Docker输出断言失败保留。继续其他共享写入/磁盘/路径与无回执等摘要分支、ACL递归恢复、可恢复删除/长期清理、P0-05及59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，开发sudo保留，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_STALE_PREFLIGHT.md；docs/qa/CONTAINER_ACL_INSTANCE_CHANGE.md",
+  "nextStep": "正常覆盖已验证候选caa9c64，随后新独占资源执行旧页面版本ACL预检拒绝及独立真实页面/无Root-HDD验收；当前未部署/新真实门禁未运行，仍447070e/1.51、Agent3947643/维护3947551及11核心healthy。同CID实例变化等前批签收保留。再推进其他共享写入/磁盘/路径/摘要、ACL递归恢复、可恢复删除/长期清理、P0-05及59项/UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，开发sudo保留，不自动回滚dev。"
 }
