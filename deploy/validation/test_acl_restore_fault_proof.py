@@ -1,13 +1,15 @@
 """Negative provenance checks; no service, credentials or real restoration."""
 import copy
 import json
+from pathlib import Path
 import unittest
 import uuid
 from unittest.mock import patch
 
 from acl_restore_fault_proof import prove_binding, RESTORE_SOURCES, restore_fault_version, verify_restore_audits
 from acl_restore_browser_proof import source_json, expected_metadata
-from verify_container_acl_faults import validate_source_profile, SOURCES, verify_current_admin
+from verify_container_acl_faults import validate_source_profile, SOURCES, verify_current_admin, verify_restart
+from validate_container_acl_faults import RESTART_KEYS
 
 
 class RestoreFaultProvenanceTests(unittest.TestCase):
@@ -70,7 +72,7 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
 
     def test_both_restore_profiles_reach_source_verification_not_ordinary_acl(self):
         from validate_container_acl_faults import expected_fault_acl
-        for version,kind in ((1,'cancel'),(2,'group-removal'),(2,'account-disable'),(3,'worker-crash'),(3,'agent-restart'),(4,'post-acl-cancel'),(4,'post-acl-worker-crash'),(5,'post-acl-group-removal'),(5,'post-acl-account-disable')):
+        for version,kind in ((1,'cancel'),(2,'group-removal'),(2,'account-disable'),(3,'worker-crash'),(3,'agent-restart'),(4,'post-acl-cancel'),(4,'post-acl-worker-crash'),(5,'post-acl-group-removal'),(5,'post-acl-account-disable'),(6,'post-acl-agent-restart')):
             baseline={**self.baseline,'aclRestoreFaultVersion':version,'kind':kind}
             with self.subTest(version=version,kind=kind),patch('acl_restore_fault_proof.verify_restore_binding',return_value=['selected-source']) as check:
                 self.assertEqual(expected_fault_acl(self.row,baseline,None,None),['selected-source'])
@@ -91,7 +93,8 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
         self.assertEqual(restore_fault_version(('worker-crash','agent-restart')),3)
         self.assertEqual(restore_fault_version(('post-acl-cancel','post-acl-worker-crash')),4)
         self.assertEqual(restore_fault_version(('post-acl-group-removal','post-acl-account-disable')),5)
-        for kinds in ((),('cancel','group-removal'),('post-acl-agent-restart',),('cancel','cancel')):
+        self.assertEqual(restore_fault_version(('post-acl-agent-restart',)),6)
+        for kinds in ((),('cancel','group-removal'),('post-acl-unknown',),('cancel','cancel'),('agent-restart','post-acl-agent-restart')):
             with self.subTest(kinds=kinds),self.assertRaises(AssertionError):restore_fault_version(kinds)
 
     def test_revocation_schema_cannot_be_mislabeled_as_cancel_or_ordinary_fault(self):
@@ -179,5 +182,48 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
     def test_existing_source_profile_cannot_claim_new_restore_sources(self):
         validate_source_profile(dict(schemaVersion=6,sha256={n:'digest' for n in SOURCES}),['cancel','logout'])
         with self.assertRaises(AssertionError):validate_source_profile(dict(schemaVersion=6,sha256={n:'digest' for n in set(SOURCES)|set(RESTORE_SOURCES)}),['cancel'])
+
+    def test_post_agent_restart_requires_schema_twelve_and_original_capture(self):
+        p=dict(schemaVersion=12,aclRestoreFaultVersion=6,sha256={n:'digest' for n in set(SOURCES)|set(RESTORE_SOURCES)})
+        validate_source_profile(p,['post-acl-agent-restart'])
+        baseline={**self.baseline,'aclRestoreFaultVersion':6,'kind':'post-acl-agent-restart'}
+        self.assertEqual(prove_binding(self.row,baseline,self.source,self.proof),self.source['accessAcl'])
+        for delta,kinds in [({'schemaVersion':11},['post-acl-agent-restart']),({'schemaVersion':6},['post-acl-agent-restart']),({'aclRestoreFaultVersion':5},['post-acl-agent-restart']),({'aclRestoreFaultVersion':True},['post-acl-agent-restart']),({},['agent-restart']),({},['post-acl-worker-crash']),({},['post-acl-account-disable'])]:
+            with self.subTest(delta=delta,kinds=kinds),self.assertRaises(AssertionError):validate_source_profile({**p,**delta},kinds)
+
+    def test_post_agent_audit_retains_completed_restore_without_cancel(self):
+        row,rows,baseline=self.audit_fixture();baseline.update(aclRestoreFaultVersion=6,kind='post-acl-agent-restart');rows[-1]['result']='Succeeded'
+        verify_restore_audits(rows,row,baseline)
+        for state in ('Failed','Canceled','Unknown'):
+            changed=copy.deepcopy(rows);changed[-1]['result']=state
+            with self.subTest(state=state),self.assertRaises(AssertionError):verify_restore_audits(changed,row,baseline)
+        cancel={**copy.deepcopy(rows[-1]),'action':'containers.files.acl.restore.cancel-requested','result':'Accepted'}
+        with self.assertRaises(AssertionError):verify_restore_audits(rows+[cancel],row,baseline)
+
+    def test_post_agent_restart_requires_restore_wrapper_binding_and_maintenance_continuity(self):
+        source=copy.deepcopy(self.source);revision='a'*40
+        row={key:'original-'+key for key in ('id','execution_job_id','container_id','instance_id','actor_subject','owner_hash','plan_json','command_json','root_started_at_utc','restore_source_json','request_hash','plan_hash','execution_hash','login_binding')}
+        row.update(cancel_requested_at_utc=None,state='Applying',publish_barrier=True,lease_token='original-lease',lease_expires_at_utc='2026-11-03T00:01:00Z')
+        final={**row,'state':'Succeeded','publish_barrier':False,'lease_token':None,'lease_expires_at_utc':None}
+        baseline=dict(aclRestoreFaultVersion=6,kind='post-acl-agent-restart',restoreSource=source,revision=revision)
+        hosts={'whaledeck-agent.service':dict(pid=100,sourceRevision=revision),'whaledeck-maintenance.service':dict(pid=200,sourceRevision=revision)}
+        service=dict(hostsBefore=hosts,hostsAfter={**hosts,'whaledeck-agent.service':dict(pid=101,sourceRevision=revision)},maintenancePidUnchanged=True,
+            otherActiveWork={key:0 for key in RESTART_KEYS},restartBeganAtUtc='2026-11-03T00:00:00Z',restartEndedAtUtc='2026-11-03T00:00:02Z',totalRestartSeconds=2,maintenanceSamples=4)
+        ui=dict(normalDualLogout=True,cancellations=0,intentReadPath='/api/v1/containers/'+row['container_id']+'/files/acls/restores/'+row['id'],restoreTerminalSource=source,
+            terminalIntent=dict(id=row['id'],executionJobId=row['execution_job_id'],state='Succeeded',resultCode='CONTAINER_ACL_COMPLETED',aclConfirmed=True,confirmation=None,historyVerified=True,receipt=dict(state='Completed')))
+        samples=[dict(atUtc=at,httpStatus=200,state='healthy',phase='Ready',noStore=True,bytes=100,responseSeconds=.05) for at in ('2026-11-02T23:59:59Z','2026-11-03T00:00:00.5Z','2026-11-03T00:00:01Z','2026-11-03T00:00:03Z')]
+        def check():verify_restart('agent-restart',dict(serviceRestart=service),baseline,ui,final,dict(row=row,executionJob=dict(state='Running')),lambda path: samples,Path('/isolated-fixture'),post=True)
+        check()
+        good_ui=copy.deepcopy(ui)
+        for key,value in [('intentReadPath',ui['intentReadPath'].replace('/restores/','/')),('restoreTerminalSource',{**source,'defaultAcl':[dict(tag='other',id=None,permissions=7)]}),('terminalIntent',{**ui['terminalIntent'],'state':'Failed'}),('normalDualLogout',False)]:
+            ui.update({key:value})
+            with self.subTest(key=key),self.assertRaises(AssertionError):check()
+            ui.clear();ui.update(copy.deepcopy(good_ui))
+        for key in ('restore_source_json','request_hash','plan_hash','execution_hash','login_binding'):
+            final[key]='changed'
+            with self.subTest(key=key),self.assertRaises(AssertionError):check()
+            final[key]=row[key]
+        samples[2]['httpStatus']=503
+        with self.assertRaises(AssertionError):check()
 
 if __name__=='__main__':unittest.main()

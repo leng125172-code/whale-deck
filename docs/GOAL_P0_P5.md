@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-03 ACL恢复写后Agent重启门禁候选已验证、未实机运行：新增profile6/schema12仅单场post-acl-agent-restart，绑定原恢复wrapper/来源与Succeeded审计，沿用准确切点、固定Agent重启、维护连续性、双原Job安全结果/正常退出/失败保留；旧profile及普通schema6兼容。25恢复证明+43Root范围+10浏览器证明+8范围共86通过及语法通过，均非新的实际重启或恢复整链。76cb825已推送、前批图谱重试成功；b69302b仍待frontend终态及标准覆盖，实际运行cad6182。[候选和未验边界](qa/CONTAINER_ACL_RESTORE_AGENT_RESTART_CANDIDATE.md)。
+
 **2026-11-03 历史超时修复四镜像预构建完成、未发布**：标准构建退出0，API/Worker/Migrator/Gateway实际ID、OCI revision与内部版本均b69302b；11核心healthy、两宿主/7配置/账本不变、活动预检0，公共8080及实际运行仍cad6182。准确CI四路成功，frontend在最后页面组；待成功终态后标准覆盖，再真实8080完整撤权复验。[本批基线与边界](qa/CONTAINER_ACL_HISTORY_RELEASE_PREPARATION.md)。
 
 **2026-11-03 历史读取维护代理超时已定位，b69302b修复候选未部署**：写后移组分项dc243实机Succeeded/Completed、原403/引用清空/当前管理员Recovery200而原Owner接口404通过；同批停用及新批ea30重读均在历史列表503前置失败，未登记恢复/撤权，两失败树保留，不签整批。实际同请求内部Gateway4.972秒200/124份、维护入口5.007秒503维护HTML，定位普通5秒代理预算。候选新增仅规范历史GET的35秒路由及保留5秒硬截止的3秒软分页，Release零警告错误/4363Unit/488Integration（7原生跳过）/32Root通过，真实HDD候选82/42两页3.085/1.604秒读完124份不改原件；不是安装态RPC或UI签收。CI四路成功/frontend待，生产仍cad6182/1.52、1399935/1214273、11核心healthy/8数据库/7配置及账本保持；须标准覆盖与8080整链复验，59项不升完成率。[失败、根因、候选与未验](qa/CONTAINER_ACL_HISTORY_TIMEOUT.md)。

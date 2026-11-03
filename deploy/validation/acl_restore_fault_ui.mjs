@@ -4,8 +4,8 @@ import { expect } from '../../web/node_modules/@playwright/test/index.mjs'
 import { openPermissionFiles, closePermissionDetails, writeSignal, waitSignal } from './installed_ui_permission_session.mjs'
 
 export async function prepareRestoreFault(page, context, base, fixture, profile) {
-  assert.ok([1, 2, 3, 4, 5].includes(fixture.aclRestoreFaultVersion))
-  assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : fixture.aclRestoreFaultVersion === 2 ? ['group-removal', 'account-disable'] : fixture.aclRestoreFaultVersion === 3 ? ['worker-crash', 'agent-restart'] : fixture.aclRestoreFaultVersion === 4 ? ['post-acl-cancel', 'post-acl-worker-crash'] : ['post-acl-group-removal', 'post-acl-account-disable']).includes(fixture.kind))
+  assert.ok([1, 2, 3, 4, 5, 6].includes(fixture.aclRestoreFaultVersion))
+  assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : fixture.aclRestoreFaultVersion === 2 ? ['group-removal', 'account-disable'] : fixture.aclRestoreFaultVersion === 3 ? ['worker-crash', 'agent-restart'] : fixture.aclRestoreFaultVersion === 4 ? ['post-acl-cancel', 'post-acl-worker-crash'] : fixture.aclRestoreFaultVersion === 5 ? ['post-acl-group-removal', 'post-acl-account-disable'] : ['post-acl-agent-restart']).includes(fixture.kind))
   const endpoint = `/api/v1/containers/${fixture.containerId}/files/acls`, directory = fixture.evidence
   let files = await openPermissionFiles(page, fixture)
   await files.getByRole('button', { name: 'ACL acl-file.bin', exact: true }).click()

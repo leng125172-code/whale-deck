@@ -27,3 +27,7 @@
 ## 文档检查与同步状态
 
 8项范围测试通过，4份本批相关MD的607条相对链接有效；目标第1节逐字保持，前批超时QA原始正文只追加接续。项目图谱接口本次传输失败，稳定事件`whale-deck.container-acl.b69302b.prebuild-started`保存在本地pending待同步；未声称网站更新成功。
+
+## 后续同步确认
+
+76cb825已重新推送至dev，远端精确SHA确认成功。项目图谱以原`whale-deck.container-acl.b69302b.prebuild-started`重试，回执项目/阶段/事件一致，原pending已移入synced；以上原时点网络失败和三镜像观察均保留。仍未部署或取得新增实机签收。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in real restoration pre-syscall cancel/logout, with NEW own captures."""
+"""Opt-in restore cancellation, authority and restart gates with NEW own captures."""
 import json
 from pathlib import Path
 import traceback
