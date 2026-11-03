@@ -138,6 +138,7 @@ jobs:
           python3 -m py_compile deploy/validation/validate_container_file_bff_extended.py
           python3 -m unittest discover -s deploy/validation -p test_metric_continuity.py
           python3 -m unittest discover -s deploy/validation -p test_scope_baseline.py
+          python3 -m unittest discover -s deploy/validation -p test_native_validation_status.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_authentik_branding.py
           python3 -m unittest discover -s deploy/validation -p test_tree_rpc_diagnostics.py
           python3 -m unittest discover -s deploy/validation -p test_unpacking_probe_scope.py
@@ -326,6 +327,10 @@ jobs:
         env:
           WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
         run: corepack pnpm exec playwright test e2e/acl-job-results.spec.ts e2e/job-events.spec.ts --reporter=line
+      - name: Check container ACL history, explicit restoration and write reservations
+        env:
+          WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
+        run: corepack pnpm exec playwright test e2e/container-acl-history.spec.ts e2e/container-acl-restores.spec.ts e2e/container-acls.spec.ts --reporter=line
       - name: Check bounded container detail and relationship layouts
         env:
           WHALEDECK_PRODUCTION_PREVIEW_URL: http://127.0.0.1:5175
