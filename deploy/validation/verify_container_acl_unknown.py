@@ -21,7 +21,13 @@ IMMUTABLE=('receipt_json','receipt_hash','acl_confirmed','history_may_exist','hi
 
 
 def require_source_version(source,baseline):
-    version=source['proofVersion'];assert type(version) is int and version in (2,3,4)
+    version=source['proofVersion'];assert type(version) is int and version in (2,3,4,5)
+    if 'aclRestoreFaultVersion' in baseline:
+        from acl_restore_unknown_proof import require_restore_unknown
+        require_restore_unknown(baseline)
+        assert version==5 and type(source.get('aclRestoreFaultVersion')) is int and source['aclRestoreFaultVersion']==7
+        return
+    assert 'aclRestoreFaultVersion' not in source and version!=5
     if baseline.get('instanceChanged',False):assert baseline['instanceChanged'] is True and baseline['postAcl'] is True and version==4
     elif baseline.get('postAcl',False):assert baseline['postAcl'] is True and version==3
     else:assert version==2
@@ -34,6 +40,9 @@ def require_acknowledgement(original, final, old_subject, new_subject):
     assert row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is None and row['lease_expires_at_utc'] is None and final['pending']==0
     assert row['result_code']=='CONTAINER_ACL_UNKNOWN_ACKNOWLEDGED'
     for key in IMMUTABLE:assert row[key]==old[key]
+    assert row.get('restore_source_json')==old.get('restore_source_json')
+    if old.get('restore_source_json') is not None:
+        for key in ('restore_source_json','request_hash','plan_hash','execution_hash','owner_hash'):assert row[key]==old[key]
     assert row['acl_confirmed'] is None and row['published_version'] is None and row['history_verified'] and row['history_may_exist']
 
 
@@ -57,7 +66,11 @@ def verify(directory):
     baseline=read(directory/'baseline.json');accepted=read(directory/'verified.json');source=read(directory/'validation-source.json');owner=read(directory/'owner-browser.json');recovery=read(directory/'recovery-browser.json')
     assert accepted['revision']==baseline['revision']==owner['revision']==recovery['revision']==source['productRevision']
     require_source_version(source,baseline);post=baseline.get('postAcl',False)
-    assert baseline['validationSourceRevision']==source['revision'] and set(source['sha256'])==set(SOURCES)
+    expected_sources=SOURCES
+    if 'aclRestoreFaultVersion' in baseline:
+        from acl_restore_unknown_proof import restore_unknown_sources
+        expected_sources=restore_unknown_sources()
+    assert baseline['validationSourceRevision']==source['revision'] and set(source['sha256'])==set(expected_sources)
     subprocess.run(['git','-C',str(repo),'merge-base','--is-ancestor',baseline['revision'],source['revision']],check=True,capture_output=True,timeout=15)
     for name,sha in source['sha256'].items():
         assert '/' not in name;raw=subprocess.check_output(['git','-C',str(repo),'show',source['revision']+':deploy/validation/'+name]);assert hashlib.sha256(raw).hexdigest()==sha
@@ -68,6 +81,10 @@ def verify(directory):
         assert ui['logout']['bffStatus']==401 and ui['logout']['identityStatus'] in (401,403)
     assert owner['registrations']==owner['confirmations']==recovery['confirmations']==1 and owner['bodies']==recovery['registrations']==recovery['bodies']==0
     assert owner['subject']==accepted['originalSubject']==baseline['originalSubject']!=recovery['subject']==accepted['recoverySubject'] and recovery['waitingVisibleInVue'] and recovery['waitingDirectoryInViewport']
+    if 'aclRestoreFaultVersion' in baseline:
+        from acl_history_browser_proof import typed_equal
+        typed_equal(owner['restoreSource'],baseline['restoreSource'])
+        assert type(recovery['ownerRestoreStatus']) is int and recovery['ownerRestoreStatus']==404 and recovery['recoveryNoStore'] is True
     assert recovery['displayedContainerId']==baseline['containerId'] and recovery['displayedPath']=='/work/acl-file.bin'
     assert 0<=accepted['productStoppedHelperSeconds']<15 and accepted['validatorKilledHelper'] is False
     if baseline.get('instanceChanged',False):
@@ -102,7 +119,8 @@ def verify(directory):
     if post:assert accepted['postAclPhysicalInventoryPreserved'] is True
     content=hashlib.shake_256(('acl-unknown:'+baseline['containerId']).encode()).digest(2*1024**2+7);assert baseline['bytesPerFile']==len(content) and baseline['sha256']==hashlib.sha256(content).hexdigest().upper()
     late=read(directory/'late-apply.json');assert late['operationId']==record['operationId'] and late['state']=='Unknown' and late['aclConfirmed'] is None and late['replayed'] and late['version']=='' and late['historyDigest']==row['history_digest']
-    audit=query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result),'targets',json_agg(target_id)) FROM audit_events WHERE job_id=:'id'::uuid AND action='containers.files.acl.unknown-acknowledged';",id=row['execution_job_id'])
+    action='containers.files.acl.'+('restore.' if 'aclRestoreFaultVersion' in baseline else '')+'unknown-acknowledged'
+    audit=query("SELECT json_build_object('n',count(*),'actors',json_agg(actor_subject),'results',json_agg(result),'targets',json_agg(target_id)) FROM audit_events WHERE job_id=:'id'::uuid AND action=:'action';",id=row['execution_job_id'],action=action)
     assert audit=={'n':1,'actors':[recovery['subject']],'results':['Unknown'],'targets':[baseline['containerId']]}
     dismissed=read(directory/'recovery-dismissed.json');assert dismissed=={'id':row['id'],'subject':recovery['subject'],'confirmations':0,'stillUnknown':True}
     assert read(directory/'allow-ack.json')=={'originalStillUnknownProtected':True,'waitingStillDeferred':True} and recovery['ackVersion']==original['row']['version']

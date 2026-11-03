@@ -15,6 +15,8 @@ try {
   directory = fixture.evidence
   const prefix = fileURLToPath(new URL('../artifacts/', import.meta.url))
   assert.ok(directory.startsWith(prefix)); assert.match(directory.slice(prefix.length), /^container-acl-unknown-[a-f0-9]{32}$/)
+  const restoration = fixture.aclRestoreFaultVersion !== undefined
+  if (restoration) { assert.equal(fixture.aclRestoreFaultVersion, 7); assert.equal(fixture.kind, 'post-acl-target-removed'); assert.equal(fixture.postAcl, true); assert.equal(fixture.instanceChanged, false) }
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
   context = await browser.newContext({ viewport: { width: mode === 'owner' ? 1440 : 320, height: 600 }, colorScheme: mode === 'owner' ? 'light' : 'dark', reducedMotion: 'reduce' })
@@ -22,38 +24,47 @@ try {
   assert.equal((await (await context.request.get(base + '/api/v1/system/status')).json()).build.sourceRevision, revision)
   phase = 'normal-' + mode + '-login'
   const profile = await loginVisible(page, context, base, mode === 'owner' ? '/containers' : '/files')
+  phase = 'original-visible-preflight'
   if (mode === 'owner') {
     const endpoint = `/api/v1/containers/${fixture.containerId}/files/acls`
     ownEndpoint = base + endpoint
+    const registrationEndpoint = restoration ? endpoint + '/restores' : endpoint
     let registrations = 0, confirmations = 0, bodies = 0
     page.on('request', request => {
       const path = new URL(request.url()).pathname
-      if (request.method() === 'POST' && path === endpoint) registrations++
-      if (request.method() === 'POST' && path.startsWith(endpoint + '/') && path.endsWith('/confirm')) confirmations++
+      if (request.method() === 'POST' && path === registrationEndpoint) registrations++
+      if (request.method() === 'POST' && currentIntent && path === endpoint + '/' + currentIntent + '/confirm') confirmations++
       if (request.method() === 'PUT' && path.includes('/files/')) bodies++
     })
-    const files = await openPermissionFiles(page, fixture)
-    await files.getByRole('button', { name: 'ACL acl-file.bin', exact: true }).click()
-    const dialog = page.getByRole('dialog', { name: '修改容器文件或目录ACL', exact: true })
-    async function select(label, value) {
-      await dialog.getByRole('combobox', { name: label, exact: true }).press('ArrowDown')
-      await page.getByRole('listbox', { name: label, exact: true }).getByRole('option', { name: value, exact: true }).click()
+    let dialog, intent, restoreSource
+    if (restoration) {
+      const { prepareRestoreFault } = await import('./acl_restore_fault_ui.mjs')
+      const prepared = await prepareRestoreFault(page, context, base, fixture, profile)
+      dialog = prepared.dialog; intent = prepared.intent; restoreSource = prepared.source
+    } else {
+      const files = await openPermissionFiles(page, fixture)
+      await files.getByRole('button', { name: 'ACL acl-file.bin', exact: true }).click()
+      dialog = page.getByRole('dialog', { name: '修改容器文件或目录ACL', exact: true })
+      async function select(label, value) {
+        await dialog.getByRole('combobox', { name: label, exact: true }).press('ArrowDown')
+        await page.getByRole('listbox', { name: label, exact: true }).getByRole('option', { name: value, exact: true }).click()
+      }
+      await select('条目1 权限', '6 · rw-'); await select('条目2 权限', '0 · ---'); await select('条目3 权限', '0 · ---')
+      await dialog.getByRole('button', { name: '添加ACL条目', exact: true }).click()
+      await dialog.getByLabel('条目4 数值ID', { exact: true }).fill('2201'); await select('条目4 权限', '6 · rw-')
+      await select('新增条目类型', 'mask'); await dialog.getByRole('button', { name: '添加ACL条目', exact: true }).click(); await select('条目5 权限', '4 · r--')
+      const queued = page.waitForResponse(r => new URL(r.url()).pathname === endpoint && r.request().method() === 'POST')
+      await dialog.getByRole('button', { name: '生成ACL修改预检', exact: true }).click()
+      const response = await queued; assert.equal(response.status(), 202)
+      intent = await response.json()
     }
-    await select('条目1 权限', '6 · rw-'); await select('条目2 权限', '0 · ---'); await select('条目3 权限', '0 · ---')
-    await dialog.getByRole('button', { name: '添加ACL条目', exact: true }).click()
-    await dialog.getByLabel('条目4 数值ID', { exact: true }).fill('2201'); await select('条目4 权限', '6 · rw-')
-    await select('新增条目类型', 'mask'); await dialog.getByRole('button', { name: '添加ACL条目', exact: true }).click(); await select('条目5 权限', '4 · r--')
-    const queued = page.waitForResponse(r => new URL(r.url()).pathname === endpoint && r.request().method() === 'POST')
-    await dialog.getByRole('button', { name: '生成ACL修改预检', exact: true }).click()
-    const response = await queued; assert.equal(response.status(), 202)
-    const intent = await response.json()
     currentIntent = intent.id
     await writeSignal(directory, 'owner-registered.json', { id: intent.id, subject: profile.subject })
     await expect(dialog.getByText('预检已完成，尚未修改ACL', { exact: true })).toBeVisible({ timeout: 45_000 })
-    await writeSignal(directory, 'owner-ready.json', { id: intent.id, subject: profile.subject })
+    await writeSignal(directory, 'owner-ready.json', { id: intent.id, subject: profile.subject, ...(restoration ? { restoreSource } : {}) })
     await waitSignal(directory, 'confirm.json', 30_000)
     const confirmed = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/' + intent.id + '/confirm' && r.request().method() === 'POST')
-    await dialog.getByRole('button', { name: '确认ACL修改', exact: true }).click()
+    await dialog.getByRole('button', { name: restoration ? '确认ACL历史恢复' : '确认ACL修改', exact: true }).click()
     const accepted = await confirmed; assert.equal(accepted.status(), 202)
     const pending = await accepted.json(); assert.equal(pending.state, 'Pending'); assert.equal(pending.confirmation, null)
     await writeSignal(directory, 'owner-confirmed.json', pending)
@@ -69,7 +80,7 @@ try {
     const logoutReceipt = await logoutFromUserMenu(page, context, base)
     assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(bodies, 0)
     await writeSignal(directory, 'owner-browser.json', { revision, id: intent.id, executionJobId: pending.executionJobId, subject: profile.subject,
-      actualUi: true, registrations, confirmations, bodies, logout: logoutReceipt, normalDualLogout: true })
+      actualUi: true, registrations, confirmations, bodies, logout: logoutReceipt, normalDualLogout: true, ...(restoration ? { restoreSource } : {}) })
   } else {
     assert.notEqual(profile.subject, fixture.originalSubject)
     const root = '/api/v1/files/container-acls/recovery'
@@ -131,6 +142,11 @@ try {
     await dialog.getByRole('button', { name: '暂不处置', exact: true }).click()
     assert.equal(confirmations, 0)
     const stillUnknown = await context.request.get(base + root + '/' + fixture.id); assert.equal(stillUnknown.status(), 200); assert.equal((await stillUnknown.json()).state, 'Unknown')
+    if (restoration) {
+      const denied = await context.request.get(base + `/api/v1/containers/${fixture.containerId}/files/acls/restores/${fixture.id}`)
+      assert.equal(denied.status(), 404)
+      assert.ok((stillUnknown.headers()['cache-control'] ?? '').includes('no-store'))
+    }
     if (fixture.postAcl) await inspectJob('unknown')
     await writeSignal(directory, 'recovery-dismissed.json', { id: fixture.id, subject: profile.subject, confirmations: 0, stillUnknown: true })
     await waitSignal(directory, 'allow-ack.json', 40_000)
@@ -173,7 +189,7 @@ try {
     phase = 'different-administrator-normal-dual-logout'
     const logoutReceipt = await logoutFromUserMenu(page, context, base)
     await writeSignal(directory, 'recovery-browser.json', { revision, id: fixture.id, subject: profile.subject, actualUi: true,
-      confirmations, registrations, bodies, originalState: old.state, waitingState: waiting.state, waitingVisibleInVue: true, waitingDirectoryInViewport: true, displayedContainerId: fixture.containerId, displayedPath: '/work/acl-file.bin', ackVersion: submitted.version, logout: logoutReceipt, normalDualLogout: true, jobReadsOnly })
+      confirmations, registrations, bodies, originalState: old.state, waitingState: waiting.state, waitingVisibleInVue: true, waitingDirectoryInViewport: true, displayedContainerId: fixture.containerId, displayedPath: '/work/acl-file.bin', ackVersion: submitted.version, logout: logoutReceipt, normalDualLogout: true, jobReadsOnly, ...(restoration ? { ownerRestoreStatus: 404, recoveryNoStore: true } : {}) })
   }
   await context.close()
   console.log(JSON.stringify({ aclUnknownBrowser: 'passed', mode }))

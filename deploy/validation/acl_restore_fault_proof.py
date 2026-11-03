@@ -14,7 +14,7 @@ RESTORE_SOURCES=tuple(dict.fromkeys((*RESTORE_BROWSER_SOURCES,'acl_restore_fault
     'verify_container_acl_restore_faults.py','test_acl_restore_fault_proof.py')))
 
 
-RESTORE_FAULT_KINDS={1:frozenset(('cancel','logout')),2:frozenset(('group-removal','account-disable')),3:frozenset(('worker-crash','agent-restart')),4:frozenset(('post-acl-cancel','post-acl-worker-crash')),5:frozenset(('post-acl-group-removal','post-acl-account-disable')),6:frozenset(('post-acl-agent-restart',))}
+RESTORE_FAULT_KINDS={1:frozenset(('cancel','logout')),2:frozenset(('group-removal','account-disable')),3:frozenset(('worker-crash','agent-restart')),4:frozenset(('post-acl-cancel','post-acl-worker-crash')),5:frozenset(('post-acl-group-removal','post-acl-account-disable')),6:frozenset(('post-acl-agent-restart',)),7:frozenset(('post-acl-target-removed',))}
 
 def restore_fault_version(kinds):
     assert kinds and len(kinds)==len(set(kinds)), 'RESTORE_FAULT_KINDS_INVALID'
@@ -101,6 +101,9 @@ def verify_restore_binding(row,baseline,storage,module):
 
 def verify_restore_audits(rows,row,baseline):
     require_restore_profile(baseline)
+    if baseline['aclRestoreFaultVersion']==7:
+        from acl_restore_unknown_proof import verify_restore_unknown_audits
+        return verify_restore_unknown_audits(rows,row,baseline)
     expected={'plan-accepted':('Accepted',row['id']),'plan-result':('Ready',row['id']),
         'confirmed':('Accepted',row['execution_job_id']),'result':('Succeeded' if baseline['aclRestoreFaultVersion'] in (4,5,6) else 'Failed' if baseline['aclRestoreFaultVersion']==3 else 'Canceled',row['execution_job_id'])}
     if baseline['kind'].removeprefix('post-acl-')=='cancel':expected['cancel-requested']=('Accepted',row['execution_job_id'])

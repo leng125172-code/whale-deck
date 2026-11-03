@@ -132,7 +132,11 @@ def save_facts(data, baseline, storage, module, directory=None, label='unknown')
     assert json.loads(raw)==record and record['state']=='Unknown' and record['aclConfirmed'] is None and record['actualIdentity'] is None and record['version']==''
     assert record['historyVerified'] and record['historyMayExist'] and record['historyDigest']==row['history_digest']
     original=baseline['original']['acl-file.bin'];assert plan['sourceIdentity']==original['identity'] and plan['accessAcl']==original['access'] and plan['defaultAcl']==original['default']
-    assert plan['command']['entries']==acl_profile('access') and plan['command']['aclType']=='access' and plan['noChange'] is False
+    desired=acl_profile('access')
+    if 'aclRestoreFaultVersion' in baseline:
+        from acl_restore_fault_proof import verify_restore_binding
+        desired=verify_restore_binding(row,baseline,storage,module)
+    assert plan['command']['entries']==desired and plan['command']['aclType']=='access' and plan['noChange'] is False
     assert plan['command']['expectedVersion']==version(baseline,'work/acl-file.bin',original['identity']) and plan['uid']==plan['gid']==1000
     receipt=json.loads(row['receipt_json']);assert re.fullmatch('[A-F0-9]{64}',row['receipt_hash'])
     assert receipt['Id']==row['execution_job_id'] and receipt['State']=='Unknown' and receipt['AclConfirmed'] is None and receipt['Version']=='' and receipt['BindingCurrent'] is False
@@ -189,24 +193,32 @@ def failure_ack(identifier):
         finally:session.close()
 
 
-def main():
+def main(restore=False):
     global PHASE
     assert os.geteuid()==0 and len(sys.argv) in (2,3);os.umask(0o077);revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision)
-    post=len(sys.argv)==3
-    if post:assert sys.argv[2] in ('post-acl','post-instance')
-    instance=post and sys.argv[2]=='post-instance'
+    assert type(restore) is bool
+    if restore:assert len(sys.argv)==2
+    post=restore or len(sys.argv)==3
+    if not restore and post:assert sys.argv[2] in ('post-acl','post-instance')
+    instance=not restore and post and sys.argv[2]=='post-instance'
     repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source_revision=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
-    for name in SOURCES:
+    source_names=SOURCES
+    if restore:
+        from acl_restore_unknown_proof import restore_unknown_sources
+        source_names=restore_unknown_sources()
+    for name in source_names:
         frozen=subprocess.check_output(['git','-C',str(repo),'show',source_revision+':deploy/validation/'+name]);assert frozen==(repo/'deploy/validation'/name).read_bytes();hashes[name]=hashlib.sha256(frozen).hexdigest()
     installed={}
-    for name in (*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged'):
+    installed_names=(*NAMES,'whaledeck-container-acl-transport.py','whaledeck-privileged')
+    if restore:installed_names=(*installed_names,'whaledeck-container-acl-history.py','whaledeck-container-acl-history-transport.py')
+    for name in installed_names:
         raw=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name]);assert raw==(Path('/usr/local/libexec')/name).read_bytes();installed[name]=hashlib.sha256(raw).hexdigest()
     base='http://127.0.0.1:8080'
     with requests.Session() as public:
         public.trust_env=False;r=public.get(base+'/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();hosts=host_snapshot(revision);worker=Worker();directory=repo/'deploy/artifacts'/('container-acl-unknown-'+uuid.uuid4().hex);directory.mkdir(mode=0o700)
-    (directory/'validation-source.json').write_text(json.dumps({'proofVersion':4 if instance else 3 if post else 2,'revision':source_revision,'productRevision':revision,'sha256':hashes,'installedSha256':installed}))
+    (directory/'validation-source.json').write_text(json.dumps({'proofVersion':5 if restore else 4 if instance else 3 if post else 2,'revision':source_revision,'productRevision':revision,'sha256':hashes,'installedSha256':installed,**({'aclRestoreFaultVersion':7} if restore else {})}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_unknown_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_unknown_module');files=reader.trusted_module('whaledeck-files.py','acl_unknown_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_unknown_hdd').FileBackups(files)
     print(json.dumps({'aclUnknown':'started','evidence':str(directory)}),flush=True)
     held=owner_browser=recovery_browser=None;identifier=waiting=None;client=profile=None;original_proved=waiting_proved=False
@@ -221,13 +233,22 @@ def main():
         baseline={'revision':revision,'validationSourceRevision':source_revision,'containerId':original['identifier'],'containerName':actual['Name'].lstrip('/'),
             'instanceId':str(actual['State']['Pid'])+':'+actual['State']['StartedAt'],'containerPid':actual['State']['Pid'],'source':str(folder),'original':inventory(folder,reader,module,content),
             'bytesPerFile':len(content),'sha256':hashlib.sha256(content).hexdigest().upper(),'coreBefore':owned.common.core_snapshot(),'hostsBefore':hosts,'evidence':str(directory),'postAcl':post,'instanceChanged':instance}
+        if restore:baseline.update(aclRestoreFaultVersion=7,kind='post-acl-target-removed')
         (directory/'baseline.json').write_text(json.dumps(baseline))
         try:
             PHASE='original-real-page-preflight'
             with temporary_user(True) as (username,password):
-                owner_browser=spawn('owner',revision,baseline,username,password,directory);ready=wait_signal(directory,'owner-ready.json',owner_browser);identifier=ready['id']
+                owner_browser=spawn('owner',revision,baseline,username,password,directory)
+                if restore:
+                    from acl_restore_fault_proof import accept_source_capture
+                    baseline['original']=accept_source_capture(owner_browser,directory,baseline,folder,reader,module,storage,content)
+                    (directory/'baseline.json').write_text(json.dumps(baseline))
+                ready=wait_signal(directory,'owner-ready.json',owner_browser);identifier=ready['id']
                 preflight([identifier]);worker.stop();write_signal(directory,'confirm.json',{'workerStopped':True});accepted=wait_signal(directory,'owner-confirmed.json',owner_browser,30)
                 row=snapshot(identifier)['row'];assert row['state']=='Pending' and row['execution_job_id']==accepted['executionJobId'];baseline.update(id=identifier,executionJobId=row['execution_job_id'],originalSubject=ready['subject']);(directory/'baseline.json').write_text(json.dumps(baseline))
+                if restore:
+                    from acl_history_browser_proof import typed_equal
+                    typed_equal(ready['restoreSource'],baseline['restoreSource'])
                 PHASE='actual-post-acl-cut' if post else 'actual-pre-acl-hdd-cut'
                 with ThreadPoolExecutor(max_workers=1) as pool:
                     observing=pool.submit(freeze_after_acl if post else freeze_before_acl,row,folder,baseline['containerPid'],'HistoryVerified');worker.start(wait_ready=False);held=observing.result(timeout=28)
@@ -252,6 +273,7 @@ def main():
                     assert owner_browser.wait(timeout=35)==0,'ORIGINAL_NORMAL_LOGOUT_FAILED';elapsed=observing.result(timeout=16)
                 assert elapsed is not None and elapsed<15,'PRODUCT_DID_NOT_STOP_UNKNOWN_ACL_HELPER';held.release();held=None
                 owner_ui=json.loads((directory/'owner-browser.json').read_bytes());assert owner_ui['subject']==ready['subject'] and owner_ui['actualUi'] and owner_ui['normalDualLogout']
+                if restore:typed_equal(owner_ui['restoreSource'],baseline['restoreSource'])
             PHASE='original-unknown-facts';unknown=wait_settled(identifier);record,raw_root,raw_hdd=save_facts(unknown,baseline,storage,module,directory)
             assert unknown['row']['state']=='Unknown' and inventory(folder,reader,module,content)==expected_physical(baseline)
             with temporary_user(True) as (username,password):
@@ -271,6 +293,8 @@ def main():
                 final=snapshot(identifier);final_record,final_root,final_hdd=save_facts(final,baseline,storage,module,directory,'final');assert final['row']['state']=='Acknowledged' and final['row']['acknowledged_by']==profile['subject']
                 if post:verify_unknown_jobs(final,json.loads((directory/'acknowledged-jobs.json').read_bytes()),'acknowledged')
                 for key in ('receipt_json','receipt_hash','acl_confirmed','history_may_exist','history_verified','history_digest','published_version','actor_subject','login_binding','execution_job_id','plan_json','command_json'):assert final['row'][key]==unknown['row'][key]
+                if restore:
+                    for key in ('restore_source_json','request_hash','plan_hash','execution_hash','owner_hash'):assert final['row'][key]==unknown['row'][key]
                 assert final_root==raw_root and final_hdd==raw_hdd and final_record==record
                 if instance:
                     latest=json.loads(command('docker','inspect',original['identifier']))[0];assert instance_frame(latest)==transition['after']
