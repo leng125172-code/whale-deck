@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 2026-11-04 来源异步预检缺失分项实机通过：4d38a51冻结74源码闭包/13安装helper，新资源真实选源后仅停原Worker，来源可读时登记202/Queued；隔离新原件取得404/原key200后再启动同Worker，原规划Failed/RESTORE_SOURCE_CHANGED，无计划/确认/执行/Root和当前前像。原inode字节还原后只查询原失败任务，5真PNG/两主题“未证明”摘要、2审计、正常双端退出/HTTP拒绝、完整实盘及独立核验/准确清理通过。旧139HDD字节九字段保持/总140，新捕获ctime变化保留；六组件28062da/两宿主/11核心/7配置账本保持、仅Worker StartedAt改变、活动0。8+11+22+28+5+8离线通过；首次登记拒绝/替换/依赖中断、递归ACL/删除及维护连续性和其余59项继续。[实机事实与边界](qa/CONTAINER_ACL_SOURCE_PLAN_MISSING.md)。
+
 - 2026-11-04 来源首次Apply缺失分项实机通过：bbd1b52运行前冻结69源码闭包/13安装helper，新资源真实捕获/选源/Ready后仅停原Worker，原确认202→Pending；隔离新原件取得404/原key200后再启动同Worker，原执行Failed/RESTORE_SOURCE_CHANGED、Root Aborted/false、RootStarted空/无当前前像。原inode字节还原后迟到同ID Root Apply仍Aborted；5真PNG/两主题执行摘要、4审计、正常双端退出/HTTP拒绝、实盘及独立核验/准确清理通过。旧138HDD字节九字段保持/总139，新捕获ctime改变保留；六组件28062da/两宿主/11核心/7配置账本保持，只有Worker StartedAt改变、活动0。11+5+22+28+8离线通过；登记/预检/替换/依赖中断、递归ACL/删除及维护连续性和其余59项继续。[实机事实与边界](qa/CONTAINER_ACL_SOURCE_APPLY_MISSING.md)。
 
 - 2026-11-04 来源确认缺失分项实机通过：c3dca1f冻结42入口文件/13安装helper，新资源正常Authentik→Vue捕获/选源/Ready，仅隔离新历史原件；真实历史404、原确认409/OPERATION_CONFLICT、原key200及完整SQL保持、执行/新Root/HDD为0。原inode/字节还原后真实读取200，原页面明确取消且正常双端退出；2个真实320暗色PNG、3审计、普通HTTP403/匿名401、独立核验及准确清理通过。137旧元数据字节九字段不变/总138，新捕获ctime改变明确保留；六组件28062da/两宿主/11核心/7配置/账本保持、活动0，无发布重启。5+22+28+8离线通过；只签此确认缺失组合，登记/预检/Apply/替换/依赖中断、递归ACL/删除及维护连续性和其余59项继续。[实机事实与边界](qa/CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md)。
