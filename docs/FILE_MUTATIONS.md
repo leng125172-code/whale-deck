@@ -1,5 +1,7 @@
 # 文件操作、编辑与回收站实施契约
 
+**2026-11-03 ACL写后同CID实例变化已实机签收**：QA冻结d2ca69d/proofVersion4，产品仍447070e/1.51，无新增部署。仅重启本案容器一次，CID/镜像/绑定保持、PID4044343→4047348及StartedAt改变；旧计划/回执仍绑定旧实例、Root/SQL Unknown且aclConfirmed=null，实际已写ACL不回滚或续做。不同当前管理员真实320×600暗色页面先暂不处置再明确确认，两次任务摘要“未证明”完整入视口；跨容器目录四次自然延期[2,4,6,8]后同ID才发布。原Root/HDD/迟到Apply不变、3Job/7审计/9真实PNG、独立原件与准确清理、81相关门禁及11核心healthy通过。首轮Docker弃用提示导致断言失败和降级确认已保留，不计整体首轮通过；其他共享写入/磁盘/路径与摘要分支、ACL递归恢复/删除及59项继续。[实际失败、实例绑定与验收边界](qa/CONTAINER_ACL_INSTANCE_CHANGE.md)。
+
 **2026-11-03 写后目标消失Unknown/处置摘要与447070e小屏修复已实机通过**：前两新资源在612f77c真实写后/Unknown/明确处置已发生，但Ack字段完整视口失败，原件与准确清理保留、不记通过。已补真实长错误码复现，447070e固定详情表格与长值换行并正常覆盖，六组件/HTTP/实际进程映射一致，Agent3947643/维护3947551、协议1.51，无新迁移。第三套全新资源严格门禁及独立复核通过：ACL已变后原容器移除，原Unknown/null/Root/HDD保持，另一管理员先暂不处置再确认，原Job Failed/Acknowledged，Unknown→Ack两任务摘要及“未证明”完整入视口，另一容器目录四次真实延期后同ID发布。75边界、27前端单元与8浏览器、9实际PNG/准确清理/11核心healthy通过；不记整体首轮通过。其他实例/磁盘/共享写入与摘要分支、ACL递归恢复/删除和59项继续。[失败、修复与真实证据](qa/CONTAINER_ACL_POST_UNKNOWN.md)。
 
 **2026-11-03 ACL写后Agent重启及原任务摘要实机通过**：运行612f77c/1.51不重发，冻结47a1769/schema6的新独占资源在目标ACL已写/Root Applying且未回执时实际重启Agent；产品0.013秒停原helper，Agent3747527→3835700，维护3747520不变/153次HTTP200 healthy-Ready。原任务Succeeded/Completed、完整写后清单/1HDD与迟到同操作Apply不再变化；原预检Ready及执行Succeeded两份SQL/API摘要、320×600暗色真实详情和同上下文正常双端退出通过。独立原件/准确清理、48边界/范围与语法通过，11核心healthy。其余Unknown/实例/共享写入/摘要分支、递归恢复/删除与59项继续。[实机证据与界限](qa/CONTAINER_ACL_POST_AGENT_RESTART.md)。
