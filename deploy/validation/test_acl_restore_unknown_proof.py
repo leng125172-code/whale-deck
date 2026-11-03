@@ -3,10 +3,10 @@ import copy
 import unittest
 import test_acl_restore_fault_proof as restoration_fixtures
 import test_acl_unknown_proof as unknown_fixtures
-from acl_restore_unknown_proof import require_restore_unknown,verify_restore_unknown_audits,restore_unknown_sources
+from acl_restore_unknown_proof import require_restore_unknown,verify_restore_unknown_audits,restore_unknown_sources,recovery_source_summary,require_recovery_source_ui,RECOVERY_SOURCE_FIELDS,require_source_denials
 from acl_restore_fault_proof import prove_binding,verify_restore_audits,restore_fault_version
 from verify_container_acl_unknown import require_source_version,require_acknowledgement
-from validate_container_acl_unknown import unknown_mode
+from validate_container_acl_unknown import unknown_mode,unknown_arguments
 
 class RestoreUnknownProofTests(unittest.TestCase):
     def setUp(self):
@@ -15,6 +15,65 @@ class RestoreUnknownProofTests(unittest.TestCase):
         self.row.update(state='Unknown',acknowledged_by=None)
         self.audits[-1]['result']='Unknown'
         self.baseline={**self.fixture.baseline,'aclRestoreFaultVersion':7,'kind':'post-acl-target-removed','postAcl':True,'instanceChanged':False}
+
+    def source_ui_fixture(self):
+        baseline={**self.baseline,'id':'intent','originalSubject':'old','recoverySourceUiVersion':1,'restoreSource':self.fixture.source}
+        recovery={'id':'intent','subject':'new','recoverySourceUiVersion':1}
+        source=recovery_source_summary(baseline)
+        text='历史ACL恢复来源 '+source['captureId']+' '+source['changedAclType']+' '+('文件' if source['kind']=='File' else '目录')+' time 原模式 '+format(source['originalMode'],'04o')+' access '+str(source['accessEntryCount'])+' 项 default '+str(source['defaultEntryCount'])+' 项 这是登记时保存的历史来源摘要，不证明当前文件状态或恢复成功。'
+        proof={'schemaVersion':1,'id':'intent','subject':'new','reads':[{'status':200,'noStore':True,'source':copy.deepcopy(source)} for _ in range(3)],'cardText':text,'timeText':'time','confirmationText':'intent '+source['captureId']+' '+source['changedAclType'],'cardInViewport':True,'confirmationInViewport':True,'horizontalOverflow':False}
+        return baseline,recovery,proof
+
+    def test_source_ui_proof_seven_requires_explicit_marker_and_preserves_old_profiles(self):
+        for instance in (False,True):
+            baseline={**self.baseline,'aclRestoreFaultVersion':8 if instance else 7,'kind':'post-acl-instance-change' if instance else 'post-acl-target-removed','instanceChanged':instance}
+            old={'proofVersion':6 if instance else 5,'aclRestoreFaultVersion':baseline['aclRestoreFaultVersion']}
+            require_source_version(old,baseline)
+            new={**old,'proofVersion':7,'recoverySourceUiVersion':1};fresh={**baseline,'recoverySourceUiVersion':1}
+            require_source_version(new,fresh)
+            for source,base in ((new,baseline),(old,fresh),({**new,'recoverySourceUiVersion':True},fresh),(new,{**fresh,'recoverySourceUiVersion':True})):
+                with self.subTest(source=source,base=base),self.assertRaises(AssertionError):require_source_version(source,base)
+        with self.assertRaises(AssertionError):require_source_version({'proofVersion':7},dict(postAcl=True,instanceChanged=False))
+
+    def test_source_ui_cli_is_opt_in_and_cannot_change_fault_mode(self):
+        self.assertEqual(unknown_arguments(['source-ui'],True),(True,False,True))
+        self.assertEqual(unknown_arguments(['post-instance','source-ui'],True),(True,True,True))
+        self.assertEqual(unknown_arguments([],True),(True,False,False))
+        for args,restore in ((['source-ui'],False),(['source-ui','post-instance'],True),(['source-ui','source-ui'],True),(['post-acl','source-ui'],True),(['post-instance','source-ui','extra'],True)):
+            with self.subTest(args=args),self.assertRaises(AssertionError):unknown_arguments(args,restore)
+
+    def test_source_ui_proof_requires_actual_card_three_exact_reads_and_current_actor(self):
+        baseline,recovery,proof=self.source_ui_fixture();require_recovery_source_ui(baseline,recovery,proof)
+        for key in proof:
+            changed=copy.deepcopy(proof);del changed[key]
+            with self.subTest(missing=key),self.assertRaises((AssertionError,KeyError)):require_recovery_source_ui(baseline,recovery,changed)
+        for key,value in [('schemaVersion',True),('id','foreign'),('subject','old'),('cardInViewport',False),('confirmationInViewport',False),('horizontalOverflow',True),('cardText','fake'),('timeText','absent'),('confirmationText','intent only'),('extra','private')]:
+            changed={**proof,key:value}
+            with self.subTest(key=key),self.assertRaises(AssertionError):require_recovery_source_ui(baseline,recovery,changed)
+        for count in (0,1,2,4):
+            with self.subTest(count=count),self.assertRaises(AssertionError):require_recovery_source_ui(baseline,recovery,{**proof,'reads':(proof['reads']*2)[:count]})
+
+    def test_source_ui_never_accepts_changed_missing_or_overbroad_summary_at_any_read(self):
+        baseline,recovery,proof=self.source_ui_fixture()
+        for index in range(3):
+            for key,value in [('status',204),('status',True),('status',403),('noStore',False),('source',None)]:
+                changed=copy.deepcopy(proof);changed['reads'][index][key]=value
+                with self.subTest(index=index,key=key,value=value),self.assertRaises(AssertionError):require_recovery_source_ui(baseline,recovery,changed)
+            for field in RECOVERY_SOURCE_FIELDS:
+                changed=copy.deepcopy(proof);changed['reads'][index]['source'][field]='replacement'
+                with self.subTest(index=index,field=field),self.assertRaises(AssertionError):require_recovery_source_ui(baseline,recovery,changed)
+            for extra in ('accessAcl','historyDigest','sourceInstanceId'):
+                changed=copy.deepcopy(proof);changed['reads'][index]['source'][extra]='private'
+                with self.subTest(index=index,extra=extra),self.assertRaises(AssertionError):require_recovery_source_ui(baseline,recovery,changed)
+
+    def test_source_summary_denials_require_actual_401_403_and_normal_http_logout(self):
+        proof={'schemaVersion':1,'anonymousStatus':401,'ordinaryStatus':403,'ordinaryAdministrator':False,'anonymousIsolatedSession':True,'normalHttpDualLogout':True}
+        require_source_denials(proof)
+        for key in proof:
+            changed=copy.deepcopy(proof);del changed[key]
+            with self.subTest(key=key),self.assertRaises(AssertionError):require_source_denials(changed)
+        for key,value in [('anonymousStatus',200),('ordinaryStatus',404),('ordinaryAdministrator',0),('normalHttpDualLogout',False),('extra','private')]:
+            with self.subTest(key=key),self.assertRaises(AssertionError):require_source_denials({**proof,key:value})
 
     def test_restore_unknown_has_distinct_provenance_and_selected_source(self):
         require_restore_unknown(self.baseline)

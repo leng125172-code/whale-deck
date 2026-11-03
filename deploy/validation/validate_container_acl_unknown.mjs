@@ -17,6 +17,8 @@ try {
   assert.ok(directory.startsWith(prefix)); assert.match(directory.slice(prefix.length), /^container-acl-unknown-[a-f0-9]{32}$/)
   const restoration = fixture.aclRestoreFaultVersion !== undefined
   if (restoration) { assert.ok([7, 8].includes(fixture.aclRestoreFaultVersion)); assert.equal(fixture.kind, fixture.aclRestoreFaultVersion === 8 ? 'post-acl-instance-change' : 'post-acl-target-removed'); assert.equal(fixture.postAcl, true); assert.equal(fixture.instanceChanged, fixture.aclRestoreFaultVersion === 8) }
+  const sourceUi = fixture.recoverySourceUiVersion !== undefined
+  if (sourceUi) { assert.equal(restoration, true); assert.equal(fixture.recoverySourceUiVersion, 1) }
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
   context = await browser.newContext({ viewport: { width: mode === 'owner' ? 1440 : 320, height: 600 }, colorScheme: mode === 'owner' ? 'light' : 'dark', reducedMotion: 'reduce' })
@@ -85,6 +87,13 @@ try {
     assert.notEqual(profile.subject, fixture.originalSubject)
     const root = '/api/v1/files/container-acls/recovery'
     let confirmations = 0, registrations = 0, bodies = 0
+    const sourceReads = []
+    let sourceCardText, sourceTimeText, sourceConfirmationText
+    const expectedSource = sourceUi ? Object.fromEntries(['captureId','changedAclType','kind','createdAtUnixMs','originalMode','accessEntryCount','defaultEntryCount'].map(key => [key, fixture.restoreSource.entry[key]])) : null
+    if (sourceUi) page.on('response', response => {
+      if (new URL(response.url()).pathname === root + '/' + fixture.id + '/restore-source' && response.request().method() === 'GET')
+        sourceReads.push(response.json().then(source => ({ status: response.status(), noStore: (response.headers()['cache-control'] ?? '').includes('no-store'), source })).catch(() => ({ invalidResponse: true })))
+    })
     let jobReadsOnly = false
     async function inspectJob(stage) {
       assert.equal(fixture.postAcl, true)
@@ -137,6 +146,18 @@ try {
     await expect(candidate).toContainText('结果未知，保护已保留')
     await expect(candidate).toContainText(/ACL变更：\s*尚未确认/)
     await expect(candidate).toContainText('已验证HDD元数据留存')
+    if (sourceUi) {
+      const card = candidate.getByRole('region', { name: '历史ACL恢复来源', exact: true })
+      await expect(card).toHaveCount(1); await expect(card.locator('code')).toHaveText(expectedSource.captureId)
+      sourceTimeText = await page.evaluate(ms => new Date(ms).toLocaleString('zh-CN', { hour12: false }), expectedSource.createdAtUnixMs)
+      for (const text of [sourceTimeText, '这是登记时保存的历史来源摘要，不证明当前文件状态或恢复成功。']) await expect(card).toContainText(text)
+      await card.scrollIntoViewIfNeeded(); await expect(card).toBeInViewport({ ratio: 1 })
+      sourceCardText = (await card.innerText()).replace(/\s+/g, ' ')
+      for (const text of [expectedSource.changedAclType, expectedSource.kind === 'File' ? '文件' : '目录', '原模式 ' + expectedSource.originalMode.toString(8).padStart(4, '0'), 'access ' + expectedSource.accessEntryCount + ' 项', 'default ' + expectedSource.defaultEntryCount + ' 项']) assert.ok(sourceCardText.includes(text))
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+      await page.screenshot({ path: join(directory, 'unknown-source-mobile-dark.png') })
+      assert.equal(sourceReads.length, 1); assert.deepEqual(await sourceReads[0], { status: 200, noStore: true, source: expectedSource })
+    }
     await candidate.getByRole('button', { name: '处置历史结果', exact: true }).click()
     await expect(dialog.getByText(/原任务会以失败结束/)).toBeVisible()
     await dialog.getByRole('button', { name: '暂不处置', exact: true }).click()
@@ -154,6 +175,13 @@ try {
     await expect(dialog.getByRole('button', { name: '确认处置并释放保护', exact: true })).toBeInViewport({ ratio: 1 })
     await expect(dialog.getByRole('button', { name: '暂不处置', exact: true })).toBeInViewport({ ratio: 1 })
     await page.screenshot({ path: join(directory, 'unknown-confirmation-mobile-dark.png') })
+    if (sourceUi) {
+      const reference = dialog.locator('.acl-recovery__reference')
+      await expect(reference).toContainText(expectedSource.captureId); await expect(reference).toBeInViewport({ ratio: 1 })
+      sourceConfirmationText = (await reference.innerText()).replace(/\s+/g, ' ')
+      await page.screenshot({ path: join(directory, 'unknown-source-confirmation-mobile-dark.png') })
+    }
+
     const acknowledged = page.waitForResponse(r => new URL(r.url()).pathname === root + '/' + fixture.id + '/acknowledge' && r.request().method() === 'POST')
     await dialog.getByRole('button', { name: '确认处置并释放保护', exact: true }).click()
     const accepted = await acknowledged; assert.equal(accepted.status(), 202)
@@ -163,6 +191,14 @@ try {
     const old = await (await context.request.get(base + root + '/' + fixture.id)).json()
     assert.equal(old.state, 'Acknowledged'); assert.equal(old.aclConfirmed, null); assert.equal(old.publishedVersion, null)
     assert.equal(old.historyVerified, true); assert.equal(old.confirmation, null)
+    if (sourceUi) {
+      assert.equal(sourceReads.length, 3)
+      const reads = await Promise.all(sourceReads)
+      for (const read of reads) assert.deepEqual(read, { status: 200, noStore: true, source: expectedSource })
+      await writeSignal(directory, 'recovery-source-ui.json', { schemaVersion: 1, id: fixture.id, subject: profile.subject, reads,
+        cardText: sourceCardText, timeText: sourceTimeText, confirmationText: sourceConfirmationText, cardInViewport: true, confirmationInViewport: true,
+        horizontalOverflow: await page.evaluate(() => document.documentElement.scrollWidth > innerWidth) })
+    }
     if (fixture.postAcl) await inspectJob('acknowledged')
     phase = 'other-container-starts-only-after-release'
     let waiting
@@ -189,7 +225,7 @@ try {
     phase = 'different-administrator-normal-dual-logout'
     const logoutReceipt = await logoutFromUserMenu(page, context, base)
     await writeSignal(directory, 'recovery-browser.json', { revision, id: fixture.id, subject: profile.subject, actualUi: true,
-      confirmations, registrations, bodies, originalState: old.state, waitingState: waiting.state, waitingVisibleInVue: true, waitingDirectoryInViewport: true, displayedContainerId: fixture.containerId, displayedPath: '/work/acl-file.bin', ackVersion: submitted.version, logout: logoutReceipt, normalDualLogout: true, jobReadsOnly, ...(restoration ? { ownerRestoreStatus: 404, recoveryNoStore: true, instanceChanged: fixture.instanceChanged } : {}) })
+      confirmations, registrations, bodies, originalState: old.state, waitingState: waiting.state, waitingVisibleInVue: true, waitingDirectoryInViewport: true, displayedContainerId: fixture.containerId, displayedPath: '/work/acl-file.bin', ackVersion: submitted.version, logout: logoutReceipt, normalDualLogout: true, jobReadsOnly, ...(sourceUi ? { recoverySourceUiVersion: 1 } : {}), ...(restoration ? { ownerRestoreStatus: 404, recoveryNoStore: true, instanceChanged: fixture.instanceChanged } : {}) })
   }
   await context.close()
   console.log(JSON.stringify({ aclUnknownBrowser: 'passed', mode }))

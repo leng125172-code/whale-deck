@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in restore Unknown/ack gate; optional post-instance restarts only its owned container."""
+"""Opt-in restore Unknown/ack gate; optional post-instance restarts only its owned container; source-ui proves the new read-only card."""
 from pathlib import Path
 import json
 import traceback

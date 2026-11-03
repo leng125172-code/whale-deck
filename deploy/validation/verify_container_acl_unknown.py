@@ -21,13 +21,17 @@ IMMUTABLE=('receipt_json','receipt_hash','acl_confirmed','history_may_exist','hi
 
 
 def require_source_version(source,baseline):
-    version=source['proofVersion'];assert type(version) is int and version in (2,3,4,5,6)
+    version=source['proofVersion'];assert type(version) is int and version in (2,3,4,5,6,7)
     if 'aclRestoreFaultVersion' in baseline:
         from acl_restore_unknown_proof import require_restore_unknown
         require_restore_unknown(baseline)
-        assert version==(6 if baseline['aclRestoreFaultVersion']==8 else 5) and type(source.get('aclRestoreFaultVersion')) is int and source['aclRestoreFaultVersion']==baseline['aclRestoreFaultVersion']
+        if 'recoverySourceUiVersion' in baseline:
+            assert type(baseline['recoverySourceUiVersion']) is int and baseline['recoverySourceUiVersion']==1
+            assert type(source.get('recoverySourceUiVersion')) is int and source['recoverySourceUiVersion']==1 and version==7
+        else:assert 'recoverySourceUiVersion' not in source and version==(6 if baseline['aclRestoreFaultVersion']==8 else 5)
+        assert type(source.get('aclRestoreFaultVersion')) is int and source['aclRestoreFaultVersion']==baseline['aclRestoreFaultVersion']
         return
-    assert 'aclRestoreFaultVersion' not in source and version not in (5,6)
+    assert 'aclRestoreFaultVersion' not in source and version not in (5,6,7) and 'recoverySourceUiVersion' not in baseline and 'recoverySourceUiVersion' not in source
     if baseline.get('instanceChanged',False):assert baseline['instanceChanged'] is True and baseline['postAcl'] is True and version==4
     elif baseline.get('postAcl',False):assert baseline['postAcl'] is True and version==3
     else:assert version==2
@@ -88,6 +92,13 @@ def verify(directory):
         from acl_history_browser_proof import typed_equal
         typed_equal(owner['restoreSource'],baseline['restoreSource'])
         assert type(recovery['ownerRestoreStatus']) is int and recovery['ownerRestoreStatus']==404 and recovery['recoveryNoStore'] is True
+    if 'recoverySourceUiVersion' in baseline:
+        from acl_restore_unknown_proof import require_recovery_source_ui,require_source_denials
+        require_source_denials(read(directory/'source-auth-denials.json'))
+        assert type(accepted.get('recoverySourceUiVersion')) is int and accepted['recoverySourceUiVersion']==1
+        require_recovery_source_ui(baseline,recovery,read(directory/'recovery-source-ui.json'))
+        for name in ('unknown-source-mobile-dark.png','unknown-source-confirmation-mobile-dark.png'):
+            path=directory/name;info=trusted(path);assert 1000<info.st_size<4*1024**2 and path.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
     assert recovery['displayedContainerId']==baseline['containerId'] and recovery['displayedPath']=='/work/acl-file.bin'
     assert 0<=accepted['productStoppedHelperSeconds']<15 and accepted['validatorKilledHelper'] is False
     if baseline.get('instanceChanged',False):
@@ -146,7 +157,7 @@ def verify(directory):
         for prefix in ('whaledeck-validation-','whaledeck-upload-qa-'):
             r=api.get(AUTHENTIK_API+'core/users/',params={'search':prefix,'page_size':100},timeout=20);assert r.status_code==200 and not r.json().get('pagination',{}).get('next') and not any(str(u['username']).startswith(prefix) for u in r.json()['results'])
     return {'independentReadOnlyVerifier':True,'revision':baseline['revision'],'id':row['id'],'aclConfirmed':None,'originalExecutionFailed':True,'rootUnknownUnchanged':True,'originalHddUnchanged':True,'sameCidInstanceChanged':baseline.get('instanceChanged',False),
-        'differentAdministratorActualPage':True,'fourNaturalDeferrals':True,'actualWaitingDirectoryVisibleInVue':True,'lateApplyRemainsUnknown':True,'exactSourcesAndContainersAbsent':True,'temporaryIdentitiesAbsent':True,'coreHealthy':11,'physicalFullBytesAndAclsVerifiedByParentBeforeCleanup':True}
+        **({'recoverySourceUiVerified':True,'sourceSummaryAnonymous401Ordinary403':True} if 'recoverySourceUiVersion' in baseline else {}),'differentAdministratorActualPage':True,'fourNaturalDeferrals':True,'actualWaitingDirectoryVisibleInVue':True,'lateApplyRemainsUnknown':True,'exactSourcesAndContainersAbsent':True,'temporaryIdentitiesAbsent':True,'coreHealthy':11,'physicalFullBytesAndAclsVerifiedByParentBeforeCleanup':True}
 
 
 if __name__=='__main__':

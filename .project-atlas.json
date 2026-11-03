@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RECOVERY_SOURCE_UI.md",
-  "nextStep": "管理员Recovery只读来源摘要与Vue候选已实现，4368单元/490集成（7默认跳过）/1087前端单元/68预览页面通过，待CI成功后标准覆盖并真实身份、文件/HDD及来源展示验收；再来源异常、磁盘共享、递归ACL/恢复、删除长期清理及其余59项。运行仍b69302b/1.52，两宿主保持，不自动回滚dev；17项移出不算完成。"
+  "nextStep": "28062da四镜像已标准预构建、未部署；实际五组件仍b69302b/1.52，预构建后六组件总probe拒绝，需发布后再一致核验。source-ui实机门禁候选126检查通过，待产品CI frontend成功终态后唯一标准覆盖与真实来源卡片/文件HDD验收，再来源异常、递归ACL/恢复、删除等59项；17项移出不算完成，不自动回滚dev。"
 }

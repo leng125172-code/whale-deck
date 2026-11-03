@@ -54,3 +54,20 @@
 候选须取得准确CI成功终态，再标准覆盖发布；使用全新自有资源和真实Authentik身份，验证来源卡片、明确处置、原owner接口404、文件/HDD原件与不可变原回执、正常退出、准确清理及独立核验。不能把本轮夹具页面接到前批实盘证据上，声称新增来源UI已经真实签收。
 
 来源丢失/替换等真实组合、其它共享写入与磁盘保护、递归ACL与递归恢复、可恢复删除和长期清理及其余59主任务继续。整体ACL、文件管理或P0–P5阶段均未新增完整签收；17项移出不算完成。
+
+
+## 接续：四镜像预构建与来源UI实机门禁候选（2026-11-04，未发布）
+
+冻结产品仍为`28062da454fd579d6860391a88816dab0bfca143`，四镜像标准build-images.sh退出0，API/Worker/Migrator/Gateway实际镜像ID、OCI revision和隔离只读无网络CLI内部版本均匹配。运行checkout仅由user干净快进至该准确公开提交；两次GitHub TLS抓取失败后，使用已经远端核对的本机Git对象传输，没有复制私有配置或工作区未提交文件。
+
+发布前与构建后只读核对：11核心healthy，全部ID/镜像/StartedAt保持；两宿主1772448/1688513 active、实际exe与映射DLL核验通过。7配置/能力密钥/sudo规则SHA/uid/gid/mode、可信账本、135份ACL HDD元数据字节SHA和九字段保持，活动Job/终端/锁/屏障/未完成意图为0。无发布、迁移、服务重启、新身份/文件写入或自动回滚。
+
+**六组件总probe在预构建后拒绝，不签其成功。** 三个旧运行镜像ID的image inspect均返回1，候选Migrator镜像也已属于28062da；严格probe返回PLATFORM_REVISION_UNPROVEN。此时分别核对运行容器内CLI/容器自身来源标签与两宿主实际进程，五个运行组件仍为b69302b；四个待发布镜像另行核对为28062da。未重标旧镜像、修改探针或账本来伪造一致。标准发布后仍须总probe六组件一致及安装validator通过，当前不能把预构建当已部署。
+
+实机工具新增显式`source-ui`参数：`validate_container_acl_restore_unknown.py <product-sha> source-ui`仍只执行原profile7目标移除；显式`post-instance source-ui`才是原profile8单个自有容器重启。新增`recoverySourceUiVersion=1`和private proofVersion7，原profile7/proof5、profile8/proof6及普通Unknown proof2/3/4保持独立、可读，不改Root故障权限或枚举。未知、混合、颠倒参数和普通ACL请求来源UI均在动作前拒绝。
+
+新证明要求页面实际发出的3次摘要GET（加载、确认前、确认后），均200/no-store，7字段逐值/逐类型等于原已验证捕获来源；卡片全部值/历史说明、捕获编号/时间、确认区同源编号在320×600暗色视口内且无横向溢出，保存两张新增真实截图。来源不规范、增字段、缺失/替换、错误状态、缺no-store、旧证明冒签和确认区不一致均拒绝。保留另一管理员owner恢复接口404、原Root Unknown/null确认、HDD与来源不改、明确ack一次、等待目录自然延期后释放、正常双端退出和准确清理/独立复核。另要求全新普通Authentik身份HTTP403、独立匿名401、普通身份正常HTTP双端退出，不能把它说成普通用户Vue页面验收。
+
+本轮126项相关检查全部通过且无跳过：22普通Unknown、14恢复Unknown、28恢复来源、44 Linux-root范围、10恢复浏览器证明、8范围；Python警告即错误编译、JS语法及git diff通过。首轮2个新测试因夹具未放入完整restoreSource而KeyError，修正夹具后通过；没有放宽产品或证明验证。边界脚本首次把固定history.lock当元数据拒绝，已改为显式核对其root/0600普通文件并排除计数；未知条目仍拒绝。以上均是候选工具和只读部署准备，**新source-ui实机门禁尚未执行**，不拼接旧9张实盘图冒充来源卡片。
+
+准确产品CI run41681017703目前backend/native-postgres/native-valkey/installer成功，frontend仍在运行，不签完整CI终态。下一步待准确成功后唯一标准覆盖，再用本批冻结工具和新资源进行真实来源UI整链。当前MD/阶段仍部分实现，59主项完成率不升。证据：`deploy/artifacts/acl-recovery-source-release-28062da/`，包含发布前/构建后只读边界、四镜像来源、构建日志及126检查；凭据只在原私有环境，不进仓库或日志。

@@ -43,6 +43,33 @@ def unknown_mode(arguments,restore=False):
     return restore or bool(arguments),arguments==['post-instance']
 
 
+def unknown_arguments(arguments,restore=False):
+    assert type(arguments) is list and type(restore) is bool
+    source_ui=bool(arguments and arguments[-1]=='source-ui')
+    assert not source_ui or restore, 'RESTORE_SOURCE_UI_REQUIRES_RESTORE'
+    post,instance=unknown_mode(arguments[:-1] if source_ui else arguments,restore)
+    return post,instance,source_ui
+
+
+def source_ui_denials(base,identifier,directory):
+    assert str(uuid.UUID(identifier))==identifier
+    url=base+'/api/v1/files/container-acls/recovery/'+identifier+'/restore-source'
+    with requests.Session() as anonymous:
+        anonymous.trust_env=False
+        assert anonymous.get(url,allow_redirects=False,timeout=20).status_code==401
+    with temporary_user(False) as (name,password):
+        client,profile=login(base,name,password,admin=False)
+        try:
+            assert profile['isAdministrator'] is False
+            request(client,'GET',url,403)
+            logout(base,client)
+        finally:client.close()
+    proof={'schemaVersion':1,'anonymousStatus':401,'ordinaryStatus':403,'ordinaryAdministrator':False,'anonymousIsolatedSession':True,'normalHttpDualLogout':True}
+    from acl_restore_unknown_proof import require_source_denials
+    require_source_denials(proof)
+    (directory/'source-auth-denials.json').write_text(json.dumps(proof))
+
+
 def expected_physical(baseline):
     return baseline['cutPhysical'] if baseline.get('postAcl',False) else baseline['original']
 
@@ -202,8 +229,8 @@ def failure_ack(identifier):
 
 def main(restore=False):
     global PHASE
-    assert os.geteuid()==0 and len(sys.argv) in (2,3);os.umask(0o077);revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision)
-    post,instance=unknown_mode(sys.argv[2:],restore)
+    assert os.geteuid()==0 and len(sys.argv) in (2,3,4);os.umask(0o077);revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision)
+    post,instance,source_ui=unknown_arguments(sys.argv[2:],restore)
     repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source_revision=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
     source_names=SOURCES
@@ -221,7 +248,7 @@ def main(restore=False):
     with requests.Session() as public:
         public.trust_env=False;r=public.get(base+'/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();hosts=host_snapshot(revision);worker=Worker();directory=repo/'deploy/artifacts'/('container-acl-unknown-'+uuid.uuid4().hex);directory.mkdir(mode=0o700)
-    (directory/'validation-source.json').write_text(json.dumps({'proofVersion':(6 if instance else 5) if restore else 4 if instance else 3 if post else 2,'revision':source_revision,'productRevision':revision,'sha256':hashes,'installedSha256':installed,**({'aclRestoreFaultVersion':8 if instance else 7} if restore else {})}))
+    (directory/'validation-source.json').write_text(json.dumps({'proofVersion':7 if source_ui else (6 if instance else 5) if restore else 4 if instance else 3 if post else 2,'revision':source_revision,'productRevision':revision,'sha256':hashes,'installedSha256':installed,**({'aclRestoreFaultVersion':8 if instance else 7} if restore else {}),**({'recoverySourceUiVersion':1} if source_ui else {})}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_unknown_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_unknown_module');files=reader.trusted_module('whaledeck-files.py','acl_unknown_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_unknown_hdd').FileBackups(files)
     print(json.dumps({'aclUnknown':'started','evidence':str(directory)}),flush=True)
     held=owner_browser=recovery_browser=None;identifier=waiting=None;client=profile=None;original_proved=waiting_proved=False
@@ -237,6 +264,7 @@ def main(restore=False):
             'instanceId':str(actual['State']['Pid'])+':'+actual['State']['StartedAt'],'containerPid':actual['State']['Pid'],'source':str(folder),'original':inventory(folder,reader,module,content),
             'bytesPerFile':len(content),'sha256':hashlib.sha256(content).hexdigest().upper(),'coreBefore':owned.common.core_snapshot(),'hostsBefore':hosts,'evidence':str(directory),'postAcl':post,'instanceChanged':instance}
         if restore:baseline.update(aclRestoreFaultVersion=8 if instance else 7,kind='post-acl-instance-change' if instance else 'post-acl-target-removed')
+        if source_ui:baseline['recoverySourceUiVersion']=1
         (directory/'baseline.json').write_text(json.dumps(baseline))
         try:
             PHASE='original-real-page-preflight'
@@ -279,6 +307,9 @@ def main(restore=False):
                 if restore:typed_equal(owner_ui['restoreSource'],baseline['restoreSource'])
             PHASE='original-unknown-facts';unknown=wait_settled(identifier);record,raw_root,raw_hdd=save_facts(unknown,baseline,storage,module,directory)
             assert unknown['row']['state']=='Unknown' and inventory(folder,reader,module,content)==expected_physical(baseline)
+            if source_ui:
+                PHASE='new-source-summary-anonymous-and-ordinary-denials'
+                source_ui_denials(base,identifier,directory)
             with temporary_user(True) as (username,password):
                 client,profile=login(base,username,password);api=Api(base,client);assert profile['subject']!=baseline['originalSubject']
                 PHASE='other-container-four-natural-deferrals';waiting,waiting_baseline=register_waiting(base,client,api,other,WAITING_PATH)
@@ -293,6 +324,10 @@ def main(restore=False):
                 write_signal(directory,'allow-ack.json',{'originalStillUnknownProtected':True,'waitingStillDeferred':True})
                 PHASE='distinct-admin-explicit-ack-and-visible-waiting-publication';assert recovery_browser.wait(timeout=150)==0,'REAL_ACL_UNKNOWN_RECOVERY_PAGE_FAILED'
                 ui=json.loads((directory/'recovery-browser.json').read_bytes());assert ui['subject']==profile['subject'] and ui['normalDualLogout'] and ui['actualUi'] and ui['waitingVisibleInVue']
+                if source_ui:
+                    from acl_restore_unknown_proof import require_recovery_source_ui
+                    proof=json.loads((directory/'recovery-source-ui.json').read_bytes())
+                    require_recovery_source_ui(baseline,ui,proof)
                 final=snapshot(identifier);final_record,final_root,final_hdd=save_facts(final,baseline,storage,module,directory,'final');assert final['row']['state']=='Acknowledged' and final['row']['acknowledged_by']==profile['subject']
                 if post:verify_unknown_jobs(final,json.loads((directory/'acknowledged-jobs.json').read_bytes()),'acknowledged')
                 for key in ('receipt_json','receipt_hash','acl_confirmed','history_may_exist','history_verified','history_digest','published_version','actor_subject','login_binding','execution_job_id','plan_json','command_json'):assert final['row'][key]==unknown['row'][key]
@@ -312,7 +347,7 @@ def main(restore=False):
                 clean_success(waiting,waiting_baseline,profile,directory,other);waiting_proved=True;logout(base,client);client.close();client=None
             worker.start();no_active_work();assert host_snapshot(revision)==hosts
             summary={'revision':revision,'id':identifier,'waitingId':waiting['id'],'originalSubject':baseline['originalSubject'],'recoverySubject':profile['subject'],
-                'businessState':'Acknowledged','executionJobState':'Failed','rootState':'Unknown','aclConfirmed':None,'historyVerified':True,
+                **({'recoverySourceUiVersion':1} if source_ui else {}),'businessState':'Acknowledged','executionJobState':'Failed','rootState':'Unknown','aclConfirmed':None,'historyVerified':True,
                 'actualOriginalAndRecoveryPages':True,'normalOriginalAndRecoveryLogout':True,'originalIdentityDeletedBeforeRecovery':True,
                 'productStoppedHelperSeconds':round(elapsed,3),'validatorKilledHelper':False,'otherWriteDeferredUntilRelease':True,'actualDirectoryVisibleInVue':True,
                 'originalFullBytesFingerprintAclsAndAttributesUnchanged':not post,'postAclPhysicalInventoryPreserved':post,'instanceChanged':instance,'lateOriginalApplyRemainsUnknown':True,'rootSha256':hashlib.sha256(raw_root).hexdigest()}
