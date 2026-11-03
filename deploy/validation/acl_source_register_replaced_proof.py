@@ -24,3 +24,9 @@ def require_rejected(baseline,value,proof):
     assert body['captureId']==source['entry']['captureId'] and body['expectedHistoryDigest']==source['entry']['historyDigest']
     assert body['expectedVersion']==version(baseline,'work/acl-file.bin',baseline['original']['acl-file.bin']['identity'])
     verify_changed_snapshot(source,proof,value['replacementSnapshot'])
+
+
+def attempt_identifier(baseline,capture_row,attempt):
+    """Identify an attempted POST even when its response is missing or rejected badly."""
+    assert attempt['subject']==baseline['subject']==capture_row['actor_subject']
+    return intent_id(attempt['subject'],capture_row['login_binding'],attempt['key'])

@@ -17,7 +17,7 @@ import requests
 import validate_container_acl_browser as acl
 from validate_container_acl_faults import wait_signal,write_signal,wait_settled,host_snapshot
 from validate_container_acl_source_missing import denials,INSTALLED
-from acl_source_register_replaced_proof import KIND,manifest,intent_id,no_registration,require_rejected
+from acl_source_register_replaced_proof import KIND,manifest,intent_id,no_registration,require_rejected,attempt_identifier
 from validate_container_acl_restore_browser import selected_source
 from validate_container_acl_history_browser import immutable
 from owned_acl_source_quarantine import installed_namespace,catalogue,OwnedSourceQuarantine
@@ -32,6 +32,17 @@ PHASE='startup'
 def fixture_bytes(identifier):
     assert re.fullmatch('[a-f0-9]{64}',identifier)
     return hashlib.shake_256(('source-register-replaced:'+identifier).encode()).digest(2*1024**2+7)
+
+
+def restore_registration_source(tool,evidence):
+    """Restore proved originals and explicitly retain any unjournaled staging dir."""
+    result=tool.restore();q=tool.q
+    if not (evidence/'source-replacement.json').exists():
+        stage='.wd-qa-acl-replacement-'+q.state()['captureId']
+        if os.path.lexists('/proc/self/fd/'+str(q.fd)+'/'+stage):
+            (evidence/'quarantine-recovery-required.json').write_text(json.dumps(dict(gatePassed=False,originalsPreserved=True,
+                originalRestored=result['originalRestored'],unjournaledStagePreserved=True,stage=stage)))
+    return result
 
 
 def main():
@@ -96,8 +107,9 @@ def main():
                     with tool.replaced() as changed:
                         (evidence/'replacement-proof.json').write_text(json.dumps(changed));write_signal(evidence,'source-replaced.json',changed)
                         rejected=wait_signal(evidence,'rejected.json',browser,60);key=rejected['key']
+                        identifier=intent_id(baseline['subject'],capture_row['login_binding'],key)
+                        absent=no_registration(baseline['subject'],capture_row['login_binding'],key)
                         require_rejected(baseline,rejected,changed)
-                        absent=no_registration(baseline['subject'],capture_row['login_binding'],key);identifier=absent['expectedIntentId']
                         assert identifier!=capture_row['id'] and absent['expectedExecutionId']!=capture_row['execution_job_id']
                         no_operation_history(identifier,storage)
                         assert acl.inventory(folder,reader,module,content)==current
@@ -128,9 +140,7 @@ def main():
         finally:
             try:
                 if (evidence/'source-quarantine.json').exists():
-                    try:
-                        if (evidence/'source-replacement.json').exists():tool.restore()
-                        else:q.restore()
+                    try:restore_registration_source(tool,evidence)
                     except BaseException:
                         (evidence/'quarantine-recovery-required.json').write_text(json.dumps(dict(gatePassed=False,originalsPreserved=True)));raise
             finally:
@@ -140,13 +150,21 @@ def main():
                     except subprocess.TimeoutExpired:browser.terminate();browser.wait(timeout=10)
             if proved:acl.remove_proved(folder,reader,module,content,current)
             else:
-                # A missing rejected POST receipt is uncertainty; preserve its source.
+                # Observe attempted work even when the UI response check failed.
+                # Never delete uncertain source or cancel an unproved task.
+                attempt=evidence/'registration-attempt.json'
+                if capture_row is not None and attempt.exists():
+                    value=json.loads(attempt.read_bytes());identifier=attempt_identifier(baseline,capture_row,value);key=value['key']
                 if identifier is not None and key is not None and capture_row is not None:
-                    absence=no_registration(baseline['subject'],capture_row['login_binding'],key)
-                    (evidence/'failed-gate-absence.json').write_text(json.dumps(absence))
-                    no_operation_history(identifier,storage)
-                    if current is not None and acl.inventory(folder,reader,module,content)==current:
-                        acl.remove_proved(folder,reader,module,content,current)
+                    try:absence=no_registration(baseline['subject'],capture_row['login_binding'],key)
+                    except BaseException as error:
+                        (evidence/'failed-gate-registration-unresolved.json').write_text(json.dumps(dict(expectedIntentId=identifier,
+                            gatePassed=False,sourcePreserved=True,possibleRegisteredWork=True,failureType=type(error).__name__)))
+                    else:
+                        (evidence/'failed-gate-absence.json').write_text(json.dumps(absence))
+                        no_operation_history(identifier,storage)
+                        if current is not None and acl.inventory(folder,reader,module,content)==current and not (evidence/'quarantine-recovery-required.json').exists():
+                            acl.remove_proved(folder,reader,module,content,current)
     acl.no_active_work();assert host_snapshot(revision)==hosts
     assert not os.path.lexists(folder) and subprocess.run(['docker','inspect',baseline['containerId']],capture_output=True,timeout=10).returncode!=0
     result=dict(revision=revision,expectedIntentId=identifier,kind=KIND,actualUi=True,normalDualLogout=True,originalSourceReadStatus=409,replacementReadStatus=200,registrationStatus=409,

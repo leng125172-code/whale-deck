@@ -47,8 +47,11 @@ try {
   const replacementSnapshot = await newRead.json(), expectedReplacement = structuredClone(selected.source)
   expectedReplacement.entry.createdAtUnixMs++; expectedReplacement.entry.historyDigest = changed.replacementDigest
   assert.deepEqual(replacementSnapshot, expectedReplacement)
+  const sending = page.waitForRequest(r => new URL(r.url()).pathname === endpoint + '/restores' && r.method() === 'POST')
   const queued = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/restores' && r.request().method() === 'POST')
   await dialog.getByRole('button', { name: '生成ACL恢复预检', exact: true }).click()
+  const attempt = await sending
+  await writeSignal(directory, 'registration-attempt.json', { subject: profile.subject, key: attempt.headers()['idempotency-key'], body: attempt.postDataJSON() })
   const rejected = await queued; assert.equal(rejected.status(), 409)
   const problem = await rejected.json(); assert.equal(problem.code, 'OPERATION_CONFLICT')
   assert.match(key, /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/)

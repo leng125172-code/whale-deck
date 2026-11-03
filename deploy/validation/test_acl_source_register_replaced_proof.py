@@ -1,11 +1,14 @@
 """Reject missing/corrupt/foreign replacements; no product or disk access."""
 import copy
 import hashlib
+import json
+import os
 import unittest
 from acl_source_confirm_replaced_proof import replacement_snapshot,verify_changed_snapshot
-from acl_source_register_replaced_proof import require_rejected
+from acl_source_register_replaced_proof import require_rejected,attempt_identifier,intent_id
 from unittest.mock import patch
-from validate_container_acl_source_register_replaced import fixture_bytes
+from validate_container_acl_source_register_replaced import fixture_bytes,restore_registration_source
+import test_owned_acl_source_replacement as replacement_fixture
 from verify_container_acl_source_register_replaced import verify_fixture_recipe
 
 
@@ -74,6 +77,39 @@ class RegisterReplacedSourceProofTests(unittest.TestCase):
         for domain in ('source-register-missing:','source-apply-replaced:','source-confirm-replaced:'):
             content=hashlib.shake_256((domain+identifier).encode()).digest(2*1024**2+7)
             with self.subTest(domain=domain),self.assertRaises(AssertionError):verify_fixture_recipe(dict(containerId=identifier,bytesPerFile=len(content),sha256=hashlib.sha256(content).hexdigest().upper()))
+
+    def test_attempt_id_is_available_without_any_response_or_accepted_rejection(self):
+        baseline=dict(subject='own');capture=dict(actor_subject='own',login_binding='A'*64)
+        attempt=dict(subject='own',key='11111111-2222-3333-4444-555555555555')
+        with patch('acl_source_register_missing_proof.query') as query:
+            self.assertEqual(attempt_identifier(baseline,capture,attempt),intent_id('own','A'*64,attempt['key']))
+            query.assert_not_called()
+
+    def test_attempt_cannot_be_bound_to_a_foreign_actor_login_or_malformed_key(self):
+        baseline=dict(subject='own');capture=dict(actor_subject='own',login_binding='A'*64)
+        attempt=dict(subject='own',key='11111111-2222-3333-4444-555555555555')
+        for altered in ({**attempt,'subject':'foreign'},{**attempt,'key':'invalid'}):
+            with self.assertRaises((AssertionError,ValueError)):attempt_identifier(baseline,capture,altered)
+        for altered in ({**capture,'actor_subject':'foreign'},{**capture,'login_binding':'invalid'}):
+            with self.assertRaises((AssertionError,ValueError)):attempt_identifier(baseline,altered,attempt)
+
+    @unittest.skipUnless(os.name=='posix' and os.geteuid()==0,'isolated Linux root required')
+    def test_unjournaled_stage_keeps_bytes_and_marks_recovery_without_deleting_original(self):
+        replacement_fixture.ReplacementTests.setUp(self)
+        stage=self.namespace/('.wd-qa-acl-replacement-'+self.capture);stage.mkdir(mode=0o700)
+        candidate=stage/'candidate.json';candidate.write_bytes(b'not-proved-temporary-bytes');original=self.path.read_bytes()
+        result=restore_registration_source(self.replacement,self.journal)
+        self.assertTrue(result['originalRestored']);self.assertEqual(self.path.read_bytes(),original)
+        self.assertEqual(candidate.read_bytes(),b'not-proved-temporary-bytes')
+        marker=json.loads((self.journal/'quarantine-recovery-required.json').read_bytes())
+        self.assertFalse(marker['gatePassed']);self.assertTrue(marker['unjournaledStagePreserved']);self.assertTrue(marker['originalsPreserved'])
+
+    @unittest.skipUnless(os.name=='posix' and os.geteuid()==0,'isolated Linux root required')
+    def test_original_alone_does_not_report_a_nonexistent_unjournaled_stage(self):
+        replacement_fixture.ReplacementTests.setUp(self)
+        original=self.path.read_bytes();result=restore_registration_source(self.replacement,self.journal)
+        self.assertTrue(result['originalRestored']);self.assertEqual(self.path.read_bytes(),original)
+        self.assertFalse((self.journal/'quarantine-recovery-required.json').exists())
 
 
 if __name__=='__main__':unittest.main()
