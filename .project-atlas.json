@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/PLATFORM_REVISION_HISTORY.md；docs/qa/CONTAINER_ACL_STALE_PREFLIGHT.md；docs/qa/PLATFORM_CONTROL_RECOVERY.md；docs/qa/PLATFORM_CONTROL_INSTALLATION.md；docs/qa/PLATFORM_MAINTENANCE_REAL_UI.md；docs/qa/CONTAINER_ACL_HISTORY_READER.md；docs/qa/CONTAINER_ACL_HISTORY_RPC.md；docs/qa/CONTAINER_ACL_HISTORY_INSTALLED.md；docs/qa/CONTAINER_ACL_HISTORY_WEB.md；docs/qa/CONTAINER_ACL_HISTORY_REAL_UI.md；docs/qa/CONTAINER_ACL_RESTORE_PERSISTENCE.md；docs/qa/CONTAINER_ACL_RESTORE_WEB.md",
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RESTORE_WEB.md；docs/qa/CONTAINER_ACL_RESTORE_PERSISTENCE.md；docs/qa/CONTAINER_ACL_HISTORY_REAL_UI.md",
   "nextStep": "ACL恢复管理员API/Vue3fd7f5f候选已验证：4361 Unit/488 Integration（7默认原生跳过）、1059前端Unit、16新恢复与65关联页面分批通过；79/81联合轮失败和修正复验保留，CI门禁已补。运行仍08b2bb8/1.52、11核心healthy/生产来源列不存在。取得CI成功终态后正常覆盖与真实Authentik/当前文件ACL/当前原件HDD恢复整链，再完整故障矩阵/递归ACL/可恢复删除/长期清理及其余59项/UI/C#酒馆/供应商/AI Live2D；17项移出不算完成，不自动回滚dev或重启主机。"
 }
