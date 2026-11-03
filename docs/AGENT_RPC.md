@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+**2026-11-03 ACL写后Agent重启及原任务摘要实机通过**：运行612f77c/1.51不重发，冻结47a1769/schema6的新独占资源在目标ACL已写/Root Applying且未回执时实际重启Agent；产品0.013秒停原helper，Agent3747527→3835700，维护3747520不变/153次HTTP200 healthy-Ready。原任务Succeeded/Completed、完整写后清单/1HDD与迟到同操作Apply不再变化；原预检Ready及执行Succeeded两份SQL/API摘要、320×600暗色真实详情和同上下文正常双端退出通过。独立原件/准确清理、48边界/范围与语法通过，11核心healthy。其余Unknown/实例/共享写入/摘要分支、递归恢复/删除与59项继续。[实机证据与界限](qa/CONTAINER_ACL_POST_AGENT_RESTART.md)。
+
 **2026-11-03 612f77c已覆盖，ACL任务摘要真实常规整链通过**：标准update唯一Invocation689e10e7f8ba479ba2b0e97de386f33c成功，六组件/HTTP/实际宿主进程映射同源，11核心healthy、8数据库平台不重建；Agent3747527/维护3747520，协议1.51不变，无新迁移。冻结8c39d09的新独占资源九场景8完成/1预检后取消，17新摘要SQL/API/真实任务详情及1旧任务空态通过，原字节/两类ACL/xattr/8HDD、同上下文双端退出与准确清理通过。首轮独立观察器误读输出目录的FileNotFoundError保留，64f6d8b修正证据输入路径后只读复核通过，未重做真实写入。19边界/范围与语法通过；Unknown/处置等摘要分支及写后Agent/实例/跨写入剩余组合、ACL递归恢复/删除与59项继续。[实机证据与界限](qa/CONTAINER_ACL_JOB_RESULTS_REAL_UI.md)。
 
 2026-11-03 ACL写后失权实机：8d93fbe原正快照余7163秒时移组/停用，约4.8秒停helper、原用户GET403及真实/forbidden或/login/私有引用清空；已发生ACL事实最终Succeeded/Completed，写后九字段/版本/迟到Apply保持、2HDD/4Job/8审计、独立原件与清理通过。不同当前管理员正常BFF只读GET200和HTTP双端退出通过，后续0b7d43c真实任务中心原执行ID/Succeeded只读页面与正常退出通过，管理写0/原SQL不变，完整结果摘要仍待。56边界/语法、6有效PNG、11核心healthy，运行仍633a2ca/1.51。[角色、历史与边界](qa/CONTAINER_ACL_POST_REVOCATION.md)。
