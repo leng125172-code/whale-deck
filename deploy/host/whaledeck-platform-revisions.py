@@ -326,5 +326,5 @@ if __name__ == '__main__':
     try:
         main(sys.argv[1:])
     except Exception:
-        print('PLATFORM_REVISION_UNPROVEN: trusted runtime/history was not proven; no automatic rollback.', file=sys.stderr)
+        print(json.dumps({'code': 'PLATFORM_REVISION_UNPROVEN', 'message': '无法证明可信运行版本或发布记录，已拒绝；未自动回退。'}, ensure_ascii=False), file=sys.stderr)
         raise SystemExit(1) from None

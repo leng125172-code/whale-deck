@@ -315,7 +315,7 @@ class RunningRevisionTests(unittest.TestCase):
         p = subprocess.run([sys.executable, '-I', str(ROOT / 'deploy/host/whaledeck-platform-revisions.py'), 'probe'], capture_output=True, text=True, timeout=5)
         self.assertNotEqual(p.returncode, 0)
         self.assertEqual(p.stdout, '')
-        self.assertTrue(p.stderr.startswith('PLATFORM_REVISION_UNPROVEN:'))
+        self.assertEqual(json.loads(p.stderr)['code'], 'PLATFORM_REVISION_UNPROVEN')
 
 
 class PublicStatusTests(unittest.TestCase):
