@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/PLATFORM_REVISION_HISTORY.md；docs/qa/CONTAINER_ACL_STALE_PREFLIGHT.md；docs/qa/PLATFORM_CONTROL_RECOVERY.md",
-  "nextStep": "P0-05维护工具持久恢复1176084/4eb4d15候选已通过47相关/11构建/5安装CLI及两原样模块隔离systemd场景（SIGKILL、影子/run丢失、锁忙和锁门禁），11核心及两服务身份不变；未安装新工具/生产账本/新发布，运行仍306f646/1.51。接下来受控安装交接，正常dev覆盖验证真实current/previous及UI/维护/磁盘整链，不自动回滚或重启工作站；继续ACL/递归恢复/删除及59项、UI/C#酒馆/供应商/AI Live2D。17项移出不算完成，开发sudo保留。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/PLATFORM_REVISION_HISTORY.md；docs/qa/CONTAINER_ACL_STALE_PREFLIGHT.md；docs/qa/PLATFORM_CONTROL_RECOVERY.md；docs/qa/PLATFORM_CONTROL_INSTALLATION.md",
+  "nextStep": "134fd25维护工具已安装并唯一正常dev覆盖，六组件/HTTP/实际映射同源；current134fd25/previous306f646，旧错误legacy留存、pending清空；Agent253100/维护253095、11核心healthy/8数据库身份和配置sudo保持。47相关/安装前后/真实锁忙与Agent拒绝通过；216维护样本有观察空窗，CI四路成功/前端仍运行，非全绿。先补安装态受控中断/真实身份页面，再ACL其余组合/递归恢复/可恢复删除/长期清理及59项、UI/C#酒馆/供应商/AI Live2D；17项移出不算完成，不自动回滚dev或重启工作站，开发sudo保留。"
 }

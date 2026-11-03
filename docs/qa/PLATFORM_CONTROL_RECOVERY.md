@@ -1,5 +1,7 @@
 # P0-05维护工具持久恢复：1176084/4eb4d15候选及隔离systemd证据
 
+**后续134fd25安装与实际正常覆盖（2026-11-03）**：新工具已安装、六组件134fd25、真实current134fd25/previous306f646及旧错误legacy保持均通过；原候选“尚未安装”仅指当时状态，下文原批次正文保留。实际手动恢复/安装态强杀/物理冷启动及身份文件-HDD页面仍未验收，见[安装、真实历史与边界](PLATFORM_CONTROL_INSTALLATION.md)。
+
 2026-11-03。**候选已实现并通过47项相关测试及原样恢复模块的隔离systemd验证，尚未安装生产工具、创建生产账本或执行新生产发布/手动恢复。** 运行仍306f646/协议1.51，Agent4135740、MaintenanceHost4135726。最终systemd探针前后11核心的完整容器ID/镜像ID/StartedAt/healthy及两服务PID/InvocationID完全相等，生产固定工具/previous原件/账本缺省状态保持。此前[真实306f646部署与旧记录问题](CONTAINER_ACL_STALE_PREFLIGHT.md)、[可信发布记录候选](PLATFORM_REVISION_HISTORY.md)保留；这不是P0-05整项签收。
 
 ## 本批修复的具体问题
