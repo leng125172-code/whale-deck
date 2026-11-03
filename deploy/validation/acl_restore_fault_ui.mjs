@@ -17,6 +17,14 @@ export async function prepareMissingSourceConfirmation(page, context, base, fixt
   return prepareSelectedRestore(page, context, base, fixture, profile)
 }
 
+export async function prepareMissingSourceApply(page, context, base, fixture, profile) {
+  assert.equal(fixture.aclSourceFaultVersion, 2)
+  assert.equal(fixture.kind, 'source-apply-missing')
+  assert.equal(fixture.aclRestoreFaultVersion, undefined)
+  assert.equal(fixture.jobResultsVersion, undefined)
+  return prepareSelectedRestore(page, context, base, fixture, profile)
+}
+
 async function prepareSelectedRestore(page, context, base, fixture, profile) {
   const endpoint = `/api/v1/containers/${fixture.containerId}/files/acls`, directory = fixture.evidence
   let files = await openPermissionFiles(page, fixture)

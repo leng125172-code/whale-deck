@@ -124,6 +124,9 @@ jobs:
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_acl_source_missing_proof.py
           python3 -W error -m py_compile deploy/validation/validate_container_acl_source_missing.py deploy/validation/verify_container_acl_source_missing.py
           node --check deploy/validation/validate_container_acl_source_missing.mjs
+          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_acl_source_apply_missing_proof.py
+          python3 -W error -m py_compile deploy/validation/acl_source_apply_missing_proof.py deploy/validation/validate_container_acl_source_apply_missing.py deploy/validation/verify_container_acl_source_apply_missing.py
+          node --check deploy/validation/validate_container_acl_source_apply_missing.mjs
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_acl_restore_fault_proof.py
           node --check deploy/validation/validate_container_acl_faults.mjs
           node --check deploy/validation/acl_restore_fault_ui.mjs
