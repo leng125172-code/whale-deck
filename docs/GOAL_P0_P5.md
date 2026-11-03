@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-03 ACL恢复写后Agent重启真实整链及双Job页面通过：首轮44a60de因来源Job回执缺失失败、仅普通捕获1/恢复0/未重启，源保留；96b6bda补真实API/SQL摘要和独立原目录读取，90检查通过后用全新资源实测。产品仍b69302b/1.52，helper0.010秒结束、Agent完整重启30.622秒，PID1688516→1772448/维护1688513保持；152次维护200/Ready、Succeeded/Completed/迟到不改、来源+当前HDD、双原Job真实320暗色/正常退出/独立复核及准确清理通过。128旧元数据字节九字段保持、总131/三旧失败树留存，11核心healthy/7配置账本保持/活动0。Unknown、递归ACL、删除及59项继续。[实机、失败与修正](qa/CONTAINER_ACL_RESTORE_POST_AGENT_RESTART.md)。
+
 2026-11-03 b69302b历史读取超时修复已部署并完成真实写后撤权复验：准确CI五路成功、唯一Invocation c7f46555dedd4db2a84c2e8e8fa46071退出0，六组件/16helper同源，Agent1688516/维护1688513，11核心healthy/8数据库/7配置保持、账本current b693/previous cad/pending空。公共8080真实签名读取128份两页3.597/2.368秒原件不改；全新Vue写后移组/停用分别4.786/4.736秒停helper、Succeeded/Completed，原403/引用清空/取消0、当前管理员Recovery200/Owner404，独立复核及准确清理通过。两探测脚本失败、一次并行账号检查失败及只读修正保留，不重放写入。恢复写后Agent候选/Unknown/递归ACL/删除和59项继续。[发布、实机与失败边界](qa/CONTAINER_ACL_HISTORY_TIMEOUT_RELEASE.md)。
 
 2026-11-03 ACL恢复写后Agent重启门禁候选已验证、未实机运行：新增profile6/schema12仅单场post-acl-agent-restart，绑定原恢复wrapper/来源与Succeeded审计，沿用准确切点、固定Agent重启、维护连续性、双原Job安全结果/正常退出/失败保留；旧profile及普通schema6兼容。25恢复证明+44Root范围+10浏览器证明+8范围共87通过及语法通过，均非新的实际重启或恢复整链。76cb825已推送、前批图谱重试成功；b69302b仍待frontend终态及标准覆盖，实际运行cad6182。[候选和未验边界](qa/CONTAINER_ACL_RESTORE_AGENT_RESTART_CANDIDATE.md)。

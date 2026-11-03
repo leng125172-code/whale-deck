@@ -1,5 +1,8 @@
 # WhaleDeck 数据模型
 
+2026-11-03 接续实机证据：b69302b不重发，历史恢复写后Agent重启及原任务摘要/正常退出、独立核验通过；当前Agent1772448、维护1688513，152维护样本正常，旧128份HDD元数据保持。来源捕获缺Job证据的首轮失败与工具修正保留，无新协议/数据库schema或授权扩大，见[真实事实与未验范围](qa/CONTAINER_ACL_RESTORE_POST_AGENT_RESTART.md)。
+
+
 2026-11-03 实际接续：b69302b限定历史GET超时/软分页修复已标准覆盖，六组件与16helper同源、生产恢复列/18CHECK保持；公共8080完整128份读取及真实Vue恢复写后移组/停用、独立只读复核通过。Agent最小授权/user NOPASSWD保持；无新协议minor或数据库schema。失败探测和独立账号检查重叠分别保留，其他故障、递归ACL/恢复及删除仍待，见[实际发布与范围](qa/CONTAINER_ACL_HISTORY_TIMEOUT_RELEASE.md)。
 
 

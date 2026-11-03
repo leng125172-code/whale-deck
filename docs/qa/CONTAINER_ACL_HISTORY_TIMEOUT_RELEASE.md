@@ -48,3 +48,7 @@
 本批修复单对象ACL历史读取并签收恢复写后实时移组/停用。恢复写后Agent重启工具profile6/schema12仍仅候选，下一步用新资源实机运行；Unknown/实例或来源变化、磁盘/共享写入、递归ACL/恢复、可恢复删除与长期清理、安装态故障及其余59项仍待。源和HDD同device，不算异盘灾备；59主项及六阶段完整签收数不提升，17项移出不算完成，master未交付。
 
 收尾8项范围检查、874条变动MD相对链接通过，目标第1节逐字保持，3份前批QA原文仅追加接续。图谱确认原whale-deck/container-acl的`whale-deck.container-acl.b69302b.history-timeout-release-real`事件，阶段active，原pending移入synced；没有将两个故障分项记为59主项完整完成。
+
+## 后续接续：恢复写后Agent重启
+
+以上原时点证据保留。随后首次尝试因来源Job证据缺失失败且未登记恢复/重启；96b6bda补齐实际来源Job回执后，使用全新资源完成恢复写后Agent重启、双任务详情/原上下文退出、HDD与独立复核，见[本轮实机和失败记录](CONTAINER_ACL_RESTORE_POST_AGENT_RESTART.md)。当前Agent1772448/维护1688513，产品仍b69302b，Unknown/递归ACL/删除及59项继续。
