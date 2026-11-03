@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+**2026-11-03 ACL历史恢复API/Vue候选3fd7f5f，未部署**：Administrator/BFF/CSRF/Origin、实时管理员/原登录及严格来源选择字段齐接；返回来源前复核、跨登录/容器拒绝和读取中止不登记，确认/取消原新执行ID。Vue只恢复所选单ACL类型，明确新预检和确认，源变化/旧实例/过期禁确认、原引用接续/退出清理和其他写入互锁；不保存ACL正文。4361 Unit/488 Integration（7默认跳过）及1059前端Unit通过，身份/Agent/仓储均夹具；没有真实人类/当前ACL原件HDD恢复证据，运行08b2bb8/1.52保持。[安全与验收边界](qa/CONTAINER_ACL_RESTORE_WEB.md)。
+
 **2026-11-03 ACL历史恢复内部候选47e3ba1，未部署**：实时管理员和原登录前后复核；输入只选capture/digest及当前版本，目标ACL由权威源派生，每次仅access或default，不递归。完整来源冻结并受MAC/SQL不可变保护，登记/规划/确认/首次写入复核；源变更阻止新写入，已有原执行回执优先观察，不把Unavailable当不存在。沿用原Agent最小能力/共享写入锁与当前ACL先备份规则；没有新管理员恢复API/Vue或真实人类/文件/HDD恢复证据。冻结4361 Unit/463 Integration（7默认跳过）和双隔离PG门禁通过，身份/源/Root仍夹具；生产保持08b2bb8/1.52及原11核心。[安全与未验边界](qa/CONTAINER_ACL_RESTORE_PERSISTENCE.md)。
 
 **2026-11-03 ACL历史真实权限常规整链通过**：运行08b2bb8/1.52，正常Authentik管理员Vue读取2页/8原快照，普通原会话两历史GET403且页面forbidden、原会话正常双端退出后两GET401；两个可见上下文正常退出及独立核验通过。读审计仅hash/摘要、原件不变，无新增Agent/恢复授权；实时撤权与进行中取消组合未补签。[严格事实与失败](qa/CONTAINER_ACL_HISTORY_REAL_UI.md)。
