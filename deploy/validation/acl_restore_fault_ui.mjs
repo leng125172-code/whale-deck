@@ -41,6 +41,18 @@ export async function prepareReplacedSourceConfirmation(page, context, base, fix
   return prepareSelectedRestore(page, context, base, fixture, profile)
 }
 
+export async function prepareReplacedSourcePlan(page, context, base, fixture, profile) {
+  assert.equal(fixture.aclSourceFaultVersion, 8)
+  assert.equal(fixture.kind, 'source-plan-replaced')
+  assert.equal(fixture.aclRestoreFaultVersion, undefined)
+  assert.equal(fixture.jobResultsVersion, undefined)
+  return prepareSelectedRestore(page, context, base, fixture, profile, async (source) => {
+    await writeSignal(fixture.evidence, 'selected.json', { source, subject: profile.subject })
+    const signal = await waitSignal(fixture.evidence, 'register.json', 60_000)
+    assert.equal(signal.workerStopped, true)
+  })
+}
+
 export async function prepareMissingSourcePlan(page, context, base, fixture, profile) {
   assert.equal(fixture.aclSourceFaultVersion, 3)
   assert.equal(fixture.kind, 'source-plan-missing')
@@ -146,8 +158,13 @@ async function prepareSelectedRestore(page, context, base, fixture, profile, bef
   await expect(dialog.getByRole('region', { name: 'ACL恢复来源', exact: true })).toContainText(captureId)
   if (!register) return { dialog, source }
   if (beforeRegister) await beforeRegister(source)
+  const sending = fixture.aclSourceFaultVersion === 8 ? page.waitForRequest(r => new URL(r.url()).pathname === endpoint + '/restores' && r.method() === 'POST') : null
   const restoring = page.waitForResponse(r => new URL(r.url()).pathname === endpoint + '/restores' && r.request().method() === 'POST')
   await dialog.getByRole('button', { name: '生成ACL恢复预检', exact: true }).click()
+  if (sending) {
+    const attempt = await sending
+    await writeSignal(directory, 'registration-attempt.json', { subject: profile.subject, key: attempt.headers()['idempotency-key'], body: attempt.postDataJSON() })
+  }
   const registered = await restoring; assert.equal(registered.status(), 202)
   assert.ok((registered.headers()['cache-control'] ?? '').includes('no-store'))
   const body = registered.request().postDataJSON(), value = await registered.json()
