@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-04 首次登记前有效来源替换实机分项通过：c0245ed冻结97源码/13安装helper，新资源真实选源后发布同capture独立inode的时间+1/自洽digest替换，旧摘要409/新摘要200；原POST仍原摘要/当前目标版本，登记409/同key及两个预期Job404，SQL意图/Job/outbox/事件/恢复审计五项0、Root/HDD缺席。原件还原后只查询仍无登记，3真PNG/两主题、正常双端退出/HTTP拒绝、独立只读与准确清理通过，旧143HDD字节九字段保持/总144、新原件ctime改变保留。11核心/两宿主/7配置账本与root只读Git索引保持，无发布启停；9202339另补异常请求查账与未写成日志stage保留告警，仅离线4新项，最终154检查0跳过，不重放。异步预检替换/依赖/期限/回执、递归ACL/删除和维护连续性及其余59项继续。[实机与工具修复边界](qa/CONTAINER_ACL_SOURCE_REGISTER_REPLACED.md)。
+
 2026-11-04 首次Apply前有效来源替换实机分项通过：fd23d93冻结92源码/13安装helper，新资源Ready后仅停原Worker，确认202/Pending后发布同capture独立inode的时间+1/自洽digest替换；旧摘要409/新摘要200、原key及Pending SQL保持。同Worker启动后原执行Failed/SOURCE_CHANGED、Root Aborted/false、RootStarted空/无当前前像；原件还原后迟到原ID Root Apply仍Aborted。5真PNG/两主题任务详情、4审计、正常双端退出/HTTP拒绝、独立只读及准确清理通过，旧142HDD字节九字段保持/总143、新原件ctime改变保留。11核心healthy/同ID镜像保持、仅Worker StartedAt变，两宿主/7配置账本与root只读Git索引保持；142离线检查0跳过，无发布宿主重启。其它替换/依赖/期限/回执、递归ACL/删除、维护连续性及59项继续。[实机与验收边界](qa/CONTAINER_ACL_SOURCE_APPLY_REPLACED.md)。
 
 2026-11-04 Ready后有效来源替换实机分项通过：6c5b331冻结87源码/13安装helper，新资源仅对新capture的另一个inode改时间+1/自洽digest，新摘要实际200、旧摘要409/AGENT_VERSION_CONFLICT、原确认409/原Ready SQL不变、执行0。原件精确还原后明确取消/正常退出，2真PNG/3审计/HTTP拒绝、旧141HDD字节九字段保持/总142及准确清理通过。独立首轮旧数据前缀错误失败，06f179b修正后冻结87源码仅只读复核通过，不重放、不称整批首轮通过；临时替换先归档再清理，新原件ctime变化保留。六组件28062da/两宿主/全部11核心/7配置账本保持、活动0，无发布启停；16+22+4+32+28+8离线通过。其它替换、依赖/期限/回执、递归ACL/删除及维护连续性和其余59项继续。[实机及修正边界](qa/CONTAINER_ACL_SOURCE_CONFIRM_REPLACED.md)。
