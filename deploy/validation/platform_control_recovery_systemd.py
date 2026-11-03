@@ -40,10 +40,14 @@ def digest(path):
 def runtime():
     units = command('systemctl', 'show', 'whaledeck-agent.service', 'whaledeck-maintenance.service',
         '--property=MainPID,ActiveState,InvocationID').splitlines()
-    containers = [json.loads(line) for line in command('docker', 'ps', '--format', '{{json .}}').splitlines()]
+    names = [name for name in command('docker', 'ps', '--format', '{{.Names}}').splitlines()
+        if name.startswith(('whaledeck-', 'database-platform-'))]
+    require(len(names) == 11, 'expected eleven existing core containers')
+    template = '{"id":{{json .Id}},"image":{{json .Image}},"startedAt":{{json .State.StartedAt}},"health":{{json .State.Health.Status}}}'
+    containers = [json.loads(line) for line in command('docker', 'inspect', '--format', template, *names).splitlines()]
+    require(all(v['health'] == 'healthy' for v in containers), 'core container not healthy')
     # No environments, mounts, endpoints, tokens or logs are read.
-    return dict(units=units, containers=sorted((v['ID'], v['Image'], v['Status']) for v in containers
-        if v['Names'].startswith('whaledeck-')))
+    return dict(units=units, containers=sorted((v['id'], v['image'], v['startedAt'], v['health']) for v in containers))
 
 
 def protected():
@@ -215,10 +219,7 @@ def main():
         for kind in ('poststop', 'volatile-loss'):
             results.append(run_case(root, kind))
         after_files, after_runtime = protected(), runtime()
-        # Docker human Status includes elapsed uptime; compare only stable IDs,
-        # images and health suffix, retaining full output as evidence.
-        stable = lambda r: (r['units'], [(i, img, s.endswith('(healthy)')) for i, img, s in r['containers']])
-        require(before_files == after_files and stable(before_runtime) == stable(after_runtime), 'production changed during test')
+        require(before_files == after_files and before_runtime == after_runtime, 'production changed during test')
         write(root / 'after.json', json.dumps(dict(files=after_files, runtime=after_runtime), indent=2).encode())
         result = dict(passed=True, syntheticLedger=True, unchangedProduction=True, cases=results,
             workstationRebooted=False, installed=False, applicationRollbackTested=False)
