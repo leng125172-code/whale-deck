@@ -25,10 +25,10 @@ export async function waitSignal(directory, name, timeout = 220_000) {
   throw new Error('PRIVATE_PERMISSION_GATE_COORDINATION_TIMEOUT')
 }
 
-export async function loginVisible(page, context, base, destination = '/containers') {
+export async function loginVisible(page, context, base, destination = '/containers', administrator = true, credentials = null) {
   const origin = new URL(base)
   assert.equal(base, 'http://127.0.0.1:8080')
-  const username = process.env.VALIDATION_USERNAME, password = process.env.VALIDATION_PASSWORD
+  const username = credentials?.username ?? process.env.VALIDATION_USERNAME, password = credentials?.password ?? process.env.VALIDATION_PASSWORD
   assert.ok(username && password)
   await page.goto(base + '/login?returnUrl=' + destination)
   await page.getByRole('button', { name: '使用用户名和密码登录', exact: true }).click()
@@ -51,7 +51,7 @@ export async function loginVisible(page, context, base, destination = '/containe
   assert.ok(identified && entered)
   await expect(page).toHaveURL(base + destination)
   const profile = await (await context.request.get(base + '/api/v1/auth/me')).json()
-  assert.equal(profile.isAdministrator, true)
+  assert.equal(profile.isAdministrator, administrator)
   return profile
 }
 
