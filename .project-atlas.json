@@ -7,5 +7,5 @@
   "status": "active",
   "category": "应用平台",
   "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_STALE_PREFLIGHT.md；docs/qa/CONTAINER_ACL_INSTANCE_CHANGE.md",
-  "nextStep": "先接续唯一发布whaledeck-dev-publish-306f646.service / Invocation d38034cfaba24730ac1fe1acae325829，不重复启动。10:44快照镜像NuGet下载仍EOF重试，宿主306f646（Agent4135740/维护4135726），API/Gateway仍447070e，11核心原容器healthy，维护1052样本200/updating；未签部署成功，新真实预检门禁未运行。保存原终态后核对六组件/映射/数据库/配置/sudo，再新资源真实预检拒绝和独立核验；若失败先保留日志修复覆盖，不自动回滚。之后ACL剩余矩阵/递归恢复/删除及59项/UI/C#酒馆/供应商/AI Live2D继续，17项移出不算完成。"
+  "nextStep": "306f646/1.51已正常唯一覆盖并签收六组件/实际映射、11核心healthy/8数据库不重建、配置和开发sudo保持；Agent4135740/维护4135726。2435d44新资源旧Vue版本预检拒绝Failed/无执行-Root-HDD、两真实摘要/权限/退出/独立清理已通过，进行中旧快照保留。继续执行Unknown无回执/不可信绑定/Superseded等摘要与其他共享写入/磁盘路径，再ACL递归/历史恢复、可恢复删除/长期清理及P0-05旧previous-revision缺陷；59项/UI/C#酒馆/供应商/AI Live2D继续。17项移出不算完成，不自动回滚dev。"
 }

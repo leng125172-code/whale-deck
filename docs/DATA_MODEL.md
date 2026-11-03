@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+**2026-11-03 306f646覆盖及ACL旧版本预检拒绝已实机通过**：原唯一Invocation d38034cfaba24730ac1fe1acae325829在10:50:22成功结束（约1690秒），下载EOF/软件源超时后同次构建完成，无重复发布或回滚；六组件CLI/镜像/HTTP与实际宿主exe/DLL映射一致，Agent4135740/维护4135726、协议1.51，11核心healthy/8数据库不重建/无新迁移，配置和开发sudo保持。冻结2435d44/proofVersion1新资源只改准确FD的mtime，原Vue旧版本被真实预检拒绝：Failed/VERSION_CONFLICT、1规划Job/2审计，执行Job/Root/HDD均0，不能把null说成已修改或未修改的执行回执。15字段SQL/API、320暗色/1440亮色详情、5真PNG、正常双端退出、普通3路403/匿名2路401、独立核验及准确清理通过；89离线本轮通过。剩余执行摘要/共享写入/磁盘路径、ACL递归恢复/删除与59项继续，P0-05旧previous-revision缺陷未修。[部署、真实证据与范围](qa/CONTAINER_ACL_STALE_PREFLIGHT.md)。
+
 **2026-11-03 10:44标准覆盖发布进行中，尚未签收**：运行checkout已由user干净快进至306f646，仅启动一次`whaledeck-dev-publish-306f646.service`，Invocation`d38034cfaba24730ac1fe1acae325829`。宿主已为306f646（Agent4135740/维护4135726），API/Gateway仍447070e，11核心容器原ID/镜像/StartedAt保持且healthy，8数据库不变；私密配置与开发sudo摘要保持。容器镜像构建遭遇NuGet EOF与Ubuntu源超时，软件源安装已完成、NuGet仍重试；unit仍activating，运行中的Result=success/ExecMainStatus=0不等于发布成功。正确8080维护入口本段1052次采样均HTTP200/updating，未覆盖整个发布窗口。**无迁移/容器替换成功回执，新真实旧版本预检门禁未开始，不计部署或功能通过**。89离线边界/范围本轮重跑通过；目标59项不变。[唯一发布、原件和接续约束](qa/CONTAINER_ACL_STALE_PREFLIGHT.md)。
 
 **2026-11-03 ACL预检失败摘要候选caa9c64已验证，尚未部署**：修正planning/Failed误显示“执行失败”，改为“预检失败，未进入 ACL 修改执行”，执行失败仍保留原语义；版本冲突文案不再假定已完成预检。993前端单元、8生产预览浏览器、89相关离线门禁及类型/构建/lint/格式通过。新增独占文件FD仅改mtime→原Vue旧版本预检拒绝的真实门禁、无执行/Root/HDD断言与独立只读核验，已接CI；**新真实门禁未运行，测试接口/临时文件不能替代Authentik/实际Worker与磁盘整链**。运行仍447070e/1.51、Agent3947643/维护3947551及11核心healthy，无部署/迁移/服务重启；59主项和25%–35%粗估不变。[候选、失败与真实验收待办](qa/CONTAINER_ACL_STALE_PREFLIGHT.md)。

@@ -1,4 +1,44 @@
-# ACL旧版本预检拒绝与摘要文案：源码候选，真实门禁待运行
+# ACL旧版本预检拒绝：306f646部署与真实页面验收
+
+## 最新签收：306f646实际部署与旧版本预检失败真实页面
+
+2026-11-03。**原唯一标准发布最终成功，新独占资源的真实门禁及独立只读复核通过。** 本节覆盖下面10:44“仍在发布”的快照及原候选“未部署/真实门禁未执行”待办；原时间点正文保留，不重做已完成的操作。只签本场景，不签完整ACL、P0–P5或master交付。
+
+### 原Invocation完成，不重复发布
+
+`whaledeck-dev-publish-306f646.service` / Invocation`d38034cfaba24730ac1fe1acae325829`，10:22:12–10:50:22 CST，约1690秒。NuGet多包EOF与Ubuntu源超时/重试确实发生并保存在原journal，仍是同一次标准update，无第二次启动、改依赖/源/TLS或自动回滚。最终active/exited、MainPID0、Resultsuccess、ExecMainStatus0；保存终态及完整journal后才停止已结束单元，inactive/dead且结果仍success。
+
+严格六组件检查通过：API/Worker/Gateway实际运行CLI/OCI镜像revision、两宿主CLI、隔离无网络Migrator CLI及实际API/Gateway HTTP均为`306f646110229496959c0c8a2e8f5a2f1570a0e7`。Agent4135740与MaintenanceHost4135726的/proc/exe及运行中DLL设备/inode匹配当前安装文件。11核心healthy，3面板容器正常替换，8数据库平台CID/镜像/StartedAt不变；标准migrator实际“database is already up to date”，没有新schema。安装态validate的systemd/权限/UDS/受限helper/HDD策略与动态网卡入口检查通过。私密配置/开发sudo SHA/owner/mode保持，不改密码或产品Agent授权。
+
+维护观察器1422次采样均HTTP200，状态updating→healthy、错误0；覆盖宿主安装后的本段，不覆盖发布起点到宿主重启前段，不能宣称整个发布窗口无中断。7静态进行中原件及已增长的观察日志都保留。最终部署目录root私有`deploy/artifacts/acl-stale-deploy-306f646/`：25份静态文件SHA、完整journal/终态/六组件/进程映射/11核心/配置sudo保护/安装检查/维护总结；原进行中快照没有被改成成功。最终权限门禁发现收尾观察器8份文件继承0644（目录一直root私有0700），SHA均一致；仅对这8份自有QA文件收紧0600并保存evidence-permissions-correction.json，未改内容、未重跑部署或真实操作。
+
+P0-05缺口仍在：实际此前已部署447070e，但helper的previous-revision记录为目标306f646。只读`previous-revision-observed.json`明确recordsActualPrevious=false；没有修补该文件、没有执行回滚，也不据此签手动上一版恢复能力。
+
+### 新资源与真实拒绝，未进入执行阶段
+
+QA冻结`2435d44d6791c569c99bffec8991c0c1c2761f47`，proofVersion1、28源码/11安装模块逐字节核对；实际产品306f646/1.51。新随机独占容器/源/内容/临时身份，不复用前批Unknown或实例变化资源。非核心、1000:1000、无网络、只读根和唯一自有HDD bind。未重启任何服务/Worker/Agent或其他容器。
+
+真实Authentik可见登录→Vue打开ACL对话框，持有源的原版本；父观察器复核准确自有容器/旧完整清单/文件FD后，只有该FD的mtime增加17ns并由内核增加ctime。两个文件各2097159完整字节、inode/mode/UID/GID/nlink/大小、两类ACL与固定普通xattr保持，其余树九字段/ACL不变；另存physical-mutated，不把新清单改写成原版本。
+
+原Vue提交确实仍携初始expectedVersion。真实API/Outbox/Worker→安装Agent/固定helper规划拒绝，原意图/规划Job为Failed、CONTAINER_ACL_VERSION_CONFLICT，无计划/确认/执行ID/Root启动/回执/发布版本/历史摘要。实际1规划Job/2审计、确认0；原key再次登记仍返回同一Failed意图，无新Job或重写原SQL。执行Job0、关联Root0及attested HDD元数据0均独立核对，包括意图ID和.NET准确字节序导出的执行ID；不是用随机ID探测“没有历史”。
+
+这证明的是**预检拒绝、没有进入执行阶段**，不是执行Unknown无回执，也不是Aborted/aclConfirmed=false。源的mtime变更由QA显式产生；不把该改动说成产品ACL写入。ACL确认/目标类型/目标模式/noChange/绑定均null，UI应显示未证明；历史回执显示未取得，历史/发布版本显示否。
+
+### 两种实际任务详情、权限与原上下文退出
+
+原planning Job的15字段SQL/API受限摘要同值同类型；同一正常登录上下文在320×600暗色和1440×600亮色打开真实任务中心同ID详情，标题“预检失败，未进入 ACL 修改执行”，不是执行失败。未证明/未取得等事实、完整字段视口及横向边界通过，身份/路径/版本/凭据不进入安全摘要，无通用取消/重试按钮。5实际PNG含预检失败对话框和两种标题/事实；已目视核对320标题/事实与1440标题，不以预览截图替代。
+
+唯一原UI注册1、确认0、内容写0、Job管理写0；额外原key重试1。原管理员在同上下文正常面板/Authentik双端退出，BFF401/身份401或403与provider导航证明齐全；另真实普通身份2读/1登记均403，匿名2读均401，普通HTTP登录也正常双端退出，原SQL快照完全保持。没有注入Cookie、拦截响应、写SQL/缓存/时钟或删除身份冒充退出。
+
+### 独立原件、准确清理与边界
+
+父进程在清理前复核完整内容/九字段/ACL/xattr等于写后mtime清单，仅在原Failed且无执行历史时清理本案源；原fixture严格核对所有权后移除准确容器。独立新进程重新只读核冻结来源/安装模块、原SQL/摘要、关联Root/HDD缺席、两种实际详情/正常退出、临时身份与源/容器不存在、宿主来源/PID及11核心healthy，执行/Root/HDD仍0。它不声称清理后重读已删除源字节。
+
+成功原件root:root/0700目录`deploy/artifacts/container-acl-stale-f5d6597939be40b8a593d0428011d331/`，21份文件SHA（索引自身另计）、5 PNG/JSON/日志0600。parent-final.log、independent-final.json、counts.json保留；主/独立原日志`/tmp/wd-acl-stale-real.log`与`/tmp/wd-acl-stale-independent.log`保留。用户可视副本是原PNG逐字节复制，无编辑/拼图，放忽略目录`deploy/artifacts/ui-candidates/acl-job-summary/stale-real-306f646/`。
+
+本轮89相关离线门禁49＋40及文档范围复核通过；993前端单元/8生产预览是候选批次的既有结果，本轮没有再声称执行它们或后端全量测试。306f646 CI41565338163最后读取仍4路成功、前端在综合授权/传输/终端浏览器步骤运行，未取得整条成功终态。下方元数据措辞导致的1项范围失败与修复原始记录保留，不改测试或范围。
+
+仍需真实执行无回执Unknown/不可信绑定/Superseded等摘要、其他共享写入/磁盘/路径组合、ACL递归与历史恢复、可恢复删除/长期清理、P0-05与其余59项/UI/C#酒馆/供应商/AI Live2D。当前40部分实现/17待实现/2最终验收不变，25%–35%仅既有低置信度工作量估算，不因分项通过抬升整项完成率。本批7份变动MD的790条相对链接无缺失，目标第1节与306f646逐字一致，以下2435d44快照及原候选正文逐字保留。最终项目图谱首次upsert连接失败，使用同一项目/事件重试成功，已核对projectId/key/eventId回执，事件`whale-deck.container-acl.306f646.stale-preflight-real`移入synced，阶段仍active。以下进行中与候选正文逐字保留。
 
 ## 后续执行快照：唯一标准发布仍在运行，未取得成功终态
 
