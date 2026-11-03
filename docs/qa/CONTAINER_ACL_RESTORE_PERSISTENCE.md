@@ -57,3 +57,7 @@ EF迁移`20261103085710_ContainerAclRestoreSources`仅扩展原`container_acl_in
 收尾本地校验：目标第1节逐字摘要不变、3份此前历史QA全文SHA保持，7份相关MD的817条相对链接有效；27份冻结候选源码和41份静态制品SHA及root:0700/0600权限核验通过。项目阶段保持active，不把候选或隔离PG提高为整项完成。
 
 交付同步：本批代码与记录已在本地dev提交；推送origin/dev连续三次因GnuTLS TLS握手中断失败（其中一次显式HTTP/1.1），已核对远端当时仍5013398，不能宣称已推送或CI通过。保留本地提交，下次先核对远端再重试，不重做PG/文件操作。项目图谱阶段eventId `whale-deck.container-acl.47e3ba1.restore-persistence`及项目元数据均收到匹配成功回执，已从pending移入synced；阶段保持active。
+
+## 后续接续（2026-11-03）
+
+本文件以上正文保留原时点证据与失败边界。cad6182随后取得准确CI五路成功、唯一标准覆盖和新独占六场景真实恢复及独立复核通过，见[实际发布与恢复验收](CONTAINER_ACL_RESTORE_REAL_UI.md)；后续通过不改写本记录当时的未部署/未验事实。恢复故障、递归ACL、删除及其余59项继续。

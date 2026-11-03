@@ -1,5 +1,9 @@
 # WhaleDeck Agent RPC 契约
 
+**2026-11-03 ACL历史恢复cad6182已正常部署/真实常规整链签收**：复用原ACL写入/历史只读RPC与1.52能力，无新增Agent授权；六组件同源，Agent1214295/维护1214273，安装后宿主validator通过。新独占9基础+6恢复的真实Vue/Worker/签名Agent/HDD及独立核验通过，5新当前ACL原件与旧来源分列、23恢复审计保持。进行中恢复故障/递归ACL等仍待，不将普通页面签收替代故障验收。[本批事实](qa/CONTAINER_ACL_RESTORE_REAL_UI.md)。
+
+以下旧日期条目保留各自当时的版本与“未部署/未验”边界，按时间顺序阅读，由上条本批记录接续，不作为当前运行状态。
+
 **2026-11-03 ACL历史读取身份修复5423433候选，未安装**：原dev/inode重开比较可因inode复用漏检；现持有原FD并比较原/新目标完整九字段，包含同inode元数据变化，失败关闭FD且不返回历史。协议仍1.52、只读能力及租约/权限不扩；30历史/469旧文件隔离回归通过，新真实恢复门禁及29证明完成但未执行，安装态RPC/HDD待发布核验。[CI事实与下一步](qa/CONTAINER_ACL_RESTORE_RELEASE_PREPARATION.md)。
 
 **2026-11-03 ACL历史恢复API/Vue候选3fd7f5f，未部署**：前端选择capture/digest，经C#新恢复计划/原确认取消和既有1.52历史Read及ACL Plan/Apply/Inspect/Discard；无新RPC/minor/root权限或schema。4361 Unit/488 Integration（7默认跳过）、1059前端Unit及类型构建lint通过；身份/Agent/仓储和页面API均夹具，不作真实签名恢复/当前ACL原件HDD证据。生产仍08b2bb8/1.52和原宿主PID、11核心healthy。[候选、失败与后续真实门禁](qa/CONTAINER_ACL_RESTORE_WEB.md)。

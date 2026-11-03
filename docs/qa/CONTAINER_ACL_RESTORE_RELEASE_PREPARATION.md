@@ -46,3 +46,7 @@
 生产构建预览丢登记响应单例5/5通过、依赖安装后的请求判定2/2通过；未重跑全部81页面并冒称单轮成功。Python/Node语法、CI YAML依赖顺序与路径检查通过。目标第1节与此前3份QA全文保持，828条相关MD相对链接有效；私有原件保存于`deploy/artifacts/acl-restore-release-preparation/`，只包含冻结来源、失败摘录和检查/运行边界，不存环境文件或凭据。新真实恢复脚本未调用，生产版本/源列/核心与宿主PID均保持前批实际状态。
 
 最后一次远端核查：cad6182/run41619582863的installer、backend、native-postgres、native-valkey四路均completed/success；frontend仍in_progress，故未启动发布。与本机全量安装检查分列，不提前签整条CI成功。
+
+## 后续接续（2026-11-03）
+
+本文件以上正文保留原时点证据与失败边界。cad6182随后取得准确CI五路成功、唯一标准覆盖和新独占六场景真实恢复及独立复核通过，见[实际发布与恢复验收](CONTAINER_ACL_RESTORE_REAL_UI.md)；后续通过不改写本记录当时的未部署/未验事实。恢复故障、递归ACL、删除及其余59项继续。

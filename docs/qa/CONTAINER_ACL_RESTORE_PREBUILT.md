@@ -26,3 +26,7 @@ cad6182/run41619582863的installer、backend、native-postgres、native-valkey�
 原件位于root私有忽略目录`deploy/artifacts/acl-restore-release-cad6182/`：部署前基线、预构建日志、4镜像ID/CLI/标签及受保护配置不变证明。未创建新的真实恢复意图、Root/HDD回执、Auth临时账号或恢复页面截图；不提高59项整项完成率。完整故障/递归ACL/可恢复删除/长期清理与其余59项继续，17项移出不算完成，master尚未交付。
 
 收尾只读布尔查询首次未包to_json，psql返回f而JSON解码失败；改为to_json(EXISTS(...))后完成核对，无数据库写入。9份静态原件SHA与root目录0700/文件0600校验通过，目标第1节和此前3份QA全文保持，3份变动MD的594条相对链接有效；8项范围检查通过。
+
+## 后续接续（2026-11-03）
+
+本文件以上正文保留原时点证据与失败边界。cad6182随后取得准确CI五路成功、唯一标准覆盖和新独占六场景真实恢复及独立复核通过，见[实际发布与恢复验收](CONTAINER_ACL_RESTORE_REAL_UI.md)；后续通过不改写本记录当时的未部署/未验事实。恢复故障、递归ACL、删除及其余59项继续。

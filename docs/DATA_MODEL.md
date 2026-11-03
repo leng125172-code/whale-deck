@@ -1,5 +1,9 @@
 # WhaleDeck 数据模型
 
+**2026-11-03 ACL恢复来源生产迁移及真实永久业务已验证**：cad6182标准覆盖已应用20261103085710_ContainerAclRestoreSources，生产restore_source_json存在/CHECK=18。新独占6意图/5执行、11恢复Job SQL/API、23来源hash审计与完整canonical来源逐项核对；旧捕获与5新当前ACL原件Root/HDD分列且保持，独立只读Passed。普通null兼容/不可变与Down保护沿用已验证候选；没有改SQL状态取得验收。故障组合/递归恢复/删除仍待。[实际迁移与证据](qa/CONTAINER_ACL_RESTORE_REAL_UI.md)。
+
+以下旧日期条目保留各自当时的版本与“未部署/未验”边界，按时间顺序阅读，由上条本批记录接续，不作为当前运行状态。
+
 **2026-11-03 ACL恢复发布准备无新schema/生产写入**：修复历史读取FD身份并新增真实恢复SQL来源全文/新执行/23专用审计和新旧Root/HDD分列证明工具；29反例证明与8范围通过，不是实际生产恢复证据。生产来源列仍不存在、17 CHECK，发布后迁入先前已有来源迁移；未以重放旧捕获或改SQL取得验收。[当前发布边界](qa/CONTAINER_ACL_RESTORE_RELEASE_PREPARATION.md)。
 
 **2026-11-03 ACL历史恢复管理员API/Vue候选3fd7f5f接入，未部署**：传输新增{intent,source}授权响应，复用此前来源不可变列和原Job/Outbox/共享锁，不新增迁移或历史缓存。浏览器仅保存key/ID、Subject/CID与restore模式提示，ACL/capture/digest不入sessionStorage；原登录刷新只GET原引用。4361 Unit/488 Integration（7默认跳过）和1059前端Unit通过，HTTP仓储/Root为夹具，本批未重跑真实PG或实际HDD恢复。生产来源列仍不存在、17 CHECK；47e3ba1隔离PG仅保留原冻结来源。[详情与边界](qa/CONTAINER_ACL_RESTORE_WEB.md)。
