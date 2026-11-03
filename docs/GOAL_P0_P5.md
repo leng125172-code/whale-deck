@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-04 历史恢复写后目标消失Unknown及跨容器目录保护实机通过：f0226dd/profile7/proofVersion5冻结51依赖，118检查后全新真实选源/恢复写入，移除仅本轮容器并正常退出，产品4.811秒结束helper；不同管理员320暗色先暂不处置再明确ack，原执行Failed/Root Unknown/null确认及来源/原件/迟到不改，等待目录版本2/4/6/8自然延期，00:09:56.537648处置后00:09:59.930647才Root写入并Vue可见。9真PNG/5恢复审计、正常双端退出/独立核验/准确清理通过；131旧元数据字节九字段保持、总133，三失败树保留，11核心healthy/两宿主及7配置账本保持/活动0。仅此写后目标消失组合，实例/来源/管理员来源UI/递归ACL/删除及59项继续。[事实与未验范围](qa/CONTAINER_ACL_RESTORE_UNKNOWN.md)。
+
 2026-11-03 ACL恢复写后Agent重启真实整链及双Job页面通过：首轮44a60de因来源Job回执缺失失败、仅普通捕获1/恢复0/未重启，源保留；96b6bda补真实API/SQL摘要和独立原目录读取，90检查通过后用全新资源实测。产品仍b69302b/1.52，helper0.010秒结束、Agent完整重启30.622秒，PID1688516→1772448/维护1688513保持；152次维护200/Ready、Succeeded/Completed/迟到不改、来源+当前HDD、双原Job真实320暗色/正常退出/独立复核及准确清理通过。128旧元数据字节九字段保持、总131/三旧失败树留存，11核心healthy/7配置账本保持/活动0。Unknown、递归ACL、删除及59项继续。[实机、失败与修正](qa/CONTAINER_ACL_RESTORE_POST_AGENT_RESTART.md)。
 
 2026-11-03 b69302b历史读取超时修复已部署并完成真实写后撤权复验：准确CI五路成功、唯一Invocation c7f46555dedd4db2a84c2e8e8fa46071退出0，六组件/16helper同源，Agent1688516/维护1688513，11核心healthy/8数据库/7配置保持、账本current b693/previous cad/pending空。公共8080真实签名读取128份两页3.597/2.368秒原件不改；全新Vue写后移组/停用分别4.786/4.736秒停helper、Succeeded/Completed，原403/引用清空/取消0、当前管理员Recovery200/Owner404，独立复核及准确清理通过。两探测脚本失败、一次并行账号检查失败及只读修正保留，不重放写入。恢复写后Agent候选/Unknown/递归ACL/删除和59项继续。[发布、实机与失败边界](qa/CONTAINER_ACL_HISTORY_TIMEOUT_RELEASE.md)。

@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RESTORE_POST_AGENT_RESTART.md",
-  "nextStep": "b69302b恢复写后Agent重启及双原Job页面、正常退出和独立核验已完成，Agent1772448/维护1688513、11核心healthy。下一步历史恢复Unknown/实例或来源变化、当前管理员明确处置与跨容器目录保护，再磁盘共享、递归ACL/恢复、删除长期清理及其余59项；保留三旧失败源树与全部失败证据，17项移出不算完成，不自动回滚dev或重启主机。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RESTORE_UNKNOWN.md",
+  "nextStep": "b69302b历史恢复写后目标消失Unknown/不同管理员处置/跨容器目录自然延期释放已实机核验。下一步同CID实例变化、来源丢失替换及恢复来源专属管理员UI，再磁盘共享、递归ACL/恢复、删除长期清理及其余59项。保持Agent1772448/维护1688513、三旧失败树和全部原件；17项移出不算完成，不自动回滚dev或重启主机。"
 }

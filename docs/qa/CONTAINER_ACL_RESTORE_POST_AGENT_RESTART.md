@@ -37,3 +37,7 @@
 下一步单独实现并实测历史恢复Unknown/实例或来源变化、不同管理员显式处置和跨容器目录保护；不能套用本场Completed或普通ACL审计冒签。之后推进磁盘/共享写入、递归ACL/恢复、可恢复删除/长期清理及其余59项。源与HDD同device，不算异盘灾备；59主项及六阶段完整签收数不提升，17项移出不算完成，master未交付。
 
 收尾8项范围测试、877条变动MD相对链接通过，目标第1节逐字保持，3份QA原文仅追加接续。项目图谱确认原whale-deck/container-acl的`whale-deck.container-acl.96b6bda.restore-post-agent-real`事件，阶段active，原pending移入synced，没有将本分项计为59主项全部完成。
+
+## 后续接续：恢复写后目标消失Unknown
+
+以上原件和失败修正记录保留。随后f0226dd以全新资源完成恢复写后仅移除目标容器、不同管理员明确处置与另一容器目录自然延期/释放的实际Vue/Root/HDD和独立复核，见[Unknown实机事实](CONTAINER_ACL_RESTORE_UNKNOWN.md)。同CID实例变化、来源异常、递归ACL和删除仍待，不扩签本记录范围。
