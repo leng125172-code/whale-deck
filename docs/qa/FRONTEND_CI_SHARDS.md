@@ -22,3 +22,12 @@ matrix fail-fast:false使一片失败不会取消其它片的完整检查；未�
 - 初轮YAML构造出现重复runs-on，提交前修正并增加回归；首次本机Corepack缓存缺bin/pnpm.cjs导致收集失败，保留失败日志。运行器改为调用已安装的项目CLI，未改全局Corepack配置或降低CI依赖安装要求。
 
 **这是CI改进候选；新的六片尚无远端执行成功终态或实测提速结论，749是收集数而非本轮浏览器通过数。** 本地另起的409项旧末组生产预览回归仍在运行，它使用测试接口，不是真实Authentik/文件HDD证据；当前产品部署及来源UI真实签收仍需独立完成。
+
+
+## 实际六片CI通过（2026-11-04）
+
+提交b6fe56457b2e609843d23110a1de341819939ac8的准确[ci.yml run41694926753](https://github.com/leng125172-code/whale-deck/actions/runs/41694926753)已12个job全部completed/success，包括frontend_checks、六个frontend-browser矩阵和单一frontend汇总。逐job logs REST原始内容核对六片127/138/125/112/130/117项，合计749通过、0跳过，与原全集/分片只收集逐ID证明一致；新流程已真实执行，前节候选时点原文保留。
+
+本次旧frontend job起止4260秒（71分钟），新frontend_checks到最后frontend汇总的关键路径1018秒（16分58秒），含各自安装/排队等实际因素；这只有两次观测，不是长期性能或SLA承诺。主产品仍部署28062da，不为CI编排改动重发应用；真实来源UI验收另见[发布与整链](CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)。
+
+首次仅按SHA查run误取同提交Dependabot的success回执，严格job集合验证立即拒绝，未用其签CI或发布；随后按workflow ci.yml定位上述正确12-job run。gh run view日志读取未取得摘要及部分REST EOF的失败均保留，只读补齐缺失片的日志后才核实749执行数。没有重跑已成功的浏览器用例来补日志，没有隐藏失败/跳过或改变门禁。这里的“完整”限定原四条命令的41个spec，没有将其它未纳入清单的spec冒称已覆盖。

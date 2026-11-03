@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RECOVERY_SOURCE_UI.md；docs/qa/CONTAINER_ACL_RESTORE_SOURCE_FAILURES.md",
-  "nextStep": "准确产品28062da的CI41681017703五路成功，四镜像/两宿主已预构建，下一步唯一标准覆盖、六组件/安装核验与新资源来源UI实机；后续CI六片候选保留全部41文件、14门禁测试和749只收集通过，未实测提速。123相关业务夹具通过不算来源HDD故障验收；运行仍b69302b，继续来源异常/递归ACL/删除等59项，17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md；docs/qa/CONTAINER_ACL_RESTORE_SOURCE_FAILURES.md",
+  "nextStep": "28062da已发布且新资源来源UI/权限/明确处置及文件HDD整链、独立核验通过；维护入口发布窗口159采样1次ConnectionError，连续性仍待修复。后续真实来源丢失/替换、其它故障与磁盘共享、递归ACL/恢复、删除长期清理及其余59项；六路CI已12路/749项成功，71分→16分58秒仅本次观测，17项移出不算完成，不自动回滚dev。"
 }

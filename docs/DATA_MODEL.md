@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-04 28062da实际来源摘要/Unknown明确处置及三次读取核验通过；生产restore_source_json、20261103085710迁移及18CHECK实查。普通200 JSON null/恢复7字段、canonical来源和请求/计划/执行/owner绑定保持，旧135HDD保持、总137两新前像分列，无新schema。 见[实际来源UI与发布边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)。
+
 2026-11-04 恢复来源摘要候选（未部署）：仅读取原container_acl_intents.restore_source_json及既有完整性保护；不新增表/列/迁移，不修改普通Intent或Job schema。独立ContainerAclRestoreSourceSummaryDto仅captureId、changedAclType、kind、createdAtUnixMs、originalMode、accessEntryCount、defaultEntryCount，普通意图返回null。HDD丢失后仍可读登记时快照，不能据此认定实际HDD存在、当前文件状态或恢复成功。 见[候选与验收边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_UI.md)。
 
 2026-11-04 实机接续：b69302b不重发，恢复写后同CID实例变化与原正常退出组合、不同管理员明确处置和跨容器目录保护通过；PID/StartedAt变化但原实例/来源及Root Unknown/null确认不改，133旧HDD原件保持。无新生产schema、RPC或授权扩大，见[实例变化事实与未验](qa/CONTAINER_ACL_RESTORE_INSTANCE_CHANGE.md)。

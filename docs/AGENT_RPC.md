@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-04 28062da已标准覆盖并以新资源真实签收恢复来源卡片及旧1.52契约整链；本批无新RPC/capability/产品sudo，13相关安装helper逐字核对，主/独立来源与Root/HDD及迟到不重写通过。摘要本身只读SQL，不新增Agent方法。 见[实际来源UI与发布边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)。
+
 2026-11-04 恢复来源展示候选（未部署）：本批新增BFF管理员只读摘要和Vue卡片，不新增Agent RPC/capability、协议minor、宿主helper或sudo权限。摘要使用原持久化来源的完整性校验，不重新调用Agent/HDD；原恢复写入前的真实来源核验与Inspect/Discard流程保持。候选测试不是新的签名RPC或磁盘验收。 见[候选与验收边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_UI.md)。
 
 2026-11-04 实机接续：b69302b不重发，恢复写后同CID实例变化与原正常退出组合、不同管理员明确处置和跨容器目录保护通过；PID/StartedAt变化但原实例/来源及Root Unknown/null确认不改，133旧HDD原件保持。无新生产schema、RPC或授权扩大，见[实例变化事实与未验](qa/CONTAINER_ACL_RESTORE_INSTANCE_CHANGE.md)。

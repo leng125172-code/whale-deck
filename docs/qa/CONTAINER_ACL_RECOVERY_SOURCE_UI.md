@@ -102,3 +102,8 @@
 2026-11-04，准确产品28062da的CI41681017703已完成，backend/frontend/installer/native-postgres/native-valkey全部completed/success，完整JSON回执保存后逐headSha与五个名称核对。前述各时点“前端仍运行”保留历史事实。四镜像与两宿主候选仍冻结28062da；尚未启动标准发布时不能提前签已部署或六组件实际一致。
 
 原串行前端持续较久，后续CI候选改为原41文件的6个独立分片，保留单一frontend汇总及全部检查，覆盖与失败门禁见[CI分片证明](FRONTEND_CI_SHARDS.md)。本地原409项末组额外完整回归正在运行；新分片只收集749项/六片无重无漏，不冒充执行通过。来源故障另新增2个原deadline到期用例，相关业务123通过，详见[来源矩阵接续](CONTAINER_ACL_RESTORE_SOURCE_FAILURES.md)。这些改动没有修改产品28062da，下一步唯一标准覆盖及新资源真实来源UI整链。
+
+
+## 实际后续（2026-11-04）
+
+以上候选/等待/失败时点原文保持。随后唯一标准覆盖28062da成功、六组件/安装核验通过，新资源真实来源卡片/8网络事件/权限/跨管理员处置及文件HDD、独立复核和准确清理通过；另以新管理员只读验证普通200 JSON null/恢复7字段/owner404。维护入口159样本中1次ConnectionError，不能签发布全窗口连续；本地409预览回归通过仍非实机。见[实际发布、原件及未解决边界](CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)。
