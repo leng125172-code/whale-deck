@@ -118,6 +118,28 @@ class AclHistoryTests(unittest.TestCase):
         self.assertEqual(len(actual), len(set(actual)))
         with self.assertRaises(self.base.r.Rejected): self.reader.listing(self.listing(after=actual[0]), self.session)
 
+    def test_soft_time_budget_returns_progressing_pages_with_same_inventory_and_no_writes(self):
+        captures={self.capture()[0]['operationId'] for _ in range(3)}
+        before=self.snapshot();clock=[0.0];original=self.reader.metadata
+        def paced(*args,**kwargs):
+            value=original(*args,**kwargs);clock[0]+=2.0;return value
+        with patch.object(module.time,'monotonic',side_effect=lambda:clock[0]),patch.object(self.reader,'metadata',side_effect=paced):
+            first=self.reader.listing(self.listing(),self.session)
+            self.assertFalse(first['complete']);self.assertEqual(first['scannedCount'],2)
+            clock[0]=0.0
+            second=self.reader.listing(self.listing(after=first['nextAfter'],expectedVersion=first['version']),self.session)
+            self.assertTrue(second['complete']);self.assertEqual(second['version'],first['version'])
+        self.assertEqual([e['captureId'] for p in (first,second) for e in p['entries']],sorted(captures))
+        self.assertEqual(self.snapshot(),before)
+
+    def test_one_read_exceeding_hard_deadline_still_fails_closed(self):
+        self.capture();before=self.snapshot();clock=[0.0];original=self.reader.metadata
+        def stalled(*args,**kwargs):
+            value=original(*args,**kwargs);clock[0]=6.0;return value
+        with patch.object(module.time,'monotonic',side_effect=lambda:clock[0]),patch.object(self.reader,'metadata',side_effect=stalled),self.assertRaisesRegex(self.base.r.Rejected,'TIMEOUT'):
+            self.reader.listing(self.listing(),self.session)
+        self.assertEqual(self.snapshot(),before)
+
     def test_append_and_in_place_change_both_invalidate_an_older_cursor(self):
         request, _ = self.capture()
         first = self.reader.listing(self.listing(), self.session)

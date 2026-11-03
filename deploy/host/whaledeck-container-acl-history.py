@@ -17,6 +17,7 @@ SCAN_LIMIT = 200
 PAGE_LIMIT = 50
 RESPONSE_BYTES = 128 * 1024
 SECONDS = 5
+SOFT_SECONDS = 3
 HASH = re.compile('[A-F0-9]{64}')
 CAPTURE = re.compile('[a-f0-9]{32}')
 
@@ -138,7 +139,9 @@ class ContainerAclHistoryReader:
                 type(request['take']) is not int or not 1 <= request['take'] <= PAGE_LIMIT or \
                 type(request['expectedVersion']) is not str or request['expectedVersion'] and not HASH.fullmatch(request['expectedVersion']) or \
                 request['after'] and not request['expectedVersion']: self.reject('REQUEST_INVALID')
-        deadline = time.monotonic() + SECONDS
+        started = time.monotonic()
+        deadline = started + SECONDS
+        soft_deadline = started + min(SOFT_SECONDS, SECONDS)
         self.current(request, session, proof, deadline)
         with self.namespace() as (configuration, base, descriptor):
             inventory = None if descriptor is None else self.inventory(descriptor, deadline)
@@ -152,7 +155,10 @@ class ContainerAclHistoryReader:
             for name, frame in [] if inventory is None else inventory[1]:
                 capture = name[:-5]
                 if capture <= request['after']: continue
-                if scanned >= SCAN_LIMIT or len(entries) >= request['take']:
+                # Leave time for final target/inventory/attestation checks.
+                # A soft boundary returns a progressing, version-bound page;
+                # the hard deadline still rejects a single stalled read.
+                if scanned >= SCAN_LIMIT or len(entries) >= request['take'] or scanned > 0 and time.monotonic() >= soft_deadline:
                     complete = False
                     break
                 self.current(request, session, proof, deadline)
