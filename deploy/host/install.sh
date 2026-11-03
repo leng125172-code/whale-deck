@@ -136,6 +136,7 @@ install -d -o root -g root -m 0700 /var/lib/whaledeck-application-backup /data/D
 for unit in whaledeck-application-backup-recovery.service whaledeck-application-backup-recovery.timer; do
   install -o root -g root -m 0644 "$(dirname "$0")/$unit" "/etc/systemd/system/$unit"
 done
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-platform-revisions.py" /usr/local/libexec/whaledeck-platform-revisions.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-platform-maintenance" /usr/local/libexec/whaledeck-platform-maintenance
 printf '%s\n' 'whaledeck-agent ALL=(root) NOPASSWD: /usr/local/libexec/whaledeck-privileged *' > /etc/sudoers.d/whaledeck-agent
 chmod 0440 /etc/sudoers.d/whaledeck-agent

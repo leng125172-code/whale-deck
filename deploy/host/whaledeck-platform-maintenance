@@ -9,14 +9,16 @@ export GIT_OPTIONAL_LOCKS=0
 action=${1:-}
 source_root=/data/GitRepos/whale-deck
 state_root=/var/lib/whaledeck-agent/platform-maintenance
-previous_file="$state_root/previous-revision"
+revision_helper=/usr/local/libexec/whaledeck-platform-revisions.py
 status_file=/run/whaledeck/maintenance/status.json
 lock_file=/run/lock/whaledeck-platform-maintenance.lock
+maintenance_started=false
 
 [[ -d $source_root/.git && -r $source_root/.env && -r $source_root/.images.env ]] || {
   echo 'Whale Deck source or private runtime configuration is unavailable.' >&2
   exit 1
 }
+[[ ! -L $state_root ]] || exit 1
 install -d -o root -g root -m 0700 "$state_root"
 # Agent publishes operation progress with atomic rename, while this root helper
 # publishes the longer deployment state. Both writers need directory access;
@@ -33,17 +35,15 @@ git_source() {
 }
 
 write_status() {
-  local state=$1 message=$2
-  printf '{"state":"%s","message":"%s","updatedAtUtc":"%s"}\n' \
-    "$state" "$message" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$status_file"
-  chown root:whaledeck "$status_file"
-  chmod 0640 "$status_file"
+  /usr/bin/python3 -I "$revision_helper" status "$1"
 }
 
 report_failure() {
   local exit_code=$?
   trap - ERR
-  write_status failed 'Whale Deck 发布失败；请修复问题后重新发布。' || true
+  if [[ $maintenance_started == true ]]; then
+    write_status failed 'Whale Deck 发布失败；请修复问题后重新发布。' || true
+  fi
   exit "$exit_code"
 }
 
@@ -60,10 +60,11 @@ compose_for() {
 }
 
 deploy_revision() {
-  local project_root=$1 migrate=$2
+  local project_root=$1 migrate=$2 expected_revision=$3
   export WHALEDECK_BUILD_REVISION
   WHALEDECK_BUILD_REVISION=$(/usr/bin/git -c "safe.directory=$project_root" -C "$project_root" rev-parse HEAD)
   [[ $WHALEDECK_BUILD_REVISION =~ ^[a-f0-9]{40}$ ]] || return 2
+  [[ $WHALEDECK_BUILD_REVISION == "$expected_revision" ]] || return 2
   "$project_root/deploy/host/publish-and-install.sh"
   compose_for "$project_root" --profile tools config --quiet
   if [[ -f $project_root/deploy/build-images.sh ]]; then
@@ -76,6 +77,8 @@ deploy_revision() {
     echo 'The update revision has no frozen image builder.' >&2
     return 2
   fi
+  [[ $(/usr/bin/git -c "safe.directory=$project_root" -C "$project_root" rev-parse HEAD) == "$expected_revision" ]] || return 2
+  [[ -z $(/usr/bin/git -c "safe.directory=$project_root" -C "$project_root" status --porcelain) ]] || return 2
   if [[ $migrate == true ]]; then
     compose_for "$project_root" --profile tools run --rm --no-deps migrator
   fi
@@ -90,29 +93,97 @@ case "$action" in
     [[ -z $(git_source status --porcelain) ]] || { echo 'Whale Deck checkout has local changes.' >&2; exit 1; }
     branch=$(git_source branch --show-current)
     [[ $branch =~ ^[A-Za-z0-9._/-]{1,120}$ ]] || { echo 'The current update branch is invalid.' >&2; exit 1; }
-    before=$(git_source rev-parse HEAD)
+    target=$(git_source rev-parse HEAD)
     # The repository owner fast-forwards the checkout before scheduling this
     # privileged phase. Root deploys that exact tested revision and therefore
     # does not depend on a desktop proxy or hold GitHub credentials.
+    prepared=$(/usr/bin/python3 -I "$revision_helper" prepare update "$target")
+    read -r revision attempt extra <<< "$prepared"
+    [[ $revision == "$target" && $attempt =~ ^[a-f0-9]{32}$ && -z $extra ]] || exit 2
+    maintenance_started=true
     write_status updating '正在部署当前 Whale Deck 开发版本。'
-    printf '%s\n' "$before" > "$previous_file"
-    deploy_revision "$source_root" true
+    deploy_revision "$source_root" true "$revision"
+    /usr/bin/python3 -I "$revision_helper" finish update "$revision" "$attempt"
     write_status healthy 'Whale Deck 更新完成。'
     ;;
   rollback)
-    [[ -r $previous_file ]] || { echo 'No previous Whale Deck revision is recorded.' >&2; exit 1; }
-    revision=$(<"$previous_file")
-    [[ $revision =~ ^[a-f0-9]{40}$ ]] || { echo 'The recorded rollback revision is invalid.' >&2; exit 1; }
+    prepared=$(/usr/bin/python3 -I "$revision_helper" prepare rollback)
+    read -r revision attempt extra <<< "$prepared"
+    [[ $revision =~ ^[a-f0-9]{40}$ && $attempt =~ ^[a-f0-9]{32}$ && -z $extra ]] || exit 2
     git_source cat-file -e "$revision^{commit}"
     rollback_root="$state_root/rollback-src"
+    # Old installers replace libexec too. Keep the current trusted transaction
+    # controller across a manual rollback; application/Agent artifacts still use
+    # the selected old commit. No automatic application rollback is introduced.
+    controls=(whaledeck-platform-maintenance whaledeck-platform-revisions.py)
+    for name in "${controls[@]}"; do
+      file="/usr/local/libexec/$name"
+      [[ -f $file && ! -L $file && $(stat -c '%u:%h:%a' "$file") == 0:1:750 ]] || exit 2
+    done
+    control_root=$(mktemp -d "$state_root/control.XXXXXXXX")
+    for name in "${controls[@]}"; do
+      if ! install -o root -g root -m 0750 "/usr/local/libexec/$name" "$control_root/$name"; then
+        for name in "${controls[@]}"; do rm -f -- "$control_root/$name"; done
+        rmdir -- "$control_root"
+        exit 1
+      fi
+    done
+    restore_control() {
+      local name staging
+      for name in "${controls[@]}"; do
+        if ! cmp -s "$control_root/$name" "/usr/local/libexec/$name"; then
+          staging=$(mktemp /usr/local/libexec/.whaledeck-maintenance-control.XXXXXXXX)
+          if ! install -o root -g root -m 0750 "$control_root/$name" "$staging"; then
+            rm -f -- "$staging"
+            return 1
+          fi
+          if ! /usr/bin/python3 -I - "$staging" <<'CONTROL_SYNC'
+import os, sys
+fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW)
+try: os.fsync(fd)
+finally: os.close(fd)
+CONTROL_SYNC
+          then
+            rm -f -- "$staging"
+            return 1
+          fi
+          if ! mv -T -- "$staging" "/usr/local/libexec/$name"; then
+            rm -f -- "$staging"
+            return 1
+          fi
+        fi
+      done
+      /usr/bin/python3 -I - /usr/local/libexec <<'CONTROL_DIRECTORY_SYNC'
+import os, sys
+fd = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try: os.fsync(fd)
+finally: os.close(fd)
+CONTROL_DIRECTORY_SYNC
+    }
+    rollback_cleanup() {
+      local result=$? name
+      trap - EXIT
+      # Keep the trusted backup if restoration itself failed.
+      restore_control || return 1
+      revision_helper=/usr/local/libexec/whaledeck-platform-revisions.py
+      git_source worktree remove --force "$rollback_root" >/dev/null 2>&1 || result=1
+      for name in "${controls[@]}"; do rm -f -- "$control_root/$name"; done
+      rmdir -- "$control_root" || result=1
+      return "$result"
+    }
+    trap rollback_cleanup EXIT
+    # The rollback installer may replace libexec before it fails. Status and
+    # commit must keep using the root-private controller captured at entry.
+    revision_helper="$control_root/whaledeck-platform-revisions.py"
     [[ ! -e $rollback_root ]] || git_source worktree remove --force "$rollback_root"
+    maintenance_started=true
     write_status rollingBack '正在回退 Whale Deck；数据库迁移不会降级。'
     git_source worktree add --detach "$rollback_root" "$revision"
-    trap 'git_source worktree remove --force "$rollback_root" >/dev/null 2>&1 || true' EXIT
     install -o root -g root -m 0600 "$source_root/.images.env" "$rollback_root/.images.env"
-    deploy_revision "$rollback_root" false
-    git_source worktree remove --force "$rollback_root"
-    trap - EXIT
+    deploy_revision "$rollback_root" false "$revision"
+    restore_control
+    /usr/bin/python3 -I "$revision_helper" finish rollback "$revision" "$attempt"
+    rollback_cleanup
     write_status healthy 'Whale Deck 已回退到上一版本。'
     ;;
   *)

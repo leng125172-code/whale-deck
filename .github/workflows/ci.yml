@@ -23,6 +23,10 @@ jobs:
           python3 -m unittest discover -s tests -p test_host_runtime.py
           bash -n deploy/build-images.sh
           python3 -m unittest discover -s tests -p 'test_build_*.py'
+          bash -n deploy/host/whaledeck-platform-maintenance
+          bash -n deploy/host/validate.sh
+          python3 -W error -m py_compile deploy/host/whaledeck-platform-revisions.py
+          python3 -W error::ResourceWarning -m unittest discover -s tests -p 'test_platform_*.py'
           bash -n deploy/ci/install-frontend-dependencies.sh
           python3 -m unittest discover -s tests -p test_ci_frontend_install.py
           bash -n deploy/host/whaledeck-privileged
