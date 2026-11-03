@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+**2026-11-03 恢复进行中取消/退出永久事实实机通过**：无新schema/迁移；两套严格资源各先完成真实普通ACL来源捕获，再执行恢复到已留当前原件/尚未修改ACL切点。共4意图/8Job、2旧来源与2新当前HDD，恢复cancel5/logout4共9条来源hash审计；原恢复Canceled/Aborted、保护/租约释放、全源保持，独立复核和准确清理通过。首次语义已过但截图状态未入视口记录保留，后用新资源严格复验。剩余故障/递归恢复/删除继续。[实际数据边界](qa/CONTAINER_ACL_RESTORE_FAULTS.md)。
+
 **2026-11-03 ACL恢复来源生产迁移及真实永久业务已验证**：cad6182标准覆盖已应用20261103085710_ContainerAclRestoreSources，生产restore_source_json存在/CHECK=18。新独占6意图/5执行、11恢复Job SQL/API、23来源hash审计与完整canonical来源逐项核对；旧捕获与5新当前ACL原件Root/HDD分列且保持，独立只读Passed。普通null兼容/不可变与Down保护沿用已验证候选；没有改SQL状态取得验收。故障组合/递归恢复/删除仍待。[实际迁移与证据](qa/CONTAINER_ACL_RESTORE_REAL_UI.md)。
 
 以下旧日期条目保留各自当时的版本与“未部署/未验”边界，按时间顺序阅读，由上条本批记录接续，不作为当前运行状态。
