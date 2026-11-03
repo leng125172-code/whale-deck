@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+**2026-11-03 ACL恢复写后取消/Worker回执中断实机通过**：产品仍cad6182/1.52不重发，工具3957cd7/schema10/version4两新资源在目标基本ACL已写/Root Applying时真实页面取消或准确原Worker SIGKILL。产品5.278/0.114秒结束helper，强杀原租约87.034秒/41采样后以原执行ID对账；两原任务Succeeded/Completed、aclConfirmed=true及新版本保持，取消请求未冒充已撤回。2旧来源+2当前HDD/9恢复审计/8Job、完整已写清单及迟到原Apply不变，正确wrapper/原上下文退出/独立核验/准确清理/4真PNG及80检查通过；旧schema9只读92原件保持。11核心healthy/8数据库/两宿主/7配置保持，395CI四成功/frontend待；写后撤权/Agent、Unknown/来源、递归ACL/删除及59项继续。[证据与边界](qa/CONTAINER_ACL_RESTORE_POST_CHANGE.md)。
+
 **2026-11-03 ACL恢复写入前Worker强杀/Agent重启实机通过**：产品仍cad6182/1.52不重发，工具12c789c/schema9/version3两新资源真实捕获后恢复至当前ACL原件HDD已验证/目标未写切点。Worker实际SIGKILL后产品0.109秒停helper，原租约86.846秒/41采样保留token/expiry/来源及权威hash；Agent重启0.012秒停helper，PID1214295→1399935、维护1214273保持，重启窗口153次200/healthy-Ready。两原任务Failed/Interrupted、Root Aborted，全源/两类ACL/2旧来源+2当前HDD/8恢复审计/8Job保持，正确恢复wrapper、原上下文退出/独立核验/准确清理/4真PNG及77检查通过；旧schema8只读兼容87原件保持。11核心healthy/8数据库/7配置保持，12cCI四成功/frontend待；写后/Unknown/来源等故障、递归ACL/删除与59项继续。[实机证据与边界](qa/CONTAINER_ACL_RESTORE_RESTARTS.md)。
 
 **2026-11-03 ACL恢复实时移组/账号停用实机通过**：产品仍cad6182/1.52不重发，工具e77c1a6/schema8/version2在两套新资源真实页面先留自有捕获再恢复，当前ACL原件HDD已验证且未写目标时仅撤销准确临时身份。旧正权限仍余7138.461/7137.025秒，产品4.938/4.858秒结束helper，Canceled/Aborted、完整源/两类ACL保持；原恢复GET均403，移组me200非管理员→forbidden、停用me403→login，引用null/取消POST0，不冒称正常退出。2旧来源+2当前HDD/8恢复审计/8Job、独立Passed/准确清理/4真PNG及73检查/语法通过；旧schema7只读兼容与81份原件保持。11核心healthy/8数据库/两宿主/7配置保持，e77CI四路成功/frontend待；其余恢复故障/递归ACL/删除与59项继续。[实际证据](qa/CONTAINER_ACL_RESTORE_REVOCATION.md)。

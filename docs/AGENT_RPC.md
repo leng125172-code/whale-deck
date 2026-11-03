@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+**2026-11-03 历史恢复写后取消/Worker中断实机分项通过**：仍cad6182/1.52，无新增RPC/安装/权限。目标ACL已写但Root仍Applying时取消或强杀原Worker，产品5.278/0.114秒停helper，强杀等原租约87.034秒/41样本后原执行Succeeded/Completed；旧来源/新当前前像保持，固定helper迟到原Apply只重放原回执（非新签名RPC）。正确恢复wrapper/原上下文退出、独立核验和准确清理通过，Agent1399935/维护1214273保持；其余切点/故障继续。[证据](qa/CONTAINER_ACL_RESTORE_POST_CHANGE.md)。
+
 **2026-11-03 恢复写入前强杀/Agent重启实机分项通过**：无新增RPC/安装/能力，仍cad6182/1.52。产品0.109/0.012秒结束原helper，Worker原租约86.846秒/41采样后恢复，源/全部权威hash和原前像保持；Agent1214295→1399935、维护1214273不变，153次维护采样200/Ready。原任务Failed/Interrupted、Root Aborted，正确恢复wrapper/原上下文退出、独立核验及准确清理通过，其他切点/故障、递归ACL/删除继续。[证据](qa/CONTAINER_ACL_RESTORE_RESTARTS.md)。
 
 **2026-11-03 历史恢复实时撤权RPC/HDD切点实机通过**：仍cad6182/1.52，无新增Agent安装或能力。两新资源恢复当前原件已备份、尚未写ACL时准确移组/停用原身份，产品4.938/4.858秒结束绑定helper，原执行Canceled/Aborted，旧来源/当前前像及源保持。独立核验、实际失权页面/准确清理通过，原Agent1214295/维护1214273保持；Worker/Agent重启、写后/Unknown、递归ACL等仍待。[证据与范围](qa/CONTAINER_ACL_RESTORE_REVOCATION.md)。

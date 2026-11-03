@@ -40,3 +40,7 @@ Worker分项未缩短/换租约，也未修改数据库时间；自然观察与�
 本批仅签单文件access恢复在“当前原件已备份、目标未写”切点的Worker强杀/原自然租约和Agent重启。仍需写后中断/撤权、Unknown/实例或来源变化、来源离线/替换、磁盘异常及共享写入组合；目录default故障、递归ACL/恢复、可恢复删除/长期清理及其余目标继续。源与HDD同device不算异盘灾备，59主项完整签收和25%–35%粗估不变，17项移出不算完成，master未交付。
 
 收尾8项范围检查、854条变动MD相对链接通过；目标第1节逐字保持，前批撤权QA原文保留后追加接续。项目图谱已确认原`whale-deck/container-acl`的`whale-deck.container-acl.12c789c.restore-restarts`事件，阶段仍active，按原eventId从pending移入synced。
+
+## 后续写后分项（2026-11-03）
+
+以上写前重启/原租约原文及原件保持。3957cd7随后在两套新资源完成目标ACL已写后取消/Worker强杀，原执行按实际事实Succeeded/Completed并独立核验通过；新观察器只读兼容本批schema9且92文件字节保持。详见[写后证据与剩余](CONTAINER_ACL_RESTORE_POST_CHANGE.md)，不以此补签其他写后故障、Unknown、来源变化、递归ACL或删除。
