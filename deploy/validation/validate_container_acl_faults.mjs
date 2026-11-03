@@ -78,6 +78,10 @@ try {
   phase = 'visible-bound-inflight-task'
   await dialog.getByRole('button', { name: '查询原ACL修改任务', exact: true }).click()
   await expect(dialog.getByRole('status')).toContainText('正在修改ACL')
+  if (restoration) {
+    await dialog.getByRole('status').scrollIntoViewIfNeeded()
+    await expect(dialog.getByRole('status')).toBeInViewport({ ratio: 1 })
+  }
   await expect(dialog.getByRole('button', { name: '请求取消ACL修改', exact: true })).toBeInViewport({ ratio: 1 })
   await page.screenshot({ path: join(directory, 'inflight.png') })
   if (behavior === 'cancel') {
@@ -124,6 +128,10 @@ try {
     phase = 'visible-original-terminal'
     await dialog.getByRole('button', { name: '查询原ACL修改任务', exact: true }).click()
     await expect(dialog.getByRole('status')).toHaveText(postAcl ? 'ACL修改已完成' : final.state === 'Failed' ? 'ACL修改未完成' : '已取消')
+    if (restoration) {
+      await dialog.getByRole('status').scrollIntoViewIfNeeded()
+      await expect(dialog.getByRole('status')).toBeInViewport({ ratio: 1 })
+    }
     if (postAcl || ['worker-crash', 'agent-restart'].includes(fixture.kind)) {
       const original = await context.request.get(ownEndpoint + '/' + intent.id); assert.equal(original.status(), 200)
       terminalIntent = await original.json(); assert.equal(terminalIntent.state, postAcl ? 'Succeeded' : 'Failed'); assert.equal(terminalIntent.resultCode, postAcl ? 'CONTAINER_ACL_COMPLETED' : 'CONTAINER_ACL_INTERRUPTED')
