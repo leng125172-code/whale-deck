@@ -237,7 +237,7 @@ class AclRevocationEvidenceTests(unittest.TestCase):
         self.verifier.validate_source_profile({'sha256':old},['cancel','logout'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'sha256':old},['group-removal'])
         self.verifier.validate_source_profile({'schemaVersion':2,'sha256':sources},['group-removal','account-disable'])
-        for schema in (True,6,'2'):
+        for schema in (True,7,'2'):
             with self.subTest(schema=schema),self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':schema,'sha256':sources},['group-removal'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':2,'sha256':old},['account-disable'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':2,'sha256':sources},['worker-crash'])
@@ -246,6 +246,43 @@ class AclRevocationEvidenceTests(unittest.TestCase):
         self.verifier.validate_source_profile({'schemaVersion':4,'sha256':sources},['post-acl-cancel','post-acl-worker-crash'])
         with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':4,'sha256':sources},['post-acl-group-removal'])
         self.verifier.validate_source_profile({'schemaVersion':5,'sha256':sources},['post-acl-group-removal','post-acl-account-disable'])
+        with self.assertRaises(AssertionError):self.verifier.validate_source_profile({'schemaVersion':5,'sha256':sources},['post-acl-agent-restart'])
+        self.verifier.validate_source_profile({'schemaVersion':6,'sha256':sources},['post-acl-agent-restart'])
+
+
+class AclPostAgentJobEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        import validate_container_acl_faults as driver
+        self.driver=driver;self.intent=str(uuid.uuid4());self.execution=str(uuid.uuid4())
+        self.plan={'command':{'aclType':'access'},'kind':'File','targetMode':416,'noChange':False,'fingerprint':'F'*64,'targetProof':'T'*64}
+        self.row={'id':self.intent,'execution_job_id':self.execution,'plan_json':'{}','relative_path':'work/acl-file.bin','instance_id':'100:fixture','actor_subject':'original-actor','history_digest':'H'*64,'published_version':'V'*64}
+        self.base={'kind':'post-acl-agent-restart','jobResultsVersion':1};self.ui={'jobResultsVersion':1,'jobReadsOnly':True}
+        self.data={'row':self.row};self.proof={'intentId':self.intent,'taskCenter':[]}
+        for execution in (False,True):
+            identifier=self.execution if execution else self.intent;value=driver.expected_job_summary(self.row,self.plan,execution)
+            job={'id':identifier,'state':'Succeeded','jobType':'containers.files.acl' if execution else 'containers.files.acl-plan','resultJson':json.dumps(value)}
+            self.data['executionJob' if execution else 'planJob']=job;self.proof['execution' if execution else 'plan']=copy.deepcopy(job)
+            self.proof['taskCenter'].append({'id':identifier,'intentId':self.intent,'execution':execution,'screenshot':'execution-job.png' if execution else 'plan-job.png','noGenericWriteControls':True})
+    def check(self):
+        with patch.object(self.driver,'managed_plan',return_value=self.plan):self.driver.verify_task_results(self.data,self.base,self.ui,self.proof)
+    def test_post_agent_kind_is_single_and_old_batch_selectors_stay_unchanged(self):
+        self.assertEqual(self.driver.requested_kinds('post-acl-agent-restart'),('post-acl-agent-restart',))
+        self.assertEqual(self.driver.requested_kinds('post-revocation'),('post-acl-group-removal','post-acl-account-disable'))
+        self.assertEqual(self.driver.terminal_state('post-acl-agent-restart'),'Succeeded')
+        with self.assertRaises(AssertionError):self.driver.requested_kinds('unsupported-restart')
+    def test_two_original_api_and_sql_summaries_are_required(self):
+        self.check();self.proof['execution']['id']=str(uuid.uuid4())
+        with self.assertRaises(AssertionError):self.check()
+    def test_missing_or_wrong_summary_facts_cannot_prove_completed_write(self):
+        self.check();value=json.loads(self.proof['execution']['resultJson']);value['aclConfirmed']=False;self.proof['execution']['resultJson']=json.dumps(value)
+        with self.assertRaises(AssertionError):self.check()
+    def test_unread_original_task_or_generic_controls_cannot_pass(self):
+        for key,value in (('id',str(uuid.uuid4())),('execution',False),('noGenericWriteControls',False)):
+            original=copy.deepcopy(self.proof);self.proof['taskCenter'][1][key]=value
+            with self.subTest(key=key),self.assertRaises(AssertionError):self.check()
+            self.proof=original
+        self.ui['jobReadsOnly']=False
+        with self.assertRaises(AssertionError):self.check()
 
 
 class AclRestartEvidenceTests(unittest.TestCase):

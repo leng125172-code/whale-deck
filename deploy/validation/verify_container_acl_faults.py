@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 import requests
-from validate_container_acl_faults import SOURCES, verify_terminal, no_active_work, load, owned, terminal_state, RESTART_KEYS, require_host_restart, observation_expiry, unchanged_except_target, managed_plan
+from validate_container_acl_faults import SOURCES, verify_terminal, no_active_work, load, owned, terminal_state, RESTART_KEYS, require_host_restart, observation_expiry, unchanged_except_target, managed_plan, verify_task_results
 from validate_metric_continuity import query
 from validate_container_upload_recovery_agent import trusted
 from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, require
@@ -18,7 +18,8 @@ from run_with_ephemeral_admin import AUTHENTIK_API, container_environment, requi
 
 def validate_source_profile(provenance, kinds):
     schema=provenance.get('schemaVersion',1)
-    assert type(schema) is int and schema in (1,2,3,4,5)
+    assert type(schema) is int and schema in (1,2,3,4,5,6)
+    if schema<6:assert 'post-acl-agent-restart' not in kinds
     if schema<5:assert not set(kinds)&{'post-acl-group-removal','post-acl-account-disable'}
     if schema<4:assert not set(kinds)&{'post-acl-cancel','post-acl-worker-crash'}
     if schema<3:assert not set(kinds)&{'worker-crash','agent-restart'}
@@ -135,7 +136,7 @@ def verify(directory):
     current=owned.common.core_snapshot();assert len(current)==11;results=[]
     assert accepted['cases'] and len(accepted['cases'])<=2 and len({r['kind'] for r in accepted['cases']})==len(accepted['cases'])
     for result in accepted['cases']:
-        kind=result['kind'];assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash','post-acl-group-removal','post-acl-account-disable');p=directory/kind;trusted(p,True)
+        kind=result['kind'];assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash','post-acl-group-removal','post-acl-account-disable','post-acl-agent-restart');p=directory/kind;trusted(p,True)
         baseline=read(p/'baseline.json');ui=read(p/'browser.json');cut=read(p/'cut-root.json');bound=read(p/'bound-helper.json')
         assert baseline['revision']==ui['revision']==accepted['revision'] and baseline['validationSourceRevision']==provenance['revision'] and baseline['kind']==ui['kind']==kind
         post=kind.startswith('post-acl-');behavior=kind.removeprefix('post-acl-')
@@ -149,6 +150,11 @@ def verify(directory):
         content=hashlib.shake_256(('acl-fault:'+baseline['containerId']).encode()).digest(2*1024**2+7)
         assert baseline['bytesPerFile']==len(content) and baseline['sha256']==hashlib.sha256(content).hexdigest().upper()
         data,record,raw,hdd_raw=verify_terminal(result['id'],ui['subject'],baseline,storage,module)
+        if kind=='post-acl-agent-restart':
+            assert provenance['schemaVersion']==6 and baseline['jobResultsVersion']==1
+            proof=read(p/'task-results.json');verify_task_results(data,baseline,ui,proof)
+            for name in ('plan-job.png','execution-job.png'):
+                path=p/name;info=trusted(path);assert 1000<info.st_size<4*1024**2 and path.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
         assert data==read(p/'final-sql.json') and raw==(p/'final-root.json').read_bytes() and hdd_raw==(p/'final-hdd.json').read_bytes()
         physical=read(p/'physical-final.json')
         if post:

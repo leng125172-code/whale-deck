@@ -22,7 +22,7 @@ import uuid
 import requests
 import validate_container_file_publishing as owned
 from bound_container_acl_cut import ROOT, freeze_before_acl, freeze_after_acl, record_for
-from validate_container_acl_browser import SOURCES as BROWSER_SOURCES, snapshot, managed_plan, no_active_work, read_metadata, inventory, PATHS, NAMES, remove_proved, version
+from validate_container_acl_browser import SOURCES as BROWSER_SOURCES, snapshot, managed_plan, no_active_work, read_metadata, inventory, PATHS, NAMES, remove_proved, version, expected_job_summary, validate_job_summary
 from validate_container_directory_restart import Worker, command, preflight, agent_identity
 from validate_container_file_staging import load
 from validate_container_upload_bff import temporary_user, login, logout, request
@@ -65,9 +65,17 @@ def wait_settled(identifier):
 
 
 def terminal_state(kind):
-    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash','post-acl-group-removal','post-acl-account-disable')
+    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','post-acl-cancel','post-acl-worker-crash','post-acl-group-removal','post-acl-account-disable','post-acl-agent-restart')
     if kind.startswith('post-acl-'):return 'Succeeded'
     return 'Failed' if kind in ('worker-crash','agent-restart') else 'Canceled'
+
+
+def requested_kinds(selector):
+    groups={'revocation':('group-removal','account-disable'),'restart':('worker-crash','agent-restart'),
+        'post-change':('post-acl-cancel','post-acl-worker-crash'),'post-revocation':('post-acl-group-removal','post-acl-account-disable')}
+    if selector in groups:return groups[selector]
+    terminal_state(selector)
+    return (selector,)
 
 
 def verify_terminal(identifier, subject, baseline, storage, module, directory=None):
@@ -125,6 +133,23 @@ def current_admin_terminal(identifier, original_subject, execution, version_valu
             proof={'subject':profile['subject'],'currentlyAdministrator':True,'readStatus':200,'intent':intent,'readOnlyOperation':True,'normalHttpDualLogout':True}
             (directory/'current-admin-read.json').write_text(json.dumps(proof));return proof
         finally:session.close()
+
+
+def verify_task_results(data, baseline, ui, proof):
+    assert baseline['kind']=='post-acl-agent-restart' and baseline['jobResultsVersion']==ui['jobResultsVersion']==1
+    assert type(baseline['jobResultsVersion']) is type(ui['jobResultsVersion']) is int
+    row=data['row'];plan=managed_plan(json.loads(row['plan_json']));assert proof['intentId']==row['id']
+    assert ui['jobReadsOnly'] is True and len(proof['taskCenter'])==2
+    for index,execution in enumerate((False,True)):
+        identifier=row['execution_job_id'] if execution else row['id'];expected=expected_job_summary(row,plan,execution)
+        sql=data['executionJob'] if execution else data['planJob'];api=proof['execution'] if execution else proof['plan']
+        value=validate_job_summary(sql,expected,identifier);assert validate_job_summary(api,expected,identifier)==value
+        text=json.dumps(value)
+        for key in ('relative_path','instance_id','actor_subject','login_binding','owner_hash','request_hash','plan_hash','execution_hash','receipt_hash'):
+            if row.get(key):assert row[key] not in text
+        for secret in (plan['fingerprint'],plan['targetProof'],row['history_digest'],row['published_version']):assert secret not in text
+        center=proof['taskCenter'][index];assert center['id']==identifier and center['intentId']==row['id'] and center['execution'] is execution
+        assert center['screenshot']==('execution-job.png' if execution else 'plan-job.png') and center['noGenericWriteControls'] is True
 
 
 def cleanup_original_after_failure(identifier, directory, folder, reader, module, content, original, *, browser_started):
@@ -273,6 +298,7 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
         baseline={'revision':revision,'validationSourceRevision':source,'kind':kind,'containerId':fixture['identifier'],'containerName':actual['Name'].lstrip('/'),
             'instanceId':str(actual['State']['Pid'])+':'+actual['State']['StartedAt'],'containerPid':actual['State']['Pid'],'source':str(folder),
             'original':original,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'coreBefore':owned.common.core_snapshot(),'evidence':str(directory)}
+        if kind=='post-acl-agent-restart':baseline['jobResultsVersion']=1
         (directory/'baseline.json').write_text(json.dumps(baseline))
         try:
             PHASE=kind+':normal-visible-preflight'
@@ -376,6 +402,7 @@ def run_case(kind, revision, evidence, source, reader, module, storage):
                 ui=json.loads((directory/'browser.json').read_bytes());assert ui['actualUi'] and ui['id']==identifier and ui['subject']==ready['subject']
                 assert ui['authorityRevoked'] if authority else ui['normalDualLogout']
                 assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==(1 if behavior=='cancel' else 0) and ui['bodies']==0
+                if baseline.get('jobResultsVersion')==1:verify_task_results(data,baseline,ui,json.loads((directory/'task-results.json').read_bytes()))
                 if post and authority:current_admin_terminal(identifier,ready['subject'],data['row']['execution_job_id'],record['version'],directory)
                 result={'kind':kind,'id':identifier,'executionJobId':data['row']['execution_job_id'],'state':terminal_state(kind),'code':data['row']['result_code'],
                     'rootState':record['state'],'rootCutState':json.loads((directory/'cut-root.json').read_bytes())['state'],'productStoppedHelperSeconds':round(elapsed,3),
@@ -413,8 +440,7 @@ def main():
     assert os.geteuid()==0 and len(sys.argv) in (2,3);os.umask(0o077)
     revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision);kinds=('cancel','logout')
     if len(sys.argv)==3:
-        assert sys.argv[2] in (*kinds,'group-removal','account-disable','revocation','worker-crash','agent-restart','restart','post-acl-cancel','post-acl-worker-crash','post-change','post-acl-group-removal','post-acl-account-disable','post-revocation')
-        kinds=('group-removal','account-disable') if sys.argv[2]=='revocation' else ('worker-crash','agent-restart') if sys.argv[2]=='restart' else ('post-acl-cancel','post-acl-worker-crash') if sys.argv[2]=='post-change' else ('post-acl-group-removal','post-acl-account-disable') if sys.argv[2]=='post-revocation' else (sys.argv[2],)
+        kinds=requested_kinds(sys.argv[2])
     repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
     for name in SOURCES:
@@ -425,7 +451,7 @@ def main():
     with requests.Session() as session:
         session.trust_env=False;r=session.get('http://127.0.0.1:8080/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();evidence=repo/'deploy/artifacts'/('container-acl-faults-'+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
-    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':5,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision}))
+    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':6,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_fault_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_fault_module');files=reader.trusted_module('whaledeck-files.py','acl_fault_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_fault_hdd').FileBackups(files)
     print(json.dumps({'aclFaults':'started','evidence':str(evidence),'kinds':kinds}),flush=True);results=[]
     for kind in kinds:

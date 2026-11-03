@@ -9,15 +9,16 @@ import { loginVisible, openPermissionFiles, closePermissionDetails, waitSignal, 
 import { logoutFromUserMenu } from './installed_ui_logout.mjs'
 
 let logoutReceipt, browser, page, context, directory, phase = 'startup', action, currentIntent, ownEndpoint
+let jobReadsOnly = false
 try {
   const fixture = JSON.parse(await readFile('/dev/stdin', 'utf8'))
   const revision = process.argv[2]
   assert.match(revision, /^[a-f0-9]{40}$/); assert.equal(fixture.revision, revision)
-  assert.ok(['cancel', 'logout', 'group-removal', 'account-disable', 'worker-crash', 'agent-restart', 'post-acl-cancel', 'post-acl-worker-crash', 'post-acl-group-removal', 'post-acl-account-disable'].includes(fixture.kind))
+  assert.ok(['cancel', 'logout', 'group-removal', 'account-disable', 'worker-crash', 'agent-restart', 'post-acl-cancel', 'post-acl-worker-crash', 'post-acl-group-removal', 'post-acl-account-disable', 'post-acl-agent-restart'].includes(fixture.kind))
   directory = fixture.evidence
   const prefix = fileURLToPath(new URL('../artifacts/', import.meta.url))
   assert.ok(directory.startsWith(prefix))
-  assert.match(directory.slice(prefix.length), /^container-acl-faults-[a-f0-9]{32}\/(cancel|logout|group-removal|account-disable|worker-crash|agent-restart|post-acl-cancel|post-acl-worker-crash|post-acl-group-removal|post-acl-account-disable)$/)
+  assert.match(directory.slice(prefix.length), /^container-acl-faults-[a-f0-9]{32}\/(cancel|logout|group-removal|account-disable|worker-crash|agent-restart|post-acl-cancel|post-acl-worker-crash|post-acl-group-removal|post-acl-account-disable|post-acl-agent-restart)$/)
   const behavior = fixture.kind.replace(/^post-acl-/, ''), postAcl = fixture.kind.startsWith('post-acl-')
   const base = 'http://127.0.0.1:8080'
   browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true })
@@ -123,13 +124,45 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
     await page.screenshot({ path: join(directory, 'terminal.png') })
     await closePermissionDetails(page, dialog)
+    if (fixture.jobResultsVersion === 1) {
+      phase = 'original-task-result-after-agent-restart'
+      assert.equal(fixture.kind, 'post-acl-agent-restart')
+      const tasks = []
+      let jobWrites = 0
+      page.on('request', r => { if (new URL(r.url()).pathname.startsWith('/api/v1/jobs') && r.method() !== 'GET') jobWrites++ })
+      async function job(id) { const r = await context.request.get(base + '/api/v1/jobs/' + id); assert.equal(r.status(), 200); return r.json() }
+      const proof = { intentId: intent.id, plan: await job(intent.id), execution: await job(pending.executionJobId), taskCenter: tasks }
+      for (const execution of [false, true]) {
+        const id = execution ? pending.executionJobId : intent.id
+        const listing = page.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/jobs' && r.request().method() === 'GET')
+        await page.goto(base + '/jobs'); const response = await listing; assert.equal(response.status(), 200)
+        const jobs = await response.json(), index = jobs.findIndex(j => j.id === id); assert.ok(index >= 0)
+        await page.locator('.jobs-page .el-table__body tr').nth(index).getByRole('button', { name: '详情', exact: true }).click()
+        const drawer = page.getByRole('dialog', { name: '任务详情', exact: true }), region = drawer.getByRole('region', { name: 'ACL 安全结果', exact: true })
+        await expect(drawer.locator('.el-descriptions__content').first()).toHaveText(id)
+        await expect(drawer.locator('.el-descriptions .el-tag')).toHaveText('Succeeded')
+        const title = execution ? 'ACL 修改已完成' : '预检完成，尚未修改 ACL'; await expect(region.getByText(title, { exact: true })).toBeVisible()
+        await expect(region).toContainText(intent.id)
+        async function field(label, value) { await expect(region.getByText(label, { exact: true }).locator('xpath=following-sibling::dd[1]')).toHaveText(value) }
+        await field('阶段', execution ? '执行' : '预检'); await field('预检无需变更', '否'); await field('ACL 已确认', execution ? '是' : '未证明')
+        await field('目标普通模式', terminalIntent.targetMode.toString(8).padStart(4, '0')); await field('历史回执', execution ? 'Completed' : '未取得'); await field('历史已验证', execution ? '是' : '否')
+        for (const secret of [fixture.containerId, fixture.instanceId, 'work/acl-file.bin', profile.subject, terminalIntent.publishedVersion, terminalIntent.historyDigest, terminalIntent.receipt.fingerprint, terminalIntent.receipt.targetProof]) assert.ok(!(await region.innerText()).includes(secret))
+        await expect(drawer.getByRole('button', { name: '取消任务', exact: true })).toHaveCount(0); await expect(drawer.getByRole('button', { name: '重新预检并重试', exact: true })).toHaveCount(0)
+        await region.getByText(title, { exact: true }).scrollIntoViewIfNeeded(); await expect(region.getByText(title, { exact: true })).toBeInViewport({ ratio: 1 })
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        const screenshot = execution ? 'execution-job.png' : 'plan-job.png'; await page.screenshot({ path: join(directory, screenshot) })
+        tasks.push({ id, intentId: intent.id, execution, screenshot, noGenericWriteControls: true })
+        await drawer.getByRole('button', { name: 'Close this dialog', exact: true }).click(); await expect(drawer).not.toBeVisible()
+      }
+      assert.equal(jobWrites, 0); jobReadsOnly = true; await writeSignal(directory, 'task-results.json', proof)
+    }
     logoutReceipt = await logoutFromUserMenu(page, context, base)
   }
   assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, behavior === 'cancel' ? 1 : 0); assert.equal(bodies, 0)
   await writeSignal(directory, 'browser.json', { revision, kind: fixture.kind, id: intent.id, executionJobId: pending.executionJobId,
     subject: profile.subject, registrations, confirmations, cancellations, bodies, finalState: final.state, normalDualLogout: !revoked, authorityRevoked: revoked,
     renderedRevocationPage: revoked ? behavior === 'group-removal' ? 'forbidden' : 'login' : null, currentIdentityStatus, originalIntentStatus, hintsCleared,
-    terminalIntent, logout: logoutReceipt, actualUi: true })
+    terminalIntent, logout: logoutReceipt, actualUi: true, jobResultsVersion: fixture.jobResultsVersion, jobReadsOnly })
   await context.close()
   console.log(JSON.stringify({ aclFaultBrowser: 'passed', kind: fixture.kind }))
 } catch (error) {
