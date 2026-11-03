@@ -1,0 +1,22 @@
+[Unit]
+Description=Recover Whale Deck maintenance controllers without replaying applications
+After=local-fs.target systemd-tmpfiles-setup.service
+Before=whaledeck-agent.service whaledeck-maintenance.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I -B /usr/local/libexec/whaledeck-platform-control-recovery.py recover
+TimeoutStartSec=45s
+User=root
+Group=root
+UMask=0077
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE
+ReadWritePaths=/usr/local/libexec /var/lib/whaledeck-agent/platform-maintenance /run/whaledeck/maintenance /run/lock
+
+[Install]
+WantedBy=multi-user.target

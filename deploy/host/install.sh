@@ -16,10 +16,29 @@ fi
 
 python3 "$(dirname "$0")/validate-runtime.py" "$source_root"
 
+# The full host installation shares the maintenance lock. A publish inherits
+# fd9; a direct install acquires it before changing accounts or fixed files.
+control_recovery="$(dirname "$0")/whaledeck-platform-control-recovery.py"
+if [[ -e /proc/$$/fd/9 ]]; then
+  python3 -I "$control_recovery" verify-lock
+else
+  python3 -I "$control_recovery" init-lock
+  exec 9<>/run/lock/whaledeck-platform-maintenance.lock
+  flock -n 9 || { echo 'Another platform maintenance operation is active.' >&2; exit 1; }
+  python3 -I "$control_recovery" verify-lock
+fi
+
 getent group whaledeck >/dev/null || groupadd --system whaledeck
 id whaledeck-agent >/dev/null 2>&1 || useradd --system --gid whaledeck --groups docker,systemd-journal --home-dir /var/lib/whaledeck-agent --shell /usr/sbin/nologin whaledeck-agent
 id whaledeck-maintenance >/dev/null 2>&1 || useradd --system --gid whaledeck --home-dir /nonexistent --shell /usr/sbin/nologin whaledeck-maintenance
 id whaledeck-shell >/dev/null 2>&1 || useradd --system --user-group --home-dir /var/lib/whaledeck-shell --shell /usr/sbin/nologin whaledeck-shell
+[[ ! -L /var/lib/whaledeck-agent && ! -L /var/lib/whaledeck-agent/platform-maintenance ]] || exit 1
+# Match StateDirectory ownership before its first service start, so systemd does
+# not recursively chown the root-private controller checkpoint on first boot.
+install -d -o whaledeck-agent -g whaledeck -m 0750 /var/lib/whaledeck-agent
+install -d -o root -g root -m 0700 /var/lib/whaledeck-agent/platform-maintenance
+python3 -I "$(dirname "$0")/whaledeck-platform-control-recovery.py" install "$(dirname "$0")"
+systemd-tmpfiles --create /etc/tmpfiles.d/whaledeck-platform-control.conf
 # Never reuse the Docker-capable Agent identity or the temporary sudo user for
 # a general host shell. Existing misconfigured identities fail closed.
 [[ $(id -u whaledeck-shell) -gt 0 && $(id -nG whaledeck-shell) == whaledeck-shell ]] || { echo 'Unsafe terminal service identity.' >&2; exit 1; }
@@ -146,6 +165,8 @@ install -o root -g root -m 0644 "$(dirname "$0")/whaledeck-agent.service" /etc/s
 install -o root -g root -m 0644 "$(dirname "$0")/whaledeck-maintenance.service" /etc/systemd/system/whaledeck-maintenance.service
 systemctl daemon-reload
 systemctl enable whaledeck-agent.service whaledeck-maintenance.service
+systemctl enable whaledeck-platform-control-recovery.service
+systemctl enable --now whaledeck-platform-control-recovery.timer
 systemctl enable --now whaledeck-application-backup-recovery.timer
 # `enable --now` does not restart an already active service after an upgrade.
 # Explicit restart guarantees the copied binaries and settings become active.

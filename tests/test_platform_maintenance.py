@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import signal
+import time
 import tempfile
 import unittest
 
@@ -25,6 +27,7 @@ class MaintenanceShellTests(unittest.TestCase):
         self.state.mkdir(mode=0o700)
         self.libexec = self.root / 'libexec'
         self.libexec.mkdir()
+        self.libexec.chmod(0o755)
         self.bin = self.root / 'bin'
         self.bin.mkdir()
         self.events = self.root / 'events'
@@ -39,6 +42,11 @@ printf 'install\\n' >> "$FIXTURE_ROOT/events"
 if [[ ${OVERWRITE_CONTROL:-0} == 1 ]]; then
   printf 'old shell controller\\n' > "$FIXTURE_ROOT/libexec/whaledeck-platform-maintenance"
   printf 'old ledger controller\\n' > "$FIXTURE_ROOT/libexec/whaledeck-platform-revisions.py"
+  printf 'old scheduler wrapper\\n' > "$FIXTURE_ROOT/libexec/whaledeck-privileged"
+fi
+if [[ ${PAUSE_AFTER_CONTROL:-0} == 1 ]]; then
+  printf 'ready\\n' > "$FIXTURE_ROOT/old-installed"
+  sleep 120
 fi
 [[ ${FAIL_INSTALL:-0} == 0 ]]
 ''')
@@ -67,7 +75,6 @@ printf 'build\\n' >> "$FIXTURE_ROOT/events"
             '/run/lock/whaledeck-platform-maintenance.lock': str(self.root / 'lock'),
             '/usr/local/libexec': str(self.libexec),
             '[[ $EUID -eq 0 ]]': f'[[ $EUID -eq {os.geteuid()} ]]',
-            '== 0:1:750': f'== {os.geteuid()}:1:750',
         }
         for old, new in substitutions.items():
             self.assertIn(old, shell)
@@ -86,7 +93,23 @@ printf 'build\\n' >> "$FIXTURE_ROOT/events"
         self.manager = self.libexec / 'whaledeck-platform-revisions.py'
         self.manager.write_text(manager)
         self.manager.chmod(0o750)
-        self.control = {p.name: p.read_bytes() for p in (self.helper, self.manager)}
+        self.wrapper = self.libexec / 'whaledeck-privileged'
+        self.wrapper.write_text('#!/bin/sh\n# fixture scheduler\n')
+        self.wrapper.chmod(0o750)
+        recovery = (ROOT / 'deploy/host/whaledeck-platform-control-recovery.py').read_text()
+        for old, new in [("STATE = Path('/var/lib/whaledeck-agent/platform-maintenance')", 'STATE = Path(' + repr(str(self.state)) + ')'),
+                ("LIBEXEC = Path('/usr/local/libexec')", 'LIBEXEC = Path(' + repr(str(self.libexec)) + ')'),
+                ("LOCK = Path('/run/lock/whaledeck-platform-maintenance.lock')", 'LOCK = Path(' + repr(str(self.root / 'lock')) + ')'),
+                ("STATUS = Path('/run/whaledeck/maintenance/status.json')", 'STATUS = Path(' + repr(str(self.root / 'status/status.json')) + ')')]:
+            self.assertIn(old, recovery)
+            recovery = recovery.replace(old, new)
+        recovery = recovery.replace('owner=0', f'owner={os.geteuid()}').replace('group=0', f'group={os.getgid()}')
+        recovery = recovery.replace('require(os.geteuid() == 0)', f'require(os.geteuid() == {os.geteuid()})')
+        recovery = recovery.replace("os.fchown(fd, 0, grp.getgrnam('whaledeck').gr_gid)", f'os.fchown(fd, {os.geteuid()}, {os.getgid()})')
+        self.recovery = self.libexec / 'whaledeck-platform-control-recovery.py'
+        self.recovery.write_text(recovery)
+        self.recovery.chmod(0o750)
+        self.control = {p.name: p.read_bytes() for p in (self.helper, self.manager, self.wrapper)}
         install = self.bin / 'install'
         install.write_text('''#!/usr/bin/env python3
 import os,subprocess,sys
@@ -198,10 +221,45 @@ if 'up' in a:
     def test_global_lock_rejects_a_second_publish(self):
         import fcntl
         with (self.root / 'lock').open('w') as lock:
+            (self.root / 'lock').chmod(0o600)
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             p = self.execute('update')
             self.assertNotEqual(p.returncode, 0)
             self.assertFalse(self.events.exists())
+
+    def test_sigkill_after_old_installer_cold_recovery_restores_only_controllers(self):
+        self.assertEqual(self.execute('update').returncode, 0)
+        self.events.write_text('')
+        env = {**os.environ, 'FIXTURE_ROOT': str(self.root), 'PATH': str(self.bin) + ':' + os.environ['PATH'],
+            'OVERWRITE_CONTROL': '1', 'PAUSE_AFTER_CONTROL': '1'}
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+            child = subprocess.Popen(['bash', str(self.helper), 'rollback'], env=env, stdout=out, stderr=err, start_new_session=True)
+            try:
+                deadline = time.monotonic() + 8
+                while not (self.root / 'old-installed').exists():
+                    self.assertIsNone(child.poll())
+                    self.assertLess(time.monotonic(), deadline)
+                    time.sleep(.02)
+                self.assertEqual(os.getpgid(child.pid), child.pid)
+                ledger = (self.state / 'deployment-revisions.json').read_bytes()
+                events = self.events.read_bytes()
+                os.killpg(child.pid, signal.SIGKILL)
+                self.assertEqual(child.wait(timeout=5), -signal.SIGKILL)
+                for _ in range(2):
+                    result = subprocess.run(['/usr/bin/python3', '-I', str(self.recovery), 'recover'], env=env, capture_output=True, text=True, timeout=5)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(self.events.read_bytes(), events)
+                    self.assertEqual((self.state / 'deployment-revisions.json').read_bytes(), ledger)
+                    self.assertEqual(self.live.read_text(), self.b)
+                    for name, raw in self.control.items():
+                        self.assertEqual((self.libexec / name).read_bytes(), raw)
+                self.assertEqual(json.loads((self.root / 'status/status.json').read_text())['state'], 'failed')
+                self.assertFalse((self.state / 'control-recovery.json').exists())
+                self.assertTrue((self.state / 'rollback-src').exists())  # No automatic Git cleanup/replay at boot.
+            finally:
+                if child.poll() is None:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    child.wait(timeout=5)
 
 
 if __name__ == '__main__':

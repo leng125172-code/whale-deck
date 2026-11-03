@@ -26,6 +26,8 @@ jobs:
           bash -n deploy/host/whaledeck-platform-maintenance
           bash -n deploy/host/validate.sh
           python3 -W error -m py_compile deploy/host/whaledeck-platform-revisions.py
+          python3 -W error -m py_compile deploy/host/whaledeck-platform-control-recovery.py
+          python3 -W error -m py_compile deploy/validation/platform_control_recovery_systemd.py
           python3 -W error::ResourceWarning -m unittest discover -s tests -p 'test_platform_*.py'
           bash -n deploy/ci/install-frontend-dependencies.sh
           python3 -m unittest discover -s tests -p test_ci_frontend_install.py

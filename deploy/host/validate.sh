@@ -35,9 +35,16 @@ assert_metadata /etc/whaledeck/agent.env '640:root:whaledeck'
 assert_metadata /usr/local/libexec/whaledeck-privileged '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-platform-maintenance '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-platform-revisions.py '750:root:root'
-for maintenance_control in /usr/local/libexec/whaledeck-platform-maintenance /usr/local/libexec/whaledeck-platform-revisions.py; do
+assert_metadata /usr/local/libexec/whaledeck-platform-control-recovery.py '750:root:root'
+for maintenance_control in /usr/local/libexec/whaledeck-platform-maintenance /usr/local/libexec/whaledeck-platform-revisions.py /usr/local/libexec/whaledeck-platform-control-recovery.py; do
   [[ ! -L $maintenance_control && $(stat -c %h "$maintenance_control") == 1 ]]
 done
+assert_metadata /etc/systemd/system/whaledeck-platform-control-recovery.service '644:root:root'
+assert_metadata /etc/systemd/system/whaledeck-platform-control-recovery.timer '644:root:root'
+assert_metadata /etc/tmpfiles.d/whaledeck-platform-control.conf '644:root:root'
+systemctl is-enabled --quiet whaledeck-platform-control-recovery.service
+systemctl is-enabled --quiet whaledeck-platform-control-recovery.timer
+systemctl is-active --quiet whaledeck-platform-control-recovery.timer
 assert_metadata /usr/local/libexec/whaledeck-container-files.py '750:root:root'
 [[ ! -L /usr/local/libexec/whaledeck-container-files.py && $(stat -c %h /usr/local/libexec/whaledeck-container-files.py) == 1 ]]
 assert_metadata /var/lib/whaledeck-container-files '700:root:root'

@@ -10,6 +10,8 @@ action=${1:-}
 source_root=/data/GitRepos/whale-deck
 state_root=/var/lib/whaledeck-agent/platform-maintenance
 revision_helper=/usr/local/libexec/whaledeck-platform-revisions.py
+recovery_helper=/usr/local/libexec/whaledeck-platform-control-recovery.py
+rollback_root=
 status_file=/run/whaledeck/maintenance/status.json
 lock_file=/run/lock/whaledeck-platform-maintenance.lock
 maintenance_started=false
@@ -24,7 +26,8 @@ install -d -o root -g root -m 0700 "$state_root"
 # publishes the longer deployment state. Both writers need directory access;
 # the shared service group remains the only non-root principal with access.
 install -d -o whaledeck-agent -g whaledeck -m 0770 "$(dirname "$status_file")"
-exec 9>"$lock_file"
+/usr/bin/python3 -I "$recovery_helper" init-lock
+exec 9<>"$lock_file"
 flock -n 9 || { echo 'Another platform maintenance operation is active.' >&2; exit 1; }
 
 # The checkout intentionally remains owned by the non-root development user.
@@ -35,7 +38,7 @@ git_source() {
 }
 
 write_status() {
-  /usr/bin/python3 -I "$revision_helper" status "$1"
+  /usr/bin/python3 -I "$recovery_helper" status-held "$1"
 }
 
 report_failure() {
@@ -88,103 +91,59 @@ deploy_revision() {
   compose_for "$project_root" up -d --force-recreate --wait --wait-timeout 180
 }
 
+cleanup_exit() {
+  local result=$?
+  trap - EXIT ERR
+  # Normal failure can discard its exact private worktree. SIGKILL/boot recovery
+  # deliberately performs no Git or application operation and preserves it.
+  if [[ -n $rollback_root && -e $rollback_root ]]; then
+    git_source worktree remove --force "$rollback_root" >/dev/null 2>&1 || result=1
+  fi
+  /usr/bin/python3 -I "$recovery_helper" recover-held || result=1
+  exit "$result"
+}
+trap cleanup_exit EXIT
+# Resolve an older interrupted controller transaction before preparing a new
+# ledger operation. The inherited root-owned fd9 proves the global lock.
+/usr/bin/python3 -I "$recovery_helper" recover-held
+
 case "$action" in
   update)
     [[ -z $(git_source status --porcelain) ]] || { echo 'Whale Deck checkout has local changes.' >&2; exit 1; }
     branch=$(git_source branch --show-current)
-    [[ $branch =~ ^[A-Za-z0-9._/-]{1,120}$ ]] || { echo 'The current update branch is invalid.' >&2; exit 1; }
+    [[ $branch =~ ^[A-Za-z0-9._/-]{1,120}$ ]] || exit 2
     target=$(git_source rev-parse HEAD)
-    # The repository owner fast-forwards the checkout before scheduling this
-    # privileged phase. Root deploys that exact tested revision and therefore
-    # does not depend on a desktop proxy or hold GitHub credentials.
     prepared=$(/usr/bin/python3 -I "$revision_helper" prepare update "$target")
     read -r revision attempt extra <<< "$prepared"
     [[ $revision == "$target" && $attempt =~ ^[a-f0-9]{32}$ && -z $extra ]] || exit 2
+    capture=$(/usr/bin/python3 -I "$recovery_helper" checkpoint-held update "$revision" "$attempt")
+    [[ $capture =~ ^[a-f0-9]{32}$ ]] || exit 2
+    revision_helper="$state_root/control-$capture/whaledeck-platform-revisions.py"
     maintenance_started=true
-    write_status updating '正在部署当前 Whale Deck 开发版本。'
+    write_status updating
     deploy_revision "$source_root" true "$revision"
     /usr/bin/python3 -I "$revision_helper" finish update "$revision" "$attempt"
-    write_status healthy 'Whale Deck 更新完成。'
+    /usr/bin/python3 -I "$recovery_helper" complete-held "$capture" update "$revision" "$attempt"
     ;;
   rollback)
     prepared=$(/usr/bin/python3 -I "$revision_helper" prepare rollback)
     read -r revision attempt extra <<< "$prepared"
     [[ $revision =~ ^[a-f0-9]{40}$ && $attempt =~ ^[a-f0-9]{32}$ && -z $extra ]] || exit 2
     git_source cat-file -e "$revision^{commit}"
+    capture=$(/usr/bin/python3 -I "$recovery_helper" checkpoint-held rollback "$revision" "$attempt")
+    [[ $capture =~ ^[a-f0-9]{32}$ ]] || exit 2
+    revision_helper="$state_root/control-$capture/whaledeck-platform-revisions.py"
     rollback_root="$state_root/rollback-src"
-    # Old installers replace libexec too. Keep the current trusted transaction
-    # controller across a manual rollback; application/Agent artifacts still use
-    # the selected old commit. No automatic application rollback is introduced.
-    controls=(whaledeck-platform-maintenance whaledeck-platform-revisions.py)
-    for name in "${controls[@]}"; do
-      file="/usr/local/libexec/$name"
-      [[ -f $file && ! -L $file && $(stat -c '%u:%h:%a' "$file") == 0:1:750 ]] || exit 2
-    done
-    control_root=$(mktemp -d "$state_root/control.XXXXXXXX")
-    for name in "${controls[@]}"; do
-      if ! install -o root -g root -m 0750 "/usr/local/libexec/$name" "$control_root/$name"; then
-        for name in "${controls[@]}"; do rm -f -- "$control_root/$name"; done
-        rmdir -- "$control_root"
-        exit 1
-      fi
-    done
-    restore_control() {
-      local name staging
-      for name in "${controls[@]}"; do
-        if ! cmp -s "$control_root/$name" "/usr/local/libexec/$name"; then
-          staging=$(mktemp /usr/local/libexec/.whaledeck-maintenance-control.XXXXXXXX)
-          if ! install -o root -g root -m 0750 "$control_root/$name" "$staging"; then
-            rm -f -- "$staging"
-            return 1
-          fi
-          if ! /usr/bin/python3 -I - "$staging" <<'CONTROL_SYNC'
-import os, sys
-fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW)
-try: os.fsync(fd)
-finally: os.close(fd)
-CONTROL_SYNC
-          then
-            rm -f -- "$staging"
-            return 1
-          fi
-          if ! mv -T -- "$staging" "/usr/local/libexec/$name"; then
-            rm -f -- "$staging"
-            return 1
-          fi
-        fi
-      done
-      /usr/bin/python3 -I - /usr/local/libexec <<'CONTROL_DIRECTORY_SYNC'
-import os, sys
-fd = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-try: os.fsync(fd)
-finally: os.close(fd)
-CONTROL_DIRECTORY_SYNC
-    }
-    rollback_cleanup() {
-      local result=$? name
-      trap - EXIT
-      # Keep the trusted backup if restoration itself failed.
-      restore_control || return 1
-      revision_helper=/usr/local/libexec/whaledeck-platform-revisions.py
-      git_source worktree remove --force "$rollback_root" >/dev/null 2>&1 || result=1
-      for name in "${controls[@]}"; do rm -f -- "$control_root/$name"; done
-      rmdir -- "$control_root" || result=1
-      return "$result"
-    }
-    trap rollback_cleanup EXIT
-    # The rollback installer may replace libexec before it fails. Status and
-    # commit must keep using the root-private controller captured at entry.
-    revision_helper="$control_root/whaledeck-platform-revisions.py"
     [[ ! -e $rollback_root ]] || git_source worktree remove --force "$rollback_root"
     maintenance_started=true
-    write_status rollingBack '正在回退 Whale Deck；数据库迁移不会降级。'
+    write_status rollingBack
     git_source worktree add --detach "$rollback_root" "$revision"
     install -o root -g root -m 0600 "$source_root/.images.env" "$rollback_root/.images.env"
     deploy_revision "$rollback_root" false "$revision"
-    restore_control
     /usr/bin/python3 -I "$revision_helper" finish rollback "$revision" "$attempt"
-    rollback_cleanup
-    write_status healthy 'Whale Deck 已回退到上一版本。'
+    git_source worktree remove --force "$rollback_root"
+    rollback_root=
+    /usr/bin/python3 -I "$recovery_helper" complete-held "$capture" rollback "$revision" "$attempt"
     ;;
   *)
     echo 'Usage: whaledeck-platform-maintenance update|rollback' >&2

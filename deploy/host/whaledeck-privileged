@@ -741,11 +741,15 @@ case "$action" in
     ;;
   platform-update-schedule)
     [[ $# -eq 1 ]] || exit 2
-    exec /usr/bin/systemd-run --unit=whaledeck-platform-update --collect --on-active=3s /usr/local/libexec/whaledeck-platform-maintenance update
+    exec /usr/bin/systemd-run --unit=whaledeck-platform-update --collect --on-active=3s \
+      --property='ExecStopPost=/usr/bin/python3 -I -B /usr/local/libexec/whaledeck-platform-control-recovery.py recover' \
+      /usr/local/libexec/whaledeck-platform-maintenance update
     ;;
   platform-rollback-schedule)
     [[ $# -eq 1 ]] || exit 2
-    exec /usr/bin/systemd-run --unit=whaledeck-platform-rollback --collect --on-active=3s /usr/local/libexec/whaledeck-platform-maintenance rollback
+    exec /usr/bin/systemd-run --unit=whaledeck-platform-rollback --collect --on-active=3s \
+      --property='ExecStopPost=/usr/bin/python3 -I -B /usr/local/libexec/whaledeck-platform-control-recovery.py recover' \
+      /usr/local/libexec/whaledeck-platform-maintenance rollback
     ;;
   reboot)
     [[ $# -eq 1 ]] || exit 2
