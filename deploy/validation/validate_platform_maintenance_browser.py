@@ -101,7 +101,9 @@ def account(api, role, group, cleaned):
 
 
 def main():
-    assert os.geteuid() == 0 and sys.argv[1:] == [RUNTIME]
+    global RUNTIME
+    assert os.geteuid() == 0 and len(sys.argv) == 2 and re.fullmatch('[a-f0-9]{40}', sys.argv[1])
+    RUNTIME = sys.argv[1]
     os.umask(0o077)
     assert command('git', '-C', str(ROOT), 'status', '--porcelain') == ''
     source = command('git', '-C', str(ROOT), 'rev-parse', 'HEAD')

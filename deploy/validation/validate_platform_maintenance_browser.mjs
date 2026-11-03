@@ -100,6 +100,14 @@ try{
  await browser.close();browser=undefined;console.log(JSON.stringify({platformMaintenanceBrowser:'passed',actualUi:true}))
 }catch(error){
  const frame=error?.stack?.split('\n').find(line=>line.includes('validate_platform_maintenance_browser.mjs:'))?.trim()
+ if(page&&evidence&&phase.startsWith('cancel-')&&page.url()===base+'/platform/maintenance'){
+  const dialog=page.getByRole('dialog')
+  if(await dialog.count()===1&&await dialog.isVisible()){
+   await page.screenshot({path:join(evidence,'failed-confirmation.png')}).catch(()=>{})
+   const bounds=await dialog.getByRole('button').evaluateAll(elements=>elements.map(el=>{const r=el.getBoundingClientRect();return {label:el.textContent.trim(),x:r.x,y:r.y,width:r.width,height:r.height,viewportWidth:innerWidth,viewportHeight:innerHeight}}))
+   await writeFile(join(evidence,'failed-confirmation-bounds.json'),JSON.stringify({phase,buttons:bounds}),{mode:0o600,flag:'wx'})
+  }
+ }
  console.error(JSON.stringify({platformMaintenanceBrowser:'failed',phase,failureType:error?.name,frame}))
  if(browser)await browser.close().catch(()=>{});process.exitCode=1
 }
