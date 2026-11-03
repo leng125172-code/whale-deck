@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-04 递归ACL内核候选b62d099已完成真实容器/HDD分项：独立ContainerRecursiveAclMetadata/EntryMetadata，access分文件/目录目标、default目录写/文件原access noChange；6聚合/17子项原件、Partial/Aborted只观察裁定/不续做及独立核验通过。未安装、未新增协议minor/RPC/SDK/业务表/迁移或API/Vue，不把候选Root/HDD当永久业务/真人页面；运行仍28062da/1.52。后续专用协议与最小授权传输再实际安装，保留既有ACL/递归chmod-chown域。[候选与未验边界](qa/CONTAINER_RECURSIVE_ACL_ENGINE.md)。
+
 2026-11-04 28062da实际来源摘要/Unknown明确处置及三次读取核验通过；生产restore_source_json、20261103085710迁移及18CHECK实查。普通200 JSON null/恢复7字段、canonical来源和请求/计划/执行/owner绑定保持，旧135HDD保持、总137两新前像分列，无新schema。 见[实际来源UI与发布边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)。
 
 2026-11-04 恢复来源摘要候选（未部署）：仅读取原container_acl_intents.restore_source_json及既有完整性保护；不新增表/列/迁移，不修改普通Intent或Job schema。独立ContainerAclRestoreSourceSummaryDto仅captureId、changedAclType、kind、createdAtUnixMs、originalMode、accessEntryCount、defaultEntryCount，普通意图返回null。HDD丢失后仍可读登记时快照，不能据此认定实际HDD存在、当前文件状态或恢复成功。 见[候选与验收边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_UI.md)。

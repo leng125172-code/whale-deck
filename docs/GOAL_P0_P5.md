@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-04 递归ACL内部内核候选b62d099实盘通过：新增trusted ACL配置/独立域，不扩大旧chmod-chown输入或授权；access分文件/目录完整ACL，default仅目录、文件noChange验证。489 Linux-root含20新专项/0跳过、8范围/语法通过，首轮inode替换夹具ENODATA及修正保留。冻结56验证源码/11宿主模块，新独占真实容器/HDD六操作（4完成/1Partial/1Aborted）、两次候选SIGKILL、6聚合/17子项原件、完整字节/inode属主mtime属性/非目标ACL与迟到不续做、独立核验及准确清理通过。旧145普通ACL元数据九字段字节、11核心/两宿主/7配置账本和索引保持，运行仍28062da/1.52。尚未安装/RPC/永久业务/Worker/API/Vue或真人页面，不算异盘或完整递归ACL；后续专用协议SDK/受限传输与其余59项继续。[候选实际证据与边界](qa/CONTAINER_RECURSIVE_ACL_ENGINE.md)。
+
 2026-11-04 异步预检前有效来源替换实机分项通过：bd72c45冻结102源码/13安装helper，新资源真实选源后只停原Worker，正常登记202/Queued后发布同capture独立inode时间+1/自洽digest替换；旧摘要409/新200、原key/完整Queued SQL保持。同Worker启动后原规划Failed/SOURCE_CHANGED，原来源/命令/期限不变，无计划/确认/执行/Root及当前恢复HDD；原件还原后仅查询原失败。0d44e15追加POST与SQL目标版本直接比较/1专项，冻结102源码仅独立只读通过，不重放。5真PNG/两主题、2审计、正常双端退出/HTTP拒绝及准确清理，旧144HDD字节九字段保持/总145、新原件ctime改变保留；11核心healthy/仅Worker StartedAt变、两宿主/7配置账本保持，最终163检查0跳过。四缺失/四同capture时间摘要替换各有证据，其它内容/依赖/期限/回执、递归ACL/删除和维护连续性及其余59项继续。[实机与版本边界](qa/CONTAINER_ACL_SOURCE_PLAN_REPLACED.md)。
 
 2026-11-04 首次登记前有效来源替换实机分项通过：c0245ed冻结97源码/13安装helper，新资源真实选源后发布同capture独立inode的时间+1/自洽digest替换，旧摘要409/新摘要200；原POST仍原摘要/当前目标版本，登记409/同key及两个预期Job404，SQL意图/Job/outbox/事件/恢复审计五项0、Root/HDD缺席。原件还原后只查询仍无登记，3真PNG/两主题、正常双端退出/HTTP拒绝、独立只读与准确清理通过，旧143HDD字节九字段保持/总144、新原件ctime改变保留。11核心/两宿主/7配置账本与root只读Git索引保持，无发布启停；9202339另补异常请求查账与未写成日志stage保留告警，仅离线4新项，最终154检查0跳过，不重放。异步预检替换/依赖/期限/回执、递归ACL/删除和维护连续性及其余59项继续。[实机与工具修复边界](qa/CONTAINER_ACL_SOURCE_REGISTER_REPLACED.md)。

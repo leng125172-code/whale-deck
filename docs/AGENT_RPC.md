@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-04 递归ACL内核候选b62d099已完成真实容器/HDD分项：独立ContainerRecursiveAclMetadata/EntryMetadata，access分文件/目录目标、default目录写/文件原access noChange；6聚合/17子项原件、Partial/Aborted只观察裁定/不续做及独立核验通过。未安装、未新增协议minor/RPC/SDK/业务表/迁移或API/Vue，不把候选Root/HDD当永久业务/真人页面；运行仍28062da/1.52。后续专用协议与最小授权传输再实际安装，保留既有ACL/递归chmod-chown域。[候选与未验边界](qa/CONTAINER_RECURSIVE_ACL_ENGINE.md)。
+
 2026-11-04 28062da已标准覆盖并以新资源真实签收恢复来源卡片及旧1.52契约整链；本批无新RPC/capability/产品sudo，13相关安装helper逐字核对，主/独立来源与Root/HDD及迟到不重写通过。摘要本身只读SQL，不新增Agent方法。 见[实际来源UI与发布边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)。
 
 2026-11-04 恢复来源展示候选（未部署）：本批新增BFF管理员只读摘要和Vue卡片，不新增Agent RPC/capability、协议minor、宿主helper或sudo权限。摘要使用原持久化来源的完整性校验，不重新调用Agent/HDD；原恢复写入前的真实来源核验与Inspect/Discard流程保持。候选测试不是新的签名RPC或磁盘验收。 见[候选与验收边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_UI.md)。
