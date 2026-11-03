@@ -2,6 +2,8 @@
 
 2026-11-04，接续已部署的28062da和[来源UI实机签收](CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)。本批实现验收工具候选，**没有新增真实来源丢失/替换验收，没有发布、账号创建、Worker/Agent重启或生产来源隔离**。59项及六阶段的完整验收状态不升。
 
+后续c3dca1f已使用新捕获完成[Ready后来源丢失确认拒绝实机验收](CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md)，包含精确还原和独立只读核验。下文仍保留此前候选批次的原始范围，不能把后续一场推广为全部来源故障签收。
+
 ## 已实现的范围
 
 `deploy/validation/owned_acl_source_quarantine.py`无CLI，不安装到`/usr/local/libexec`，不增加sudo、RPC或产品Agent权限。后续真实门禁必须在新自有容器内通过正常Authentik/Vue捕获ACL，沿用已有实际文件、SQL、Root、HDD验证，再调用本工具；不能以本工具的夹具输入代替这些证明。
