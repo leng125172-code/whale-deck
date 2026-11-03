@@ -6,6 +6,6 @@
   "summary": "面向单工作站的容器化协同与运维面板。保留59个主任务，用户明确追加C#酒馆完整编排、Vue配置与AI看板娘子计划；不建设多节点、企业租户或计费平台。",
   "status": "active",
   "category": "应用平台",
-  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md；docs/qa/CONTAINER_ACL_RESTORE_SOURCE_FAILURES.md；docs/qa/CONTAINER_ACL_SOURCE_QUARANTINE_CANDIDATE.md；docs/qa/CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md；docs/qa/CONTAINER_ACL_SOURCE_APPLY_MISSING.md；docs/qa/CONTAINER_ACL_SOURCE_PLAN_MISSING.md；docs/qa/CONTAINER_ACL_SOURCE_REGISTER_MISSING.md；docs/qa/CONTAINER_ACL_SOURCE_CONFIRM_REPLACED.md",
-  "nextStep": "Ready后有效来源替换已实机：新摘要200/旧摘要409/原确认409、原Ready SQL保持且执行0，原件还原后取消/正常退出，旧141HDD保持/总142。独立首轮验证器前缀错误，06f179b修正后只读复核通过，不重放。继续其它阶段/内容替换、依赖暂不可用/原期限/三态回执、递归ACL/恢复、删除长期清理、维护发布连续性及其余59项；运行28062da，新CI终态待取。17项移出不算完成，不自动回滚dev。"
+  "source": "README.md；docs/GOAL_P0_P5.md；docs/IMPLEMENTATION_STATUS.md；docs/qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md；docs/qa/CONTAINER_ACL_RESTORE_SOURCE_FAILURES.md；docs/qa/CONTAINER_ACL_SOURCE_QUARANTINE_CANDIDATE.md；docs/qa/CONTAINER_ACL_SOURCE_CONFIRM_MISSING.md；docs/qa/CONTAINER_ACL_SOURCE_APPLY_MISSING.md；docs/qa/CONTAINER_ACL_SOURCE_PLAN_MISSING.md；docs/qa/CONTAINER_ACL_SOURCE_REGISTER_MISSING.md；docs/qa/CONTAINER_ACL_SOURCE_CONFIRM_REPLACED.md；docs/qa/CONTAINER_ACL_SOURCE_APPLY_REPLACED.md",
+  "nextStep": "首次Apply前有效来源替换已实机：确认202/Pending后旧摘要409/新200，原执行Failed/Root Aborted/无前像，原件还原后迟到Apply仍Aborted；5PNG/4审计/独立核验，旧142HDD保持/总143。继续登记/预检替换、其它内容/依赖中断/原期限/三态回执、递归ACL/恢复、删除长期清理、维护发布连续性及其余59项；运行28062da，新CI终态待取。17项移出不算完成，不自动回滚dev。"
 }
