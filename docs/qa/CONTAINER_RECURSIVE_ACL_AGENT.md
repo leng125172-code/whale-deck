@@ -52,4 +52,6 @@ Plan实际拒绝18项：无签名、普通ACL域、递归owner域、过期/未�
 
 ## 剩余门槛
 
+后续内部编排候选0168d5b/4b01148已实现并通过离线专项及后端回归，见[内部业务候选与持久化边界](CONTAINER_RECURSIVE_ACL_BUSINESS.md)。该进展不倒填本页实机业务证据，真实Repository/共享屏障/Worker/API/Vue仍未完成。
+
 后续先接永久意图/Job/outbox与共享目录保护、迁移/数据库检查、Worker/API/Vue，再部署取得真实Authentik身份和页面整链证据。仍需安装态Partial/Unknown/取消/强杀/重启/实时撤权/跨写入/能力兼容/准确stop与EOF等完整故障矩阵、递归ACL历史恢复、可恢复删除和长期清理。当前Agent探针直接持有root私有签名能力，Actor是固定探针标记，不是真实人类身份，不能当作BFF/CSRF/Origin/资源授权或页面验收。其它59项、酒馆/Live2D与统一UI计划继续，不用本批17个操作增加主任务完成数。

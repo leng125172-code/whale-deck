@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-04 递归ACL内部编排候选0168d5b/4b01148完成：独立意图/规划与执行Job绑定、四业务MAC域及确认、首次await前命令/续租前计划深快照、SameCommand及null/empty/零值、有界列表先验证；当前权威身份/取消/租约/期限、原ID先查后封存不重放、Partial/Unknown明确处置及独立ReceiptHash保留实际事实。最终Release0警告错误、149新增专项/4649Unit及490Integration通过（7默认原生跳过）、8范围；11源码SHA与候选CLI来源4b01148核对。显式内存仓储/Gateway夹具，尚无真实Repo/迁移/共享路径保护/Worker/公开API/Vue或真人整链；不算永久业务已上线。只读前批安装基线保持：两宿主7cb3935/1.53、四容器/账本28062da、11核心healthy、7配置账本和旧145/23元数据保持、总153/58、活动0。上轮c05bae1已远端同步；下一批真实PG持久化/全写入屏障再页面整链，维护连续性/递归恢复/删除及其余59项继续。[代码、失败及准确边界](qa/CONTAINER_RECURSIVE_ACL_BUSINESS.md)。
+
 2026-11-04 递归ACL安装态分项通过：7cb3935准确CI12路成功后标准构建/安装，两宿主实际7cb3935、minor1.53，四产品容器/账本仍28062da。31c2249冻结探针与独立验收源码，新独占实盘8场景7完成/1写前取消、18规划/8操作拒绝、7聚合/28子项HDD与43响应逐项核验；完整字节/inode/owner/mtime/普通属性/非目标ACL及迟到不重写、准确清理通过。旧单项ACL9场景8完成/1取消及独立兼容核验通过，普通HDD总153/原145保持，递归总13聚合45子项（含前批6/17）。73递归探针检查/8范围、Release零警告错误通过。11核心未重建且healthy、7配置与账本保持、NOPASSWD保留；维护安装会重启两宿主，无全窗口零中断签收。尚无永久业务/Worker/API/Vue/真人身份整链，Partial/Unknown等安装态故障、递归恢复/删除和其余59项继续。[实机、版本和未验边界](qa/CONTAINER_RECURSIVE_ACL_AGENT.md)。
 
 2026-11-04 递归ACL专用协议候选ae3cab5已接：minor1.53/四方法独立全消息签名与cap协商、file/null和directory/empty wrapper presence、aclType/逐项计数绑定，固定受限传输及安装验证。4500 Unit/490 Integration（7默认原生跳过）、506 Linux-root/8范围/5CLI与Release通过；无新业务表/迁移/公开API/Vue，未安装或签收真实RPC。当前仍28062da/1.52；原生探针/标准安装与签名HDD兼容后再全业务。[候选和准确边界](qa/CONTAINER_RECURSIVE_ACL_RPC.md)。

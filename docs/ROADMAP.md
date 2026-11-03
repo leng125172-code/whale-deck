@@ -10,6 +10,8 @@
 
 ## 当前P1/P2文件推进点（2026-11-04）
 
+内部编排0168d5b/4b01148候选与ReceiptHash/列表边界已实现验证，149新增专项/4649单元与490集成通过，7默认原生跳过；[候选与未验门槛](qa/CONTAINER_RECURSIVE_ACL_BUSINESS.md)。下一批先接真实PG仓储/迁移与全部写入屏障，再Worker/API/Vue；内存仓储测试不算共享路径或持久化验收。
+
 递归ACL已完成[安装态签名RPC/HDD及单项ACL兼容分项](qa/CONTAINER_RECURSIVE_ACL_AGENT.md)，下一步永久意图/Job/outbox与共享路径保护、Worker/API/Vue，再真实Authentik页面整链及完整故障矩阵。递归ACL历史恢复、可恢复删除/长期清理仍未完成；59项主任务不因底层分项升完成。宿主运行7cb3935/1.53，四容器及发布账本仍28062da，维护零中断仍未签收。
 
 ## 当前前端UI改造计划（2026-10-30，归属P0-08）
