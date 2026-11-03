@@ -17,17 +17,27 @@ async function critical(action: 'apply-update' | 'rollback') {
   running.value = action
   try {
     const plan = await planOperation('platform', action, null, {})
-    await ElMessageBox.confirm(
-      [
-        ...plan.changes,
-        ...plan.warnings,
-        action === 'rollback'
-          ? '将切换到最近一次可回滚版本。'
-          : '将按已批准的更新计划维护 Whale Deck 核心组件。',
-      ].join('\n'),
-      action === 'rollback' ? '平台回滚确认' : '平台更新确认',
-      { type: 'warning' },
-    )
+    try {
+      await ElMessageBox.confirm(
+        [
+          ...plan.changes,
+          ...plan.warnings,
+          action === 'rollback'
+            ? '将切换到最近一次可回滚版本。'
+            : '将按已批准的更新计划维护 Whale Deck 核心组件。',
+        ].join('\n'),
+        action === 'rollback' ? '平台回滚确认' : '平台更新确认',
+        {
+          type: 'warning',
+          confirmButtonText: action === 'rollback' ? '确认回退' : '确认更新',
+          cancelButtonText: '取消',
+          customClass: 'platform-maintenance-confirm',
+        },
+      )
+    } catch (error) {
+      if (error === 'cancel' || error === 'close') return
+      throw error
+    }
     const job = await enqueueOperation('platform', action, null, {}, true, plan.planHash)
     ElMessage.success(`维护任务已提交：${job.id}`)
   } finally {
@@ -89,6 +99,26 @@ async function critical(action: 'apply-update' | 'rollback') {
   </div>
 </template>
 <style scoped>
+:global(.el-message-box.platform-maintenance-confirm) {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+}
+:global(.platform-maintenance-confirm .el-message-box__header),
+:global(.platform-maintenance-confirm .el-message-box__btns) {
+  flex-shrink: 0;
+}
+:global(.platform-maintenance-confirm .el-message-box__content) {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+:global(.platform-maintenance-confirm .el-message-box__message) {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
 .maintenance-page {
   display: grid;
   gap: 18px;
