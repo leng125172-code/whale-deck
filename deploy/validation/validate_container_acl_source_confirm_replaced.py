@@ -22,6 +22,11 @@ from validate_container_upload_recovery_agent import trusted
 PHASE='startup'
 
 
+def fixture_bytes(identifier):
+    assert re.fullmatch('[a-f0-9]{64}',identifier)
+    return hashlib.shake_256(('source-confirm-replaced:'+identifier).encode()).digest(2*1024**2+7)
+
+
 def main():
     global PHASE
     assert os.geteuid()==0 and len(sys.argv)==2;os.umask(0o077)
@@ -43,7 +48,7 @@ def main():
     with installed_namespace(storage) as (namespace,attest), acl.owned.fixture() as fixture:
         old=catalogue(namespace);(evidence/'old-hdd.json').write_text(json.dumps(old))
         folder=fixture['folder'];(folder/'acl-directory').mkdir(mode=0o750)
-        content=hashlib.shake_256(('source-confirm-replaced:'+fixture['identifier']).encode()).digest(2*1024**2+7)
+        content=fixture_bytes(fixture['identifier'])
         for relative,kind in acl.PATHS.items():
             p=folder/relative
             if kind=='File':p.write_bytes(content);os.setxattr(p,'user.whaledeck-acl',b'preserve ordinary attribute')

@@ -23,6 +23,14 @@ from owned_acl_source_quarantine import installed_namespace, catalogue, OwnedSou
 from run_with_ephemeral_admin import AUTHENTIK_API,container_environment,require
 
 
+def verify_fixture_recipe(baseline):
+    assert re.fullmatch('[a-f0-9]{64}',baseline['containerId'])
+    assert type(baseline['bytesPerFile']) is int and baseline['bytesPerFile']==2*1024**2+7
+    content=hashlib.shake_256(('source-confirm-replaced:'+baseline['containerId']).encode()).digest(baseline['bytesPerFile'])
+    assert hashlib.sha256(content).hexdigest().upper()==baseline['sha256']
+    return content
+
+
 def verify(name):
     assert re.fullmatch('container-acl-source-confirm-replaced-[a-f0-9]{32}',name)
     repo=Path(__file__).resolve().parents[2];evidence=repo/'deploy/artifacts'/name;trusted(evidence,True)
@@ -55,9 +63,7 @@ def verify(name):
     logout=ui['logout'];assert logout['normalUiLogout'] and logout['providerNavigationObserved'] and logout['bffStatus']==401 and logout['identityStatus'] in (401,403)
     assert read('denials.json')==dict(anonymousReadsDenied=2,ordinaryReadsDenied=2,normalOrdinaryDualLogout=True)
     assert read('physical-final.json')==baseline['original']==proof['after']
-    assert baseline['bytesPerFile']==2*1024**2+7
-    content=hashlib.shake_256(('source-missing:'+baseline['containerId']).encode()).digest(baseline['bytesPerFile'])
-    assert hashlib.sha256(content).hexdigest().upper()==baseline['sha256']
+    verify_fixture_recipe(baseline)
     files=load('/usr/local/libexec/whaledeck-files.py','source_missing_independent_files')
     module=load('/usr/local/libexec/whaledeck-container-acl.py','source_missing_independent_acl')
     storage=load('/usr/local/libexec/whaledeck-file-backups.py','source_missing_independent_hdd').FileBackups(files)

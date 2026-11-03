@@ -1,7 +1,10 @@
 """Reject missing/corrupt/foreign replacements; no product or disk access."""
 import copy
+import hashlib
 import unittest
 from acl_source_confirm_replaced_proof import replacement_snapshot,verify_changed_snapshot
+from validate_container_acl_source_confirm_replaced import fixture_bytes
+from verify_container_acl_source_confirm_replaced import verify_fixture_recipe
 
 
 class ReplacedSourceProofTests(unittest.TestCase):
@@ -27,6 +30,15 @@ class ReplacedSourceProofTests(unittest.TestCase):
             with self.subTest(key=key),self.assertRaises(AssertionError):verify_changed_snapshot(self.source,self.proof,changed)
         for key,value in [('location',dict(containerId='foreign')),('accessAcl',[]),('defaultAcl',[{'permissions':7}])]:
             with self.subTest(key=key),self.assertRaises(AssertionError):verify_changed_snapshot(self.source,self.proof,{**expected,key:value})
+
+    def test_independent_verifier_recipe_matches_parent_payload_and_rejects_other_scenarios(self):
+        identifier='a'*64;content=fixture_bytes(identifier)
+        baseline=dict(containerId=identifier,bytesPerFile=len(content),sha256=hashlib.sha256(content).hexdigest().upper())
+        self.assertEqual(verify_fixture_recipe(baseline),content)
+        old=hashlib.shake_256(('source-missing:'+identifier).encode()).digest(len(content))
+        with self.assertRaises(AssertionError):verify_fixture_recipe({**baseline,'sha256':hashlib.sha256(old).hexdigest().upper()})
+        for change in ({'containerId':'b'*64},{'bytesPerFile':True},{'bytesPerFile':len(content)-1}):
+            with self.subTest(change=change),self.assertRaises(AssertionError):verify_fixture_recipe({**baseline,**change})
 
 
 if __name__=='__main__':unittest.main()
