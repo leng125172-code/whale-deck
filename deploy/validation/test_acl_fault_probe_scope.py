@@ -208,6 +208,15 @@ class AclRevocationEvidenceTests(unittest.TestCase):
             ui={**self.ui,key:value}
             with self.subTest(key=key),self.assertRaises(AssertionError):self.verifier.verify_authority(self.baseline,ui,self.row,self.result,self.proof)
 
+    def test_restoration_revocation_must_read_the_actual_restore_endpoint(self):
+        self.baseline['aclRestoreFaultVersion']=2
+        self.row.update(container_id='a'*64,id='owned-restore-id')
+        correct='/api/v1/containers/'+'a'*64+'/files/acls/restores/owned-restore-id'
+        self.ui['intentReadPath']=correct;self.check()
+        for wrong in (correct.replace('/restores/','/'),correct+'-foreign'):
+            self.ui['intentReadPath']=wrong
+            with self.subTest(wrong=wrong),self.assertRaises(AssertionError):self.check()
+
     def test_disable_requires_original_groups_preserved_and_login_denial(self):
         self.result['kind']=self.proof['kind']='account-disable'
         self.ui.update(renderedRevocationPage='login',currentIdentityStatus=401)

@@ -30,9 +30,13 @@ try {
   const profile = await loginVisible(page, context, base)
   const endpoint = `/api/v1/containers/${fixture.containerId}/files/acls`
   ownEndpoint = base + endpoint
-  const restoration = fixture.aclRestoreFaultVersion === 1
-  if (restoration) assert.ok(['cancel', 'logout'].includes(fixture.kind))
+  const restoration = fixture.aclRestoreFaultVersion !== undefined
+  if (restoration) {
+    assert.ok([1, 2].includes(fixture.aclRestoreFaultVersion))
+    assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : ['group-removal', 'account-disable']).includes(fixture.kind))
+  }
   const registrationEndpoint = restoration ? endpoint + '/restores' : endpoint
+  const intentReadPath = registrationEndpoint + '/' // ID appended only after actual registration
   let registrations = 0, confirmations = 0, cancellations = 0, bodies = 0
   page.on('request', request => {
     const path = new URL(request.url()).pathname
@@ -104,7 +108,7 @@ try {
   let terminalIntent = null, currentIdentityStatus = null, originalIntentStatus = null, hintsCleared = false
   if (revoked) {
     phase = 'original-live-authority-denied'
-    const denied = await context.request.get(ownEndpoint + '/' + intent.id); originalIntentStatus = denied.status()
+    const denied = await context.request.get(base + intentReadPath + intent.id); originalIntentStatus = denied.status()
     assert.ok([401, 403].includes(originalIntentStatus))
     const me = await context.request.get(base + '/api/v1/auth/me'); currentIdentityStatus = me.status()
     if (behavior === 'group-removal') {
@@ -176,7 +180,7 @@ try {
   }
   assert.equal(registrations, 1); assert.equal(confirmations, 1); assert.equal(cancellations, behavior === 'cancel' ? 1 : 0); assert.equal(bodies, 0)
   await writeSignal(directory, 'browser.json', { revision, kind: fixture.kind, id: intent.id, executionJobId: pending.executionJobId,
-    subject: profile.subject, registrations, confirmations, cancellations, bodies, finalState: final.state, normalDualLogout: !revoked, authorityRevoked: revoked,
+    subject: profile.subject, intentReadPath: intentReadPath + intent.id, registrations, confirmations, cancellations, bodies, finalState: final.state, normalDualLogout: !revoked, authorityRevoked: revoked,
     renderedRevocationPage: revoked ? behavior === 'group-removal' ? 'forbidden' : 'login' : null, currentIdentityStatus, originalIntentStatus, hintsCleared,
     terminalIntent, logout: logoutReceipt, actualUi: true, jobResultsVersion: fixture.jobResultsVersion, jobReadsOnly })
   await context.close()

@@ -13,10 +13,22 @@ RESTORE_SOURCES=tuple(dict.fromkeys((*RESTORE_BROWSER_SOURCES,'acl_restore_fault
     'verify_container_acl_restore_faults.py','test_acl_restore_fault_proof.py')))
 
 
+RESTORE_FAULT_KINDS={1:frozenset(('cancel','logout')),2:frozenset(('group-removal','account-disable'))}
+
+def restore_fault_version(kinds):
+    assert kinds and len(kinds)==len(set(kinds)), 'RESTORE_FAULT_KINDS_INVALID'
+    matches=[version for version,allowed in RESTORE_FAULT_KINDS.items() if set(kinds)<=allowed]
+    assert len(matches)==1, 'RESTORE_FAULT_PROFILE_MISMATCH'
+    return matches[0]
+
+def require_restore_profile(baseline):
+    value=baseline['aclRestoreFaultVersion']
+    assert type(value) is int and value==restore_fault_version((baseline['kind'],))
+
 def accept_source_capture(browser,directory,baseline,folder,reader,module,storage,content):
     from validate_container_acl_faults import wait_signal,write_signal
     from validate_container_acl_browser import inventory,verify_case
-    assert type(baseline['aclRestoreFaultVersion']) is int and baseline['aclRestoreFaultVersion']==1
+    require_restore_profile(baseline)
     (directory/'source-capture-baseline.json').write_text(json.dumps(baseline))
     captured=wait_signal(directory,'source-captured.json',browser,120)
     assert captured['result']['name']=='access'
@@ -34,7 +46,7 @@ def accept_source_capture(browser,directory,baseline,folder,reader,module,storag
 
 
 def prove_binding(row,baseline,source,proof):
-    assert type(baseline['aclRestoreFaultVersion']) is int and baseline['aclRestoreFaultVersion']==1 and baseline['kind'] in ('cancel','logout')
+    require_restore_profile(baseline)
     item=proof['result'];loc=source['location'];entry=source['entry']
     assert loc==dict(containerId=row['container_id'],instanceId=row['instance_id'],path=row['relative_path'])
     assert loc['path']=='work/acl-file.bin' and entry['changedAclType']=='access'

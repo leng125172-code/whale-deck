@@ -4,8 +4,8 @@ import { expect } from '../../web/node_modules/@playwright/test/index.mjs'
 import { openPermissionFiles, closePermissionDetails, writeSignal, waitSignal } from './installed_ui_permission_session.mjs'
 
 export async function prepareRestoreFault(page, context, base, fixture, profile) {
-  assert.equal(fixture.aclRestoreFaultVersion, 1)
-  assert.ok(['cancel', 'logout'].includes(fixture.kind))
+  assert.ok([1, 2].includes(fixture.aclRestoreFaultVersion))
+  assert.ok((fixture.aclRestoreFaultVersion === 1 ? ['cancel', 'logout'] : ['group-removal', 'account-disable']).includes(fixture.kind))
   const endpoint = `/api/v1/containers/${fixture.containerId}/files/acls`, directory = fixture.evidence
   let files = await openPermissionFiles(page, fixture)
   await files.getByRole('button', { name: 'ACL acl-file.bin', exact: true }).click()

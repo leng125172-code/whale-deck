@@ -3,8 +3,9 @@ import copy
 import json
 import unittest
 import uuid
+from unittest.mock import patch
 
-from acl_restore_fault_proof import prove_binding, RESTORE_SOURCES
+from acl_restore_fault_proof import prove_binding, RESTORE_SOURCES, restore_fault_version
 from acl_restore_browser_proof import source_json
 from verify_container_acl_faults import validate_source_profile, SOURCES
 
@@ -66,6 +67,36 @@ class RestoreFaultProvenanceTests(unittest.TestCase):
         for delta in ({'aclRestoreFaultVersion':0},{'aclRestoreFaultVersion':True},{'sha256':{n:'digest' for n in SOURCES}}):
             with self.subTest(delta=list(delta)),self.assertRaises(AssertionError):validate_source_profile({**p,**delta},['cancel'])
         with self.assertRaises(AssertionError):validate_source_profile(p,['worker-crash'])
+
+    def test_both_restore_profiles_reach_source_verification_not_ordinary_acl(self):
+        from validate_container_acl_faults import expected_fault_acl
+        for version,kind in ((1,'cancel'),(2,'group-removal'),(2,'account-disable')):
+            baseline={**self.baseline,'aclRestoreFaultVersion':version,'kind':kind}
+            with self.subTest(version=version,kind=kind),patch('acl_restore_fault_proof.verify_restore_binding',return_value=['selected-source']) as check:
+                self.assertEqual(expected_fault_acl(self.row,baseline,None,None),['selected-source'])
+                check.assert_called_once_with(self.row,baseline,None,None)
+        with patch('acl_restore_fault_proof.verify_restore_binding') as check:
+            with self.assertRaises(AssertionError):expected_fault_acl(self.row,{**self.baseline,'aclRestoreFaultVersion':2},None,None)
+            check.assert_not_called()
+
+    def test_revocation_binding_requires_matching_explicit_profile(self):
+        for kind in ('group-removal','account-disable'):
+            with self.subTest(kind=kind):
+                self.assertEqual(prove_binding(self.row,{**self.baseline,'aclRestoreFaultVersion':2,'kind':kind},self.source,self.proof),self.source['accessAcl'])
+                with self.assertRaises(AssertionError):prove_binding(self.row,{**self.baseline,'kind':kind},self.source,self.proof)
+
+    def test_profile_selection_rejects_mixed_unknown_empty_or_duplicate_cases(self):
+        self.assertEqual(restore_fault_version(('cancel','logout')),1)
+        self.assertEqual(restore_fault_version(('group-removal','account-disable')),2)
+        for kinds in ((),('cancel','group-removal'),('worker-crash',),('cancel','cancel')):
+            with self.subTest(kinds=kinds),self.assertRaises(AssertionError):restore_fault_version(kinds)
+
+    def test_revocation_schema_cannot_be_mislabeled_as_cancel_or_ordinary_fault(self):
+        p=dict(schemaVersion=8,aclRestoreFaultVersion=2,sha256={n:'digest' for n in set(SOURCES)|set(RESTORE_SOURCES)})
+        validate_source_profile(p,['group-removal','account-disable'])
+        for delta,kinds in [({'schemaVersion':7},['group-removal']),({'aclRestoreFaultVersion':1},['group-removal']),({},['cancel']),({'aclRestoreFaultVersion':True},['account-disable'])]:
+            with self.subTest(delta=delta,kinds=kinds),self.assertRaises(AssertionError):validate_source_profile({**p,**delta},kinds)
+        with self.assertRaises(AssertionError):validate_source_profile(dict(schemaVersion=6,aclRestoreFaultVersion=2,sha256={n:'digest' for n in SOURCES}),['group-removal'])
 
     def test_existing_source_profile_cannot_claim_new_restore_sources(self):
         validate_source_profile(dict(schemaVersion=6,sha256={n:'digest' for n in SOURCES}),['cancel','logout'])

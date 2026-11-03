@@ -78,6 +78,14 @@ def requested_kinds(selector):
     return (selector,)
 
 
+def expected_fault_acl(row,baseline,storage,module):
+    if 'aclRestoreFaultVersion' in baseline:
+        from acl_restore_fault_proof import require_restore_profile,verify_restore_binding
+        require_restore_profile(baseline)
+        return verify_restore_binding(row,baseline,storage,module)
+    return __import__('validate_container_acl_browser').profile('access')
+
+
 def verify_terminal(identifier, subject, baseline, storage, module, directory=None):
     """Read permanent facts; optionally archive to a NEW evidence directory."""
     data=snapshot(identifier);row=data['row'];plan=managed_plan(json.loads(row['plan_json']))
@@ -91,7 +99,7 @@ def verify_terminal(identifier, subject, baseline, storage, module, directory=No
     assert row['acl_confirmed'] is post and row['history_may_exist'] and row['history_verified']
     assert bool(row['published_version']) is post
     assert plan['sourceIdentity']==baseline['original']['acl-file.bin']['identity'] and plan['accessAcl']==baseline['original']['acl-file.bin']['access'] and plan['defaultAcl']==baseline['original']['acl-file.bin']['default']
-    desired=__import__('acl_restore_fault_proof').verify_restore_binding(row,baseline,storage,module) if baseline.get('aclRestoreFaultVersion')==1 else __import__('validate_container_acl_browser').profile('access')
+    desired=expected_fault_acl(row,baseline,storage,module)
     assert plan['command']['entries']==desired and plan['noChange'] is False
     record=record_for(row);operation=uuid.UUID(row['execution_job_id']).hex;raw=(ROOT/(operation+'.json')).read_bytes()
     assert json.loads(raw)==record and record['state']==('Completed' if post else 'Aborted') and record['aclConfirmed'] is post
@@ -285,6 +293,10 @@ def natural_lease(row, folder, reader, module, content, original, directory, *, 
 def run_case(kind, revision, evidence, source, reader, module, storage, *, restore=False):
     global PHASE
     post=kind.startswith('post-acl-');behavior=kind.removeprefix('post-acl-')
+    restore_version=None
+    if restore:
+        from acl_restore_fault_proof import restore_fault_version
+        restore_version=restore_fault_version((kind,))
     PHASE=kind+':preflight';no_active_work();worker=Worker();directory=evidence/kind;directory.mkdir(mode=0o700)
     held=browser=None;identifier=None;proved=False;current=None;agent_attempted=False;host=None
     with owned.fixture(restartable_core=('whaledeck-worker',)) as fixture, temporary_user(True) as (username,password):
@@ -299,9 +311,7 @@ def run_case(kind, revision, evidence, source, reader, module, storage, *, resto
         baseline={'revision':revision,'validationSourceRevision':source,'kind':kind,'containerId':fixture['identifier'],'containerName':actual['Name'].lstrip('/'),
             'instanceId':str(actual['State']['Pid'])+':'+actual['State']['StartedAt'],'containerPid':actual['State']['Pid'],'source':str(folder),
             'original':original,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'coreBefore':owned.common.core_snapshot(),'evidence':str(directory)}
-        if restore:
-            assert kind in ('cancel','logout')
-            baseline['aclRestoreFaultVersion']=1
+        if restore:baseline['aclRestoreFaultVersion']=restore_version
         if kind=='post-acl-agent-restart':baseline['jobResultsVersion']=1
         (directory/'baseline.json').write_text(json.dumps(baseline))
         try:
@@ -449,7 +459,10 @@ def main(restore=False):
     revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision);kinds=('cancel','logout')
     if len(sys.argv)==3:
         kinds=requested_kinds(sys.argv[2])
-    if restore:assert set(kinds)<=set(('cancel','logout'))
+    restore_version=None
+    if restore:
+        from acl_restore_fault_proof import restore_fault_version
+        restore_version=restore_fault_version(kinds)
     repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes={}
     source_names=SOURCES
@@ -466,7 +479,7 @@ def main(restore=False):
     with requests.Session() as session:
         session.trust_env=False;r=session.get('http://127.0.0.1:8080/api/v1/system/status',timeout=10);assert r.status_code==200 and r.json()['build']['sourceRevision']==revision,'TARGET_PRODUCT_NOT_DEPLOYED'
     no_active_work();evidence=repo/'deploy/artifacts'/('container-acl-faults-'+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
-    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':7 if restore else 6,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision,**({'aclRestoreFaultVersion':1} if restore else {})}))
+    (evidence/'validation-source.json').write_text(json.dumps({'schemaVersion':6+restore_version if restore else 6,'revision':source,'sha256':hashes,'installedSha256':installed,'productRevision':revision,**({'aclRestoreFaultVersion':restore_version} if restore else {})}))
     reader=load('/usr/local/libexec/whaledeck-container-files.py','acl_fault_reader');module=load('/usr/local/libexec/whaledeck-container-acl.py','acl_fault_module');files=reader.trusted_module('whaledeck-files.py','acl_fault_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','acl_fault_hdd').FileBackups(files)
     print(json.dumps({'aclFaults':'started','evidence':str(evidence),'kinds':kinds}),flush=True);results=[]
     for kind in kinds:
