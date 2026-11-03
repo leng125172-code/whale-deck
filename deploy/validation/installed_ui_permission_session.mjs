@@ -72,3 +72,10 @@ export async function closePermissionDetails(page, dialog) {
   await dialog.getByRole('button', { name: '关闭', exact: true }).click()
   await page.getByRole('dialog', { name: /容器详情/ }).locator('.el-drawer__close-btn').click()
 }
+
+// JobsView requests 100 rows; AppShell independently requests 50 on navigation.
+export function isJobPageResponse(response, base) {
+  const url=new URL(response.url())
+  return url.origin===new URL(base).origin&&url.pathname==='/api/v1/jobs'&&response.request().method()==='GET'&&
+    [...url.searchParams.keys()].length===1&&url.searchParams.getAll('take').length===1&&url.searchParams.get('take')==='100'
+}
