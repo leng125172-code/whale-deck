@@ -30,6 +30,15 @@ class HistoryBrowserProofTests(unittest.TestCase):
         prove_snapshot(self.signal,self.baseline,self.result,self.metadata)
         prove_pages([self.page_request],self.baseline,self.expected)
         prove_audits(self.rows,self.subject,self.baseline,[self.page],[self.snapshot])
+    def test_actual_jsonb_objects_and_text_have_identical_strict_audit_semantics(self):
+        rows=copy.deepcopy(self.rows)
+        for row in rows:row['detail_json']=json.loads(row['detail_json'])
+        prove_audits(rows,self.subject,self.baseline,[self.page],[self.snapshot])
+        for value in ([],None,False):
+            bad=copy.deepcopy(rows);bad[0]['detail_json']=value
+            with self.assertRaises(AssertionError):prove_audits(bad,self.subject,self.baseline,[self.page],[self.snapshot])
+        bad=copy.deepcopy(self.rows);bad[0]['detail_json']=bad[0]['detail_json'][:-1]+',"version":"C"}'
+        with self.assertRaises(AssertionError):prove_audits(bad,self.subject,self.baseline,[self.page],[self.snapshot])
     def test_altered_capture_digest_scope_and_boolean_zero_cannot_be_accepted(self):
         for field,value in (('captureId','b'*32),('historyDigest','D'*64),('originalMode',False),('createdAtUnixMs',False)):
             signal=copy.deepcopy(self.signal);signal['snapshot']['entry'][field]=value

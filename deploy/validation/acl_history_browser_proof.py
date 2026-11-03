@@ -48,7 +48,16 @@ def prove_audits(rows, subject, baseline, pages, snapshots):
         assert row['result'] == 'Validated' and row['job_id'] is None and row['id'] not in ids and row['trace_id'] not in traces
         assert type(row['trace_id']) is str and 0 < len(row['trace_id']) <= 64
         ids.add(row['id']); traces.add(row['trace_id'])
-        detail = json.loads(row['detail_json'])
+        detail = row['detail_json']
+        if type(detail) is str:
+            def unique(pairs):
+                value={}
+                for key,item in pairs:
+                    assert key not in value
+                    value[key]=item
+                return value
+            detail=json.loads(detail,object_pairs_hook=unique)
+        assert type(detail) is dict
         assert set(detail) == {'pathHash', 'instanceHash', 'version', 'sizeBytes', 'sha256'}
         assert detail['instanceHash'] == digest(baseline['instanceId']) and detail['sizeBytes'] is detail['sha256'] is None
         observed.append((row['action'], detail['pathHash'], detail['version']))
