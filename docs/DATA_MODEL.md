@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-04 递归ACL专用协议候选ae3cab5已接：minor1.53/四方法独立全消息签名与cap协商、file/null和directory/empty wrapper presence、aclType/逐项计数绑定，固定受限传输及安装验证。4500 Unit/490 Integration（7默认原生跳过）、506 Linux-root/8范围/5CLI与Release通过；无新业务表/迁移/公开API/Vue，未安装或签收真实RPC。当前仍28062da/1.52；原生探针/标准安装与签名HDD兼容后再全业务。[候选和准确边界](qa/CONTAINER_RECURSIVE_ACL_RPC.md)。
+
 2026-11-04 递归ACL内核候选b62d099已完成真实容器/HDD分项：独立ContainerRecursiveAclMetadata/EntryMetadata，access分文件/目录目标、default目录写/文件原access noChange；6聚合/17子项原件、Partial/Aborted只观察裁定/不续做及独立核验通过。未安装、未新增协议minor/RPC/SDK/业务表/迁移或API/Vue，不把候选Root/HDD当永久业务/真人页面；运行仍28062da/1.52。后续专用协议与最小授权传输再实际安装，保留既有ACL/递归chmod-chown域。[候选与未验边界](qa/CONTAINER_RECURSIVE_ACL_ENGINE.md)。
 
 2026-11-04 28062da实际来源摘要/Unknown明确处置及三次读取核验通过；生产restore_source_json、20261103085710迁移及18CHECK实查。普通200 JSON null/恢复7字段、canonical来源和请求/计划/执行/owner绑定保持，旧135HDD保持、总137两新前像分列，无新schema。 见[实际来源UI与发布边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)。

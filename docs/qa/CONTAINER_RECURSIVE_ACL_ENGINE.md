@@ -39,3 +39,5 @@ sudo -n env GIT_OPTIONAL_LOCKS=0 python3 -u deploy/validation/verify_container_r
 源目录与备份HDD为同一device，本场不算异盘恢复或整机NVMe运行布局验收。20新专项中的Unknown/孤儿回执、ACL syscall中断等是实际隔离文件系统检查，其中ContainerRoot/挂载/UUID为显式夹具；不能拿它们补签本场没有运行的物理Unknown或生产故障。489 Linux-root（包含20新）/8范围及语法通过，不冒称本轮全量后端/前端重跑；CI已接语法和自动发现，终态另取。
 
 下一批接专用.NET协议/SDK和固定受限传输，再实际安装与签名RPC/旧能力兼容；永久业务/共享保护/API/Vue、真实身份页面与完整故障/历史恢复随后逐项完成。当前只是内核候选实盘分项，不计递归ACL或主阶段整体完成。
+
+2026-11-04 后续：专用1.53协议/SDK/受限传输候选ae3cab5已实现并通过4500单元/490集成（7默认原生跳过）、506 Linux-root及Release检查，尚未安装或真实签名RPC签收。上文本轮b62d099内核实盘事实保持，不补签后续受限unit/身份页面；[后续候选与未验边界](CONTAINER_RECURSIVE_ACL_RPC.md)。

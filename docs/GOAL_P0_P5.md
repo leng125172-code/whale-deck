@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-04 递归ACL专用协议/SDK/受限传输候选ae3cab5完成：新增四unary RPC、独立全消息/方法签名与单次短时能力、minor1.53/专属cap协商；wrapper保留default文件null/目录显式空、ID/权限presence，原计划/aclType/四状态计数严格验证。最终confined child/root逐项namespace/FD非IDMAP检查、固定stdin/unit/准确Invocation stop与仅4cap/3写目录、安装验证接入，无CHOWN/SYS_ADMIN。Release0警告错误、4500Unit/490Integration（7默认原生跳过）、506Linux-root零跳过、8范围/5CLI及语法通过；CA2208/4个旧argv预期/CS8602夹具失败修正保留。干净冻结重建CLI来源ae3核对，但未安装/签名实机/永久业务/API/Vue，运行仍28062da/1.52，11核心/两宿主/7配置账本/145旧普通ACL保持、活动0。下一批原生探针/标准安装与真实RPC-HDD兼容，再全业务与其余59项。[实现与未验边界](qa/CONTAINER_RECURSIVE_ACL_RPC.md)。
+
 2026-11-04 递归ACL内部内核候选b62d099实盘通过：新增trusted ACL配置/独立域，不扩大旧chmod-chown输入或授权；access分文件/目录完整ACL，default仅目录、文件noChange验证。489 Linux-root含20新专项/0跳过、8范围/语法通过，首轮inode替换夹具ENODATA及修正保留。冻结56验证源码/11宿主模块，新独占真实容器/HDD六操作（4完成/1Partial/1Aborted）、两次候选SIGKILL、6聚合/17子项原件、完整字节/inode属主mtime属性/非目标ACL与迟到不续做、独立核验及准确清理通过。旧145普通ACL元数据九字段字节、11核心/两宿主/7配置账本和索引保持，运行仍28062da/1.52。尚未安装/RPC/永久业务/Worker/API/Vue或真人页面，不算异盘或完整递归ACL；后续专用协议SDK/受限传输与其余59项继续。[候选实际证据与边界](qa/CONTAINER_RECURSIVE_ACL_ENGINE.md)。
 
 2026-11-04 异步预检前有效来源替换实机分项通过：bd72c45冻结102源码/13安装helper，新资源真实选源后只停原Worker，正常登记202/Queued后发布同capture独立inode时间+1/自洽digest替换；旧摘要409/新200、原key/完整Queued SQL保持。同Worker启动后原规划Failed/SOURCE_CHANGED，原来源/命令/期限不变，无计划/确认/执行/Root及当前恢复HDD；原件还原后仅查询原失败。0d44e15追加POST与SQL目标版本直接比较/1专项，冻结102源码仅独立只读通过，不重放。5真PNG/两主题、2审计、正常双端退出/HTTP拒绝及准确清理，旧144HDD字节九字段保持/总145、新原件ctime改变保留；11核心healthy/仅Worker StartedAt变、两宿主/7配置账本保持，最终163检查0跳过。四缺失/四同capture时间摘要替换各有证据，其它内容/依赖/期限/回执、递归ACL/删除和维护连续性及其余59项继续。[实机与版本边界](qa/CONTAINER_ACL_SOURCE_PLAN_REPLACED.md)。
