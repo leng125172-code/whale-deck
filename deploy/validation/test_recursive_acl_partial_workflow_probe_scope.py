@@ -269,6 +269,21 @@ class RecursiveAclPartialWorkflowScope(unittest.TestCase):
         proof=(ROOT/'recursive_acl_cross_directory_proof.py').read_text()
         for value in ('rmtree(', 'os.kill(', 'SIGKILL', 'UPDATE ', 'DELETE ', 'time.time='):self.assertNotIn(value,proof)
 
+    def test_transient_claim_lease_is_not_counted_as_a_natural_deferral(self):
+        b,initial,reg,*_=self.cross_fixture();claimed=copy.deepcopy(initial);claimed['row'].update(lease_token='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',lease_expires_at_utc='2026-11-04T12:01:30+00:00')
+        self.assertFalse(require_blocked(claimed,b,reg['subject'],dt.datetime.fromisoformat('2026-11-04T12:00:00+00:00')))
+        claimed['row']['lease_expires_at_utc']=None
+        with self.assertRaises(AssertionError):require_blocked(claimed,b,reg['subject'],dt.datetime.fromisoformat('2026-11-04T12:00:00+00:00'))
+
+    def test_cross_failure_resolution_only_accepts_exact_recorded_case(self):
+        from recover_recursive_acl_cross_directory import target,CASE
+        self.assertEqual(CASE,target(CASE).name)
+        for name in ('../escape','container-recursive-acl-partial-'+'a'*32):
+            with self.assertRaises(AssertionError):target(name)
+        text=(ROOT/'recover_recursive_acl_cross_directory.py').read_text()
+        self.assertIn('originalGatePassed=False',text);self.assertIn('crossFenceAcceptance=False',text)
+        for value in ('remove_owned(', 'rmtree(', 'os.kill(', 'UPDATE ', 'DELETE '):self.assertNotIn(value,text)
+
     def test_partial_revocation_preserves_the_real_result_and_denies_old_context(self):
         subject='11111111-1111-4111-8111-111111111111';p=phase();p['row'].update(actor_subject=subject,cancel_requested_at_utc=None);p['executionJob']['cancel_requested_at_utc']=None
         before=dict(pk=1,uuid=subject,username='whaledeck-upload-qa-'+'a'*12,is_active=True,groups=['admin'])

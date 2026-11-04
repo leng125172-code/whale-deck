@@ -46,9 +46,10 @@ def same_waiting(initial,current):
 def require_blocked(data,baseline,subject,at):
     row=data['row'];assert data['job']['id']==row['id']
     assert row['container_id']==baseline['containerId'] and row['instance_id']==baseline['instanceId'] and row['relative_path']==baseline['path']==WAITING_PATH and row['actor_subject']==subject
-    assert row['state']=='Pending' and row['root_started_at_utc'] is row['completed_at_utc'] is row['lease_token'] is row['lease_expires_at_utc'] is None and row['publish_barrier'] is False
+    assert row['state']=='Pending' and row['root_started_at_utc'] is row['completed_at_utc'] is None and row['publish_barrier'] is False
     assert data['job']['state']=='Queued' and data['accepted']==1 and data['terminalAudits']==0 and data['pending']>0
-    return type(row['version']) is int and row['version']>=2 and dt.datetime.fromisoformat(row['next_attempt_at_utc'])>at
+    assert (row['lease_token'] is None)==(row['lease_expires_at_utc'] is None)
+    return row['lease_token'] is None and row['lease_expires_at_utc'] is None and type(row['version']) is int and row['version']>=2 and dt.datetime.fromisoformat(row['next_attempt_at_utc'])>at
 
 
 def original_file_unchanged(baseline):
