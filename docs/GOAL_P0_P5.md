@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-04 递归ACL写前实时移组/账号停用两项实机通过：工具冻结5f5fabb，产品仍b880208/1.53不重发；唯一Invocatione8543e8311be46df85e22d617183be28准确退出0并归档后停止QA unit。新身份原正权限仍余7161.060/7160.533秒，HDD已验证且整树原样；产品4.984/4.510秒结束准确helper，Canceled/Aborted、五计数分别0/0/1/3/0与0/0/0/4/0，全树字节九字段/两ACL/普通属性保持。原GET均403，移组me200非管理员→403页、停用me403→登录，引用清空且取消POST0，不冒称正常退出。2聚合HDD/0子历史、1首项Aborted Root如实保留，4真PNG/独立只读/旧门禁兼容及准确清理通过。91递归/12身份/8范围通过；旧484文件保持，11核心healthy/两宿主PID来源保持，14意图8S/5C/1E、执行12/Job26、活动0。继续重启租约/写后/Partial/Unknown/其余故障、递归恢复/删除和59项，不升完整完成率。[实机事实与边界](qa/CONTAINER_RECURSIVE_ACL_REVOCATION.md)。
+
 2026-11-04 递归ACL执行中写前取消/原上下文正常退出两项实机通过：冻结54ee000，产品仍b880208/1.53不重发，唯一Invocation72018fbf83e045388903440cf8f183e5。两套新资源实际Authentik→Vue→确认Pending→同Worker启动，Root Applying/HDD已验证且首项未开始；产品4.925/5.022秒结束准确FD绑定helper，SQL Canceled/Root Aborted、五计数0/0/0/4/0，全树字节九字段/两ACL/普通属性保持，2聚合HDD/0子历史留存。两原上下文正常双端退出/匿名401、3真PNG、独立只读/准确清理及89工具/8范围通过。旧480文件全部保持，11核心healthy/两宿主PID来源保持；12意图8S/3C/1E、执行10/Job22、活动0。Type=exec unit成功后回收，以同Invocation管理日志证明Deactivated successfully，不以默认show补签原退出元数据。仍需写后/撤权/重启租约/Partial/Unknown与其余故障、递归恢复/删除及59项，不升完整完成率。[实机证据及边界](qa/CONTAINER_RECURSIVE_ACL_PREWRITE_FAULTS.md)。
 
 2026-11-04 b880208引用保护已标准覆盖：准确CI41774447299共12路全绿，首次镜像/宿主预构建TLS失败原件保留，错开重试并核验4镜像/2宿主后唯一发布Invocation657c3c07df6841cea48d56e07b1c5705成功（171秒）。六组件/HTTP/实际exe-DLL同源，Agent3598741/维护3598736、11核心健康、8数据库身份/7配置/153与98旧HDD保持，账本current=b880208/previous=c020c24/pending空，90维护样本全200但不推断零中断。新资源只复验取消：原key/id重载前后保持、Canceled且无执行/Root/HDD、物理完全不变；原总脚本因403页无用户菜单而普通退出失败，已只读补核并精确清理，不重发取消。f8e9f5a两个全新认证上下文实际完成普通4GET/4POST403、各4匿名401、正常双端退出且原SQL不变；不补签原普通上下文或旧丢引用根因。83工具/8范围通过。生产共10意图（8S/1E/1C）、执行仍8、活动0；仍未单批八场景全绿，继续完整故障/递归恢复/删除和其余59项。[覆盖、真实取消和认证补验及边界](qa/CONTAINER_RECURSIVE_ACL_AUTH_RELEASE.md)。
