@@ -34,7 +34,8 @@ class RecursiveAclPartialProbeScope(unittest.TestCase):
 
     def test_before_first_entry_or_later_or_unverified_history_never_counts_partial(self):
         r,_,_,_=fixture()
-        for key,value in [('state','Partial'),('state','Completed'),('startedThrough',-1),('startedThrough',1),('finishedThrough',-1),('finishedThrough',1),('historyVerified',False),('historyMayExist',False),('historyDigest','a'*64)]:
+        self.assertTrue(cut.partial_boundary({**r,'startedThrough':1}))
+        for key,value in [('state','Partial'),('state','Completed'),('startedThrough',-1),('startedThrough',2),('finishedThrough',-1),('finishedThrough',1),('historyVerified',False),('historyMayExist',False),('historyDigest','a'*64)]:
             with self.subTest(key=key,value=value):self.assertFalse(cut.partial_boundary({**r,key:value}))
         with self.assertRaises(AssertionError):cut.partial_boundary({**r,'startedThrough':False})
         for key in ('entryCount','changeCount','fileCount','directoryCount'):

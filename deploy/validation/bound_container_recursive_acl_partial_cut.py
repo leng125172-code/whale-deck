@@ -24,7 +24,7 @@ def partial_boundary(record):
     assert type(record['startedThrough']) is type(record['finishedThrough']) is int
     return (record['state']=='Applying' and record['historyVerified'] is True and record['historyMayExist'] is True
         and re.fullmatch('[A-F0-9]{64}',record['historyDigest']) is not None
-        and record['startedThrough']==record['finishedThrough']==0)
+        and record['finishedThrough']==0 and record['startedThrough'] in (0,1))
 
 
 def partial_proof(record,original,current):
@@ -51,7 +51,7 @@ def partial_proof(record,original,current):
         if relative!='sub/中文.bin':assert current[relative]==original[relative],'RECURSIVE_ACL_OTHER_ENTRY_ALREADY_CHANGED'
     assert current['']['identity']==plan['rootIdentity']
     return dict(firstCompletedId=first_id,firstRelativePath='sub/中文.bin',firstChangedIdentity=actual['identity'],rootStillOriginal=original['']['identity'],
-        rootPhase='Applying',startedThrough=0,finishedThrough=0,completedChildHistoryDigest=first['historyDigest'],otherThreeEntriesOriginal=True)
+        rootPhase='Applying',startedThrough=record['startedThrough'],finishedThrough=0,completedChildHistoryDigest=first['historyDigest'],otherThreeEntriesOriginal=True)
 
 
 def freeze_partial_acl(row,source,container_pid,original,inventory):
