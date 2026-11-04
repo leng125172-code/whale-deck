@@ -24,7 +24,7 @@ internal static class ContainerRecursiveAclProbe
             FileEntries=kind=="default"?null:new() {Entries={Entries(profile=="mask"?6U:4U,profile=="root")}},
             DirectoryEntries=new() {Entries={kind=="default"?(profile=="clear"?[]:Entries(6)):Entries(7,profile=="root",true)}} };
     }
-    public static async Task RunAsync()
+    public static async Task RunAsync(bool paging = false)
     {
         using var lifetime=new CancellationTokenSource(TimeSpan.FromSeconds(360));
         var text=await Console.In.ReadLineAsync(lifetime.Token);Require(text is {Length:>0 and <=8192});
@@ -64,10 +64,12 @@ internal static class ContainerRecursiveAclProbe
             {
                 var line=await Console.In.ReadLineAsync(lifetime.Token);Require(line is {Length:>0 and <=65536});
                 using var json=JsonDocument.Parse(line!);var input=json.RootElement;var action=input.GetProperty("action").GetString()!;Phase=action;
+                if(paging) Require(action is "plan" or "apply" or "quit");
                 if(action=="quit") {Fields(input,"action");await Emit(new {kind="done"});return;}
                 if(action=="plan")
                 {
                     Fields(input,"action","aclType","profile","version","boundaries");
+                    if(paging) Require(input.GetProperty("aclType").GetString()=="access" && input.GetProperty("profile").GetString()=="named" && !input.GetProperty("boundaries").GetBoolean());
                     var request=new ContainerRecursiveAclPlanRequest {Command=Command(id,instance,input.GetProperty("aclType").GetString()!,input.GetProperty("profile").GetString()!,input.GetProperty("version").GetString()!),
                         Context=new() {ActorSubject="installed-recursive-acl-protocol-probe",TraceId="owned-recursive-acl-validation"}};
                     var refusals=0;async Task Reject(Func<Task> call,StatusCode code) {await Denied(call,code);refusals++;}
@@ -102,7 +104,8 @@ internal static class ContainerRecursiveAclProbe
                     }
                     var authority=Headers("Plan",request);var plan=await client.PlanAsync(request,authority,Until(),lifetime.Token);
                     if(input.GetProperty("boundaries").GetBoolean()) await Reject(async()=>await client.PlanAsync(request,authority,Until(),lifetime.Token),StatusCode.PermissionDenied);
-                    Require(plan.Command.Equals(request.Command) && plan.OwnerUid==1000 && plan.OwnerGid==1000 && plan.EntryCount==4 && plan.FileCount==2 && plan.DirectoryCount==2);
+                    Require(plan.Command.Equals(request.Command) && plan.OwnerUid==1000 && plan.OwnerGid==1000 &&
+                        plan.EntryCount==(paging?26U:4U) && plan.FileCount==(paging?25U:2U) && plan.DirectoryCount==(paging?1U:2U));
                     await Emit(new {kind="plan",plan=formatter.Format(plan),boundaryRefusals=refusals});continue;
                 }
                 Require(action is "apply" or "inspect" or "discard" or "reject");Fields(input,"action","operationId","plan");

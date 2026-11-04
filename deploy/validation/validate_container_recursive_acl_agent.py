@@ -41,9 +41,10 @@ def host_identity(revision):
 
 
 class Probe:
-    def __init__(self,binary,evidence,header):
+    def __init__(self,binary,evidence,header,mode='container-recursive-acl'):
+        assert mode in ('container-recursive-acl','container-recursive-acl-page-capture')
         self.error=(evidence/'rpc.stderr').open('wb');self.transcript=evidence/'rpc.jsonl';self.buffer=b''
-        self.process=subprocess.Popen([str(binary),'container-recursive-acl'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=self.error)
+        self.process=subprocess.Popen([str(binary),mode],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=self.error)
         try:
             self.send(header);ready=self.receive();assert ready['kind']=='ready' and ready['revision']==header['revision'] and ready['probeRevision']==header['probeRevision'] and ready['protocolMinor']>=53
         except BaseException:self.close(False);raise
