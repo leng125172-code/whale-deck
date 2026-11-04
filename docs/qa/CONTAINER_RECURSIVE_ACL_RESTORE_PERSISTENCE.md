@@ -37,3 +37,6 @@ Agent回执、来源内容、身份与时间推进是显式测试夹具；真实
 下一批接管理员公开API、严格请求输入、Vue来源/异质目标预检、确认/取消、任务结果及Partial/Unknown处置，再准确CI、标准覆盖与真实Authentik→Vue→API/Worker→Agent→实际文件/HDD整链。完整恢复故障矩阵、可恢复删除/长期清理、维护入口连续性及其余59项目标仍需推进；前批67维护样本4次非200及来源/HDD同device2049的限制保留，不能由本批数据库通过消除。
 
 远端同步：功能候选f7d6a68已推送origin/dev；首次GnuTLS中断、直连低速超时，单次HTTP/1.1连接重试成功，未改全局代理/TLS或强推。项目图谱首次传输失败后，以同一事件 `whale-deck.container-acl.f7d6a68.recursive-restore-persistence` 重试获匹配成功回执，pending移入synced，阶段仍active。CI终态、生产部署及真人页面不由推送成功代签。
+
+
+后续接续：管理员API/Vue候选0034671及范围元数据修正7906e45已完成接口/页面候选验证，见[API与Vue批次](CONTAINER_RECURSIVE_ACL_RESTORE_API_UI.md)。本报告f7d6a68真实PG和当时未部署事实保持，不据后续候选补签生产迁移或真人恢复整链。
