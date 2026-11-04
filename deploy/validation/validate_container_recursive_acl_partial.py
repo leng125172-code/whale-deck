@@ -16,14 +16,15 @@ from validate_container_recursive_permission_faults import require_logout_author
 from validate_container_recursive_permission_faults import require_authority_change,restore_fault_services
 from recursive_acl_restart_proof import RESTART_KINDS,restart
 from recursive_acl_partial_restart_proof import natural_partial_lease,verify_partial_restart
-from recursive_acl_partial_unknown_proof import capture_completed_child,remove_unknown_target,verify_unknown_target
+from recursive_acl_partial_unknown_proof import capture_completed_child,remove_unknown_target,verify_unknown_target,UNKNOWN_KINDS
+from recursive_acl_instance_proof import prepare_instance,restart_instance,attest_instance_after_ack
 
 PHASE='startup'
 SOURCES=('validate_container_recursive_acl_partial.py','validate_container_recursive_acl_partial.mjs','verify_container_recursive_acl_partial.py','recursive_acl_partial_proof.py','test_recursive_acl_partial_workflow_probe_scope.py')
 
 
 def selected_case(arguments):
-    assert tuple(arguments) in ((),('logout',),('group-removal',),('account-disable',),('worker-crash',),('agent-restart',),('target-removed',)), 'UNKNOWN_PARTIAL_ACL_SCENARIO'
+    assert tuple(arguments) in ((),('logout',),('group-removal',),('account-disable',),('worker-crash',),('agent-restart',),('target-removed',),('instance-changed',)), 'UNKNOWN_PARTIAL_ACL_SCENARIO'
     return arguments[0] if arguments else 'cancel'
 
 
@@ -78,13 +79,13 @@ def main():
     storage=load('/usr/local/libexec/whaledeck-file-backups.py','partial_acl_hdd').FileBackups(files);acl=load('/usr/local/libexec/whaledeck-container-acl.py','partial_acl_acl')
     old=preservation_snapshot(storage);scope=dict(revision=revision,validationSourceRevision=source,validationSourceSha256=hashes,sourceHashes=installed,hostIdentity=hosts,coreBefore=core,preservedFiles=old,kind=kind)
     (evidence/'scope.json').write_text(json.dumps(scope));worker=Worker();owner_process=recovery_process=held=None;proved=False;attempt=dict(agentRestartAttempted=False);hosts_after=hosts
-    unknown=kind=='target-removed';expected_state='Unknown' if unknown else 'Partial'
-    with owned.fixture(restartable_core=('whaledeck-worker',),removable=unknown) as fixture,ExitStack() as users:
+    unknown=kind in UNKNOWN_KINDS;expected_state='Unknown' if unknown else 'Partial'
+    with owned.fixture(restartable_core=('whaledeck-worker',),removable=(kind=='target-removed')) as fixture,ExitStack() as users:
         owner=users.enter_context(temporary_user(True));recovery=users.enter_context(temporary_user(True))
         root=fixture['folder']/'recursive-tree'
         content=hashlib.shake_256(('recursive-acl-partial:'+fixture['identifier']).encode()).digest(2*1024**2+7)
         create_tree(root,content)
-        observed=json.loads(command('docker','inspect',fixture['identifier']))[0];current=lambda:inventory(root,reader,content,acl);original=current()
+        observed=json.loads(command('docker','inspect',fixture['identifier']))[0];current=lambda:inventory(root,reader,content,acl);new_inventory=lambda pid:inventory(Path('/proc')/str(pid)/'root/work/recursive-tree',reader,content,acl);original=current()
         baseline=dict(revision=revision,validationSourceRevision=source,containerId=fixture['identifier'],containerName=observed['Name'].lstrip('/'),containerPid=observed['State']['Pid'],instanceId=str(observed['State']['Pid'])+':'+observed['State']['StartedAt'],source=str(fixture['folder']),original=original,evidence=str(evidence),bytesPerFile=len(content),sha256=hashlib.sha256(content).hexdigest().upper(),kind=kind)
         with storage.target(create_namespace=False,read_only=True) as (configuration,fd):storage.attest(configuration,fd,read_only=True);baseline.update(sourceDevice=root.stat().st_dev,hddDevice=os.fstat(fd).st_dev)
         (evidence/'baseline.json').write_text(json.dumps(baseline))
@@ -105,10 +106,13 @@ def main():
                     assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc'])>dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
                     write_signal(evidence,'action.json',dict(partialCut=True));action=wait_signal(evidence,'action-done.json',owner_process,40)
                     assert action['id']==identifier and action['subject']==ready['subject']
-                    remove_unknown_target(baseline,fixture,held,current,cut_physical,evidence)
+                    if kind=='target-removed':remove_unknown_target(baseline,fixture,held,current,cut_physical,evidence)
+                    else:prepared=prepare_instance(baseline,fixture,held,snapshot(identifier)['row'],current,cut_physical)
                     began=time.monotonic()
                     with ThreadPoolExecutor(max_workers=1) as pool:
-                        exiting=pool.submit(held.wait_exit_seconds,began,15);write_signal(evidence,'logout.json',dict(onlyExactOwnedContainerRemoved=True))
+                        exiting=pool.submit(held.wait_exit_seconds,began,15)
+                        if kind=='instance-changed':restart_instance(baseline,fixture,held,prepared,current,cut_physical,new_inventory,evidence)
+                        write_signal(evidence,'logout.json',dict(onlyExactOwnedContainerRemoved=kind=='target-removed',onlyExactOwnedInstanceRestarted=kind=='instance-changed'))
                         wait_signal(evidence,'logout-done.json',owner_process,40);elapsed=exiting.result(timeout=16)
                     response=identity.client.get(identity.url,timeout=5);assert response.status_code==200 and identity.changed is False
                     authority=dict(kind='logout',subject=ready['subject'],before=identity.before,after=identity.snapshot(response.json()),noIdentityMutation=True,confirmedAtUtc=dt.datetime.now(dt.timezone.utc).isoformat(),permissionExpiresAtUtc=ready['permissionExpiresAtUtc'])
@@ -154,7 +158,7 @@ def main():
             assert owner_process.wait(timeout=100)==0,'PARTIAL_OWNER_PAGE_FAILED';owner_ui=json.loads((evidence/'owner-browser.json').read_bytes());assert owner_ui['subject']==ready['subject']
             require_case(kind,partial,owner_ui,json.loads((evidence/('authority-change.json' if revoked else 'logout-authority.json')).read_bytes()) if identity else None)
             if kind in RESTART_KINDS:assert verify_partial_restart(kind,scope,owner_ui,partial,evidence,lambda p:json.loads(p.read_bytes()))==hosts_after
-            if kind in ('logout','target-removed'):assert owner_ui['result'] is None and owner_ui['hintsCleared'] is True and owner_ui['cancellations']==0
+            if kind=='logout' or unknown:assert owner_ui['result'] is None and owner_ui['hintsCleared'] is True and owner_ui['cancellations']==0
             baseline.update(id=identifier,originalSubject=ready['subject'],receipt=public_receipt);(evidence/'recovery-fixture.json').write_text(json.dumps(baseline))
             PHASE='actual-different-admin-recovery';recovery_process=browser(repo,revision,'recovery',baseline,recovery);canceled=wait_signal(evidence,'recovery-canceled.json',recovery_process)
             assert canceled['subject']!=ready['subject'] and canceled['acknowledgements']==0 and snapshot(identifier)==partial and current()==physical
@@ -162,6 +166,7 @@ def main():
             assert recovery_process.wait(timeout=100)==0,'PARTIAL_RECOVERY_PAGE_FAILED';recovery_ui=json.loads((evidence/'recovery-browser.json').read_bytes());ack=snapshot(identifier);require_ack(partial,ack,recovery_ui['subject'],unknown=unknown)
             assert current()==physical;ack_facts=verify_records(ack,baseline,original,physical,storage,evidence,'ack');assert facts['counts']==ack_facts['counts'] and facts['outcomes']==ack_facts['outcomes']
             (evidence/'physical-final.json').write_text(json.dumps(current()));(evidence/'facts.json').write_text(json.dumps(dict(partial=facts,ack=ack_facts)))
+            if kind=='instance-changed':attest_instance_after_ack(baseline,ack['row'],current,new_inventory,evidence)
             if unknown:verify_unknown_target(baseline,ack['row'],evidence,lambda p:json.loads(p.read_bytes()))
             proved=True
         finally:

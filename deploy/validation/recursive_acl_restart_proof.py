@@ -19,7 +19,7 @@ from validate_container_acl_faults import host_snapshot, require_host_restart, o
 from validate_container_recursive_permission_faults import same_operation
 
 RESTART_KINDS=('worker-crash','agent-restart')
-OWNER_PATTERN=r'(?:wd-qa-recursive-acl-restarts-[a-f0-9]{7}|wd-qa-recursive-acl-partial-restarts-[a-f0-9]{7}-(?:worker|agent))\.service'
+OWNER_PATTERN=r'(?:wd-qa-recursive-acl-restarts-[a-f0-9]{7}|wd-qa-recursive-acl-partial-restarts-[a-f0-9]{7}-(?:worker|agent)|wd-qa-recursive-acl-partial-instance-[a-f0-9]{7})\.service'
 RESTART_KEYS={'uploads','directories','copies','moves','permissions','ownerships','recursivePermissions','recursiveOwnerships','acls','recursiveAcls'}
 
 

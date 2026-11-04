@@ -6,10 +6,12 @@ from pathlib import Path
 from bound_container_recursive_acl_cut import STATE,child_id
 from bound_container_recursive_acl_partial_cut import partial_proof
 
+UNKNOWN_KINDS=('target-removed','instance-changed')
+
 
 def require_unknown_identity(baseline,fixture):
     source=Path(baseline['source'])
-    assert baseline['kind']=='target-removed' and fixture['identifier']==baseline['containerId'] and fixture['folder']==source
+    assert baseline['kind'] in UNKNOWN_KINDS and fixture['identifier']==baseline['containerId'] and fixture['folder']==source
     assert source.parent==Path('/data/WhaleDeck/apps') and source.name==baseline['containerName']
 
 
@@ -20,6 +22,7 @@ def capture_completed_child(row,directory):
 
 
 def remove_unknown_target(baseline,fixture,held,current,cut,directory):
+    assert baseline['kind']=='target-removed'
     require_unknown_identity(baseline,fixture)
     assert current()==cut and not select.select([held.descriptor],[],[],0)[0]
     fixture['remove_owned']()
@@ -30,8 +33,12 @@ def remove_unknown_target(baseline,fixture,held,current,cut,directory):
 
 
 def verify_unknown_target(baseline,row,directory,read):
-    assert baseline['kind']=='target-removed' and row['root_state']=='Unknown'
-    removed=read(directory/'removed-owned.json');assert removed==dict(containerId=baseline['containerId'],onlyExactOwnedContainerRemoved=True,helperAliveBeforeNormalLogout=True,partialSourceInventoryUnchanged=True)
+    assert baseline['kind'] in UNKNOWN_KINDS and row['root_state']=='Unknown'
+    if baseline['kind']=='target-removed':
+        removed=read(directory/'removed-owned.json');assert removed==dict(containerId=baseline['containerId'],onlyExactOwnedContainerRemoved=True,helperAliveBeforeNormalLogout=True,partialSourceInventoryUnchanged=True)
+    else:
+        from recursive_acl_instance_proof import verify_instance_evidence
+        verify_instance_evidence(baseline,row,directory,read,read(directory/'cut-physical.json'))
     physical=read(directory/'cut-physical.json');assert physical==read(directory/'physical-partial.json')==read(directory/'physical-final.json')
     cut=read(directory/'cut-root.json');assert cut['operationId']==row['execution_job_id'].replace('-','') and cut['owner']==row['owner_hash']
     proof=partial_proof(cut,baseline['original'],physical);bound=read(directory/'bound-helper.json')

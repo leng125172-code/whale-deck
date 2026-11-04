@@ -12,7 +12,7 @@ const observeLogout=value=>writeSignal(directory,role+'-logout-'+value.phase+'.j
 try{
   const packet=JSON.parse(await readFile('/dev/stdin','utf8')),f=packet.fixture,revision=process.argv[2],base='http://127.0.0.1:8080'
   assert.match(revision,/^[a-f0-9]{40}$/);assert.equal(f.revision,revision);assert.ok(['owner','recovery'].includes(role))
-  const kind=f.kind??'cancel';assert.ok(['cancel','logout','group-removal','account-disable','worker-crash','agent-restart','target-removed'].includes(kind));const revoked=['group-removal','account-disable'].includes(kind),unknown=kind==='target-removed',expectedState=unknown?'Unknown':'Partial'
+  const kind=f.kind??'cancel';assert.ok(['cancel','logout','group-removal','account-disable','worker-crash','agent-restart','target-removed','instance-changed'].includes(kind));const revoked=['group-removal','account-disable'].includes(kind),unknown=['target-removed','instance-changed'].includes(kind),expectedState=unknown?'Unknown':'Partial'
   directory=f.evidence;assert.match(directory,/\/deploy\/artifacts\/container-recursive-acl-partial-[a-f0-9]{32}$/)
   browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true})
   context=await browser.newContext({viewport:{width:320,height:600},colorScheme:role==='owner'?'dark':'light',reducedMotion:'reduce'});context.setDefaultTimeout(20_000);page=await context.newPage()

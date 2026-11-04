@@ -6,6 +6,8 @@ from unittest.mock import patch
 from recursive_acl_partial_restart_proof import partial_checkpoint,inventory_digest,verify_partial_lease
 from recursive_acl_restart_proof import require_only_transients,owner_unit
 from recursive_acl_partial_unknown_proof import require_unknown_identity,remove_unknown_target
+from recursive_acl_instance_proof import require_instance_transition,prepare_instance,restart_instance,instance_frame
+import validate_container_file_publishing as owned
 from pathlib import Path
 import unittest
 from recursive_acl_partial_proof import require_phase,require_ack,require_case,entry_checkpoint
@@ -46,6 +48,7 @@ class RecursiveAclPartialWorkflowScope(unittest.TestCase):
 
     def test_scenario_selection_cannot_accidentally_repeat_cancel_or_revoke(self):
         self.assertEqual('cancel',selected_case([]));self.assertEqual('logout',selected_case(['logout']))
+        self.assertEqual('instance-changed',selected_case(['instance-changed']))
         self.assertEqual('target-removed',selected_case(['target-removed']))
         self.assertEqual('worker-crash',selected_case(['worker-crash']));self.assertEqual('agent-restart',selected_case(['agent-restart']))
         self.assertEqual('group-removal',selected_case(['group-removal']));self.assertEqual('account-disable',selected_case(['account-disable']))
@@ -155,6 +158,55 @@ class RecursiveAclPartialWorkflowScope(unittest.TestCase):
         for forbidden in ('remove_owned(', 'docker rm', "'confirm.json'", 'rmtree(', 'os.kill(', 'SIGKILL'):self.assertNotIn(forbidden,text)
         self.assertIn('originalGatePassed=False,resumedRecoveryPassed=True',text)
         self.assertIn("browser(repo,sys.argv[1],'recovery'",text)
+
+    def instance_fixture(self):
+        folder=Path('/data/WhaleDeck/apps/wdv-container-publish-'+'a'*32);cid='b'*64
+        state=dict(Running=True,Pid=123,StartedAt='2026-11-04T12:00:00.100Z')
+        frame=dict(Id=cid,Name='/'+folder.name,Image=owned.common.IMAGE,State=state,
+            Config=dict(User='1000:1000',Labels={'io.whaledeck.validation':folder.name}),
+            Mounts=[dict(Type='bind',Source=str(folder),Destination='/work',RW=True)],
+            HostConfig=dict(NetworkMode='none',ReadonlyRootfs=True,Binds=None,Mounts=[dict(Type='bind',Source=str(folder),Target='/work',ReadOnly=False)],CapDrop=['ALL'],SecurityOpt=['no-new-privileges'],Privileged=False,PidMode='',IpcMode='private',PidsLimit=16,Memory=32*1024**2,NanoCpus=250000000,RestartPolicy=dict(Name='no',MaximumRetryCount=0)))
+        b=dict(kind='instance-changed',containerId=cid,containerName=folder.name,containerPid=123,source=str(folder),instanceId='123:'+state['StartedAt'])
+        after=copy.deepcopy(frame);after['State'].update(Pid=456,StartedAt='2026-11-04T12:00:02.100Z');physical={'firstKnownChanged':True}
+        from recursive_acl_restart_proof import RESTART_KEYS
+        proof=dict(before=frame,after=after,oldInstanceId=b['instanceId'],newInstanceId='456:'+after['State']['StartedAt'],commandAcknowledgement=cid,restartAttemptedOnce=True,helperAliveAfterRestart=True,
+            sourceInventory=physical,newInstanceInventory=physical,coreBefore={'core':'unchanged'},coreAfter={'core':'unchanged'},otherActiveWork={k:0 for k in RESTART_KEYS})
+        return b,proof,physical
+
+    def test_instance_transition_requires_real_new_instance_and_exact_original_resource(self):
+        b,p,physical=self.instance_fixture();require_instance_transition(b,p,physical)
+        for change in (lambda v:v['after']['State'].update(Pid=123),lambda v:v['after']['State'].update(StartedAt=v['before']['State']['StartedAt']),lambda v:v['after'].update(Id='c'*64),lambda v:v['after'].update(Image='foreign-image'),lambda v:v['after']['HostConfig'].update(Privileged=True),lambda v:v['after']['HostConfig'].update(NetworkMode='host'),lambda v:v['after']['HostConfig']['Mounts'][0].update(Source='/etc'),lambda v:v['after']['Config'].update(User='0:0'),lambda v:v.update(newInstanceInventory={'firstKnownChanged':False}),lambda v:v.update(coreAfter={'core':'restarted'}),lambda v:v.update(commandAcknowledgement='foreign'),lambda v:v.update(restartAttemptedOnce=False),lambda v:v['otherActiveWork'].update(acls=True)):
+            bad=copy.deepcopy(p);change(bad)
+            with self.subTest(proof=bad),self.assertRaises(AssertionError):require_instance_transition(b,bad,physical)
+
+    def test_instance_guard_refuses_foreign_fixture_or_busy_work_before_any_command(self):
+        from unittest.mock import Mock
+        b,p,physical=self.instance_fixture();fixture=dict(identifier=b['containerId'],folder=Path(b['source']));held=Mock(descriptor=7)
+        with patch('recursive_acl_instance_proof.command') as command,patch('recursive_acl_instance_proof.select.select',return_value=([],[],[])),patch('recursive_acl_instance_proof.restart_allowed',side_effect=AssertionError('OTHER_FILE_WORK_RESTART_REFUSED')):
+            with self.assertRaises(AssertionError):prepare_instance(b,fixture,held,{},lambda:physical,physical)
+            command.assert_not_called()
+        with patch('recursive_acl_instance_proof.command') as command,self.assertRaises(AssertionError):prepare_instance(b,{**fixture,'identifier':'c'*64},held,{},lambda:physical,physical)
+        command.assert_not_called()
+        with patch('recursive_acl_instance_proof.command') as command,self.assertRaises(AssertionError):restart_instance(b,{**fixture,'instanceRestartAttempted':True},held,p,lambda:physical,physical,lambda pid:physical,Path('/tmp'))
+        command.assert_not_called()
+
+    def test_instance_unit_exception_requires_own_cgroup_pid_and_invocation(self):
+        import os
+        unit='wd-qa-recursive-acl-partial-instance-123abcd.service';group='/system.slice/'+unit;inv='c'*32;helper='whaledeck-container-recursive-acl-'+'a'*32+'.service'
+        require_only_transients([unit,helper],helper,unit)
+        props=f'InvocationID={inv}\nMainPID={os.getpid()}\nControlGroup={group}'
+        with patch('recursive_acl_restart_proof.Path.read_text',return_value='0::'+group),patch.dict(os.environ,{'INVOCATION_ID':inv}),patch('recursive_acl_restart_proof.command',return_value=props):self.assertEqual(unit,owner_unit())
+        with patch('recursive_acl_restart_proof.Path.read_text',return_value='0::'+group),patch.dict(os.environ,{'INVOCATION_ID':'d'*32}),patch('recursive_acl_restart_proof.command',return_value=props),self.assertRaises(AssertionError):owner_unit()
+        for owner in ('wd-qa-recursive-acl-partial-instance-all.service','wd-qa-recursive-acl-partial-instance-123abcd-extra.service'):
+            with self.assertRaises(AssertionError):require_only_transients([],helper,owner)
+        with self.assertRaises(AssertionError):require_only_transients([unit,helper,'wd-qa-foreign.service'],helper,unit)
+
+    def test_instance_frame_excludes_environment_and_independent_evidence_requires_after_ack(self):
+        b,p,physical=self.instance_fixture();frame=copy.deepcopy(p['before']);frame['Config'].update(Env=['PRIVATE_VALUE'],Labels={**frame['Config']['Labels'],'foreign':'PRIVATE_VALUE'})
+        safe=instance_frame(frame);self.assertNotIn('PRIVATE_VALUE',json.dumps(safe))
+        text=(ROOT/'recursive_acl_instance_proof.py').read_text()
+        self.assertIn('at>=ended',text);self.assertIn("actual==proof['after']",text)
+        for forbidden in ('os.kill(', 'SIGKILL', 'rmtree(', "'systemctl'", 'query('):self.assertNotIn(forbidden,text)
 
     def test_partial_revocation_preserves_the_real_result_and_denies_old_context(self):
         subject='11111111-1111-4111-8111-111111111111';p=phase();p['row'].update(actor_subject=subject,cancel_requested_at_utc=None);p['executionJob']['cancel_requested_at_utc']=None

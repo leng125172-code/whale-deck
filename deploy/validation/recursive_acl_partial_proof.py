@@ -14,16 +14,17 @@ from validate_container_upload_recovery_agent import trusted
 from validate_container_recursive_permission_faults import require_logout_authority
 from validate_container_recursive_permission_faults import require_authority_change
 from validate_container_recursive_acl_faults import verify_revoked_browser
+from recursive_acl_partial_unknown_proof import UNKNOWN_KINDS
 
 COUNTS=('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')
 
 
 def require_case(kind,partial,owner,authority=None):
     revoked=kind in ('group-removal','account-disable')
-    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','target-removed') and owner['subject']==partial['row']['actor_subject'] and owner['normalDualLogout'] is (not revoked)
+    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','target-removed','instance-changed') and owner['subject']==partial['row']['actor_subject'] and owner['normalDualLogout'] is (not revoked)
     assert owner['registrations']==owner['confirmations']==1 and owner['cancellations']==int(kind=='cancel') and owner['acknowledgements']==owner['uploads']==0
     assert bool(partial['row']['cancel_requested_at_utc']) is (kind=='cancel') and bool(partial['executionJob']['cancel_requested_at_utc']) is (kind=='cancel')
-    if kind in ('logout','target-removed'):
+    if kind=='logout' or kind in UNKNOWN_KINDS:
         assert owner['result'] is None and owner['hintsCleared'] is True
         require_logout_authority(authority,owner['subject'])
         expiry=dt.datetime.fromisoformat(authority['permissionExpiresAtUtc']);ended=dt.datetime.fromisoformat(authority['confirmedAtUtc'])
@@ -77,7 +78,7 @@ def entry_checkpoint(record,index,present,unknown):
 
 
 def verify_records(data,baseline,before,after,storage,directory,prefix,read_only=False):
-    unknown=baseline.get('kind')=='target-removed'
+    unknown=baseline.get('kind') in UNKNOWN_KINDS
     assert prefix in ('partial','ack');require_phase(data,prefix=='ack',unknown=unknown)
     row=data['row'];plan=managed_plan(json.loads(row['plan_json']));record=record_for(row);operation=uuid.UUID(row['execution_job_id']).hex
     assert row['container_id']==baseline['containerId'] and row['instance_id']==baseline['instanceId'] and plan['rootIdentity']==before['']['identity']
