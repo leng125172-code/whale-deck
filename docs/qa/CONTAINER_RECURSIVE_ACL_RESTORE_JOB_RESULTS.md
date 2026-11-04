@@ -38,3 +38,21 @@ c166bd8真实隔离PG宏门禁执行1/通过1/零跳过，dispatch-9b31be3950724
 只读审查发现并经服务/仓储/ValidFacts核实：Unknown此前无回执时，原执行Discard可补获Completed/Partial/Aborted，不应只接受Partial/Unknown。并且UNKNOWN_ACKNOWLEDGED按原Unknown状态记录，即使补获Partial也不应误要求PARTIAL_ACKNOWLEDGED。后端与Vue已同步接受这些合法事实，任务仍为Failed/Acknowledged，不自动解释为成功或重放；原Partial已有回执时仍不能改写既有计数/摘要。新增三态后端及前端投影测试通过，定向27/53；扩展原生PG分别核对四种补获结果，增加专属阶段标记，最终修订仍待准确PG运行。
 
 新生产预览扩展到第11个显式夹具时，十进制10拼在GUID末位形成无效ID，白名单正确隐藏它，四个主题场景失败；已按十六进制单字符生成并保留原失败截图/上下文，接下来用全新预览进程复验。此为夹具失败，不当作真实页面验收；修正前构建、23后端/49前端/首8预览与首PG等原结果按各自冻结保留。
+
+
+## 最终候选ac90911验证与生产保持
+
+最终实现冻结ac909114d65101639d12f53c5d921edc69c2a89d。真实隔离PG状态dispatch-21c15666dad5456db4bd6dc2cb4d75ce为Passed，executedTests=passedTests=1，cleanupConfirmed=true；实际出现job-facts-privacy-null-counts-audit-rollback及job-facts-late-receipts-acknowledged专属阶段。两自有库、SDK容器和scratch均清理；各阶段断言不另冒充独立测试数量。617a1f3的准确PG也Passed/1/1/cleanupConfirmed，不拿前序回执替代最终候选。
+
+最终5075 Unit/660 Integration通过，默认7原生跳过独立列出；1292前端单测全部通过，类型/生产构建/格式/oxlint/eslint通过。准确干净ac检出重建后，最终8生产构建预览再次通过（4恢复+4旧ACL）；恢复每主题11类数据，包括规划目标变更拒绝、无回执Unknown、原Partial处置、原Unknown处置补获Completed/Partial/Aborted、legacy和私有异常。36张新预览截图保存并人工查看缺回执、部分处置、补获完成与中止计数。身份/API/收据为明确夹具，绝非真实工作站新功能验收。
+
+末次产物检查命令误查本地dist/build-info.json而退出；实际该文件由deploy/gateway/Dockerfile在镜像内生成，Vite目录本来不含它。改按172份公开Vite产物哈希归档，并重新从干净准确检出构建及通过8预览；未把该检查失败当发布失败或重发生产操作。该证据不声称六组件CLI或已安装新版来源已核验。
+
+生产前后只读快照逐字节及九字段保持：1952保护文件、来源Root1570、恢复Root196/HDD132、目录94；普通业务54意图49执行103Job、恢复13意图10执行/活动0，其他活动Job/终端/宿主锁/发布保护均0。11核心healthy、ID/镜像/StartedAt和两宿主eeb24dd/PID1379812与1379807保持，无生产发布、重启、恢复重放或回滚。源/HDD同device旧限制及维护连续性缺口保留。
+
+私有证据deploy/artifacts/recursive-acl-restore-job-results-9314fcd9f635455594c8ee12d3589bf5含原始基线、后置保持、三个准确PG状态/Invocation终态/日志、36候选PNG、夹具GUID失败原件及公开构建哈希。60文件逐项SHA256通过，清单摘要4a8c1157e784d256a59a4606022c3acff747e56bb9e998df3879c3ee90e1701e。三QA unit均在准确回执归档后停止；运行服务未停止。
+
+候选已验证仍非部署验收：继续准确CI终态、标准覆盖，再新资源真实Authentik→Vue任务摘要→API/Worker→Agent→实体/HDD，特别是Unknown/Partial/处置与历史规划的展示；随后撤权/重启等剩余矩阵、可恢复删除和59项目标。不得把本页提升为整项或整阶段完成。
+
+
+收尾：范围8检查再通过，变更MD的740个本地链接缺失0，diff通过，Git索引1000:1000/664。ac90911准确CI41935193964查询时仍in_progress，617a1f3旧CI41934293674已completed/success，不转签新候选。项目图谱事件whale-deck.container-acl.ac90911.restore-job-summary-candidate已获project/key/event匹配、duplicate=false成功回执，pending移入synced，阶段保持active。
