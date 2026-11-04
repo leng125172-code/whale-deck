@@ -209,15 +209,20 @@ def wait_case(process, evidence, name):
     return json.loads(path.read_bytes())
 
 
-def main():
+def main(history=False):
     global PHASE
     assert os.geteuid()==0 and len(sys.argv)>=2; os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
     selected=selected_cases(sys.argv[2:])
+    assert not history or selected==CASES,'HISTORY_REQUIRES_FULL_NEW_OWNED_FIXTURE'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     repo = Path(__file__).resolve().parents[2]; base = 'http://127.0.0.1:8080'
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(), 'FREEZE_VALIDATION_SOURCE_FIRST'
     validation_revision = subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'], text=True).strip()
-    hashes = source_closure(repo,validation_revision,seeds=SOURCES)
+    seeds=SOURCES
+    if history:
+        from validate_container_recursive_acl_history_browser import SOURCES as history_sources
+        seeds=(*SOURCES,*history_sources)
+    hashes = source_closure(repo,validation_revision,seeds=seeds)
     assert all(hashlib.sha256((repo/'deploy/validation'/n).read_bytes()).hexdigest()==v for n,v in hashes.items())
     hosts=host_identity(revision)
     source_hashes={}
@@ -256,6 +261,7 @@ def main():
         baseline = {'revision':revision,'validationSourceRevision':validation_revision,'validationSourceSha256':hashes,'containerId':fixture['identifier'],'containerName':inspected['Name'].lstrip('/'),'instanceId':str(inspected['State']['Pid'])+':'+inspected['State']['StartedAt'],
             'source':str(fixture['folder']),'root':str(root),'original':original,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'cases':list(selected),'seededFixtureOnly':selected!=CASES,'coreBefore':before,'hostIdentity':hosts,'sourceHashes':source_hashes,'evidence':str(evidence)}
         baseline['sourceVersion'] = version(baseline,'work/recursive-tree',original['']['identity'])
+        if history:baseline['recursiveHistoryBrowser']=True
         with storage.target(create_namespace=False,read_only=True) as (configuration,base_fd):
             storage.attest(configuration,base_fd,read_only=True)
             baseline['sourceDevice'] = root.stat().st_dev; baseline['hddDevice'] = os.fstat(base_fd).st_dev
@@ -280,6 +286,10 @@ def main():
                         with pending.open('x') as stream: stream.write(json.dumps({'id':result['id'],'physicalAndHistoryVerified':True}))
                         pending.replace(target)
                         print(json.dumps({'actualRecursiveAclBrowser':'case-verified','case':name,'state':result['state'],'physicalAndHistoryVerified':True}),flush=True)
+                    if history:
+                        PHASE='actual-recursive-history-physical-and-audit-proof'
+                        from validate_container_recursive_acl_history_browser import exercise
+                        exercise(process,evidence,baseline,results,reader,storage,root,content,acl,current)
                     assert process.wait(timeout=120) == 0, 'ACTUAL_RECURSIVE_BROWSER_FAILED'
                 finally:
                     if process.poll() is None:
