@@ -20,10 +20,10 @@ COUNTS=('completedCount','changedCount','abortedCount','notStartedCount','unknow
 
 def require_case(kind,partial,owner,authority=None):
     revoked=kind in ('group-removal','account-disable')
-    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart') and owner['subject']==partial['row']['actor_subject'] and owner['normalDualLogout'] is (not revoked)
+    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart','target-removed') and owner['subject']==partial['row']['actor_subject'] and owner['normalDualLogout'] is (not revoked)
     assert owner['registrations']==owner['confirmations']==1 and owner['cancellations']==int(kind=='cancel') and owner['acknowledgements']==owner['uploads']==0
     assert bool(partial['row']['cancel_requested_at_utc']) is (kind=='cancel') and bool(partial['executionJob']['cancel_requested_at_utc']) is (kind=='cancel')
-    if kind=='logout':
+    if kind in ('logout','target-removed'):
         assert owner['result'] is None and owner['hintsCleared'] is True
         require_logout_authority(authority,owner['subject'])
         expiry=dt.datetime.fromisoformat(authority['permissionExpiresAtUtc']);ended=dt.datetime.fromisoformat(authority['confirmedAtUtc'])
@@ -34,21 +34,27 @@ def require_case(kind,partial,owner,authority=None):
         verify_revoked_browser(owner,kind,owner['subject'])
 
 
-def require_phase(data,ack=False):
-    row=data['row'];assert row['state']==('Acknowledged' if ack else 'Partial') and row['root_state']=='Partial'
+def require_phase(data,ack=False,unknown=False):
+    assert type(unknown) is bool
+    phase='Unknown' if unknown else 'Partial'
+    row=data['row'];assert row['state']==('Acknowledged' if ack else phase) and row['root_state']==phase
     assert row['root_started_at_utc'] and row['lease_token'] is row['lease_expires_at_utc'] is None and row['history_verified'] and row['history_may_exist']
     assert row['publish_barrier'] is (not ack) and bool(row['completed_at_utc']) is ack
     assert data['planJob']['state']=='Succeeded' and data['executionJob']['state']==('Failed' if ack else 'Running')
     assert bool(data['executionJob']['completed_at_utc']) is ack and data['accepted']==data['confirmed']==1
-    assert row['result_code']==('CONTAINER_RECURSIVE_ACL_PARTIAL_ACKNOWLEDGED' if ack else 'CONTAINER_RECURSIVE_ACL_PARTIAL_REQUIRES_ACKNOWLEDGEMENT')
+    code='CONTAINER_RECURSIVE_ACL_UNKNOWN_ACKNOWLEDGED' if ack else 'CONTAINER_RECURSIVE_ACL_RESULT_UNKNOWN'
+    assert row['result_code']==(code if unknown else 'CONTAINER_RECURSIVE_ACL_PARTIAL_ACKNOWLEDGED' if ack else 'CONTAINER_RECURSIVE_ACL_PARTIAL_REQUIRES_ACKNOWLEDGEMENT')
     assert (data['pending']==0) if ack else data['pending']>0
-    assert type(row['changed_count']) is int and 0<row['changed_count']==row['completed_count']<4 and row['unknown_count']==0
-    assert row['aborted_count']+row['not_started_count']+row['completed_count']==4
+    if unknown:
+        assert all(type(row[k]) is int and row[k]==0 for k in ('completed_count','changed_count','aborted_count','not_started_count')) and type(row['unknown_count']) is int and row['unknown_count']==4
+    else:
+        assert type(row['changed_count']) is int and 0<row['changed_count']==row['completed_count']<4 and row['unknown_count']==0
+        assert row['aborted_count']+row['not_started_count']+row['completed_count']==4
     assert bool(row['acknowledged_by']) is ack and bool(row['acknowledgement_json']) is ack
 
 
-def require_ack(before,after,subject):
-    require_phase(before);require_phase(after,True);old,new=before['row'],after['row']
+def require_ack(before,after,subject,unknown=False):
+    require_phase(before,unknown=unknown);require_phase(after,True,unknown=unknown);old,new=before['row'],after['row']
     assert subject!=old['actor_subject'] and new['acknowledged_by']==subject and new['version']>old['version']
     stable=('id','actor_subject','login_binding','container_id','instance_id','relative_path','owner_hash','command_json','request_hash','plan_json','plan_hash','execution_hash','execution_job_id','confirmed_at_utc','execution_expires_at_utc','root_started_at_utc',
         'root_state','completed_count','changed_count','aborted_count','not_started_count','unknown_count','outcome_digest','history_digest','history_verified','history_may_exist','cancel_requested_at_utc')
@@ -61,17 +67,20 @@ def require_ack(before,after,subject):
 
 
 def verify_records(data,baseline,before,after,storage,directory,prefix,read_only=False):
-    assert prefix in ('partial','ack');require_phase(data,prefix=='ack')
+    unknown=baseline.get('kind')=='target-removed'
+    assert prefix in ('partial','ack');require_phase(data,prefix=='ack',unknown=unknown)
     row=data['row'];plan=managed_plan(json.loads(row['plan_json']));record=record_for(row);operation=uuid.UUID(row['execution_job_id']).hex
     assert row['container_id']==baseline['containerId'] and row['instance_id']==baseline['instanceId'] and plan['rootIdentity']==before['']['identity']
     assert plan['command']['path']==row['relative_path']=='work/recursive-tree' and plan['command']['aclType']=='access'
     assert (plan['command']['fileEntries'],plan['command']['directoryEntries'])==expected_targets(1) and plan['entryCount']==plan['changeCount']==4
-    assert record['state']=='Partial' and record['historyVerified'] and record['historyMayExist'] and re.fullmatch('[A-F0-9]{64}',row['receipt_hash'])
-    receipt=json.loads(row['receipt_json']);assert receipt['Id']==row['execution_job_id'] and receipt['State']=='Partial' and receipt['AclType']=='access'
+    phase_name='Unknown' if unknown else 'Partial'
+    assert record['state']==phase_name and record['historyVerified'] and record['historyMayExist'] and re.fullmatch('[A-F0-9]{64}',row['receipt_hash'])
+    receipt=json.loads(row['receipt_json']);assert receipt['Id']==row['execution_job_id'] and receipt['State']==phase_name and receipt['AclType']=='access'
     assert receipt['Fingerprint']==plan['fingerprint'] and receipt['TargetProof']==plan['targetProof'] and receipt['HistoryAvailable'] and receipt['HistoryVerified'] and receipt['HistoryMayExist']
     for key in COUNTS:
         column=re.sub(r'(?<!^)(?=[A-Z])','_',key).lower();assert type(record[key]) is int and record[key]==row[column]==receipt[key[0].upper()+key[1:]]
-    assert 0<record['changedCount']==record['completedCount']<4 and record['unknownCount']==0 and record['notStartedCount']>0
+    if unknown:assert [record[k] for k in COUNTS]==[0,0,0,0,4] and record['outcomeDigest']==row['outcome_digest']==receipt['OutcomeDigest']=='' and receipt['BindingCurrent'] is False
+    else:assert 0<record['changedCount']==record['completedCount']<4 and record['unknownCount']==0 and record['notStartedCount']>0
     preserved(before,after,'access');assert after['']==before['']
     archive(directory,prefix+'.sql.json',json.dumps(data,sort_keys=True).encode(),read_only)
     archive(directory,prefix+'.root.json',(STATE/(operation+'.json')).read_bytes(),read_only)
@@ -97,13 +106,13 @@ def verify_records(data,baseline,before,after,storage,directory,prefix,read_only
                     if index<=record['startedThrough']:
                         trusted(child_path);child_raw=child_path.read_bytes();child=json.loads(child_raw)
                         assert child['operationId']==cid and child['owner']==row['owner_hash'] and child['plan']==cp
-                        phase=child['state'];assert phase in ('Completed','Aborted')
+                        phase=child['state'];assert phase in (('Completed','Aborted','Preparing','Prepared','Applying','Unknown') if unknown else ('Completed','Aborted'))
                         if phase=='Completed':
                             wanted=list(old['identity']);wanted[2]=wanted[2]&~0o777|cp['targetMode']
                             assert actual['identity'][:8]==wanted[:8] and actual['identity'][8]>old['identity'][8] and child['actualIdentity']==actual['identity'] and child['aclConfirmed'] and child['historyVerified']
                             assert actual['access']==cp['command']['entries'] and actual['default']==old['default']
                             version=file_version(baseline,path,actual['identity']);assert child['version']==version;changed=True
-                        else:assert actual==old and child['aclConfirmed'] is False and child['actualIdentity'] is None and child['version']==''
+                        else:assert actual==old and child['aclConfirmed'] is (False if phase=='Aborted' else None) and child['actualIdentity'] is None and child['version']==''
                         archive(directory,prefix+'.'+cid+'.root.json',child_raw,read_only)
                         if child['historyVerified']:
                             hr=read_metadata(storage.f,storage,configuration,child_fd,cid+'.json',16384);h=json.loads(hr)
@@ -117,6 +126,9 @@ def verify_records(data,baseline,before,after,storage,directory,prefix,read_only
                 assert {v for v in os.listdir(child_fd) if v.endswith('.json')}=={v['id']+'.json' for v in children if v['historyVerified']}
             finally:os.close(child_fd)
         finally:os.close(fd)
-    assert digest(b'whaledeck-recursive-acl-outcomes-v1\n',outcomes)==record['outcomeDigest']==row['outcome_digest']==receipt['OutcomeDigest']
-    assert sum(v['changed'] for v in outcomes)==record['changedCount']
+    if unknown:
+        assert sum(v['changed'] for v in outcomes)==1 and outcomes[0]['state']=='Completed' and all(v['state']!='Completed' for v in outcomes[1:])
+    else:
+        assert digest(b'whaledeck-recursive-acl-outcomes-v1\n',outcomes)==record['outcomeDigest']==row['outcome_digest']==receipt['OutcomeDigest']
+        assert sum(v['changed'] for v in outcomes)==record['changedCount']
     return dict(id=row['id'],state=row['state'],counts=[record[k] for k in COUNTS],childHddRecords=histories,outcomes=outcomes)

@@ -5,6 +5,7 @@ import hashlib
 from unittest.mock import patch
 from recursive_acl_partial_restart_proof import partial_checkpoint,inventory_digest,verify_partial_lease
 from recursive_acl_restart_proof import require_only_transients,owner_unit
+from recursive_acl_partial_unknown_proof import require_unknown_identity,remove_unknown_target
 from pathlib import Path
 import unittest
 from recursive_acl_partial_proof import require_phase,require_ack,require_case
@@ -45,6 +46,7 @@ class RecursiveAclPartialWorkflowScope(unittest.TestCase):
 
     def test_scenario_selection_cannot_accidentally_repeat_cancel_or_revoke(self):
         self.assertEqual('cancel',selected_case([]));self.assertEqual('logout',selected_case(['logout']))
+        self.assertEqual('target-removed',selected_case(['target-removed']))
         self.assertEqual('worker-crash',selected_case(['worker-crash']));self.assertEqual('agent-restart',selected_case(['agent-restart']))
         self.assertEqual('group-removal',selected_case(['group-removal']));self.assertEqual('account-disable',selected_case(['account-disable']))
         for values in (['cancel'],['logout','cancel'],['group-removal','account-disable'],['--all']):
@@ -90,6 +92,42 @@ class RecursiveAclPartialWorkflowScope(unittest.TestCase):
                 with self.subTest(change=sample_change),self.assertRaises(AssertionError):verify_partial_lease(row,final,bad,raw,cut,physical,observed)
             with self.assertRaises(AssertionError):verify_partial_lease(row,final,proof,raw,cut,physical,{'atUtc':'2026-11-04T12:00:59+00:00'})
             with self.assertRaises(AssertionError):verify_partial_lease(row,final,proof,raw,cut,{'changed':'lost'},observed)
+
+    def test_unknown_aggregate_does_not_relabel_a_known_prior_change_as_partial_success(self):
+        before=phase();r=before['row'];receipt=json.loads(r['receipt_json']);receipt.update(State='Unknown',ChangedCount=0)
+        r.update(state='Unknown',root_state='Unknown',result_code='CONTAINER_RECURSIVE_ACL_RESULT_UNKNOWN',completed_count=0,changed_count=0,aborted_count=0,not_started_count=0,unknown_count=4,receipt_json=json.dumps(receipt),cancel_requested_at_utc=None)
+        require_phase(before,unknown=True)
+        with self.assertRaises(AssertionError):require_phase(before)
+        after=acknowledgement(before);after['row']['result_code']='CONTAINER_RECURSIVE_ACL_UNKNOWN_ACKNOWLEDGED';require_ack(before,after,'different-admin',unknown=True)
+        for key,value in [('completed_count',1),('unknown_count',0),('unknown_count',True),('changed_count',1),('result_code','CONTAINER_RECURSIVE_ACL_COMPLETED')]:
+            bad=copy.deepcopy(before);bad['row'][key]=value
+            with self.subTest(key=key),self.assertRaises(AssertionError):require_phase(bad,unknown=True)
+        for key,value in [('execution_job_id','replacement'),('root_started_at_utc','new-start'),('history_digest','rewritten'),('unknown_count',3),('outcome_digest','fabricated')]:
+            bad=copy.deepcopy(after);bad['row'][key]=value
+            with self.subTest(key=key),self.assertRaises(AssertionError):require_ack(before,bad,'different-admin',unknown=True)
+
+    def test_disappearance_refuses_foreign_fixture_or_changed_inventory_before_remove(self):
+        from unittest.mock import Mock
+        folder=Path('/data/WhaleDeck/apps/wdv-container-publish-'+'a'*32)
+        b=dict(kind='target-removed',containerId='b'*64,source=str(folder),containerName=folder.name)
+        fixture=dict(identifier='b'*64,folder=folder,remove_owned=Mock())
+        require_unknown_identity(b,fixture)
+        for changes in ({'identifier':'c'*64},{'folder':Path('/etc')}):
+            with self.subTest(changes=changes),self.assertRaises(AssertionError):require_unknown_identity(b,{**fixture,**changes})
+        held=Mock(descriptor=7)
+        with self.assertRaises(AssertionError):remove_unknown_target(b,fixture,held,lambda:{'modified':True},{'modified':False},Path('/tmp'))
+        fixture['remove_owned'].assert_not_called()
+        with patch('recursive_acl_partial_unknown_proof.select.select',return_value=([7],[],[])),self.assertRaises(AssertionError):remove_unknown_target(b,fixture,held,lambda:{},{},Path('/tmp'))
+        fixture['remove_owned'].assert_not_called()
+
+    def test_unknown_browser_waits_for_exact_removal_then_normal_logout_before_settlement(self):
+        text=(ROOT/'validate_container_recursive_acl_partial.mjs').read_text()
+        self.assertIn("unknown?'结果未知，保护已保留':'部分修改，保护已保留'",text)
+        self.assertLess(text.index("waitSignal(directory,'logout.json'"),text.index("phase='inflight-normal-visible-logout'"))
+        self.assertIn("unknown?'logout-done.json':'action-done.json'",text)
+        self.assertIn("assert.equal(final.state,expectedState)",text)
+        helper=(ROOT/'recursive_acl_partial_unknown_proof.py').read_text()
+        for forbidden in ('os.kill(', 'SIGKILL', 'rmtree(', 'docker rm', 'query('):self.assertNotIn(forbidden,helper)
 
     def test_partial_revocation_preserves_the_real_result_and_denies_old_context(self):
         subject='11111111-1111-4111-8111-111111111111';p=phase();p['row'].update(actor_subject=subject,cancel_requested_at_utc=None);p['executionJob']['cancel_requested_at_utc']=None

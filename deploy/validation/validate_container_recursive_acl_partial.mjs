@@ -11,7 +11,7 @@ const role=process.argv[3]
 try{
   const packet=JSON.parse(await readFile('/dev/stdin','utf8')),f=packet.fixture,revision=process.argv[2],base='http://127.0.0.1:8080'
   assert.match(revision,/^[a-f0-9]{40}$/);assert.equal(f.revision,revision);assert.ok(['owner','recovery'].includes(role))
-  const kind=f.kind??'cancel';assert.ok(['cancel','logout','group-removal','account-disable','worker-crash','agent-restart'].includes(kind));const revoked=['group-removal','account-disable'].includes(kind)
+  const kind=f.kind??'cancel';assert.ok(['cancel','logout','group-removal','account-disable','worker-crash','agent-restart','target-removed'].includes(kind));const revoked=['group-removal','account-disable'].includes(kind),unknown=kind==='target-removed',expectedState=unknown?'Unknown':'Partial'
   directory=f.evidence;assert.match(directory,/\/deploy\/artifacts\/container-recursive-acl-partial-[a-f0-9]{32}$/)
   browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true})
   context=await browser.newContext({viewport:{width:320,height:600},colorScheme:role==='owner'?'dark':'light',reducedMotion:'reduce'});context.setDefaultTimeout(20_000);page=await context.newPage()
@@ -48,10 +48,11 @@ try{
     await waitSignal(directory,'action.json',40_000);phase='actual-partial-cut'
     await dialog.getByRole('button',{name:'查询原递归ACL修改任务',exact:true}).click();await expect(dialog.getByRole('status')).toHaveText('正在逐项修改ACL')
     await dialog.getByRole('status').scrollIntoViewIfNeeded();await expect(dialog.getByRole('status')).toBeInViewport({ratio:1});await page.screenshot({path:join(directory,'inflight.png')})
+    if(unknown){await writeSignal(directory,'action-done.json',{id,subject:profile.subject});await waitSignal(directory,'logout.json',40_000)}
     if(kind==='cancel'){
       const cancel=dialog.getByRole('button',{name:'请求取消递归ACL修改',exact:true});await cancel.click();await page.getByRole('button',{name:'继续等待',exact:true}).click();assert.equal(cancellations,0)
       await cancel.click();await page.getByRole('button',{name:'确认请求取消',exact:true}).click()
-    }else if(kind==='logout'){
+    }else if(kind==='logout'||unknown){
       phase='inflight-normal-visible-logout';await closePermissionDetails(page,dialog);logout=await logoutFromUserMenu(page,context,base);await writeSignal(directory,'owner-logout.json',logout)
       await expect(page.getByRole('region',{name:'容器递归ACL修改任务',exact:true})).toHaveCount(0)
       await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-hints-v1'))).toBe(null);hintsCleared=true
@@ -59,8 +60,8 @@ try{
       await expect(page.getByRole('heading',{name:'使用工作站账号登录',exact:true})).toBeVisible()
       await page.screenshot({path:join(directory,'owner-logged-out.png')})
     }
-    await writeSignal(directory,'action-done.json',{id,subject:profile.subject})
-    const final=await waitSignal(directory,'settled.json');assert.equal(final.id,id);assert.equal(final.state,'Partial')
+    await writeSignal(directory,unknown?'logout-done.json':'action-done.json',{id,subject:profile.subject})
+    const final=await waitSignal(directory,'settled.json');assert.equal(final.id,id);assert.equal(final.state,expectedState)
     if(revoked){
       phase='original-revoked-context-denied';originalIntentStatus=(await context.request.get(base+endpoint+'/'+id)).status();assert.ok([401,403].includes(originalIntentStatus))
       const me=await context.request.get(base+'/api/v1/auth/me');currentIdentityStatus=me.status()
@@ -90,7 +91,7 @@ try{
     id=f.id;assert.notEqual(profile.subject,f.originalSubject);phase='different-admin-recovery'
     assert.equal((await context.request.get(base+endpoint+'/'+id)).status(),404)
     await page.getByRole('button',{name:'容器递归ACL修改异常',exact:true}).click();const dialog=page.getByRole('dialog',{name:'容器递归ACL修改异常处置',exact:true})
-    const row=dialog.locator('.recursive-acl-recovery__row').filter({hasText:id});await expect(row).toHaveCount(1);await expect(row).toContainText('部分修改，保护已保留');await counts(row,f.receipt);await page.screenshot({path:join(directory,'recovery-counts.png')})
+    const row=dialog.locator('.recursive-acl-recovery__row').filter({hasText:id});await expect(row).toHaveCount(1);await expect(row).toContainText(unknown?'结果未知，保护已保留':'部分修改，保护已保留');await counts(row,f.receipt);await page.screenshot({path:join(directory,'recovery-counts.png')})
     await row.getByRole('button',{name:'处置历史结果',exact:true}).click();await expect(dialog.getByRole('button',{name:'暂不处置',exact:true})).toBeInViewport({ratio:1});await expect(dialog.getByRole('button',{name:'确认处置并释放保护',exact:true})).toBeInViewport({ratio:1})
     await page.screenshot({path:join(directory,'recovery-confirm.png')});await dialog.getByRole('button',{name:'暂不处置',exact:true}).click();assert.equal(acknowledgements,0)
     await writeSignal(directory,'recovery-canceled.json',{id,subject:profile.subject,acknowledgements});await waitSignal(directory,'acknowledge.json',40_000)
