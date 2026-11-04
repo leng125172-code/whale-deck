@@ -66,7 +66,7 @@ internal static class ContainerRecursiveAclHistoryProbe
                 if(action=="quit") { Fields(input,"action"); await Emit(new{kind="done"}); return; }
                 var path=Text(input,"path"); Require(path is "work/recursive-tree" or "work/original.bin" or "work/history-missing");
                 var refusals=0;
-                async Task Reject(Func<Task> call,StatusCode status) { await Denied(call,status); refusals++; }
+                async Task Reject(Func<Task> call,StatusCode status) { Phase=action+"-refusal-"+(refusals+1).ToString(CultureInfo.InvariantCulture); await Denied(call,status); refusals++; }
                 if(action=="list")
                 {
                     Fields(input,"action","path","after","take","expectedVersion","boundaries");
@@ -101,7 +101,7 @@ internal static class ContainerRecursiveAclHistoryProbe
                         await Reject(async()=>await client.ListAsync(changed,Headers("List",changed),Until(),lifetime.Token),StatusCode.Aborted);
                     }
                     var authority=Headers("List",request);
-                    var page=await client.ListAsync(request,authority,Until(),lifetime.Token);
+                    Phase="list-value";var page=await client.ListAsync(request,authority,Until(),lifetime.Token);
                     Require(page.Location.Equals(request.Location) && page.HasComplete && page.HasScannedCount && page.HasInvalidCount &&
                         page.Entries.Count<=request.Take && page.ScannedCount<=200 && page.InvalidCount<=page.ScannedCount &&
                         Upper(page.Version) && (request.ExpectedVersion.Length==0 || page.Version==request.ExpectedVersion) && page.Complete==(page.NextAfter.Length==0));
@@ -136,7 +136,7 @@ internal static class ContainerRecursiveAclHistoryProbe
                         changed=request.Clone();changed.Take=request.Take==1?2U:1U;
                         await Reject(async()=>await client.ReadAsync(changed,Headers("Read",request),Until(),lifetime.Token),StatusCode.PermissionDenied);
                         changed=request.Clone();changed.ClearOffset();
-                        await Reject(async()=>await client.ReadAsync(changed,Headers("Read",request),Until(),lifetime.Token),StatusCode.PermissionDenied);
+                        await Reject(async()=>await client.ReadAsync(changed,Headers("Read",request),Until(),lifetime.Token),StatusCode.InvalidArgument);
                         changed=request.Clone();changed.ClearOffset();
                         await Reject(async()=>await client.ReadAsync(changed,Headers("Read",changed),Until(),lifetime.Token),StatusCode.InvalidArgument);
                         changed=request.Clone();changed.Take=0;
@@ -152,7 +152,7 @@ internal static class ContainerRecursiveAclHistoryProbe
                         foreach(var variant in new[]{"recursive-domain","single-history-domain"})
                             await Reject(async()=>await client.ReadAsync(request,Headers("Read",request,variant),Until(),lifetime.Token),StatusCode.PermissionDenied);
                     }
-                    var authority=Headers("Read",request);var snapshot=await client.ReadAsync(request,authority,Until(),lifetime.Token);
+                    var authority=Headers("Read",request);Phase="read-value";var snapshot=await client.ReadAsync(request,authority,Until(),lifetime.Token);
                     Require(snapshot.Location.Equals(request.Location) && snapshot.Summary is not null && snapshot.Summary.CaptureId==request.CaptureId && snapshot.Summary.HistoryDigest==request.ExpectedHistoryDigest);
                     Summary(snapshot.Summary!);
                     Require(snapshot.HasOffset && snapshot.Offset==request.Offset && snapshot.HasComplete && snapshot.Entries.Count>0 && snapshot.Entries.Count<=request.Take && snapshot.CalculateSize()<=128*1024);

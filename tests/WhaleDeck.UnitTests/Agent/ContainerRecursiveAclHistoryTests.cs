@@ -134,5 +134,11 @@ public sealed class ContainerRecursiveAclHistoryTests : IDisposable
         if(accepted){using var result=await task;Assert.Equal(size-8,result.RootElement.GetProperty("x").GetString()!.Length);}
         else Assert.Equal("FILES_OUTPUT_LIMIT",(await Assert.ThrowsAsync<InvalidOperationException>(()=>task)).Message);
     }
+    [Fact]public async Task MissingOffsetFailsRequestValidationBeforeBindingOrDriverAccess()
+    {
+        var request=Read();request.ClearOffset();
+        var error=await Assert.ThrowsAsync<ArgumentException>(()=>new ContainerRecursiveAclHistoryGrpcService(null!).Read(request,null!));
+        Assert.Equal("CONTAINER_RECURSIVE_ACL_HISTORY_REQUEST_INVALID",error.Message);
+    }
     public void Dispose(){File.Delete(_file);CryptographicOperations.ZeroMemory(_key);}
 }
