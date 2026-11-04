@@ -1,5 +1,7 @@
 # 当前完成比例与代码量估算
 
+2026-11-04补充：[Partial正常退出与不同管理员处置](qa/CONTAINER_RECURSIVE_ACL_PARTIAL_LOGOUT.md)已实机/独立签收本场景；启动失败及原截图边界保留，其他矩阵继续。整体粗估、59项/阶段完整签收计数与旧代码量快照保持。
+
 2026-11-04补充：[Partial取消及不同管理员处置整链](qa/CONTAINER_RECURSIVE_ACL_PARTIAL_REAL_UI.md)已实机签收本场景，原计数/修改和历史保留；其他故障/恢复/删除继续，整体粗估、59项完整签收/阶段统计与旧代码量快照保持。
 
 2026-11-04补充：[Worker新资源完整故障门禁](qa/CONTAINER_RECURSIVE_ACL_WORKER_RECHECK.md)已补齐，旧失败不改写；Partial观察器仅离线候选，真实部分写入及处置整链未签收。整体粗估、59项完整签收、阶段统计及旧代码量快照保持。
