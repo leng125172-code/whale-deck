@@ -41,3 +41,7 @@ Release探针构建0警告/0错误；143项既有原探针边界、20项历史�
 **后续：** 新建专属超过25份捕获的真实历史列表夹具，验证继续扫描/已读卡片分页；继续逐inode递归历史恢复写入、来源/撤权/依赖与Partial/Unknown故障、可恢复删除及长期清理、维护连续性和其余59项。不增加主任务完整完成数。
 
 [原常规整链及历史证据](CONTAINER_RECURSIVE_ACL_HISTORY_REAL_UI.md) · [当前目标](../GOAL_P0_P5.md)
+
+后续只读补强：`e8d8287`增加捕获前像与初始baseline的严格类型比较、实际已发布探针二进制SHA与发布目录清单的独立核验，以及拒绝替换初始状态的反例。冻结`8d38d0431b58ad95aa3b92db373805c306667d26`后，仅对同一证据执行`--recheck`，Result=success/ExecMainCode=1/ExecMainStatus=0；仍为原1笔捕获/原4次页面读取/原5审计，无新写入、登录或页面重放，不改写原d15b698的两个独立成功回执。补强后历史证据专项21项（新跨页10项）、143原边界和8范围，共172项通过。
+
+实机目录92份、构建/离线目录8份文件均已生成并逐项复核SHA256清单，探针保留原发布清单；三个QA unit均按准确Invocation归档后停止，源及临时身份已精确清理。项目图谱事件`whale-deck.container-acl.d15b698.recursive-history-paging`取得对应project/key/event成功回执、pending移至synced，阶段保持active。
