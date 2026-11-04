@@ -115,6 +115,15 @@ class RestoreActualTemporaryManifestProofTests(unittest.TestCase):
         request, result, before = self.k.seed(kind)
         return dict(request=request, result=result, before=before, metadata=json.loads(self.k.source_file(request).read_bytes()))
 
+    def test_source_path_mismatch_is_rejected_before_writable_parent_checks(self):
+        source = self.capture('access')
+        command = self.k.command(source['request'], source['result'])
+        command['path'] = 'tmp/recursive-readonly'
+        before = self.k.b.snapshot()
+        with self.assertRaisesRegex(self.k.b.base.r.Rejected, 'CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_NOT_FOUND'):
+            self.k.engine.plan(command, self.k.b.base.session)
+        self.assertEqual(before, self.k.b.snapshot())
+
     def test_actual_native_plan_manifest_source_and_heterogeneous_target_projections(self):
         for kind in ('access', 'default'):
             source = self.capture(kind); before = self.k.b.snapshot(); request = self.k.request(source['request'], source['result']); plan = request['plan']
