@@ -16,7 +16,7 @@ from recursive_acl_history_paging_proof import summary,verify_capture,inventory
 from recursive_acl_history_browser_proof import prove_pages,prove_audits
 from validate_container_recursive_acl_history_browser import audit_rows,acknowledge
 from validate_container_directory_restart import Worker,preflight
-from bound_container_recursive_acl_restore_cut import freeze_before_first_restore
+from bound_container_recursive_acl_restore_cut import freeze_before_first_restore,OBSERVER_WAIT_SECONDS
 
 SOURCES=('validate_recursive_acl_restore_prewrite.py','validate_recursive_acl_restore_prewrite.mjs','recursive_acl_restore_prewrite.py','recursive_acl_restore_prewrite_proof.py','bound_container_recursive_acl_restore_cut.py','verify_recursive_acl_restore_prewrite.py','test_recursive_acl_restore_prewrite_proof.py')
 
@@ -96,11 +96,16 @@ def exercise(process,evidence,b,row,m,root,reader,content,acl,storage,fixture):
         (evidence/'pending.sql.json').write_text(json.dumps(pending_sql))
         gate.PHASE='bound-pre-first-restore'
         with ThreadPoolExecutor(max_workers=1) as pool:
+            from threading import Event
+            armed=Event()
             events=[]
             def observe(value):
                 assert len(events)<64;events.append(value);(evidence/'boundary-observations.json').write_text(json.dumps(events))
-            watch=pool.submit(freeze_before_first_restore,r,b['source'],int(b['instanceId'].split(':')[0]),before,current,observe)
-            worker.start(wait_ready=False);held=watch.result(timeout=28)
+            watch=pool.submit(freeze_before_first_restore,r,b['source'],int(b['instanceId'].split(':')[0]),before,current,observe,armed)
+            # Thread readiness only; the helper does not exist before Worker starts.
+            # This is not a write barrier or a guarantee against a missed window.
+            assert armed.wait(timeout=5),'RESTORE_OBSERVER_NOT_ARMED'
+            worker.start(wait_ready=False);held=watch.result(timeout=OBSERVER_WAIT_SECONDS+3)
         assert held is not None,'REAL_RESTORE_PREWRITE_CUT_MISSED_NOT_COUNTED'
         cut=sql_snapshot(r['id']);assert cut['row']['state']=='Applying' and cut['row']['publish_barrier'] and cut['row']['root_started_at_utc']
         request=dict(operationId=r['execution_job_id'].replace('-',''),owner=r['owner_hash'],plan=held.record['plan'])

@@ -24,6 +24,7 @@ from verify_container_recursive_permissions import digest, unsigned
 
 CGROUP = Path('/sys/fs/cgroup/system.slice')
 TRANSPORT = b'/usr/local/libexec/whaledeck-container-recursive-acl-restore-transport.py'
+OBSERVER_WAIT_SECONDS = 120
 
 
 def record_for(row):
@@ -89,7 +90,7 @@ def invocation_proof(pid,unit):
     return dict(invocationId=values[0],mainPid=pid,exactCgroupAndInvocation=True)
 
 
-def freeze_before_first_restore(row, source, container_pid, original, inventory,observe=lambda value:None):
+def freeze_before_first_restore(row, source, container_pid, original, inventory,observe=lambda value:None,armed=None):
     assert os.geteuid() == 0 and re.fullmatch('[a-f0-9]{64}', row['container_id'])
     source = Path(source)
     assert source.parent == Path('/data/WhaleDeck/apps') and re.fullmatch('wdv-container-publish-[a-f0-9]{32}', source.name)
@@ -99,7 +100,9 @@ def freeze_before_first_restore(row, source, container_pid, original, inventory,
     root_identity = identity(Path(f'/proc/{container_pid}/root'))
     operation = row['execution_job_id'].replace('-', '')
     lock = STATE / (operation + '.lock'); descriptor = None; pid = group = None; paused=False; started=None
-    deadline = time.monotonic() + 25
+    began = time.monotonic();deadline = began + OBSERVER_WAIT_SECONDS;record=None;observed_state=None
+    observe(dict(stage='observer-armed',waitSeconds=OBSERVER_WAIT_SECONDS))
+    if armed is not None:armed.set()
     try:
         while time.monotonic() < deadline:
             if descriptor is None and lock.exists():
@@ -118,6 +121,8 @@ def freeze_before_first_restore(row, source, container_pid, original, inventory,
                     if descriptor is not None: break
             try: record = record_for(row)
             except FileNotFoundError: record = None
+            if record and record['state']!=observed_state:
+                observed_state=record['state'];observe(dict(stage='state-observed',state=observed_state,elapsedMs=round((time.monotonic()-began)*1000)))
             if record and record['state'] in ('Completed', 'Partial', 'Unknown', 'Aborted'):
                 observe(dict(stage='already-terminal',state=record['state'],startedThrough=record['startedThrough'],finishedThrough=record['finishedThrough']));return None
             if descriptor is not None and record and first_entry_boundary(record):
@@ -146,6 +151,7 @@ def freeze_before_first_restore(row, source, container_pid, original, inventory,
                     held = HeldCopy(pid, descriptor, group, frozen, proof); descriptor = None; return held
                 observe(dict(stage='missed-stopped-boundary'));return None
             time.sleep(.0005)
+        observe(dict(stage='wait-expired',elapsedMs=round((time.monotonic()-began)*1000),state=record['state'] if record else None))
         return None
     finally:
         if descriptor is not None:

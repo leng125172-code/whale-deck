@@ -81,7 +81,7 @@ try{
  phase='actual-confirmation';const confirming=page.waitForResponse(r=>new URL(r.url()).pathname===restoreEndpoint+'/'+ready.id+'/confirm'&&r.request().method()==='POST')
  await dialog.getByRole('button',{name:'确认递归ACL恢复',exact:true}).click();const response=await confirming;assert.equal(response.status(),202);const pending=await response.json();assert.equal(pending.state,'Pending');assert.ok(pending.executionJobId)
  await writeSignal(evidence,'pending-result.json',pending)
- assert.equal((await waitSignal(evidence,'action-verified.json',60000)).boundPrewrite,true)
+ assert.equal((await waitSignal(evidence,'action-verified.json',180000)).boundPrewrite,true)
  phase='actual-inflight';await dialog.getByRole('button',{name:'查询原递归ACL恢复任务',exact:true}).click();await expect(dialog.getByText('正在逐项恢复ACL',{exact:true})).toBeVisible({timeout:30000})
  await page.screenshot({path:join(evidence,'inflight.png')})
  phase='actual-cancel';await dialog.getByRole('button',{name:'请求取消递归ACL恢复',exact:true}).click();await page.getByRole('button',{name:'继续等待',exact:true}).click();assert.equal(counts.cancellations,0)

@@ -60,3 +60,14 @@
 2026-11-05继续复核：修正失败处理引用未导入subprocess的问题，单独验证测试浏览器terminate超时后仅回收QA自有Node子进程，避免NameError遮盖原失败；不向Root helper发送SIGKILL。21写前专项、2恢复范围、41关联工具及8范围共72测试通过，零跳过。首次命令误写Ready测试模块名导致ImportError，该次失败保留，改为现存test_recursive_acl_restore_ready_logout后整组通过。
 
 实机前只读检查：恢复9意图/6执行/活动0，来源54意图/49执行/103Job；其他活动Job、终端、宿主锁及上传/目录保护均0。运行eeb24dd和两宿主保持。下一次运行必须冻结新修订，使用全新26对象来源、临时身份和操作ID；结果依实际观察事件及完整物理/原件核验记录，未运行前不签通过。
+
+
+## 新资源73fa7bc复验：仍不签写前取消
+
+冻结73fa7bc，唯一unit whaledeck-qa-restore-prewrite-73fa7bc，Invocation 2bac098288524ca393074ba6d97995e0；全新26对象、来源与身份正常进入Vue Ready并确认Pending。准确helper已pidfd-bound，但25秒总观察结束时尚未取得Applying写前边界，原门禁Result=exit-code/ExecMainStatus=1。第一次排空观察在返回后117ms仍为Preparing，后续进入Applying并完整Completed。只能证明本批观察时限不足；不倒推首批ca251a8的精确错失原因。没有bound-helper、页面取消、原上下文正常退出或完整权限页面签收。
+
+修复后失败清理本次实际等待32个样本，19.225秒才取得SQL Succeeded、Root Completed和原操作锁空闲；26完成/26变更/0Unknown，无租约/发布保护，随后才清理临时身份与容器。原文件目录仍按未核验规则保留，未重发Apply或ACK。恢复累计10意图/7执行/活动0。失败证据位于私有deploy/artifacts/recursive-acl-restore-prewrite-cancel-2c40b80c1c444bb9973e223664f7e7d6。
+
+新候选将有界观察等待改120秒，浏览器握手180秒；Worker启动前等待观察线程完成范围检查并armed，日志新增阶段/到期时间。armed只证明线程就绪，不是helper或写入同步栅栏，不能保证永不漏窗；暂停后完整物理未变、精确pidfd/FD/Invocation和HDD要求全部保留。显式测试45秒Preparing后才终态仍可观察且不发信号，未通过放宽首写前条件取得通过。
+
+新增固定本次失败目录的只读核对与准确清理工具，不接受任意任务，不发Apply/ACK/SQL更新/进程信号。需证明原SQL与Job成功、26项Root/HDD/完整实体和旧保护保持后才清理；清理后重开108份来源与恢复原件，不宣称重读已删除源字节。22写前专项、2原恢复范围、2本次范围、41关联与8主范围共75测试通过，零跳过；仍须实际运行核对工具并保存结果。

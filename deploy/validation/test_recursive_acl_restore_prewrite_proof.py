@@ -18,6 +18,16 @@ def boundary():
     return dict(state='Applying',startedThrough=0,finishedThrough=-1,historyVerified=True,historyMayExist=True,historyDigest='A'*64,plan=dict(restoreSource=dict(changedAclType='access'),entryCount=26,changeCount=26,fileCount=25,directoryCount=1))
 
 class RestorePrewriteScopeTests(unittest.TestCase):
+    def test_observer_keeps_waiting_for_preparing_after_old_25_second_deadline(self):
+        from threading import Event
+        prefix='bound_container_recursive_acl_restore_cut.';folder=Path('/data/WhaleDeck/apps/wdv-container-publish-'+'a'*32)
+        row=dict(container_id='b'*64,instance_id='2:owned',execution_job_id='c'*32,plan_json='{}')
+        preparing=boundary();preparing['state']='Preparing';terminal=boundary();terminal['state']='Completed'
+        events=[];armed=Event()
+        with patch(prefix+'os.geteuid',return_value=0),patch(prefix+'Path.resolve',return_value=folder),patch(prefix+'Path.is_symlink',return_value=False),patch(prefix+'identity',return_value=(1,2)),patch(prefix+'managed_plan',return_value=dict(parentIdentity=[1,2])),patch(prefix+'Path.exists',return_value=False),patch(prefix+'record_for',side_effect=[preparing,terminal]),patch(prefix+'time.monotonic',side_effect=[0,0,0,45,45]),patch(prefix+'time.sleep'),patch(prefix+'signal.pidfd_send_signal',side_effect=AssertionError('must not signal')):
+            self.assertIsNone(freeze_before_first_restore(row,folder,2,{},lambda:{},events.append,armed))
+        self.assertTrue(armed.is_set());self.assertEqual(['observer-armed','state-observed','state-observed','already-terminal'],[e['stage'] for e in events]);self.assertEqual(45_000,events[2]['elapsedMs'])
+
     def test_browser_stop_reaps_owned_child_even_when_terminate_times_out(self):
         import subprocess
         from recursive_acl_restore_prewrite import stop_browser
