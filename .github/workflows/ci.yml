@@ -141,6 +141,8 @@ jobs:
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_inventory_proof.py
           node --check deploy/validation/validate_recursive_acl_history_inventory.mjs
           python3 -W error -m py_compile deploy/host/whaledeck-container-recursive-acl-restore.py deploy/host/whaledeck-container-recursive-acl-restore-transport.py deploy/validation/validate_recursive_acl_restore_kernel.py deploy/validation/verify_recursive_acl_restore_kernel.py deploy/validation/recover_recursive_acl_restore_kernel.py
+          python3 -W error -m py_compile deploy/validation/recursive_acl_restore_business_proof.py deploy/validation/test_recursive_acl_restore_business_proof.py
+          sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_business_proof.py
           node --check deploy/validation/validate_container_recursive_acl_browser.mjs
           python3 -W error -m py_compile deploy/validation/bound_container_acl_cut.py deploy/validation/validate_container_acl_faults.py deploy/validation/verify_container_acl_faults.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_acl_fault_probe_scope.py
