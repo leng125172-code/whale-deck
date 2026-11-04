@@ -129,6 +129,16 @@ class RecursiveAclPartialWorkflowScope(unittest.TestCase):
         helper=(ROOT/'recursive_acl_partial_unknown_proof.py').read_text()
         for forbidden in ('os.kill(', 'SIGKILL', 'rmtree(', 'docker rm', 'query('):self.assertNotIn(forbidden,helper)
 
+    def test_ack_and_logout_evidence_are_separate_and_no_failure_replays_ack(self):
+        text=(ROOT/'validate_container_recursive_acl_partial.mjs').read_text();helper=(ROOT/'installed_ui_logout.mjs').read_text()
+        self.assertIn("'recovery-before-logout.json'",text);self.assertIn('normalDualLogoutProved:false',text)
+        self.assertLess(text.index("'recovery-before-logout.json'"),text.index("phase='normal-visible-logout'",text.index("'recovery-before-logout.json'")))
+        for mark in ('controls-ready','menu-opened','bff-accepted','provider-observed','sessions-cleared','login-route'):
+            self.assertIn("mark('"+mark+"'",helper)
+        self.assertIn("phase:'failed',atStep:phase,failureType:error?.name,bffStatus,identityStatus",helper)
+        for secret in ('error.message','error.stack','response.headers()', 'cookies()', 'storageState('):self.assertNotIn(secret,helper)
+        self.assertNotIn('context.request.post',helper[helper.index('}catch(error)'):])
+
     def test_partial_revocation_preserves_the_real_result_and_denies_old_context(self):
         subject='11111111-1111-4111-8111-111111111111';p=phase();p['row'].update(actor_subject=subject,cancel_requested_at_utc=None);p['executionJob']['cancel_requested_at_utc']=None
         before=dict(pk=1,uuid=subject,username='whaledeck-upload-qa-'+'a'*12,is_active=True,groups=['admin'])

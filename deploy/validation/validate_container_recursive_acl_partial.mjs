@@ -8,6 +8,7 @@ import {logoutFromUserMenu} from './installed_ui_logout.mjs'
 
 let browser,page,context,directory,id,endpoint,phase='startup'
 const role=process.argv[3]
+const observeLogout=value=>writeSignal(directory,role+'-logout-'+value.phase+'.json',value)
 try{
   const packet=JSON.parse(await readFile('/dev/stdin','utf8')),f=packet.fixture,revision=process.argv[2],base='http://127.0.0.1:8080'
   assert.match(revision,/^[a-f0-9]{40}$/);assert.equal(f.revision,revision);assert.ok(['owner','recovery'].includes(role))
@@ -53,7 +54,7 @@ try{
       const cancel=dialog.getByRole('button',{name:'请求取消递归ACL修改',exact:true});await cancel.click();await page.getByRole('button',{name:'继续等待',exact:true}).click();assert.equal(cancellations,0)
       await cancel.click();await page.getByRole('button',{name:'确认请求取消',exact:true}).click()
     }else if(kind==='logout'||unknown){
-      phase='inflight-normal-visible-logout';await closePermissionDetails(page,dialog);logout=await logoutFromUserMenu(page,context,base);await writeSignal(directory,'owner-logout.json',logout)
+      phase='inflight-normal-visible-logout';await closePermissionDetails(page,dialog);logout=await logoutFromUserMenu(page,context,base,undefined,observeLogout);await writeSignal(directory,'owner-logout.json',logout)
       await expect(page.getByRole('region',{name:'容器递归ACL修改任务',exact:true})).toHaveCount(0)
       await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-hints-v1'))).toBe(null);hintsCleared=true
       await expect(page.getByRole('status',{name:'正在启动 WhaleDeck 协同平台',exact:true})).toHaveCount(0)
@@ -84,7 +85,7 @@ try{
     assert.equal(result.state,'Partial');assert.equal(result.receipt.state,'Partial');assert.equal(result.confirmation,null);assert.deepEqual(result.receipt,final.receipt)
     await counts(dialog,result.receipt);await page.screenshot({path:join(directory,'partial-counts.png')})
     await expect(dialog.getByRole('button',{name:'确认递归ACL修改',exact:true})).toHaveCount(0)
-    await closePermissionDetails(page,dialog);phase='normal-visible-logout';logout=await logoutFromUserMenu(page,context,base)
+    await closePermissionDetails(page,dialog);phase='normal-visible-logout';logout=await logoutFromUserMenu(page,context,base,undefined,observeLogout)
     }
     if(!revoked)assert.equal((await context.request.get(base+endpoint+'/'+id)).status(),401)
   }else{
@@ -100,7 +101,8 @@ try{
     await expect(dialog.getByRole('status')).toHaveText('已处置部分修改或未知历史结果并释放保护；不代表整树修改成功，不会续做或自动恢复ACL，不删除原对象。')
     await page.screenshot({path:join(directory,'acknowledged.png')});const response=await context.request.get(base+'/api/v1/files/container-recursive-acls/recovery/'+id);assert.equal(response.status(),200);assert.ok(response.headers()['cache-control']?.includes('no-store'));result=await response.json()
     assert.equal(result.state,'Acknowledged');const receiptFacts=r=>Object.fromEntries(Object.entries(r).filter(([k])=>!['replayed','bindingCurrent','historyAvailable'].includes(k)));assert.deepEqual(receiptFacts(result.receipt),receiptFacts(f.receipt))
-    await dialog.getByRole('button',{name:'关闭',exact:true}).click();phase='normal-visible-logout';logout=await logoutFromUserMenu(page,context,base)
+    await writeSignal(directory,'recovery-before-logout.json',{id,subject:profile.subject,result,actualUi:true,normalDualLogoutProved:false,registrations,confirmations,cancellations,acknowledgements,uploads,kind})
+    await dialog.getByRole('button',{name:'关闭',exact:true}).click();phase='normal-visible-logout';logout=await logoutFromUserMenu(page,context,base,undefined,observeLogout)
     assert.equal((await context.request.get(base+'/api/v1/files/container-recursive-acls/recovery/'+id)).status(),401)
   }
   assert.equal(registrations,role==='owner'?1:0);assert.equal(confirmations,role==='owner'?1:0);assert.equal(cancellations,role==='owner'&&kind==='cancel'?1:0);assert.equal(acknowledgements,role==='recovery'?1:0);assert.equal(uploads,0)
