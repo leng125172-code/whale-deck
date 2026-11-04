@@ -209,11 +209,12 @@ def wait_case(process, evidence, name):
     return json.loads(path.read_bytes())
 
 
-def main(history=False):
+def main(history=False,restore=False):
     global PHASE
     assert os.geteuid()==0 and len(sys.argv)>=2; os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
     selected=selected_cases(sys.argv[2:])
     assert not history or selected==CASES,'HISTORY_REQUIRES_FULL_NEW_OWNED_FIXTURE'
+    assert not restore or selected==CASES and not history,'RESTORE_REQUIRES_FULL_NEW_OWNED_FIXTURE'
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     repo = Path(__file__).resolve().parents[2]; base = 'http://127.0.0.1:8080'
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(), 'FREEZE_VALIDATION_SOURCE_FIRST'
@@ -222,6 +223,9 @@ def main(history=False):
     if history:
         from validate_container_recursive_acl_history_browser import SOURCES as history_sources
         seeds=(*SOURCES,*history_sources)
+    if restore:
+        from validate_container_recursive_acl_restore_browser import SOURCES as restore_sources
+        seeds=(*SOURCES,*restore_sources)
     hashes = source_closure(repo,validation_revision,seeds=seeds)
     assert all(hashlib.sha256((repo/'deploy/validation'/n).read_bytes()).hexdigest()==v for n,v in hashes.items())
     hosts=host_identity(revision)
@@ -230,6 +234,11 @@ def main(history=False):
         path=Path('/usr/local/libexec')/name;trusted(path)
         frozen=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name]);assert path.read_bytes()==frozen
         source_hashes[name]=hashlib.sha256(frozen).hexdigest()
+    if restore:
+        from validate_container_recursive_acl_restore_agent import HOST_NAMES
+        for name in HOST_NAMES:
+            path=Path('/usr/local/libexec')/name;trusted(path);frozen=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name]);assert path.read_bytes()==frozen;source_hashes[name]=hashlib.sha256(frozen).hexdigest()
+        assert query("SELECT count(*) FROM container_recursive_acl_restore_intents WHERE completed_at_utc IS NULL OR publish_barrier OR lease_token IS NOT NULL;")==0
     no_active_work(); active = query("SELECT json_build_object('n',count(*)) FROM container_recursive_acl_intents WHERE completed_at_utc IS NULL OR publish_barrier;"); assert active['n'] == 0
     before = owned.common.core_snapshot(); assert len(before) == 11
     evidence = repo/'deploy/artifacts'/('container-recursive-acl-browser-'+uuid.uuid4().hex); evidence.mkdir(mode=0o700)
@@ -255,6 +264,10 @@ def main(history=False):
                     acl.write_acl(fd,'access',access_files if kind=='File' else access_dirs)
                     if kind=='Directory':acl.write_acl(fd,'default',default)
                 finally:os.close(fd)
+        if restore:
+            fd=os.open(root/'one.bin',os.O_RDONLY|os.O_NOFOLLOW)
+            try:acl.write_acl(fd,'access',[{'tag':'user_obj','id':None,'permissions':6},{'tag':'user','id':0,'permissions':6},{'tag':'group_obj','id':None,'permissions':0},{'tag':'mask','id':None,'permissions':2},{'tag':'other','id':None,'permissions':0}])
+            finally:os.close(fd)
         for relative in PATHS: os.utime(root/relative, ns=(1700000000123456789,1700000000123456789))
         inspected = json.loads(owned.common.command(['docker','inspect',fixture['identifier']]))[0]
         original = inventory(root,reader,content,acl)
@@ -262,6 +275,16 @@ def main(history=False):
             'source':str(fixture['folder']),'root':str(root),'original':original,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'cases':list(selected),'seededFixtureOnly':selected!=CASES,'coreBefore':before,'hostIdentity':hosts,'sourceHashes':source_hashes,'evidence':str(evidence)}
         baseline['sourceVersion'] = version(baseline,'work/recursive-tree',original['']['identity'])
         if history:baseline['recursiveHistoryBrowser']=True
+        if restore:
+            baseline['recursiveRestoreBrowser']=True
+            from recursive_acl_restore_agent_io import installed,snapshot as private_snapshot,hdd_snapshot
+            from validate_container_recursive_acl_faults import preservation_snapshot
+            io=installed()
+            baseline['protectedBefore']=preservation_snapshot(io.storage)
+            baseline['sourceRootBefore']=private_snapshot(io.sourceState)
+            baseline['restoreRootBefore']=private_snapshot(io.restoreState)
+            baseline['restoreHddBefore']=hdd_snapshot(io,True)
+            baseline['directoryRootBefore']=private_snapshot(Path('/var/lib/whaledeck-container-directories'))
         with storage.target(create_namespace=False,read_only=True) as (configuration,base_fd):
             storage.attest(configuration,base_fd,read_only=True)
             baseline['sourceDevice'] = root.stat().st_dev; baseline['hddDevice'] = os.fstat(base_fd).st_dev
@@ -290,6 +313,10 @@ def main(history=False):
                         PHASE='actual-recursive-history-physical-and-audit-proof'
                         from validate_container_recursive_acl_history_browser import exercise
                         exercise(process,evidence,baseline,results,reader,storage,root,content,acl,current)
+                    if restore:
+                        PHASE='actual-recursive-restore-physical-sql-and-hdd-proof'
+                        from validate_container_recursive_acl_restore_browser import exercise
+                        current=exercise(process,evidence,baseline,results,reader,storage,root,content,acl,current)
                     assert process.wait(timeout=120) == 0, 'ACTUAL_RECURSIVE_BROWSER_FAILED'
                 finally:
                     if process.poll() is None:
@@ -300,6 +327,9 @@ def main(history=False):
             assert browser['completed'] == [p['result'] for p in results]
             assert browser['ordinary']['deniedGet']==4 and browser['ordinary']['deniedPost']==4 and browser['ordinary']['pagePrivateRequests']==0 and browser['ordinary']['logout']['normalUiLogout']
             assert browser['anonymousDenied']==4
+        if restore:
+            PHASE='independent-live-restore-proof-before-cleanup'
+            subprocess.run([sys.executable,str(repo/'deploy/validation/verify_container_recursive_acl_restore_browser.py'),evidence.name,'--live'],check=True)
         PHASE = 'proved-source-cleanup'; assert inventory(root,reader,content,acl) == current
         remove_proved(root,reader,content,current,acl)
     PHASE = 'independent-cleanup-preconditions'

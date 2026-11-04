@@ -6,6 +6,7 @@ import { chromium, expect } from '../../web/node_modules/@playwright/test/index.
 import { loginVisible, openPermissionFiles, closePermissionDetails, writeSignal, waitSignal } from './installed_ui_permission_session.mjs'
 import { logoutFromUserMenu } from './installed_ui_logout.mjs'
 import {runRecursiveHistoryBrowser,historyUrls,historyDenials} from './validate_container_recursive_acl_history_browser.mjs'
+import {runRecursiveRestoreBrowser,restoreUrls,restoreDenials,ordinaryRestorePosts} from './validate_container_recursive_acl_restore_browser.mjs'
 
 let phase='startup',browser,evidence,activePage
 const diagnosticStart=Date.now(),diagnostics=[]
@@ -161,13 +162,17 @@ try {
   assert.equal(registrations,cases.length);assert.equal(confirmations,cases.length-1); assert.equal(uploads, 0); assert.ok((await Promise.all(headerChecks)).every(Boolean))
   let recursiveHistory=null
   if(fixture.recursiveHistoryBrowser){phase='recursive-history';recursiveHistory=await runRecursiveHistoryBrowser(page,base,fixture,profile.subject,completed)}
+  let recursiveRestore=null
+  if(fixture.recursiveRestoreBrowser){phase='recursive-restore';recursiveRestore=await runRecursiveRestoreBrowser(page,context,base,fixture,profile.subject,completed,headers)}
   phase='visible-dual-logout';const adminLogout=await logoutFromUserMenu(page,context,base)
   await writeFile(join(evidence,'admin-logout.json'),JSON.stringify(adminLogout),{mode:0o600})
   const paths=[endpoint+'/'+completed[0].id,endpoint+'/by-key/'+crypto.randomUUID(),'/api/v1/files/container-recursive-acls/recovery','/api/v1/files/container-recursive-acls/recovery/'+completed[0].id]
   for(const path of paths)assert.equal((await context.request.get(base+path)).status(),401)
+  if(recursiveRestore)assert.deepEqual(await restoreDenials(context,restoreUrls(base,fixture,recursiveRestore)),[401,401,401,401])
   if(recursiveHistory)assert.deepEqual(await historyDenials(context,historyUrls(base,fixture,completed)),[401,401])
   phase='ordinary-visible-login';const ordinaryContext=await browser.newContext({viewport:{width:320,height:600},colorScheme:'dark',reducedMotion:'reduce'}),ordinaryPage=await ordinaryContext.newPage();activePage=ordinaryPage;ordinaryContext.setDefaultTimeout(20_000)
   const ordinaryProfile=await loginVisible(ordinaryPage,ordinaryContext,base,'/',false,credentials.ordinary)
+  let restorePagePrivateRequests=0;ordinaryPage.on('request',r=>{if(new URL(r.url()).pathname.includes('recursive-acl-restores'))restorePagePrivateRequests++})
   let pagePrivateRequests=0;ordinaryPage.on('request',r=>{if(new URL(r.url()).pathname.includes('recursive-acls'))pagePrivateRequests++})
   await ordinaryPage.goto(base+'/files');await expect(ordinaryPage).toHaveURL(base+'/forbidden');assert.equal(pagePrivateRequests,0)
   await ordinaryPage.screenshot({path:join(evidence,'ordinary-denied.png')})
@@ -175,6 +180,9 @@ try {
   const ordinaryCsrf=await(await ordinaryContext.request.get(base+'/api/v1/auth/csrf')).json(),ordinaryHeaders={Origin:base,[ordinaryCsrf.headerName]:ordinaryCsrf.token,'Idempotency-Key':completed[0].id}
   for(const path of [endpoint,endpoint+'/'+completed[0].id+'/confirm',endpoint+'/'+completed[0].id+'/cancel','/api/v1/files/container-recursive-acls/recovery/'+completed[0].id+'/acknowledge'])assert.equal((await ordinaryContext.request.post(base+path,{headers:ordinaryHeaders,data:path===endpoint?forbidden:{version:completed[0].version,confirmed:true,planHash:'not-authority'}})).status(),403)
   await writeFile(join(evidence,'ordinary-denials.json'),JSON.stringify({subject:ordinaryProfile.subject,deniedGet:4,deniedPost:4,pagePrivateRequests}),{mode:0o600})
+  const restoreDenied=recursiveRestore?await restoreDenials(ordinaryContext,restoreUrls(base,fixture,recursiveRestore)):null
+  const restorePostDenied=recursiveRestore?await ordinaryRestorePosts(ordinaryContext,base,fixture,recursiveRestore,ordinaryHeaders):null
+  if(recursiveRestore){assert.deepEqual(restoreDenied,[403,403,403,403]);assert.deepEqual(restorePostDenied,[403,403,403,403]);assert.equal(restorePagePrivateRequests,0)}
   const historyDenied=recursiveHistory?await historyDenials(ordinaryContext,historyUrls(base,fixture,completed)):null
   if(historyDenied)assert.deepEqual(historyDenied,[403,403])
   await ordinaryPage.getByRole('button',{name:'首页',exact:true}).click();await expect(ordinaryPage).toHaveURL(base+'/')
@@ -187,8 +195,14 @@ try {
     await writeSignal(evidence,'history-ordinary-result.json',historyOrdinary)
     assert.equal((await waitSignal(evidence,'history-ordinary-verified.json')).ordinaryAndAnonymousDenied,true)
   }
+  let restoreOrdinary=null
+  if(recursiveRestore){
+    const anonymous=await restoreDenials(ordinaryContext,restoreUrls(base,fixture,recursiveRestore));assert.deepEqual(anonymous,[401,401,401,401])
+    restoreOrdinary={subject:ordinaryProfile.subject,deniedGet:restoreDenied,deniedPost:restorePostDenied,anonymous,uiRestoreRequests:restorePagePrivateRequests,normalDualLogout:ordinaryLogout}
+    await writeSignal(evidence,'restore-ordinary-result.json',restoreOrdinary);assert.equal((await waitSignal(evidence,'restore-ordinary-verified.json')).ordinaryAndAnonymousDenied,true)
+  }
   const ordinary={subject:ordinaryProfile.subject,deniedGet:4,deniedPost:4,pagePrivateRequests,logout:ordinaryLogout};await ordinaryContext.close()
-  await writeFile(join(evidence,'browser.json'),JSON.stringify({revision,containerId:fixture.containerId,subject:profile.subject,completed,registrations,confirmations,registrationRetries:cases.length,confirmationRetries:cases.length-1,contentUploads:uploads,actualUi:true,normalDualLogout:true,logout:adminLogout,ordinary,anonymousDenied:4,...(recursiveHistory?{recursiveHistory,historyOrdinary}:{})}),{mode:0o600})
+  await writeFile(join(evidence,'browser.json'),JSON.stringify({revision,containerId:fixture.containerId,subject:profile.subject,completed,registrations,confirmations,registrationRetries:cases.length,confirmationRetries:cases.length-1,contentUploads:uploads,actualUi:true,normalDualLogout:true,logout:adminLogout,ordinary,anonymousDenied:4,...(recursiveHistory?{recursiveHistory,historyOrdinary}:{}),...(recursiveRestore?{recursiveRestore,restoreOrdinary}:{})}),{mode:0o600})
   await context.close(); await browser.close(); browser = undefined
   console.log(JSON.stringify({ recursiveAclBrowser: 'passed', actualUi:true,cases:cases.length }))
 } catch (error) {
