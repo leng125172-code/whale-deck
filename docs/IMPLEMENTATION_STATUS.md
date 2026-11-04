@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 2026-11-04 递归ACL历史只读协议候选2b30e09完成：独立1.54能力/全请求签名List-Read、SDK/Agent/有界128KiB受限传输与安装配置，逐项异质前像/标量presence/UTF8顺序/完整计划计数与分页绑定，旧64KiB保持。Release零警告错误、4744单元/569集成通过（7默认原生跳过），93新协议SDK专项、138递归/71历史root工具（重叠）/26历史小组及8范围/CLI5通过；测试提供者含夹具，不算安装RPC/业务/UI或恢复。只读核对591保护文件与永久30意图28执行58Job保持，11核心healthy/宿主及b880208保持/活动0，新模块未安装；保留CA1806、apphost默认.NET路径失败及GitHub500事实。继续原生探针/安装态签名读取、管理员业务页面/逐inode恢复、删除及其余59项，不升完整完成率。[协议候选与验收边界](qa/CONTAINER_RECURSIVE_ACL_HISTORY_RPC.md)。
+
 - 2026-11-04 递归ACL历史读取底层候选实盘通过：1e974b0冻结14native模块，新隔离容器真实3Completed/1Partial捕获，完整HDD前像含未开始项；5页扫描49聚合/0无效、仅本CID/path4份，16逐项页与独立进程重开真实ContainerRoot/HDD均通过。异质ACL/ID0/default清除/完整字节属性及候选Root/HDD保持，准确清理，未安装/未RPC/业务/UI或真实恢复。首轮重复offset/take工具TypeError及只读补核、一次占位SHA启动拒绝均保留，不重做旧捕获。13核心+1工具新专项、126递归/59历史工具（重叠）root零跳过/8范围；旧557/574文件保持，安装态Root不变、HDD新增34元数据/共591保护文件，11核心healthy/宿主及b880208保持/活动0、永久30意图28执行58Job保持。继续专属协议SDK/安装读取、逐inode恢复/删除及其余59项，不升完整完成率。[候选、实盘和失败边界](qa/CONTAINER_RECURSIVE_ACL_HISTORY_ENGINE.md)。
 
 - 2026-11-04 递归ACL Unknown跨容器目录延期/释放真实整链及独立通过：冻结8666da0/Invocation5e56fb5cca614fed881b4384d18cdefb准确退出0。另一容器真实Vue计划/登记，四次自然延期版本2/4/6/8且原Unknown/完整源/Root保持、目标与目录Root缺席；不同管理员明确ACK后6.001秒，同一目录ID开始并Succeeded、原绑定/计划保持，实际inode/1000:1000/0750/Root及真实页面可见/退出401与精确清理通过。前两总失败保留：missed cut实际4/4只读核验不计跨写入；短暂claim租约误判修正，原Unknown UI处置/旧等待任务正常管理员HTTP取消至Canceled/Root Aborted，单独独立恢复不补签原总门禁。112工具root零跳过/8范围、7真PNG，11核心healthy/宿主及b880208保持/活动0，557配置ACL保护文件及47目录Root，30递归意图9S/5C/1E/3F/12A、28执行/58Job。仍需其他矩阵、递归恢复/删除及其余59项，不升完整完成率。[实机、失败与边界](qa/CONTAINER_RECURSIVE_ACL_CROSS_DIRECTORY.md)。
