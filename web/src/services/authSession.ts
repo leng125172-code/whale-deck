@@ -15,6 +15,10 @@ import {
   clearRecursiveOwnershipHints,
   reconcileRecursiveOwnershipHints,
 } from '@/services/containerRecursiveOwnershipHints'
+import {
+  clearRecursiveAclHints,
+  reconcileRecursiveAclHints,
+} from '@/services/containerRecursiveAclHints'
 import { clearMoveHints, reconcileMoveHints } from '@/services/containerMoveHints'
 import type { CurrentUser } from '@/services/contracts'
 import {
@@ -54,6 +58,7 @@ function expireSession() {
   clearAclHints()
   clearRecursivePermissionHints()
   clearRecursiveOwnershipHints()
+  clearRecursiveAclHints()
   clearMoveHints()
   if (import.meta.env.DEV) sessionStorage.removeItem(previewStorageKey)
   if (hadIdentity) expiredAction?.()
@@ -137,6 +142,7 @@ async function loadAuthSession() {
       reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
       reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
       reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
+      reconcileRecursiveAclHints(user.value?.subject, user.value?.isAdministrator === true)
       reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
       initialized.value = true
     }
@@ -180,6 +186,7 @@ async function logout() {
   clearAclHints()
   clearRecursivePermissionHints()
   clearRecursiveOwnershipHints()
+  clearRecursiveAclHints()
   clearMoveHints()
   if (import.meta.env.DEV) {
     generation++
@@ -213,6 +220,7 @@ async function refresh() {
     reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
+    reconcileRecursiveAclHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
   } catch (reason) {
     if (current === generation) {

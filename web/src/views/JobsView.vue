@@ -23,10 +23,23 @@ const aclTask = computed(
     !!selected.value &&
     ['containers.files.acl', 'containers.files.acl-plan'].includes(selected.value.jobType),
 )
+const recursiveAclTask = computed(
+  () =>
+    !!selected.value &&
+    ['containers.files.recursive-acl', 'containers.files.recursive-acl-plan'].includes(
+      selected.value.jobType,
+    ),
+)
 const canCancel = computed(
   () =>
     selected.value &&
     !terminalStates.has(selected.value.state) &&
+    !(
+      recursiveAclTask.value &&
+      ['AwaitingContainerRecursiveAclResolution', 'AwaitingContainerRecursiveAclReceipt'].includes(
+        selected.value.phase,
+      )
+    ) &&
     !(
       aclTask.value &&
       (selected.value.phase === 'AwaitingContainerAclReceipt' ||
@@ -49,6 +62,7 @@ const canRetry = computed(
     selected.value &&
     !byteUpload.value &&
     !aclTask.value &&
+    !recursiveAclTask.value &&
     ['Failed', 'Canceled', 'RolledBack'].includes(selected.value.state),
 )
 interface RetryContext {
@@ -325,6 +339,13 @@ onBeforeUnmount(() => {
             >
           </el-descriptions-item>
         </el-descriptions>
+        <el-alert
+          v-if="recursiveAclTask"
+          title="递归ACL只能基于当前目录树生成专属预检并明确确认，原任务不会通用重试；部分修改或未知结果须在文件页核对原任务、实际计数和HDD历史。"
+          type="info"
+          :closable="false"
+        />
+        <el-link v-if="recursiveAclTask" href="/files">前往文件页核对原递归ACL任务</el-link>
         <el-alert
           v-if="aclTask"
           title="重新修改 ACL 请回到容器文件，基于当前对象版本生成新预检；未知结果请在文件页面的容器 ACL 恢复入口核对并明确处置。原任务不会自动重复执行。"
