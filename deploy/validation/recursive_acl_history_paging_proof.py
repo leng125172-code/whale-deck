@@ -54,6 +54,7 @@ def summary(row,metadata):
         sourceInstanceId=c['instanceId'],changedAclType='access',manifestDigest=plan['manifestDigest'],entryCount=26,fileCount=25,directoryCount=1,changeCount=26)
 
 def verify_capture(evidence,b,row,storage,archive=False):
+    typed_equal(row['before'],b['original'])
     request=row['request'];operation=request['operationId'];plan=request['plan'];result=row['result'];before=row['before'];after=row['after']
     assert request['owner']=='B'*64 and before.keys()==after.keys()==PATHS.keys()
     assert [plan[k] for k in ('entryCount','fileCount','directoryCount','changeCount')]==[26,25,1,26]

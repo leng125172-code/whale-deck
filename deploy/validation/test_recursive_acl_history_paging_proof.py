@@ -8,7 +8,7 @@ import tempfile
 import types
 import unittest
 
-from recursive_acl_history_paging_proof import FILES,ORDER,PATHS,content,inventory,remove_proved,summary,prove_page
+from recursive_acl_history_paging_proof import FILES,ORDER,PATHS,content,inventory,remove_proved,summary,prove_page,verify_capture
 from recursive_acl_history_browser_proof import location,endpoint
 from validate_recursive_acl_history_paging import wait_case,SOURCES
 from validate_container_recursive_acl_agent import Probe
@@ -28,6 +28,10 @@ def fixture(index=0):
     return b,row,metadata,copy.deepcopy(dict(index=index,subject='real-subject',snapshot=snapshot,request=request,screenshot=f'paging-{index}.png'))
 
 class RecursiveAclHistoryPagingProofTests(unittest.TestCase):
+    def test_capture_cannot_substitute_initial_state_before_any_filesystem_access(self):
+        b=dict(original={'one':{'mode':0o640}})
+        for replacement in ({'one':{'mode':0o600}},{'other':{'mode':0o640}},{'one':{'mode':False}}):
+            with self.subTest(replacement=replacement),self.assertRaises(AssertionError):verify_capture(None,b,dict(before=replacement),None)
     def test_actual_twenty_five_plus_root_shape_next_back_next(self):
         self.assertEqual(25,len(FILES));self.assertEqual(26,len(ORDER));self.assertEqual('',ORDER[-1]);self.assertEqual('末项.bin',ORDER[-2]);self.assertEqual(26,len(set(ORDER)))
         for index in range(4):

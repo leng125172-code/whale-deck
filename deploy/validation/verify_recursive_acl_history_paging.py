@@ -32,6 +32,11 @@ def verify(name,live=False):
     for name,sha in b['validationSourceSha256'].items():assert hashlib.sha256(subprocess.check_output(['git','-C',str(repo),'show',b['validationSourceRevision']+':deploy/validation/'+name])).hexdigest()==sha
     assert set(b['probeSourceSha256'])==set(PROBE_SOURCES)
     for name,sha in b['probeSourceSha256'].items():assert hashlib.sha256(subprocess.check_output(['git','-C',str(repo),'show',b['probeRevision']+':'+name])).hexdigest()==sha
+    published=private_json(repo/'deploy/artifacts'/('recursive-acl-history-paging-probe-'+b['probeRevision'][:7])/'published-probe.json')
+    binary=Path(published['binary']);assert binary.parent.parent==repo/'deploy/artifacts' and re.fullmatch(r'terminal-probe\.[A-Za-z0-9]+',binary.parent.name) and binary.name=='TerminalProbe'
+    trusted(binary);trusted(binary.parent,True)
+    assert published['probeRevision']==b['probeRevision'][:7] and hashlib.sha256(binary.read_bytes()).hexdigest()==published['binarySha256']==b['probeBinarySha256']
+    subprocess.run(['sha256sum','--quiet','-c','SHA256SUMS'],cwd=binary.parent,check=True,capture_output=True,timeout=30)
     for name,sha in b['sourceHashes'].items():
         raw=subprocess.check_output(['git','-C',str(repo),'show',b['revision']+':deploy/host/'+name]);assert hashlib.sha256(raw).hexdigest()==sha and (Path('/usr/local/libexec')/name).read_bytes()==raw
     transcript=[json.loads(line) for line in (evidence/'rpc.jsonl').read_bytes().splitlines()];assert [r['kind'] for r in transcript]==['ready','plan','receipt','done']
@@ -77,8 +82,15 @@ def verify(name,live=False):
 
 if __name__=='__main__':
     try:
-        assert os.geteuid()==0 and (len(sys.argv)==2 or len(sys.argv)==3 and sys.argv[2]=='--live');os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
-        live=len(sys.argv)==3;v=verify(sys.argv[1],live);path=Path(__file__).resolve().parents[2]/'deploy/artifacts'/sys.argv[1]/('live-independent.json' if live else 'final-independent.json')
+        assert os.geteuid()==0 and (len(sys.argv)==2 or len(sys.argv)==3 and sys.argv[2] in ('--live','--recheck'));os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
+        live=sys.argv[2:]==['--live'];recheck=sys.argv[2:]==['--recheck'];repo=Path(__file__).resolve().parents[2]
+        if recheck:
+            assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_RECHECK_FIRST'
+            revision=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()
+            frozen=source_closure(repo,revision,seeds=SOURCES);assert all(hashlib.sha256((repo/'deploy/validation'/name).read_bytes()).hexdigest()==sha for name,sha in frozen.items())
+        v=verify(sys.argv[1],live)
+        if recheck:v.update(recheckOnly=True,verifierSourceRevision=revision,verifierSourceSha256=frozen)
+        path=repo/'deploy/artifacts'/sys.argv[1]/('recheck-independent.json' if recheck else 'live-independent.json' if live else 'final-independent.json')
         with path.open('x') as stream:json.dump(v,stream)
         print(json.dumps(dict(actualRecursiveHistoryPagingIndependent='passed',**v)))
     except BaseException as error:
