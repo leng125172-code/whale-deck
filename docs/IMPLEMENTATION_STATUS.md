@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 2026-11-05 递归ACL恢复原生探针/独立证明候选ae79e86完成：固定UDS/自有scope、先1.55能力后读key并清零、预置22/23拒绝；独立来源/frame/当前树/异构目标及子权限/父拓扑投影，含自洽重算摘要负测。13新专项/156关联Linux-root零跳过、探针Release/标准冻结自包含构建及8范围通过；实机仅4提前拒绝（含旧minor54能力拒绝）及旧ACL ready-quit，11核心/两宿主390889d保持，未安装/未捕获/未调用新恢复RPC/无业务UI。首轮属性夹具与转义问题保留，readonly来源/错误版本预期按实码顺序修正。继续完整安装态gate/child-HDD-outcome-transcript核验、准确CI及标准安装，再永久业务/共享保护/Worker/API/Vue、故障与删除和59项，不升完整完成率。[工具、实际边界及剩余](qa/CONTAINER_RECURSIVE_ACL_RESTORE_PROBE.md)。
+
 - 2026-11-05 递归ACL历史恢复签名协议候选e066ec1完成：独立1.55能力/四RPC、完整请求与来源十字段/frame九字段presence/异构目标摘要绑定、SDK反向校验及固定受限stdin/安装配置，旧1.53 ACL与1.54只读历史门槛保持。Release零警告错误，4892 Unit（142新）/612 Integration通过（7默认原生跳过）、531 Linux-root（10新传输）/0跳过、12宿主配置及8范围通过；源读取竞态分类修正，首次sln路径/测试content引用及diff空行问题保留。没有安装或新增工作站RPC/真实身份UI/永久恢复业务证据，不把前序内核实盘转签本批；本批未执行发布、修改身份或真实文件。继续原生探针/准确CI、标准安装与真实签名恢复/HDD独立核验，再持久化/共享保护/Worker/API/Vue及故障矩阵、删除和59项，不升完整完成率。[协议、验证及边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_RPC.md)。
 
 - 2026-11-05 递归ACL历史恢复底层候选已实现：372aca8/4c943b4独立域、按路径/kind恢复原修改类型、source摘要/文件九字段/当前树与目标投影封存、当前前像先留存及逐项来源围栏，Partial/Unknown与迟到不续做。521 Linux-root（15新）/0跳过及8范围通过；真实自有容器/HDD2来源+7恢复场景（3完成/2Partial/2Aborted，含两次候选SIGKILL）实际结果保留。原整轮因独立工具误用child.history.load失败，e15d5bc修正后仅只读物理/HDD核验与准确清理、清理后独立核验通过，不重放、不补签原成功。原1394保护保持/普通快照1404、恢复域22JSON+6锁另封存，11核心/两宿主390889d/目录Root94/38意图35执行73Job/活动0保持，无安装/RPC/持久化/真实UI。保留初始夹具引用、ENOENT预期和umask077回归4失败修正日志；124证据SHA通过。继续专用协议/安装、业务与恢复页面、剩余故障/删除及59项，不升完整完成率。[实现、实盘分项与失败边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_KERNEL.md)。
