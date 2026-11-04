@@ -23,6 +23,16 @@ def selected_case(arguments):
     return 'logout' if arguments else 'cancel'
 
 
+def create_tree(root,content):
+    root.mkdir(mode=0o750);(root/'sub').mkdir(mode=0o700)
+    owners={'':(2100,3100),'one.bin':(2200,3200),'sub':(2101,3101),'sub/中文.bin':(2201,3201)}
+    for relative,entry_kind in PATHS.items():
+        path=root/relative
+        if entry_kind=='File':path.write_bytes(content)
+        os.setxattr(path,'user.whaledeck-recursive',b'preserve ordinary attribute');os.chown(path,*owners[relative]);path.chmod(0o750 if relative=='' else 0o700 if entry_kind=='Directory' else 0o640 if relative=='one.bin' else 0o600)
+    for relative in PATHS:os.utime(root/relative,ns=(1700000000123456789,1700000000123456789))
+
+
 def wait_state(identifier,state):
     deadline=time.monotonic()+100
     while True:
@@ -66,14 +76,9 @@ def main():
     (evidence/'scope.json').write_text(json.dumps(scope));worker=Worker();owner_process=recovery_process=held=None;proved=False
     with owned.fixture(restartable_core=('whaledeck-worker',)) as fixture,ExitStack() as users:
         owner=users.enter_context(temporary_user(True));recovery=users.enter_context(temporary_user(True))
-        root=fixture['folder']/'recursive-tree';root.mkdir(mode=0o750);(root/'sub').mkdir(mode=0o700)
+        root=fixture['folder']/'recursive-tree'
         content=hashlib.shake_256(('recursive-acl-partial:'+fixture['identifier']).encode()).digest(2*1024**2+7)
-        owners={'':(2100,3100),'one.bin':(2200,3200),'sub':(2101,3101),'sub/中文.bin':(2201,3201)}
-        for relative,kind in PATHS.items():
-            path=root/relative
-            if kind=='File':path.write_bytes(content)
-            os.setxattr(path,'user.whaledeck-recursive',b'preserve ordinary attribute');os.chown(path,*owners[relative]);path.chmod(0o750 if relative=='' else 0o700 if kind=='Directory' else 0o640 if relative=='one.bin' else 0o600)
-        for relative in PATHS:os.utime(root/relative,ns=(1700000000123456789,1700000000123456789))
+        create_tree(root,content)
         observed=json.loads(command('docker','inspect',fixture['identifier']))[0];current=lambda:inventory(root,reader,content,acl);original=current()
         baseline=dict(revision=revision,validationSourceRevision=source,containerId=fixture['identifier'],containerName=observed['Name'].lstrip('/'),containerPid=observed['State']['Pid'],instanceId=str(observed['State']['Pid'])+':'+observed['State']['StartedAt'],source=str(fixture['folder']),original=original,evidence=str(evidence),bytesPerFile=len(content),sha256=hashlib.sha256(content).hexdigest().upper(),kind=kind)
         with storage.target(create_namespace=False,read_only=True) as (configuration,fd):storage.attest(configuration,fd,read_only=True);baseline.update(sourceDevice=root.stat().st_dev,hddDevice=os.fstat(fd).st_dev)

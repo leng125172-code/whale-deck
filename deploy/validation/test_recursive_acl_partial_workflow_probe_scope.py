@@ -3,7 +3,7 @@ import ast,copy,json
 from pathlib import Path
 import unittest
 from recursive_acl_partial_proof import require_phase,require_ack,require_case
-from validate_container_recursive_acl_partial import selected_case
+from validate_container_recursive_acl_partial import selected_case,create_tree
 from verify_container_recursive_acl_partial import target
 
 ROOT=Path(__file__).resolve().parent
@@ -25,6 +25,19 @@ def acknowledgement(before):
 
 
 class RecursiveAclPartialWorkflowScope(unittest.TestCase):
+    def test_owned_tree_build_does_not_overwrite_logout_scenario(self):
+        import tempfile,stat
+        from unittest.mock import patch
+        scenario=selected_case(['logout'])
+        with tempfile.TemporaryDirectory() as directory,patch('validate_container_recursive_acl_partial.os.chown') as chown:
+            root=Path(directory)/'recursive-tree';create_tree(root,b'fixed test bytes')
+            self.assertEqual('logout',scenario);self.assertEqual(4,chown.call_count)
+            self.assertEqual(b'fixed test bytes',(root/'sub/中文.bin').read_bytes());self.assertEqual(0o600,stat.S_IMODE((root/'sub/中文.bin').stat().st_mode))
+            self.assertEqual(0o640,stat.S_IMODE((root/'one.bin').stat().st_mode));self.assertEqual(0o750,stat.S_IMODE(root.stat().st_mode))
+            text=(ROOT/'validate_container_recursive_acl_partial.py').read_text();main=next(n for n in ast.parse(text).body if isinstance(n,ast.FunctionDef) and n.name=='main')
+            for node in ast.walk(main):
+                if isinstance(node,ast.For):self.assertNotIn('kind',{n.id for n in ast.walk(node.target) if isinstance(n,ast.Name)})
+
     def test_scenario_selection_cannot_accidentally_repeat_cancel_or_revoke(self):
         self.assertEqual('cancel',selected_case([]));self.assertEqual('logout',selected_case(['logout']))
         for values in (['cancel'],['logout','cancel'],['group-removal'],['--all']):
