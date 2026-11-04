@@ -1,5 +1,7 @@
 # 递归 ACL 内部业务编排候选
 
+后续进展：224f57c已补真实Repository/迁移/共享fence及Worker注册，并通过真实隔离PG门禁，见[持久化分项验收与生产未升级边界](CONTAINER_RECURSIVE_ACL_PERSISTENCE.md)。以下未持久化措辞保留为本批当时事实，不倒填本页测试或真人整链证据。
+
 2026-11-04，内部编排源码`0168d5b48e5696a4ed89444dc3a8f369630c2cce`，输入快照边界补强`4b01148c6d9f4bef5fb437500f481d66e99c2bea`。上批[安装态签名RPC/HDD](CONTAINER_RECURSIVE_ACL_AGENT.md)已通过，本批没有重放真实操作、发布或重启服务。**本批仅实现内部业务与持久化接口契约；真实仓储、迁移、共享路径互斥、Worker/DI、公开API/Vue和真实身份整链尚未接通，59项主任务及阶段不升完成。**
 
 ## 已实现的内部行为
