@@ -79,3 +79,6 @@
 
 
 收尾检查：75项工具/范围测试通过，随后更新元数据后8范围再通过；5份Python AST、Node语法、CI YAML、diff均通过，变更MD的732本地链接缺失0。11核心healthy、活动Job/终端/宿主锁及上传/目录保护均0，临时QA身份缺席，Git索引仍1000:1000/664。项目图谱事件whale-deck.container-acl.73fa7bc.prewrite-drain-reconcile取得project/key/event匹配、duplicate=false回执，pending已移入synced，阶段保持active。新候选远端CI终态尚未核实，不称全绿。
+
+
+后续独立新资源f219b18已通过执行中首项写前取消真实整链，详见[新批真实签收](CONTAINER_RECURSIVE_ACL_RESTORE_PREWRITE_REAL_UI.md)。上述两批失败和各自封存结论不改变，不回放旧执行。
