@@ -31,7 +31,7 @@ def verify(name):
     trusted(evidence,True)
     b=private_json(evidence/'baseline.json');accepted=private_json(evidence/'verified.json');browser=private_json(evidence/'browser.json');proofs=private_json(evidence/'results.json')
     assert accepted['revision']==browser['revision']==b['revision'] and re.fullmatch('[a-f0-9]{40}',b['revision'])
-    labels=b['cases'];assert labels in (list(CASES),list(CASES[5:]));count=len(labels)
+    labels=b['cases'];assert labels in (list(CASES),list(CASES[5:]),['cancel']);count=len(labels)
     assert accepted['cases']==len(proofs)==len(browser['completed'])==count and accepted['succeeded']==count-1 and accepted['canceledBeforeExecution']==1
     assert accepted['actualBrowserAndIdentity'] and browser['actualUi'] and browser['normalDualLogout'] and browser['logout']['normalUiLogout']
     assert browser['registrations']==browser['registrationRetries']==count and browser['confirmations']==browser['confirmationRetries']==count-1 and browser['contentUploads']==0

@@ -6,7 +6,21 @@ import { chromium, expect } from '../../web/node_modules/@playwright/test/index.
 import { loginVisible, openPermissionFiles, closePermissionDetails, writeSignal, waitSignal } from './installed_ui_permission_session.mjs'
 import { logoutFromUserMenu } from './installed_ui_logout.mjs'
 
-let phase = 'startup', browser, evidence, activePage
+let phase='startup',browser,evidence,activePage
+const diagnosticStart=Date.now(),diagnostics=[]
+function diagnostic(value){if(diagnostics.length<256)diagnostics.push({elapsedMs:Date.now()-diagnosticStart,phase,...value})}
+async function reference(label){
+  let value=null
+  try{
+    const raw=await activePage.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-hints-v1'))
+    if(raw){value=JSON.parse(raw);assert.ok(Array.isArray(value)&&value.length<=4)
+      for(const v of value){assert.deepEqual(Object.keys(v).sort(),['containerId','id','key','subject']);assert.ok(typeof v.subject==='string'&&v.subject.length<=256);assert.match(v.containerId,/^[a-f0-9]{64}$/);assert.match(v.key,/^[a-f0-9-]{36}$/);assert.ok(v.id===null||/^[a-f0-9-]{36}$/.test(v.id))}
+    }
+  }catch{value={invalidOrUnavailable:true}}
+  diagnostic({type:'reference',label,path:new URL(activePage.url()).pathname,value})
+  await writeFile(join(evidence,'reference-observations.json'),JSON.stringify(diagnostics),{mode:0o600})
+  return value
+}
 process.once('SIGTERM', () => { void (async () => { if (browser) await browser.close().catch(() => {}); process.exit(143) })() })
 try {
   const revision=process.argv[2], packet=JSON.parse(await readFile('/dev/stdin','utf8')), fixture=packet.fixture, credentials=packet.credentials
@@ -18,6 +32,8 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 800 }, colorScheme: 'light', reducedMotion: 'reduce' })
   context.setDefaultTimeout(20_000)
   const page = await context.newPage(); activePage = page
+  page.on('response',r=>{if(new URL(r.url()).pathname==='/api/v1/auth/me')diagnostic({type:'identity-response',status:r.status()})})
+  page.on('requestfailed',r=>{if(new URL(r.url()).pathname==='/api/v1/auth/me'){const code=r.failure()?.errorText;diagnostic({type:'identity-request-failed',code:/^[A-Z0-9_:.-]{1,80}$/i.test(code??'')?code:'NETWORK_ERROR'})}})
   assert.equal((await (await context.request.get(base + '/api/v1/system/status')).json()).build.sourceRevision, revision)
   phase = 'normal-visible-authentik-login'; const profile = await loginVisible(page, context, base, '/containers', true, credentials.admin)
   const endpoint = `/api/v1/containers/${fixture.containerId}/files/recursive-acls`
@@ -67,7 +83,7 @@ try {
   }
   let index=0
   for (const item of cases) {
-    phase=item.name;await page.setViewportSize({width:index%2?320:1440,height:600});await page.emulateMedia({colorScheme:index%2?'dark':'light'});index++
+    phase=item.name;await page.setViewportSize({width:item.cancel?320:index%2?320:1440,height:600});await page.emulateMedia({colorScheme:item.cancel?'dark':index%2?'dark':'light'});index++
     const files = await openPermissionFiles(page, fixture)
     await files.getByRole('button', { name: '递归ACL recursive-tree', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '递归修改容器目录ACL', exact: true })
@@ -88,7 +104,10 @@ try {
     assert.deepEqual([ready.rootUid, ready.rootGid, ready.executorUid, ready.executorGid], [...fixture.original[''].identity.slice(3,5), 1000, 1000])
     const duplicate = await context.request.post(base + endpoint, { headers: { ...headers, 'Idempotency-Key': key }, data: body })
     assert.equal(duplicate.status(), 202); assert.equal((await duplicate.json()).id, registered.id)
-    await page.reload(); await expect(page).toHaveURL(base + '/containers'); await openPermissionFiles(page, fixture)
+    const expectedReference={subject:profile.subject,containerId:fixture.containerId,key,id:ready.id}
+    const stored=await reference('before-reload');assert.ok(Array.isArray(stored));assert.deepEqual(stored.find(v=>v.containerId===fixture.containerId),expectedReference)
+    await page.reload();await reference('after-reload');await expect(page).toHaveURL(base+'/containers');await openPermissionFiles(page,fixture)
+    const restored=await reference('after-files-open');assert.ok(Array.isArray(restored));assert.deepEqual(restored.find(v=>v.containerId===fixture.containerId),expectedReference)
     await page.getByRole('button', { name: '查看递归ACL修改任务', exact: true }).click()
     await expect(dialog.getByText('预检已完成，尚未修改ACL', { exact: true })).toBeVisible({ timeout: 30_000 })
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true)
@@ -130,6 +149,7 @@ try {
       await expect(facts).toContainText('已验证留存');await expect(facts).toContainText(/HDD元数据\s*可用/)
     }
     await page.screenshot({path:join(evidence,item.name+'-result.png')})
+    await reference('after-result')
     assert.equal(result.confirmation, null); completed.push({ name: item.name, ...result })
     // The next mode change is forbidden until a separate parent reads physical bytes/metadata and SQL/Root/HDD.
     await writeSignal(evidence, item.name + '-result.json', { subject: profile.subject, result: completed.at(-1) })
@@ -158,8 +178,8 @@ try {
 } catch (error) {
   const frame = error?.stack?.split('\n').find(line => line.includes('validate_container_recursive_acl_browser.mjs:'))?.trim()
   if(activePage&&evidence&&!phase.includes('login')&&!phase.includes('logout')){
-    const hint=await activePage.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-hints-v1')).catch(()=>null)
-    await writeFile(join(evidence,'failed-reference.json'),JSON.stringify({phase,path:new URL(activePage.url()).pathname,hint}),{mode:0o600}).catch(()=>{})
+    await reference('failure').catch(()=>{})
+
   }
   if (activePage && evidence && phase!=='startup'&&!phase.includes('login')&&!phase.includes('logout')) await activePage.screenshot({ path: join(evidence, 'failed-product-page.png') }).catch(() => {})
   console.error(JSON.stringify({ recursiveAclBrowser: 'failed', phase, failureType: error?.name, frame }))

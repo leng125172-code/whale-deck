@@ -43,6 +43,12 @@ def expected_targets(index):
     return files,directories
 
 
+def selected_cases(arguments):
+    values=tuple(arguments)
+    assert values in ((),('--remaining-defaults',),('--cancel-only',)),'UNKNOWN_REAL_GATE_SELECTION'
+    return CASES[-1:] if values==('--cancel-only',) else CASES[5:] if values else CASES
+
+
 def no_active_work():
     result=previous_idle()
     extra=query("SELECT json_build_object('recursiveAcl',(SELECT count(*) FROM container_recursive_acl_intents WHERE completed_at_utc IS NULL OR publish_barrier OR lease_token IS NOT NULL));")
@@ -205,8 +211,8 @@ def wait_case(process, evidence, name):
 
 def main():
     global PHASE
-    assert os.geteuid()==0 and (len(sys.argv)==2 or len(sys.argv)==3 and sys.argv[2]=='--remaining-defaults'); os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
-    selected=CASES[5:] if len(sys.argv)==3 else CASES
+    assert os.geteuid()==0 and len(sys.argv)>=2; os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
+    selected=selected_cases(sys.argv[2:])
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     repo = Path(__file__).resolve().parents[2]; base = 'http://127.0.0.1:8080'
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(), 'FREEZE_VALIDATION_SOURCE_FIRST'

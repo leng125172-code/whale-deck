@@ -7,7 +7,7 @@ import copy
 from pathlib import Path
 import tempfile
 import unittest
-from validate_container_recursive_acl_browser import managed_entries,managed_plan,snapshot,archive,wait_case,CASES,CHANGES,expected_targets
+from validate_container_recursive_acl_browser import managed_entries,managed_plan,snapshot,archive,wait_case,CASES,CHANGES,expected_targets,selected_cases
 from verify_container_recursive_acl_browser import verify
 from recover_container_recursive_acl_browser import recover
 
@@ -21,6 +21,13 @@ def plan(kind='access'):
         ParentIdentity=dict(Device=18446744073709551615,Inode=33),TargetProof='B'*64,ParentVersion='C'*64,OwnerUid=1000,OwnerGid=1000,Fingerprint='D'*64,ManifestDigest='E'*64,EntryCount=4,FileCount=2,DirectoryCount=2,ChangeCount=2)
 
 class RecursiveAclBrowserProbeScopeTests(unittest.TestCase):
+    def test_cancel_only_is_bounded_and_cannot_repeat_prior_write_cases(self):
+        self.assertEqual(('cancel',),selected_cases(['--cancel-only']))
+        self.assertEqual(CASES[5:],selected_cases(['--remaining-defaults']))
+        self.assertEqual(CASES,selected_cases([]))
+        for arguments in (['--cancel-only','--confirm'],['--access'],['../escape'],['--cancel-only;echo']):
+            with self.subTest(arguments=arguments),self.assertRaises(AssertionError):selected_cases(arguments)
+
     def test_plan_preserves_full_mode_64bit_identity_zero_entries_and_separate_targets(self):
         source=plan();out=managed_plan(source)
         self.assertEqual({'schemaVersion','command','targetProof','parentIdentity','parentVersion','uid','gid','fingerprint','rootIdentity','manifestDigest','entryCount','fileCount','directoryCount','changeCount'},set(out))
@@ -94,6 +101,11 @@ class RecursiveAclBrowserProbeScopeTests(unittest.TestCase):
         for required in ('loginVisible','logoutFromUserMenu','await waitSignal(evidence, item.name + \'-verified.json\')',):
             self.assertIn(required,s)
         self.assertIn('recursiveAclBrowser',s);self.assertNotIn('recursiveOwnershipBrowser',s)
+        for point in ('before-reload','after-reload','after-files-open','identity-response','identity-request-failed'):
+            self.assertIn(point,s)
+        self.assertIn('Object.keys(v).sort()',s);self.assertNotIn('request.allHeaders()).',s)
+        self.assertNotIn('url:activePage.url()',s)
+        self.assertNotIn('storageState()',s)
         self.assertEqual(8,len(CASES));self.assertEqual((2,4,0,2,4,0,2,4),CHANGES)
 
 if __name__=='__main__':unittest.main()
