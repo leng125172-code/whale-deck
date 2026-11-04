@@ -117,6 +117,13 @@ class RecursiveAclRestoreTests(unittest.TestCase):
         with self.no_write():reply=self.engine.inspect(request,self.b.base.session)
         self.assertEqual('Partial',reply['state']);self.assertTrue(reply['historyAvailable'])
 
+    def test_target_disappearing_after_write_is_unknown_and_late_apply_does_not_resume(self):
+        source,result,_=self.seed();request=self.request(source,result)
+        self.engine.checkpoint=lambda phase,index:(self.b.tree/'one.bin').rename(self.b.tree/'renamed.bin') if phase=='AfterEntry' and index==0 else None
+        with self.assertRaises((OSError,self.b.base.r.Rejected)):self.engine.apply(request,self.b.base.session)
+        with self.no_write():reply=self.engine.inspect(request,self.b.base.session);late=self.engine.apply(request,self.b.base.session)
+        self.assertEqual(('Unknown',4),(reply['state'],reply['unknownCount']));self.assertEqual('Unknown',late['state']);self.assertTrue(reply['historyAvailable'])
+
     def test_extra_or_wrong_kind_target_tree_fails_before_restore_capture(self):
         source,result,_=self.seed();extra=self.b.tree/'extra';extra.write_bytes(b'extra')
         with self.assertRaises(self.b.base.r.Rejected):self.engine.plan(self.command(source,result),self.b.base.session)
