@@ -26,7 +26,7 @@ from validate_container_acl_browser import no_active_work as previous_idle
 from validate_container_recursive_acl_agent import STATE,host_identity
 from validate_container_recursive_acl import PATHS,NAMES,inventory,preserved,remove_proved
 from verify_container_recursive_acl import digest,unsigned,acl_mode,file_version
-from verify_container_recursive_acl_agent import expected_targets
+from verify_container_recursive_acl_agent import expected_targets as native_targets
 from validate_metric_continuity import query
 from acl_source_apply_missing_proof import source_closure
 from validate_container_recursive_ownership_browser import read_metadata,version
@@ -35,6 +35,12 @@ PHASE='startup'
 CASES=('default','access','noop','mask','root','default-noop','clear-default','cancel')
 CHANGES=(2,4,0,2,4,0,2,4)
 SOURCES=('validate_container_recursive_acl_browser.py','validate_container_recursive_acl_browser.mjs','verify_container_recursive_acl_browser.py','test_recursive_acl_browser_probe_scope.py')
+
+
+def expected_targets(index):
+    files,directories=native_targets(index)
+    if index==4:next(e for e in files if e['tag']=='mask')['permissions']=6
+    return files,directories
 
 
 def no_active_work():
@@ -199,7 +205,8 @@ def wait_case(process, evidence, name):
 
 def main():
     global PHASE
-    assert os.geteuid() == 0 and len(sys.argv) == 2; os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
+    assert os.geteuid()==0 and (len(sys.argv)==2 or len(sys.argv)==3 and sys.argv[2]=='--remaining-defaults'); os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
+    selected=CASES[5:] if len(sys.argv)==3 else CASES
     revision = sys.argv[1]; assert re.fullmatch('[a-f0-9]{40}', revision)
     repo = Path(__file__).resolve().parents[2]; base = 'http://127.0.0.1:8080'
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(), 'FREEZE_VALIDATION_SOURCE_FIRST'
@@ -229,11 +236,19 @@ def main():
             if kind == 'File': path.write_bytes(content)
             os.setxattr(path,'user.whaledeck-recursive',b'preserve ordinary attribute')
             os.chown(path,*owners[relative]); path.chmod(0o750 if relative=='' else 0o700 if kind=='Directory' else 0o640 if relative=='one.bin' else 0o600)
+        if selected==CASES[5:]:
+            access_files,access_dirs=expected_targets(4);default=expected_targets(0)[1]
+            for relative,kind in PATHS.items():
+                fd=os.open(root/relative,os.O_RDONLY|os.O_NOFOLLOW)
+                try:
+                    acl.write_acl(fd,'access',access_files if kind=='File' else access_dirs)
+                    if kind=='Directory':acl.write_acl(fd,'default',default)
+                finally:os.close(fd)
         for relative in PATHS: os.utime(root/relative, ns=(1700000000123456789,1700000000123456789))
         inspected = json.loads(owned.common.command(['docker','inspect',fixture['identifier']]))[0]
         original = inventory(root,reader,content,acl)
         baseline = {'revision':revision,'validationSourceRevision':validation_revision,'validationSourceSha256':hashes,'containerId':fixture['identifier'],'containerName':inspected['Name'].lstrip('/'),'instanceId':str(inspected['State']['Pid'])+':'+inspected['State']['StartedAt'],
-            'source':str(fixture['folder']),'root':str(root),'original':original,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'coreBefore':before,'hostIdentity':hosts,'sourceHashes':source_hashes,'evidence':str(evidence)}
+            'source':str(fixture['folder']),'root':str(root),'original':original,'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),'cases':list(selected),'seededFixtureOnly':selected!=CASES,'coreBefore':before,'hostIdentity':hosts,'sourceHashes':source_hashes,'evidence':str(evidence)}
         baseline['sourceVersion'] = version(baseline,'work/recursive-tree',original['']['identity'])
         with storage.target(create_namespace=False,read_only=True) as (configuration,base_fd):
             storage.attest(configuration,base_fd,read_only=True)
@@ -247,7 +262,7 @@ def main():
                 process = subprocess.Popen(['node',str(repo/'deploy/validation/validate_container_recursive_acl_browser.mjs'),revision],stdin=subprocess.PIPE,stdout=out,stderr=err,env=environment,text=True)
                 try:
                     process.stdin.write(json.dumps({'fixture':baseline,'credentials':{'admin':dict(zip(('username','password'),admin)),'ordinary':dict(zip(('username','password'),ordinary))}}));process.stdin.close()
-                    for name in CASES:
+                    for name in selected:
                         PHASE = 'actual-ui-physical-proof-'+name
                         signal = wait_case(process,evidence,name); result = signal['result']; assert result['name'] == name and result['confirmation'] is None
                         after = inventory(root,reader,content,acl)
@@ -265,7 +280,7 @@ def main():
                         process.terminate()
                         try: process.wait(timeout=15)
                         except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=10)
-            browser = json.loads((evidence/'browser.json').read_bytes()); assert browser['normalDualLogout'] and browser['registrations'] == 8 and browser['confirmations'] == 7 and browser['contentUploads'] == 0
+            browser = json.loads((evidence/'browser.json').read_bytes()); assert browser['normalDualLogout'] and browser['registrations']==len(selected) and browser['confirmations']==len(selected)-1 and browser['contentUploads'] == 0
             assert browser['completed'] == [p['result'] for p in results]
             assert browser['ordinary']['deniedGet']==4 and browser['ordinary']['deniedPost']==4 and browser['ordinary']['pagePrivateRequests']==0 and browser['ordinary']['logout']['normalUiLogout']
             assert browser['anonymousDenied']==4
@@ -275,9 +290,9 @@ def main():
     assert owned.common.core_snapshot() == before and not fixture['folder'].exists() and host_identity(revision)==hosts
     no_active_work(); active = query("SELECT json_build_object('n',count(*)) FROM container_recursive_acl_intents WHERE completed_at_utc IS NULL OR publish_barrier OR lease_token IS NOT NULL;"); assert active['n'] == 0
     units = subprocess.check_output(['systemctl','list-units','--all','--no-legend','whaledeck-container-recursive-acl-*'],text=True,timeout=15); assert not units.strip()
-    verified = {'revision':revision,'actualBrowserAndIdentity':True,'cases':8,'succeeded':7,'canceledBeforeExecution':1,'aggregateHddRecords':7,'childHddRecords':28,'perCasePhysicalBytesAndMetadata':True,'ordinaryDenied':8,'anonymousDenied':4,'normalDualLogout':True,'exactSourceAndContainerAbsent':True,'coreUnchanged':11,'permanentHistoryRetained':True}
+    verified = {'revision':revision,'actualBrowserAndIdentity':True,'cases':len(selected),'caseLabels':list(selected),'succeeded':len(selected)-1,'canceledBeforeExecution':1,'aggregateHddRecords':len(selected)-1,'childHddRecords':4*(len(selected)-1),'perCasePhysicalBytesAndMetadata':True,'ordinaryDenied':8,'anonymousDenied':4,'normalDualLogout':True,'exactSourceAndContainerAbsent':True,'coreUnchanged':11,'permanentHistoryRetained':True}
     (evidence/'verified.json').write_text(json.dumps(verified))
-    print(json.dumps({'actualRecursiveAclBrowser':'passed','evidence':str(evidence),'cases':8}),flush=True)
+    print(json.dumps({'actualRecursiveAclBrowser':'passed','evidence':str(evidence),'cases':len(selected)}),flush=True)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only proof and exact cleanup of the first failed default case only.
+"""Read-only proof and exact cleanup of the proved prefix of a failed normal case batch.
 
 Never recreates its container, repeats any ACL request or upgrades the failed
 whole gate to Passed. Original context logout was not proved and stays unproved.
@@ -26,7 +26,8 @@ def recover(name):
     repo=Path(__file__).resolve().parents[2];evidence=repo/'deploy/artifacts'/name
     info=evidence.lstat();assert evidence.resolve(strict=True)==evidence and info.st_uid==0 and stat.S_IMODE(info.st_mode)==0o700
     assert not (evidence/'verified.json').exists() and not (evidence/'recovered-first-default.json').exists() and not (evidence/'browser.json').exists()
-    assert sorted(p.name for p in evidence.glob('*-result.json'))==['default-result.json']
+    labels=('default','access','noop','mask','root') if (evidence/'root-result.json').exists() else ('default',)
+    assert {p.name for p in evidence.glob('*-result.json')}=={label+'-result.json' for label in labels}
     b=private_json(evidence/'baseline.json');signal=private_json(evidence/'default-result.json');assert signal['result']['name']=='default' and signal['result']['state']=='Succeeded'
     assert b['validationSourceSha256']==source_closure(repo,b['validationSourceRevision'],seeds=SOURCES)
     no_active_work();assert common.core_snapshot()=={k:tuple(v) for k,v in b['coreBefore'].items()}
@@ -40,15 +41,21 @@ def recover(name):
     content=hashlib.shake_256(('recursive-browser:'+b['containerId']).encode()).digest(b['bytesPerFile']);assert hashlib.sha256(content).hexdigest().upper()==b['sha256']
     after=inventory(root,reader,content,acl)
     out=evidence/('preserved-default-readback-'+uuid.uuid4().hex);out.mkdir(mode=0o700)
-    proof=verify_case(signal['result'],b,signal['subject'],out,reader,storage,b['original'],after,acl)
-    (out/'physical-readback.json').write_text(json.dumps(proof))
+    proofs=[];previous=b['original']
+    for label in labels:
+        signal=private_json(evidence/(label+'-result.json'))
+        observed=after if label==labels[-1] else private_json(evidence/(label+'-physical-after.json'))
+        proof=verify_case(signal['result'],b,signal['subject'],out,reader,storage,previous,observed,acl);proofs.append(proof);previous=observed
+        if (evidence/(label+'-physical-before.json')).exists():assert private_json(evidence/(label+'-physical-before.json'))==proof['before']
+    assert previous==after
+    (out/'physical-readback.json').write_text(json.dumps(proofs))
     leaf=source/'original.bin';info=leaf.lstat();identity=common.fingerprint(leaf);expected=hashlib.shake_256(('owned-container-original:'+source.name).encode()).digest(common.SIZE)
     assert stat.S_ISREG(info.st_mode) and info.st_nlink==1 and (info.st_uid,info.st_gid,stat.S_IMODE(info.st_mode))==(1000,1000,0o640) and leaf.read_bytes()==expected
     remove_proved(root,reader,content,after,acl)
     assert common.fingerprint(leaf)==identity and leaf.read_bytes()==expected and {p.name for p in source.iterdir()}=={'original.bin'}
     leaf.unlink();assert not list(source.iterdir()) and (source.stat().st_dev,source.stat().st_ino)==(parent.st_dev,parent.st_ino);source.rmdir()
     no_active_work();assert common.core_snapshot()=={k:tuple(v) for k,v in b['coreBefore'].items()}
-    result=dict(revision=b['revision'],originalWholeGatePassed=False,firstDefaultCasePhysicallyAndHistoryVerified=True,aggregateHddRecords=1,childHddRecords=4,noRepeatedFileMutation=True,originalNormalDualLogoutAccepted=False,originalFailurePreserved=True,exactSourceAndContainerAbsent=True,coreUnchanged=11,readbackDirectory=out.name)
+    result=dict(revision=b['revision'],originalWholeGatePassed=False,firstDefaultCasePhysicallyAndHistoryVerified=True,recoveredLabels=list(labels),aggregateHddRecords=len(labels),childHddRecords=4*len(labels),noRepeatedFileMutation=True,originalNormalDualLogoutAccepted=False,originalFailurePreserved=True,exactSourceAndContainerAbsent=True,coreUnchanged=11,readbackDirectory=out.name)
     (evidence/'recovered-first-default.json').write_text(json.dumps(result));return result
 
 if __name__=='__main__':

@@ -31,9 +31,10 @@ def verify(name):
     trusted(evidence,True)
     b=private_json(evidence/'baseline.json');accepted=private_json(evidence/'verified.json');browser=private_json(evidence/'browser.json');proofs=private_json(evidence/'results.json')
     assert accepted['revision']==browser['revision']==b['revision'] and re.fullmatch('[a-f0-9]{40}',b['revision'])
-    assert accepted['cases']==len(proofs)==len(browser['completed'])==8 and accepted['succeeded']==7 and accepted['canceledBeforeExecution']==1
+    labels=b['cases'];assert labels in (list(CASES),list(CASES[5:]));count=len(labels)
+    assert accepted['cases']==len(proofs)==len(browser['completed'])==count and accepted['succeeded']==count-1 and accepted['canceledBeforeExecution']==1
     assert accepted['actualBrowserAndIdentity'] and browser['actualUi'] and browser['normalDualLogout'] and browser['logout']['normalUiLogout']
-    assert browser['registrations']==browser['registrationRetries']==8 and browser['confirmations']==browser['confirmationRetries']==7 and browser['contentUploads']==0
+    assert browser['registrations']==browser['registrationRetries']==count and browser['confirmations']==browser['confirmationRetries']==count-1 and browser['contentUploads']==0
     assert browser['subject']!=browser['ordinary']['subject'] and browser['ordinary']['deniedGet']==browser['ordinary']['deniedPost']==4
     assert browser['ordinary']['pagePrivateRequests']==0 and browser['ordinary']['logout']['normalUiLogout'] and browser['anonymousDenied']==4
     for logout in (browser['logout'],browser['ordinary']['logout']):
@@ -52,15 +53,16 @@ def verify(name):
     acl=load('/usr/local/libexec/whaledeck-container-acl.py','recursive_acl_ui_second_acl')
     previous=b['original'];children=0;aggregates=0
     for index,proof in enumerate(proofs):
-        item=browser['completed'][index];assert item==proof['result'] and item['name']==CASES[index] and proof['before']==previous
+        item=browser['completed'][index];assert item==proof['result'] and item['name']==labels[index] and proof['before']==previous
         assert private_json(evidence/(item['name']+'-result.json'))=={'subject':browser['subject'],'result':item}
         assert private_json(evidence/(item['name']+'-verified.json'))=={'id':item['id'],'physicalAndHistoryVerified':True}
         actual=verify_case(item,b,browser['subject'],evidence,reader,storage,proof['before'],proof['after'],acl,read_only=True)
         assert actual==proof;children+=actual['children'];aggregates+=item['name']!='cancel';previous=proof['after']
-    assert children==accepted['childHddRecords']==28 and aggregates==accepted['aggregateHddRecords']==7
+    assert children==accepted['childHddRecords']==4*(count-1) and aggregates==accepted['aggregateHddRecords']==count-1
     assert previous==private_json(evidence/'physical-final.json')
-    images=list(evidence.glob('*.png'));assert len(images)==30 and len(list(evidence.glob('*-targets.png')))==13
-    assert len(list(evidence.glob('*-ready.png')))==8 and len(list(evidence.glob('*-result.png')))==8 and (evidence/'ordinary-denied.png').exists()
+    target_shots=sum(1 if label in ('default','default-noop','clear-default') else 2 for label in labels)
+    images=list(evidence.glob('*.png'));assert len(images)==2*count+target_shots+1 and len(list(evidence.glob('*-targets.png')))==target_shots
+    assert len(list(evidence.glob('*-ready.png')))==count and len(list(evidence.glob('*-result.png')))==count and (evidence/'ordinary-denied.png').exists()
     for image in images:
         data=image.read_bytes();assert len(data)>1000 and data[:8]==b'\x89PNG\r\n\x1a\n'
         width,height=struct.unpack('>II',data[16:24]);assert height==600 and width in (320,1440)
@@ -74,7 +76,7 @@ def verify(name):
         assert response.status_code==200 and not response.json().get('pagination',{}).get('next')
         assert not any(str(u['username']).startswith('whaledeck-upload-qa-') for u in response.json()['results'])
     finally:api.close()
-    return dict(revision=b['revision'],independentReadOnlyVerifier=True,cases=8,aggregateHddRecords=7,childHddRecords=28,temporaryIdentitiesAbsent=True,exactSourceAndContainerAbsent=True,coreUnchanged=11,physicalBytesCheckedByParentPerCase=True,sourceBytesRereadAfterCleanup=False,normalDualLogoutFromOriginalContexts=True)
+    return dict(revision=b['revision'],independentReadOnlyVerifier=True,cases=count,caseLabels=labels,aggregateHddRecords=count-1,childHddRecords=4*(count-1),temporaryIdentitiesAbsent=True,exactSourceAndContainerAbsent=True,coreUnchanged=11,physicalBytesCheckedByParentPerCase=True,sourceBytesRereadAfterCleanup=False,normalDualLogoutFromOriginalContexts=True)
 
 
 if __name__=='__main__':

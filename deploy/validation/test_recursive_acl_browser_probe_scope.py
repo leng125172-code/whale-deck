@@ -7,7 +7,7 @@ import copy
 from pathlib import Path
 import tempfile
 import unittest
-from validate_container_recursive_acl_browser import managed_entries,managed_plan,snapshot,archive,wait_case,CASES,CHANGES
+from validate_container_recursive_acl_browser import managed_entries,managed_plan,snapshot,archive,wait_case,CASES,CHANGES,expected_targets
 from verify_container_recursive_acl_browser import verify
 from recover_container_recursive_acl_browser import recover
 
@@ -29,6 +29,12 @@ class RecursiveAclBrowserProbeScopeTests(unittest.TestCase):
         self.assertEqual(1700000000123456789,out['rootIdentity'][7]);self.assertEqual(1700000000987654321,out['rootIdentity'][8])
         self.assertEqual({'tag':'user','id':0,'permissions':0},out['command']['fileEntries'][1]);self.assertIsNot(out['command']['fileEntries'],out['command']['directoryEntries'])
         source['Command']['FileEntries'][1]['Permissions']=7;self.assertEqual(0,out['command']['fileEntries'][1]['permissions'])
+
+    def test_browser_root_target_preserves_its_explicit_mask_six_and_named_zero(self):
+        files,dirs=expected_targets(4)
+        self.assertEqual(6,next(e['permissions'] for e in files if e['tag']=='mask'))
+        self.assertEqual(7,next(e['permissions'] for e in dirs if e['tag']=='mask'))
+        self.assertEqual({'tag':'user','id':0,'permissions':0},files[1])
 
     def test_default_null_and_explicit_clear_cannot_default_access_targets(self):
         source=plan('default');source['Command']['DirectoryEntries']=[];out=managed_plan(source)

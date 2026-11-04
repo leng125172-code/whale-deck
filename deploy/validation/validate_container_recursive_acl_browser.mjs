@@ -41,12 +41,13 @@ try {
     if (request.method() === 'PUT' && path.includes('/files/')) uploads++
   })
   async function query(id){const r=await context.request.get(base+endpoint+'/'+id);assert.equal(r.status(),200);assert.ok(r.headers()['cache-control']?.includes('no-store'));return r.json()}
-  const cases=[
+  const allCases=[
     {name:'default',kind:'default',changes:2},{name:'access',changes:4},{name:'noop',changes:0},
     {name:'mask',changes:2,mask:6},{name:'root',changes:4,mask:6,id:0,permission:0},
     {name:'default-noop',kind:'default',changes:0},{name:'clear-default',kind:'default',clear:true,changes:2},
     {name:'cancel',mask:6,changes:4,cancel:true},
   ]
+  const cases=allCases.filter(item=>fixture.cases.includes(item.name));assert.deepEqual(cases.map(item=>item.name),fixture.cases)
   const bits=['---','--x','-w-','-wx','r--','r-x','rw-','rwx']
   async function select(region,label,value){
     const control=region.getByRole('combobox',{name:label,exact:true});await control.scrollIntoViewIfNeeded();await control.press('ArrowDown')
@@ -136,7 +137,7 @@ try {
 
     await closePermissionDetails(page, dialog)
   }
-  assert.equal(registrations, 8); assert.equal(confirmations, 7); assert.equal(uploads, 0); assert.ok((await Promise.all(headerChecks)).every(Boolean))
+  assert.equal(registrations,cases.length);assert.equal(confirmations,cases.length-1); assert.equal(uploads, 0); assert.ok((await Promise.all(headerChecks)).every(Boolean))
   phase='visible-dual-logout';const adminLogout=await logoutFromUserMenu(page,context,base)
   const paths=[endpoint+'/'+completed[0].id,endpoint+'/by-key/'+crypto.randomUUID(),'/api/v1/files/container-recursive-acls/recovery','/api/v1/files/container-recursive-acls/recovery/'+completed[0].id]
   for(const path of paths)assert.equal((await context.request.get(base+path)).status(),401)
@@ -151,9 +152,9 @@ try {
   phase='ordinary-visible-dual-logout';const ordinaryLogout=await logoutFromUserMenu(ordinaryPage,ordinaryContext,base)
   for(const path of paths)assert.equal((await ordinaryContext.request.get(base+path)).status(),401)
   const ordinary={subject:ordinaryProfile.subject,deniedGet:4,deniedPost:4,pagePrivateRequests,logout:ordinaryLogout};await ordinaryContext.close()
-  await writeFile(join(evidence,'browser.json'),JSON.stringify({revision,containerId:fixture.containerId,subject:profile.subject,completed,registrations,confirmations,registrationRetries:8,confirmationRetries:7,contentUploads:uploads,actualUi:true,normalDualLogout:true,logout:adminLogout,ordinary,anonymousDenied:4}),{mode:0o600})
+  await writeFile(join(evidence,'browser.json'),JSON.stringify({revision,containerId:fixture.containerId,subject:profile.subject,completed,registrations,confirmations,registrationRetries:cases.length,confirmationRetries:cases.length-1,contentUploads:uploads,actualUi:true,normalDualLogout:true,logout:adminLogout,ordinary,anonymousDenied:4}),{mode:0o600})
   await context.close(); await browser.close(); browser = undefined
-  console.log(JSON.stringify({ recursiveAclBrowser: 'passed', actualUi: true, cases: 8 }))
+  console.log(JSON.stringify({ recursiveAclBrowser: 'passed', actualUi:true,cases:cases.length }))
 } catch (error) {
   const frame = error?.stack?.split('\n').find(line => line.includes('validate_container_recursive_acl_browser.mjs:'))?.trim()
   if (activePage && evidence && phase!=='startup'&&!phase.includes('login')&&!phase.includes('logout')) await activePage.screenshot({ path: join(evidence, 'failed-product-page.png') }).catch(() => {})
