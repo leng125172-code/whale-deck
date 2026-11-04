@@ -60,6 +60,16 @@ public sealed class ContainerRecursiveAclRestoreJobResultTests
         Assert.Null(ContainerRecursiveAclRestoreJobResults.ForJob(Job(s with { State = "Succeeded", PublishBarrier = false })));
     }
 
+    [Fact]
+    public void PlanningTargetRefusalIsNotMistakenForCompletedSupersededExecution()
+    {
+        var s = Summary() with { JobId = Intent, Stage = "planning", State = "Failed", Code = "CONTAINER_RECURSIVE_ACL_RESTORE_TARGET_CHANGED", AclType = null,
+            EntryCount=null,FileCount=null,DirectoryCount=null,ChangeCount=null,SourceEntryCount=null,SourceFileCount=null,SourceDirectoryCount=null,SourceChangedCount=null,
+            ReceiptState=null,CompletedCount=null,ChangedCount=null,AbortedCount=null,NotStartedCount=null,UnknownCount=null,BindingCurrent=null,HistoryAvailable=null,HistoryVerified=false,HistoryMayExist=false };
+        Assert.NotNull(ContainerRecursiveAclRestoreJobResults.ForJob(Job(s)));
+        Assert.Null(ContainerRecursiveAclRestoreJobResults.ForJob(Job(Summary() with { State="Failed",Code=s.Code,ReceiptState="Aborted",CompletedCount=0,ChangedCount=0,NotStartedCount=4,BindingCurrent=false })));
+    }
+
     [Theory][InlineData("Ready")][InlineData("Canceled")][InlineData("Expired")][InlineData("Failed")]
     public void PlanningFactsAreNotExecutionResults(string state)
     {

@@ -329,9 +329,12 @@ public sealed partial class NativeNotificationDispatchTests
             var unprovedFacts=await JobFacts(unprovedRow,true,"Unknown");Assert.Null(unprovedFacts.CompletedCount);Assert.Null(unprovedFacts.UnknownCount);Assert.Null(unprovedFacts.ReceiptState);Assert.True(unprovedFacts.PublishBarrier);
             await other.AcknowledgeAsync(admin,unprovedRow.Id,unprovedRow.Version,Receipt(unproved,"Unknown"),default);
             await JobFacts((await repo.FindAsync(unproved.Id,default))!,true,"Acknowledged");
-            var planningFailure=Row();await repo.EnqueueAsync(planningFailure,default);var failedClaim=Assert.IsType<ContainerRecursiveAclRestoreIntent>(await repo.ClaimAsync(clock.GetUtcNow(),default));Assert.Equal(planningFailure.Id,failedClaim.Id);
-            await repo.FinishPlanningAsync(failedClaim,null,"CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_NOT_FOUND",default);
-            var failedFacts=await JobFacts((await repo.FindAsync(planningFailure.Id,default))!,false,"Failed");Assert.Null(failedFacts.EntryCount);Assert.Null(failedFacts.AclType);Assert.Null(failedFacts.ChangedCount);
+            foreach(var refusal in new[]{"CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_NOT_FOUND","CONTAINER_RECURSIVE_ACL_RESTORE_TARGET_CHANGED"})
+            {
+                var planningFailure=Row();await repo.EnqueueAsync(planningFailure,default);var failedClaim=Assert.IsType<ContainerRecursiveAclRestoreIntent>(await repo.ClaimAsync(clock.GetUtcNow(),default));Assert.Equal(planningFailure.Id,failedClaim.Id);
+                await repo.FinishPlanningAsync(failedClaim,null,refusal,default);
+                var failedFacts=await JobFacts((await repo.FindAsync(planningFailure.Id,default))!,false,"Failed");Assert.Null(failedFacts.EntryCount);Assert.Null(failedFacts.AclType);Assert.Null(failedFacts.ChangedCount);
+            }
             var queuedCancel=Row();await repo.EnqueueAsync(queuedCancel,default);await repo.CancelAsync(actor,queuedCancel.Id,default);
             await JobFacts((await repo.FindAsync(queuedCancel.Id,default))!,false,"Canceled");
             var abandoned = await Applying(await Ready(Row())); var oldToken = abandoned.LeaseToken;
@@ -401,6 +404,7 @@ public sealed partial class NativeNotificationDispatchTests
 
             Assert.DoesNotContain(await db.OperationJobs.Where(j => ids.Contains(j.Id) || db.ContainerRecursiveAclRestoreIntents.Any(r => r.ExecutionJobId == j.Id && ids.Contains(r.Id))).ToArrayAsync(), j => j.State is "Queued" or "Running");
             Console.WriteLine("INBOX_PHASE=container-recursive-acl-restore-persistent-manifest-partial-unknown-immutable-both-fences-audited");
+            Console.WriteLine("INBOX_PHASE=container-recursive-acl-restore-job-facts-privacy-null-counts-audit-rollback");
         }
         finally
         {

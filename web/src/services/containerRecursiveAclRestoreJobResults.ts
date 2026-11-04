@@ -164,7 +164,8 @@ export function readRecursiveAclRestoreJobResult(
     }
     if (
       v.state === 'Failed'
-        ? [
+        ? !(suffix === 'TARGET_CHANGED' && v.stage === 'planning') &&
+          [
             'READY',
             'PLAN_EXPIRED',
             'COMPLETED',

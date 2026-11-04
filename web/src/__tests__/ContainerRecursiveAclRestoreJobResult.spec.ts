@@ -98,6 +98,46 @@ describe('Recursive ACL restore historical job facts', () => {
     ).toEqual(Array(5).fill('未证明'))
     wrapper.unmount()
   })
+  it('keeps a planning target refusal instead of confusing it with a completed stale target', () => {
+    const v = {
+      ...result,
+      jobId: id,
+      stage: 'planning',
+      state: 'Failed',
+      code: 'CONTAINER_RECURSIVE_ACL_RESTORE_TARGET_CHANGED',
+      aclType: null,
+      entryCount: null,
+      fileCount: null,
+      directoryCount: null,
+      changeCount: null,
+      sourceEntryCount: null,
+      sourceFileCount: null,
+      sourceDirectoryCount: null,
+      sourceChangedCount: null,
+      receiptState: null,
+      completedCount: null,
+      changedCount: null,
+      abortedCount: null,
+      notStartedCount: null,
+      unknownCount: null,
+      bindingCurrent: null,
+      historyAvailable: null,
+      historyVerified: false,
+      historyMayExist: false,
+    }
+    expect(parse(v, 'Failed', type + '-plan', id)).toEqual(v)
+    const wrapper = mount(Component, {
+      props: { jobId: id, jobType: type + '-plan', state: 'Failed', resultJson: JSON.stringify(v) },
+    })
+    expect(wrapper.text()).toContain('原实例或目录树已变化')
+    expect(
+      wrapper
+        .get('[aria-label="本次恢复实际结果"]')
+        .findAll('dd')
+        .map((v) => v.text()),
+    ).toEqual(Array(5).fill('未证明'))
+    wrapper.unmount()
+  })
   it('distinguishes a saved Ready plan from a later execution', () => {
     const v = {
       ...result,

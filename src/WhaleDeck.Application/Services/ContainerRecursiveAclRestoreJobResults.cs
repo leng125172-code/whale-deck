@@ -85,7 +85,7 @@ public static class ContainerRecursiveAclRestoreJobResults
             "Partial" => suffix == "PARTIAL_REQUIRES_ACKNOWLEDGEMENT",
             "Unknown" => suffix is "RESULT_UNKNOWN" or "OUTPUT_INVALID" or "BINDING_CHANGED",
             "Acknowledged" => suffix == (s.ReceiptState == "Partial" ? "PARTIAL_ACKNOWLEDGED" : "UNKNOWN_ACKNOWLEDGED"),
-            "Failed" => suffix is not ("READY" or "PLAN_EXPIRED" or "COMPLETED" or "TARGET_CHANGED" or "CANCELED" or "PARTIAL_REQUIRES_ACKNOWLEDGEMENT" or "RESULT_UNKNOWN" or "PARTIAL_ACKNOWLEDGED" or "UNKNOWN_ACKNOWLEDGED"),
+            "Failed" => suffix == "TARGET_CHANGED" && s.Stage == "planning" || suffix is not ("READY" or "PLAN_EXPIRED" or "COMPLETED" or "TARGET_CHANGED" or "CANCELED" or "PARTIAL_REQUIRES_ACKNOWLEDGEMENT" or "RESULT_UNKNOWN" or "PARTIAL_ACKNOWLEDGED" or "UNKNOWN_ACKNOWLEDGED"),
             _ => false
         };
     }

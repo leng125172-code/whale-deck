@@ -70,16 +70,36 @@ for (const width of [320, 1440])
         ready,
         null,
         { ...result, path: '/private-never-render' },
+        {
+          ...ready,
+          intentId: result.intentId.slice(0, -1) + '4',
+          state: 'Failed',
+          code: 'CONTAINER_RECURSIVE_ACL_RESTORE_TARGET_CHANGED',
+          aclType: null,
+          entryCount: null,
+          fileCount: null,
+          directoryCount: null,
+          changeCount: null,
+          sourceEntryCount: null,
+          sourceFileCount: null,
+          sourceDirectoryCount: null,
+          sourceChangedCount: null,
+        },
       ]
       const jobs = facts.map((facts, i) => {
-        const id = i === 4 ? result.intentId : result.jobId.slice(0, -1) + String(i)
+        const id =
+          i === 4
+            ? result.intentId
+            : i === 7
+              ? result.intentId.slice(0, -1) + '4'
+              : result.jobId.slice(0, -1) + String(i)
         return {
           id,
           jobType:
-            i === 4
+            i === 4 || i === 7
               ? 'containers.files.recursive-acl-restore-plan'
               : 'containers.files.recursive-acl-restore',
-          state: [1, 2].includes(i) ? 'Running' : i === 3 ? 'Failed' : 'Succeeded',
+          state: [1, 2].includes(i) ? 'Running' : i === 3 || i === 7 ? 'Failed' : 'Succeeded',
           phase:
             i === 1
               ? 'AwaitingContainerRecursiveAclRestoreResolution'
@@ -128,7 +148,7 @@ for (const width of [320, 1440])
           .click()
         const drawer = page.getByRole('dialog', { name: '任务详情', exact: true }),
           region = drawer.getByRole('region', { name: '递归ACL恢复安全结果', exact: true })
-        if (i >= 5) {
+        if (i === 5 || i === 6) {
           await expect(region).toContainText('不将缺失结果视为零修改或成功')
         } else {
           await expect(region).toContainText(
@@ -138,6 +158,9 @@ for (const width of [320, 1440])
               '结果未知，保护已保留',
               '已处置历史结果，不代表整树修改成功',
               '预检已完成，尚未恢复ACL',
+              '',
+              '',
+              '递归ACL恢复未完成',
             ][i]!,
           )
           const actual = region.locator('[aria-label="本次恢复实际结果"]')
@@ -148,7 +171,9 @@ for (const width of [320, 1440])
                 ? ['1', '1', '0', '3', '0']
                 : Array(5).fill('未证明'),
           )
-          await expect(region.locator('[aria-label="恢复来源原计数"]')).toContainText('来源原修改2')
+          await expect(region.locator('[aria-label="恢复来源原计数"]')).toContainText(
+            i === 7 ? '来源原修改未证明' : '来源原修改2',
+          )
           if (i === 3) await expect(region).toContainText('不代表整树恢复成功')
           await actual.scrollIntoViewIfNeeded()
           await page.screenshot({
