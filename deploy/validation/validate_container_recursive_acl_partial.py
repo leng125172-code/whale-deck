@@ -13,14 +13,15 @@ from acl_source_apply_missing_proof import source_closure
 from validate_container_upload_recovery_agent import trusted
 from owned_authentik_revocation import OwnedAuthentikRevocation
 from validate_container_recursive_permission_faults import require_logout_authority
+from validate_container_recursive_permission_faults import require_authority_change
 
 PHASE='startup'
 SOURCES=('validate_container_recursive_acl_partial.py','validate_container_recursive_acl_partial.mjs','verify_container_recursive_acl_partial.py','recursive_acl_partial_proof.py','test_recursive_acl_partial_workflow_probe_scope.py')
 
 
 def selected_case(arguments):
-    assert tuple(arguments) in ((),('logout',)), 'UNKNOWN_PARTIAL_ACL_SCENARIO'
-    return 'logout' if arguments else 'cancel'
+    assert tuple(arguments) in ((),('logout',),('group-removal',),('account-disable',)), 'UNKNOWN_PARTIAL_ACL_SCENARIO'
+    return arguments[0] if arguments else 'cancel'
 
 
 def create_tree(root,content):
@@ -94,12 +95,21 @@ def main():
             (evidence/'cut-root.json').write_text(json.dumps(held.record));(evidence/'cut-physical.json').write_text(json.dumps(current()));(evidence/'bound-helper.json').write_text(json.dumps(dict(pid=held.pid,unit=held.cgroup,proof=held.proof)))
             PHASE='actual-visible-partial-'+kind
             with ExitStack() as checks:
-                identity=checks.enter_context(OwnedAuthentikRevocation(owner[0],ready['subject'])) if kind=='logout' else None
+                revoked=kind in ('group-removal','account-disable')
+                identity=checks.enter_context(OwnedAuthentikRevocation(owner[0],ready['subject'])) if kind=='logout' or revoked else None
                 if identity:assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc'])>dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
+                if revoked:
+                    write_signal(evidence,'action.json',dict(partialCut=True));wait_signal(evidence,'action-done.json',owner_process,40)
                 began=time.monotonic()
                 with ThreadPoolExecutor(max_workers=1) as pool:
-                    exiting=pool.submit(held.wait_exit_seconds,began,15);write_signal(evidence,'action.json',dict(partialCut=True));wait_signal(evidence,'action-done.json',owner_process,40);elapsed=exiting.result(timeout=16)
-                if identity:
+                    exiting=pool.submit(held.wait_exit_seconds,began,15)
+                    if revoked:
+                        authority=identity.change(kind);authority['permissionExpiresAtUtc']=ready['permissionExpiresAtUtc'];require_authority_change(authority,ready,kind)
+                        (evidence/'authority-change.json').write_text(json.dumps(authority))
+                    else:
+                        write_signal(evidence,'action.json',dict(partialCut=True));wait_signal(evidence,'action-done.json',owner_process,40)
+                    elapsed=exiting.result(timeout=16)
+                if identity and kind=='logout':
                     response=identity.client.get(identity.url,timeout=5);assert response.status_code==200 and identity.changed is False
                     authority=dict(kind='logout',subject=ready['subject'],before=identity.before,after=identity.snapshot(response.json()),noIdentityMutation=True,confirmedAtUtc=dt.datetime.now(dt.timezone.utc).isoformat(),permissionExpiresAtUtc=ready['permissionExpiresAtUtc'])
                     require_logout_authority(authority,ready['subject']);assert dt.datetime.fromisoformat(authority['permissionExpiresAtUtc'])>dt.datetime.fromisoformat(authority['confirmedAtUtc'])+dt.timedelta(hours=1)
@@ -112,7 +122,7 @@ def main():
             public_receipt={k[0].lower()+k[1:]:v for k,v in json.loads(partial['row']['receipt_json']).items()}
             write_signal(evidence,'settled.json',dict(id=identifier,state='Partial',receipt=public_receipt))
             assert owner_process.wait(timeout=100)==0,'PARTIAL_OWNER_PAGE_FAILED';owner_ui=json.loads((evidence/'owner-browser.json').read_bytes());assert owner_ui['subject']==ready['subject']
-            require_case(kind,partial,owner_ui,json.loads((evidence/'logout-authority.json').read_bytes()) if kind=='logout' else None)
+            require_case(kind,partial,owner_ui,json.loads((evidence/('authority-change.json' if revoked else 'logout-authority.json')).read_bytes()) if identity else None)
             if kind=='logout':assert owner_ui['result'] is None and owner_ui['hintsCleared'] is True and owner_ui['cancellations']==0
             baseline.update(id=identifier,originalSubject=ready['subject'],receipt=public_receipt);(evidence/'recovery-fixture.json').write_text(json.dumps(baseline))
             PHASE='actual-different-admin-recovery';recovery_process=browser(repo,revision,'recovery',baseline,recovery);canceled=wait_signal(evidence,'recovery-canceled.json',recovery_process)
@@ -131,7 +141,7 @@ def main():
     after=owned.common.core_snapshot()
     for name,value in core.items():assert after[name][:3]==value[:3] if name.lstrip('/')=='whaledeck-worker' else after[name]==value
     preserved=preservation_snapshot(storage);assert all(preserved.get(k)==v for k,v in old.items());(evidence/'preservation-after.json').write_text(json.dumps(preserved))
-    (evidence/'verified.json').write_text(json.dumps(dict(actualPartialAndDifferentAdminAck=True,id=identifier,productStoppedHelperSeconds=round(elapsed,3),partialCounts=facts['counts'],childHddRecords=facts['childHddRecords'],oldFilesUnchanged=len(old),normalDualLogoutContexts=2,exactSourceAndContainerAbsent=True,originalRootAndHddRetained=True,kind=kind)))
+    (evidence/'verified.json').write_text(json.dumps(dict(actualPartialAndDifferentAdminAck=True,id=identifier,productStoppedHelperSeconds=round(elapsed,3),partialCounts=facts['counts'],childHddRecords=facts['childHddRecords'],oldFilesUnchanged=len(old),normalDualLogoutContexts=1 if revoked else 2,revokedContexts=int(revoked),exactSourceAndContainerAbsent=True,originalRootAndHddRetained=True,kind=kind)))
     print(json.dumps(dict(recursiveAclPartial='passed',evidence=evidence.name,counts=facts['counts'])),flush=True)
 
 

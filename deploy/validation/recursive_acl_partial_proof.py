@@ -12,12 +12,15 @@ from verify_container_recursive_acl import file_version,acl_mode
 from verify_container_recursive_permissions import digest,unsigned
 from validate_container_upload_recovery_agent import trusted
 from validate_container_recursive_permission_faults import require_logout_authority
+from validate_container_recursive_permission_faults import require_authority_change
+from validate_container_recursive_acl_faults import verify_revoked_browser
 
 COUNTS=('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')
 
 
 def require_case(kind,partial,owner,authority=None):
-    assert kind in ('cancel','logout') and owner['subject']==partial['row']['actor_subject'] and owner['normalDualLogout'] is True
+    revoked=kind in ('group-removal','account-disable')
+    assert kind in ('cancel','logout','group-removal','account-disable') and owner['subject']==partial['row']['actor_subject'] and owner['normalDualLogout'] is (not revoked)
     assert owner['registrations']==owner['confirmations']==1 and owner['cancellations']==int(kind=='cancel') and owner['acknowledgements']==owner['uploads']==0
     assert bool(partial['row']['cancel_requested_at_utc']) is (kind=='cancel') and bool(partial['executionJob']['cancel_requested_at_utc']) is (kind=='cancel')
     if kind=='logout':
@@ -25,6 +28,10 @@ def require_case(kind,partial,owner,authority=None):
         require_logout_authority(authority,owner['subject'])
         expiry=dt.datetime.fromisoformat(authority['permissionExpiresAtUtc']);ended=dt.datetime.fromisoformat(authority['confirmedAtUtc'])
         assert expiry.utcoffset() is not None and ended.utcoffset() is not None and expiry>ended+dt.timedelta(hours=1)
+    if revoked:
+        assert owner['result'] is None
+        require_authority_change(authority,dict(subject=owner['subject'],permissionExpiresAtUtc=authority['permissionExpiresAtUtc']),kind)
+        verify_revoked_browser(owner,kind,owner['subject'])
 
 
 def require_phase(data,ack=False):

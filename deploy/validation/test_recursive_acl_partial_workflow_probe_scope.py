@@ -40,8 +40,23 @@ class RecursiveAclPartialWorkflowScope(unittest.TestCase):
 
     def test_scenario_selection_cannot_accidentally_repeat_cancel_or_revoke(self):
         self.assertEqual('cancel',selected_case([]));self.assertEqual('logout',selected_case(['logout']))
-        for values in (['cancel'],['logout','cancel'],['group-removal'],['--all']):
+        self.assertEqual('group-removal',selected_case(['group-removal']));self.assertEqual('account-disable',selected_case(['account-disable']))
+        for values in (['cancel'],['logout','cancel'],['group-removal','account-disable'],['--all']):
             with self.subTest(values=values),self.assertRaises(AssertionError):selected_case(values)
+
+    def test_partial_revocation_preserves_the_real_result_and_denies_old_context(self):
+        subject='11111111-1111-4111-8111-111111111111';p=phase();p['row'].update(actor_subject=subject,cancel_requested_at_utc=None);p['executionJob']['cancel_requested_at_utc']=None
+        before=dict(pk=1,uuid=subject,username='whaledeck-upload-qa-'+'a'*12,is_active=True,groups=['admin'])
+        for kind,changes in [('group-removal',dict(groups=[])),('account-disable',dict(is_active=False))]:
+            authority=dict(kind=kind,subject=subject,before=before,after={**before,**changes},onlyOwnedIdentityChanged=True,permissionExpiresAtUtc='2026-11-04T14:00:00+00:00',confirmedAtUtc='2026-11-04T12:00:00+00:00')
+            ui=dict(kind=kind,subject=subject,normalDualLogout=False,logout=None,registrations=1,confirmations=1,cancellations=0,acknowledgements=0,uploads=0,result=None,hintsCleared=True,authorityRevoked=True,anonymousGet401=False,originalIntentStatus=403,
+                privatePanelsAbsent=True,currentIdentityStatus=200 if kind=='group-removal' else 403,currentlyAdministrator=False if kind=='group-removal' else None,currentSubject=subject if kind=='group-removal' else None,renderedRevocationPage='forbidden' if kind=='group-removal' else 'login')
+            require_case(kind,p,ui,authority)
+            for key,value in [('normalDualLogout',True),('cancellations',1),('result',{'state':'Canceled'}),('originalIntentStatus',200),('hintsCleared',False),('authorityRevoked',False),('anonymousGet401',True)]:
+                with self.subTest(kind=kind,key=key),self.assertRaises(AssertionError):require_case(kind,p,{**ui,key:value},authority)
+            bad=copy.deepcopy(authority);bad['after']['pk']=2
+            with self.assertRaises(AssertionError):require_case(kind,p,ui,bad)
+            with self.assertRaises(AssertionError):require_case(kind,p,ui,{**authority,'permissionExpiresAtUtc':'2026-11-04T12:59:59+00:00'})
 
     def test_normal_partial_logout_is_not_cancel_revoke_expiry_or_fabricated_private_get(self):
         subject='11111111-1111-4111-8111-111111111111';p=phase();p['row'].update(actor_subject=subject,cancel_requested_at_utc=None);p['executionJob']['cancel_requested_at_utc']=None

@@ -20,7 +20,7 @@ def target(name):
 def verify(name):
     p=target(name);trusted(p,True);scope=private_json(p/'scope.json');b=private_json(p/'baseline.json');accepted=private_json(p/'verified.json');facts=private_json(p/'facts.json')
     owner=private_json(p/'owner-browser.json');recovery=private_json(p/'recovery-browser.json');partial=private_json(p/'partial.sql.json');ack=private_json(p/'ack.sql.json')
-    kind=b.get('kind','cancel');assert kind in ('cancel','logout') and scope.get('kind','cancel')==accepted.get('kind','cancel')==kind
+    kind=b.get('kind','cancel');revoked=kind in ('group-removal','account-disable');assert kind in ('cancel','logout','group-removal','account-disable') and scope.get('kind','cancel')==accepted.get('kind','cancel')==kind
     repo=Path(__file__).resolve().parents[2];assert scope['validationSourceSha256']==source_closure(repo,scope['validationSourceRevision'],seeds=SOURCES)
     for n,sha in scope['validationSourceSha256'].items():assert hashlib.sha256(subprocess.check_output(['git','-C',str(repo),'show',scope['validationSourceRevision']+':deploy/validation/'+n])).hexdigest()==sha
     for n,sha in scope['sourceHashes'].items():
@@ -28,11 +28,13 @@ def verify(name):
     assert host_identity(scope['revision'])==scope['hostIdentity'] and snapshot(accepted['id'])==ack
     assert accepted['actualPartialAndDifferentAdminAck'] and owner['subject']==partial['row']['actor_subject'] and recovery['subject']!=owner['subject']
     for role,ui in (('owner',owner),('recovery',recovery)):
-        assert ui['id']==accepted['id'] and ui['actualUi'] and ui['normalDualLogout'] and ui['uploads']==0
+        assert ui['id']==accepted['id'] and ui['actualUi'] and ui['normalDualLogout'] is (role=='recovery' or not revoked) and ui['uploads']==0
         assert ui['registrations']==ui['confirmations']==int(role=='owner') and ui['cancellations']==int(role=='owner' and kind=='cancel') and ui['acknowledgements']==int(role=='recovery')
-        logout=ui['logout'];assert logout['normalUiLogout'] and logout['providerNavigationObserved'] and logout['finalLoginPage'] and logout['postStatus'] in (302,303) and logout['bffStatus']==401 and logout['identityStatus'] in (401,403)
+        if role=='recovery' or not revoked:
+            logout=ui['logout'];assert logout['normalUiLogout'] and logout['providerNavigationObserved'] and logout['finalLoginPage'] and logout['postStatus'] in (302,303) and logout['bffStatus']==401 and logout['identityStatus'] in (401,403)
+        else:assert ui['logout'] is None
     if kind=='logout':assert private_json(p/'owner-logout.json')==owner['logout']
-    require_case(kind,partial,owner,private_json(p/'logout-authority.json') if kind=='logout' else None)
+    require_case(kind,partial,owner,private_json(p/('authority-change.json' if revoked else 'logout-authority.json')) if kind=='logout' or revoked else None)
     require_ack(partial,ack,recovery['subject']);assert private_json(p/'recovery-canceled.json')['acknowledgements']==0
     files=load('/usr/local/libexec/whaledeck-files.py','partial_second_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','partial_second_hdd').FileBackups(files)
     before=b['original'];after=private_json(p/'physical-partial.json');assert after==private_json(p/'physical-final.json')
@@ -45,7 +47,7 @@ def verify(name):
     observed=preservation_snapshot(storage);assert all(observed.get(k)==v for k,v in scope['preservedFiles'].items())
     core=owned.common.core_snapshot();assert core.keys()==scope['coreBefore'].keys()
     for n,v in scope['coreBefore'].items():assert core[n][:3]==tuple(v[:3]) if n.lstrip('/')=='whaledeck-worker' else core[n]==tuple(v)
-    images=list(p.glob('*.png'));assert {v.name for v in images}=={'inflight.png','owner-logged-out.png' if kind=='logout' else 'partial-counts.png','recovery-counts.png','recovery-confirm.png','acknowledged.png'}
+    images=list(p.glob('*.png'));assert {v.name for v in images}=={'inflight.png','authority-denied.png' if revoked else 'owner-logged-out.png' if kind=='logout' else 'partial-counts.png','recovery-counts.png','recovery-confirm.png','acknowledged.png'}
     for image in images:
         raw=image.read_bytes();assert len(raw)>1000 and raw[:8]==b'\x89PNG\r\n\x1a\n' and struct.unpack('>II',raw[16:24])==(320,600)
     api=requests.Session();api.trust_env=False;api.headers['Authorization']='Bearer '+require(container_environment(),'Authentication__Authentik__ApiToken')
@@ -54,7 +56,7 @@ def verify(name):
     finally:api.close()
     no_active_work();preflight()
     return dict(independentReadOnlyVerifier=True,actualPartialAndDifferentAdminAck=True,kind=kind,partialCounts=facts['partial']['counts'],rootAndHddRereadAndRetained=True,ackAuditCurrentDifferentAdmin=True,
-        normalDualLogoutContexts=2,temporaryIdentitiesAbsent=True,exactSourceAndContainerAbsent=True,physicalBytesCheckedByParentBeforeCleanup=True,sourceBytesRereadAfterCleanup=False)
+        normalDualLogoutContexts=1 if revoked else 2,revokedContexts=int(revoked),temporaryIdentitiesAbsent=True,exactSourceAndContainerAbsent=True,physicalBytesCheckedByParentBeforeCleanup=True,sourceBytesRereadAfterCleanup=False)
 
 
 if __name__=='__main__':
