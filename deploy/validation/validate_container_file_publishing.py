@@ -101,26 +101,37 @@ def fixture(*, restartable_core=(), removable=False):
         yield owned
         verify_files()
     finally:
-        lookup = subprocess.run(['docker', 'inspect', identifier or name], capture_output=True, timeout=20)
-        if lookup.returncode == 0:
-            actual = json.loads(lookup.stdout)[0]; exact = actual['Id']
-            if identifier is not None: assert exact == identifier
-            verify_container(actual, exact, name, folder)
-            common.command(['docker', 'rm', '--force', exact])
-            assert subprocess.run(['docker', 'inspect', exact], capture_output=True, timeout=10).returncode != 0
-        else: assert identifier is None or removable and removed == identifier, 'owned container disappeared without bound removal'
-        verified = False
-        try: verify_files(); verified = True
-        except (AssertionError, OSError, subprocess.SubprocessError): pass
-        if verified:
-            for name in owned['proofs']: (folder / name).unlink()
-            if owned['private']:
-                private = folder / owned['private']
-                for name in owned['privateProofs']: (private / name).unlink()
-                private.rmdir()
-            folder.rmdir()
-        print(json.dumps({'ownedPublishContainerRemoved': True, 'verifiedFixtureRemoved': verified,
-            'unverifiedFixturePreserved': not verified}), flush=True)
+        if retain_unsettled_fixture(owned):
+            print(json.dumps({'ownedPublishContainerRemoved': False, 'unsettledFixtureRetained': True, 'unverifiedFixturePreserved': True}),flush=True)
+        else:
+            lookup = subprocess.run(['docker', 'inspect', identifier or name], capture_output=True, timeout=20)
+            if lookup.returncode == 0:
+                actual = json.loads(lookup.stdout)[0]; exact = actual['Id']
+                if identifier is not None: assert exact == identifier
+                verify_container(actual, exact, name, folder)
+                common.command(['docker', 'rm', '--force', exact])
+                assert subprocess.run(['docker', 'inspect', exact], capture_output=True, timeout=10).returncode != 0
+            else: assert identifier is None or removable and removed == identifier, 'owned container disappeared without bound removal'
+            verified = False
+            try: verify_files(); verified = True
+            except (AssertionError, OSError, subprocess.SubprocessError): pass
+            if verified:
+                for name in owned['proofs']: (folder / name).unlink()
+                if owned['private']:
+                    private = folder / owned['private']
+                    for name in owned['privateProofs']: (private / name).unlink()
+                    private.rmdir()
+                folder.rmdir()
+            print(json.dumps({'ownedPublishContainerRemoved': True, 'verifiedFixtureRemoved': verified,
+                'unverifiedFixturePreserved': not verified}), flush=True)
+
+
+def retain_unsettled_fixture(owned):
+    value=owned.get('retain_unsettled',False);assert type(value) is bool
+    if not value:return False
+    folder=Path(owned['folder']);assert folder.parent==common.APPS and re.fullmatch('wdv-container-publish-[a-f0-9]{32}',folder.name)
+    assert re.fullmatch('[a-f0-9]{64}',owned['identifier'])
+    return True
 
 
 def overlay_check(reader, files, docker, upload, publisher, state, target):

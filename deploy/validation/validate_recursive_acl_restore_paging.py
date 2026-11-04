@@ -150,7 +150,7 @@ def main(ready_logout=False,prewrite_cancel=False):
                         process.stdin.write(json.dumps(dict(fixture=browser_fixture,credentials=dict(admin=dict(zip(('username','password'),admin)),ordinary=dict(zip(('username','password'),ordinary))))));process.stdin.close()
                         if prewrite_cancel:
                             from recursive_acl_restore_prewrite import exercise
-                            exercise(process,evidence,b,row,metadata,root,reader,data,acl,storage)
+                            exercise(process,evidence,b,row,metadata,root,reader,data,acl,storage,fixture)
                         elif ready_logout:
                             from recursive_acl_restore_ready_logout import exercise
                             exercise(process,evidence,b,row,metadata,root,reader,data,acl,storage)

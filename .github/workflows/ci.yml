@@ -153,6 +153,9 @@ jobs:
           python3 -W error -m py_compile deploy/validation/bound_container_recursive_acl_restore_cut.py deploy/validation/recursive_acl_restore_prewrite_proof.py deploy/validation/recursive_acl_restore_prewrite.py deploy/validation/validate_recursive_acl_restore_prewrite.py deploy/validation/verify_recursive_acl_restore_prewrite.py deploy/validation/test_recursive_acl_restore_prewrite_proof.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_prewrite_proof.py
           node --check deploy/validation/validate_recursive_acl_restore_prewrite.mjs
+          python3 -W error -m py_compile deploy/validation/validate_container_file_publishing.py deploy/validation/recover_recursive_acl_restore_prewrite.py deploy/validation/test_recover_recursive_acl_restore_prewrite.py
+          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recover_recursive_acl_restore_prewrite.py
+          node --check deploy/validation/recover_recursive_acl_restore_prewrite.mjs
           python3 -W error -m py_compile deploy/validation/recursive_acl_restore_business_proof.py deploy/validation/test_recursive_acl_restore_business_proof.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_business_proof.py
           node --check deploy/validation/validate_container_recursive_acl_browser.mjs

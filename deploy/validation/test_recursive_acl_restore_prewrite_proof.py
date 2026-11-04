@@ -79,6 +79,58 @@ class RestorePrewriteScopeTests(unittest.TestCase):
             began=process_start(child.pid);self.assertTrue(pidfd_same(fd,child.pid,began));child.wait(timeout=2);self.assertFalse(pidfd_same(fd,child.pid,began))
         finally:os.close(fd);child.wait(timeout=2)
 
+    def test_failed_gate_keeps_container_until_original_execution_is_quiescent(self):
+        from recursive_acl_restore_prewrite import quiescent
+        row=dict(execution_job_id='original',state='Applying',lease_token='lease')
+        self.assertFalse(quiescent(row,dict(state='Completed'),True))
+        row.update(state='Unknown',lease_token=None)
+        self.assertFalse(quiescent(row,dict(state='Applying'),True));self.assertFalse(quiescent(row,dict(state='Unknown'),False));self.assertTrue(quiescent(row,dict(state='Unknown'),True))
+        self.assertFalse(quiescent(dict(execution_job_id=None,completed_at_utc=None),None,False));self.assertTrue(quiescent(dict(execution_job_id=None,completed_at_utc='expired'),None,False))
+    def test_retention_switch_cannot_target_arbitrary_container_or_source(self):
+        from validate_container_file_publishing import retain_unsettled_fixture,common
+        owned=dict(folder=common.APPS/('wdv-container-publish-'+'a'*32),identifier='b'*64,retain_unsettled=True)
+        self.assertTrue(retain_unsettled_fixture(owned));self.assertFalse(retain_unsettled_fixture({}))
+        for replacement in (dict(folder='/etc'),dict(identifier='arbitrary'),dict(retain_unsettled='true')):
+            with self.subTest(replacement=replacement),self.assertRaises(AssertionError):retain_unsettled_fixture({**owned,**replacement})
+
+    @unittest.skipUnless(os.geteuid()==0,'fixture chown uses temporary root-owned test directory')
+    def test_failed_unsettled_fixture_retains_container_and_propagates_error(self):
+        import tempfile,contextlib,io
+        import validate_container_file_publishing as owned
+        calls=[]
+        def command(args):
+            calls.append(args)
+            if args[:3]==['docker','image','inspect']:return json.dumps([dict(Id=owned.common.IMAGE,Config=dict(Volumes=None))]).encode()
+            if args[:2]==['docker','run']:return ('a'*64).encode()
+            if args[:2]==['docker','inspect']:return b'[{}]'
+            raise AssertionError('must not remove or otherwise mutate Docker')
+        with tempfile.TemporaryDirectory() as folder,patch.object(owned.common,'APPS',Path(folder)),patch.object(owned.common,'verify_apps_directory'),patch.object(owned.common,'core_snapshot',return_value={}),patch.object(owned.common,'command',side_effect=command),patch.object(owned,'verify_container'),patch.object(owned.pwd,'getpwnam',return_value=SimpleNamespace(pw_uid=997)),contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError,'original failure'):
+                with owned.fixture() as f:
+                    kept=f['folder'];f['retain_unsettled']=True;raise RuntimeError('original failure')
+            self.assertTrue(kept.exists());self.assertTrue((kept/'original.bin').exists());self.assertFalse(any(v[:2]==['docker','rm'] for v in calls))
+
+    @unittest.skipUnless(os.geteuid()==0,'actual private record/lock FD requires root')
+    def test_failure_drain_uses_bound_original_record_and_free_kernel_lock(self):
+        import tempfile,fcntl
+        from recursive_acl_restore_prewrite import drain_original
+        from test_recursive_acl_restore_agent_probe_scope import synthetic,wire
+        from test_recursive_acl_restore_business_proof import managed
+        plan=synthetic();op='a'*32;owner='B'*64;identifier='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        data=dict(row=dict(execution_job_id=identifier,state='Unknown',lease_token=None,owner_hash=owner,plan_json=json.dumps(managed(wire(plan)))))
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);evidence=root/'evidence';evidence.mkdir(mode=0o700);record=root/(op+'.json');lock=root/(op+'.lock');lock.write_bytes(b'');lock.chmod(0o600)
+            record.write_text(json.dumps(dict(operationId=op,owner=owner,plan=plan,state='Unknown')));record.chmod(0o600)
+            with patch('recursive_acl_restore_agent_io.RESTORE_STATE',root),patch('recursive_acl_restore_prewrite.sql_snapshot',return_value=data):
+                self.assertTrue(drain_original(identifier,evidence))
+                fd=os.open(lock,os.O_RDONLY)
+                try:
+                    fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                    with patch('recursive_acl_restore_prewrite.time.monotonic',side_effect=[0,400,400]):self.assertFalse(drain_original(identifier,evidence))
+                finally:os.close(fd)
+                record.write_text(json.dumps(dict(operationId='c'*32,owner=owner,plan=plan,state='Unknown')))
+                with patch('recursive_acl_restore_prewrite.time.monotonic',side_effect=[0,400,400]):self.assertFalse(drain_original(identifier,evidence))
+
     def test_only_pidfd_stop_continue_and_no_validator_sigkill_or_arbitrary_transport(self):
         source=(Path(__file__).parent/'bound_container_recursive_acl_restore_cut.py').read_text()
         self.assertIn('signal.SIGSTOP',source);self.assertIn('signal.SIGCONT',source);self.assertNotIn('SIGKILL',source)

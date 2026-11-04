@@ -17,3 +17,39 @@
 复核期间补上pidfd fdinfo-Pid/启动时间/存活与信号前后绑定、仅已暂停进程恢复，覆盖PID退出/替换反例；增加Applying但全树未变的合法子项边界；Worker回执排除运行凭据。均在冻结前修订，未执行实机SIGSTOP/Worker操作，也没有通过放宽物理未变或HDD要求取得通过。
 
 后续保留完整真实运行回执、失败及修复记录；本批只验执行中写前取消，不签执行中正常退出、写后/撤权/重启/Partial/Unknown/来源异常、删除/长期清理、维护连续性与其余59项。17项移出不算完成。
+
+
+## 首批实机失败：不签写前取消
+
+冻结 `ca251a88fffbc9a9b4ae6eb9327fa37c90f34aa2`、98源码，唯一unit `whaledeck-qa-restore-prewrite-ca251a8`，Invocation `f86a59e066bf4bf193916bcd9024fee9`。新26对象来源及真实Vue Ready/确认Pending已完成，但观察器返回None，REAL_RESTORE_PREWRITE_CUT_MISSED_NOT_COUNTED，原总门禁ExecMainStatus=1/Result=exit-code。没有取得bound-helper证明，没有发送页面取消或处置；也没有保存足以判断是否短暂停顿过的观察事件，不能猜测精确错失原因。
+
+更严重的是失败清理顺序错误：原Apply尚未结算时，测试浏览器被关闭、临时身份清理、原容器被夹具移除。源文件目录按未验证规则保留；原任务随后SQL/Root均Unknown、发布保护true，聚合计数0/0/0/0/26，startedThrough22、finishedThrough21。不能把这算成零写入或取消，也不把工具清理导致的情况称为产品正常写前故障。
+
+只读逐项核对确认：item-00.bin至item-21.bin共22份子Root为Completed/aclConfirmed=true，实际inode/owner/bytes/非目标ACL及目标access匹配；item-22.bin子Root为Unknown/ACL未证实，当前文件保持原样；其余3对象也保持来源捕获后状态。聚合仍保留Unknown26，不改写SQL/Root计数为22。恢复HDD完整聚合加23子项、来源聚合加26子项原件均归档；新原件不是模拟数据。
+
+## 原任务保存、真实管理员处置及清理
+
+专属恢复工具 `92b866f65da1ba457fb71ba9eebb78170bd7c97c` 只允许上述固定失败目录，不提供任意任务或Apply入口。唯一恢复unit `whaledeck-qa-restore-recovery-92b866f`，Invocation `2a924a5a16544d66ac8020826e57ca1b`，ExecMainStatus=0/Result=success。
+
+所有可用原件及26对象完整字节/九字段/access/default/xattr先核对后，另一名全新真实管理员正常Authentik登录/文件页，原owner入口404，异常页保留Unknown26。先点“暂不处置”并验证ACK0、完整SQL与物理/Root/HDD保持，再一次明确“确认处置并释放保护”202→Acknowledged。Root永久Unknown事实和原五计数/历史保持，原执行Job以Failed结束、发布保护释放；不续做、不回滚22个已变更对象、不删除HDD。新管理员原上下文正常BFF/Authentik退出与匿名401通过；两个真实320暗色PNG保存并人工复核。原失败上下文没有正常退出，不补签。
+
+恢复工具三轮读取当前实体及全部原件，确认后才精确删除25个自有文件和空根，original.bin按确定性全字节/uid/gid/单链接核对后删除，源目录和原容器均缺席。清理后另进程重开54份来源及48份恢复Root/HDD，与处置前归档逐字节相同，不宣称再次读已清理源字节。该只读脚本首次相对路径被trusted拒绝，改绝对路径后通过；没有重发ACK或恢复请求。
+
+普通业务仍54意图/49执行/103Job；恢复9意图/6执行/活动0，新增原Unknown→Acknowledged，不多创建任务。旧1682保护文件字节九字段保持、普通保护总1736；来源Root1354，恢复Root130/HDD101（含本批聚合及23子项）、目录94。11核心ID/镜像/状态保持，只有同ID同镜像Worker按已记录流程重启；Agent1379812/维护1379807与eeb24dd保持。源/HDD同device2049与旧维护连续性限制保留。
+
+私有原失败与恢复证据 `deploy/artifacts/recursive-acl-restore-prewrite-cancel-bd15b60dd0914c08a8728c1758cf9259/` 保存原两个unit准确回执/日志、原SQL/物理现场、逐项Root/HDD、真实管理员暂不处置/ACK/退出、清理与清理后原件证明。`recovered-original.json` 明确originalGatePassed=false、originalRestorationNotReplayed=true、normalOriginalLogoutNotAccepted=true。不生成原verified.json、不改写失败终态。
+
+## 失败清理修复候选与未验边界
+
+修复候选：失败后先终止测试浏览器，停止后续页面动作；保留测试身份和容器等待原执行结算。只有原SQL已终态/无租约、原Root终态且操作锁空闲，才允许移除容器；若有界350秒/800观察仍无法核实，保留自有容器/目录并明确记录，不能以清理强制销毁运行目标。原执行不会重做。失败排空回执与边界选择/暂停/错失事件有界保存；Worker finally仍恢复健康。保留开关只对工厂创建的精确自有ID/目录生效，默认调用不改变。
+
+修复后20项写前专项（新增真实临时上下文异常保留且不吞异常、排空/保留范围反例）及2项固定恢复范围、41关联工具，共63项通过，另8范围通过，零跳过。Docker保留/进程排空条件负例是夹具，临时ACL/HDD与pidfd是本机实际测试，不冒称修复后新实机故障整链通过。本轮不再新建另一笔恢复试错，下一批必须全新资源/ID并保留观察事件与正确失败清理。
+
+写前取消、执行中退出/写后/撤权/重启/Partial/Unknown等完整矩阵、删除/长期清理、维护连续性及其余59项仍待；当前只新增失败保存与原任务显式处置证据，不提升完整完成率。
+
+
+收尾：原失败/恢复248文件已生成并逐项验证SHA256清单，清单SHA256 `9ec99587a7cdbb64ff93819cf9959152bcf54c1fc289e92190f850645b96c9ac`。原失败unit退出1、恢复unit退出0准确回执均归档后才停止QA unit；原工作站没有恢复重放或回滚。另只读核对11核心healthy、原ID/镜像保持，只有已授权同Worker StartedAt变化。
+
+最终20写前专项+2恢复范围+41关联工具共63项、8范围通过，Python/Node/YAML及diff检查通过；本轮修改MD的733个本地链接存在/缺失0，原Ready QA正文前缀保留，Git索引1000:1000/664。新清理/诊断修复仅候选，未运行另一批真实写前取消；新候选CI终态尚未核实，不称全绿。
+
+项目图谱事件 `whale-deck.container-acl.ca251a8.prewrite-failure-recovery` 已取得project/key/event匹配且duplicate=false成功回执，pending移入synced，阶段保持active。

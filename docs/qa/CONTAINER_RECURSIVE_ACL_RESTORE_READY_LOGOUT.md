@@ -51,3 +51,6 @@
 收尾：最终8项范围复跑通过；本轮修改MD的731个本地链接存在、缺失0，原跨页QA正文按Git原字节前缀保留，diff检查通过，主开发Git索引1000:1000/664。91fa693工具候选已普通推送成功，本批未验证新工具/文档CI终态，不称CI全绿；运行产品eeb24dd保持原已验发布。
 
 项目图谱事件 `whale-deck.container-acl.91fa693.recursive-restore-ready-logout` 取得project/key/event匹配且duplicate=false成功回执，pending移入synced，container-acl保持active。
+
+
+后续执行中门禁（2026-11-05）首批未取得写前边界且清理顺序出错，原Unknown已按真实管理员明确处置并保存实际变更，见[失败与修复候选](CONTAINER_RECURSIVE_ACL_RESTORE_PREWRITE_CANCEL.md)。本报告Ready正常退出与自然到期原事实保留，不改记为执行中验收通过。

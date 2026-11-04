@@ -89,7 +89,7 @@ def invocation_proof(pid,unit):
     return dict(invocationId=values[0],mainPid=pid,exactCgroupAndInvocation=True)
 
 
-def freeze_before_first_restore(row, source, container_pid, original, inventory):
+def freeze_before_first_restore(row, source, container_pid, original, inventory,observe=lambda value:None):
     assert os.geteuid() == 0 and re.fullmatch('[a-f0-9]{64}', row['container_id'])
     source = Path(source)
     assert source.parent == Path('/data/WhaleDeck/apps') and re.fullmatch('wdv-container-publish-[a-f0-9]{32}', source.name)
@@ -114,16 +114,17 @@ def freeze_before_first_restore(row, source, container_pid, original, inventory)
                             try:
                                 started=process_start(pid);descriptor=os.pidfd_open(pid)
                             except (ProcessLookupError,FileNotFoundError): continue
-                            group = directory.name; break
+                            group = directory.name;observe(dict(stage='pidfd-bound',pid=pid,unit=group,started=started));break
                     if descriptor is not None: break
             try: record = record_for(row)
             except FileNotFoundError: record = None
-            if record and record['state'] in ('Completed', 'Partial', 'Unknown', 'Aborted'): return None
+            if record and record['state'] in ('Completed', 'Partial', 'Unknown', 'Aborted'):
+                observe(dict(stage='already-terminal',state=record['state'],startedThrough=record['startedThrough'],finishedThrough=record['finishedThrough']));return None
             if descriptor is not None and record and first_entry_boundary(record):
                 if not pidfd_same(descriptor,pid,started) or not bound_fds(pid, root_identity, operation_lock(lock)): return None
                 try: signal.pidfd_send_signal(descriptor, signal.SIGSTOP)
                 except ProcessLookupError: return None
-                paused=True
+                paused=True;observe(dict(stage='sigstop-sent',pid=pid))
                 until = time.monotonic() + 2
                 while True:
                     state = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[0]
@@ -133,7 +134,7 @@ def freeze_before_first_restore(row, source, container_pid, original, inventory)
                     time.sleep(.0005)
                 assert pidfd_same(descriptor,pid,started) and bound_fds(pid, root_identity, operation_lock(lock)), 'STOPPED_RESTORE_FD_BINDING_CHANGED'
                 service=invocation_proof(pid,group)
-                frozen = record_for(row)
+                frozen = record_for(row);observe(dict(stage='stopped-record',state=frozen['state'],startedThrough=frozen['startedThrough'],finishedThrough=frozen['finishedThrough']))
                 if first_entry_boundary(frozen) and inventory() == original:
                     child = receipt_json(STATE / (operation + '.entries') / (child_id(operation, 0) + '.json'))
                     if child is not None:
@@ -143,7 +144,7 @@ def freeze_before_first_restore(row, source, container_pid, original, inventory)
                         historyVerified=True, startedThrough=frozen['startedThrough'], finishedThrough=-1,
                         childPhase=None if child is None else child['state'])
                     held = HeldCopy(pid, descriptor, group, frozen, proof); descriptor = None; return held
-                return None
+                observe(dict(stage='missed-stopped-boundary'));return None
             time.sleep(.0005)
         return None
     finally:

@@ -34,7 +34,42 @@ def worker_receipt(value):
     return dict(Id=value['Id'],Name=value['Name'],Image=value['Image'],State=dict(Running=value['State']['Running'],StartedAt=value['State']['StartedAt'],Health=dict(Status=value['State']['Health']['Status'])))
 
 
-def exercise(process,evidence,b,row,m,root,reader,content,acl,storage):
+def quiescent(row,record,lock_free):
+    if row['execution_job_id'] is None:return row.get('completed_at_utc') is not None
+    return (row['state'] in ('Succeeded','Superseded','Canceled','Failed','Partial','Unknown','Acknowledged')
+        and row['lease_token'] is None and record is not None and record['state'] in ('Completed','Aborted','Partial','Unknown') and lock_free is True)
+
+
+def drain_original(identifier,evidence):
+    import fcntl,uuid
+    from recursive_acl_restore_agent_io import RESTORE_STATE,read_at
+    began=time.monotonic();deadline=began+350;samples=[]
+    while True:
+        data=sql_snapshot(identifier);r=data['row'];record=None;free=False
+        if r['execution_job_id'] is not None:
+            op=uuid.UUID(r['execution_job_id']).hex
+            try:
+                _,record,_=read_at(None,str(RESTORE_STATE/(op+'.json')))
+                from recursive_acl_restore_business_proof import managed_plan
+                from bound_container_acl_cut import operation_lock
+                if record['operationId']!=op or record['owner']!=r['owner_hash'] or record['plan']!=managed_plan(r['plan_json']):record=None
+                lock_identity=operation_lock(RESTORE_STATE/(op+'.lock'))
+                descriptor=os.open(RESTORE_STATE/(op+'.lock'),os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC)
+                try:
+                    assert (os.fstat(descriptor).st_dev,os.fstat(descriptor).st_ino)==lock_identity
+                    try:fcntl.flock(descriptor,fcntl.LOCK_EX|fcntl.LOCK_NB);free=True;fcntl.flock(descriptor,fcntl.LOCK_UN)
+                    except BlockingIOError:pass
+                finally:os.close(descriptor)
+            except FileNotFoundError:pass
+        samples.append(dict(elapsedMs=round((time.monotonic()-began)*1000),state=r['state'],rootState=record['state'] if record else None,operationLockFree=free))
+        (evidence/'failure-drain.json').write_text(json.dumps(samples))
+        if quiescent(r,record,free):
+            (evidence/'failure-drained.sql.json').write_text(json.dumps(data));return True
+        if time.monotonic()>=deadline or len(samples)>=800:return False
+        time.sleep(.5)
+
+
+def exercise(process,evidence,b,row,m,root,reader,content,acl,storage,fixture):
     import validate_recursive_acl_restore_paging as gate
     gate.PHASE='confirmed-prewrite-ready';signal=wait_signal(process,evidence,'ready');page_proof(signal,b,row,m,0);page_proof(signal['selected'],b,row,m,0,selection=True)
     initial=sql_snapshot(signal['ready']['id']);ready_proof(signal,b,row,m,initial);gate.no_restore_records(signal['ready']['id']);(evidence/'ready.sql.json').write_text(json.dumps(initial))
@@ -52,7 +87,10 @@ def exercise(process,evidence,b,row,m,root,reader,content,acl,storage):
         (evidence/'pending.sql.json').write_text(json.dumps(pending_sql))
         gate.PHASE='bound-pre-first-restore'
         with ThreadPoolExecutor(max_workers=1) as pool:
-            watch=pool.submit(freeze_before_first_restore,r,b['source'],int(b['instanceId'].split(':')[0]),before,current)
+            events=[]
+            def observe(value):
+                assert len(events)<64;events.append(value);(evidence/'boundary-observations.json').write_text(json.dumps(events))
+            watch=pool.submit(freeze_before_first_restore,r,b['source'],int(b['instanceId'].split(':')[0]),before,current,observe)
             worker.start(wait_ready=False);held=watch.result(timeout=28)
         assert held is not None,'REAL_RESTORE_PREWRITE_CUT_MISSED_NOT_COUNTED'
         cut=sql_snapshot(r['id']);assert cut['row']['state']=='Applying' and cut['row']['publish_barrier'] and cut['row']['root_started_at_utc']
@@ -90,6 +128,20 @@ def exercise(process,evidence,b,row,m,root,reader,content,acl,storage):
         assert audit_rows(ui['ordinary']['subject'])==[] and query("SELECT count(*) FROM audit_events WHERE actor_subject=:'subject' AND action LIKE 'containers.files.recursive-acl-restore.%';",subject=ui['ordinary']['subject'])==0
         (evidence/'early-proof.json').write_text(json.dumps(proof));assert sql_snapshot(r['id'])==final and current()==before
         acknowledge(evidence,'final-auth',dict(prewriteNoChangeAndHistoryVerified=True));assert process.wait(timeout=90)==0
+    except BaseException:
+        # No identity/container cleanup while the original Apply may still run.
+        fixture['retain_unsettled']=True
+        if process.poll() is None:
+            process.terminate()
+            try:process.wait(timeout=15)
+            except subprocess.TimeoutExpired:process.kill();process.wait(timeout=10)
+        if held is not None:held.release();held=None
+        try:
+            worker.start(wait_ready=False)
+            if drain_original(signal['ready']['id'],evidence):fixture['retain_unsettled']=False
+        except BaseException as drain_error:
+            (evidence/'failure-drain-error.json').write_text(json.dumps(dict(type=type(drain_error).__name__,containerRetained=True)))
+        raise
     finally:
         if held is not None:held.release()
         worker.start();(evidence/'worker-after.json').write_text(json.dumps(worker_receipt(worker.current())))
