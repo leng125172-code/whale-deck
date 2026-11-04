@@ -17,7 +17,7 @@ using Rpc = WhaleDeck.Contracts.Agent.V1;
 namespace WhaleDeck.UnitTests.Agent;
 
 /// <summary>Isolated SDK projection and full signature validation. Not an installed Agent acceptance.</summary>
-public sealed class ContainerRecursiveAclRestoreGatewayTests
+public sealed partial class ContainerRecursiveAclRestoreGatewayTests
 {
     private static App.ContainerRecursiveAclRestoreCommandDto Command => new(new(new('a',64),"777:2026-10-27T01:02:03.123456789Z","work/中文目录"),"dd0a8865343e49bdb01a72680131bf39",new('7',64),new('9',64));
     private static App.ContainerRecursiveAclRestorePlanDto Plan => new(1,Command,new('A',64),new(101,202),new('B',64),1000,1001,new('C',64),

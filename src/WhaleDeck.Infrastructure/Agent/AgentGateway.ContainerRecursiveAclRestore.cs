@@ -37,10 +37,15 @@ public sealed partial class AgentGateway : IContainerRecursiveAclRestoreGateway
             string.IsNullOrWhiteSpace(actor.TraceId) || actor.TraceId.Length > 128 || actor.TraceId.Any(char.IsControl)) throw new ArgumentException("CONTAINER_RECURSIVE_ACL_RESTORE_CONTEXT_INVALID");
         var request = new ContainerRecursiveAclRestorePlanRequest { Command = RecursiveAclRestoreCommand(command), Context = new() { ActorSubject = actor.Subject, TraceId = actor.TraceId } };
         var client = await RecursiveAclRestoreClient(cancellationToken);
-        var response = await client.PlanAsync(request, RecursiveAclRestoreHeaders("Plan", request), deadline: DateTime.UtcNow.AddSeconds(330), cancellationToken: cancellationToken);
-        var plan = RecursiveAclRestorePlan(response);
-        if (!ContainerRecursiveAclRestoreValidation.SameCommand(plan.Command, command)) throw ContainerRecursiveAclRestoreValidation.Invalid();
-        return plan;
+        try
+        {
+            var response = await client.PlanAsync(request, RecursiveAclRestoreHeaders("Plan", request), deadline: DateTime.UtcNow.AddSeconds(330), cancellationToken: cancellationToken);
+            var plan = RecursiveAclRestorePlan(response);
+            if (!ContainerRecursiveAclRestoreValidation.SameCommand(plan.Command, command)) throw ContainerRecursiveAclRestoreValidation.Invalid();
+            return plan;
+        }
+        catch (RpcException error) when (RecursiveAclRestorePreflightCode(error) is { } code)
+        { throw new ContainerRecursiveAclRestorePreflightRejectedException(code); }
     }
     public Task<ContainerRecursiveAclRestoreReceiptDto> ApplyContainerRecursiveAclRestoreAsync(ContainerRecursiveAclRestoreOperationDto operation, CancellationToken cancellationToken) => RecursiveAclRestoreAction("Apply", operation, cancellationToken);
     public Task<ContainerRecursiveAclRestoreReceiptDto> DiscardContainerRecursiveAclRestoreAsync(ContainerRecursiveAclRestoreOperationDto operation, CancellationToken cancellationToken) => RecursiveAclRestoreAction("Discard", operation, cancellationToken);
@@ -56,13 +61,19 @@ public sealed partial class AgentGateway : IContainerRecursiveAclRestoreGateway
             Plan = RecursiveAclRestorePlan(operation.Plan), Context = UploadContext(operation.Context) };
         var client = await RecursiveAclRestoreClient(cancellationToken);
         var headers = RecursiveAclRestoreHeaders(action, request); var deadline = DateTime.UtcNow.AddSeconds(330);
-        var response = action switch
+        ContainerRecursiveAclRestoreReceipt response;
+        try
         {
-            "Apply" => await client.ApplyAsync(request, headers, deadline, cancellationToken),
-            "Inspect" => await client.InspectAsync(request, headers, deadline, cancellationToken),
-            "Discard" => await client.DiscardAsync(request, headers, deadline, cancellationToken),
-            _ => throw new ArgumentException("CONTAINER_RECURSIVE_ACL_RESTORE_ACTION_INVALID")
-        };
+            response = action switch
+            {
+                "Apply" => await client.ApplyAsync(request, headers, deadline, cancellationToken),
+                "Inspect" => await client.InspectAsync(request, headers, deadline, cancellationToken),
+                "Discard" => await client.DiscardAsync(request, headers, deadline, cancellationToken),
+                _ => throw new ArgumentException("CONTAINER_RECURSIVE_ACL_RESTORE_ACTION_INVALID")
+            };
+        }
+        catch (RpcException error) when (action == "Apply" && RecursiveAclRestoreSourceCode(error) is { } code)
+        { throw new ContainerRecursiveAclRestorePreflightRejectedException(code); }
         if (response.OperationId != request.OperationId) throw ContainerRecursiveAclRestoreValidation.Invalid();
         var receipt = new ContainerRecursiveAclRestoreReceiptDto(operation.Id, response.ContainerId, response.InstanceId, response.Fingerprint,
             response.TargetProof, response.State, response.BindingCurrent, response.Replayed, response.CompletedCount, response.ChangedCount,
@@ -70,6 +81,25 @@ public sealed partial class AgentGateway : IContainerRecursiveAclRestoreGateway
             response.HistoryDigest, response.HistoryAvailable, response.OutcomeDigest, response.AclType);
         ContainerRecursiveAclRestoreValidation.Receipt(operation, receipt); return receipt;
     }
+    private static string? RecursiveAclRestoreSourceCode(RpcException error) => (error.StatusCode, error.Status.Detail) switch
+    {
+        (StatusCode.Aborted, "CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_CHANGED" or "CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_TREE_MISMATCH") => error.Status.Detail,
+        (StatusCode.FailedPrecondition, "CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_NOT_FOUND" or "CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_INVALID") => error.Status.Detail,
+        _ => null
+    };
+    private static string? RecursiveAclRestorePreflightCode(RpcException error) => RecursiveAclRestoreSourceCode(error) ?? (error.StatusCode, error.Status.Detail) switch
+    {
+        (StatusCode.Aborted, "CONTAINER_RECURSIVE_ACL_RESTORE_VERSION_CONFLICT" or "CONTAINER_RECURSIVE_ACL_RESTORE_TREE_CHANGED") => "CONTAINER_RECURSIVE_ACL_RESTORE_VERSION_CONFLICT",
+        (StatusCode.InvalidArgument, "CONTAINER_RECURSIVE_ACL_RESTORE_PLAN_INVALID") => "CONTAINER_RECURSIVE_ACL_RESTORE_PLAN_INVALID",
+        (StatusCode.FailedPrecondition, "CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_UNSUPPORTED" or "CONTAINER_RECURSIVE_ACL_RESTORE_EXTENDED_METADATA_REQUIRED" or
+            "CONTAINER_RECURSIVE_ACL_RESTORE_MAPPING_UNPROVEN" or "CONTAINER_RECURSIVE_ACL_RESTORE_UNSUPPORTED") => error.Status.Detail,
+        (StatusCode.ResourceExhausted, "CONTAINER_RECURSIVE_ACL_RESTORE_ATTRIBUTES_LIMIT" or "CONTAINER_RECURSIVE_ACL_RESTORE_TREE_LIMIT" or "CONTAINER_RECURSIVE_ACL_RESTORE_MANIFEST_LIMIT") => error.Status.Detail,
+        (StatusCode.PermissionDenied, "CONTAINER_RECURSIVE_ACL_RESTORE_PROTECTED" or "CONTAINER_PROTECTED" or "CONTAINER_UNSAFE_ISOLATION" or "CONTAINER_UNSAFE_MOUNT" or
+            "CONTAINER_FILES_SHARED_CORE_MOUNT" or "CONTAINER_UPLOAD_PUBLISH_READ_ONLY" or "CONTAINER_UPLOAD_PUBLISH_MOUNT_ROOT") => "CONTAINER_RECURSIVE_ACL_RESTORE_PROTECTED",
+        (StatusCode.FailedPrecondition, "CONTAINER_RECURSIVE_ACL_RESTORE_ROOT_CHANGED" or "CONTAINER_FILES_TARGET_MISSING" or "CONTAINER_FILES_INSTANCE_CHANGED" or
+            "CONTAINER_FILES_TARGET_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or "CONTAINER_NOT_RUNNING") => "CONTAINER_RECURSIVE_ACL_RESTORE_TARGET_CHANGED",
+        _ => null
+    };
     private static ContainerRecursiveAclRestoreCommand RecursiveAclRestoreCommand(ContainerRecursiveAclRestoreCommandDto command) => new()
     { Location = ContainerLocation(command.Location), CaptureId = command.CaptureId, ExpectedHistoryDigest = command.ExpectedHistoryDigest, ExpectedVersion = command.ExpectedVersion };
     private static ContainerRecursiveAclRestorePlan RecursiveAclRestorePlan(ContainerRecursiveAclRestorePlanDto plan) => new()
