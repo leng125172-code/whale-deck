@@ -43,3 +43,6 @@
 收尾：8范围复跑通过；本轮修改MD的728个本地链接存在、缺失0，原常规整链QA正文按Git原字节前缀保留，CI YAML解析与diff检查通过，Git索引1000:1000/664。候选272474c已普通推送成功，无部署重放；新文档提交的CI未核实终态，不声称新CI已全绿。
 
 项目图谱事件 `whale-deck.container-acl.272474c.recursive-restore-paging` 首次传输失败，同eventId重试取得project/key/event匹配且duplicate=false成功回执，pending移入synced；container-acl保持active。
+
+
+后续（2026-11-05）：新Ready原上下文正常退出、同Subject新登录隔离与原五分钟期限自然到期已独立实机签收，见[退出与自然到期](CONTAINER_RECURSIVE_ACL_RESTORE_READY_LOGOUT.md)。本报告原跨页/明确取消事实保持，不改记为当时已验证退出中的Ready。
