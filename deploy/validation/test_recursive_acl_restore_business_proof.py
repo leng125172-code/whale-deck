@@ -85,6 +85,13 @@ class BusinessTemporaryRecordsTests(unittest.TestCase):
         data['audits'].append(dict(id=str(uuid.uuid4()),actor_subject='proof-admin',target_type='container',target_id=row['container_id'],action='containers.files.recursive-acl-restore.cancel-requested',result='Accepted',job_id=row['id'],trace_id='test-trace',detail_json=json.dumps(metadata(row))))
         proof=self.prove(data,result,baseline);self.assertTrue(proof['canceled']);self.assertIsNone(proof['request'])
         with self.assertRaises(AssertionError):records_bound_to_business(proof,bundle,source,frame,item['before'],item['after'],self.fixture.attrs)
+    def test_real_jsonb_projection_objects_and_text_metadata_bind_identically(self):
+        _,_,_,_,data,result,baseline=self.projection();expected=self.prove(data,result,baseline)
+        for job in (data['planJob'],data['executionJob']):job['request_json']=json.loads(job['request_json'])
+        for audit in data['audits']:audit['detail_json']=json.loads(audit['detail_json'])
+        self.assertEqual(expected,self.prove(data,result,baseline))
+        data['audits'][0]['detail_json']['extra']='private'
+        with self.assertRaises(AssertionError):self.prove(data,result,baseline)
     def test_job_receipt_scope_count_and_metadata_tampering_fail_closed(self):
         _,_,_,_,data,result,baseline=self.projection()
         for name in ['actor','container','job','pending','receipt-id','count','source','audit-extra','metadata-extra','receipt-MAC-missing']:

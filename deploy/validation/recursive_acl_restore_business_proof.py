@@ -31,6 +31,15 @@ def private_json(raw):
     return json.loads(raw,object_pairs_hook=unique,parse_constant=invalid)
 
 
+def json_projection(value):
+    """PostgreSQL jsonb projects objects; text columns still use strict raw JSON."""
+    if type(value) is dict:
+        encoded=json.dumps(value,ensure_ascii=False,allow_nan=False).encode('utf-8')
+        assert 0<len(encoded)<=65536,'BUSINESS_PROOF_JSON_LIMIT'
+        return value
+    return private_json(value)
+
+
 def camel(value):
     if type(value) is dict:
         result={}
@@ -89,7 +98,7 @@ def audit_proof(audits,row,canceled):
         action=item['action'].removeprefix(prefix);assert action in expected and action not in seen;seen.add(action)
         assert (item['result'],item['job_id'])==expected[action] and item['id'] not in ids;ids.add(item['id'])
         assert type(item['trace_id']) is str and 0<len(item['trace_id'])<=128
-        typed_equal(private_json(item['detail_json']),metadata(row))
+        typed_equal(json_projection(item['detail_json']),metadata(row))
     assert seen==expected.keys()
 
 
@@ -111,7 +120,7 @@ def database_proof(data,result,baseline,subject):
     assert [result[k] for k in ('rootUid','rootGid','rootMode','executorUid','executorGid')]==[*plan['rootIdentity'][3:5],plan['rootIdentity'][2],plan['uid'],plan['gid']]
     assert result['manifestDigest']==plan['manifestDigest'] and all(type(data[k]) is int and data[k]>=0 for k in ('pending','accepted','confirmed','events')) and data['pending']==0 and data['accepted']==1
     plan_job=data['planJob'];assert plan_job['id']==row['id'] and plan_job['actor_subject']==subject and plan_job['state']=='Succeeded' and plan_job['job_type']=='containers.files.recursive-acl-restore-plan'
-    assert plan_job['idempotency_key']==row['idempotency_key'];typed_equal(private_json(plan_job['request_json']),metadata(row))
+    assert plan_job['idempotency_key']==row['idempotency_key'];typed_equal(json_projection(plan_job['request_json']),metadata(row))
     canceled=row['state']=='Canceled';assert row['state'] in ('Canceled','Succeeded')
     if canceled:
         assert row['execution_job_id'] is row['execution_hash'] is row['root_started_at_utc'] is data['executionJob'] is result['executionJobId'] is None
@@ -122,7 +131,7 @@ def database_proof(data,result,baseline,subject):
     else:
         execution=identifier(row['execution_job_id']);assert execution!=operation and execution!=source['captureId'] and operation!=source['captureId']
         job=data['executionJob'];assert job['id']==row['execution_job_id']==result['executionJobId'] and job['actor_subject']==subject and job['state']=='Succeeded' and job['job_type']=='containers.files.recursive-acl-restore'
-        assert job['idempotency_key']==job['id'];typed_equal(private_json(job['request_json']),metadata(row))
+        assert job['idempotency_key']==job['id'];typed_equal(json_projection(job['request_json']),metadata(row))
         assert data['confirmed']==1 and data['events']>=4 and row['root_started_at_utc']
         for key in ('execution_hash','receipt_hash'):assert type(row[key]) is str and HASH.fullmatch(row[key])
         request=dict(operationId=execution,owner=row['owner_hash'],plan=plan)

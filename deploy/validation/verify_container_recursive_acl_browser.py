@@ -73,7 +73,7 @@ def verify(name,history=False,restore=False):
     assert previous==private_json(evidence/('source-physical-final.json' if restore else 'physical-final.json'))
     target_shots=sum(1 if label in ('default','default-noop','clear-default') else 2 for label in labels)
     images=list(evidence.glob('*.png'));assert len(images)==2*count+target_shots+1+(7 if history else 0)+(30 if restore else 0) and len(list(evidence.glob('*-targets.png')))==target_shots
-    assert len(list(evidence.glob('*-ready.png')))==count and len(list(evidence.glob('*-result.png')))==count and (evidence/'ordinary-denied.png').exists()
+    assert len(list(evidence.glob('*-ready.png')))==count+(5 if restore else 0) and len(list(evidence.glob('*-result.png')))==count+(5 if restore else 0) and (evidence/'ordinary-denied.png').exists()
     for image in images:
         data=image.read_bytes();assert len(data)>1000 and data[:8]==b'\x89PNG\r\n\x1a\n'
         width,height=struct.unpack('>II',data[16:24]);assert height==600 and width in (320,1440)
