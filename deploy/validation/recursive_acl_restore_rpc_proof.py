@@ -100,20 +100,33 @@ def native_acl(value):
     assert actual == value
 
 
-def manifest_proof(plan, metadata, source, before, attribute_digest):
+def manifest_proof(plan, metadata, source, before, attribute_digest, *, operation_id, owner):
     fields(metadata, ('schemaVersion', 'resourceType', 'storageId', 'operationId', 'owner', 'plan', 'entries', 'createdAtUnixMs', 'historyDigest'))
     integer(metadata['schemaVersion'], 1, 1); integer(metadata['createdAtUnixMs'], 0, 9223372036854775807)
     assert metadata['resourceType'] == 'ContainerRecursiveAclRestoreMetadata' and metadata['storageId'] == 'database-platform.backup.hdd' and metadata['plan'] == plan
-    assert re.fullmatch('[a-f0-9]{32}', metadata['operationId']) and re.fullmatch('[A-F0-9]{64}', metadata['owner'])
+    assert re.fullmatch('[a-f0-9]{32}', operation_id) and re.fullmatch('[A-F0-9]{64}', owner)
+    assert metadata['operationId'] == operation_id and metadata['owner'] == owner
     assert metadata['historyDigest'] == digest(b'whaledeck-container-recursive-acl-restore-history-v1\n', {k:v for k,v in metadata.items() if k != 'historyDigest'})
     entries = metadata['entries']; assert type(entries) is list and len(entries) == plan['entryCount']
     assert digest(b'whaledeck-container-recursive-acl-restore-manifest-v1\n', entries) == plan['manifestDigest']
     historical = {e['relativePath']:e['plan'] for e in source['metadata']['entries']}; paths = [e['relativePath'] for e in entries]
     assert paths == sorted(before, key=lambda rel:(-(rel.count('/') + 1 if rel else 0), rel.encode())) and set(paths) == set(historical)
-    projection = []; files = 0; changes = 0
+    projection = []; files = 0; changes = 0; inodes = set()
     hash_value(attribute_digest)
     for entry in entries:
         fields(entry, ('relativePath', 'plan')); rel = entry['relativePath']; child = entry['plan']; old = before[rel]
+        fields(child, ('schemaVersion', 'command', 'targetProof', 'parentIdentity', 'parentVersion', 'uid', 'gid', 'fingerprint', 'kind', 'sourceIdentity', 'attributesDigest', 'accessAcl', 'defaultAcl', 'targetMode', 'noChange'))
+        integer(child['schemaVersion'], 1, 1)
+        assert all(child[k] == plan[k] for k in ('targetProof', 'uid', 'gid'))
+        identity = child['sourceIdentity']; assert type(identity) is list and len(identity) == 9 and all(type(v) is int for v in identity)
+        inode = tuple(identity[:2]); assert inode not in inodes and inode[0] == plan['rootIdentity'][0]; inodes.add(inode)
+        if rel:
+            parent = rel.rpartition('/')[0]; assert parent in before and stat.S_ISDIR(before[parent]['identity'][2])
+            parent_path = plan['command']['path'] + ('/' + parent if parent else '')
+            assert child['parentIdentity'] == before[parent]['identity'][:2] and child['parentVersion'] == file_version(plan['command'], parent_path, before[parent]['identity'])
+        else:
+            assert child['kind'] == 'Directory' and child['sourceIdentity'] == plan['rootIdentity']
+            assert all(child[k] == plan[k] for k in ('parentIdentity', 'parentVersion'))
         assert child['kind'] == historical[rel]['kind'] and child['sourceIdentity'] == old['identity'] and child['accessAcl'] == old['access'] and child['defaultAcl'] == old['default']
         assert child['kind'] in ('File', 'Directory') and child['attributesDigest'] == attribute_digest
         kind = plan['restoreSource']['changedAclType']; file = child['kind'] == 'File'; files += file

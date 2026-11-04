@@ -124,6 +124,36 @@ class RestoreActualTemporaryManifestProofTests(unittest.TestCase):
             self.k.engine.plan(command, self.k.b.base.session)
         self.assertEqual(before, self.k.b.snapshot())
 
+    def test_wrong_expected_current_version_has_plan_invalid_without_state_or_hdd_write(self):
+        source = self.capture('access'); before = self.k.b.snapshot()
+        command = self.k.command(source['request'], source['result']); command['expectedVersion'] = '0'*64
+        with self.assertRaisesRegex(self.k.b.base.r.Rejected, 'CONTAINER_RECURSIVE_ACL_RESTORE_PLAN_INVALID'):
+            self.k.engine.plan(command, self.k.b.base.session)
+        self.assertEqual(before, self.k.b.snapshot()); self.assertFalse(list(self.k.state.iterdir()))
+
+    def test_coherent_rehash_cannot_substitute_child_authority_parent_topology_or_operation(self):
+        source = self.capture('access'); before = self.k.b.snapshot(); request = self.k.request(source['request'], source['result'])
+        self.k.engine.apply(request, self.k.b.base.session)
+        metadata = json.loads((self.k.b.base.disk.target/'container-recursive-acl-restore-v1'/(request['operationId']+'.json')).read_bytes())
+        attrs = digest(b'whaledeck-container-acl-attributes-v1\n', [['user.preserve', base64.b64encode(os.getxattr(self.k.b.tree, 'user.preserve')).decode()]])
+        for index in (0, 3):
+            for key in ('uid', 'gid', 'targetProof', 'parentIdentity', 'parentVersion'):
+                changed = copy.deepcopy(metadata); child = changed['entries'][index]['plan']
+                if key in ('uid', 'gid'): child[key] += 1
+                elif key == 'parentIdentity': child[key][1] += 1
+                else: child[key] = 'F'*64
+                child['fingerprint'] = digest(b'whaledeck-container-acl-plan-v1\n', {k:v for k,v in child.items() if k != 'fingerprint'})
+                plan = changed['plan']; plan['manifestDigest'] = digest(b'whaledeck-container-recursive-acl-restore-manifest-v1\n', changed['entries'])
+                plan['fingerprint'] = digest(b'whaledeck-container-recursive-acl-restore-plan-v1\n', {k:v for k,v in plan.items() if k != 'fingerprint'})
+                changed['historyDigest'] = digest(b'whaledeck-container-recursive-acl-restore-history-v1\n', {k:v for k,v in changed.items() if k != 'historyDigest'})
+                with self.subTest(index=index, key=key), self.assertRaises(AssertionError):
+                    manifest_proof(plan, changed, source, before, attrs, operation_id=request['operationId'], owner=request['owner'])
+        for key in ('operationId', 'owner'):
+            changed = copy.deepcopy(metadata); changed[key] = 'f'*32 if key == 'operationId' else 'F'*64
+            changed['historyDigest'] = digest(b'whaledeck-container-recursive-acl-restore-history-v1\n', {k:v for k,v in changed.items() if k != 'historyDigest'})
+            with self.subTest(key=key), self.assertRaises(AssertionError):
+                manifest_proof(changed['plan'], changed, source, before, attrs, operation_id=request['operationId'], owner=request['owner'])
+
     def test_actual_native_plan_manifest_source_and_heterogeneous_target_projections(self):
         for kind in ('access', 'default'):
             source = self.capture(kind); before = self.k.b.snapshot(); request = self.k.request(source['request'], source['result']); plan = request['plan']
@@ -136,14 +166,14 @@ class RestoreActualTemporaryManifestProofTests(unittest.TestCase):
             metadata_path = self.k.b.base.disk.target/'container-recursive-acl-restore-v1'/(request['operationId']+'.json')
             metadata = json.loads(metadata_path.read_bytes())
             attributes = digest(b'whaledeck-container-acl-attributes-v1\n', [['user.preserve', base64.b64encode(os.getxattr(self.k.b.tree, 'user.preserve')).decode()]])
-            entries = manifest_proof(plan, metadata, source, before, attributes)
+            entries = manifest_proof(plan, metadata, source, before, attributes, operation_id=request['operationId'], owner=request['owner'])
             self.assertEqual(4, len(entries))
             for field in ('restoreTargetsDigest', 'manifestDigest', 'fingerprint'):
                 changed = copy.deepcopy(plan); changed[field] = 'F'*64
                 with self.subTest(kind=kind, field=field), self.assertRaises(AssertionError):
                     source_proof(changed, source, frame, before)
             changed = copy.deepcopy(metadata); changed['entries'][0]['plan']['command']['entries'][0]['permissions'] ^= 1
-            with self.assertRaises(AssertionError): manifest_proof(plan, changed, source, before, attributes)
+            with self.assertRaises(AssertionError): manifest_proof(plan, changed, source, before, attributes, operation_id=request['operationId'], owner=request['owner'])
             for index in range(9):
                 changed = list(frame); changed[index] += 1
                 with self.subTest(frame=index), self.assertRaises(AssertionError): source_proof(plan, source, changed, before)

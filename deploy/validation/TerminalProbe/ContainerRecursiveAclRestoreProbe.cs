@@ -100,8 +100,10 @@ internal static class ContainerRecursiveAclRestoreProbe
                         // a source-scope rejection, not proof of the read-only write guard.
                         changed = request.Clone(); changed.Command.Location.Path = "tmp/recursive-readonly";
                         await Reject(async () => await client.PlanAsync(changed, Headers("Plan", changed), Until(), lifetime.Token), StatusCode.FailedPrecondition);
+                        // An internally constructed plan with a mismatched expected
+                        // version is rejected by the kernel as PLAN_INVALID.
                         changed = request.Clone(); changed.Command.ExpectedVersion = new('0', 64);
-                        await Reject(async () => await client.PlanAsync(changed, Headers("Plan", changed), Until(), lifetime.Token), StatusCode.Aborted);
+                        await Reject(async () => await client.PlanAsync(changed, Headers("Plan", changed), Until(), lifetime.Token), StatusCode.InvalidArgument);
                         changed = request.Clone(); changed.Command.ExpectedHistoryDigest = new('0', 64);
                         await Reject(async () => await client.PlanAsync(changed, Headers("Plan", changed), Until(), lifetime.Token), StatusCode.Aborted);
                         changed = request.Clone(); changed.Command.CaptureId = Guid.NewGuid().ToString("N");
