@@ -44,6 +44,8 @@ jobs:
           node --check deploy/validation/validate_container_recursive_ownership_browser.mjs
           python3 -W error -m py_compile deploy/validation/validate_container_recursive_acl_browser.py deploy/validation/verify_container_recursive_acl_browser.py deploy/validation/recover_container_recursive_acl_browser.py
           node --check deploy/validation/validate_container_recursive_acl_browser.mjs
+          python3 -W error -m py_compile deploy/validation/validate_recursive_acl_auth_only.py
+          node --check deploy/validation/validate_recursive_acl_auth_only.mjs
           node --check deploy/validation/validate_container_recursive_ownership_faults.mjs
           node --check deploy/validation/validate_installed_logout_only.mjs
           python3 -W error -m py_compile deploy/host/whaledeck-container-recursive-acl.py deploy/host/whaledeck-container-recursive-acl-transport.py deploy/validation/validate_container_recursive_acl.py deploy/validation/verify_container_recursive_acl.py

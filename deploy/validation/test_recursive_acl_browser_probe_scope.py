@@ -10,6 +10,7 @@ import unittest
 from validate_container_recursive_acl_browser import managed_entries,managed_plan,snapshot,archive,wait_case,CASES,CHANGES,expected_targets,selected_cases
 from verify_container_recursive_acl_browser import verify
 from recover_container_recursive_acl_browser import recover
+from validate_recursive_acl_auth_only import target as auth_only_target
 
 ROOT=Path(__file__).resolve().parent
 
@@ -74,6 +75,7 @@ class RecursiveAclBrowserProbeScopeTests(unittest.TestCase):
         for name in ('../escape','container-recursive-ownership-browser-'+'a'*32,'container-recursive-acl-browser-'+'A'*32):
             with self.subTest(name=name),self.assertRaises(AssertionError):verify(name)
             with self.subTest(recovery=name),self.assertRaises(AssertionError):recover(name)
+            with self.subTest(auth_only=name),self.assertRaises(AssertionError):auth_only_target(name)
         with tempfile.TemporaryDirectory() as d:
             for name in ('../escape','other','default/result','default-result.json'):
                 with self.subTest(name=name),self.assertRaises(AssertionError):wait_case(None,Path(d),name)
@@ -106,6 +108,11 @@ class RecursiveAclBrowserProbeScopeTests(unittest.TestCase):
         self.assertIn('Object.keys(v).sort()',s);self.assertNotIn('request.allHeaders()).',s)
         self.assertNotIn('url:activePage.url()',s)
         self.assertNotIn('storageState()',s)
+        auth=(ROOT/'validate_recursive_acl_auth_only.mjs').read_text()
+        for forbidden in ('page.route(', 'context.route(', 'addCookies(', 'storageState:', 'localStorage.setItem','sessionStorage.setItem'):
+            self.assertNotIn(forbidden,auth)
+        self.assertIn("name:'首页'",auth)
+        self.assertIn('fileMutations:0',auth)
         self.assertEqual(8,len(CASES));self.assertEqual((2,4,0,2,4,0,2,4),CHANGES)
 
 if __name__=='__main__':unittest.main()
