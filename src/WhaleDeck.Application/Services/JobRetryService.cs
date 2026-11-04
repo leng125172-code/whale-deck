@@ -55,6 +55,7 @@ public sealed class JobRetryService(IJobRepository jobs, IAgentGateway agent, Op
         Guid id, CancellationToken cancellationToken)
     {
         var source = await jobs.FindAsync(id, cancellationToken) ?? throw new KeyNotFoundException("Job was not found.");
+        if (source.JobType is "containers.files.recursive-acl-restore-plan" or "containers.files.recursive-acl-restore") throw new InvalidOperationException("Recursive ACL restoration requires a new source/tree-bound plan and explicit confirmation; generic retry cannot repeat writes.");
         if (source.JobType is "containers.files.recursive-acl-plan" or "containers.files.recursive-acl") throw new InvalidOperationException("Recursive ACL changes require a new tree/version-bound plan and explicit confirmation; generic retry cannot repeat metadata writes.");
         if (source.JobType is "containers.files.acl-plan" or "containers.files.acl") throw new InvalidOperationException("Container ACL changes require a new inode/version-bound ACL plan and explicit confirmation; generic retry cannot repeat metadata writes.");
         if (source.JobType is "containers.files.recursive-ownership-plan" or "containers.files.recursive-ownership") throw new InvalidOperationException("Recursive ownership changes require a new tree/version-bound plan and explicit confirmation; generic retry cannot repeat a partial batch.");
