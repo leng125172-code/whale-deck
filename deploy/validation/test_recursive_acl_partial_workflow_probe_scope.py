@@ -2,7 +2,8 @@
 import ast,copy,json
 from pathlib import Path
 import unittest
-from recursive_acl_partial_proof import require_phase,require_ack
+from recursive_acl_partial_proof import require_phase,require_ack,require_case
+from validate_container_recursive_acl_partial import selected_case
 from verify_container_recursive_acl_partial import target
 
 ROOT=Path(__file__).resolve().parent
@@ -24,6 +25,26 @@ def acknowledgement(before):
 
 
 class RecursiveAclPartialWorkflowScope(unittest.TestCase):
+    def test_scenario_selection_cannot_accidentally_repeat_cancel_or_revoke(self):
+        self.assertEqual('cancel',selected_case([]));self.assertEqual('logout',selected_case(['logout']))
+        for values in (['cancel'],['logout','cancel'],['group-removal'],['--all']):
+            with self.subTest(values=values),self.assertRaises(AssertionError):selected_case(values)
+
+    def test_normal_partial_logout_is_not_cancel_revoke_expiry_or_fabricated_private_get(self):
+        subject='11111111-1111-4111-8111-111111111111';p=phase();p['row'].update(actor_subject=subject,cancel_requested_at_utc=None);p['executionJob']['cancel_requested_at_utc']=None
+        identity=dict(pk=1,uuid=subject,username='whaledeck-upload-qa-'+'a'*12,is_active=True,groups=['admin'])
+        authority=dict(kind='logout',subject=subject,before=identity,after=copy.deepcopy(identity),noIdentityMutation=True,permissionExpiresAtUtc='2026-11-04T14:00:00+00:00',confirmedAtUtc='2026-11-04T12:00:00+00:00')
+        ui=dict(subject=subject,normalDualLogout=True,registrations=1,confirmations=1,cancellations=0,acknowledgements=0,uploads=0,result=None,hintsCleared=True)
+        require_case('logout',p,ui,authority)
+        for key,value in [('normalDualLogout',False),('cancellations',1),('result',{'state':'Partial'}),('hintsCleared',False),('subject','other')]:
+            with self.subTest(key=key),self.assertRaises(AssertionError):require_case('logout',p,{**ui,key:value},authority)
+        for changed in ({'groups':[]},{'is_active':False},{'pk':2}):
+            bad=copy.deepcopy(authority);bad['after'].update(changed)
+            with self.subTest(changed=changed),self.assertRaises(AssertionError):require_case('logout',p,ui,bad)
+        with self.assertRaises(AssertionError):require_case('logout',p,ui,{**authority,'permissionExpiresAtUtc':'2026-11-04T12:59:59+00:00'})
+        p['row']['cancel_requested_at_utc']='cancel'
+        with self.assertRaises(AssertionError):require_case('logout',p,ui,authority)
+
     def test_partial_cannot_finish_job_release_barrier_or_assert_zero_changes(self):
         original=phase();require_phase(original)
         for key,value in [('publish_barrier',False),('completed_at_utc','early'),('root_state','Aborted'),('changed_count',0),('changed_count',True),('unknown_count',1),('history_verified',False),('lease_token','live'),('acknowledged_by','somebody')]:

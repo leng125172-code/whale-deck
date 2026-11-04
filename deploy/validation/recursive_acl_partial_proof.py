@@ -3,6 +3,7 @@ import json
 import os
 import re
 import uuid
+import datetime as dt
 
 from bound_container_recursive_acl_cut import record_for,child_id,STATE
 from validate_container_recursive_acl_browser import managed_plan,expected_targets,read_metadata,archive
@@ -10,8 +11,20 @@ from validate_container_recursive_acl import PATHS,preserved
 from verify_container_recursive_acl import file_version,acl_mode
 from verify_container_recursive_permissions import digest,unsigned
 from validate_container_upload_recovery_agent import trusted
+from validate_container_recursive_permission_faults import require_logout_authority
 
 COUNTS=('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')
+
+
+def require_case(kind,partial,owner,authority=None):
+    assert kind in ('cancel','logout') and owner['subject']==partial['row']['actor_subject'] and owner['normalDualLogout'] is True
+    assert owner['registrations']==owner['confirmations']==1 and owner['cancellations']==int(kind=='cancel') and owner['acknowledgements']==owner['uploads']==0
+    assert bool(partial['row']['cancel_requested_at_utc']) is (kind=='cancel') and bool(partial['executionJob']['cancel_requested_at_utc']) is (kind=='cancel')
+    if kind=='logout':
+        assert owner['result'] is None and owner['hintsCleared'] is True
+        require_logout_authority(authority,owner['subject'])
+        expiry=dt.datetime.fromisoformat(authority['permissionExpiresAtUtc']);ended=dt.datetime.fromisoformat(authority['confirmedAtUtc'])
+        assert expiry.utcoffset() is not None and ended.utcoffset() is not None and expiry>ended+dt.timedelta(hours=1)
 
 
 def require_phase(data,ack=False):

@@ -5,7 +5,7 @@ from pathlib import Path
 import requests
 
 from validate_container_recursive_acl_partial import SOURCES,host_identity,no_active_work,preflight,load,preservation_snapshot,owned,snapshot,source_closure
-from recursive_acl_partial_proof import require_ack,verify_records
+from recursive_acl_partial_proof import require_ack,verify_records,require_case
 from verify_container_recursive_permissions import private_json
 from validate_container_upload_recovery_agent import trusted
 from validate_metric_continuity import query
@@ -20,6 +20,7 @@ def target(name):
 def verify(name):
     p=target(name);trusted(p,True);scope=private_json(p/'scope.json');b=private_json(p/'baseline.json');accepted=private_json(p/'verified.json');facts=private_json(p/'facts.json')
     owner=private_json(p/'owner-browser.json');recovery=private_json(p/'recovery-browser.json');partial=private_json(p/'partial.sql.json');ack=private_json(p/'ack.sql.json')
+    kind=b.get('kind','cancel');assert kind in ('cancel','logout') and scope.get('kind','cancel')==accepted.get('kind','cancel')==kind
     repo=Path(__file__).resolve().parents[2];assert scope['validationSourceSha256']==source_closure(repo,scope['validationSourceRevision'],seeds=SOURCES)
     for n,sha in scope['validationSourceSha256'].items():assert hashlib.sha256(subprocess.check_output(['git','-C',str(repo),'show',scope['validationSourceRevision']+':deploy/validation/'+n])).hexdigest()==sha
     for n,sha in scope['sourceHashes'].items():
@@ -28,8 +29,10 @@ def verify(name):
     assert accepted['actualPartialAndDifferentAdminAck'] and owner['subject']==partial['row']['actor_subject'] and recovery['subject']!=owner['subject']
     for role,ui in (('owner',owner),('recovery',recovery)):
         assert ui['id']==accepted['id'] and ui['actualUi'] and ui['normalDualLogout'] and ui['uploads']==0
-        assert ui['registrations']==ui['confirmations']==ui['cancellations']==int(role=='owner') and ui['acknowledgements']==int(role=='recovery')
+        assert ui['registrations']==ui['confirmations']==int(role=='owner') and ui['cancellations']==int(role=='owner' and kind=='cancel') and ui['acknowledgements']==int(role=='recovery')
         logout=ui['logout'];assert logout['normalUiLogout'] and logout['providerNavigationObserved'] and logout['finalLoginPage'] and logout['postStatus'] in (302,303) and logout['bffStatus']==401 and logout['identityStatus'] in (401,403)
+    if kind=='logout':assert private_json(p/'owner-logout.json')==owner['logout']
+    require_case(kind,partial,owner,private_json(p/'logout-authority.json') if kind=='logout' else None)
     require_ack(partial,ack,recovery['subject']);assert private_json(p/'recovery-canceled.json')['acknowledgements']==0
     files=load('/usr/local/libexec/whaledeck-files.py','partial_second_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','partial_second_hdd').FileBackups(files)
     before=b['original'];after=private_json(p/'physical-partial.json');assert after==private_json(p/'physical-final.json')
@@ -42,7 +45,7 @@ def verify(name):
     observed=preservation_snapshot(storage);assert all(observed.get(k)==v for k,v in scope['preservedFiles'].items())
     core=owned.common.core_snapshot();assert core.keys()==scope['coreBefore'].keys()
     for n,v in scope['coreBefore'].items():assert core[n][:3]==tuple(v[:3]) if n.lstrip('/')=='whaledeck-worker' else core[n]==tuple(v)
-    images=list(p.glob('*.png'));assert {v.name for v in images}=={'inflight.png','partial-counts.png','recovery-counts.png','recovery-confirm.png','acknowledged.png'}
+    images=list(p.glob('*.png'));assert {v.name for v in images}=={'inflight.png','owner-logged-out.png' if kind=='logout' else 'partial-counts.png','recovery-counts.png','recovery-confirm.png','acknowledged.png'}
     for image in images:
         raw=image.read_bytes();assert len(raw)>1000 and raw[:8]==b'\x89PNG\r\n\x1a\n' and struct.unpack('>II',raw[16:24])==(320,600)
     api=requests.Session();api.trust_env=False;api.headers['Authorization']='Bearer '+require(container_environment(),'Authentication__Authentik__ApiToken')
@@ -50,7 +53,7 @@ def verify(name):
         r=api.get(AUTHENTIK_API+'core/users/',params=dict(search='whaledeck-upload-qa-',page_size=100),timeout=20);assert r.status_code==200 and not r.json().get('pagination',{}).get('next') and not any(u['username'].startswith('whaledeck-upload-qa-') for u in r.json()['results'])
     finally:api.close()
     no_active_work();preflight()
-    return dict(independentReadOnlyVerifier=True,actualPartialAndDifferentAdminAck=True,partialCounts=facts['partial']['counts'],rootAndHddRereadAndRetained=True,ackAuditCurrentDifferentAdmin=True,
+    return dict(independentReadOnlyVerifier=True,actualPartialAndDifferentAdminAck=True,kind=kind,partialCounts=facts['partial']['counts'],rootAndHddRereadAndRetained=True,ackAuditCurrentDifferentAdmin=True,
         normalDualLogoutContexts=2,temporaryIdentitiesAbsent=True,exactSourceAndContainerAbsent=True,physicalBytesCheckedByParentBeforeCleanup=True,sourceBytesRereadAfterCleanup=False)
 
 

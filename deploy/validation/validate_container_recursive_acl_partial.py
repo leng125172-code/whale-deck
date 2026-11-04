@@ -3,16 +3,24 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 import hashlib,json,os,re,subprocess,sys,time,uuid
+import datetime as dt
 from pathlib import Path
 
 from bound_container_recursive_acl_partial_cut import freeze_partial_acl
 from validate_container_recursive_acl_faults import owned,Worker,command,preflight,host_identity,no_active_work,load,temporary_user,preservation_snapshot,inventory,remove_proved,NAMES,PATHS,write_signal,wait_signal,snapshot
-from recursive_acl_partial_proof import verify_records,require_ack
+from recursive_acl_partial_proof import verify_records,require_ack,require_case
 from acl_source_apply_missing_proof import source_closure
 from validate_container_upload_recovery_agent import trusted
+from owned_authentik_revocation import OwnedAuthentikRevocation
+from validate_container_recursive_permission_faults import require_logout_authority
 
 PHASE='startup'
 SOURCES=('validate_container_recursive_acl_partial.py','validate_container_recursive_acl_partial.mjs','verify_container_recursive_acl_partial.py','recursive_acl_partial_proof.py','test_recursive_acl_partial_workflow_probe_scope.py')
+
+
+def selected_case(arguments):
+    assert tuple(arguments) in ((),('logout',)), 'UNKNOWN_PARTIAL_ACL_SCENARIO'
+    return 'logout' if arguments else 'cancel'
 
 
 def wait_state(identifier,state):
@@ -42,7 +50,7 @@ def stop(process):
 
 def main():
     global PHASE
-    assert os.geteuid()==0 and len(sys.argv)==2;os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
+    assert os.geteuid()==0 and len(sys.argv) in (2,3);kind=selected_case(sys.argv[2:]);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision);repo=Path(__file__).resolve().parents[2]
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_VALIDATION_SOURCE_FIRST'
     source=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes=source_closure(repo,source,seeds=SOURCES)
@@ -54,7 +62,7 @@ def main():
     print(json.dumps(dict(recursiveAclPartial='started',evidence=str(evidence))),flush=True)
     reader=load('/usr/local/libexec/whaledeck-container-files.py','partial_acl_reader');files=reader.trusted_module('whaledeck-files.py','partial_acl_files')
     storage=load('/usr/local/libexec/whaledeck-file-backups.py','partial_acl_hdd').FileBackups(files);acl=load('/usr/local/libexec/whaledeck-container-acl.py','partial_acl_acl')
-    old=preservation_snapshot(storage);scope=dict(revision=revision,validationSourceRevision=source,validationSourceSha256=hashes,sourceHashes=installed,hostIdentity=hosts,coreBefore=core,preservedFiles=old)
+    old=preservation_snapshot(storage);scope=dict(revision=revision,validationSourceRevision=source,validationSourceSha256=hashes,sourceHashes=installed,hostIdentity=hosts,coreBefore=core,preservedFiles=old,kind=kind)
     (evidence/'scope.json').write_text(json.dumps(scope));worker=Worker();owner_process=recovery_process=held=None;proved=False
     with owned.fixture(restartable_core=('whaledeck-worker',)) as fixture,ExitStack() as users:
         owner=users.enter_context(temporary_user(True));recovery=users.enter_context(temporary_user(True))
@@ -67,7 +75,7 @@ def main():
             os.setxattr(path,'user.whaledeck-recursive',b'preserve ordinary attribute');os.chown(path,*owners[relative]);path.chmod(0o750 if relative=='' else 0o700 if kind=='Directory' else 0o640 if relative=='one.bin' else 0o600)
         for relative in PATHS:os.utime(root/relative,ns=(1700000000123456789,1700000000123456789))
         observed=json.loads(command('docker','inspect',fixture['identifier']))[0];current=lambda:inventory(root,reader,content,acl);original=current()
-        baseline=dict(revision=revision,validationSourceRevision=source,containerId=fixture['identifier'],containerName=observed['Name'].lstrip('/'),containerPid=observed['State']['Pid'],instanceId=str(observed['State']['Pid'])+':'+observed['State']['StartedAt'],source=str(fixture['folder']),original=original,evidence=str(evidence),bytesPerFile=len(content),sha256=hashlib.sha256(content).hexdigest().upper())
+        baseline=dict(revision=revision,validationSourceRevision=source,containerId=fixture['identifier'],containerName=observed['Name'].lstrip('/'),containerPid=observed['State']['Pid'],instanceId=str(observed['State']['Pid'])+':'+observed['State']['StartedAt'],source=str(fixture['folder']),original=original,evidence=str(evidence),bytesPerFile=len(content),sha256=hashlib.sha256(content).hexdigest().upper(),kind=kind)
         with storage.target(create_namespace=False,read_only=True) as (configuration,fd):storage.attest(configuration,fd,read_only=True);baseline.update(sourceDevice=root.stat().st_dev,hddDevice=os.fstat(fd).st_dev)
         (evidence/'baseline.json').write_text(json.dumps(baseline))
         try:
@@ -79,18 +87,29 @@ def main():
                 watch=pool.submit(freeze_partial_acl,row,fixture['folder'],baseline['containerPid'],original,current);worker.start(wait_ready=False);held=watch.result(timeout=28)
             assert held is not None,'ACTUAL_PARTIAL_ACL_CUT_MISSED_NOT_COUNTED'
             (evidence/'cut-root.json').write_text(json.dumps(held.record));(evidence/'cut-physical.json').write_text(json.dumps(current()));(evidence/'bound-helper.json').write_text(json.dumps(dict(pid=held.pid,unit=held.cgroup,proof=held.proof)))
-            PHASE='actual-visible-partial-cancel';began=time.monotonic()
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                exiting=pool.submit(held.wait_exit_seconds,began,15);write_signal(evidence,'action.json',dict(partialCut=True));wait_signal(evidence,'action-done.json',owner_process,40);elapsed=exiting.result(timeout=16)
+            PHASE='actual-visible-partial-'+kind
+            with ExitStack() as checks:
+                identity=checks.enter_context(OwnedAuthentikRevocation(owner[0],ready['subject'])) if kind=='logout' else None
+                if identity:assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc'])>dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
+                began=time.monotonic()
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    exiting=pool.submit(held.wait_exit_seconds,began,15);write_signal(evidence,'action.json',dict(partialCut=True));wait_signal(evidence,'action-done.json',owner_process,40);elapsed=exiting.result(timeout=16)
+                if identity:
+                    response=identity.client.get(identity.url,timeout=5);assert response.status_code==200 and identity.changed is False
+                    authority=dict(kind='logout',subject=ready['subject'],before=identity.before,after=identity.snapshot(response.json()),noIdentityMutation=True,confirmedAtUtc=dt.datetime.now(dt.timezone.utc).isoformat(),permissionExpiresAtUtc=ready['permissionExpiresAtUtc'])
+                    require_logout_authority(authority,ready['subject']);assert dt.datetime.fromisoformat(authority['permissionExpiresAtUtc'])>dt.datetime.fromisoformat(authority['confirmedAtUtc'])+dt.timedelta(hours=1)
+                    (evidence/'logout-authority.json').write_text(json.dumps(authority))
             assert elapsed is not None and elapsed<15,'PRODUCT_DID_NOT_STOP_PARTIAL_ACL_HELPER'
             held.release();held=None;(evidence/'product-helper-exit.json').write_text(json.dumps(dict(productStoppedHelperSeconds=elapsed,validatorKilledHelper=False)))
             PHASE='actual-partial-permanent-proof';partial=wait_state(identifier,'Partial');physical=current();(evidence/'physical-partial.json').write_text(json.dumps(physical))
-            assert partial['row']['cancel_requested_at_utc'] and partial['executionJob']['cancel_requested_at_utc']
+            assert bool(partial['row']['cancel_requested_at_utc']) is (kind=='cancel') and bool(partial['executionJob']['cancel_requested_at_utc']) is (kind=='cancel')
             facts=verify_records(partial,baseline,original,physical,storage,evidence,'partial')
             public_receipt={k[0].lower()+k[1:]:v for k,v in json.loads(partial['row']['receipt_json']).items()}
             write_signal(evidence,'settled.json',dict(id=identifier,state='Partial',receipt=public_receipt))
             assert owner_process.wait(timeout=100)==0,'PARTIAL_OWNER_PAGE_FAILED';owner_ui=json.loads((evidence/'owner-browser.json').read_bytes());assert owner_ui['subject']==ready['subject']
-            baseline.update(id=identifier,originalSubject=ready['subject'],receipt=owner_ui['result']['receipt']);(evidence/'recovery-fixture.json').write_text(json.dumps(baseline))
+            require_case(kind,partial,owner_ui,json.loads((evidence/'logout-authority.json').read_bytes()) if kind=='logout' else None)
+            if kind=='logout':assert owner_ui['result'] is None and owner_ui['hintsCleared'] is True and owner_ui['cancellations']==0
+            baseline.update(id=identifier,originalSubject=ready['subject'],receipt=public_receipt);(evidence/'recovery-fixture.json').write_text(json.dumps(baseline))
             PHASE='actual-different-admin-recovery';recovery_process=browser(repo,revision,'recovery',baseline,recovery);canceled=wait_signal(evidence,'recovery-canceled.json',recovery_process)
             assert canceled['subject']!=ready['subject'] and canceled['acknowledgements']==0 and snapshot(identifier)==partial and current()==physical
             verify_records(partial,baseline,original,physical,storage,evidence,'partial',read_only=True);write_signal(evidence,'acknowledge.json',dict(originalProtectionAndHistoryVerified=True))
@@ -107,7 +126,7 @@ def main():
     after=owned.common.core_snapshot()
     for name,value in core.items():assert after[name][:3]==value[:3] if name.lstrip('/')=='whaledeck-worker' else after[name]==value
     preserved=preservation_snapshot(storage);assert all(preserved.get(k)==v for k,v in old.items());(evidence/'preservation-after.json').write_text(json.dumps(preserved))
-    (evidence/'verified.json').write_text(json.dumps(dict(actualPartialAndDifferentAdminAck=True,id=identifier,productStoppedHelperSeconds=round(elapsed,3),partialCounts=facts['counts'],childHddRecords=facts['childHddRecords'],oldFilesUnchanged=len(old),normalDualLogoutContexts=2,exactSourceAndContainerAbsent=True,originalRootAndHddRetained=True)))
+    (evidence/'verified.json').write_text(json.dumps(dict(actualPartialAndDifferentAdminAck=True,id=identifier,productStoppedHelperSeconds=round(elapsed,3),partialCounts=facts['counts'],childHddRecords=facts['childHddRecords'],oldFilesUnchanged=len(old),normalDualLogoutContexts=2,exactSourceAndContainerAbsent=True,originalRootAndHddRetained=True,kind=kind)))
     print(json.dumps(dict(recursiveAclPartial='passed',evidence=evidence.name,counts=facts['counts'])),flush=True)
 
 
