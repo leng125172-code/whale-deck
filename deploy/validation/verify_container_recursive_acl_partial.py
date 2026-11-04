@@ -8,6 +8,7 @@ from validate_container_recursive_acl_partial import SOURCES,host_identity,no_ac
 from recursive_acl_restart_proof import RESTART_KINDS
 from recursive_acl_partial_restart_proof import verify_partial_restart
 from recursive_acl_partial_unknown_proof import verify_unknown_target,UNKNOWN_KINDS
+from recursive_acl_cross_directory_proof import verify_cross_directory
 from recursive_acl_partial_proof import require_ack,verify_records,require_case
 from verify_container_recursive_permissions import private_json
 from validate_container_upload_recovery_agent import trusted
@@ -55,7 +56,9 @@ def verify(name):
     observed=preservation_snapshot(storage);assert all(observed.get(k)==v for k,v in scope['preservedFiles'].items())
     core=owned.common.core_snapshot();assert core.keys()==scope['coreBefore'].keys()
     for n,v in scope['coreBefore'].items():assert core[n][:3]==tuple(v[:3]) if n.lstrip('/')=='whaledeck-worker' else core[n]==tuple(v)
-    images=list(p.glob('*.png'));assert {v.name for v in images}=={'inflight.png','authority-denied.png' if revoked else 'owner-logged-out.png' if kind=='logout' or unknown else 'partial-counts.png','recovery-counts.png','recovery-confirm.png','acknowledged.png'}
+    cross=bool(b.get('crossDirectory',False));assert cross is bool(scope.get('crossDirectory',False)) is bool(accepted.get('crossDirectory',False))
+    cross_proof=verify_cross_directory(p,ack,recovery,private_json) if cross else None
+    images=list(p.glob('*.png'));assert {v.name for v in images}==({'waiting-pending.png','waiting-succeeded.png'} if cross else set())|{'inflight.png','authority-denied.png' if revoked else 'owner-logged-out.png' if kind=='logout' or unknown else 'partial-counts.png','recovery-counts.png','recovery-confirm.png','acknowledged.png'}
     for image in images:
         raw=image.read_bytes();assert len(raw)>1000 and raw[:8]==b'\x89PNG\r\n\x1a\n' and struct.unpack('>II',raw[16:24])==(320,600)
     api=requests.Session();api.trust_env=False;api.headers['Authorization']='Bearer '+require(container_environment(),'Authentication__Authentik__ApiToken')
@@ -64,7 +67,7 @@ def verify(name):
     finally:api.close()
     no_active_work();preflight()
     return dict(independentReadOnlyVerifier=True,actualPartialAndDifferentAdminAck=not unknown,actualUnknownAfterPartialAndDifferentAdminAck=unknown,kind=kind,partialCounts=facts['partial']['counts'],rootAndHddRereadAndRetained=True,ackAuditCurrentDifferentAdmin=True,
-        normalDualLogoutContexts=1 if revoked else 2,revokedContexts=int(revoked),temporaryIdentitiesAbsent=True,exactSourceAndContainerAbsent=True,physicalBytesCheckedByParentBeforeCleanup=True,sourceBytesRereadAfterCleanup=False)
+        normalDualLogoutContexts=1 if revoked else 2,revokedContexts=int(revoked),temporaryIdentitiesAbsent=True,exactSourceAndContainerAbsent=True,physicalBytesCheckedByParentBeforeCleanup=True,sourceBytesRereadAfterCleanup=False,crossDirectory=cross_proof)
 
 
 if __name__=='__main__':

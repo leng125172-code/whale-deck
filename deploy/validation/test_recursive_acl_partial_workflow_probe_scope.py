@@ -8,6 +8,7 @@ from recursive_acl_restart_proof import require_only_transients,owner_unit
 from recursive_acl_partial_unknown_proof import require_unknown_identity,remove_unknown_target
 from recursive_acl_instance_proof import require_instance_transition,prepare_instance,restart_instance,instance_frame
 import validate_container_file_publishing as owned
+from recursive_acl_cross_directory_proof import selected_waiting,require_registration,require_deferrals,require_completed,require_blocked,clean_waiting,STABLE,WAITING_PATH
 from pathlib import Path
 import unittest
 from recursive_acl_partial_proof import require_phase,require_ack,require_case,entry_checkpoint
@@ -207,6 +208,66 @@ class RecursiveAclPartialWorkflowScope(unittest.TestCase):
         text=(ROOT/'recursive_acl_instance_proof.py').read_text()
         self.assertIn('at>=ended',text);self.assertIn("actual==proof['after']",text)
         for forbidden in ('os.kill(', 'SIGKILL', 'rmtree(', "'systemctl'", 'query('):self.assertNotIn(forbidden,text)
+
+    def cross_fixture(self):
+        began=dt.datetime.fromisoformat('2026-11-04T12:00:00+00:00');identifier='22222222-2222-4222-8222-222222222222';key='11111111-1111-4111-8111-111111111111'
+        b=dict(containerId='a'*64,instanceId='123:instance',path=WAITING_PATH)
+        command=dict(containerId=b['containerId'],instanceId=b['instanceId'],path=WAITING_PATH,mode='0750')
+        rp=dict(command=command,uid=1000,gid=1000,parentVersion='A'*64,targetProof='B'*64)
+        rp['fingerprint']=hashlib.sha256(b'whaledeck-container-directory-plan-v1\n'+json.dumps(rp,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest().upper()
+        plan=dict(Fingerprint=rp['fingerprint'],TargetProof=rp['targetProof'],ParentVersion=rp['parentVersion'])
+        row={k:k for k in STABLE};row.update(id=identifier,idempotency_key=key,actor_subject='different-admin',owner_hash='D'*64,container_id=b['containerId'],instance_id=b['instanceId'],relative_path=WAITING_PATH,plan_hash='C'*64,plan_json=json.dumps(plan),state='Pending',root_started_at_utc=None,completed_at_utc=None,lease_token=None,lease_expires_at_utc=None,publish_barrier=False,version=2,next_attempt_at_utc=(began+dt.timedelta(seconds=6)).isoformat())
+        initial=dict(row=row,job=dict(id=identifier,state='Queued'),accepted=1,terminalAudits=0,pending=1,events=1)
+        reg=dict(id=identifier,subject='different-admin',intent=dict(id=identifier,jobId=identifier,command=dict(location=dict(containerId=b['containerId'],instanceId=b['instanceId'],path=WAITING_PATH),mode='0750')),plans=1,registrations=1,cancellations=0,uploads=0,originAndIdempotencyObserved=True,registration=dict(planTokenSha256='C'*64,confirmed=True,idempotencyKey=key))
+        raw=b'unchanged Unknown root';sha=hashlib.sha256(raw).hexdigest();samples=[]
+        for i in range(4):
+            data=copy.deepcopy(initial);data['row'].update(version=2+2*i,next_attempt_at_utc=(began+dt.timedelta(seconds=6*i+6)).isoformat())
+            samples.append(dict(observedAtUtc=(began+dt.timedelta(seconds=6*i)).isoformat(),sql=data,rootAbsent=True,targetAbsent=True,recursiveUnknownProtected=True,originalPhysicalUnchanged=True,unknownRootSha256=sha))
+        final=copy.deepcopy(initial);final['row'].update(state='Succeeded',root_started_at_utc=(began+dt.timedelta(seconds=26)).isoformat(),completed_at_utc=(began+dt.timedelta(seconds=27)).isoformat(),result_code='CONTAINER_DIRECTORY_CREATED',published_version='E'*64,version=10)
+        final.update(job=dict(id=identifier,state='Succeeded'),terminalAudits=1,pending=0,events=3)
+        receipt=dict(state='Completed',operationId=identifier.replace('-',''),owner='D'*64,version='E'*64,plan=rp)
+        return b,initial,reg,samples,final,receipt,began+dt.timedelta(seconds=25),raw
+
+    def test_cross_directory_is_explicit_and_rejects_unrelated_fault_flags(self):
+        for args in ([],['logout'],['target-removed']):self.assertFalse(selected_waiting(args))
+        self.assertTrue(selected_waiting(['target-removed','cross-directory']))
+        for args in (['cancel','cross-directory'],['instance-changed','cross-directory'],['target-removed','--all'],['target-removed','cross-directory','extra']):
+            with self.subTest(args=args),self.assertRaises(AssertionError):selected_waiting(args)
+
+    def test_waiting_registration_binds_token_digest_and_does_not_store_raw_plan_token(self):
+        b,initial,reg,*_=self.cross_fixture();require_registration(reg,initial,b)
+        for change in ({'planTokenSha256':'raw signed plan'},{'confirmed':False},{'idempotencyKey':'33333333-3333-4333-8333-333333333333'},{'planHash':'raw signed plan'}):
+            bad=copy.deepcopy(reg);bad['registration'].update(change)
+            with self.subTest(change=change),self.assertRaises(AssertionError):require_registration(bad,initial,b)
+        bad=copy.deepcopy(initial);bad['job']['id']='another-job'
+        with self.assertRaises(AssertionError):require_registration(reg,bad,b)
+        text=(ROOT/'recursive_acl_cross_directory.mjs').read_text();self.assertIn("createHash('sha256').update(post.planHash",text);self.assertNotIn('registration:response.request().postDataJSON()',text)
+
+    def test_four_natural_deferrals_cannot_repeat_one_row_or_release_barrier_early(self):
+        b,initial,reg,samples,_,_,released,raw=self.cross_fixture();require_deferrals(samples,b,reg,initial,released,raw)
+        for change in (lambda s:s[1]['sql']['row'].update(version=2),lambda s:s[1]['sql']['row'].update(next_attempt_at_utc=s[0]['sql']['row']['next_attempt_at_utc']),lambda s:s[1]['sql']['row'].update(lease_token='live'),lambda s:s[1]['sql']['row'].update(root_started_at_utc='2026-11-04T12:00:06+00:00'),lambda s:s[1].update(rootAbsent=False),lambda s:s[1].update(recursiveUnknownProtected=False),lambda s:s[1].update(unknownRootSha256='0'*64),lambda s:s[1]['sql']['row'].update(actor_subject='other-admin'),lambda s:s[1]['sql']['row'].update(plan_json='new-plan')):
+            bad=copy.deepcopy(samples);change(bad)
+            with self.subTest(samples=bad),self.assertRaises(AssertionError):require_deferrals(bad,b,reg,initial,released,raw)
+        with self.assertRaises(AssertionError):require_deferrals(samples,b,reg,initial,dt.datetime.fromisoformat(samples[-1]['observedAtUtc']),raw)
+
+    def test_waiting_completion_requires_original_job_root_and_time_after_ack(self):
+        b,initial,reg,_,final,receipt,released,_=self.cross_fixture();require_completed(final,initial,b,reg,released,receipt)
+        for key,value in [('id','new-id'),('actor_subject','other'),('published_version','bad'),('root_started_at_utc','2026-11-04T12:00:20+00:00'),('publish_barrier',True),('request_hash','new-hash')]:
+            bad=copy.deepcopy(final);bad['row'][key]=value
+            with self.subTest(key=key),self.assertRaises(AssertionError):require_completed(bad,initial,b,reg,released,receipt)
+        for key,value in [('state','Aborted'),('operationId','0'*32),('owner','F'*64),('version','F'*64)]:
+            with self.subTest(key=key),self.assertRaises(AssertionError):require_completed(final,initial,b,reg,released,{**receipt,key:value})
+
+    def test_cross_directory_cleanup_refuses_foreign_path_before_reading_or_removing(self):
+        with patch('recursive_acl_cross_directory_proof.trusted') as trusted,self.assertRaises(AssertionError):clean_waiting((Path('/etc/foreign'),(),()))
+        trusted.assert_not_called()
+
+    def test_cross_directory_browser_uses_visible_controls_without_mutating_test_interfaces(self):
+        text=(ROOT/'recursive_acl_cross_directory.mjs').read_text()
+        for value in ('新建目录','生成目录计划','确认创建目录','waiting-pending.png','waiting-succeeded.png','originalTaskVisibleAfterRelease:true'):self.assertIn(value,text)
+        for value in ('page.route(', 'context.route(', 'request.post(', 'addCookies(', 'sessionStorage.setItem','localStorage.setItem'):self.assertNotIn(value,text)
+        proof=(ROOT/'recursive_acl_cross_directory_proof.py').read_text()
+        for value in ('rmtree(', 'os.kill(', 'SIGKILL', 'UPDATE ', 'DELETE ', 'time.time='):self.assertNotIn(value,proof)
 
     def test_partial_revocation_preserves_the_real_result_and_denies_old_context(self):
         subject='11111111-1111-4111-8111-111111111111';p=phase();p['row'].update(actor_subject=subject,cancel_requested_at_utc=None);p['executionJob']['cancel_requested_at_utc']=None

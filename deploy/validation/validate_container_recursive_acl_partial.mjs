@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises'
 import {join} from 'node:path'
 import {chromium,expect} from '../../web/node_modules/@playwright/test/index.mjs'
 import {loginVisible,openPermissionFiles,closePermissionDetails,writeSignal,waitSignal} from './installed_ui_permission_session.mjs'
+import {registerWaitingDirectory} from './recursive_acl_cross_directory.mjs'
 import {logoutFromUserMenu} from './installed_ui_logout.mjs'
 
 let browser,page,context,directory,id,endpoint,phase='startup'
@@ -17,7 +18,7 @@ try{
   browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true})
   context=await browser.newContext({viewport:{width:320,height:600},colorScheme:role==='owner'?'dark':'light',reducedMotion:'reduce'});context.setDefaultTimeout(20_000);page=await context.newPage()
   assert.equal((await(await context.request.get(base+'/api/v1/system/status')).json()).build.sourceRevision,revision)
-  phase='normal-visible-login';const profile=await loginVisible(page,context,base,role==='owner'?'/containers':'/files',true,packet.credentials)
+  phase='normal-visible-login';const profile=await loginVisible(page,context,base,role==='owner'||f.waitingDirectory?'/containers':'/files',true,packet.credentials)
   endpoint=`/api/v1/containers/${f.containerId}/files/recursive-acls`
   let registrations=0,confirmations=0,cancellations=0,acknowledgements=0,uploads=0
   page.on('request',r=>{const p=new URL(r.url()).pathname;if(r.method()==='POST'){
@@ -27,7 +28,7 @@ try{
     if(p.startsWith('/api/v1/files/container-recursive-acls/recovery/')&&p.endsWith('/acknowledge'))acknowledgements++
   }if(r.method()==='PUT'&&p.includes('/files/'))uploads++})
   async function counts(region,values){const facts=region.getByLabel('实际逐项结果',{exact:true});for(const[label,key]of [['已完成核对','completedCount'],['实际修改','changedCount'],['已中止','abortedCount'],['未开始','notStartedCount'],['待证明','unknownCount']])await expect(facts.getByText(label,{exact:true}).locator('..').locator('dd')).toHaveText(String(values[key]));await facts.scrollIntoViewIfNeeded();await expect(facts).toBeInViewport({ratio:1})}
-  let result=null,logout=null,hintsCleared=false,originalIntentStatus=null,currentIdentityStatus=null,currentSubject=null,currentlyAdministrator=null,renderedRevocationPage=null,privatePanelsAbsent=false
+  let waitingDirectory=null,showWaitingDirectory=null,result=null,logout=null,hintsCleared=false,originalIntentStatus=null,currentIdentityStatus=null,currentSubject=null,currentlyAdministrator=null,renderedRevocationPage=null,privatePanelsAbsent=false
   if(role==='owner'){
     const files=await openPermissionFiles(page,f);await files.getByRole('button',{name:'递归ACL recursive-tree',exact:true}).click()
     const dialog=page.getByRole('dialog',{name:'递归修改容器目录ACL',exact:true}),bits=['---','--x','-w-','-wx','r--','r-x','rw-','rwx']
@@ -91,22 +92,28 @@ try{
   }else{
     id=f.id;assert.notEqual(profile.subject,f.originalSubject);phase='different-admin-recovery'
     assert.equal((await context.request.get(base+endpoint+'/'+id)).status(),404)
+    if(f.waitingDirectory)showWaitingDirectory=await registerWaitingDirectory(page,base,f,profile)
     await page.getByRole('button',{name:'容器递归ACL修改异常',exact:true}).click();const dialog=page.getByRole('dialog',{name:'容器递归ACL修改异常处置',exact:true})
     const row=dialog.locator('.recursive-acl-recovery__row').filter({hasText:id});await expect(row).toHaveCount(1);await expect(row).toContainText(unknown?'结果未知，保护已保留':'部分修改，保护已保留');await counts(row,f.receipt);await page.screenshot({path:join(directory,'recovery-counts.png')})
     await row.getByRole('button',{name:'处置历史结果',exact:true}).click();await expect(dialog.getByRole('button',{name:'暂不处置',exact:true})).toBeInViewport({ratio:1});await expect(dialog.getByRole('button',{name:'确认处置并释放保护',exact:true})).toBeInViewport({ratio:1})
     await page.screenshot({path:join(directory,'recovery-confirm.png')});await dialog.getByRole('button',{name:'暂不处置',exact:true}).click();assert.equal(acknowledgements,0)
-    await writeSignal(directory,'recovery-canceled.json',{id,subject:profile.subject,acknowledgements});await waitSignal(directory,'acknowledge.json',40_000)
+    await writeSignal(directory,'recovery-canceled.json',{id,subject:profile.subject,acknowledgements});await waitSignal(directory,'acknowledge.json',f.waitingDirectory?120_000:40_000)
     await row.getByRole('button',{name:'处置历史结果',exact:true}).click();const ack=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1/files/container-recursive-acls/recovery/'+id+'/acknowledge'&&r.request().method()==='POST')
     await dialog.getByRole('button',{name:'确认处置并释放保护',exact:true}).click();assert.equal((await ack).status(),202)
     await expect(dialog.getByRole('status')).toHaveText('已处置部分修改或未知历史结果并释放保护；不代表整树修改成功，不会续做或自动恢复ACL，不删除原对象。')
     await page.screenshot({path:join(directory,'acknowledged.png')});const response=await context.request.get(base+'/api/v1/files/container-recursive-acls/recovery/'+id);assert.equal(response.status(),200);assert.ok(response.headers()['cache-control']?.includes('no-store'));result=await response.json()
     assert.equal(result.state,'Acknowledged');const receiptFacts=r=>Object.fromEntries(Object.entries(r).filter(([k])=>!['replayed','bindingCurrent','historyAvailable'].includes(k)));assert.deepEqual(receiptFacts(result.receipt),receiptFacts(f.receipt))
     await writeSignal(directory,'recovery-before-logout.json',{id,subject:profile.subject,result,actualUi:true,normalDualLogoutProved:false,registrations,confirmations,cancellations,acknowledgements,uploads,kind})
-    await dialog.getByRole('button',{name:'关闭',exact:true}).click();phase='normal-visible-logout';logout=await logoutFromUserMenu(page,context,base,undefined,observeLogout)
+    await dialog.getByRole('button',{name:'关闭',exact:true}).click()
+    if(showWaitingDirectory){
+      await writeSignal(directory,'waiting-acknowledged.json',{id,subject:profile.subject});const final=await waitSignal(directory,'waiting-finished.json',120_000);waitingDirectory=await showWaitingDirectory(context,final)
+    }
+    phase='normal-visible-logout';logout=await logoutFromUserMenu(page,context,base,undefined,observeLogout)
     assert.equal((await context.request.get(base+'/api/v1/files/container-recursive-acls/recovery/'+id)).status(),401)
+    if(waitingDirectory){waitingDirectory.anonymousStatus=(await context.request.get(base+waitingDirectory.privateEndpoint)).status();assert.equal(waitingDirectory.anonymousStatus,401);delete waitingDirectory.privateEndpoint}
   }
   assert.equal(registrations,role==='owner'?1:0);assert.equal(confirmations,role==='owner'?1:0);assert.equal(cancellations,role==='owner'&&kind==='cancel'?1:0);assert.equal(acknowledgements,role==='recovery'?1:0);assert.equal(uploads,0)
-  await writeSignal(directory,role+'-browser.json',{id,subject:profile.subject,result,logout,actualUi:true,normalDualLogout:role==='recovery'||!revoked,registrations,confirmations,cancellations,acknowledgements,uploads,kind,hintsCleared,
+  await writeSignal(directory,role+'-browser.json',{id,subject:profile.subject,result,logout,actualUi:true,normalDualLogout:role==='recovery'||!revoked,registrations,confirmations,cancellations,acknowledgements,uploads,kind,hintsCleared,waitingDirectory,
     authorityRevoked:role==='owner'&&revoked,anonymousGet401:role==='recovery'||!revoked,originalIntentStatus,currentIdentityStatus,currentSubject,currentlyAdministrator,renderedRevocationPage,privatePanelsAbsent})
   console.log(JSON.stringify({recursiveAclPartialBrowser:'passed',role}))
 }catch(error){
