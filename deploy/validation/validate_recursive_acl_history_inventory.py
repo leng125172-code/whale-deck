@@ -115,10 +115,10 @@ def main():
             PHASE='independent-live'
             with (evidence/'independent-live.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation/verify_recursive_acl_history_inventory.py'),evidence.name,'--live'],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
             assert inventory(root,reader,data,acl)==current;remove_proved(root,reader,data,current,acl)
-        PHASE='exact-cleanup';assert not fixture['folder'].exists();final=unchanged(evidence,b,storage);(evidence/'final-preservation.json').write_text(json.dumps(final));(evidence/'verified.json').write_text(json.dumps(dict(revision=revision,captures=26,childMetadata=104,realInventoryPagination=True,realSnapshotPagination=False,historyAudits=3,exactSourceAndContainerAbsent=True)))
+        PHASE='exact-cleanup';assert not fixture['folder'].exists();final=unchanged(evidence,b,storage);(evidence/'final-preservation.json').write_text(json.dumps(final));(evidence/'verified.json').write_text(json.dumps(dict(revision=revision,captures=26,childMetadata=104,realInventoryPagination=True,realSnapshotPagination=False,historyAudits=len(auth['pages'])+1,exactSourceAndContainerAbsent=True)))
         PHASE='independent-final'
         with (evidence/'independent-final.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation/verify_recursive_acl_history_inventory.py'),evidence.name],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
-        print(json.dumps(dict(actualRecursiveHistoryInventory='passed',evidence=evidence.name,captures=26,historyAudits=3)),flush=True)
+        print(json.dumps(dict(actualRecursiveHistoryInventory='passed',evidence=evidence.name,captures=26,historyAudits=len(auth['pages'])+1)),flush=True)
     except BaseException as error:
         import traceback
         last=traceback.extract_tb(error.__traceback__)[-1];(evidence/'failure.json').write_text(json.dumps(dict(phase=PHASE,type=type(error).__name__,file=Path(last.filename).name,line=last.lineno,verifiedCaptures=len(rows))));print(json.dumps(dict(actualRecursiveHistoryInventory='failed',phase=PHASE,evidence=evidence.name,type=type(error).__name__)),flush=True);raise SystemExit(1) from None

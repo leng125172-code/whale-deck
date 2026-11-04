@@ -37,14 +37,14 @@ def verify(name,live=False):
     r=load('/usr/local/libexec/whaledeck-container-files.py','inventory_independent_reader');f=r.trusted_module('whaledeck-files.py','inventory_independent_files');acl=load('/usr/local/libexec/whaledeck-container-acl.py','inventory_independent_acl');storage=load('/usr/local/libexec/whaledeck-file-backups.py','inventory_independent_hdd').FileBackups(f)
     data=content(b['containerId']);assert len(data)==b['bytesPerFile'] and hashlib.sha256(data).hexdigest().upper()==b['sha256'];metadata=verify_chain(evidence,b,rows,storage);protected=unchanged(evidence,b,storage)
     assert browser['revision']==b['revision'] and browser['inventoryMultipleCaptures'] is True and browser['realSnapshotPagination'] is False and browser['mutations']==0
-    signals=browser['signals'];assert len(signals)==5;pages=browser['pages'];assert len(pages)==2;selected=[]
+    signals=browser['signals'];assert len(signals)==5;pages=browser['pages'];assert 2<=len(pages)<=100;selected=[]
     for label,signal in zip(LABELS,signals,strict=True):
         assert signal==saved('inventory-'+label+'-result.json') and signal['subject']==browser['subject']
         prove_signal(signal,b,rows,metadata,label);assert signal['pages']==pages[:len(signal['pages'])]
         if label=='selected':selected.append(signal)
         prove_audits(saved('inventory-'+label+'.audit.json'),browser['subject'],b,signal['pages'],selected)
         assert saved('inventory-'+label+'-verified.json')==dict(originalsAndAuditVerified=True)
-    audits=audit_rows(browser['subject']);prove_audits(audits,browser['subject'],b,pages,selected);assert len(audits)==3
+    audits=audit_rows(browser['subject']);prove_audits(audits,browser['subject'],b,pages,selected);assert len(audits)==len(pages)+1
     observed=browser['requests'];assert observed==[dict(method=p['request']['method'],pathname=p['request']['pathname']) for p in pages]+[dict(method=selected[0]['request']['method'],pathname=selected[0]['request']['pathname'])]
     other=browser['ordinary'];assert other['subject']!=browser['subject'] and other['denied']==[403,403] and other['anonymous']==browser['adminAnonymous']==[401,401] and other['uiRequests']==0 and audit_rows(other['subject'])==[]
     for logout in (browser['adminLogout'],other['logout']):assert logout['normalUiLogout'] and logout['providerNavigationObserved'] and logout['finalLoginPage'] and logout['postStatus'] in (302,303) and logout['bffStatus']==401 and logout['identityStatus'] in (401,403)
@@ -61,8 +61,8 @@ def verify(name,live=False):
         assert source.resolve(strict=True)==source and Path(b['root'])==source/'recursive-tree' and inventory(Path(b['root']),r,data,acl)==rows[-1]['after'];current=json.loads(common.command(['docker','inspect',b['containerId']]))[0];verify_container(current,b['containerId'],b['containerName'],source)
     else:
         assert not os.path.lexists(source);missing=subprocess.run(['docker','inspect',b['containerId']],capture_output=True,timeout=15);assert missing.returncode!=0 and b'no such' in missing.stderr.lower()
-        accepted=saved('verified.json');assert accepted['captures']==26 and accepted['historyAudits']==3 and accepted['exactSourceAndContainerAbsent'] is True and saved('final-preservation.json')==protected and saved('live-independent.json')['physicalTreeReread'] is True
-    return dict(revision=b['revision'],independentReadOnly=True,physicalTreeReread=live,sourceBytesRereadAfterCleanup=False,captures=26,aggregateHdd=26,childHdd=104,inventoryPageSizes=[25,1],cachedPageSizes=[25,1],networkListRequests=2,snapshotReads=1,historyAudits=3,oldProtectedFiles=len(b['protectedFiles']),finalProtectedFiles=len(protected),sourceAndContainerAbsent=not live,temporaryIdentitiesAbsent=True,normalDualLogoutOriginalContexts=True,realInventoryPagination=True,realSnapshotPagination=False)
+        accepted=saved('verified.json');assert accepted['captures']==26 and accepted['historyAudits']==len(audits) and accepted['exactSourceAndContainerAbsent'] is True and saved('final-preservation.json')==protected and saved('live-independent.json')['physicalTreeReread'] is True
+    return dict(revision=b['revision'],independentReadOnly=True,physicalTreeReread=live,sourceBytesRereadAfterCleanup=False,captures=26,aggregateHdd=26,childHdd=104,inventoryPageSizes=[len(p['page']['entries']) for p in pages],cachedPageSizes=[25,1],networkListRequests=len(pages),snapshotReads=1,historyAudits=len(audits),oldProtectedFiles=len(b['protectedFiles']),finalProtectedFiles=len(protected),sourceAndContainerAbsent=not live,temporaryIdentitiesAbsent=True,normalDualLogoutOriginalContexts=True,realInventoryPagination=True,realSnapshotPagination=False)
 
 if __name__=='__main__':
     try:

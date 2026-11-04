@@ -7,6 +7,7 @@ from recursive_acl_inventory_proof import verify_chain,summary,expected_snapshot
 from recursive_acl_history_browser_proof import location,endpoint
 from validate_recursive_acl_history_inventory import SOURCES,content,wait_case
 from verify_recursive_acl_history_inventory import verify
+from recover_recursive_acl_history_inventory import recover
 from recursive_acl_history_paging_proof import verify_capture
 
 ROOT=Path(__file__).resolve().parent
@@ -14,7 +15,7 @@ ROOT=Path(__file__).resolve().parent
 def fixture(label='last'):
     b=dict(containerId='a'*64,instanceId='123:2026-11-04T00:00:00Z',original={'round':0});rows=[];metadata={};access=[dict(tag='user_obj',id=None,permissions=6),dict(tag='group_obj',id=None,permissions=4),dict(tag='other',id=None,permissions=0)]
     for index in range(26):
-        capture=f'{index+1:032x}';p=dict(command=dict(instanceId=b['instanceId']),manifestDigest='B'*64,entryCount=4,fileCount=2,directoryCount=2,changeCount=4 if index==0 else 2)
+        capture=f'{index+256:032x}';p=dict(command=dict(instanceId=b['instanceId']),manifestDigest='B'*64,entryCount=4,fileCount=2,directoryCount=2,changeCount=4 if index==0 else 2)
         rows.append(dict(index=index,profile='inventory-mask' if index%2 else 'inventory-named',before={'round':index},after={'round':index+1},request=dict(operationId=capture,plan=p)))
         metadata[capture]=dict(historyDigest=f'{index+1:064X}',createdAtUnixMs=1700000000000+index,entries=[dict(relativePath=relative,plan=dict(kind='File' if relative.endswith('.bin') else 'Directory',sourceIdentity=[1,2,0o100640 if relative.endswith('.bin') else 0o40750],accessAcl=copy.deepcopy(access),defaultAcl=[])) for relative in ('sub/中文.bin','one.bin','sub','')])
     expected={r['request']['operationId']:summary(r,metadata[r['request']['operationId']]) for r in rows};ids=sorted(expected);query=dict(instanceId=b['instanceId'],path='work/recursive-tree')
@@ -27,6 +28,25 @@ def fixture(label='last'):
     return b,rows,metadata,copy.deepcopy(signal)
 
 class RecursiveAclInventoryProofTests(unittest.TestCase):
+    def test_failed_recovery_cannot_target_other_evidence_or_escape_before_file_access(self):
+        for name in ('../escape','recursive-acl-history-paging-'+'a'*32,'recursive-acl-history-inventory-'+'A'*32):
+            with self.assertRaises(AssertionError):recover(name)
+    def test_soft_budget_pages_twenty_two_and_four_still_render_cached_twenty_five_and_one(self):
+        for label in ('first','last','back','next','selected'):
+            b,r,m,s=fixture(label);ids=sorted(m);first=s['pages'][0];first['page'].update(entries=first['page']['entries'][:22],scannedCount=79,nextAfter=ids[21])
+            if label=='first':s['visibleCaptures']=ids[:22]
+            else:
+                last=s['pages'][1];last['request']['query']['after']=ids[21];last['page'].update(entries=[summary(row,m[row['request']['operationId']]) for row in r[22:]],scannedCount=14)
+            prove_signal(s,b,r,m,label)
+
+    def test_empty_progressing_first_page_and_three_network_pages_are_valid(self):
+        b,r,m,s=fixture('last');ids=sorted(m);last=copy.deepcopy(s['pages'][1]);middle=copy.deepcopy(s['pages'][0]);first=s['pages'][0]
+        first['page'].update(entries=[],scannedCount=30,nextAfter=f'{255:032x}')
+        middle['request']['query'].update(after=f'{255:032x}',expectedVersion='C'*64)
+        last['request']['query']['after']=ids[24]
+        s['pages']=[first,middle,last];prove_signal(s,b,r,m,'last')
+        initial=copy.deepcopy(s);initial.update(label='first',pages=[first],visibleCaptures=[],screenshot='inventory-first.png');prove_signal(initial,b,r,m,'first')
+
     def test_partial_full_cached_and_selected_proofs_bind_twenty_six_captures(self):
         for label in ('first','last','back','next','selected'):
             b,r,m,s=fixture(label);self.assertEqual(26,len(prove_signal(s,b,r,m,label)))
@@ -75,7 +95,7 @@ class RecursiveAclInventoryProofTests(unittest.TestCase):
     def test_source_uses_real_controls_fixed_budget_no_injection_and_select_queries(self):
         source=(ROOT/'validate_recursive_acl_history_inventory.mjs').read_text()
         for forbidden in ('.route(','.addCookies(','storageState:','localStorage.setItem','sessionStorage.setItem','request.post(','request.put('):self.assertNotIn(forbidden,source)
-        for expected in ('继续扫描','上一页历史','下一页已读历史','requests.length,2','requests.length,3','inventoryMultipleCaptures:true','writeSignal','waitSignal'):self.assertIn(expected,source)
+        for expected in ('继续扫描','上一页历史','下一页已读历史','requests.length,pages.length','requests.length,pages.length+1','inventoryMultipleCaptures:true','writeSignal','waitSignal'):self.assertIn(expected,source)
         self.assertTrue(all((ROOT/name).is_file() for name in SOURCES))
         main=(ROOT/'validate_recursive_acl_history_inventory.py').read_text();self.assertIn('for index in range(26)',main);self.assertIn("profile='mask' if index%2 else 'named'",main)
         tree=ast.parse(main)

@@ -132,7 +132,7 @@ jobs:
           python3 -W error -m py_compile deploy/validation/recursive_acl_history_paging_proof.py deploy/validation/validate_recursive_acl_history_paging.py deploy/validation/verify_recursive_acl_history_paging.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_history_paging_proof.py
           node --check deploy/validation/validate_recursive_acl_history_paging.mjs
-          python3 -W error -m py_compile deploy/validation/recursive_acl_inventory_proof.py deploy/validation/validate_recursive_acl_history_inventory.py deploy/validation/verify_recursive_acl_history_inventory.py
+          python3 -W error -m py_compile deploy/validation/recursive_acl_inventory_proof.py deploy/validation/validate_recursive_acl_history_inventory.py deploy/validation/verify_recursive_acl_history_inventory.py deploy/validation/recover_recursive_acl_history_inventory.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_inventory_proof.py
           node --check deploy/validation/validate_recursive_acl_history_inventory.mjs
           node --check deploy/validation/validate_container_recursive_acl_browser.mjs
