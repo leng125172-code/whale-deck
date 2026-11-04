@@ -323,12 +323,17 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal("Failed", (await db.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == resolvedPartial.ExecutionJobId)).State);
             // Original natural lease expires on the synthetic test clock, not SQL edits.
             // An unreturned Root result is not a row of invented zeroes.
-            var unproved=await Applying(await Ready(Row()));
-            Assert.True(await repo.FinishAsync(unproved,"Unknown","CONTAINER_RECURSIVE_ACL_RESTORE_RESULT_UNKNOWN",null,default));
-            var unprovedRow=(await other.FindAsync(unproved.Id,default))!;
-            var unprovedFacts=await JobFacts(unprovedRow,true,"Unknown");Assert.Null(unprovedFacts.CompletedCount);Assert.Null(unprovedFacts.UnknownCount);Assert.Null(unprovedFacts.ReceiptState);Assert.True(unprovedFacts.PublishBarrier);
-            await other.AcknowledgeAsync(admin,unprovedRow.Id,unprovedRow.Version,Receipt(unproved,"Unknown"),default);
-            await JobFacts((await repo.FindAsync(unproved.Id,default))!,true,"Acknowledged");
+            foreach(var lateState in new[]{"Unknown","Completed","Partial","Aborted"})
+            {
+                var unproved=await Applying(await Ready(Row()));
+                Assert.True(await repo.FinishAsync(unproved,"Unknown","CONTAINER_RECURSIVE_ACL_RESTORE_RESULT_UNKNOWN",null,default));
+                var unprovedRow=(await other.FindAsync(unproved.Id,default))!;
+                var unprovedFacts=await JobFacts(unprovedRow,true,"Unknown");Assert.Null(unprovedFacts.CompletedCount);Assert.Null(unprovedFacts.UnknownCount);Assert.Null(unprovedFacts.ReceiptState);Assert.True(unprovedFacts.PublishBarrier);
+                var late=Receipt(unproved,lateState);await other.AcknowledgeAsync(admin,unprovedRow.Id,unprovedRow.Version,late,default);
+                var lateFacts=await JobFacts((await repo.FindAsync(unproved.Id,default))!,true,"Acknowledged");
+                Assert.Equal(lateState,lateFacts.ReceiptState);Assert.Equal((int)late.CompletedCount,lateFacts.CompletedCount);Assert.Equal((int)late.ChangedCount,lateFacts.ChangedCount);Assert.False(lateFacts.PublishBarrier);
+                Assert.Equal("CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_ACKNOWLEDGED",lateFacts.Code);
+            }
             foreach(var refusal in new[]{"CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_NOT_FOUND","CONTAINER_RECURSIVE_ACL_RESTORE_TARGET_CHANGED"})
             {
                 var planningFailure=Row();await repo.EnqueueAsync(planningFailure,default);var failedClaim=Assert.IsType<ContainerRecursiveAclRestoreIntent>(await repo.ClaimAsync(clock.GetUtcNow(),default));Assert.Equal(planningFailure.Id,failedClaim.Id);
@@ -405,6 +410,7 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.DoesNotContain(await db.OperationJobs.Where(j => ids.Contains(j.Id) || db.ContainerRecursiveAclRestoreIntents.Any(r => r.ExecutionJobId == j.Id && ids.Contains(r.Id))).ToArrayAsync(), j => j.State is "Queued" or "Running");
             Console.WriteLine("INBOX_PHASE=container-recursive-acl-restore-persistent-manifest-partial-unknown-immutable-both-fences-audited");
             Console.WriteLine("INBOX_PHASE=container-recursive-acl-restore-job-facts-privacy-null-counts-audit-rollback");
+            Console.WriteLine("INBOX_PHASE=container-recursive-acl-restore-job-facts-late-receipts-acknowledged");
         }
         finally
         {

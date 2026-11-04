@@ -18,6 +18,40 @@ const props = (v: unknown, state = 'Succeeded') => ({
 })
 
 describe('Recursive ACL restore historical job facts', () => {
+  it.each(['Completed', 'Partial', 'Aborted'])(
+    'retains a late %s receipt obtained while acknowledging an unproved Unknown',
+    (receipt) => {
+      const v = {
+        ...result,
+        state: 'Acknowledged',
+        code: 'CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_ACKNOWLEDGED',
+        receiptState: receipt,
+      }
+      if (receipt === 'Partial')
+        Object.assign(v, {
+          completedCount: 1,
+          changedCount: 1,
+          notStartedCount: 3,
+          bindingCurrent: false,
+        })
+      if (receipt === 'Aborted')
+        Object.assign(v, {
+          completedCount: 0,
+          changedCount: 0,
+          notStartedCount: 4,
+          bindingCurrent: false,
+          historyVerified: false,
+          historyAvailable: false,
+        })
+      expect(parse(v, 'Failed')).toEqual(v)
+      expect(parse(v, 'Succeeded')).toBeNull()
+      const wrapper = mount(Component, { props: props(v, 'Failed') })
+      expect(wrapper.text()).toContain(receipt)
+      expect(wrapper.text()).toContain('不代表整树恢复成功')
+      expect(wrapper.text()).not.toContain('未记录可验证')
+      wrapper.unmount()
+    },
+  )
   it('renders source changes and actual restored changes separately', () => {
     expect(parse(result)).toEqual(result)
     const wrapper = mount(Component, { props: props(result) })

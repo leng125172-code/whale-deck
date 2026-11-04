@@ -158,9 +158,10 @@ export function readRecursiveAclRestoreJobResult(
       Canceled: ['CANCELED'],
       Partial: ['PARTIAL_REQUIRES_ACKNOWLEDGEMENT'],
       Unknown: ['RESULT_UNKNOWN', 'OUTPUT_INVALID', 'BINDING_CHANGED'],
-      Acknowledged: [
-        v.receiptState === 'Partial' ? 'PARTIAL_ACKNOWLEDGED' : 'UNKNOWN_ACKNOWLEDGED',
-      ],
+      Acknowledged:
+        v.receiptState === 'Partial'
+          ? ['PARTIAL_ACKNOWLEDGED', 'UNKNOWN_ACKNOWLEDGED']
+          : ['UNKNOWN_ACKNOWLEDGED'],
     }
     if (
       v.state === 'Failed'
@@ -218,7 +219,6 @@ export function readRecursiveAclRestoreJobResult(
           : v.state
     if (
       v.receiptState !== expected ||
-      (v.state === 'Acknowledged' && !['Partial', 'Unknown'].includes(v.receiptState)) ||
       (v.receiptState === 'Completed' &&
         (v.completedCount !== v.entryCount ||
           v.changedCount !== v.changeCount ||

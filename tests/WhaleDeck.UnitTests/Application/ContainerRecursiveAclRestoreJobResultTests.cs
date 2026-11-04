@@ -60,6 +60,16 @@ public sealed class ContainerRecursiveAclRestoreJobResultTests
         Assert.Null(ContainerRecursiveAclRestoreJobResults.ForJob(Job(s with { State = "Succeeded", PublishBarrier = false })));
     }
 
+    [Theory][InlineData("Completed")][InlineData("Partial")][InlineData("Aborted")]
+    public void AcknowledgementCanObtainALateOriginalReceiptWithoutTurningTheJobIntoSuccess(string receipt)
+    {
+        var s=Summary() with { State="Acknowledged",Code="CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_ACKNOWLEDGED",ReceiptState=receipt };
+        if(receipt=="Partial")s=s with{CompletedCount=1,ChangedCount=1,NotStartedCount=3,BindingCurrent=false};
+        if(receipt=="Aborted")s=s with{CompletedCount=0,ChangedCount=0,NotStartedCount=4,BindingCurrent=false,HistoryVerified=false,HistoryAvailable=false};
+        var job=Job(s);Assert.Equal("Failed",job.State);Assert.NotNull(ContainerRecursiveAclRestoreJobResults.ForJob(job));
+        Assert.Null(ContainerRecursiveAclRestoreJobResults.ForJob(Job(s,"Succeeded")));
+    }
+
     [Fact]
     public void PlanningTargetRefusalIsNotMistakenForCompletedSupersededExecution()
     {

@@ -63,7 +63,6 @@ public static class ContainerRecursiveAclRestoreJobResults
         if (!execution || s.EntryCount is null || actual.Any(n => n is null or < 0 or > 10000) || s.BindingCurrent is null || s.HistoryAvailable is null ||
             s.ChangedCount > s.CompletedCount || s.ChangedCount > s.ChangeCount || (long)s.CompletedCount!.Value + s.AbortedCount!.Value + s.NotStartedCount!.Value + s.UnknownCount!.Value != s.EntryCount) return false;
         return s.ReceiptState == (s.State switch { "Succeeded" or "Superseded" => "Completed", "Canceled" or "Failed" => "Aborted", "Partial" => "Partial", "Unknown" => "Unknown", _ => s.ReceiptState }) &&
-            (s.State != "Acknowledged" || s.ReceiptState is "Partial" or "Unknown") &&
             (s.ReceiptState != "Completed" || s.CompletedCount == s.EntryCount && s.ChangedCount == s.ChangeCount) &&
             (s.ReceiptState != "Aborted" || s.ChangedCount == 0 && s.UnknownCount == 0 && s.BindingCurrent == false) &&
             (s.ReceiptState != "Partial" || s.ChangedCount > 0 && s.CompletedCount < s.EntryCount && s.UnknownCount == 0 && s.HistoryVerified) &&
@@ -84,7 +83,7 @@ public static class ContainerRecursiveAclRestoreJobResults
             "Superseded" => suffix == "TARGET_CHANGED", "Canceled" => suffix == "CANCELED",
             "Partial" => suffix == "PARTIAL_REQUIRES_ACKNOWLEDGEMENT",
             "Unknown" => suffix is "RESULT_UNKNOWN" or "OUTPUT_INVALID" or "BINDING_CHANGED",
-            "Acknowledged" => suffix == (s.ReceiptState == "Partial" ? "PARTIAL_ACKNOWLEDGED" : "UNKNOWN_ACKNOWLEDGED"),
+            "Acknowledged" => suffix == "UNKNOWN_ACKNOWLEDGED" || suffix == "PARTIAL_ACKNOWLEDGED" && s.ReceiptState == "Partial",
             "Failed" => suffix == "TARGET_CHANGED" && s.Stage == "planning" || suffix is not ("READY" or "PLAN_EXPIRED" or "COMPLETED" or "TARGET_CHANGED" or "CANCELED" or "PARTIAL_REQUIRES_ACKNOWLEDGEMENT" or "RESULT_UNKNOWN" or "PARTIAL_ACKNOWLEDGED" or "UNKNOWN_ACKNOWLEDGED"),
             _ => false
         };

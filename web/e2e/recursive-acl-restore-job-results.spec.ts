@@ -85,6 +85,29 @@ for (const width of [320, 1440])
           sourceDirectoryCount: null,
           sourceChangedCount: null,
         },
+        {
+          ...result,
+          state: 'Acknowledged',
+          code: 'CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_ACKNOWLEDGED',
+        },
+        {
+          ...partial,
+          state: 'Acknowledged',
+          code: 'CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_ACKNOWLEDGED',
+          publishBarrier: false,
+        },
+        {
+          ...result,
+          state: 'Acknowledged',
+          code: 'CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_ACKNOWLEDGED',
+          receiptState: 'Aborted',
+          completedCount: 0,
+          changedCount: 0,
+          notStartedCount: 4,
+          bindingCurrent: false,
+          historyVerified: false,
+          historyAvailable: false,
+        },
       ]
       const jobs = facts.map((facts, i) => {
         const id =
@@ -92,20 +115,24 @@ for (const width of [320, 1440])
             ? result.intentId
             : i === 7
               ? result.intentId.slice(0, -1) + '4'
-              : result.jobId.slice(0, -1) + String(i)
+              : result.jobId.slice(0, -1) + i.toString(16)
         return {
           id,
           jobType:
             i === 4 || i === 7
               ? 'containers.files.recursive-acl-restore-plan'
               : 'containers.files.recursive-acl-restore',
-          state: [1, 2].includes(i) ? 'Running' : i === 3 || i === 7 ? 'Failed' : 'Succeeded',
+          state: [1, 2].includes(i)
+            ? 'Running'
+            : i === 3 || i === 7 || i >= 8
+              ? 'Failed'
+              : 'Succeeded',
           phase:
             i === 1
               ? 'AwaitingContainerRecursiveAclRestoreResolution'
               : i === 2
                 ? 'AwaitingContainerRecursiveAclRestoreReceipt'
-                : i === 3
+                : i === 3 || i >= 8
                   ? 'Acknowledged'
                   : 'Succeeded',
           progressPercent: null,
@@ -161,20 +188,28 @@ for (const width of [320, 1440])
               '',
               '',
               '递归ACL恢复未完成',
+              '已处置历史结果，不代表整树修改成功',
+              '已处置历史结果，不代表整树修改成功',
+              '已处置历史结果，不代表整树修改成功',
             ][i]!,
           )
           const actual = region.locator('[aria-label="本次恢复实际结果"]')
           await expect(actual.locator('dd')).toHaveText(
-            i === 0
+            i === 0 || i === 8
               ? ['4', '4', '0', '0', '0']
-              : i === 1 || i === 3
+              : i === 1 || i === 3 || i === 9
                 ? ['1', '1', '0', '3', '0']
-                : Array(5).fill('未证明'),
+                : i === 10
+                  ? ['0', '0', '0', '4', '0']
+                  : Array(5).fill('未证明'),
           )
           await expect(region.locator('[aria-label="恢复来源原计数"]')).toContainText(
             i === 7 ? '来源原修改未证明' : '来源原修改2',
           )
-          if (i === 3) await expect(region).toContainText('不代表整树恢复成功')
+          if (i === 3 || i >= 8) {
+            await expect(region).toContainText('不代表整树恢复成功')
+            await expect(region).not.toContainText('递归ACL恢复已完成')
+          }
           await actual.scrollIntoViewIfNeeded()
           await page.screenshot({
             path: `../deploy/artifacts/ui-candidates/recursive-acl-restore-job-results/result-${i}-${width}-${colorScheme}.png`,
