@@ -30,7 +30,8 @@ def engines(repo,revision,state):
 
 
 def source_request(b,case,**extra):
-    return dict(containerId=b['containerId'],instanceId=b['instanceId'],path='work/recursive-tree',captureId=case['request']['operationId'],expectedHistoryDigest=case['receipt']['historyDigest'],offset=0,take=50,**extra)
+    assert set(extra)<={'offset','take'}
+    return dict(containerId=b['containerId'],instanceId=b['instanceId'],path='work/recursive-tree',captureId=case['request']['operationId'],expectedHistoryDigest=case['receipt']['historyDigest'],**{'offset':0,'take':50,**extra})
 
 
 def verify_page(page,b,case,offset):

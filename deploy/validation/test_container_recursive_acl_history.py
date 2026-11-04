@@ -15,6 +15,14 @@ common=load('whaledeck-container-acl-history.py','recursive_history_common_candi
 module=load('whaledeck-container-recursive-acl-history.py','recursive_history_candidate')
 
 
+class RecursiveHistoryProbeScope(unittest.TestCase):
+    def test_paging_overrides_defaults_without_duplicate_arguments_or_identity_override(self):
+        from recursive_acl_history_probe import source_request
+        b=dict(containerId='a'*64,instanceId='123:instance');case=dict(request=dict(operationId='b'*32),receipt=dict(historyDigest='C'*64))
+        value=source_request(b,case,offset=2,take=1);self.assertEqual((value['offset'],value['take']),(2,1));self.assertEqual(value['containerId'],b['containerId'])
+        with self.assertRaises(AssertionError):source_request(b,case,containerId='d'*64)
+
+
 @unittest.skipUnless(os.name=='posix' and os.geteuid()==0,'isolated Linux root required')
 class RecursiveAclHistoryTests(unittest.TestCase):
     def setUp(self):
