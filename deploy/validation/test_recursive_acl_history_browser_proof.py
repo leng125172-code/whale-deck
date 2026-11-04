@@ -79,6 +79,14 @@ class RecursiveAclHistoryBrowserProofTests(unittest.TestCase):
     def test_durable_audits_accept_jsonb_or_json_and_ignore_order(self):
         b,_,_,s,a=fixture();a[0]['detail_json']=json.dumps(a[0]['detail_json']);prove_audits(list(reversed(a)),'subject-a',b,s['pages'],[s])
 
+    def test_incomplete_page_cursor_cannot_precede_its_returned_capture(self):
+        b,r,m,s,_=fixture();first=s['pages'][0];last=copy.deepcopy(first)
+        cursor='0'*31+'1'
+        first['page'].update(complete=False,nextAfter=cursor)
+        last['request']['query'].update(after=cursor,expectedVersion='C'*64)
+        last['page'].update(entries=[],scannedCount=0)
+        with self.assertRaises(AssertionError):prove_pages([first,last],b,{m['operationId']:expected_summary(r,m)})
+
     def test_audit_identity_hash_capture_counts_types_duplicates_and_extra_plaintext_reject(self):
         changes=[lambda x:x[0].update(actor_subject='other'),lambda x:x[1].update(trace_id=x[0]['trace_id']),
                  lambda x:x[1].update(id=x[0]['id']),lambda x:x[1].update(job_id='not-null'),lambda x:x[0].update(result='Accepted'),

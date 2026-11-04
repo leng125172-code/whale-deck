@@ -56,6 +56,7 @@ def prove_pages(pages,baseline,expected):
         previous=after
         for entry in page['entries']:
             capture=entry['captureId'];assert capture>previous and capture in expected
+            assert page['complete'] or capture<=page['nextAfter']
             typed_equal(entry,expected[capture]);seen.append(capture);previous=capture
         if not page['complete']:assert re.fullmatch('[a-f0-9]{32}',page['nextAfter']) and page['nextAfter']>after and page['nextAfter']>=previous
         version=page['version'];after=page['nextAfter']
