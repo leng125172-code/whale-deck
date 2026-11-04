@@ -134,6 +134,9 @@ def main():
             with io.storage.target(create_namespace=False, read_only=True) as (_, fd): b.update(sourceDevice=root.stat().st_dev, hddDevice=os.fstat(fd).st_dev)
             (evidence/'baseline.json').write_text(json.dumps(b)); header = dict(revision=revision, probeRevision=probe_revision, **location, coreId=core['/whaledeck-api'][0])
             source_probe = SourceProbe(binary, evidence/'source-rpc', header); restore_probe = RestoreProbe(binary, evidence/'restore-rpc', header)
+            PHASE = 'independent-prewrite'
+            with (evidence/'independent-prewrite.log').open('x') as log: subprocess.run([sys.executable, str(repo/'deploy/validation/verify_container_recursive_acl_restore_agent.py'), '--prewrite', evidence.name], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=120)
+            assert inventory(root, io.reader, content, io.acl) == b['original']
             def save_rows():
                 (evidence/'sources.json').write_text(json.dumps(sources)); (evidence/'results.json').write_text(json.dumps(rows))
             def capture(label, kind, profile='named'):

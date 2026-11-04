@@ -104,6 +104,7 @@ def verify(name, live=False):
         keep_old(current, previous); assert current == private_json(evidence/filename)
     assert snapshot(Path('/var/lib/whaledeck-container-directories')) == b['directoryRoot']
     content = fixture_bytes(b['containerId']); assert len(content) == b['bytesPerFile'] == 2*1024**2+7 and hashlib.sha256(content).hexdigest() == b['sha256']
+    prewrite = private_json(evidence/'independent-prewrite.json'); assert prewrite['sourceBytesReadBeforeFirstCapture'] is True and prewrite['normalSourceCaptures'] == prewrite['restoreOperations'] == 0
     final = private_json(evidence/'physical-final.json'); assert final == late['after'] and b['original'] == sources[0]['before']
     if live:
         observed = io.docker.api('GET', '/containers/'+b['containerId']+'/json'); owned.verify_container(observed, b['containerId'], b['name'], Path(b['source']))
@@ -114,6 +115,27 @@ def verify(name, live=False):
         assert not os.path.lexists(b['source']) and not owned.common.command(['docker', 'ps', '-aq', '--no-trunc', '--filter', 'id='+b['containerId']])
     result = dict(**proof, childHddMetadata=24, activeTransientUnits=0, coreHealthy=True, livePinnedSource=live, sourceBytesReadBeforeCleanup=live, sourceBytesRereadAfterCleanup=False, humanOrUi=False)
     (evidence/('independent-live.json' if live else 'independent-final.json')).open('x').write(json.dumps(result)); return result
+
+
+def verify_prewrite(name):
+    assert re.fullmatch('container-recursive-acl-restore-agent-[a-f0-9]{32}', name)
+    repo = Path(__file__).resolve().parents[2]; evidence = repo/'deploy/artifacts'/name
+    from validate_container_upload_recovery_agent import trusted
+    trusted(evidence, True); b = private_json(evidence/'baseline.json'); io = installed()
+    assert b['validationSourceSha256'] == source_closure(repo, b['validationSourceRevision'], seeds=SEEDS)
+    for filename, sha in b['validationSourceSha256'].items(): assert hashlib.sha256((repo/'deploy/validation'/filename).read_bytes()).hexdigest() == sha
+    assert host_identity(b['revision']) == b['hosts'] and owned.common.core_snapshot() == {k:tuple(v) for k,v in b['core'].items()}
+    assert core_health(b['core']) == b['coreHealth'] and idle_helpers() == 0; no_active_work()
+    assert preservation_snapshot(io.storage) == b['oldProtected'] and snapshot(io.sourceState) == b['oldSourceRoot']
+    assert snapshot(io.restoreState) == b['oldRestoreRoot'] and hdd_snapshot(io, True) == b['oldRestoreHdd']
+    assert snapshot(Path('/var/lib/whaledeck-container-directories')) == b['directoryRoot']
+    assert not (evidence/'sources.json').exists() and not (evidence/'results.json').exists()
+    content = fixture_bytes(b['containerId']); assert len(content) == b['bytesPerFile'] and hashlib.sha256(content).hexdigest() == b['sha256']
+    observed = io.docker.api('GET', '/containers/'+b['containerId']+'/json'); owned.verify_container(observed, b['containerId'], b['name'], Path(b['source']))
+    assert io.docker.target(observed, b['containerId'], io.docker.registry())['instanceId'] == b['instanceId']
+    verify_pinned_source_restore(b, b['original'], io, content)
+    result = dict(sourceBytesReadBeforeFirstCapture=True, normalSourceCaptures=0, restoreOperations=0, coreHealthy=True, humanOrUi=False)
+    (evidence/'independent-prewrite.json').open('x').write(json.dumps(result)); return result
 
 
 def verify_pinned_source_restore(b, final, io, content):
@@ -153,6 +175,9 @@ def verify_pinned_source_restore(b, final, io, content):
 if __name__ == '__main__':
     assert os.geteuid() == 0; os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS'] = '0'
     assert len(sys.argv) in (2, 3)
-    live = len(sys.argv) == 3
-    if live: assert sys.argv[1] == '--live'
-    print(json.dumps(verify(sys.argv[-1], live=live)))
+    if len(sys.argv) == 3 and sys.argv[1] == '--prewrite':
+        print(json.dumps(verify_prewrite(sys.argv[-1])))
+    else:
+        live = len(sys.argv) == 3
+        if live: assert sys.argv[1] == '--live'
+        print(json.dumps(verify(sys.argv[-1], live=live)))
