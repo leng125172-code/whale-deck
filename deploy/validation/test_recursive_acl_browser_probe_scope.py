@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from validate_container_recursive_acl_browser import managed_entries,managed_plan,snapshot,archive,wait_case,CASES,CHANGES
 from verify_container_recursive_acl_browser import verify
+from recover_container_recursive_acl_browser import recover
 
 ROOT=Path(__file__).resolve().parent
 
@@ -22,6 +23,8 @@ def plan(kind='access'):
 class RecursiveAclBrowserProbeScopeTests(unittest.TestCase):
     def test_plan_preserves_full_mode_64bit_identity_zero_entries_and_separate_targets(self):
         source=plan();out=managed_plan(source)
+        self.assertEqual({'schemaVersion','command','targetProof','parentIdentity','parentVersion','uid','gid','fingerprint','rootIdentity','manifestDigest','entryCount','fileCount','directoryCount','changeCount'},set(out))
+        self.assertEqual('E'*64,out['manifestDigest'])
         self.assertEqual([18446744073709551615,18446744073709551614],out['rootIdentity'][:2]);self.assertEqual(0o40750,out['rootIdentity'][2])
         self.assertEqual(1700000000123456789,out['rootIdentity'][7]);self.assertEqual(1700000000987654321,out['rootIdentity'][8])
         self.assertEqual({'tag':'user','id':0,'permissions':0},out['command']['fileEntries'][1]);self.assertIsNot(out['command']['fileEntries'],out['command']['directoryEntries'])
@@ -57,6 +60,7 @@ class RecursiveAclBrowserProbeScopeTests(unittest.TestCase):
             with self.subTest(value=value),self.assertRaises((AssertionError,ValueError)):snapshot(value)
         for name in ('../escape','container-recursive-ownership-browser-'+'a'*32,'container-recursive-acl-browser-'+'A'*32):
             with self.subTest(name=name),self.assertRaises(AssertionError):verify(name)
+            with self.subTest(recovery=name),self.assertRaises(AssertionError):recover(name)
         with tempfile.TemporaryDirectory() as d:
             for name in ('../escape','other','default/result','default-result.json'):
                 with self.subTest(name=name),self.assertRaises(AssertionError):wait_case(None,Path(d),name)

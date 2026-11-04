@@ -91,7 +91,7 @@ def managed_plan(value):
     parent=[p['Device'],p['Inode']];assert all(type(v) is int and 0<=v<=18446744073709551615 for v in parent) and parent[1]>0
     for v in (c['ExpectedVersion'],value['TargetProof'],value['ParentVersion'],value['Fingerprint'],value['ManifestDigest']):assert type(v) is str and re.fullmatch('[A-F0-9]{64}',v)
     return {'schemaVersion':1,'command':{'containerId':loc['ContainerId'],'instanceId':loc['InstanceId'],'path':loc['Path'],'expectedVersion':c['ExpectedVersion'],'aclType':kind,'fileEntries':files,'directoryEntries':directories},
-        'targetProof':value['TargetProof'],'parentIdentity':parent,'parentVersion':value['ParentVersion'],'uid':value['OwnerUid'],'gid':value['OwnerGid'],'fingerprint':value['Fingerprint'],'rootIdentity':identity,**counts}
+        'targetProof':value['TargetProof'],'parentIdentity':parent,'parentVersion':value['ParentVersion'],'uid':value['OwnerUid'],'gid':value['OwnerGid'],'fingerprint':value['Fingerprint'],'rootIdentity':identity,'manifestDigest':value['ManifestDigest'],**counts}
 
 
 def archive(evidence,name,raw,read_only):
@@ -251,6 +251,8 @@ def main():
                         PHASE = 'actual-ui-physical-proof-'+name
                         signal = wait_case(process,evidence,name); result = signal['result']; assert result['name'] == name and result['confirmation'] is None
                         after = inventory(root,reader,content,acl)
+                        (evidence/(name+'-physical-before.json')).write_text(json.dumps(current))
+                        (evidence/(name+'-physical-after.json')).write_text(json.dumps(after))
                         proof = verify_case(result,baseline,signal['subject'],evidence,reader,storage,current,after,acl); results.append(proof); current = after
                         (evidence/'results.json').write_text(json.dumps(results)); (evidence/'physical-final.json').write_text(json.dumps(current))
                         target = evidence/(name+'-verified.json'); pending = evidence/(name+'-verified.pending')
