@@ -84,6 +84,14 @@ def terminal_state(kind):
     return 'Failed' if kind in RESTART_KINDS else 'Canceled'
 
 
+def terminal_summary(row,record,children):
+    assert type(row['state']) is str and row['state'] in ('Failed','Canceled')
+    assert type(children) is int and 0<=children<=1 and record['state']=='Aborted'
+    counts=[record[k] for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')]
+    assert all(type(n) is int and n>=0 for n in counts)
+    return dict(id=row['id'],executionJobId=row['execution_job_id'],state=row['state'],rootState='Aborted',aggregateHddRecords=1,childHddRecords=children,counts=counts)
+
+
 def verify_revoked_browser(ui, kind, subject):
     assert kind in REVOKED_KINDS and ui['kind']==kind and ui['subject']==subject
     assert ui['authorityRevoked'] is True and ui['normalDualLogout'] is False and ui['logout'] is None
@@ -152,8 +160,8 @@ def verify_terminal(identifier, baseline, subject, storage, directory, *, read_o
             child_directory=STATE/(operation+'.entries');outcomes=[]
             if child_directory.exists():
                 trusted(child_directory,True)
-                expected={child_id(operation,0)+'.json'} if record['startedThrough']==0 else set()
-                actual={p.name for p in child_directory.iterdir() if p.name.endswith('.json')};assert actual==expected
+                child_names={child_id(operation,0)+'.json'} if record['startedThrough']==0 else set()
+                actual={p.name for p in child_directory.iterdir() if p.name.endswith('.json')};assert actual==child_names
             else:assert record['startedThrough']==-1
             for index,entry in enumerate(saved['entries']):
                 child=child_id(operation,index);phase='NotStarted'
@@ -175,8 +183,7 @@ def verify_terminal(identifier, baseline, subject, storage, directory, *, read_o
             expected_outcome='' if record['startedThrough']<0 else digest(b'whaledeck-recursive-acl-outcomes-v1\n',outcomes)
             assert record['outcomeDigest']==receipt['OutcomeDigest']==expected_outcome and (row['outcome_digest'] or '')==expected_outcome
         finally:os.close(fd)
-    return dict(id=identifier,executionJobId=row['execution_job_id'],state=expected,rootState='Aborted',aggregateHddRecords=1,childHddRecords=children,
-        counts=[record[k] for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')])
+    return terminal_summary(row,record,children)
 
 
 def run_case(kind, revision, source_revision, hashes, evidence, reader, storage, acl):
@@ -236,6 +243,7 @@ def run_case(kind, revision, source_revision, hashes, evidence, reader, storage,
                 elif kind in RESTART_KINDS:
                     write_signal(directory,'action.json',dict(kind=kind));action=wait_signal(directory,'action-done.json',browser,40)
                     elapsed,service,restart_row=restart(kind,held,worker,applying['row'],revision,directory,attempt)
+                    (directory/'service-restart.json').write_text(json.dumps(service))
                 else:
                     began=time.monotonic()
                     with ThreadPoolExecutor(max_workers=1) as pool:
@@ -243,6 +251,7 @@ def run_case(kind, revision, source_revision, hashes, evidence, reader, storage,
                         write_signal(directory,'action.json',dict(kind=kind));action=wait_signal(directory,'action-done.json',browser,40)
                         elapsed=exit_watch.result(timeout=16)
                 assert elapsed is not None and elapsed<15,'PRODUCT_DID_NOT_STOP_BOUND_RECURSIVE_ACL_HELPER'
+                (directory/'product-helper-exit.json').write_text(json.dumps(dict(productStoppedHelperSeconds=elapsed,validatorKilledHelper=False)))
                 held.release();held=None
                 assert action['id']==identifier and action['subject']==ready['subject']
                 if kind=='worker-crash':

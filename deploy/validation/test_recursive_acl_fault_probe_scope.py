@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from bound_container_recursive_acl_cut import child_id, first_entry_boundary, freeze_before_first_acl
-from validate_container_recursive_acl_faults import selected_kinds, terminal_state, verify_revoked_browser, require_authority_change
+from validate_container_recursive_acl_faults import selected_kinds, terminal_state, terminal_summary, verify_revoked_browser, require_authority_change
 from recursive_acl_restart_proof import require_only_transients, owner_unit, restart_allowed, lease_held, verify_lease, RESTART_KEYS
 from verify_container_recursive_acl_faults import target
 
@@ -19,6 +19,17 @@ def record():
 
 
 class RecursiveAclFaultProbeScope(unittest.TestCase):
+    def test_terminal_summary_is_serializable_sql_state_with_either_child_count(self):
+        import json
+        for state in ('Failed','Canceled'):
+            for started in (False,True):
+                row=dict(id='original',execution_job_id='execution',state=state)
+                record=dict(state='Aborted',completedCount=0,changedCount=0,abortedCount=int(started),notStartedCount=4-int(started),unknownCount=0)
+                result=terminal_summary(row,record,int(started));self.assertEqual(state,json.loads(json.dumps(result))['state'])
+                self.assertEqual([0,0,int(started),4-int(started),0],result['counts'])
+        for state in (set(),{'child.json'},'Succeeded',False):
+            with self.subTest(state=state),self.assertRaises(AssertionError):terminal_summary({**row,'state':state},record,0)
+
     def test_cut_requires_first_entry_before_any_completion_and_verified_hdd(self):
         self.assertTrue(first_entry_boundary(record()))
         r=record();r['startedThrough']=-1;self.assertTrue(first_entry_boundary(r))
