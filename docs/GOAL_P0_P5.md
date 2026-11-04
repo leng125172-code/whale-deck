@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-05 递归ACL恢复持久化候选f7d6a68通过真实隔离PG：新增Repository/EF迁移20261104182233、18CHECK/12发布围栏及不可变保护、双Job/outbox/审计原子事务与来源/回执MAC；旧十类容器写入和宿主锁对称保护、路径/活动预算、DI/Worker/取消及通用重试拒绝已接。真实native宏门禁1通过零跳过、专属新阶段执行且两库/SDK清理确认，回执/身份/时钟仍为测试夹具，不冒充Root/UI。5048 Unit/613 Integration（7默认原生跳过）、Release零警告错误、8范围/3状态通过，38源码SHA及三CLI来源核对。运行前后1434保护、来源Root1052/恢复Root32-HDD46/目录94字节九字段与11核心/两宿主e066保持，生产新表缺席、旧38意图35执行73Job/活动0。未发布生产迁移/新Worker/API/Vue，无新真人文件整链；继续管理员API/页面、准确CI及标准覆盖和真实恢复验收，完整故障、删除/维护连续性及其余59项继续，不升完整完成率。[持久化、真实DB及边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_PERSISTENCE.md)。
+
 2026-11-05 递归ACL恢复内部业务候选70862f8完成：独立意图/确定性ID/owner及request-plan-execution-receipt-confirmation域、完整来源摘要/frame/目标摘要绑定、实时管理员/登录和租约保护、原执行Inspect优先与Partial/Unknown事实保全；Apply来源拒绝先观察再围栏，不推断零写或重做。296定向含154新增、5046 Unit/612 Integration通过（7原生默认跳过），Release零警告错误与8范围通过，夹具CS0649补实质续租冻结测试后修正。未映射EF或注册生产工作流/Worker/API，真实持久化/共享写排他/页面尚待；内存仓库不算SQL。只读确认1434保护/restore Root32-HDD46与前批九字段字节保持、11核心healthy/两宿主e066、38意图35执行73Job/活动0保持，无发布/重复实机写。继续真实EF/迁移/审计/租约与所有writer保护、PG验收，再Worker/API/Vue和真人整链及其余59项，不升完整完成率。[内部编排与真实边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_BUSINESS.md)。
 
 2026-11-05 递归ACL恢复1.55宿主已标准安装并完成签名RPC分项：产品e066ec1准确CI全成功，工具55df39e/探针ae79e86；新独占资源3来源、4恢复（3完成1取消）/17回执、22+23拒绝、24 child HDD及迟到旧调用不重放通过，首次捕获前/清理前独立FD实读与清理后原件核验、精确清理通过。169关联root/0跳过、严格编译及标准自包含10.0.13/安装validate通过；安装前bytes工具预检错误修正后未重复真实操作。11核心healthy，Agent1080518/维护1080514均e066，普通保护1434/旧1404保持，restore Root32/HDD46另存，目录94与38意图35执行73Job保持/活动0，98证据SHA通过。维护67样本4次非200，连续性仍失败；源/HDD同device2049不算异盘。无永久恢复业务/真实Auth UI，继续独立意图EF/共享保护/Worker/API/Vue整链、故障矩阵、删除及59项，不升完整完成率。[安装、真实RPC及剩余](qa/CONTAINER_RECURSIVE_ACL_RESTORE_AGENT.md)。

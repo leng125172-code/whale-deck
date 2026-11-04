@@ -35,3 +35,6 @@
 2. 将新恢复意图加入所有文件 writer 的双向路径冲突、物理注册挂载作用域及全局 publish barrier；包含跨容器/目录别名、Partial/Unknown 不释放保护与明确 ACK 释放。用独立真实 PostgreSQL 验证并清理测试库，不能只验证模型元数据。
 3. 注册独立 Worker 和业务依赖；禁止通用 retry/outbox 将原恢复重新排成可写任务，再接管理员 API/Vue、实际 Authentik → 页面 → SQL/Worker → Agent → 文件/HDD 整链及完整故障矩阵。
 4. 继续可恢复删除、维护入口连续性及其余59项。前批维护入口4/67非200、源/HDD同device2049的边界保持；本批没有补签连续性、异盘或完整页面验收。user NOPASSWD按授权保留，dev不自动回滚。
+
+
+后续接续：f7d6a68真实仓储/EF迁移、共享写入保护及Worker候选已通过独立PostgreSQL验收，见[持久化批次与边界](CONTAINER_RECURSIVE_ACL_RESTORE_PERSISTENCE.md)。本文70862f8当时的内存夹具/缺口与原测试记录保持，不据后续数据库分项补签生产迁移、Worker循环或真人页面整链。
