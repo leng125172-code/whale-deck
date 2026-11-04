@@ -85,11 +85,17 @@ def expected_targets(index):
     return acl(6 if index in (3,7) else 4,root=index==4),acl(7,directory=True,root=index==4)
 
 
+def ready_proof(value,baseline):
+    assert type(value) is dict and set(value)=={'kind','revision','probeRevision','protocolMinor'}
+    assert value['kind']=='ready' and value['revision']==baseline['revision'] and value['probeRevision']==baseline['probeRevision']
+    assert type(value['protocolMinor']) is int and 53<=value['protocolMinor']<=4294967295
+
+
 def verify_records(evidence,b,accepted,rows,files,storage):
     state=Path('/var/lib/whaledeck-container-recursive-acl');assert b['statePath']==str(state)
     previous=b['original'];ids=set();histories=0
     transcript=[json.loads(line) for line in (evidence/'rpc.jsonl').read_bytes().splitlines()]
-    assert len(transcript)==43 and transcript[0]==dict(kind='ready',revision=b['revision'],probeRevision=b['probeRevision'],protocolMinor=53) and transcript[-1]==dict(kind='done')
+    assert len(transcript)==43 and transcript[-1]==dict(kind='done');ready_proof(transcript[0],b)
     plans=[item for item in transcript if item['kind']=='plan'];assert len(plans)==8
     denied=[item for item in transcript if item['kind']=='rejected'];assert len(denied)==1 and denied[0]['refusals']==8
     labels=('default','access','noop','mask','root','default-noop','clear-default','cancel')
@@ -178,19 +184,20 @@ def verify_records(evidence,b,accepted,rows,files,storage):
     return histories
 
 
-def main():
-    from validate_container_recursive_acl_agent import host_identity,no_active_work
+def main(history=False):
+    from validate_container_recursive_acl_agent import host_identity,no_active_work,validation_seeds
     assert os.geteuid()==0 and len(sys.argv)==2;os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     name=sys.argv[1];assert re.fullmatch('container-recursive-acl-agent-[a-f0-9]{32}',name)
     repo=Path(__file__).resolve().parents[2];evidence=repo/'deploy/artifacts'/name
     assert evidence.resolve(strict=True)==evidence and evidence.stat().st_uid==0 and stat.S_IMODE(evidence.stat().st_mode)==0o700
     b=private_json(evidence/'baseline.json');accepted=private_json(evidence/'verified.json');rows=private_json(evidence/'results.json')
+    assert b.get('recursiveHistory',False) is history
     for key in ('revision','probeRevision','validationSourceRevision'):assert re.fullmatch('[a-f0-9]{40}',b[key])
     assert accepted['revision']==b['revision'] and accepted['operations']==len(rows)==8 and accepted['completed']==7 and accepted['aborted']==1
     for flag in ('installedSignedUdsAndFixedHelper','fullBytesAndOriginalInodesOwnersMtimeAttributesAndOtherAcl','rootAndHddRetained','exactSourceAndContainerCleaned','coreUnchanged'):assert accepted[flag] is True
     assert accepted['humanBffOrUi'] is b['candidateOnly'] is False and accepted['planBoundaryRefusals']==18 and accepted['operationBoundaryRefusals']==8 and accepted['aggregateHddMetadata']==7 and accepted['activeTransientUnits']==0
     verify_fixture_recipe(b)
-    assert b['validationSourceSha256']==source_closure(repo,b['validationSourceRevision'],seeds=('validate_container_recursive_acl_agent.py','verify_container_recursive_acl_agent.py','test_recursive_acl_agent_probe_scope.py'))
+    assert b['validationSourceSha256']==source_closure(repo,b['validationSourceRevision'],seeds=validation_seeds(history))
     for filename,sha in b['validationSourceSha256'].items():assert hashlib.sha256((repo/'deploy/validation'/filename).read_bytes()).hexdigest()==sha
     probe_source=subprocess.check_output(['git','-C',str(repo),'show',b['probeRevision']+':deploy/validation/TerminalProbe/ContainerRecursiveAclProbe.cs'])
     assert hashlib.sha256(probe_source).hexdigest()==b['probeSourceSha256'] and host_identity(b['revision'])==b['hostIdentity']
@@ -207,6 +214,9 @@ def main():
     assert common.core_snapshot()=={key:tuple(value) for key,value in b['coreBefore'].items()};no_active_work()
     units=subprocess.check_output(['systemctl','list-units','--all','--no-legend','whaledeck-container-recursive-acl-*'],text=True,timeout=10);assert not units.strip()
     health=json.loads(subprocess.check_output(['docker','inspect',*common.CORE_NAMES]));assert len(health)==11 and all(item['State'].get('Health',{}).get('Status')=='healthy' for item in health)
+    if history:
+        from verify_container_recursive_acl_history_agent import verify_history
+        verify_history(evidence,b,rows,storage,live=False)
     proof=dict(revision=b['revision'],probeRevision=b['probeRevision'],validationSourceRevision=b['validationSourceRevision'],operations=8,completed=7,aborted=1,childHddMetadata=histories,
         installedSignedRpc=True,actualRootAndAttestedHddVerified=True,chronologyAndExactCleanup=True,independentReadOnlyCheck=True,coreUnchangedHealthy=11,sourceBytesRereadAfterCleanup=False,humanBusinessOrUi=False)
     (evidence/'independent-final.json').write_text(json.dumps(proof));print(json.dumps({'independentInstalledRecursiveAclRpc':'passed',**proof}),flush=True)

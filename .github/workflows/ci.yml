@@ -49,6 +49,8 @@ jobs:
           node --check deploy/validation/validate_container_recursive_ownership_faults.mjs
           node --check deploy/validation/validate_installed_logout_only.mjs
           python3 -W error -m py_compile deploy/host/whaledeck-container-recursive-acl-history.py deploy/host/whaledeck-container-recursive-acl-history-transport.py
+          python3 -W error -m py_compile deploy/validation/validate_container_recursive_acl_history_agent.py deploy/validation/verify_container_recursive_acl_history_agent.py deploy/validation/recursive_acl_history_rpc_proof.py
+          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_history_agent_probe_scope.py
           python3 -W error -m py_compile deploy/host/whaledeck-container-recursive-acl.py deploy/host/whaledeck-container-recursive-acl-transport.py deploy/validation/validate_container_recursive_acl.py deploy/validation/verify_container_recursive_acl.py
           python3 -W error -m py_compile deploy/validation/validate_container_recursive_acl_agent.py deploy/validation/verify_container_recursive_acl_agent.py
           python3 -W error -m py_compile deploy/host/whaledeck-container-recursive-ownership-transport.py deploy/host/whaledeck-container-recursive-ownership.py deploy/validation/validate_container_recursive_ownership.py deploy/validation/verify_container_recursive_ownership.py deploy/validation/validate_container_recursive_ownership_agent.py deploy/validation/verify_container_recursive_ownership_agent.py

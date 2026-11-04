@@ -98,14 +98,19 @@ def fixture_bytes(identifier):
     return hashlib.shake_256(('recursive-acl-installed:'+identifier).encode()).digest(2*1024**2+7)
 
 
-def main():
+def validation_seeds(history=False):
+    base=('validate_container_recursive_acl_agent.py','verify_container_recursive_acl_agent.py','test_recursive_acl_agent_probe_scope.py')
+    return base+('validate_container_recursive_acl_history_agent.py','verify_container_recursive_acl_history_agent.py','recursive_acl_history_rpc_proof.py','test_recursive_acl_history_agent_probe_scope.py') if history else base
+
+
+def main(history=False):
     global PHASE
     assert os.geteuid()==0 and len(sys.argv)==4;os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision=sys.argv[1];assert re.fullmatch('[a-f0-9]{40}',revision)
     repo=Path(__file__).resolve().parents[2];binary=Path(sys.argv[2])
     validation_revision=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()
     probe_revision=sys.argv[3];assert re.fullmatch('[a-f0-9]{40}',probe_revision)
-    validation_hashes=source_closure(repo,validation_revision,seeds=('validate_container_recursive_acl_agent.py','verify_container_recursive_acl_agent.py','test_recursive_acl_agent_probe_scope.py'))
+    validation_hashes=source_closure(repo,validation_revision,seeds=validation_seeds(history))
     assert all(hashlib.sha256((repo/'deploy/validation'/n).read_bytes()).hexdigest()==v for n,v in validation_hashes.items())
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_INSTALLED_GATE_FIRST'
     probe_path='deploy/validation/TerminalProbe/ContainerRecursiveAclProbe.cs'
@@ -114,13 +119,24 @@ def main():
     assert binary.parent.parent==repo/'deploy/artifacts' and re.fullmatch(r'terminal-probe\.[A-Za-z0-9]+',binary.parent.name) and binary.name=='TerminalProbe'
     trusted(binary);trusted(binary.parent,True)
     subprocess.run(['sha256sum','--quiet','-c','SHA256SUMS'],cwd=binary.parent,check=True,capture_output=True,timeout=30)
+    names=(*NAMES,'whaledeck-container-backups.py','whaledeck-container-acl-transport.py','whaledeck-container-recursive-acl-transport.py','whaledeck-privileged')
+    history_probe_sources={}
+    if history:
+        from validate_container_recursive_acl_history_agent import NAMES as history_names, PROBE_SOURCES, exercise
+        names=(*names,*history_names)
+        for path in PROBE_SOURCES:
+            raw=subprocess.check_output(['git','-C',str(repo),'show',probe_revision+':'+path]);assert (repo/path).read_bytes()==raw
+            history_probe_sources[path]=hashlib.sha256(raw).hexdigest()
     hashes={}
-    for name in (*NAMES,'whaledeck-container-backups.py','whaledeck-container-acl-transport.py','whaledeck-container-recursive-acl-transport.py','whaledeck-privileged'):
+    for name in names:
         path=Path('/usr/local/libexec')/name;trusted(path)
         frozen=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name],timeout=10)
         assert path.read_bytes()==frozen;hashes[name]=hashlib.sha256(frozen).hexdigest()
     trusted(STATE,True);assert stat.S_IMODE(STATE.stat().st_mode)==0o700
     before=owned.common.core_snapshot();assert len(before)==11;checks=no_active_work();hosts=host_identity(revision)
+    if history:
+        from validate_container_recursive_acl_browser import no_active_work as history_idle
+        checks=history_idle()
     evidence=repo/'deploy/artifacts'/('container-recursive-acl-agent-'+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
     print(json.dumps(dict(installedRecursiveAclRpc='started',evidence=str(evidence))),flush=True)
     reader=load('/usr/local/libexec/whaledeck-container-files.py','recursive_installed_reader')
@@ -143,6 +159,7 @@ def main():
             baseline={'revision':revision,'probeRevision':probe_revision,'validationSourceRevision':validation_revision,'validationSourceSha256':validation_hashes,'probeSourceSha256':hashlib.sha256(probe_source).hexdigest(),**location,'source':str(fixture['folder']),'name':inspected['Name'].lstrip('/'),'root':str(root),
                 'original':inventory(root,reader,content,module),'sha256':hashlib.sha256(content).hexdigest().upper(),'bytesPerFile':len(content),
                 'coreBefore':before,'hostIdentity':hosts,'sourceHashes':hashes,'preflight':checks,'candidateOnly':False,'statePath':str(STATE)}
+            if history:baseline.update(recursiveHistory=True,historyProbeSourceSha256=history_probe_sources)
             with storage.target(create_namespace=False,read_only=True) as (_,fd):baseline['hddDevice']=os.fstat(fd).st_dev;assert root.stat().st_dev==baseline['hddDevice']
             (evidence/'baseline.json').write_text(json.dumps(baseline))
             header={'revision':revision,'probeRevision':probe_revision,**location,'coreId':before['/whaledeck-api'][0]};probe=Probe(binary,evidence,header)
@@ -182,14 +199,20 @@ def main():
                 (evidence/'results.json').write_text(json.dumps(rows))
             closing=probe;probe=None;closing.close(True)
             final=inventory(root,reader,content,module);(evidence/'physical-final.json').write_text(json.dumps(final))
+            if history:
+                PHASE='history-readonly-rpc'
+                exercise(binary,evidence,header,rows,lambda:inventory(root,reader,content,module),storage)
+                assert inventory(root,reader,content,module)==final
             PHASE='proved-cleanup';remove_proved(root,reader,content,final,module)
         assert not fixture['folder'].exists() and owned.common.core_snapshot()==before and host_identity(revision)==hosts;no_active_work()
+        if history:history_idle()
         units=subprocess.check_output(['systemctl','list-units','--all','--no-legend','whaledeck-container-recursive-acl-*'],text=True,timeout=10)
         assert not units.strip()
         verified={'revision':revision,'operations':8,'completed':7,'aborted':1,'aggregateHddMetadata':7,'childHddMetadata':28,
             'installedSignedUdsAndFixedHelper':True,'humanBffOrUi':False,'fullBytesAndOriginalInodesOwnersMtimeAttributesAndOtherAcl':True,
             'rootAndHddRetained':True,'exactSourceAndContainerCleaned':True,'coreUnchanged':True,'activeTransientUnits':0,
             'planBoundaryRefusals':18,'operationBoundaryRefusals':8}
+        if history:verified['installedRecursiveAclHistoryRpc']='passed'
         (evidence/'verified.json').write_text(json.dumps(verified))
         print(json.dumps({'installedRecursiveAclRpc':'passed','evidence':evidence.name,**verified}),flush=True)
     except BaseException as error:
