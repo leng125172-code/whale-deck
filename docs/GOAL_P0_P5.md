@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-05 递归ACL恢复内部业务候选70862f8完成：独立意图/确定性ID/owner及request-plan-execution-receipt-confirmation域、完整来源摘要/frame/目标摘要绑定、实时管理员/登录和租约保护、原执行Inspect优先与Partial/Unknown事实保全；Apply来源拒绝先观察再围栏，不推断零写或重做。296定向含154新增、5046 Unit/612 Integration通过（7原生默认跳过），Release零警告错误与8范围通过，夹具CS0649补实质续租冻结测试后修正。未映射EF或注册生产工作流/Worker/API，真实持久化/共享写排他/页面尚待；内存仓库不算SQL。只读确认1434保护/restore Root32-HDD46与前批九字段字节保持、11核心healthy/两宿主e066、38意图35执行73Job/活动0保持，无发布/重复实机写。继续真实EF/迁移/审计/租约与所有writer保护、PG验收，再Worker/API/Vue和真人整链及其余59项，不升完整完成率。[内部编排与真实边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_BUSINESS.md)。
+
 2026-11-05 递归ACL恢复1.55宿主已标准安装并完成签名RPC分项：产品e066ec1准确CI全成功，工具55df39e/探针ae79e86；新独占资源3来源、4恢复（3完成1取消）/17回执、22+23拒绝、24 child HDD及迟到旧调用不重放通过，首次捕获前/清理前独立FD实读与清理后原件核验、精确清理通过。169关联root/0跳过、严格编译及标准自包含10.0.13/安装validate通过；安装前bytes工具预检错误修正后未重复真实操作。11核心healthy，Agent1080518/维护1080514均e066，普通保护1434/旧1404保持，restore Root32/HDD46另存，目录94与38意图35执行73Job保持/活动0，98证据SHA通过。维护67样本4次非200，连续性仍失败；源/HDD同device2049不算异盘。无永久恢复业务/真实Auth UI，继续独立意图EF/共享保护/Worker/API/Vue整链、故障矩阵、删除及59项，不升完整完成率。[安装、真实RPC及剩余](qa/CONTAINER_RECURSIVE_ACL_RESTORE_AGENT.md)。
 
 2026-11-05 递归ACL恢复原生探针/独立证明候选ae79e86完成：固定UDS/自有scope、先1.55能力后读key并清零、预置22/23拒绝；独立来源/frame/当前树/异构目标及子权限/父拓扑投影，含自洽重算摘要负测。13新专项/156关联Linux-root零跳过、探针Release/标准冻结自包含构建及8范围通过；实机仅4提前拒绝（含旧minor54能力拒绝）及旧ACL ready-quit，11核心/两宿主390889d保持，未安装/未捕获/未调用新恢复RPC/无业务UI。首轮属性夹具与转义问题保留，readonly来源/错误版本预期按实码顺序修正。继续完整安装态gate/child-HDD-outcome-transcript核验、准确CI及标准安装，再永久业务/共享保护/Worker/API/Vue、故障与删除和59项，不升完整完成率。[工具、实际边界及剩余](qa/CONTAINER_RECURSIVE_ACL_RESTORE_PROBE.md)。
