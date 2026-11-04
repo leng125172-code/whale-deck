@@ -117,7 +117,7 @@ try{
   phase='original-job-terminal-ui';const listing=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1/jobs'&&r.request().method()==='GET');await page.goto(base+'/jobs')
   const jobsResponse=await listing;assert.equal(jobsResponse.status(),200);const jobs=await jobsResponse.json(),jobIndex=jobs.findIndex(v=>v.id===pending.executionJobId);assert.ok(jobIndex>=0);assert.equal(jobs[jobIndex].state,'Canceled')
   await page.locator('.el-table__body-wrapper tbody tr').nth(jobIndex).getByRole('button',{name:'详情',exact:true}).click()
-  const drawer=page.getByRole('dialog',{name:'任务详情',exact:true});await expect(drawer.getByText(pending.executionJobId,{exact:true})).toBeVisible();await expect(drawer.getByText('Canceled',{exact:true})).toBeVisible()
+  const drawer=page.getByRole('dialog',{name:'任务详情',exact:true});await expect(drawer.getByText(pending.executionJobId,{exact:true})).toBeVisible();await expect(drawer.locator('.el-tag').filter({hasText:/^Canceled$/})).toBeVisible()
   assert.equal(await drawer.getByRole('button',{name:'取消任务',exact:true}).count(),0);assert.equal(await drawer.getByRole('button',{name:'重新预检并重试',exact:true}).count(),0)
   await page.screenshot({path:join(evidence,'terminal.png')});await drawer.locator('.el-drawer__close-btn').click()
   adminReloginLogout=await logoutFromUserMenu(page,context,base);const adminAnonymous=await denied(context,urls,401)
