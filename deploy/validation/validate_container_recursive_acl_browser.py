@@ -215,6 +215,7 @@ def main():
     no_active_work(); active = query("SELECT json_build_object('n',count(*)) FROM container_recursive_acl_intents WHERE completed_at_utc IS NULL OR publish_barrier;"); assert active['n'] == 0
     before = owned.common.core_snapshot(); assert len(before) == 11
     evidence = repo/'deploy/artifacts'/('container-recursive-acl-browser-'+uuid.uuid4().hex); evidence.mkdir(mode=0o700)
+    print(json.dumps({'actualRecursiveAclBrowser':'started','evidence':str(evidence)}),flush=True)
     reader = load('/usr/local/libexec/whaledeck-container-files.py','recursive_browser_reader')
     files = reader.trusted_module('whaledeck-files.py','recursive_browser_files')
     storage = load('/usr/local/libexec/whaledeck-file-backups.py','recursive_browser_storage').FileBackups(files)
@@ -255,6 +256,7 @@ def main():
                         target = evidence/(name+'-verified.json'); pending = evidence/(name+'-verified.pending')
                         with pending.open('x') as stream: stream.write(json.dumps({'id':result['id'],'physicalAndHistoryVerified':True}))
                         pending.replace(target)
+                        print(json.dumps({'actualRecursiveAclBrowser':'case-verified','case':name,'state':result['state'],'physicalAndHistoryVerified':True}),flush=True)
                     assert process.wait(timeout=60) == 0, 'ACTUAL_RECURSIVE_BROWSER_FAILED'
                 finally:
                     if process.poll() is None:
@@ -279,5 +281,8 @@ def main():
 if __name__ == '__main__':
     try: main()
     except BaseException as error:
-        print(json.dumps({'actualRecursiveAclBrowser':'failed','phase':PHASE,'failureType':type(error).__name__}),flush=True)
+        import traceback
+        frames=traceback.extract_tb(error.__traceback__)
+        frame=next((f for f in reversed(frames) if f.filename.endswith('validate_container_recursive_acl_browser.py')),None)
+        print(json.dumps({'actualRecursiveAclBrowser':'failed','phase':PHASE,'failureType':type(error).__name__,'frame':frame.lineno if frame else None}),flush=True)
         raise SystemExit(1) from None
