@@ -59,8 +59,9 @@ def keep_old(current, previous):
 
 def core_health(core):
     value = owned.common.command(['docker', 'inspect', '--format', '{{.Name}} {{.Id}} {{.State.Health.Status}}', *owned.common.CORE_NAMES])
+    assert type(value) is bytes
     result = {}
-    for line in value.splitlines():
+    for line in value.decode('utf-8').splitlines():
         name, identifier, health = line.split(); assert name in core and identifier == core[name][0] and health == 'healthy' and core[name][2] == 'running'
         assert name not in result; result[name] = health
     assert set(result) == set(core); return result

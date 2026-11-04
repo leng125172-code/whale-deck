@@ -9,6 +9,8 @@ import json
 import os
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
+from validate_container_recursive_acl_restore_agent import core_health, owned
 
 import test_container_file_recursive_acl_restore as kernel
 from test_recursive_acl_restore_agent_probe_scope import wire
@@ -33,6 +35,19 @@ class GateSelectionTests(unittest.TestCase):
     def test_arbitrary_evidence_paths_fail_before_any_installed_access(self):
         for value in ('../escape', 'recursive-acl-restore-kernel-'+'a'*32, 'container-recursive-acl-restore-agent-'+'A'*32):
             with self.subTest(value=value), self.assertRaises(AssertionError): verify(value)
+
+
+class CoreHealthProofTests(unittest.TestCase):
+    def test_native_command_bytes_are_decoded_and_identity_is_checked(self):
+        core = {'/test-core': ('a'*64, 'image', 'running', 'start')}
+        with patch.object(owned.common, 'command', return_value=('/test-core '+'a'*64+' healthy\n').encode()):
+            self.assertEqual({'/test-core':'healthy'}, core_health(core))
+
+    def test_unhealthy_replaced_missing_or_duplicate_container_fails_closed(self):
+        core = {'/test-core': ('a'*64, 'image', 'running', 'start')}
+        good = ('/test-core '+'a'*64+' healthy\n').encode()
+        for output in (good.replace(b'healthy', b'unhealthy'), good.replace(b'a'*64, b'b'*64), b'', good+good):
+            with self.subTest(output=output), patch.object(owned.common, 'command', return_value=output), self.assertRaises(AssertionError): core_health(core)
 
 
 @unittest.skipUnless(os.geteuid() == 0, 'temporary real Linux ACL records required')
