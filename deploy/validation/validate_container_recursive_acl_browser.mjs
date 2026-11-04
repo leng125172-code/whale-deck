@@ -159,6 +159,7 @@ try {
   }
   assert.equal(registrations,cases.length);assert.equal(confirmations,cases.length-1); assert.equal(uploads, 0); assert.ok((await Promise.all(headerChecks)).every(Boolean))
   phase='visible-dual-logout';const adminLogout=await logoutFromUserMenu(page,context,base)
+  await writeFile(join(evidence,'admin-logout.json'),JSON.stringify(adminLogout),{mode:0o600})
   const paths=[endpoint+'/'+completed[0].id,endpoint+'/by-key/'+crypto.randomUUID(),'/api/v1/files/container-recursive-acls/recovery','/api/v1/files/container-recursive-acls/recovery/'+completed[0].id]
   for(const path of paths)assert.equal((await context.request.get(base+path)).status(),401)
   phase='ordinary-visible-login';const ordinaryContext=await browser.newContext({viewport:{width:320,height:600},colorScheme:'dark',reducedMotion:'reduce'}),ordinaryPage=await ordinaryContext.newPage();activePage=ordinaryPage;ordinaryContext.setDefaultTimeout(20_000)
@@ -169,6 +170,8 @@ try {
   for(const path of paths)assert.equal((await ordinaryContext.request.get(base+path)).status(),403)
   const ordinaryCsrf=await(await ordinaryContext.request.get(base+'/api/v1/auth/csrf')).json(),ordinaryHeaders={Origin:base,[ordinaryCsrf.headerName]:ordinaryCsrf.token,'Idempotency-Key':completed[0].id}
   for(const path of [endpoint,endpoint+'/'+completed[0].id+'/confirm',endpoint+'/'+completed[0].id+'/cancel','/api/v1/files/container-recursive-acls/recovery/'+completed[0].id+'/acknowledge'])assert.equal((await ordinaryContext.request.post(base+path,{headers:ordinaryHeaders,data:path===endpoint?forbidden:{version:completed[0].version,confirmed:true,planHash:'not-authority'}})).status(),403)
+  await writeFile(join(evidence,'ordinary-denials.json'),JSON.stringify({subject:ordinaryProfile.subject,deniedGet:4,deniedPost:4,pagePrivateRequests}),{mode:0o600})
+  await ordinaryPage.getByRole('button',{name:'首页',exact:true}).click();await expect(ordinaryPage).toHaveURL(base+'/')
   phase='ordinary-visible-dual-logout';const ordinaryLogout=await logoutFromUserMenu(ordinaryPage,ordinaryContext,base)
   for(const path of paths)assert.equal((await ordinaryContext.request.get(base+path)).status(),401)
   const ordinary={subject:ordinaryProfile.subject,deniedGet:4,deniedPost:4,pagePrivateRequests,logout:ordinaryLogout};await ordinaryContext.close()

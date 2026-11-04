@@ -26,9 +26,9 @@ def recover(name):
     repo=Path(__file__).resolve().parents[2];evidence=repo/'deploy/artifacts'/name
     info=evidence.lstat();assert evidence.resolve(strict=True)==evidence and info.st_uid==0 and stat.S_IMODE(info.st_mode)==0o700
     assert not (evidence/'verified.json').exists() and not (evidence/'recovered-first-default.json').exists() and not (evidence/'browser.json').exists()
-    labels=('default-noop','clear-default') if (evidence/'default-noop-result.json').exists() else ('default','access','noop','mask','root') if (evidence/'root-result.json').exists() else ('default',)
+    labels=('cancel',) if (evidence/'cancel-result.json').exists() else ('default-noop','clear-default') if (evidence/'default-noop-result.json').exists() else ('default','access','noop','mask','root') if (evidence/'root-result.json').exists() else ('default',)
     assert {p.name for p in evidence.glob('*-result.json')}=={label+'-result.json' for label in labels}
-    b=private_json(evidence/'baseline.json');signal=private_json(evidence/(labels[0]+'-result.json'));assert signal['result']['name']==labels[0] and signal['result']['state']=='Succeeded'
+    b=private_json(evidence/'baseline.json');signal=private_json(evidence/(labels[0]+'-result.json'));assert signal['result']['name']==labels[0] and signal['result']['state']==('Canceled' if labels==('cancel',) else 'Succeeded')
     assert b['validationSourceSha256']==source_closure(repo,b['validationSourceRevision'],seeds=SOURCES)
     no_active_work();assert common.core_snapshot()=={k:tuple(v) for k,v in b['coreBefore'].items()}
     absent=subprocess.run(['docker','inspect',b['containerId']],capture_output=True,timeout=15);assert absent.returncode!=0 and b'no such' in absent.stderr.lower()
@@ -55,7 +55,7 @@ def recover(name):
     assert common.fingerprint(leaf)==identity and leaf.read_bytes()==expected and {p.name for p in source.iterdir()}=={'original.bin'}
     leaf.unlink();assert not list(source.iterdir()) and (source.stat().st_dev,source.stat().st_ino)==(parent.st_dev,parent.st_ino);source.rmdir()
     no_active_work();assert common.core_snapshot()=={k:tuple(v) for k,v in b['coreBefore'].items()}
-    result=dict(revision=b['revision'],originalWholeGatePassed=False,recoveredCasesPhysicallyAndHistoryVerified=True,recoveredLabels=list(labels),aggregateHddRecords=len(labels),childHddRecords=4*len(labels),noRepeatedFileMutation=True,originalNormalDualLogoutAccepted=False,originalFailurePreserved=True,exactSourceAndContainerAbsent=True,coreUnchanged=11,readbackDirectory=out.name)
+    result=dict(revision=b['revision'],originalWholeGatePassed=False,recoveredCasesPhysicallyAndHistoryVerified=True,recoveredLabels=list(labels),aggregateHddRecords=sum(p['children']>0 for p in proofs),childHddRecords=sum(p['children'] for p in proofs),noRepeatedFileMutation=True,originalNormalDualLogoutAccepted=False,originalFailurePreserved=True,exactSourceAndContainerAbsent=True,coreUnchanged=11,readbackDirectory=out.name)
     (evidence/'recovered-first-default.json').write_text(json.dumps(result));return result
 
 if __name__=='__main__':
