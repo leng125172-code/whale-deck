@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import JobsView from '@/views/JobsView.vue'
+import { result as restoreJobResult } from './fixtures/recursiveAclRestoreJobResult'
 import type { JobEvent } from '@/services/contracts'
 
 const { request, stage, subscribe } = vi.hoisted(() => ({
@@ -78,6 +79,27 @@ afterEach(() => {
 })
 
 describe('Job retry', () => {
+  it('renders restore job facts and never falls back to raw private JSON', async () => {
+    const result = restoreJobResult
+    const row = {
+      ...source,
+      id: result.jobId,
+      jobType: 'containers.files.recursive-acl-restore',
+      state: 'Succeeded',
+      resultJson: JSON.stringify(result),
+    }
+    request.mockImplementation(async (path) =>
+      path.endsWith('/events') ? [] : path === 'jobs?take=100' ? [row] : row,
+    )
+    const wrapper = mount(JobsView, { global: { plugins: [ElementPlus], stubs } })
+    wrappers.push(wrapper)
+    await flushPromises()
+    await wrapper.get('.el-table__body tr').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="递归ACL恢复安全结果"]').text()).toContain('来源原修改2')
+    expect(wrapper.get('[aria-label="本次恢复实际结果"]').text()).toContain('实际修改4')
+    expect(wrapper.findAll('button').some((b) => b.text() === '重新预检并重试')).toBe(false)
+  })
   it.each([
     'containers.files.recursive-acl-plan',
     'containers.files.recursive-acl',

@@ -25,8 +25,8 @@ public sealed partial class ContainerRecursiveAclRestoreRepository
         Facts(row, receipt);
         if (state == "Unknown" && row.RootStartedAtUtc is not null) row.HistoryMayExist = true;
         row.NextAttemptAtUtc = now.AddSeconds(30); row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
-        if (terminal) { await FinishJob(job, state == "Succeeded" ? "Succeeded" : state == "Canceled" ? "Canceled" : "Failed", state, code, cancellationToken); await Processed(job.Id, now, cancellationToken); }
-        else { job.State = "Running"; job.Phase = state == "Partial" ? "AwaitingContainerRecursiveAclRestoreResolution" : "AwaitingContainerRecursiveAclRestoreReceipt"; job.ErrorCode = code; job.Version++; await Event(job, code, cancellationToken); }
+        if (terminal) { await FinishJob(job, row, state == "Succeeded" ? "Succeeded" : state == "Canceled" ? "Canceled" : "Failed", state, code, cancellationToken); await Processed(job.Id, now, cancellationToken); }
+        else { job.State = "Running"; job.Phase = state == "Partial" ? "AwaitingContainerRecursiveAclRestoreResolution" : "AwaitingContainerRecursiveAclRestoreReceipt"; job.ErrorCode = code; job.ResultJson = JobResult(row, job); job.Version++; await Event(job, code, cancellationToken); }
         Audit(row, job.Id, row.ActorSubject, row.TraceId, "result", state); await db.SaveChangesAsync(cancellationToken); return true;
     }, cancellationToken);
     public Task AcknowledgeAsync(TerminalActor actor, Guid id, long version, ContainerRecursiveAclRestoreReceiptDto receipt, CancellationToken cancellationToken) => Transaction(async () =>
@@ -39,7 +39,7 @@ public sealed partial class ContainerRecursiveAclRestoreRepository
         row.State = "Acknowledged"; row.CompletedAtUtc = now; row.PublishBarrier = false; row.ResultCode = unresolved == "Partial" ? "CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_ACKNOWLEDGED" : "CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_ACKNOWLEDGED";
         Facts(row, receipt); row.AcknowledgedBy = actor.Subject;
         row.AcknowledgementJson = ContainerRecursiveAclRestoreWorkflowValidation.Serialize(receipt); row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
-        await FinishJob(job, "Failed", "Acknowledged", row.ResultCode, cancellationToken); await Processed(job.Id, now, cancellationToken);
+        await FinishJob(job, row, "Failed", "Acknowledged", row.ResultCode, cancellationToken); await Processed(job.Id, now, cancellationToken);
         Audit(row, job.Id, actor.Subject, actor.TraceId, unresolved == "Partial" ? "partial-acknowledged" : "unknown-acknowledged", receipt.State); await db.SaveChangesAsync(cancellationToken); return true;
     }, cancellationToken);
     private async Task EnsurePaths(ContainerRecursiveAclRestoreIntent row, CancellationToken cancellationToken)
@@ -113,9 +113,12 @@ public sealed partial class ContainerRecursiveAclRestoreRepository
         var sequence = (await db.OperationJobEvents.Where(e => e.JobId == job.Id).MaxAsync(e => (long?)e.Sequence, cancellationToken) ?? 0) + 1;
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
     }
-    private async Task FinishJob(OperationJob job, string state, string phase, string code, CancellationToken cancellationToken)
+    private string? JobResult(ContainerRecursiveAclRestoreIntent row, OperationJob job) =>
+        ContainerRecursiveAclRestoreWorkflowValidation.HasValidBinding(row, protector) ? ContainerRecursiveAclRestoreJobResults.Snapshot(row, row.ExecutionJobId == job.Id) : null;
+    private async Task FinishJob(OperationJob job, ContainerRecursiveAclRestoreIntent row, string state, string phase, string code, CancellationToken cancellationToken)
     {
         job.State = state; job.Phase = phase; job.CompletedAtUtc = Now(); job.ErrorCode = state == "Succeeded" ? null : code;
+        job.ResultJson = JobResult(row, job);
         job.ProgressPercent = state == "Succeeded" ? (short)100 : null; job.Version++; await Event(job, code, cancellationToken);
     }
     private void Audit(ContainerRecursiveAclRestoreIntent row, Guid jobId, string actor, string trace, string action, string result) => db.AuditEvents.Add(new()

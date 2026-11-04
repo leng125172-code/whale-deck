@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiRequest, apiUrl, createIdempotencyKey } from '@/services/apiClient'
 import { stageSecret, subscribeToJob, type OperationPlan } from '@/services/operations'
 import ContainerAclJobResult from '@/components/containers/ContainerAclJobResult.vue'
+import ContainerRecursiveAclRestoreJobResult from '@/components/containers/ContainerRecursiveAclRestoreJobResult.vue'
 import { readAclJobResult } from '@/services/containerAclJobResults'
 import type { Job, JobEvent } from '@/services/contracts'
 
@@ -326,6 +327,18 @@ onBeforeUnmount(() => {
           <el-descriptions-item label="结果">
             <ContainerAclJobResult
               v-if="aclTask"
+              :job-type="selected.jobType"
+              :state="selected.state"
+              :result-json="selected.resultJson"
+            />
+            <ContainerRecursiveAclRestoreJobResult
+              v-else-if="
+                [
+                  'containers.files.recursive-acl-restore',
+                  'containers.files.recursive-acl-restore-plan',
+                ].includes(selected.jobType)
+              "
+              :job-id="selected.id"
               :job-type="selected.jobType"
               :state="selected.state"
               :result-json="selected.resultJson"

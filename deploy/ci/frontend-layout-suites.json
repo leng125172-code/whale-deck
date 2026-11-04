@@ -43,6 +43,7 @@
     "e2e/topbar-badges.spec.ts",
     "e2e/platform-build.spec.ts",
     "e2e/file-content-search.spec.ts",
-    "e2e/host-logs.spec.ts"
+    "e2e/host-logs.spec.ts",
+    "e2e/recursive-acl-restore-job-results.spec.ts"
   ]
 }

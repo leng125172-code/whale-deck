@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -15,6 +16,7 @@ namespace WhaleDeck.IntegrationTests;
 public sealed partial class NativeNotificationDispatchTests
 {
     private static readonly string[] RecursiveAclRestoreFenceTables = ["container_file_upload_operations", "container_directory_operations", "container_copy_intents", "container_move_intents", "container_permission_intents", "container_ownership_intents", "container_recursive_permission_intents", "container_recursive_ownership_intents", "container_acl_intents", "container_recursive_acl_intents"];
+    private static readonly JsonSerializerOptions RestoreJobResultJson = new(JsonSerializerDefaults.Web);
     /// <summary>Real isolated PostgreSQL/MAC/transactions/triggers. Receipts are synthetic, not Root or UI evidence.</summary>
     private static async Task ContainerRecursiveAclRestoreBoundaries(DbContextOptions<PlatformDbContext> options)
     {
@@ -47,11 +49,26 @@ public sealed partial class NativeNotificationDispatchTests
             state == "Aborted" ? 4U : state == "Partial" ? 3U : 0U, state == "Unknown" ? 4U : 0U,
             state != "Aborted", state is "Completed" or "Partial", state is "Completed" or "Partial" ? new('8', 64) : "",
             state is "Completed" or "Partial", state is "Completed" or "Partial" ? new('9', 64) : "", sourceTypes[row.Id]);
+        async Task<ContainerRecursiveAclRestoreJobResults.Summary> JobFacts(ContainerRecursiveAclRestoreIntent row, bool execution, string state)
+        {
+            var jobId = execution ? row.ExecutionJobId!.Value : row.Id;
+            var job = await second.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == jobId);
+            Assert.NotNull(job.ResultJson);
+            var projected = await new OperationService(new JobRepository(second)).FindAsync(jobId, default);
+            Assert.NotNull(projected!.ResultJson); Assert.Equal(ContainerRecursiveAclRestoreJobResults.ForJob(job), projected.ResultJson);
+            var value = JsonSerializer.Deserialize<ContainerRecursiveAclRestoreJobResults.Summary>(projected.ResultJson, RestoreJobResultJson)!;
+            Assert.Equal(row.Id,value.IntentId);Assert.Equal(jobId,value.JobId);Assert.Equal(state,value.State);Assert.Equal(execution?"execution":"planning",value.Stage);
+            using var document=JsonDocument.Parse(projected.ResultJson);Assert.Equal(26,document.RootElement.EnumerateObject().Count());
+            foreach(var secret in new[]{row.ActorSubject,row.LoginBinding,row.TraceId,row.ContainerId,row.InstanceId,row.RelativePath,row.OwnerHash,row.RequestHash,row.PlanHash,row.ExecutionHash,row.ReceiptHash}) if(secret is not null)Assert.DoesNotContain(secret,projected.ResultJson,StringComparison.Ordinal);
+            return value;
+        }
         async Task<ContainerRecursiveAclRestoreIntent> Ready(ContainerRecursiveAclRestoreIntent row)
         {
             await repo.EnqueueAsync(row, default); var claimed = Assert.IsType<ContainerRecursiveAclRestoreIntent>(await repo.ClaimAsync(clock.GetUtcNow(), default)); Assert.Equal(row.Id, claimed.Id);
             Assert.True(await repo.MarkPlanningAsync(claimed, default)); await repo.FinishPlanningAsync(claimed, Plan(row), "CONTAINER_RECURSIVE_ACL_RESTORE_READY", default);
-            return (await repo.FindAsync(row.Id, default))!;
+            var ready = (await repo.FindAsync(row.Id, default))!;
+            var facts=await JobFacts(ready,false,"Ready");Assert.Null(facts.CompletedCount);Assert.Equal(1U,facts.SourceChangedCount);Assert.Equal(2U,facts.ChangeCount);
+            return ready;
         }
         async Task<ContainerRecursiveAclRestoreIntent> Pending(ContainerRecursiveAclRestoreIntent row)
         {
@@ -195,6 +212,7 @@ public sealed partial class NativeNotificationDispatchTests
                 var completed=await Applying(await Ready(Row(defaults:defaults)));Assert.True(await repo.FinishAsync(completed,"Succeeded","CONTAINER_RECURSIVE_ACL_RESTORE_COMPLETED",Receipt(completed,"Completed"),default));
                 var stored=(await other.FindAsync(completed.Id,default))!;Assert.True(ContainerRecursiveAclRestoreWorkflowValidation.HasValidBinding(stored,protector));
                 Assert.Equal(defaults?"default":"access",ContainerRecursiveAclRestoreWorkflowValidation.ReadPlan(stored).RestoreSource.ChangedAclType);Assert.NotNull(stored.ReceiptHash);
+                var facts=await JobFacts(stored,true,"Succeeded");Assert.Equal(4,facts.CompletedCount);Assert.Equal(2,facts.ChangedCount);Assert.False(facts.PublishBarrier);
             }
             // PostgreSQL itself rejects malformed source/frame/targets, independently of the application validator.
             var validPlan=Plan(Row());var validJson=ContainerRecursiveAclRestoreWorkflowValidation.Serialize(validPlan);
@@ -263,16 +281,19 @@ public sealed partial class NativeNotificationDispatchTests
             var uncertain = Receipt(blocked, "Unknown") with { HistoryVerified = true, HistoryDigest = new('7', 64) };
             Assert.True(await repo.FinishAsync(blocked, "Unknown", "CONTAINER_RECURSIVE_ACL_RESTORE_RESULT_UNKNOWN", uncertain, default));
             var unknown = (await other.FindAsync(blocked.Id, default))!; Assert.True(unknown.PublishBarrier); Assert.Equal("Unknown", unknown.RootState); Assert.Equal(4, unknown.UnknownCount); Assert.True(unknown.HistoryVerified);
+            var unknownFacts=await JobFacts(unknown,true,"Unknown");Assert.Equal(4,unknownFacts.UnknownCount);Assert.True(unknownFacts.PublishBarrier);
             Assert.Null(await repo.ClaimAsync(clock.GetUtcNow(), default));
             await Rejected($"UPDATE container_recursive_acl_restore_intents SET history_may_exist=false WHERE id={unknown.Id}", "container_recursive_acl_restore_fact_immutable");
             var admin = actor with { Subject = "native-current-permission-admin", LoginBinding = new('F', 64) };
             await other.AcknowledgeAsync(admin, unknown.Id, unknown.Version, uncertain, default);
             var ack = (await repo.FindAsync(unknown.Id, default))!; Assert.Equal("Acknowledged", ack.State); Assert.False(ack.PublishBarrier); Assert.Equal("Unknown", ack.RootState);
             Assert.Equal(4, ack.UnknownCount); Assert.True(ack.HistoryVerified); Assert.Equal(admin.Subject, ack.AcknowledgedBy);
+            var ackFacts=await JobFacts(ack,true,"Acknowledged");Assert.Equal("Unknown",ackFacts.ReceiptState);Assert.Equal(4,ackFacts.UnknownCount);Assert.False(ackFacts.PublishBarrier);
             Assert.Equal("Failed", (await db.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == ack.ExecutionJobId)).State);
             var partial = await Applying(await Ready(Row())); var partialReceipt = Receipt(partial, "Partial");
             Assert.True(await repo.FinishAsync(partial, "Partial", "CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_REQUIRES_ACKNOWLEDGEMENT", partialReceipt, default));
             var paused = (await other.FindAsync(partial.Id, default))!;
+            var partialFacts=await JobFacts(paused,true,"Partial");Assert.Equal(1,partialFacts.ChangedCount);Assert.True(partialFacts.PublishBarrier);
             Assert.Equal("Partial", paused.State); Assert.Null(paused.CompletedAtUtc); Assert.True(paused.PublishBarrier);
             Assert.Equal(1, paused.ChangedCount); Assert.Equal(3, paused.NotStartedCount);
             Assert.Equal(partialReceipt, ContainerRecursiveAclRestoreWorkflowValidation.ReadReceipt(paused));
@@ -296,10 +317,23 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.True(await db.Database.SqlQuery<bool>($"SELECT EXISTS (SELECT 1 FROM outbox_messages WHERE message_type='ContainerRecursiveAclRestoreCancellationRequested' AND payload_json->>'jobId'={paused.ExecutionJobId.Value.ToString("D")}) AS \"Value\"").SingleAsync());
             await other.AcknowledgeAsync(admin, paused.Id, paused.Version, partialReceipt with { HistoryAvailable = false, Replayed = true }, default);
             var resolvedPartial = (await repo.FindAsync(paused.Id, default))!;
+            var resolvedFacts=await JobFacts(resolvedPartial,true,"Acknowledged");Assert.Equal("Partial",resolvedFacts.ReceiptState);Assert.Equal(1,resolvedFacts.ChangedCount);Assert.False(resolvedFacts.PublishBarrier);
             Assert.Equal("Acknowledged", resolvedPartial.State); Assert.Equal("Partial", resolvedPartial.RootState); Assert.Equal(1, resolvedPartial.ChangedCount);
             Assert.True(resolvedPartial.HistoryVerified); Assert.False(resolvedPartial.HistoryAvailable); Assert.False(resolvedPartial.PublishBarrier);
             Assert.Equal("Failed", (await db.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == resolvedPartial.ExecutionJobId)).State);
             // Original natural lease expires on the synthetic test clock, not SQL edits.
+            // An unreturned Root result is not a row of invented zeroes.
+            var unproved=await Applying(await Ready(Row()));
+            Assert.True(await repo.FinishAsync(unproved,"Unknown","CONTAINER_RECURSIVE_ACL_RESTORE_RESULT_UNKNOWN",null,default));
+            var unprovedRow=(await other.FindAsync(unproved.Id,default))!;
+            var unprovedFacts=await JobFacts(unprovedRow,true,"Unknown");Assert.Null(unprovedFacts.CompletedCount);Assert.Null(unprovedFacts.UnknownCount);Assert.Null(unprovedFacts.ReceiptState);Assert.True(unprovedFacts.PublishBarrier);
+            await other.AcknowledgeAsync(admin,unprovedRow.Id,unprovedRow.Version,Receipt(unproved,"Unknown"),default);
+            await JobFacts((await repo.FindAsync(unproved.Id,default))!,true,"Acknowledged");
+            var planningFailure=Row();await repo.EnqueueAsync(planningFailure,default);var failedClaim=Assert.IsType<ContainerRecursiveAclRestoreIntent>(await repo.ClaimAsync(clock.GetUtcNow(),default));Assert.Equal(planningFailure.Id,failedClaim.Id);
+            await repo.FinishPlanningAsync(failedClaim,null,"CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_NOT_FOUND",default);
+            var failedFacts=await JobFacts((await repo.FindAsync(planningFailure.Id,default))!,false,"Failed");Assert.Null(failedFacts.EntryCount);Assert.Null(failedFacts.AclType);Assert.Null(failedFacts.ChangedCount);
+            var queuedCancel=Row();await repo.EnqueueAsync(queuedCancel,default);await repo.CancelAsync(actor,queuedCancel.Id,default);
+            await JobFacts((await repo.FindAsync(queuedCancel.Id,default))!,false,"Canceled");
             var abandoned = await Applying(await Ready(Row())); var oldToken = abandoned.LeaseToken;
             clock.Offset = TimeSpan.FromSeconds(91); var reclaimed = Assert.IsType<ContainerRecursiveAclRestoreIntent>(await other.ClaimAsync(clock.GetUtcNow(), default));
             Assert.Equal(abandoned.Id, reclaimed.Id); Assert.NotEqual(oldToken, reclaimed.LeaseToken); Assert.NotNull(reclaimed.RootStartedAtUtc); Assert.True(reclaimed.PublishBarrier);
@@ -320,19 +354,28 @@ public sealed partial class NativeNotificationDispatchTests
             await second.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM file_path_locks WHERE operation_id={inverse.Id}");
             await repo.CancelAsync(actor, inverse.Id, default); Assert.True(await repo.FinishAsync(inverse, "Canceled", "CONTAINER_RECURSIVE_ACL_RESTORE_CANCELED", Receipt(inverse, "Aborted"), default));
             var canceled = (await other.FindAsync(inverse.Id, default))!; Assert.Equal("Aborted", canceled.RootState); Assert.Equal(0, canceled.ChangedCount); Assert.False(canceled.HistoryMayExist); Assert.Null(canceled.HistoryDigest);
+            var canceledFacts=await JobFacts(canceled,true,"Canceled");Assert.Equal(0,canceledFacts.ChangedCount);Assert.Equal(4,canceledFacts.NotStartedCount);
             var expiredReady = await Ready(Row()); clock.Offset = TimeSpan.FromMinutes(6);
             await Assert.ThrowsAsync<InvalidOperationException>(() => repo.ConfirmAsync(actor, Claims(expiredReady), expiredReady.Version, default));
-            await repo.CancelAsync(actor, expiredReady.Id, default); clock.Offset = TimeSpan.Zero;
+            await repo.CancelAsync(actor, expiredReady.Id, default); await JobFacts(expiredReady,false,"Ready"); clock.Offset = TimeSpan.Zero;
             // Audit failure is part of the same SQL transaction as the intent/jobs/outbox.
-            var rejected = Row();
+            var rejected = Row();var rejectedFinish=await Applying(await Ready(Row()));
             await second.Database.ExecuteSqlRawAsync("""
                 CREATE FUNCTION wdv_recursive_acl_restore_audit_reject() RETURNS trigger LANGUAGE plpgsql AS $f$
                 BEGIN RAISE EXCEPTION 'wdv_recursive_acl_restore_audit_failed' USING ERRCODE='23514'; END $f$;
                 CREATE TRIGGER wdv_recursive_acl_restore_audit_reject BEFORE INSERT ON audit_events
                   FOR EACH ROW WHEN (NEW.action LIKE 'containers.files.recursive-acl-restore.%') EXECUTE FUNCTION wdv_recursive_acl_restore_audit_reject();
                 """);
-            try { await Assert.ThrowsAsync<DbUpdateException>(() => repo.EnqueueAsync(rejected, default)); }
+            try
+            {
+                await Assert.ThrowsAsync<DbUpdateException>(() => repo.EnqueueAsync(rejected, default));
+                await Assert.ThrowsAsync<DbUpdateException>(() => repo.FinishAsync(rejectedFinish,"Failed","CONTAINER_RECURSIVE_ACL_RESTORE_INTERRUPTED",Receipt(rejectedFinish,"Aborted"),default));
+                Assert.Equal("Applying",(await other.FindAsync(rejectedFinish.Id,default))!.State);
+                var rolledBack=await second.OperationJobs.AsNoTracking().SingleAsync(j=>j.Id==rejectedFinish.ExecutionJobId);Assert.Equal("Running",rolledBack.State);Assert.Null(rolledBack.ResultJson);
+            }
             finally { await second.Database.ExecuteSqlRawAsync("DROP TRIGGER wdv_recursive_acl_restore_audit_reject ON audit_events; DROP FUNCTION wdv_recursive_acl_restore_audit_reject();"); }
+            Assert.True(await repo.FinishAsync(rejectedFinish,"Failed","CONTAINER_RECURSIVE_ACL_RESTORE_INTERRUPTED",Receipt(rejectedFinish,"Aborted"),default));
+            await JobFacts((await repo.FindAsync(rejectedFinish.Id,default))!,true,"Failed");
             Assert.False(await second.ContainerRecursiveAclRestoreIntents.AnyAsync(r => r.Id == rejected.Id)); Assert.False(await second.OperationJobs.AnyAsync(j => j.Id == rejected.Id));
             var waiting = new List<ContainerRecursiveAclRestoreIntent>();
             for (var n = 0; n < 4; n++) { var row = Row(); await repo.EnqueueAsync(row, default); waiting.Add(row); }
