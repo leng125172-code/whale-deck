@@ -32,6 +32,8 @@ from verify_container_recursive_permissions import digest, unsigned
 from acl_source_apply_missing_proof import source_closure
 from owned_authentik_revocation import OwnedAuthentikRevocation
 from validate_container_recursive_permission_faults import require_authority_change
+from validate_container_recursive_permission_faults import restore_fault_services
+from recursive_acl_restart_proof import RESTART_KINDS, restart, natural_lease, require_host_restart, verify_restart
 
 PHASE='startup'
 REVOKED_KINDS=('group-removal','account-disable')
@@ -73,8 +75,13 @@ def preservation_snapshot(storage):
 
 def selected_kinds(arguments):
     arguments=tuple(arguments)
-    assert arguments in ((),('cancel',),('logout',),('revocation',),('group-removal',),('account-disable',)), 'UNKNOWN_RECURSIVE_ACL_FAULT_SELECTION'
-    return REVOKED_KINDS if arguments==('revocation',) else arguments or ('cancel','logout')
+    assert arguments in ((),('cancel',),('logout',),('revocation',),('group-removal',),('account-disable',),('restart',),('worker-crash',),('agent-restart',)), 'UNKNOWN_RECURSIVE_ACL_FAULT_SELECTION'
+    return REVOKED_KINDS if arguments==('revocation',) else RESTART_KINDS if arguments==('restart',) else arguments or ('cancel','logout')
+
+
+def terminal_state(kind):
+    assert kind in ('cancel','logout',*REVOKED_KINDS,*RESTART_KINDS)
+    return 'Failed' if kind in RESTART_KINDS else 'Canceled'
 
 
 def verify_revoked_browser(ui, kind, subject):
@@ -100,11 +107,11 @@ def wait_settled(identifier):
 
 def verify_terminal(identifier, baseline, subject, storage, directory, *, read_only=False):
     """Permanent facts only; source bytes are separately proved by the parent."""
-    assert baseline['kind'] in ('cancel','logout',*REVOKED_KINDS)
+    expected=terminal_state(baseline['kind'])
     data=snapshot(identifier);row=data['row'];plan=managed_plan(json.loads(row['plan_json']))
     assert row['actor_subject']==subject and row['container_id']==baseline['containerId'] and row['instance_id']==baseline['instanceId']
     assert row['relative_path']==plan['command']['path']=='work/recursive-tree'
-    assert row['state']==data['executionJob']['state']=='Canceled' and row['result_code']=='CONTAINER_RECURSIVE_ACL_CANCELED'
+    assert row['state']==data['executionJob']['state']==expected and row['result_code']==('CONTAINER_RECURSIVE_ACL_INTERRUPTED' if expected=='Failed' else 'CONTAINER_RECURSIVE_ACL_CANCELED')
     assert data['accepted']==data['confirmed']==1 and data['pending']==0 and data['planJob']['state']=='Succeeded'
     assert row['root_started_at_utc'] and row['completed_at_utc'] and not row['publish_barrier'] and row['lease_token'] is row['lease_expires_at_utc'] is None
     assert bool(row['cancel_requested_at_utc']) is (baseline['kind']=='cancel')
@@ -168,14 +175,14 @@ def verify_terminal(identifier, baseline, subject, storage, directory, *, read_o
             expected_outcome='' if record['startedThrough']<0 else digest(b'whaledeck-recursive-acl-outcomes-v1\n',outcomes)
             assert record['outcomeDigest']==receipt['OutcomeDigest']==expected_outcome and (row['outcome_digest'] or '')==expected_outcome
         finally:os.close(fd)
-    return dict(id=identifier,executionJobId=row['execution_job_id'],state='Canceled',rootState='Aborted',aggregateHddRecords=1,childHddRecords=children,
+    return dict(id=identifier,executionJobId=row['execution_job_id'],state=expected,rootState='Aborted',aggregateHddRecords=1,childHddRecords=children,
         counts=[record[k] for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')])
 
 
 def run_case(kind, revision, source_revision, hashes, evidence, reader, storage, acl):
     global PHASE
     PHASE=kind+':idle-check';no_active_work();preflight();worker=Worker();directory=evidence/kind;directory.mkdir(mode=0o700)
-    held=browser=None;identifier=None;proved=False;root=None
+    held=browser=None;identifier=None;proved=False;root=None;attempt=dict(agentRestartAttempted=False)
     with owned.fixture(restartable_core=('whaledeck-worker',)) as fixture, temporary_user(True) as credentials:
         root=fixture['folder']/'recursive-tree';root.mkdir(mode=0o750);(root/'sub').mkdir(mode=0o700)
         content=hashlib.shake_256(('recursive-acl-fault:'+fixture['identifier']).encode()).digest(2*1024**2+7)
@@ -190,7 +197,7 @@ def run_case(kind, revision, source_revision, hashes, evidence, reader, storage,
         original=current();baseline=dict(revision=revision,validationSourceRevision=source_revision,validationSourceSha256=hashes,kind=kind,
             containerId=fixture['identifier'],containerName=inspect['Name'].lstrip('/'),containerPid=inspect['State']['Pid'],
             instanceId=str(inspect['State']['Pid'])+':'+inspect['State']['StartedAt'],source=str(fixture['folder']),original=original,
-            sha256=hashlib.sha256(content).hexdigest().upper(),bytesPerFile=len(content),evidence=str(directory))
+            sha256=hashlib.sha256(content).hexdigest().upper(),bytesPerFile=len(content),evidence=str(directory),coreBefore=owned.common.core_snapshot())
         with storage.target(create_namespace=False,read_only=True) as (configuration,fd):
             storage.attest(configuration,fd,read_only=True);baseline.update(sourceDevice=root.stat().st_dev,hddDevice=os.fstat(fd).st_dev)
         (directory/'baseline.json').write_text(json.dumps(baseline))
@@ -213,7 +220,7 @@ def run_case(kind, revision, source_revision, hashes, evidence, reader, storage,
                 assert current()==original
                 (directory/'cut-sql.json').write_text(json.dumps(applying));(directory/'cut-root.json').write_text(json.dumps(held.record))
                 (directory/'cut-physical.json').write_text(json.dumps(current()));(directory/'bound-helper.json').write_text(json.dumps(dict(pid=held.pid,unit=held.cgroup,proof=held.proof)))
-                PHASE=kind+':actual-visible-action';authority=None
+                PHASE=kind+':actual-visible-action';authority=None;service=None;restart_row=None
                 if kind in REVOKED_KINDS:
                     write_signal(directory,'action.json',dict(kind=kind));action=wait_signal(directory,'action-done.json',browser,40)
                     assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc'])>dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
@@ -226,6 +233,9 @@ def run_case(kind, revision, source_revision, hashes, evidence, reader, storage,
                             (directory/'authority-change.json').write_text(json.dumps(authority))
                             require_authority_change(authority,ready,kind)
                             elapsed=exit_watch.result(timeout=16)
+                elif kind in RESTART_KINDS:
+                    write_signal(directory,'action.json',dict(kind=kind));action=wait_signal(directory,'action-done.json',browser,40)
+                    elapsed,service,restart_row=restart(kind,held,worker,applying['row'],revision,directory,attempt)
                 else:
                     began=time.monotonic()
                     with ThreadPoolExecutor(max_workers=1) as pool:
@@ -235,19 +245,24 @@ def run_case(kind, revision, source_revision, hashes, evidence, reader, storage,
                 assert elapsed is not None and elapsed<15,'PRODUCT_DID_NOT_STOP_BOUND_RECURSIVE_ACL_HELPER'
                 held.release();held=None
                 assert action['id']==identifier and action['subject']==ready['subject']
+                if kind=='worker-crash':
+                    PHASE=kind+':original-natural-lease';natural_lease(restart_row,current,original,directory)
                 PHASE=kind+':physical-and-permanent-facts';wait_settled(identifier);proof=verify_terminal(identifier,baseline,ready['subject'],storage,directory)
                 assert current()==original;(directory/'physical-final.json').write_text(json.dumps(current()))
-                write_signal(directory,'settled.json',dict(id=identifier,state='Canceled'))
+                write_signal(directory,'settled.json',dict(id=identifier,state=terminal_state(kind)))
                 assert browser.wait(timeout=100)==0,'REAL_RECURSIVE_ACL_TERMINAL_PAGE_FAILED'
                 ui=json.loads((directory/'browser.json').read_bytes());assert ui['actualUi'] and ui['id']==identifier and ui['subject']==ready['subject']
                 assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==int(kind=='cancel') and ui['uploads']==0
                 if authority:verify_revoked_browser(ui,kind,ready['subject'])
                 else:assert ui['normalDualLogout'] and ui['anonymousGet401']
                 proof.update(kind=kind,subject=ready['subject'],productStoppedHelperSeconds=round(elapsed,3),validatorKilledHelper=False,originalFullTreeUnchanged=True,normalDualLogout=authority is None,authorityRevoked=authority is not None)
+                if service:
+                    proof['serviceRestart']=service
+                    verify_restart(kind,proof,baseline,ui,snapshot(identifier)['row'],directory,lambda p:json.loads(p.read_bytes()))
                 (directory/'verified.json').write_text(json.dumps(proof));proved=True
         finally:
             if held is not None:held.release()
-            try:worker.start()
+            try:restore_fault_services(worker,attempt['agentRestartAttempted'],attempt.get('hostsBefore'),revision)
             finally:
                 if browser and browser.poll() is None:
                     browser.terminate()
@@ -281,12 +296,14 @@ def main():
     results=[]
     for kind in kinds:
         results.append(run_case(kind,revision,source,hashes,evidence,reader,storage,acl));(evidence/'results.json').write_text(json.dumps(results))
-    no_active_work();preflight();assert host_identity(revision)==hosts
+    no_active_work();preflight();hosts_after=host_identity(revision)
+    if 'agent-restart' in kinds:require_host_restart(hosts,hosts_after,revision)
+    else:assert hosts_after==hosts
     after=owned.common.core_snapshot();assert before.keys()==after.keys()
     for name,value in before.items():assert after[name][:3]==value[:3] if name.lstrip('/')=='whaledeck-worker' else after[name]==value
     observed=preservation_snapshot(storage);assert all(observed.get(k)==v for k,v in preserved.items())
     (evidence/'preservation-after.json').write_text(json.dumps(observed))
-    (evidence/'verified.json').write_text(json.dumps(dict(actualVisibleIdentityAndActions=True,cases=len(results),kinds=kinds,rootAndHddRetained=True,physicalBytesCheckedBeforeCleanup=True,sourceBytesRereadAfterCleanup=False,onlyWorkerRestarted=True,hostsUnchanged=True)))
+    (evidence/'verified.json').write_text(json.dumps(dict(actualVisibleIdentityAndActions=True,cases=len(results),kinds=kinds,rootAndHddRetained=True,physicalBytesCheckedBeforeCleanup=True,sourceBytesRereadAfterCleanup=False,onlyWorkerRestarted='agent-restart' not in kinds,hostsUnchanged=hosts_after==hosts,hostIdentityAfter=hosts_after)))
     print(json.dumps(dict(recursiveAclFaults='passed',evidence=evidence.name,cases=len(results))),flush=True)
 
 

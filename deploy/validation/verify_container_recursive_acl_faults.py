@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 import requests
-from validate_container_recursive_acl_faults import SOURCES, REVOKED_KINDS, verify_revoked_browser, require_authority_change, verify_terminal, no_active_work, host_identity, load, owned, preservation_snapshot
+from validate_container_recursive_acl_faults import SOURCES, REVOKED_KINDS, RESTART_KINDS, require_host_restart, verify_restart, verify_revoked_browser, require_authority_change, verify_terminal, no_active_work, host_identity, load, owned, preservation_snapshot
 from verify_container_recursive_permissions import private_json
 from validate_container_upload_recovery_agent import trusted
 from acl_source_apply_missing_proof import source_closure
@@ -24,7 +24,7 @@ def target(name):
 
 def verify(name):
     evidence=target(name);trusted(evidence,True);scope=private_json(evidence/'scope.json');accepted=private_json(evidence/'verified.json');proofs=private_json(evidence/'results.json')
-    assert scope['kinds'] in (['cancel'],['logout'],['cancel','logout'],['group-removal'],['account-disable'],list(REVOKED_KINDS)) and accepted['kinds']==scope['kinds'] and accepted['cases']==len(proofs)==len(scope['kinds'])
+    assert scope['kinds'] in (['cancel'],['logout'],['cancel','logout'],['group-removal'],['account-disable'],list(REVOKED_KINDS),list(RESTART_KINDS),['worker-crash'],['agent-restart']) and accepted['kinds']==scope['kinds'] and accepted['cases']==len(proofs)==len(scope['kinds'])
     assert accepted['actualVisibleIdentityAndActions'] and accepted['physicalBytesCheckedBeforeCleanup'] and not accepted['sourceBytesRereadAfterCleanup']
     repo=Path(__file__).resolve().parents[2]
     assert scope['validationSourceSha256']==source_closure(repo,scope['validationSourceRevision'],seeds=SOURCES)
@@ -32,7 +32,9 @@ def verify(name):
         raw=subprocess.check_output(['git','-C',str(repo),'show',scope['validationSourceRevision']+':deploy/validation/'+name]);assert hashlib.sha256(raw).hexdigest()==sha
     for name,sha in scope['sourceHashes'].items():
         raw=subprocess.check_output(['git','-C',str(repo),'show',scope['revision']+':deploy/host/'+name]);assert hashlib.sha256(raw).hexdigest()==sha and (Path('/usr/local/libexec')/name).read_bytes()==raw
-    assert host_identity(scope['revision'])==scope['hostIdentity']
+    hosts=accepted.get('hostIdentityAfter',scope['hostIdentity']);assert host_identity(scope['revision'])==hosts
+    if 'agent-restart' in scope['kinds']:require_host_restart(scope['hostIdentity'],hosts,scope['revision'])
+    else:assert scope['hostIdentity']==hosts
     files=load('/usr/local/libexec/whaledeck-files.py','recursive_acl_fault_second_files');storage=load('/usr/local/libexec/whaledeck-file-backups.py','recursive_acl_fault_second_hdd').FileBackups(files)
     observed=preservation_snapshot(storage);previous=scope['preservedFiles'];assert all(observed.get(k)==v for k,v in previous.items())
     for kind,proof in zip(scope['kinds'],proofs):
@@ -51,9 +53,11 @@ def verify(name):
             assert ui['anonymousGet401'];logout=ui['logout'];assert logout==private_json(directory/'logout.json')
             assert logout['normalUiLogout'] and logout['providerNavigationObserved'] and logout['finalLoginPage'] and logout['postStatus'] in (302,303) and logout['bffStatus']==401 and logout['identityStatus'] in (401,403)
         actual=verify_terminal(proof['id'],baseline,ready['subject'],storage,directory,read_only=True)
+        if kind in RESTART_KINDS:
+            verify_restart(kind,proof,baseline,ui,private_json(directory/'final-sql.json')['row'],directory,private_json)
         assert all(proof[k]==v for k,v in actual.items()) and proof==private_json(directory/'verified.json')
         assert proof['validatorKilledHelper'] is False and 0<proof['productStoppedHelperSeconds']<15 and proof['originalFullTreeUnchanged']
-        shots=list(directory.glob('*.png'));assert {p.name for p in shots}==({'inflight.png','authority-denied.png'} if kind in REVOKED_KINDS else {'inflight.png','terminal.png'} if kind=='cancel' else {'inflight.png'})
+        shots=list(directory.glob('*.png'));assert {p.name for p in shots}==({'inflight.png','authority-denied.png'} if kind in REVOKED_KINDS else {'inflight.png','terminal.png'} if kind in ('cancel',*RESTART_KINDS) else {'inflight.png'})
         for p in shots:
             raw=p.read_bytes();assert len(raw)>1000 and raw[:8]==b'\x89PNG\r\n\x1a\n';assert struct.unpack('>II',raw[16:24])==((320 if kind in ('cancel','group-removal') else 1440),600)
         source=Path(baseline['source']);assert source.parent==owned.common.APPS and source.name==baseline['containerName'] and not os.path.lexists(source)

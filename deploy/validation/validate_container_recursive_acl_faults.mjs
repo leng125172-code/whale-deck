@@ -10,9 +10,10 @@ let browser, page, context, directory, endpoint, id, phase='startup'
 try {
   const packet=JSON.parse(await readFile('/dev/stdin','utf8')), f=packet.fixture, revision=process.argv[2]
   assert.match(revision,/^[a-f0-9]{40}$/);assert.equal(f.revision,revision)
-  assert.ok(['cancel','logout','group-removal','account-disable'].includes(f.kind));directory=f.evidence
-  assert.match(directory,/\/deploy\/artifacts\/container-recursive-acl-faults-[a-f0-9]{32}\/(cancel|logout|group-removal|account-disable)$/)
+  assert.ok(['cancel','logout','group-removal','account-disable','worker-crash','agent-restart'].includes(f.kind));directory=f.evidence
+  assert.match(directory,/\/deploy\/artifacts\/container-recursive-acl-faults-[a-f0-9]{32}\/(cancel|logout|group-removal|account-disable|worker-crash|agent-restart)$/)
   const revoked=['group-removal','account-disable'].includes(f.kind),narrow=['cancel','group-removal'].includes(f.kind)
+  const restart=['worker-crash','agent-restart'].includes(f.kind),expectedState=restart?'Failed':'Canceled'
   const base='http://127.0.0.1:8080'
   browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true})
   context=await browser.newContext({viewport:{width:narrow?320:1440,height:600},colorScheme:narrow?'dark':'light',reducedMotion:'reduce'})
@@ -71,13 +72,14 @@ try {
     assert.equal(await page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-hints-v1')),null)
   }
   await writeSignal(directory,'action-done.json',{kind:f.kind,id,subject:profile.subject,registrations,confirmations,cancellations,uploads})
-  const final=await waitSignal(directory,'settled.json');assert.equal(final.id,id);assert.equal(final.state,'Canceled')
+  const final=await waitSignal(directory,'settled.json');assert.equal(final.id,id);assert.equal(final.state,expectedState)
   let terminal=null,originalIntentStatus=null,currentIdentityStatus=null,currentSubject=null,currentlyAdministrator=null,renderedRevocationPage=null,hintsCleared=false,privatePanelsAbsent=false
-  if(f.kind==='cancel'){
+  if(f.kind==='cancel'||restart){
     phase='visible-terminal';await dialog.getByRole('button',{name:'查询原递归ACL修改任务',exact:true}).click()
-    await expect(dialog.getByRole('status')).toHaveText('已取消');await dialog.getByRole('status').scrollIntoViewIfNeeded();await expect(dialog.getByRole('status')).toBeInViewport({ratio:1})
+    await expect(dialog.getByRole('status')).toHaveText(restart?'递归ACL修改未完成':'已取消');await dialog.getByRole('status').scrollIntoViewIfNeeded();await expect(dialog.getByRole('status')).toBeInViewport({ratio:1})
     const r=await context.request.get(base+endpoint+'/'+id);assert.equal(r.status(),200);assert.ok(r.headers()['cache-control']?.includes('no-store'));terminal=await r.json()
-    assert.equal(terminal.state,'Canceled');assert.equal(terminal.receipt.state,'Aborted');assert.equal(terminal.receipt.changedCount,0);assert.equal(terminal.receipt.unknownCount,0)
+    assert.equal(terminal.state,expectedState);assert.equal(terminal.receipt.state,'Aborted');assert.equal(terminal.receipt.changedCount,0);assert.equal(terminal.receipt.unknownCount,0)
+    if(restart){assert.equal(terminal.executionJobId,pending.executionJobId);assert.equal(terminal.resultCode,'CONTAINER_RECURSIVE_ACL_INTERRUPTED');assert.equal(terminal.confirmation,null)}
     await page.screenshot({path:join(directory,'terminal.png')});await closePermissionDetails(page,dialog)
     phase='normal-visible-logout';logout=await logoutFromUserMenu(page,context,base);await writeSignal(directory,'logout.json',logout)
   }else if(revoked){
