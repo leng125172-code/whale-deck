@@ -35,3 +35,5 @@
 私有原件：`deploy/artifacts/container-recursive-acl-browser-{a7a3e4abf1934a81b599769401da95ec,f9d4a10605384ed1a0ba5ed89428e1fa,3596ca688e18492d8f57f9f7200c1065}/`；总边界/日志/测试位于 `deploy/artifacts/recursive-acl-real-95f9f1a/`。三个失败 unit 的准确 Invocation/退出 1 均已归档后才 reset-failed，未删除失败事实。证据私有且不进 Git。
 
 下一步准确 CI 后标准覆盖 auth 候选，仅新做取消/认证与原引用诊断复验，避免重放七类成功写入；核对普通/匿名拒绝和两个原上下文正常双端退出，再推进完整故障矩阵、递归 ACL 历史恢复、可恢复删除/长期清理及其余目标。跨盘、冷启动、维护零中断、完整 ACL/P1/P2 都未新增签收。
+
+后续接续：b880208已取得12路CI并标准覆盖；新的取消/重载和不同新认证上下文补验成立，原普通退出总门禁失败不改绿，见[新发布与分项边界](CONTAINER_RECURSIVE_ACL_AUTH_RELEASE.md)。本文件三批失败及原根因未定记录保持。

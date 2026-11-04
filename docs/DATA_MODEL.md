@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-04 b880208覆盖无新schema，迁移1/18CHECK/11fence/1guard保持；生产递归ACL总10意图为8Succeeded/1Expired/1Canceled，实际执行仍8，活动0。新取消仅增加规划意图，无执行回执/历史；认证-only补验不新增意图且原SQL完整快照不变，旧153/98HDD保持。[覆盖、真实取消和认证补验及边界](qa/CONTAINER_RECURSIVE_ACL_AUTH_RELEASE.md)。
+
 2026-11-04 c020c24新递归ACL业务已实际形成9永久意图：8Succeeded、1Ready在原5分钟自然Expired且无execution/Root；17Job、9规划接受/8确认审计。8聚合/32子HDD保留，普通153/递归98、旧Root原件保持；三套精确清理不删任何意图。七类分项与三次原总失败分别保留，不签整个正常链。[真实分项、三次失败与修复候选](qa/CONTAINER_RECURSIVE_ACL_REAL_UI_PARTIAL.md)。
 
 2026-11-04 c020c24标准前向迁移已实际安装20261103235841：新递归ACL表18CHECK、11写入fence触发器、1不可变guard及迁移记录均只读实查；总意图/活动0。旧153/58HDD保持，新Worker虽已运行但尚无真实任务分发/执行签收，不向生产注入合成意图替代真人链。[标准发布、生产迁移与未验边界](qa/CONTAINER_RECURSIVE_ACL_RELEASE.md)。

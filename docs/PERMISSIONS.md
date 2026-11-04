@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-04 b880208安装/实际身份分项通过，Agent权限/user NOPASSWD与7配置保持。新取消保持原登录/key/id且无执行；另新管理员恢复列表200/no-store、原owner404，普通4GET/4POST403与UI请求0，各新上下文4匿名401/正常双端退出通过。两个新认证上下文不替代原失败的普通上下文。[覆盖、真实取消和认证补验及边界](qa/CONTAINER_RECURSIVE_ACL_AUTH_RELEASE.md)。
+
 2026-11-04 c020c24真实管理员七类递归ACL分项通过，但第三批止于Ready重载丢入口；本轮未走到普通/匿名矩阵和原上下文正常双端退出。b880208只在初次身份未知时保留opaque引用，仍无身份/权限、清私有位置；401/403、降权/换主体和退出清理有新增回归，候选未部署、实机原因未定。[真实分项、三次失败与修复候选](qa/CONTAINER_RECURSIVE_ACL_REAL_UI_PARTIAL.md)。
 
 2026-11-04 c020c24标准覆盖及安装权限/UDS/受限helper核验通过；7配置/user NOPASSWD策略保持、Agent未扩权。新恢复列表与原键GET实测匿名401，尚无本批真实管理员/普通用户页面或文件操作；既有模拟回环403不能补签实机授权矩阵。[标准发布、生产迁移与未验边界](qa/CONTAINER_RECURSIVE_ACL_RELEASE.md)。

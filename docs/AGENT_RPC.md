@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-04 b880208六组件及实际运行映射同源、安装核验通过；不增加协议/能力。新真实取消止于预检，无execution或Root/HDD写入，不能称为新的Agent Discard/进行中中断验收。旧153/98HDD保持，真实进行中矩阵仍待。[覆盖、真实取消和认证补验及边界](qa/CONTAINER_RECURSIVE_ACL_AUTH_RELEASE.md)。
+
 2026-11-04 产品仍c020c24/1.53，七类实际页面驱动已留8聚合/32子HDD（含额外首default）；共享回执/完整子计划与原字段实际核对，不重放原ID。三批总门禁失败，取消尚无执行，无新协议或capability；旧Root原件保持，不把只读补核改成原浏览器正常结束。[真实分项、三次失败与修复候选](qa/CONTAINER_RECURSIVE_ACL_REAL_UI_PARTIAL.md)。
 
 2026-11-04 c020c24正常覆盖后，两宿主实际exe/DLL映射与六组件/HTTP同源，安装validator通过，沿用1.53。没有增加RPC/capability或重放已完成的原生文件操作；本批不把安装检查冒充新的真实业务RPC/HDD页面整链。[标准发布、生产迁移与未验边界](qa/CONTAINER_RECURSIVE_ACL_RELEASE.md)。
