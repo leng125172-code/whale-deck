@@ -37,3 +37,6 @@ Vue从已核实的递归历史前像选择来源，用文件列表中原对象�
 功能0034671及范围修正7906e45已推送origin/dev；首次推送TLS中断，单次HTTP/1.1重试成功，无强推或全局代理/TLS改动。准确CI41893214030最后观察仍in_progress，未作为成功终态或发布许可。
 
 项目图谱已获匹配事件 `whale-deck.container-acl.7906e45.recursive-restore-api-ui` 的成功回执，pending移入synced，阶段仍active；这不是整阶段完成或部署成功的证明。
+
+
+后续接续：eeb24dd准确CI成功后已完成标准覆盖与生产迁移技术核验，见[发布批次及未验边界](CONTAINER_RECURSIVE_ACL_RESTORE_RELEASE.md)。本文候选时点的测试夹具和未上线事实保持，不以发布技术核验补签真人恢复整链。
