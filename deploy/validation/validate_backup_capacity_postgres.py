@@ -147,6 +147,7 @@ def run_native(suite, report):
             phases = re.findall(r'INBOX_PHASE=([a-z-]{1,160})', output)
             if suite == 'dispatch':
                 assert 'container-acl-restore-source-mac-immutable-audited-new-jobs' in phases, 'ACL restore persistence boundaries were not executed'
+                assert 'container-recursive-acl-persistent-manifest-partial-unknown-immutable-both-fences-audited' in phases, 'Recursive ACL persistence boundaries were not executed'
             report.update(executedTests=1, passedTests=1, nativePhases=phases, stage='cleanup')
             if suite == 'capacity':
                 print(json.dumps({'nativeBackupCapacityPostgres': 'passed', 'database': 'isolated-and-migrated',

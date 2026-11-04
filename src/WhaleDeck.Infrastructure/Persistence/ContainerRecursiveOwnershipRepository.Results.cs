@@ -47,6 +47,7 @@ public sealed partial class ContainerRecursiveOwnershipRepository
         var ordinaryPermissions = await db.ContainerPermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursivePermissions = await db.ContainerRecursivePermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var acls = await db.ContainerAclIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
+        var recursiveAcls = await db.ContainerRecursiveAclIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursiveOwnerships = await db.ContainerRecursiveOwnershipIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null && r.Id != row.Id).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var ownerships = await db.ContainerOwnershipIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var directories = await db.ContainerDirectoryOperations.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
@@ -55,8 +56,8 @@ public sealed partial class ContainerRecursiveOwnershipRepository
             .Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
         var moves = await db.ContainerMoveIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null)
             .Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
-        if (ownerships.Length + acls.Length + recursiveOwnerships.Length + recursivePermissions.Length + ordinaryPermissions.Length + directories.Length + uploads.Length + copies.Length + moves.Length > 64 ||
-            ownerships.Concat(recursivePermissions).Concat(recursiveOwnerships).Concat(acls).Concat(ordinaryPermissions).Concat(directories).Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
+        if (ownerships.Length + acls.Length + recursiveAcls.Length + recursiveOwnerships.Length + recursivePermissions.Length + ordinaryPermissions.Length + directories.Length + uploads.Length + copies.Length + moves.Length > 64 ||
+            ownerships.Concat(recursivePermissions).Concat(recursiveOwnerships).Concat(recursiveAcls).Concat(acls).Concat(ordinaryPermissions).Concat(directories).Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
             copies.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath)) ||
             moves.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath)))
             throw new InvalidOperationException("CONTAINER_RECURSIVE_OWNERSHIP_TARGET_BUSY");

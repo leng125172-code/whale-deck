@@ -16,6 +16,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
     public DbSet<ContainerPermissionIntent> ContainerPermissionIntents => Set<ContainerPermissionIntent>();
     public DbSet<ContainerRecursivePermissionIntent> ContainerRecursivePermissionIntents => Set<ContainerRecursivePermissionIntent>();
     public DbSet<ContainerRecursiveOwnershipIntent> ContainerRecursiveOwnershipIntents => Set<ContainerRecursiveOwnershipIntent>();
+    public DbSet<ContainerRecursiveAclIntent> ContainerRecursiveAclIntents => Set<ContainerRecursiveAclIntent>();
     public DbSet<ContainerAclIntent> ContainerAclIntents => Set<ContainerAclIntent>();
     public DbSet<ContainerOwnershipIntent> ContainerOwnershipIntents => Set<ContainerOwnershipIntent>();
     public DbSet<ContainerMoveIntent> ContainerMoveIntents => Set<ContainerMoveIntent>();
@@ -114,6 +115,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
         ConfigureContainerAcls(modelBuilder);
         ConfigureContainerRecursivePermissions(modelBuilder);
         ConfigureContainerRecursiveOwnerships(modelBuilder);
+        ConfigureContainerRecursiveAcls(modelBuilder);
         ConfigureContainerMoves(modelBuilder);
         ConfigureContainerFileHistory(modelBuilder);
         ConfigureFileArchives(modelBuilder);
