@@ -109,14 +109,14 @@ class RecursivePermissionHistory:
             finally:os.close(lock)
 
 
-def recursive_permissions_type(permission_type, directory_type, permission_history_type, *, ownership=False, acl=False):
+def recursive_permissions_type(permission_type, directory_type, permission_history_type, *, ownership=False, acl=False, acl_restore=False):
     # Trusted type construction only: this switch is never part of a command,
     # plan or helper input. Existing permission byte domains stay unchanged.
-    if type(ownership) is not bool or type(acl) is not bool or ownership and acl: raise ValueError('RECURSIVE_MUTATION_TYPE_INVALID')
-    mutation = 'acl' if acl else 'ownership' if ownership else 'permission'
-    namespace = 'container-recursive-acl-v1' if acl else 'container-recursive-ownership-v1' if ownership else NAMESPACE
-    resource = 'ContainerRecursiveAclMetadata' if acl else 'ContainerRecursiveOwnershipMetadata' if ownership else 'ContainerRecursivePermissionMetadata'
-    prefix = 'CONTAINER_RECURSIVE_ACL_' if acl else 'CONTAINER_RECURSIVE_OWNERSHIP_' if ownership else 'CONTAINER_RECURSIVE_PERMISSION_'
+    if type(ownership) is not bool or type(acl) is not bool or type(acl_restore) is not bool or ownership and acl or acl_restore and not acl: raise ValueError('RECURSIVE_MUTATION_TYPE_INVALID')
+    mutation = 'acl-restore' if acl_restore else 'acl' if acl else 'ownership' if ownership else 'permission'
+    namespace = 'container-recursive-acl-restore-v1' if acl_restore else 'container-recursive-acl-v1' if acl else 'container-recursive-ownership-v1' if ownership else NAMESPACE
+    resource = 'ContainerRecursiveAclRestoreMetadata' if acl_restore else 'ContainerRecursiveAclMetadata' if acl else 'ContainerRecursiveOwnershipMetadata' if ownership else 'ContainerRecursivePermissionMetadata'
+    prefix = 'CONTAINER_RECURSIVE_ACL_RESTORE_' if acl_restore else 'CONTAINER_RECURSIVE_ACL_' if acl else 'CONTAINER_RECURSIVE_OWNERSHIP_' if ownership else 'CONTAINER_RECURSIVE_PERMISSION_'
     child_fields = {'aclType','entries'} if acl else {'uid','gid'} if ownership else {'mode'}
     if permission_type.COMMAND != {'containerId','instanceId','path','expectedVersion'} | child_fields:
         raise ValueError(prefix+'CHILD_ENGINE_MISMATCH')
@@ -125,7 +125,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
         def __init__(self, outer, request):
             super().__init__(outer.history.storage);self.outer,self.batch=outer,request
         def expected(self,request):
-            return {**super().expected(request),'resourceType':'ContainerRecursiveAclEntryMetadata' if acl else 'ContainerRecursiveOwnershipEntryMetadata' if ownership else 'ContainerRecursivePermissionEntryMetadata','parentOperationId':self.batch['operationId'],
+            return {**super().expected(request),'resourceType':'ContainerRecursiveAclRestoreEntryMetadata' if acl_restore else 'ContainerRecursiveAclEntryMetadata' if acl else 'ContainerRecursiveOwnershipEntryMetadata' if ownership else 'ContainerRecursivePermissionEntryMetadata','parentOperationId':self.batch['operationId'],
                 'manifestDigest':self.batch['plan']['manifestDigest']}
         def artifact_directories(self):return (namespace,self.batch['operationId'],'entries')
         @contextlib.contextmanager
@@ -139,8 +139,8 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                 finally:os.close(fd)
 
     class RecursivePermissions(directory_type):
-        COMMAND={'containerId','instanceId','path','expectedVersion'} | ({'aclType','fileEntries','directoryEntries'} if acl else {'uid','gid'} if ownership else {'fileMode','directoryMode'})
-        PLAN=directory_type.PLAN|{'rootIdentity','manifestDigest','entryCount','fileCount','directoryCount','changeCount'}
+        COMMAND={'containerId','instanceId','path','expectedVersion'} | ({'captureId','expectedHistoryDigest'} if acl_restore else {'aclType','fileEntries','directoryEntries'} if acl else {'uid','gid'} if ownership else {'fileMode','directoryMode'})
+        PLAN=directory_type.PLAN|{'rootIdentity','manifestDigest','entryCount','fileCount','directoryCount','changeCount'}|({'restoreSource','restoreSourceFrame','restoreTargetsDigest'} if acl_restore else set())
         RECORD={'schemaVersion','operationId','owner','plan','state','startedThrough','finishedThrough','historyMayExist','historyVerified','historyDigest',
             'completedCount','changedCount','abortedCount','notStartedCount','unknownCount','outcomeDigest'}
         TERMINAL=('Completed','Aborted','Partial','Unknown')
@@ -164,7 +164,8 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
             if type(value) is not dict or set(value)!=self.COMMAND:self.reject('REQUEST_INVALID')
             self.r.target_binding(value['containerId'],value['instanceId']);self.r.canonical_path(value['path'],empty=False)
             if self.r.protected(value['path'],self.f):self.reject('PROTECTED')
-            if acl:
+            if acl_restore:self.restore_command(value)
+            elif acl:
                 if value['aclType'] not in ('access','default'):self.reject('TYPE_INVALID')
                 if value['aclType']=='default' and value['fileEntries'] is not None:self.reject('DEFAULT_FILE_ENTRIES_INVALID')
                 try:
@@ -177,7 +178,8 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                 for key in ('fileMode','directoryMode'):
                     if type(value[key]) is not str or not re.fullmatch('0[0-7]{3}',value[key]):self.reject('MODE_INVALID')
             if type(value['expectedVersion']) is not str or not re.fullmatch('[A-F0-9]{64}',value['expectedVersion']):self.reject('VERSION_INVALID')
-        def targets(self,command,kind,access=None):
+        def targets(self,command,kind,access=None,relative=None,source=None):
+            if acl_restore:return self.restore_targets(command,kind,access,relative,source)
             if acl:
                 if kind=='File' and command['aclType']=='default':
                     # Files are inventoried and proved unchanged, never given a default ACL.
@@ -191,6 +193,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                     type(plan['manifestDigest']) is not str or not re.fullmatch('[A-F0-9]{64}',plan['manifestDigest']):self.reject('PLAN_INVALID')
             version=hashlib.sha256(b'whaledeck-container-file-v1\n'+json.dumps([plan['command']['containerId'],plan['command']['instanceId'],plan['command']['path'],*plan['rootIdentity']],ensure_ascii=False,separators=(',',':')).encode()).hexdigest().upper()
             if version!=plan['command']['expectedVersion']:self.reject('PLAN_INVALID')
+            if acl_restore:self.validate_restore_plan(plan)
         @contextlib.contextmanager
         def root(self,scope,session):
             self.tick()
@@ -264,6 +267,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
             return rows
         def inventory(self,command,session):
             self.command(command);proof=self.guard(command,session)
+            source=self.restore_source(command,session) if acl_restore else None
             with directory_type.parent(self,{'command':command,'targetProof':proof},session) as parent:
                 fd=self.f.open_at(parent,command['path'].rsplit('/',1)[-1],os.O_RDONLY|os.O_DIRECTORY,cross_mount=True)
                 try:root_identity=list(self.r.fingerprint(os.fstat(fd)))
@@ -271,11 +275,13 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                 uid,gid=self.p.owner(session);parent_info=os.fstat(parent)
                 scope={'schemaVersion':1,'command':json.loads(encode(command)) if acl else dict(command),'targetProof':proof,'parentIdentity':[parent_info.st_dev,parent_info.st_ino],
                     'parentVersion':self.r.version(command,command['path'].rpartition('/')[0],parent_info),'uid':uid,'gid':gid,'rootIdentity':root_identity}
+            if acl_restore:scope.update(restoreSource=self.restore_summary(source),restoreSourceFrame=source['frame'])
             rows=self.walk(scope,session);builder=self.child(scope,self.state_path,self.history);entries=[];size=0
+            if acl_restore and {r['relativePath']:r['kind'] for r in rows}!={e['relativePath']:e['plan']['kind'] for e in source['entries']}:self.reject('SOURCE_TREE_MISMATCH')
             for row in sorted(rows,key=lambda row:(-(row['relativePath'].count('/')+1 if row['relativePath'] else 0),row['relativePath'].encode())):
                 self.tick();path=command['path']+('/'+row['relativePath'] if row['relativePath'] else '')
                 version=hashlib.sha256(b'whaledeck-container-file-v1\n'+json.dumps([command['containerId'],command['instanceId'],path,*row['identity']],ensure_ascii=False,separators=(',',':')).encode()).hexdigest().upper()
-                targets=self.targets(command,row['kind'],row.get('accessAcl'))
+                targets=self.targets(command,row['kind'],row.get('accessAcl'),row['relativePath'],source)
                 child_command={'containerId':command['containerId'],'instanceId':command['instanceId'],'path':path,'expectedVersion':version,**targets}
                 plan=builder.plan(child_command,session)
                 if plan['sourceIdentity']!=row['identity'] or plan['attributesDigest']!=row['attributesDigest']:self.reject('TREE_CHANGED')
@@ -285,6 +291,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
             if self.walk(scope,session)!=rows:self.reject('TREE_CHANGED')
             scope.update(manifestDigest=self.manifest_digest(entries),entryCount=len(entries),fileCount=sum(e['plan']['kind']=='File' for e in entries),
                 directoryCount=sum(e['plan']['kind']=='Directory' for e in entries),changeCount=sum(not e['plan']['noChange'] for e in entries))
+            if acl_restore:scope['restoreTargetsDigest']=self.restore_targets_digest(entries)
             scope['fingerprint']=self.digest(scope);self.validate_plan(scope);return scope,entries
         def plan(self,command,session):self.begin();return self.inventory(command,session)[0]
         def validate_record(self,record,operation):
@@ -321,9 +328,14 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                 if rel:self.r.canonical_path(rel,empty=False)
                 child=entry['plan'];permission_type.validate_plan(inspector,child)
                 path=plan['command']['path']+('/'+rel if rel else '')
-                targets=self.targets(plan['command'],child['kind'],child.get('accessAcl'))
-                target_mismatch=any(child['command'][key]!=value for key,value in targets.items())
-                if acl and plan['command']['aclType']=='default' and child['kind']=='File' and not child['noChange']:self.reject('HISTORY_CHANGED')
+                if acl_restore:
+                    kind=plan['restoreSource']['changedAclType'];expected_type='access' if child['kind']=='File' and kind=='default' else kind
+                    target_mismatch=child['command']['aclType']!=expected_type
+                else:
+                    targets=self.targets(plan['command'],child['kind'],child.get('accessAcl'))
+                    target_mismatch=any(child['command'][key]!=value for key,value in targets.items())
+                kind=plan['restoreSource']['changedAclType'] if acl_restore else plan['command'].get('aclType')
+                if acl and kind=='default' and child['kind']=='File' and not child['noChange']:self.reject('HISTORY_CHANGED')
                 if child['command']['path']!=path or any(child['command'][key]!=plan['command'][key] for key in ('containerId','instanceId')) or target_mismatch or \
                         any(child[key]!=plan[key] for key in ('targetProof','uid','gid')):self.reject('HISTORY_CHANGED')
                 inode=tuple(child['sourceIdentity'][:2])
@@ -336,6 +348,7 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
             if root is None or root['kind']!='Directory' or root['sourceIdentity']!=plan['rootIdentity'] or \
                     any(root[key]!=plan[key] for key in ('parentIdentity','parentVersion')) or files!=plan['fileCount'] or changes!=plan['changeCount']:
                 self.reject('HISTORY_CHANGED')
+            if acl_restore and self.restore_targets_digest(entries)!=plan['restoreTargetsDigest']:self.reject('HISTORY_CHANGED')
             return entries
         def child_request(self,request,index,entry):
             operation=hashlib.sha256(('whaledeck-recursive-'+mutation+'-entry-id-v1:').encode()+request['operationId'].encode()+b':'+str(index).encode()).hexdigest()[:32]
@@ -347,6 +360,9 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
             finally:os.close(fd)
         def checkpoint(self,phase,index):
             """Trusted disposable test boundary; not request data or a public control."""
+        @contextlib.contextmanager
+        def mutation_source(self,request,session):
+            yield lambda:None
         def apply(self,request,session):
             self.begin()
             with self.locked(request) as (state,record):
@@ -362,15 +378,16 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                 try:
                     plan,entries=self.inventory(request['plan']['command'],session)
                     if plan!=request['plan']:self.reject('TREE_CHANGED')
-                    record['historyMayExist']=True;self.save(state,record)
-                    saved=self.history.capture(request,entries);self.validate_manifest(request,saved)
-                    record.update(state='Applying',historyVerified=True,historyDigest=saved['historyDigest']);self.save(state,record)
-                    with self.child_engine(state,request,True) as (child,_):
-                        for index,entry in enumerate(entries):
-                            self.tick();record['startedThrough']=index;self.save(state,record);self.checkpoint('BeforeEntry',index);self.tick()
-                            result=child.apply(self.child_request(request,index,entry),session)
-                            if result['state']!='Completed' or not result['bindingCurrent'] or ownership and result['ownerConfirmed'] is not True or acl and result['aclConfirmed'] is not True:self.reject('ENTRY_RESULT_UNKNOWN')
-                            record['finishedThrough']=index;self.save(state,record);self.checkpoint('AfterEntry',index)
+                    with self.mutation_source(request,session) as current_source:
+                        current_source();record['historyMayExist']=True;self.save(state,record)
+                        saved=self.history.capture(request,entries);self.validate_manifest(request,saved)
+                        record.update(state='Applying',historyVerified=True,historyDigest=saved['historyDigest']);self.save(state,record)
+                        with self.child_engine(state,request,True) as (child,_):
+                            for index,entry in enumerate(entries):
+                                self.tick();record['startedThrough']=index;self.save(state,record);self.checkpoint('BeforeEntry',index);self.tick();current_source()
+                                result=child.apply(self.child_request(request,index,entry),session)
+                                if result['state']!='Completed' or not result['bindingCurrent'] or ownership and result['ownerConfirmed'] is not True or acl and result['aclConfirmed'] is not True:self.reject('ENTRY_RESULT_UNKNOWN')
+                                record['finishedThrough']=index;self.save(state,record);self.checkpoint('AfterEntry',index);current_source()
                     self.recover(state,record,session)
                 except BaseException:
                     try:self.recover(state,record,session)
@@ -452,6 +469,6 @@ def recursive_permissions_type(permission_type, directory_type, permission_histo
                     finally:os.close(fd)
                 except (OSError,self.r.Rejected,self.f.Rejected,ValueError,TypeError,KeyError):pass
             keys=('operationId','state','completedCount','changedCount','abortedCount','notStartedCount','unknownCount','historyMayExist','historyVerified','historyDigest','outcomeDigest')
-            return {**({'aclType':record['plan']['command']['aclType']} if acl else {}),**{k:record[k] for k in keys},'containerId':record['plan']['command']['containerId'],'instanceId':record['plan']['command']['instanceId'],
+            return {**({'aclType':record['plan']['restoreSource']['changedAclType'] if acl_restore else record['plan']['command']['aclType']} if acl else {}),**{k:record[k] for k in keys},'containerId':record['plan']['command']['containerId'],'instanceId':record['plan']['command']['instanceId'],
                 'targetProof':record['plan']['targetProof'],'fingerprint':record['plan']['fingerprint'],'bindingCurrent':binding,'historyAvailable':available,'replayed':replayed}
     return RecursivePermissions
