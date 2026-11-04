@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-04 递归ACL管理员API候选c020c24：全部入口Administrator/NoStore，写入沿用BFF Cookie/CSRF/Origin；原登录才可确认原计划，当前其他管理员仅核对异常/明确处置。严格字段presence/数值0/default null与空目录清除不可互换，脱敏拒绝不回显目标。回环MVC权限/CSRF与页面测试通过，但身份目录/仓储/Agent为夹具，不补签实时Authentik或安装态故障。通用任务重试在后端和Vue明确禁用；无Agent授权/sudo扩展。[候选、失败与未验边界](qa/CONTAINER_RECURSIVE_ACL_API_UI.md)。
+
 2026-11-04 28062da来源摘要已部署真实验证：正常Authentik/Vue另一管理员有限7字段/三次200-no-store、普通HTTP403/匿名401、原owner恢复404、原version一次明确ack及双端退出。另新管理员只读补验普通意图200 JSON null/恢复7字段仍200/owner404。不是新的全部实时撤权或异常响应实机矩阵。 见[实际来源UI与发布边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_REAL_UI.md)。
 
 2026-11-04 新增候选权限边界（未部署）：GET /api/v1/files/container-acls/recovery/{id}/restore-source 仅当前实时管理员可读，服务在仓储读取前后验证身份，校验已存请求/计划/回执绑定后投影7字段；另一管理员可读有限历史摘要，仍不能访问原owner /restores/{id}。匿名401/普通403/当前撤权403；200 JSON null仅合法普通ACL，损坏、缺失与来源依赖失败不得降级为null。没有完整ACL、Location、SourceInstanceId、digest或授权hash输出，也不改变确认/处置写入授权。 见[候选与验收边界](qa/CONTAINER_ACL_RECOVERY_SOURCE_UI.md)。

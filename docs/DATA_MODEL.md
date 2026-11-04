@@ -1,5 +1,7 @@
 # WhaleDeck 数据模型
 
+2026-11-04 递归ACL API/Vue候选c020c24复用224f57c的永久意图/18CHECK、共享fence和Worker，不新增表/列或迁移。严格目标字段、原版本/hash/ID与客户端深快照及回执计数绑定，通用任务重试不得创建新的元数据写入。回环接口和页面夹具通过不等于生产新表已部署；本批没有重跑PG或修改HDD，真实迁移与页面整链仍待。[候选、失败与未验边界](qa/CONTAINER_RECURSIVE_ACL_API_UI.md)。
+
 2026-11-04 递归ACL持久化候选224f57c通过真实隔离PG：新增真实仓储/EF迁移20261103235841、18CHECK及不可变历史/回执MAC、双Job/outbox/审计原子事务、租约与原Started；9类旧容器写入+宿主锁对称共享fence/路径预算，DI/Worker与取消路由已接。新类型专属原生阶段实际执行，1宏门禁无跳过通过、两库/SDK清理成功、外部投递0；合成Agent回执/身份/测试时钟不冒充真实Root或进程重启。4649Unit/491Integration（7默认原生跳过）、8范围/3状态工具及Release零警告错误通过，34源码SHA与三候选CLI来源核对。运行前后11核心/两宿主7cb3935、7配置账本、153/58HDD字节九字段保持、活动0，生产新表实际缺席。尚无生产迁移/新Worker运行/公开API/Vue/真人整链；下一批管理员API与页面再CI/标准覆盖和实盘签收，故障/递归恢复/删除及其余59项继续。[真实DB分项与失败/未验边界](qa/CONTAINER_RECURSIVE_ACL_PERSISTENCE.md)。
 
 2026-11-04 递归ACL内部编排候选0168d5b/4b01148完成：独立意图/规划与执行Job绑定、四业务MAC域及确认、首次await前命令/续租前计划深快照、SameCommand及null/empty/零值、有界列表先验证；当前权威身份/取消/租约/期限、原ID先查后封存不重放、Partial/Unknown明确处置及独立ReceiptHash保留实际事实。最终Release0警告错误、149新增专项/4649Unit及490Integration通过（7默认原生跳过）、8范围；11源码SHA与候选CLI来源4b01148核对。显式内存仓储/Gateway夹具，尚无真实Repo/迁移/共享路径保护/Worker/公开API/Vue或真人整链；不算永久业务已上线。只读前批安装基线保持：两宿主7cb3935/1.53、四容器/账本28062da、11核心healthy、7配置账本和旧145/23元数据保持、总153/58、活动0。上轮c05bae1已远端同步；下一批真实PG持久化/全写入屏障再页面整链，维护连续性/递归恢复/删除及其余59项继续。[代码、失败及准确边界](qa/CONTAINER_RECURSIVE_ACL_BUSINESS.md)。
