@@ -1,5 +1,7 @@
 # WhaleDeck 权限矩阵
 
+2026-11-04 c020c24真实管理员七类递归ACL分项通过，但第三批止于Ready重载丢入口；本轮未走到普通/匿名矩阵和原上下文正常双端退出。b880208只在初次身份未知时保留opaque引用，仍无身份/权限、清私有位置；401/403、降权/换主体和退出清理有新增回归，候选未部署、实机原因未定。[真实分项、三次失败与修复候选](qa/CONTAINER_RECURSIVE_ACL_REAL_UI_PARTIAL.md)。
+
 2026-11-04 c020c24标准覆盖及安装权限/UDS/受限helper核验通过；7配置/user NOPASSWD策略保持、Agent未扩权。新恢复列表与原键GET实测匿名401，尚无本批真实管理员/普通用户页面或文件操作；既有模拟回环403不能补签实机授权矩阵。[标准发布、生产迁移与未验边界](qa/CONTAINER_RECURSIVE_ACL_RELEASE.md)。
 
 2026-11-04 递归ACL管理员API候选c020c24：全部入口Administrator/NoStore，写入沿用BFF Cookie/CSRF/Origin；原登录才可确认原计划，当前其他管理员仅核对异常/明确处置。严格字段presence/数值0/default null与空目录清除不可互换，脱敏拒绝不回显目标。回环MVC权限/CSRF与页面测试通过，但身份目录/仓储/Agent为夹具，不补签实时Authentik或安装态故障。通用任务重试在后端和Vue明确禁用；无Agent授权/sudo扩展。[候选、失败与未验边界](qa/CONTAINER_RECURSIVE_ACL_API_UI.md)。

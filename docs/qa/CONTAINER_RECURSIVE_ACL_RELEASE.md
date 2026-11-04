@@ -49,3 +49,5 @@ Agent PID 为 3295429，MaintenanceHost PID 为 3295422。安装 validator 退�
 私有证据目录为 `deploy/artifacts/recursive-acl-release-c020c24-c6e37fb0/`：完整 CI、请求、前后快照、自有只读 preflight/postflight 脚本、准确 Invocation journal/终态、安装 validator、157 原始采样及观察器结果。实际验证的 52 份跟踪依赖源码冻结于 1a07455，并逐 blob/工作区比对；三个私有只读编排脚本另存 SHA，不冒称产品代码或已执行的 CI 测试。脚本及证据 SHA 保存在目录内；不把私密环境或凭据入 Git/日志。本批未重跑此前 4651/569/1161 的本地全量测试；那些属于 c020c24 候选记录，远端本次取得的准确 CI 另有回执。
 
 下一步在全新自有容器/四对象树上完成完整真实 UI 常规批次：default 设置→access 两组完整目标→noop→mask→显式 ID 0/权限 0→default noop→default 清除→预检后取消；每轮先由独立物理检查读取全字节、身份、mtime、普通 xattr/非目标 ACL，再允许下一轮写入。核对原永久 Job/outbox/审计、Root 聚合/各子项、attested HDD、重载原引用与幂等、普通/匿名拒绝、同上下文正常双端退出和精确清理，最后独立只读复核。此前已完成的原生 RPC 场景不重放来冒充此批页面证据。随后进行中故障矩阵、递归 ACL 历史恢复、可恢复删除/长期清理、维护入口连续性及其余 59 项继续；无新增跨盘或物理冷启动验收。
+
+后续接续：七类真实页面分项及三批原总失败已保留，取消/重载引用与原正常退出仍未签，见[实机部分记录及修复候选](CONTAINER_RECURSIVE_ACL_REAL_UI_PARTIAL.md)。本发布记录和原时间/安装证据保持，不将后续分项回填成完整页面通过。

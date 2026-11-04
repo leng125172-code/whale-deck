@@ -1,5 +1,7 @@
 # WhaleDeck 后端用例
 
+2026-11-04 七类递归ACL真实分项已取原计划/实际字节属性/SQL/Root/HDD；验证工具两次错误修正后仅补核原操作。第三批未执行取消，Ready丢引用后自然Expired；不能以到期代替取消。b880208已修初次身份不可用会清引用的确定代码路径，但实机因果和修复效果、角色/正常退出门禁仍待。[真实分项、三次失败与修复候选](qa/CONTAINER_RECURSIVE_ACL_REAL_UI_PARTIAL.md)。
+
 2026-11-04 递归ACL业务、API、Worker与Vue已随c020c24正常覆盖，生产迁移和空闲/保护状态核验通过；新意图仍0，尚无真实人类原登录发起的预检/执行。下一批全新自有树逐轮页面驱动和物理/SQL/Root/HDD门控，再独立复核，不能把安装算业务完成。[标准发布、生产迁移与未验边界](qa/CONTAINER_RECURSIVE_ACL_RELEASE.md)。
 
 2026-11-04 递归ACL管理员用例候选c020c24：登记异步树预检→原登录确认→查询/明确取消；当前管理员另走异常列表/原ID读取/版本绑定明确处置。已用Controller调用既有Workflow，双Job/outbox/审计与Root先查原执行规则保持；额外拒绝通用Job重试绕过新树计划。569集成包含严格HTTP及回环Cookie/CSRF，但身份/仓储/Agent为夹具；部署与真实业务整链、完整故障/历史恢复仍待。[候选、失败与未验边界](qa/CONTAINER_RECURSIVE_ACL_API_UI.md)。

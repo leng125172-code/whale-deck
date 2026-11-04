@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-04 产品仍c020c24/1.53，七类实际页面驱动已留8聚合/32子HDD（含额外首default）；共享回执/完整子计划与原字段实际核对，不重放原ID。三批总门禁失败，取消尚无执行，无新协议或capability；旧Root原件保持，不把只读补核改成原浏览器正常结束。[真实分项、三次失败与修复候选](qa/CONTAINER_RECURSIVE_ACL_REAL_UI_PARTIAL.md)。
+
 2026-11-04 c020c24正常覆盖后，两宿主实际exe/DLL映射与六组件/HTTP同源，安装validator通过，沿用1.53。没有增加RPC/capability或重放已完成的原生文件操作；本批不把安装检查冒充新的真实业务RPC/HDD页面整链。[标准发布、生产迁移与未验边界](qa/CONTAINER_RECURSIVE_ACL_RELEASE.md)。
 
 2026-11-04 递归ACL管理员API/Vue候选c020c24已接现有Workflow和1.53协议；本批不新增RPC、capability、helper、签名域或安装。原登记、确认、取消及异常明确处置均走已实现专用业务，不由Controller或浏览器直接访问Root/Docker。回环/浏览器夹具不能替代安装态RPC与真人整链；后续准确CI、标准覆盖与实际文件/HDD验证。[候选、失败与未验边界](qa/CONTAINER_RECURSIVE_ACL_API_UI.md)。
