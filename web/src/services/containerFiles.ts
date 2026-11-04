@@ -15,7 +15,7 @@ export function containerFileBase(id: string) {
   return `containers/${id}/files`
 }
 export function containerFileQuery(
-  target: ContainerFileTarget,
+  target: Pick<ContainerFileTarget, 'containerId' | 'instanceId'>,
   path: string,
   extra: Record<string, string> = {},
 ) {

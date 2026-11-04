@@ -20,7 +20,12 @@ const props = defineProps<{
   target: ContainerFileTarget
   path: string
   disabled: boolean
+  restoreDisabled?: boolean
 }>()
+const emit = defineEmits<{
+  restore: [snapshot: ContainerRecursiveAclHistorySnapshot, version: string]
+}>()
+const objectVersion = ref('')
 const allowed = computed(() => authSession.user.value?.isAdministrator === true)
 const opened = ref(false),
   busy = ref(false),
@@ -51,6 +56,7 @@ function clear() {
   stop()
   opened.value = false
   scope.value = ''
+  objectVersion.value = ''
   rows.value = []
   inventoryPage.value = 0
   cursor.value = ''
@@ -203,8 +209,23 @@ async function open(entry: FileEntry) {
   if (!allowed.value || props.disabled || entry.isProtected || entry.kind !== 'Directory') return
   clear()
   scope.value = filePath(props.path, entry.name)
+  objectVersion.value = entry.version
   opened.value = true
   await load()
+}
+function restore() {
+  if (
+    !allowed.value ||
+    busy.value ||
+    props.restoreDisabled ||
+    !snapshot.value ||
+    !/^[A-F0-9]{64}$/.test(objectVersion.value)
+  )
+    return
+  const value = snapshot.value,
+    version = objectVersion.value
+  clear()
+  emit('restore', value, version)
 }
 function effective(entry: ContainerAclEntry, entries: ContainerAclEntry[]) {
   const mask = entries.find((v) => v.tag === 'mask')?.permissions ?? 7
@@ -356,6 +377,9 @@ defineExpose({ open })
       <p v-if="cursor" role="status">仍有库存需要扫描；当前列表尚未完整。</p>
     </template>
     <template #footer>
+      <el-button v-if="snapshot" type="warning" :disabled="busy || restoreDisabled" @click="restore"
+        >预检恢复此递归ACL历史</el-button
+      >
       <el-button @click="clear">{{ busy ? '取消读取并关闭' : '关闭' }}</el-button>
       <el-button v-if="selected" :disabled="busy" @click="inventory">返回历史列表</el-button>
       <el-button v-if="snapshot && previousOffsets.length" :disabled="busy" @click="previousEntries"

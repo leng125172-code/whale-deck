@@ -78,23 +78,25 @@ afterEach(() => {
 })
 
 describe('Job retry', () => {
-  it.each(['containers.files.recursive-acl-plan', 'containers.files.recursive-acl'])(
-    '%s never offers generic retry',
-    async (jobType) => {
-      const row = { ...source, jobType }
-      request.mockImplementation(async (path: string) =>
-        path.endsWith('/events') ? [] : path === 'jobs?take=100' ? [row] : row,
-      )
-      const wrapper = mount(JobsView, { global: { plugins: [ElementPlus], stubs } })
-      wrappers.push(wrapper)
-      await flushPromises()
-      await wrapper.get('.el-table__body tr').trigger('click')
-      await flushPromises()
-      expect(wrapper.findAll('button').some((b) => b.text() === '重新预检并重试')).toBe(false)
-      expect(wrapper.text()).toContain('原任务不会通用重试')
-      expect(request.mock.calls.some(([path]) => path.includes('/retry'))).toBe(false)
-    },
-  )
+  it.each([
+    'containers.files.recursive-acl-plan',
+    'containers.files.recursive-acl',
+    'containers.files.recursive-acl-restore-plan',
+    'containers.files.recursive-acl-restore',
+  ])('%s never offers generic retry', async (jobType) => {
+    const row = { ...source, jobType }
+    request.mockImplementation(async (path: string) =>
+      path.endsWith('/events') ? [] : path === 'jobs?take=100' ? [row] : row,
+    )
+    const wrapper = mount(JobsView, { global: { plugins: [ElementPlus], stubs } })
+    wrappers.push(wrapper)
+    await flushPromises()
+    await wrapper.get('.el-table__body tr').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('button').some((b) => b.text() === '重新预检并重试')).toBe(false)
+    expect(wrapper.text()).toContain('原任务不会通用重试')
+    expect(request.mock.calls.some(([path]) => path.includes('/retry'))).toBe(false)
+  })
 
   it.each([
     'files.upload',

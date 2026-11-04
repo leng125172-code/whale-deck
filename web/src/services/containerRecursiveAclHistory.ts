@@ -232,7 +232,7 @@ export function assertContainerRecursiveAclHistorySnapshot(
   return value as unknown as ContainerRecursiveAclHistorySnapshot
 }
 export async function listContainerRecursiveAclHistory(
-  target: ContainerFileTarget,
+  target: HistoryTarget,
   path: string,
   after: string,
   version: string,
@@ -254,7 +254,7 @@ export async function listContainerRecursiveAclHistory(
   return assertContainerRecursiveAclHistoryPage(response, target, path, after, version)
 }
 export async function readContainerRecursiveAclHistory(
-  target: ContainerFileTarget,
+  target: HistoryTarget,
   path: string,
   summary: ContainerRecursiveAclHistorySummary,
   offset: number,

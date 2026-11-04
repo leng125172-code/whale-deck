@@ -1,3 +1,7 @@
+import {
+  clearRecursiveAclRestoreHints,
+  reconcileRecursiveAclRestoreHints,
+} from './containerRecursiveAclRestoreHints'
 import { readonly, ref } from 'vue'
 import { runtimeConfig } from '@/config/runtime'
 import { ApiError, apiRequest } from '@/services/apiClient'
@@ -58,6 +62,7 @@ function expireSession() {
   clearAclHints()
   clearRecursivePermissionHints()
   clearRecursiveOwnershipHints()
+  clearRecursiveAclRestoreHints()
   clearRecursiveAclHints()
   clearMoveHints()
   if (import.meta.env.DEV) sessionStorage.removeItem(previewStorageKey)
@@ -148,6 +153,7 @@ async function loadAuthSession() {
         reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileRecursiveAclRestoreHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecursiveAclHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
       }
@@ -193,6 +199,7 @@ async function logout() {
   clearAclHints()
   clearRecursivePermissionHints()
   clearRecursiveOwnershipHints()
+  clearRecursiveAclRestoreHints()
   clearRecursiveAclHints()
   clearMoveHints()
   if (import.meta.env.DEV) {
@@ -227,6 +234,7 @@ async function refresh() {
     reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
+    reconcileRecursiveAclRestoreHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursiveAclHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
   } catch (reason) {

@@ -26,9 +26,12 @@ const aclTask = computed(
 const recursiveAclTask = computed(
   () =>
     !!selected.value &&
-    ['containers.files.recursive-acl', 'containers.files.recursive-acl-plan'].includes(
-      selected.value.jobType,
-    ),
+    [
+      'containers.files.recursive-acl',
+      'containers.files.recursive-acl-plan',
+      'containers.files.recursive-acl-restore',
+      'containers.files.recursive-acl-restore-plan',
+    ].includes(selected.value.jobType),
 )
 const canCancel = computed(
   () =>
@@ -36,9 +39,12 @@ const canCancel = computed(
     !terminalStates.has(selected.value.state) &&
     !(
       recursiveAclTask.value &&
-      ['AwaitingContainerRecursiveAclResolution', 'AwaitingContainerRecursiveAclReceipt'].includes(
-        selected.value.phase,
-      )
+      [
+        'AwaitingContainerRecursiveAclResolution',
+        'AwaitingContainerRecursiveAclReceipt',
+        'AwaitingContainerRecursiveAclRestoreResolution',
+        'AwaitingContainerRecursiveAclRestoreReceipt',
+      ].includes(selected.value.phase)
     ) &&
     !(
       aclTask.value &&
