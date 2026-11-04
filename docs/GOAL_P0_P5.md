@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-04 递归ACL Unknown跨容器目录延期/释放真实整链及独立通过：冻结8666da0/Invocation5e56fb5cca614fed881b4384d18cdefb准确退出0。另一容器真实Vue计划/登记，四次自然延期版本2/4/6/8且原Unknown/完整源/Root保持、目标与目录Root缺席；不同管理员明确ACK后6.001秒，同一目录ID开始并Succeeded、原绑定/计划保持，实际inode/1000:1000/0750/Root及真实页面可见/退出401与精确清理通过。前两总失败保留：missed cut实际4/4只读核验不计跨写入；短暂claim租约误判修正，原Unknown UI处置/旧等待任务正常管理员HTTP取消至Canceled/Root Aborted，单独独立恢复不补签原总门禁。112工具root零跳过/8范围、7真PNG，11核心healthy/宿主及b880208保持/活动0，557配置ACL保护文件及47目录Root，30递归意图9S/5C/1E/3F/12A、28执行/58Job。仍需其他矩阵、递归恢复/删除及其余59项，不升完整完成率。[实机、失败与边界](qa/CONTAINER_RECURSIVE_ACL_CROSS_DIRECTORY.md)。
+
 2026-11-04 递归ACL首项真实修改后同CID实例变化Unknown组合实机/独立通过：冻结9fe980e，Invocationc883e387722041089c204ec83a5dbdd2准确退出0；仅自有容器PID4152489→4155649/StartedAt变化，CID/镜像/挂载/安全预算与核心身份保持，宿主源和新namespace完整物理均等于cut。产品3.686秒停helper，Root/SQL当前0/0/0/0/4、原首项实际修改/Completed/HDD独立留证；另一管理员暂不处置后明确ACK，原执行/历史/计数保持，ACK后同CID新实例仍活再准确清理。两正常退出/5真PNG/唯一审计，104工具root零跳过/8范围、旧目标消失只读兼容通过。旧535文件保持/539总文件、11核心healthy/两宿主与b880208/1.53保持/活动0，27意图8S/5C/1E/3F/10A、25执行/52Job。仍需跨写入等矩阵、递归恢复/删除及其余59项，不升完整完成率。[实机及边界](qa/CONTAINER_RECURSIVE_ACL_INSTANCE_CHANGE.md)。
 
 2026-11-04 首项真实ACL修改后目标消失Unknown组合已新资源完整实机及独立通过：冻结2375732/Invocation11cc1224353f4b09bf28d7a6e1747d5a准确退出0，产品4.361秒停helper；Root/SQL当前计数0/0/0/0/4，消失前首项Completed及真实修改独立保留，不能解释成零修改。另一管理员暂不处置ACK0后明确ACK，原执行/Root-HDD/Unknown计数保留、唯一审计/两正常退出/5真PNG/准确清理通过。前两总失败保留：首次恢复退出Error仅只读补核不补签，第二次started marker先于child原件的缺席校验已修正，原任务经新管理员恢复及独立分项通过；不重放删除或执行。100工具root零跳过/8范围，11核心healthy/活动0，宿主与产品b880208/1.53保持，26意图8S/5C/1E/3F/9A、24执行/50Job，535保护文件。仍需实例/跨写入等矩阵、递归恢复/删除及其余59项，不升完整完成率。[实机、两失败与恢复边界](qa/CONTAINER_RECURSIVE_ACL_PARTIAL_UNKNOWN.md)。
