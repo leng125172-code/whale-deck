@@ -5,11 +5,13 @@ Only an owned tree and fresh human identity; no receipt/SQL/clock edits, product
 hooks or arbitrary PID input. Full physical proof precedes exact source cleanup.
 """
 from concurrent.futures import ThreadPoolExecutor
+import datetime as dt
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import select
 import stat
 import subprocess
 import sys
@@ -28,8 +30,11 @@ from validate_container_upload_bff import temporary_user
 from validate_container_upload_recovery_agent import trusted
 from verify_container_recursive_permissions import digest, unsigned
 from acl_source_apply_missing_proof import source_closure
+from owned_authentik_revocation import OwnedAuthentikRevocation
+from validate_container_recursive_permission_faults import require_authority_change
 
 PHASE='startup'
+REVOKED_KINDS=('group-removal','account-disable')
 SOURCES=('bound_container_recursive_acl_cut.py','validate_container_recursive_acl_faults.py',
     'validate_container_recursive_acl_faults.mjs','verify_container_recursive_acl_faults.py','test_recursive_acl_fault_probe_scope.py')
 
@@ -67,8 +72,21 @@ def preservation_snapshot(storage):
 
 
 def selected_kinds(arguments):
-    assert tuple(arguments) in ((),('cancel',),('logout',)), 'UNKNOWN_RECURSIVE_ACL_FAULT_SELECTION'
-    return tuple(arguments) or ('cancel','logout')
+    arguments=tuple(arguments)
+    assert arguments in ((),('cancel',),('logout',),('revocation',),('group-removal',),('account-disable',)), 'UNKNOWN_RECURSIVE_ACL_FAULT_SELECTION'
+    return REVOKED_KINDS if arguments==('revocation',) else arguments or ('cancel','logout')
+
+
+def verify_revoked_browser(ui, kind, subject):
+    assert kind in REVOKED_KINDS and ui['kind']==kind and ui['subject']==subject
+    assert ui['authorityRevoked'] is True and ui['normalDualLogout'] is False and ui['logout'] is None
+    assert ui['anonymousGet401'] is False
+    assert ui['originalIntentStatus'] in (401,403) and ui['hintsCleared'] is True and ui['privatePanelsAbsent'] is True
+    assert ui['cancellations']==0 and ui['uploads']==0
+    if kind=='group-removal':
+        assert ui['currentIdentityStatus']==200 and ui['currentlyAdministrator'] is False and ui['currentSubject']==subject and ui['renderedRevocationPage']=='forbidden'
+    else:
+        assert ui['currentIdentityStatus'] in (401,403) and ui['currentlyAdministrator'] is None and ui['currentSubject'] is None and ui['renderedRevocationPage']=='login'
 
 
 def wait_settled(identifier):
@@ -82,7 +100,7 @@ def wait_settled(identifier):
 
 def verify_terminal(identifier, baseline, subject, storage, directory, *, read_only=False):
     """Permanent facts only; source bytes are separately proved by the parent."""
-    assert baseline['kind'] in ('cancel','logout')
+    assert baseline['kind'] in ('cancel','logout',*REVOKED_KINDS)
     data=snapshot(identifier);row=data['row'];plan=managed_plan(json.loads(row['plan_json']))
     assert row['actor_subject']==subject and row['container_id']==baseline['containerId'] and row['instance_id']==baseline['instanceId']
     assert row['relative_path']==plan['command']['path']=='work/recursive-tree'
@@ -195,11 +213,25 @@ def run_case(kind, revision, source_revision, hashes, evidence, reader, storage,
                 assert current()==original
                 (directory/'cut-sql.json').write_text(json.dumps(applying));(directory/'cut-root.json').write_text(json.dumps(held.record))
                 (directory/'cut-physical.json').write_text(json.dumps(current()));(directory/'bound-helper.json').write_text(json.dumps(dict(pid=held.pid,unit=held.cgroup,proof=held.proof)))
-                PHASE=kind+':actual-visible-action';began=time.monotonic()
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    exit_watch=pool.submit(held.wait_exit_seconds,began,15)
+                PHASE=kind+':actual-visible-action';authority=None
+                if kind in REVOKED_KINDS:
                     write_signal(directory,'action.json',dict(kind=kind));action=wait_signal(directory,'action-done.json',browser,40)
-                    elapsed=exit_watch.result(timeout=16)
+                    assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc'])>dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
+                    with OwnedAuthentikRevocation(credentials[0],ready['subject']) as native:
+                        assert current()==original and not select.select([held.descriptor],[],[],0)[0],'BOUND_RECURSIVE_ACL_HELPER_ALREADY_EXITED'
+                        began=time.monotonic()
+                        with ThreadPoolExecutor(max_workers=1) as pool:
+                            exit_watch=pool.submit(held.wait_exit_seconds,began,15)
+                            authority=native.change(kind)
+                            (directory/'authority-change.json').write_text(json.dumps(authority))
+                            require_authority_change(authority,ready,kind)
+                            elapsed=exit_watch.result(timeout=16)
+                else:
+                    began=time.monotonic()
+                    with ThreadPoolExecutor(max_workers=1) as pool:
+                        exit_watch=pool.submit(held.wait_exit_seconds,began,15)
+                        write_signal(directory,'action.json',dict(kind=kind));action=wait_signal(directory,'action-done.json',browser,40)
+                        elapsed=exit_watch.result(timeout=16)
                 assert elapsed is not None and elapsed<15,'PRODUCT_DID_NOT_STOP_BOUND_RECURSIVE_ACL_HELPER'
                 held.release();held=None
                 assert action['id']==identifier and action['subject']==ready['subject']
@@ -207,9 +239,11 @@ def run_case(kind, revision, source_revision, hashes, evidence, reader, storage,
                 assert current()==original;(directory/'physical-final.json').write_text(json.dumps(current()))
                 write_signal(directory,'settled.json',dict(id=identifier,state='Canceled'))
                 assert browser.wait(timeout=100)==0,'REAL_RECURSIVE_ACL_TERMINAL_PAGE_FAILED'
-                ui=json.loads((directory/'browser.json').read_bytes());assert ui['actualUi'] and ui['id']==identifier and ui['subject']==ready['subject'] and ui['normalDualLogout']
-                assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==int(kind=='cancel') and ui['uploads']==0 and ui['anonymousGet401']
-                proof.update(kind=kind,subject=ready['subject'],productStoppedHelperSeconds=round(elapsed,3),validatorKilledHelper=False,originalFullTreeUnchanged=True,normalDualLogout=True)
+                ui=json.loads((directory/'browser.json').read_bytes());assert ui['actualUi'] and ui['id']==identifier and ui['subject']==ready['subject']
+                assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==int(kind=='cancel') and ui['uploads']==0
+                if authority:verify_revoked_browser(ui,kind,ready['subject'])
+                else:assert ui['normalDualLogout'] and ui['anonymousGet401']
+                proof.update(kind=kind,subject=ready['subject'],productStoppedHelperSeconds=round(elapsed,3),validatorKilledHelper=False,originalFullTreeUnchanged=True,normalDualLogout=authority is None,authorityRevoked=authority is not None)
                 (directory/'verified.json').write_text(json.dumps(proof));proved=True
         finally:
             if held is not None:held.release()

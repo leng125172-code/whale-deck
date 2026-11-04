@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from bound_container_recursive_acl_cut import child_id, first_entry_boundary, freeze_before_first_acl
-from validate_container_recursive_acl_faults import selected_kinds
+from validate_container_recursive_acl_faults import selected_kinds, verify_revoked_browser, require_authority_change
 from verify_container_recursive_acl_faults import target
 
 ROOT=Path(__file__).resolve().parent
@@ -44,10 +44,37 @@ class RecursiveAclFaultProbeScope(unittest.TestCase):
 
     def test_selector_and_archive_reject_arbitrary_inputs(self):
         self.assertEqual(('cancel','logout'),selected_kinds([]));self.assertEqual(('cancel',),selected_kinds(['cancel']))
+        self.assertEqual(('group-removal','account-disable'),selected_kinds(['revocation']))
+        self.assertEqual(('group-removal',),selected_kinds(['group-removal']))
+        self.assertEqual(('account-disable',),selected_kinds(['account-disable']))
         for args in (['restart'],['cancel','logout'],['logout','--all'],['post-acl-cancel']):
             with self.subTest(args=args),self.assertRaises(AssertionError):selected_kinds(args)
         for name in ('../escape','container-recursive-acl-browser-'+'a'*32,'container-recursive-acl-faults-'+'A'*32):
             with self.subTest(name=name),self.assertRaises(AssertionError):target(name)
+
+    def test_revoked_browser_cannot_be_normal_logout_expiry_or_other_identity(self):
+        subject='11111111-1111-4111-8111-111111111111'
+        for kind in ('group-removal','account-disable'):
+            ui=dict(kind=kind,subject=subject,authorityRevoked=True,normalDualLogout=False,logout=None,anonymousGet401=False,
+                originalIntentStatus=403,hintsCleared=True,privatePanelsAbsent=True,cancellations=0,uploads=0,
+                currentIdentityStatus=200 if kind=='group-removal' else 403,currentlyAdministrator=False if kind=='group-removal' else None,
+                currentSubject=subject if kind=='group-removal' else None,renderedRevocationPage='forbidden' if kind=='group-removal' else 'login')
+            verify_revoked_browser(ui,kind,subject)
+            for field,value in [('normalDualLogout',True),('logout',{}),('anonymousGet401',True),('authorityRevoked',False),('originalIntentStatus',200),('hintsCleared',False),('privatePanelsAbsent',False),('cancellations',1),('uploads',1),('currentIdentityStatus',200 if kind=='account-disable' else 403),('currentlyAdministrator',True),('currentSubject','22222222-2222-4222-8222-222222222222'),('renderedRevocationPage','overview')]:
+                bad={**ui,field:value}
+                with self.subTest(kind=kind,field=field),self.assertRaises(AssertionError):verify_revoked_browser(bad,kind,subject)
+
+    def test_positive_authority_outlives_the_exact_owned_patch(self):
+        subject='11111111-1111-4111-8111-111111111111'
+        before=dict(pk=1,uuid=subject,username='whaledeck-upload-qa-'+'a'*12,is_active=True,groups=['admin'])
+        ready=dict(subject=subject,permissionExpiresAtUtc='2026-11-04T12:00:00+00:00')
+        for kind,changes in [('group-removal',dict(groups=[])),('account-disable',dict(is_active=False))]:
+            proof=dict(kind=kind,subject=subject,before=before,after={**before,**changes},onlyOwnedIdentityChanged=True,confirmedAtUtc='2026-11-04T10:00:00+00:00')
+            require_authority_change(proof,ready,kind)
+            for change in ({'pk':2},{'username':'real-admin'},{'uuid':'22222222-2222-4222-8222-222222222222'}):
+                bad=copy.deepcopy(proof);bad['after'].update(change)
+                with self.subTest(kind=kind,change=change),self.assertRaises(AssertionError):require_authority_change(bad,ready,kind)
+            with self.assertRaises(AssertionError):require_authority_change(proof,{**ready,'permissionExpiresAtUtc':'2026-11-04T10:59:59+00:00'},kind)
 
     def test_arbitrary_host_source_refused_before_any_proc_or_signal(self):
         row=dict(container_id='a'*64,instance_id='123:instance')
