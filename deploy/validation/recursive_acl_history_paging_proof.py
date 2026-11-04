@@ -12,7 +12,7 @@ import stat
 from acl_history_browser_proof import typed_equal
 from recursive_acl_history_browser_proof import location,request_proof
 from verify_container_recursive_acl import digest,unsigned,file_version,acl_mode
-from validate_container_recursive_acl import file_acl,directory_acl
+from validate_container_recursive_acl import file_acl,directory_acl,PATHS as SMALL_PATHS
 from validate_container_recursive_acl_agent import STATE
 from validate_container_recursive_ownership_browser import read_metadata
 from validate_container_upload_recovery_agent import trusted
@@ -53,12 +53,17 @@ def summary(row,metadata):
     return dict(captureId=row['request']['operationId'],historyDigest=metadata['historyDigest'],createdAtUnixMs=metadata['createdAtUnixMs'],
         sourceInstanceId=c['instanceId'],changedAclType='access',manifestDigest=plan['manifestDigest'],entryCount=26,fileCount=25,directoryCount=1,changeCount=26)
 
-def verify_capture(evidence,b,row,storage,archive=False):
+def verify_capture(evidence,b,row,storage,archive=False,*,profile=None):
+    assert profile in (None,'inventory-named','inventory-mask')
     typed_equal(row['before'],b['original'])
     request=row['request'];operation=request['operationId'];plan=request['plan'];result=row['result'];before=row['before'];after=row['after']
-    assert request['owner']=='B'*64 and before.keys()==after.keys()==PATHS.keys()
-    assert [plan[k] for k in ('entryCount','fileCount','directoryCount','changeCount')]==[26,25,1,26]
-    command=plan['command'];assert command==dict(containerId=b['containerId'],instanceId=b['instanceId'],path='work/recursive-tree',expectedVersion=file_version(b,'work/recursive-tree',before['']['identity']),aclType='access',fileEntries=file_acl(),directoryEntries=directory_acl())
+    paths=PATHS if profile is None else SMALL_PATHS
+    order=ORDER if profile is None else ('sub/中文.bin','one.bin','sub','')
+    files=file_acl(6 if profile=='inventory-mask' else 4);directories=directory_acl()
+    changes=sum(before[p]['access']!=(files if kind=='File' else directories) for p,kind in paths.items())
+    assert request['owner']=='B'*64 and before.keys()==after.keys()==paths.keys()
+    assert [plan[k] for k in ('entryCount','fileCount','directoryCount','changeCount')]==([26,25,1,26] if profile is None else [4,2,2,changes])
+    command=plan['command'];assert command==dict(containerId=b['containerId'],instanceId=b['instanceId'],path='work/recursive-tree',expectedVersion=file_version(b,'work/recursive-tree',before['']['identity']),aclType='access',fileEntries=files,directoryEntries=directories)
     assert plan['rootIdentity']==before['']['identity'] and (plan['uid'],plan['gid'])==(1000,1000)
     assert digest(b'whaledeck-container-recursive-acl-plan-v1\n',unsigned(plan,'fingerprint'))==plan['fingerprint']
     def raw_record(name,raw):
@@ -76,7 +81,7 @@ def verify_capture(evidence,b,row,storage,archive=False):
     assert result['fingerprint']==plan['fingerprint'] and result['targetProof']==plan['targetProof']
     for flag in ('bindingCurrent','historyAvailable','historyVerified','historyMayExist'):assert result[flag] is True
     assert record['historyVerified'] is record['historyMayExist'] is True
-    assert [record[k] for k in ('completedCount','changedCount','abortedCount','unknownCount','notStartedCount')]==[26,26,0,0,0]
+    assert [record[k] for k in ('completedCount','changedCount','abortedCount','unknownCount','notStartedCount')]==[len(paths),changes,0,0,0]
     for key in ('completedCount','changedCount','abortedCount','unknownCount','notStartedCount'):typed_equal(result[key],record[key])
     attrs=digest(b'whaledeck-container-acl-attributes-v1\n',[['user.whaledeck-recursive',base64.b64encode(b'preserve ordinary attribute').decode('ascii')]])
     with storage.target(create_namespace=False,read_only=True) as (configuration,base):
@@ -87,32 +92,34 @@ def verify_capture(evidence,b,row,storage,archive=False):
             assert metadata['schemaVersion']==1 and type(metadata['schemaVersion']) is int and metadata['resourceType']=='ContainerRecursiveAclMetadata' and metadata['storageId']=='database-platform.backup.hdd'
             assert type(metadata['createdAtUnixMs']) is int and metadata['createdAtUnixMs']>=0 and all(metadata[k]==request[k] for k in ('operationId','owner','plan'))
             assert digest(b'whaledeck-container-recursive-acl-history-v1\n',unsigned(metadata,'historyDigest'))==metadata['historyDigest']==record['historyDigest']==result['historyDigest']
-            items=metadata['entries'];assert [v['relativePath'] for v in items]==list(ORDER)
+            items=metadata['entries'];assert [v['relativePath'] for v in items]==list(order)
             assert digest(b'whaledeck-container-recursive-acl-manifest-v1\n',items)==plan['manifestDigest']
             outcomes=[];child=storage.f.open_at(fd,operation+'/entries',os.O_RDONLY|os.O_DIRECTORY)
             try:
                 storage.attest(configuration,child,read_only=True)
                 for n,item in enumerate(items):
-                    relative=item['relativePath'];old=before[relative];actual=after[relative];p=item['plan'];identity=old['identity'];current=actual['identity'];kind=PATHS[relative]
+                    relative=item['relativePath'];old=before[relative];actual=after[relative];p=item['plan'];identity=old['identity'];current=actual['identity'];kind=paths[relative]
                     identifier=hashlib.sha256(b'whaledeck-recursive-acl-entry-id-v1:'+operation.encode()+b':'+str(n).encode()).hexdigest()[:32]
                     path=STATE/(operation+'.entries')/(identifier+'.json');trusted(path);cr=raw_record(identifier+'.root.json',path.read_bytes())
                     ch=raw_record(identifier+'.hdd.json',read_metadata(storage.f,storage,configuration,child,identifier+'.json',16384))
-                    target=file_acl() if kind=='File' else directory_acl()
+                    target=files if kind=='File' else directories
                     node='work/recursive-tree'+('/'+relative if relative else '')
                     assert p['sourceIdentity']==identity and p['accessAcl']==old['access'] and p['defaultAcl']==old['default'] and p['attributesDigest']==attrs
                     assert p['command']==dict(containerId=b['containerId'],instanceId=b['instanceId'],path=node,expectedVersion=file_version(b,node,identity),aclType='access',entries=target)
-                    assert p['kind']==kind and p['noChange'] is False and p['targetMode']==acl_mode(target)
+                    no_change=target==old['access']
+                    assert p['kind']==kind and p['noChange'] is no_change and p['targetMode']==acl_mode(target)
                     assert digest(b'whaledeck-container-acl-plan-v1\n',unsigned(p,'fingerprint'))==p['fingerprint']
                     assert cr['schemaVersion']==ch['schemaVersion']==1 and type(cr['schemaVersion']) is type(ch['schemaVersion']) is int
                     assert cr['operationId']==ch['operationId']==identifier and cr['owner']==ch['owner']==request['owner'] and cr['plan']==ch['plan']==p
                     assert cr['state']=='Completed' and cr['aclConfirmed'] is cr['historyVerified'] is True and cr['actualIdentity']==current
                     wanted=list(identity);wanted[2]=wanted[2]&~0o777|p['targetMode'];assert current[:8]==wanted[:8]
                     assert actual['access']==target and actual['default']==old['default']
+                    if no_change:typed_equal(actual,old)
                     assert ch['resourceType']=='ContainerRecursiveAclEntryMetadata' and ch['storageId']=='database-platform.backup.hdd' and ch['parentOperationId']==operation and ch['manifestDigest']==plan['manifestDigest']
                     assert type(ch['createdAtUnixMs']) is int and ch['createdAtUnixMs']>=0
                     assert digest(b'whaledeck-container-recursive-acl-entry-history-v1\n',unsigned(ch,'historyDigest'))==ch['historyDigest']==cr['historyDigest']
                     published=file_version(b,node,current);assert cr['version']==published
-                    outcomes.append(dict(id=identifier,state='Completed',version=published,changed=True))
+                    outcomes.append(dict(id=identifier,state='Completed',version=published,changed=not no_change))
             finally:os.close(child)
         finally:os.close(fd)
     assert digest(b'whaledeck-recursive-acl-outcomes-v1\n',outcomes)==record['outcomeDigest']==result['outcomeDigest']
