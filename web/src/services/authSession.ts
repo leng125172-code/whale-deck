@@ -138,10 +138,10 @@ async function loadAuthSession() {
     window.clearTimeout(timeout)
     if (current === generation) {
       reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
+      reconcileDirectoryHints(user.value?.subject, user.value?.isAdministrator === true)
       // Opaque original IDs survive unknown identity; they grant no UI or API access.
       // Authoritative denial, subject/role change and explicit logout still clear them.
       if (identityKnown) {
-        reconcileDirectoryHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileCopyHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcilePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)

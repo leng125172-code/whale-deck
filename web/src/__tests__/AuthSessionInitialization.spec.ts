@@ -146,6 +146,24 @@ it.each([503, 'network', 'abort'])(
   async (reason) => {
     const hints = await pendingReference()
     rememberFileBrowserLocation('admin', { rootId: 'whaledeck.files.shared', path: 'private' })
+    const directory = await import('@/services/containerDirectoryHints')
+    directory.saveDirectoryHint({
+      subject: 'admin',
+      command: {
+        location: {
+          containerId: recursiveReference.containerId,
+          instanceId: '777:2026-11-04T01:02:03Z',
+          path: 'work/private',
+        },
+        mode: '0750',
+      },
+      registration: {
+        planHash: 'private-plan',
+        confirmed: true,
+        idempotencyKey: recursiveReference.key,
+      },
+      id: null,
+    })
     const { ApiError } = await import('@/services/apiClient')
     request.mockRejectedValueOnce(
       reason === 503
@@ -160,6 +178,7 @@ it.each([503, 'network', 'abort'])(
     expect(authSession.user.value).toBeNull()
     expect(authSession.unavailable.value).toBe(true)
     expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
+    expect(directory.directoryHint('admin', recursiveReference.containerId)).toBeNull()
     expect(hints.recursiveAclHint('admin', recursiveReference.containerId)).toEqual(
       recursiveReference,
     )
