@@ -56,3 +56,6 @@
 项目图谱事件 `whale-deck.container-acl.7837675.recursive-restore-real-ui` 首次传输失败，按同eventId重试取得project/key/event匹配成功回执、duplicate=false；pending移入synced，container-acl保持active。
 
 首批失败证据210文件与成功批287文件分别写入私有SHA256清单并逐项复核；清单SHA256为`71db2b78373f13a0d9fe4e98bd1cf1219a83608845b90603ca29ad2e728344d9`、`433bf9672b23965b1acab83bb34445c71ca53031243f41c0bc8c9a255e943d67`。QA unit成功回执归档后才stop（仅已退出QA unit），原产品宿主和容器未重启；临时人工截图查看副本已清理。
+
+
+后续分项（2026-11-05）：26对象恢复预览真实跨页、原引用/写前取消和正常退出已实机签收，见[跨页记录](CONTAINER_RECURSIVE_ACL_RESTORE_PAGING.md)。本报告原四对象单页、完整故障未验等事实保留，不改记为当时已跨页。
