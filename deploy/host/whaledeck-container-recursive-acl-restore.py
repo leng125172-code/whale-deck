@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Trusted heterogeneous recursive ACL restore kernel, no CLI/RPC/install grant.
+"""Trusted heterogeneous recursive ACL restore kernel, no independent CLI.
+
+Selected only by the fixed restore transport; authorization belongs to Agent.
 
 Restore the selected capture's changed ACL type by path/kind. The other ACL,
 ordinary attributes, owners and content stay current. Historical inode numbers

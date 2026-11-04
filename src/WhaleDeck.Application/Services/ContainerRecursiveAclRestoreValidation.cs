@@ -1,0 +1,67 @@
+using WhaleDeck.Application.Models;
+
+namespace WhaleDeck.Application.Services;
+
+public static class ContainerRecursiveAclRestoreValidation
+{
+    public static void Command(ContainerRecursiveAclRestoreCommandDto? command)
+    {
+        if (command is null) throw new ArgumentException("CONTAINER_RECURSIVE_ACL_RESTORE_COMMAND_REQUIRED");
+        ContainerFileValidation.Location(command.Location); ContainerFileValidation.Hash(command.ExpectedVersion);
+        ContainerAclHistoryValidation.Read(command.Location, command.CaptureId, command.ExpectedHistoryDigest);
+    }
+    public static void Plan(ContainerRecursiveAclRestorePlanDto? plan)
+    {
+        if (plan is null || plan.SchemaVersion != 1 || plan.ParentIdentity is not { Inode: > 0 } || plan.OwnerUid == uint.MaxValue || plan.OwnerGid == uint.MaxValue)
+            throw new ArgumentException("CONTAINER_RECURSIVE_ACL_RESTORE_PLAN_INVALID");
+        Command(plan.Command);
+        if (plan.RestoreSource is null) throw new ArgumentException("CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_INVALID");
+        if (plan.RootIdentity is not { Inode: > 0, LinkCount: > 0 } source || source.Mode > ushort.MaxValue || (source.Mode & 0xE00) != 0 ||
+            (source.Mode & 0xF000) != 0x4000U || source.OwnerUid == uint.MaxValue || source.OwnerGid == uint.MaxValue || source.SizeBytes < 0 ||
+            plan.EntryCount is < 1 or > 10000 || plan.FileCount >= plan.EntryCount || plan.DirectoryCount != plan.EntryCount - plan.FileCount || plan.ChangeCount > plan.EntryCount || plan.RestoreSource.ChangedAclType == "default" && plan.ChangeCount > plan.DirectoryCount)
+            throw new ArgumentException("CONTAINER_RECURSIVE_ACL_RESTORE_PLAN_INVALID");
+        try { ContainerRecursiveAclHistoryValidation.Summary(plan.RestoreSource, plan.Command.Location); }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException)
+        { throw new ArgumentException("CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_INVALID"); }
+        if (plan.RestoreSource.CaptureId != plan.Command.CaptureId || plan.RestoreSource.HistoryDigest != plan.Command.ExpectedHistoryDigest ||
+            plan.RestoreSource.EntryCount != plan.EntryCount || plan.RestoreSource.FileCount != plan.FileCount || plan.RestoreSource.DirectoryCount != plan.DirectoryCount ||
+            plan.RestoreSourceFrame is not { Inode: > 0, Mode: 0x8180, OwnerUid: 0, OwnerGid: 0, LinkCount: 1, SizeBytes: > 0 and <= 16777216 })
+            throw new ArgumentException("CONTAINER_RECURSIVE_ACL_RESTORE_SOURCE_INVALID");
+        ContainerFileValidation.Hash(plan.RestoreTargetsDigest);
+        ContainerFileValidation.Hash(plan.ManifestDigest); ContainerFileValidation.Hash(plan.TargetProof); ContainerFileValidation.Hash(plan.ParentVersion); ContainerFileValidation.Hash(plan.Fingerprint);
+    }
+    public static void Operation(ContainerRecursiveAclRestoreOperationDto operation)
+    {
+        if (operation is null || operation.Id == Guid.Empty || operation.Context is null || operation.Context.JobId != operation.Id ||
+            operation.Context.IdempotencyKey == Guid.Empty || string.IsNullOrWhiteSpace(operation.Context.ActorSubject) || operation.Context.ActorSubject.Length > 256 ||
+            operation.Context.ActorSubject.Any(char.IsControl) || string.IsNullOrWhiteSpace(operation.Context.TraceId) || operation.Context.TraceId.Length > 128 || operation.Context.TraceId.Any(char.IsControl))
+            throw new ArgumentException("CONTAINER_RECURSIVE_ACL_RESTORE_CONTEXT_INVALID");
+        Plan(operation.Plan); ContainerFileValidation.Hash(operation.Owner);
+    }
+    public static void Receipt(ContainerRecursiveAclRestoreOperationDto operation, ContainerRecursiveAclRestoreReceiptDto receipt)
+    {
+        var location = operation.Plan.Command.Location;
+        var n = operation.Plan.EntryCount;
+        if (receipt is null || receipt.Id != operation.Id || receipt.ContainerId != location.ContainerId || receipt.InstanceId != location.InstanceId ||
+            receipt.AclType != operation.Plan.RestoreSource.ChangedAclType || receipt.TargetProof != operation.Plan.TargetProof || receipt.Fingerprint != operation.Plan.Fingerprint ||
+            receipt.HistoryVerified && !receipt.HistoryMayExist || receipt.HistoryAvailable && !receipt.HistoryVerified ||
+            receipt.HistoryVerified != (receipt.HistoryDigest is { Length: 64 }) || !receipt.HistoryVerified && receipt.HistoryDigest != "" ||
+            receipt.State is not ("Completed" or "Partial" or "Aborted" or "Unknown") ||
+            receipt.CompletedCount > n || receipt.AbortedCount > n || receipt.NotStartedCount > n || receipt.UnknownCount > n ||
+            (ulong)receipt.CompletedCount + receipt.AbortedCount + receipt.NotStartedCount + receipt.UnknownCount != n ||
+            receipt.ChangedCount > receipt.CompletedCount || receipt.ChangedCount > operation.Plan.ChangeCount ||
+            receipt.State == "Completed" && (receipt.CompletedCount != n || receipt.ChangedCount != operation.Plan.ChangeCount || !receipt.HistoryVerified) ||
+            receipt.State == "Partial" && (receipt.ChangedCount == 0 || receipt.CompletedCount == n || receipt.UnknownCount != 0 || !receipt.HistoryVerified) ||
+            receipt.State == "Unknown" && receipt.UnknownCount == 0 ||
+            receipt.State == "Aborted" && (receipt.ChangedCount != 0 || receipt.UnknownCount != 0) ||
+            receipt.BindingCurrent && (receipt.State != "Completed" || !receipt.HistoryAvailable)) throw Invalid();
+        try
+        {
+            if (receipt.HistoryVerified) ContainerFileValidation.Hash(receipt.HistoryDigest);
+            if (receipt.State is "Completed" or "Partial" || receipt.OutcomeDigest != "") ContainerFileValidation.Hash(receipt.OutcomeDigest);
+        }
+        catch (ArgumentException) { throw Invalid(); }
+    }
+    public static bool SameCommand(ContainerRecursiveAclRestoreCommandDto a, ContainerRecursiveAclRestoreCommandDto b) => a == b;
+    public static InvalidOperationException Invalid() => new("CONTAINER_RECURSIVE_ACL_RESTORE_OUTPUT_INVALID");
+}

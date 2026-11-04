@@ -1444,3 +1444,43 @@ service ContainerRecursiveAclHistoryService {
   rpc List(ContainerRecursiveAclHistoryListRequest) returns (ContainerRecursiveAclHistoryPage);
   rpc Read(ContainerRecursiveAclHistoryReadRequest) returns (ContainerRecursiveAclHistorySnapshot);
 }
+
+// Independent heterogeneous history restore authority, protocol 1.55.
+// Only a source reference crosses RPC; per-inode ACLs stay in verified HDD metadata.
+message ContainerRecursiveAclRestoreCommand {
+  ContainerFileLocation location = 1; string capture_id = 2;
+  string expected_history_digest = 3; string expected_version = 4;
+}
+message ContainerRecursiveAclRestoreFrame {
+  optional uint64 device = 1; optional uint64 inode = 2; optional uint32 mode = 3;
+  optional uint32 owner_uid = 4; optional uint32 owner_gid = 5; optional uint64 link_count = 6;
+  optional int64 size_bytes = 7; optional int64 modified_at_unix_ns = 8; optional int64 changed_at_unix_ns = 9;
+}
+message ContainerRecursiveAclRestorePlan {
+  uint32 schema_version = 1; ContainerRecursiveAclRestoreCommand command = 2; string target_proof = 3;
+  FileDirectoryIdentity parent_identity = 4; string parent_version = 5;
+  uint32 owner_uid = 6; uint32 owner_gid = 7; string fingerprint = 8;
+  FileObjectIdentity root_identity = 9; int64 root_changed_at_unix_ns = 10;
+  string manifest_digest = 11; uint32 entry_count = 12; uint32 file_count = 13;
+  uint32 directory_count = 14; uint32 change_count = 15;
+  ContainerRecursiveAclHistorySummary restore_source = 16;
+  ContainerRecursiveAclRestoreFrame restore_source_frame = 17; string restore_targets_digest = 18;
+}
+message ContainerRecursiveAclRestorePlanRequest { ContainerRecursiveAclRestoreCommand command = 1; RequestContext context = 2; }
+message ContainerRecursiveAclRestoreRequest {
+  string operation_id = 1; string owner = 2; ContainerRecursiveAclRestorePlan plan = 3; RequestContext context = 4;
+}
+message ContainerRecursiveAclRestoreReceipt {
+  string operation_id = 1; string container_id = 2; string instance_id = 3; string fingerprint = 4;
+  string target_proof = 5; string state = 6; bool binding_current = 7; bool replayed = 8;
+  uint32 completed_count = 9; uint32 changed_count = 10; uint32 aborted_count = 11;
+  uint32 not_started_count = 12; uint32 unknown_count = 13;
+  bool history_may_exist = 14; bool history_verified = 15; string history_digest = 16;
+  bool history_available = 17; string outcome_digest = 18; string acl_type = 19;
+}
+service ContainerRecursiveAclRestoreService {
+  rpc Plan(ContainerRecursiveAclRestorePlanRequest) returns (ContainerRecursiveAclRestorePlan);
+  rpc Apply(ContainerRecursiveAclRestoreRequest) returns (ContainerRecursiveAclRestoreReceipt);
+  rpc Inspect(ContainerRecursiveAclRestoreRequest) returns (ContainerRecursiveAclRestoreReceipt);
+  rpc Discard(ContainerRecursiveAclRestoreRequest) returns (ContainerRecursiveAclRestoreReceipt);
+}

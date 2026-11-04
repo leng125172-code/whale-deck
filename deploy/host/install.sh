@@ -114,6 +114,10 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-o
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-recursive-acl
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-acl.py" /usr/local/libexec/whaledeck-container-recursive-acl.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-acl-transport.py" /usr/local/libexec/whaledeck-container-recursive-acl-transport.py
+[[ ! -L /var/lib/whaledeck-container-recursive-acl-restore ]] || exit 1
+install -d -o root -g root -m 0700 /var/lib/whaledeck-container-recursive-acl-restore
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-acl-restore.py" /usr/local/libexec/whaledeck-container-recursive-acl-restore.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-acl-restore-transport.py" /usr/local/libexec/whaledeck-container-recursive-acl-restore-transport.py
 [[ ! -L /var/lib/whaledeck-container-acl ]] || exit 1
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-acl
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-acl.py" /usr/local/libexec/whaledeck-container-acl.py
