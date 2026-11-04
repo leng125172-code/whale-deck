@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock,call,patch
 import test_recursive_acl_restore_record_probe_scope as native
 from recursive_acl_restore_agent_io import read_bundle
 from recursive_acl_restore_record_proof import records_proof
@@ -18,6 +18,16 @@ def boundary():
     return dict(state='Applying',startedThrough=0,finishedThrough=-1,historyVerified=True,historyMayExist=True,historyDigest='A'*64,plan=dict(restoreSource=dict(changedAclType='access'),entryCount=26,changeCount=26,fileCount=25,directoryCount=1))
 
 class RestorePrewriteScopeTests(unittest.TestCase):
+    def test_browser_stop_reaps_owned_child_even_when_terminate_times_out(self):
+        import subprocess
+        from recursive_acl_restore_prewrite import stop_browser
+        process=Mock();process.poll.return_value=None
+        process.wait.side_effect=[subprocess.TimeoutExpired('owned-node',15),-9]
+        stop_browser(process)
+        self.assertEqual(process.mock_calls,[call.poll(),call.terminate(),call.wait(timeout=15),call.kill(),call.wait(timeout=10)])
+        process=Mock();process.poll.return_value=0
+        stop_browser(process);self.assertEqual(process.mock_calls,[call.poll()])
+
     def test_cut_only_accepts_26_access_objects_after_verified_current_hdd(self):
         self.assertTrue(first_entry_boundary(boundary()))
         for key,value in [('state','Preparing'),('state','Completed'),('startedThrough',1),('finishedThrough',0),('historyVerified',False),('historyMayExist',False),('historyDigest','a'*64)]:

@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
+import subprocess
 import time
 from acl_history_browser_proof import typed_equal
 from recursive_acl_restore_paging_proof import page_proof,ready_proof
@@ -32,6 +33,14 @@ def wait_named(process,evidence,name):
 def worker_receipt(value):
     # Never archive Config.Env: the real Worker contains database/service secrets.
     return dict(Id=value['Id'],Name=value['Name'],Image=value['Image'],State=dict(Running=value['State']['Running'],StartedAt=value['State']['StartedAt'],Health=dict(Status=value['State']['Health']['Status'])))
+
+
+def stop_browser(process):
+    # Only the QA-owned Node child; this never signals the privileged helper.
+    if process.poll() is None:
+        process.terminate()
+        try:process.wait(timeout=15)
+        except subprocess.TimeoutExpired:process.kill();process.wait(timeout=10)
 
 
 def quiescent(row,record,lock_free):
@@ -129,12 +138,10 @@ def exercise(process,evidence,b,row,m,root,reader,content,acl,storage,fixture):
         (evidence/'early-proof.json').write_text(json.dumps(proof));assert sql_snapshot(r['id'])==final and current()==before
         acknowledge(evidence,'final-auth',dict(prewriteNoChangeAndHistoryVerified=True));assert process.wait(timeout=90)==0
     except BaseException:
-        # No identity/container cleanup while the original Apply may still run.
+        # Drain before identity cleanup; retain the target on an unproved drain.
+        # The outer user context still revokes temporary identities on timeout.
         fixture['retain_unsettled']=True
-        if process.poll() is None:
-            process.terminate()
-            try:process.wait(timeout=15)
-            except subprocess.TimeoutExpired:process.kill();process.wait(timeout=10)
+        stop_browser(process)
         if held is not None:held.release();held=None
         try:
             worker.start(wait_ready=False)
