@@ -19,17 +19,18 @@ from validate_container_acl_faults import host_snapshot, require_host_restart, o
 from validate_container_recursive_permission_faults import same_operation
 
 RESTART_KINDS=('worker-crash','agent-restart')
+OWNER_PATTERN=r'(?:wd-qa-recursive-acl-restarts-[a-f0-9]{7}|wd-qa-recursive-acl-partial-restarts-[a-f0-9]{7}-(?:worker|agent))\.service'
 RESTART_KEYS={'uploads','directories','copies','moves','permissions','ownerships','recursivePermissions','recursiveOwnerships','acls','recursiveAcls'}
 
 
 def require_only_transients(active, helper, owner):
     assert re.fullmatch('whaledeck-container-recursive-acl-[a-f0-9]{32}\\.service',helper)
-    assert re.fullmatch('wd-qa-recursive-acl-restarts-[a-f0-9]{7}\\.service',owner)
+    assert re.fullmatch(OWNER_PATTERN,owner)
     assert set(active)<={helper,owner},'OTHER_TRANSIENT_WORK_RESTART_REFUSED'
 
 
 def owner_unit():
-    group=Path('/proc/self/cgroup').read_text().strip();assert re.fullmatch(r'0::/system.slice/wd-qa-recursive-acl-restarts-[a-f0-9]{7}\.service',group)
+    group=Path('/proc/self/cgroup').read_text().strip();assert re.fullmatch('0::/system.slice/'+OWNER_PATTERN,group)
     unit=group.rsplit('/',1)[1];invocation=os.environ.get('INVOCATION_ID','');assert re.fullmatch('[a-f0-9]{32}',invocation)
     props=dict(v.split('=',1) for v in command('systemctl','show',unit,'-p','InvocationID','-p','MainPID','-p','ControlGroup').splitlines())
     assert props['InvocationID']==invocation and props['MainPID']==str(os.getpid()) and group=='0::'+props['ControlGroup']
@@ -144,13 +145,12 @@ def verify_lease(row,final,proof,raw):
     assert (ended-previous).total_seconds()<5
 
 
-def verify_restart(kind,result,baseline,ui,final,directory,read):
-    assert kind in RESTART_KINDS and ui['normalDualLogout'] and ui['cancellations']==0 and final['cancel_requested_at_utc'] is None
-    service=result['serviceRestart'];assert RESTART_KEYS<=service['otherActiveWork'].keys() and all(type(v) is int and v==0 for v in service['otherActiveWork'].values())
+def verify_restart_service(kind,service,baseline,final,directory,read):
+    """Shared fixed service identity/guard proof, independent of write outcome."""
+    assert kind in RESTART_KINDS
+    assert RESTART_KEYS<=service['otherActiveWork'].keys() and all(type(v) is int and v==0 for v in service['otherActiveWork'].values())
     start=read(directory/'restart-start-sql.json');row=start['row'];same_operation(row,final);assert final['login_binding']==row['login_binding']
     assert row['state']=='Applying' and row['publish_barrier'] and start['executionJob']['state']=='Running'
-    intent=ui['terminal'];assert intent['id']==final['id'] and intent['executionJobId']==final['execution_job_id'] and intent['state']=='Failed' and intent['resultCode']=='CONTAINER_RECURSIVE_ACL_INTERRUPTED'
-    assert intent['confirmation'] is None and intent['receipt']['state']=='Aborted' and intent['receipt']['changedCount']==intent['receipt']['unknownCount']==0 and intent['receipt']['historyVerified'] is True
     if kind=='worker-crash':
         assert service['sameWorkerContainerAndImage'] and service['signal']=='SIGKILL' and type(service['manuallyStarted']) is bool
         witness=read(directory/'worker-inspect.json');original=baseline['coreBefore']['/whaledeck-worker']
@@ -159,10 +159,6 @@ def verify_restart(kind,result,baseline,ui,final,directory,read):
         before,after,at=[dt.datetime.fromisoformat(v) for v in (service['beforeStartedAt'],service['afterStartedAt'],witness['observedAtUtc'])];assert dt.datetime.fromisoformat(original[3])<=before<after<=at
         crash=read(directory/'after-worker-crash-sql.json');lease_held(row,crash['row']);assert crash['executionJob']['state']=='Running'
         assert service['originalLeaseExpiresAtUtc']==row['lease_expires_at_utc']
-        raw=(directory/'after-helper-exit-root.json').read_bytes();root=json.loads(raw)
-        assert root['operationId']==final['execution_job_id'].replace('-','') and root['owner']==final['owner_hash']
-        assert root['plan']==managed_plan(json.loads(final['plan_json'])) and root['historyDigest']==final['history_digest']
-        verify_lease(crash['row'],final,read(directory/'natural-lease.json'),raw)
     else:
         require_host_restart(service['hostsBefore'],service['hostsAfter'],baseline['revision']);assert service['maintenancePidUnchanged']
         began=dt.datetime.fromisoformat(service['restartBeganAtUtc']);ended=dt.datetime.fromisoformat(service['restartEndedAtUtc']);observation_expiry(row,began)
@@ -171,3 +167,16 @@ def verify_restart(kind,result,baseline,ui,final,directory,read):
         assert any(began<t<ended for t in times) and all((b-a).total_seconds()<5 for a,b in zip(times,times[1:]))
         assert 0<=(ended-began).total_seconds()<=service['totalRestartSeconds']+1
         assert all(v['httpStatus']==200 and v['state']=='healthy' and v['phase']=='Ready' and v['noStore'] and 0<v['bytes']<=2048 and 0<=v['responseSeconds']<5 for v in samples)
+    return row
+
+
+def verify_restart(kind,result,baseline,ui,final,directory,read):
+    assert kind in RESTART_KINDS and ui['normalDualLogout'] and ui['cancellations']==0 and final['cancel_requested_at_utc'] is None
+    row=verify_restart_service(kind,result['serviceRestart'],baseline,final,directory,read)
+    intent=ui['terminal'];assert intent['id']==final['id'] and intent['executionJobId']==final['execution_job_id'] and intent['state']=='Failed' and intent['resultCode']=='CONTAINER_RECURSIVE_ACL_INTERRUPTED'
+    assert intent['confirmation'] is None and intent['receipt']['state']=='Aborted' and intent['receipt']['changedCount']==intent['receipt']['unknownCount']==0 and intent['receipt']['historyVerified'] is True
+    if kind=='worker-crash':
+        raw=(directory/'after-helper-exit-root.json').read_bytes();root=json.loads(raw)
+        assert root['operationId']==final['execution_job_id'].replace('-','') and root['owner']==final['owner_hash']
+        assert root['plan']==managed_plan(json.loads(final['plan_json'])) and root['historyDigest']==final['history_digest']
+        verify_lease(row,final,read(directory/'natural-lease.json'),raw)

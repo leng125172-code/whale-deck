@@ -13,14 +13,16 @@ from acl_source_apply_missing_proof import source_closure
 from validate_container_upload_recovery_agent import trusted
 from owned_authentik_revocation import OwnedAuthentikRevocation
 from validate_container_recursive_permission_faults import require_logout_authority
-from validate_container_recursive_permission_faults import require_authority_change
+from validate_container_recursive_permission_faults import require_authority_change,restore_fault_services
+from recursive_acl_restart_proof import RESTART_KINDS,restart
+from recursive_acl_partial_restart_proof import natural_partial_lease,verify_partial_restart
 
 PHASE='startup'
 SOURCES=('validate_container_recursive_acl_partial.py','validate_container_recursive_acl_partial.mjs','verify_container_recursive_acl_partial.py','recursive_acl_partial_proof.py','test_recursive_acl_partial_workflow_probe_scope.py')
 
 
 def selected_case(arguments):
-    assert tuple(arguments) in ((),('logout',),('group-removal',),('account-disable',)), 'UNKNOWN_PARTIAL_ACL_SCENARIO'
+    assert tuple(arguments) in ((),('logout',),('group-removal',),('account-disable',),('worker-crash',),('agent-restart',)), 'UNKNOWN_PARTIAL_ACL_SCENARIO'
     return arguments[0] if arguments else 'cancel'
 
 
@@ -74,7 +76,7 @@ def main():
     reader=load('/usr/local/libexec/whaledeck-container-files.py','partial_acl_reader');files=reader.trusted_module('whaledeck-files.py','partial_acl_files')
     storage=load('/usr/local/libexec/whaledeck-file-backups.py','partial_acl_hdd').FileBackups(files);acl=load('/usr/local/libexec/whaledeck-container-acl.py','partial_acl_acl')
     old=preservation_snapshot(storage);scope=dict(revision=revision,validationSourceRevision=source,validationSourceSha256=hashes,sourceHashes=installed,hostIdentity=hosts,coreBefore=core,preservedFiles=old,kind=kind)
-    (evidence/'scope.json').write_text(json.dumps(scope));worker=Worker();owner_process=recovery_process=held=None;proved=False
+    (evidence/'scope.json').write_text(json.dumps(scope));worker=Worker();owner_process=recovery_process=held=None;proved=False;attempt=dict(agentRestartAttempted=False);hosts_after=hosts
     with owned.fixture(restartable_core=('whaledeck-worker',)) as fixture,ExitStack() as users:
         owner=users.enter_context(temporary_user(True));recovery=users.enter_context(temporary_user(True))
         root=fixture['folder']/'recursive-tree'
@@ -92,37 +94,49 @@ def main():
             with ThreadPoolExecutor(max_workers=1) as pool:
                 watch=pool.submit(freeze_partial_acl,row,fixture['folder'],baseline['containerPid'],original,current);worker.start(wait_ready=False);held=watch.result(timeout=28)
             assert held is not None,'ACTUAL_PARTIAL_ACL_CUT_MISSED_NOT_COUNTED'
-            (evidence/'cut-root.json').write_text(json.dumps(held.record));(evidence/'cut-physical.json').write_text(json.dumps(current()));(evidence/'bound-helper.json').write_text(json.dumps(dict(pid=held.pid,unit=held.cgroup,proof=held.proof)))
+            cut_physical=current();(evidence/'cut-root.json').write_text(json.dumps(held.record));(evidence/'cut-physical.json').write_text(json.dumps(cut_physical));(evidence/'bound-helper.json').write_text(json.dumps(dict(pid=held.pid,unit=held.cgroup,proof=held.proof)))
             PHASE='actual-visible-partial-'+kind
-            with ExitStack() as checks:
-                revoked=kind in ('group-removal','account-disable')
-                identity=checks.enter_context(OwnedAuthentikRevocation(owner[0],ready['subject'])) if kind=='logout' or revoked else None
-                if identity:assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc'])>dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
-                if revoked:
-                    write_signal(evidence,'action.json',dict(partialCut=True));wait_signal(evidence,'action-done.json',owner_process,40)
-                began=time.monotonic()
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    exiting=pool.submit(held.wait_exit_seconds,began,15)
+            revoked=kind in ('group-removal','account-disable');identity=None
+            if kind in RESTART_KINDS:
+                write_signal(evidence,'action.json',dict(partialCut=True));action=wait_signal(evidence,'action-done.json',owner_process,40)
+                assert action['id']==identifier and action['subject']==ready['subject'] and current()==cut_physical
+                elapsed,service,restart_row=restart(kind,held,worker,snapshot(identifier)['row'],revision,evidence,attempt)
+                (evidence/'service-restart.json').write_text(json.dumps(service));hosts_after=service['hostsAfter']
+            else:
+                with ExitStack() as checks:
+                    identity=checks.enter_context(OwnedAuthentikRevocation(owner[0],ready['subject'])) if kind=='logout' or revoked else None
+                    if identity:assert dt.datetime.fromisoformat(ready['permissionExpiresAtUtc'])>dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=1)
                     if revoked:
-                        authority=identity.change(kind);authority['permissionExpiresAtUtc']=ready['permissionExpiresAtUtc'];require_authority_change(authority,ready,kind)
-                        (evidence/'authority-change.json').write_text(json.dumps(authority))
-                    else:
                         write_signal(evidence,'action.json',dict(partialCut=True));wait_signal(evidence,'action-done.json',owner_process,40)
-                    elapsed=exiting.result(timeout=16)
-                if identity and kind=='logout':
-                    response=identity.client.get(identity.url,timeout=5);assert response.status_code==200 and identity.changed is False
-                    authority=dict(kind='logout',subject=ready['subject'],before=identity.before,after=identity.snapshot(response.json()),noIdentityMutation=True,confirmedAtUtc=dt.datetime.now(dt.timezone.utc).isoformat(),permissionExpiresAtUtc=ready['permissionExpiresAtUtc'])
-                    require_logout_authority(authority,ready['subject']);assert dt.datetime.fromisoformat(authority['permissionExpiresAtUtc'])>dt.datetime.fromisoformat(authority['confirmedAtUtc'])+dt.timedelta(hours=1)
-                    (evidence/'logout-authority.json').write_text(json.dumps(authority))
+                    began=time.monotonic()
+                    with ThreadPoolExecutor(max_workers=1) as pool:
+                        exiting=pool.submit(held.wait_exit_seconds,began,15)
+                        if revoked:
+                            authority=identity.change(kind);authority['permissionExpiresAtUtc']=ready['permissionExpiresAtUtc'];require_authority_change(authority,ready,kind)
+                            (evidence/'authority-change.json').write_text(json.dumps(authority))
+                        else:
+                            write_signal(evidence,'action.json',dict(partialCut=True));wait_signal(evidence,'action-done.json',owner_process,40)
+                        elapsed=exiting.result(timeout=16)
+                    if identity and kind=='logout':
+                        response=identity.client.get(identity.url,timeout=5);assert response.status_code==200 and identity.changed is False
+                        authority=dict(kind='logout',subject=ready['subject'],before=identity.before,after=identity.snapshot(response.json()),noIdentityMutation=True,confirmedAtUtc=dt.datetime.now(dt.timezone.utc).isoformat(),permissionExpiresAtUtc=ready['permissionExpiresAtUtc'])
+                        require_logout_authority(authority,ready['subject']);assert dt.datetime.fromisoformat(authority['permissionExpiresAtUtc'])>dt.datetime.fromisoformat(authority['confirmedAtUtc'])+dt.timedelta(hours=1)
+                        (evidence/'logout-authority.json').write_text(json.dumps(authority))
             assert elapsed is not None and elapsed<15,'PRODUCT_DID_NOT_STOP_PARTIAL_ACL_HELPER'
-            held.release();held=None;(evidence/'product-helper-exit.json').write_text(json.dumps(dict(productStoppedHelperSeconds=elapsed,validatorKilledHelper=False)))
+            (evidence/'product-helper-exit.json').write_text(json.dumps(dict(productStoppedHelperSeconds=elapsed,validatorKilledHelper=False)))
+            held.release();held=None
+            if kind=='worker-crash':
+                PHASE='actual-partial-original-natural-lease';natural_partial_lease(restart_row,current,cut_physical,json.loads((evidence/'cut-root.json').read_bytes()),evidence)
             PHASE='actual-partial-permanent-proof';partial=wait_state(identifier,'Partial');physical=current();(evidence/'physical-partial.json').write_text(json.dumps(physical))
+            (evidence/'partial-observed.json').write_text(json.dumps(dict(id=identifier,executionJobId=partial['row']['execution_job_id'],state=partial['row']['state'],atUtc=dt.datetime.now(dt.timezone.utc).isoformat())))
+            if kind in RESTART_KINDS:assert physical==cut_physical
             assert bool(partial['row']['cancel_requested_at_utc']) is (kind=='cancel') and bool(partial['executionJob']['cancel_requested_at_utc']) is (kind=='cancel')
             facts=verify_records(partial,baseline,original,physical,storage,evidence,'partial')
             public_receipt={k[0].lower()+k[1:]:v for k,v in json.loads(partial['row']['receipt_json']).items()}
             write_signal(evidence,'settled.json',dict(id=identifier,state='Partial',receipt=public_receipt))
             assert owner_process.wait(timeout=100)==0,'PARTIAL_OWNER_PAGE_FAILED';owner_ui=json.loads((evidence/'owner-browser.json').read_bytes());assert owner_ui['subject']==ready['subject']
             require_case(kind,partial,owner_ui,json.loads((evidence/('authority-change.json' if revoked else 'logout-authority.json')).read_bytes()) if identity else None)
+            if kind in RESTART_KINDS:assert verify_partial_restart(kind,scope,owner_ui,partial,evidence,lambda p:json.loads(p.read_bytes()))==hosts_after
             if kind=='logout':assert owner_ui['result'] is None and owner_ui['hintsCleared'] is True and owner_ui['cancellations']==0
             baseline.update(id=identifier,originalSubject=ready['subject'],receipt=public_receipt);(evidence/'recovery-fixture.json').write_text(json.dumps(baseline))
             PHASE='actual-different-admin-recovery';recovery_process=browser(repo,revision,'recovery',baseline,recovery);canceled=wait_signal(evidence,'recovery-canceled.json',recovery_process)
@@ -134,14 +148,14 @@ def main():
             proved=True
         finally:
             if held is not None:held.release()
-            try:worker.start()
+            try:restore_fault_services(worker,attempt['agentRestartAttempted'],attempt.get('hostsBefore'),revision)
             finally:stop(owner_process);stop(recovery_process)
             if proved:remove_proved(root,reader,content,physical,acl)
-    no_active_work();preflight();assert host_identity(revision)==hosts and not fixture['folder'].exists()
+    no_active_work();preflight();assert host_identity(revision)==hosts_after and not fixture['folder'].exists()
     after=owned.common.core_snapshot()
     for name,value in core.items():assert after[name][:3]==value[:3] if name.lstrip('/')=='whaledeck-worker' else after[name]==value
     preserved=preservation_snapshot(storage);assert all(preserved.get(k)==v for k,v in old.items());(evidence/'preservation-after.json').write_text(json.dumps(preserved))
-    (evidence/'verified.json').write_text(json.dumps(dict(actualPartialAndDifferentAdminAck=True,id=identifier,productStoppedHelperSeconds=round(elapsed,3),partialCounts=facts['counts'],childHddRecords=facts['childHddRecords'],oldFilesUnchanged=len(old),normalDualLogoutContexts=1 if revoked else 2,revokedContexts=int(revoked),exactSourceAndContainerAbsent=True,originalRootAndHddRetained=True,kind=kind)))
+    (evidence/'verified.json').write_text(json.dumps(dict(actualPartialAndDifferentAdminAck=True,id=identifier,productStoppedHelperSeconds=round(elapsed,3),partialCounts=facts['counts'],childHddRecords=facts['childHddRecords'],oldFilesUnchanged=len(old),normalDualLogoutContexts=1 if revoked else 2,revokedContexts=int(revoked),exactSourceAndContainerAbsent=True,originalRootAndHddRetained=True,kind=kind,hostsAfter=hosts_after)))
     print(json.dumps(dict(recursiveAclPartial='passed',evidence=evidence.name,counts=facts['counts'])),flush=True)
 
 

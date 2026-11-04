@@ -20,7 +20,7 @@ COUNTS=('completedCount','changedCount','abortedCount','notStartedCount','unknow
 
 def require_case(kind,partial,owner,authority=None):
     revoked=kind in ('group-removal','account-disable')
-    assert kind in ('cancel','logout','group-removal','account-disable') and owner['subject']==partial['row']['actor_subject'] and owner['normalDualLogout'] is (not revoked)
+    assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart') and owner['subject']==partial['row']['actor_subject'] and owner['normalDualLogout'] is (not revoked)
     assert owner['registrations']==owner['confirmations']==1 and owner['cancellations']==int(kind=='cancel') and owner['acknowledgements']==owner['uploads']==0
     assert bool(partial['row']['cancel_requested_at_utc']) is (kind=='cancel') and bool(partial['executionJob']['cancel_requested_at_utc']) is (kind=='cancel')
     if kind=='logout':

@@ -1,5 +1,10 @@
 """Partial protection and truthful explicit acknowledgement boundaries only."""
 import ast,copy,json
+import datetime as dt
+import hashlib
+from unittest.mock import patch
+from recursive_acl_partial_restart_proof import partial_checkpoint,inventory_digest,verify_partial_lease
+from recursive_acl_restart_proof import require_only_transients,owner_unit
 from pathlib import Path
 import unittest
 from recursive_acl_partial_proof import require_phase,require_ack,require_case
@@ -40,9 +45,51 @@ class RecursiveAclPartialWorkflowScope(unittest.TestCase):
 
     def test_scenario_selection_cannot_accidentally_repeat_cancel_or_revoke(self):
         self.assertEqual('cancel',selected_case([]));self.assertEqual('logout',selected_case(['logout']))
+        self.assertEqual('worker-crash',selected_case(['worker-crash']));self.assertEqual('agent-restart',selected_case(['agent-restart']))
         self.assertEqual('group-removal',selected_case(['group-removal']));self.assertEqual('account-disable',selected_case(['account-disable']))
         for values in (['cancel'],['logout','cancel'],['group-removal','account-disable'],['--all']):
             with self.subTest(values=values),self.assertRaises(AssertionError):selected_case(values)
+
+    def test_restart_owner_must_be_exact_unit_with_current_pid_and_invocation(self):
+        import os
+        helper='whaledeck-container-recursive-acl-'+'a'*32+'.service'
+        for label in ('worker','agent'):
+            unit='wd-qa-recursive-acl-partial-restarts-123abcd-'+label+'.service';group='/system.slice/'+unit;inv='b'*32
+            require_only_transients([unit,helper],helper,unit)
+            props=f'InvocationID={inv}\nMainPID={os.getpid()}\nControlGroup={group}'
+            with patch('recursive_acl_restart_proof.Path.read_text',return_value='0::'+group),patch.dict(os.environ,{'INVOCATION_ID':inv}),patch('recursive_acl_restart_proof.command',return_value=props):self.assertEqual(unit,owner_unit())
+            with self.assertRaises(AssertionError):require_only_transients([unit,helper,'wd-qa-foreign.service'],helper,unit)
+        for unit in ('wd-qa-recursive-acl-partial-restarts-123abcd.service','wd-qa-recursive-acl-partial-restarts-123abcd-all.service'):
+            with self.assertRaises(AssertionError):require_only_transients([],helper,unit)
+
+    def test_partial_checkpoint_cannot_treat_zero_unknown_or_full_tree_as_partial(self):
+        cut=dict(operationId='a'*32,owner='owner',plan=dict(command=dict(aclType='access'),entryCount=4,changeCount=4,fileCount=2,directoryCount=2),historyDigest='A'*64,
+            state='Applying',historyVerified=True,historyMayExist=True,finishedThrough=0,startedThrough=1)
+        partial_checkpoint(cut,cut)
+        partial={**cut,'state':'Partial','completedCount':1,'changedCount':1,'unknownCount':0,'abortedCount':1,'notStartedCount':2};partial_checkpoint(partial,cut)
+        for key,value in [('changedCount',0),('changedCount',True),('unknownCount',1),('completedCount',4),('notStartedCount',0),('historyVerified',False),('operationId','b'*32),('historyDigest','B'*64),('state','Completed')]:
+            with self.subTest(key=key),self.assertRaises(AssertionError):partial_checkpoint({**partial,key:value},cut)
+        for key,value in [('finishedThrough',-1),('finishedThrough',1),('startedThrough',2)]:
+            with self.subTest(key=key),self.assertRaises(AssertionError):partial_checkpoint({**cut,key:value},cut)
+
+    def test_partial_natural_lease_rejects_early_recovery_new_binding_or_lost_physical_facts(self):
+        keys=('id','execution_job_id','root_started_at_utc','actor_subject','owner_hash','container_id','instance_id','relative_path','command_json','request_hash','plan_json','plan_hash','execution_hash','confirmed_at_utc','execution_expires_at_utc','login_binding')
+        row={k:k for k in keys};row.update(execution_job_id='a'*32,plan_json='{}',state='Applying',publish_barrier=True,completed_at_utc=None,cancel_requested_at_utc=None,lease_token='original',lease_expires_at_utc='2026-11-04T12:01:00+00:00')
+        cut=dict(operationId='a'*32,owner=row['owner_hash'],plan=dict(command=dict(aclType='access'),entryCount=4,changeCount=4,fileCount=2,directoryCount=2),historyDigest='A'*64,
+            state='Applying',historyVerified=True,historyMayExist=True,finishedThrough=0,startedThrough=1)
+        physical={'first':{'changed':True},'otherThree':{'changed':False}};raw=json.dumps(cut).encode();sha=hashlib.sha256(raw).hexdigest();physical_sha=inventory_digest(physical);began=dt.datetime.fromisoformat('2026-11-04T12:00:00+00:00')
+        proof=dict(originalLeaseToken='original',originalLeaseExpiresAtUtc=row['lease_expires_at_utc'],waitBeganAtUtc=began.isoformat(),waitEndedAtUtc='2026-11-04T12:01:00+00:00',monotonicWaitSeconds=60,rootSha256=sha,partialInventorySha256=physical_sha,rootStateAfterHelperExit='Applying',clocksOrSqlModified=False,
+            samples=[dict(atUtc=(began+dt.timedelta(seconds=i)).isoformat(),state='Applying',barrier=True,leaseToken='original',leaseExpiresAtUtc=row['lease_expires_at_utc'],rootSha256=sha,partialInventorySha256=physical_sha) for i in range(0,60,2)])
+        final=dict(plan_json='{}',completed_at_utc=None,state='Partial');observed=dict(atUtc='2026-11-04T12:01:01+00:00')
+        with patch('recursive_acl_partial_restart_proof.managed_plan',return_value=cut['plan']):
+            verify_partial_lease(row,final,proof,raw,cut,physical,observed)
+            for key,value in [('originalLeaseToken','new'),('clocksOrSqlModified',True),('waitEndedAtUtc','2026-11-04T12:00:59+00:00'),('partialInventorySha256','0'*64),('monotonicWaitSeconds',5),('samples',[])]:
+                with self.subTest(key=key),self.assertRaises(AssertionError):verify_partial_lease(row,final,{**proof,key:value},raw,cut,physical,observed)
+            for sample_change in ({'barrier':False},{'leaseToken':'new'},{'partialInventorySha256':'0'*64},{'atUtc':'2026-11-04T12:01:01+00:00'}):
+                bad=copy.deepcopy(proof);bad['samples'][3].update(sample_change)
+                with self.subTest(change=sample_change),self.assertRaises(AssertionError):verify_partial_lease(row,final,bad,raw,cut,physical,observed)
+            with self.assertRaises(AssertionError):verify_partial_lease(row,final,proof,raw,cut,physical,{'atUtc':'2026-11-04T12:00:59+00:00'})
+            with self.assertRaises(AssertionError):verify_partial_lease(row,final,proof,raw,cut,{'changed':'lost'},observed)
 
     def test_partial_revocation_preserves_the_real_result_and_denies_old_context(self):
         subject='11111111-1111-4111-8111-111111111111';p=phase();p['row'].update(actor_subject=subject,cancel_requested_at_utc=None);p['executionJob']['cancel_requested_at_utc']=None

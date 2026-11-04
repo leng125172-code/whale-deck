@@ -5,6 +5,8 @@ from pathlib import Path
 import requests
 
 from validate_container_recursive_acl_partial import SOURCES,host_identity,no_active_work,preflight,load,preservation_snapshot,owned,snapshot,source_closure
+from recursive_acl_restart_proof import RESTART_KINDS
+from recursive_acl_partial_restart_proof import verify_partial_restart
 from recursive_acl_partial_proof import require_ack,verify_records,require_case
 from verify_container_recursive_permissions import private_json
 from validate_container_upload_recovery_agent import trusted
@@ -20,13 +22,15 @@ def target(name):
 def verify(name):
     p=target(name);trusted(p,True);scope=private_json(p/'scope.json');b=private_json(p/'baseline.json');accepted=private_json(p/'verified.json');facts=private_json(p/'facts.json')
     owner=private_json(p/'owner-browser.json');recovery=private_json(p/'recovery-browser.json');partial=private_json(p/'partial.sql.json');ack=private_json(p/'ack.sql.json')
-    kind=b.get('kind','cancel');revoked=kind in ('group-removal','account-disable');assert kind in ('cancel','logout','group-removal','account-disable') and scope.get('kind','cancel')==accepted.get('kind','cancel')==kind
+    kind=b.get('kind','cancel');revoked=kind in ('group-removal','account-disable');assert kind in ('cancel','logout','group-removal','account-disable','worker-crash','agent-restart') and scope.get('kind','cancel')==accepted.get('kind','cancel')==kind
     repo=Path(__file__).resolve().parents[2];assert scope['validationSourceSha256']==source_closure(repo,scope['validationSourceRevision'],seeds=SOURCES)
     for n,sha in scope['validationSourceSha256'].items():assert hashlib.sha256(subprocess.check_output(['git','-C',str(repo),'show',scope['validationSourceRevision']+':deploy/validation/'+n])).hexdigest()==sha
     for n,sha in scope['sourceHashes'].items():
         raw=subprocess.check_output(['git','-C',str(repo),'show',scope['revision']+':deploy/host/'+n]);assert hashlib.sha256(raw).hexdigest()==sha and (Path('/usr/local/libexec')/n).read_bytes()==raw
-    assert host_identity(scope['revision'])==scope['hostIdentity'] and snapshot(accepted['id'])==ack
+    expected_hosts=verify_partial_restart(kind,scope,owner,partial,p,private_json) if kind in RESTART_KINDS else scope['hostIdentity']
+    assert host_identity(scope['revision'])==expected_hosts and (kind not in RESTART_KINDS or accepted['hostsAfter']==expected_hosts) and snapshot(accepted['id'])==ack
     assert accepted['actualPartialAndDifferentAdminAck'] and owner['subject']==partial['row']['actor_subject'] and recovery['subject']!=owner['subject']
+    stopped=private_json(p/'product-helper-exit.json');assert stopped['validatorKilledHelper'] is False and 0<=stopped['productStoppedHelperSeconds']<15 and round(stopped['productStoppedHelperSeconds'],3)==accepted['productStoppedHelperSeconds']
     for role,ui in (('owner',owner),('recovery',recovery)):
         assert ui['id']==accepted['id'] and ui['actualUi'] and ui['normalDualLogout'] is (role=='recovery' or not revoked) and ui['uploads']==0
         assert ui['registrations']==ui['confirmations']==int(role=='owner') and ui['cancellations']==int(role=='owner' and kind=='cancel') and ui['acknowledgements']==int(role=='recovery')

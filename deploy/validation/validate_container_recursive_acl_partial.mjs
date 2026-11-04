@@ -11,7 +11,7 @@ const role=process.argv[3]
 try{
   const packet=JSON.parse(await readFile('/dev/stdin','utf8')),f=packet.fixture,revision=process.argv[2],base='http://127.0.0.1:8080'
   assert.match(revision,/^[a-f0-9]{40}$/);assert.equal(f.revision,revision);assert.ok(['owner','recovery'].includes(role))
-  const kind=f.kind??'cancel';assert.ok(['cancel','logout','group-removal','account-disable'].includes(kind));const revoked=['group-removal','account-disable'].includes(kind)
+  const kind=f.kind??'cancel';assert.ok(['cancel','logout','group-removal','account-disable','worker-crash','agent-restart'].includes(kind));const revoked=['group-removal','account-disable'].includes(kind)
   directory=f.evidence;assert.match(directory,/\/deploy\/artifacts\/container-recursive-acl-partial-[a-f0-9]{32}$/)
   browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true})
   context=await browser.newContext({viewport:{width:320,height:600},colorScheme:role==='owner'?'dark':'light',reducedMotion:'reduce'});context.setDefaultTimeout(20_000);page=await context.newPage()
@@ -77,7 +77,7 @@ try{
       await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-hints-v1'))).toBe(null);hintsCleared=true
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:join(directory,'authority-denied.png')})
     }
-    if(kind==='cancel'){
+    if(['cancel','worker-crash','agent-restart'].includes(kind)){
     phase='actual-partial-result';await dialog.getByRole('button',{name:'查询原递归ACL修改任务',exact:true}).click();await expect(dialog.getByRole('status')).toHaveText('部分修改，保护已保留')
     const response=await context.request.get(base+endpoint+'/'+id);assert.equal(response.status(),200);assert.ok(response.headers()['cache-control']?.includes('no-store'));result=await response.json()
     assert.equal(result.state,'Partial');assert.equal(result.receipt.state,'Partial');assert.equal(result.confirmation,null);assert.deepEqual(result.receipt,final.receipt)
