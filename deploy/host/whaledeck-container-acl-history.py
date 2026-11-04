@@ -27,13 +27,18 @@ def encode(value):
 
 
 class ContainerAclHistoryReader:
+    NAMESPACE = 'container-acl-v1'
+    HISTORY_DOMAIN = b'whaledeck-container-acl-history-v1\n'
+    INVENTORY_DOMAIN = b'whaledeck-container-acl-history-inventory-v1\n'
+    ERROR_PREFIX = 'CONTAINER_ACL_HISTORY_'
+    DIRECTORY_MULTIPLIER = 1
     def __init__(self, acl):
         self.a, self.h, self.f, self.r = acl, acl.history, acl.f, acl.r
-        if self.h.NAMESPACE != 'container-acl-v1' or self.h.DOMAIN != b'whaledeck-container-acl-history-v1\n':
-            raise ValueError('CONTAINER_ACL_HISTORY_ENGINE_MISMATCH')
+        if self.h.NAMESPACE != self.NAMESPACE or self.h.DOMAIN != self.HISTORY_DOMAIN:
+            raise ValueError(self.ERROR_PREFIX + 'ENGINE_MISMATCH')
 
     def reject(self, suffix):
-        raise self.r.Rejected('CONTAINER_ACL_HISTORY_' + suffix)
+        raise self.r.Rejected(self.ERROR_PREFIX + suffix)
 
     def scope(self, request, session, fields):
         if type(request) is not dict or set(request) != fields: self.reject('REQUEST_INVALID')
@@ -75,7 +80,7 @@ class ContainerAclHistoryReader:
         rows = []
         with os.scandir(descriptor) as entries:
             for index, entry in enumerate(entries):
-                if index >= MAX_RECORDS + 64: self.reject('LIMIT')
+                if index >= MAX_RECORDS * self.DIRECTORY_MULTIPLIER + 64: self.reject('LIMIT')
                 if time.monotonic() > deadline: self.reject('TIMEOUT')
                 if re.fullmatch('[a-f0-9]{32}\\.json', entry.name):
                     if len(rows) >= MAX_RECORDS: self.reject('LIMIT')
@@ -146,7 +151,7 @@ class ContainerAclHistoryReader:
         with self.namespace() as (configuration, base, descriptor):
             inventory = None if descriptor is None else self.inventory(descriptor, deadline)
             base_frame = self.frame(os.fstat(base))
-            version = hashlib.sha256(b'whaledeck-container-acl-history-inventory-v1\n' + encode(dict(
+            version = hashlib.sha256(self.INVENTORY_DOMAIN + encode(dict(
                 containerId=request['containerId'], instanceId=request['instanceId'], path=request['path'],
                 targetProof=proof, inventory=inventory, absentBase=base_frame if descriptor is None else None))).hexdigest().upper()
             if request['expectedVersion'] and request['expectedVersion'] != version: self.reject('VERSION_CONFLICT')
@@ -164,7 +169,7 @@ class ContainerAclHistoryReader:
                 self.current(request, session, proof, deadline)
                 try: value = self.metadata(descriptor, capture, frame)
                 except (self.r.Rejected, self.f.Rejected) as error:
-                    if str(error) == 'CONTAINER_ACL_HISTORY_VERSION_CONFLICT': raise
+                    if str(error) == self.ERROR_PREFIX + 'VERSION_CONFLICT': raise
                     invalid += 1; scanned += 1; cursor = capture
                     continue
                 except (OSError, ValueError, TypeError, KeyError):
