@@ -15,8 +15,10 @@ class RestoreKernelScopeTests(unittest.TestCase):
 
     def test_independent_artifact_selection_rejects_before_dependency_access(self):
         from verify_recursive_acl_restore_kernel import verify
+        from recover_recursive_acl_restore_kernel import recover
         for name in ('../escape','recursive-acl-restore-kernel-'+'A'*32,'container-recursive-acl-'+'a'*32):
             with self.assertRaises(AssertionError):verify(name)
+            with self.assertRaises(AssertionError):recover(name)
 
 @unittest.skipUnless(os.name=='posix' and os.geteuid()==0,'isolated Linux root required')
 class RecursiveAclRestoreTests(unittest.TestCase):

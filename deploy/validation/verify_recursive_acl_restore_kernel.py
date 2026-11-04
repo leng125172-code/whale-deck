@@ -12,7 +12,7 @@ from validate_container_recursive_acl_faults import preservation_snapshot
 from validate_container_recursive_acl_browser import no_active_work
 from acl_source_apply_missing_proof import source_closure
 
-def verify(name,live=False):
+def verify(name,live=False,*,preserved=False,recovered=False):
     assert re.fullmatch('recursive-acl-restore-kernel-[a-f0-9]{32}',name)
     repo=Path(__file__).resolve().parents[2];evidence=repo/'deploy/artifacts'/name
     from validate_container_upload_recovery_agent import trusted
@@ -55,23 +55,30 @@ def verify(name,live=False):
                             cr=private_json(path);child.validate_record(cr,sub['operationId']);assert cr['plan']==node
                             if cr['state']=='Completed':assert actual['access' if selected=='access' else 'default']==target
                             if cr['historyVerified']:
-                                ch=child.history.load(sub);assert ch['historyDigest']==cr['historyDigest'] and ch['plan']==node;hdd_children+=1
                                 with child.history.target(False) as (_,fd):
+                                    assert child.history.read(fd,sub)==cr['historyDigest'];hdd_children+=1
                                     raw=(Path(os.readlink('/proc/self/fd/'+str(fd)))/(sub['operationId']+'.json')).read_bytes();assert raw==(evidence/'hdd'/p.restore.history.NAMESPACE/request['operationId']/'entries'/(sub['operationId']+'.json')).read_bytes()
                         else:assert actual==old
             finally:os.close(state_fd)
         assert root_snapshot(evidence/'source-state')==private_json(evidence/'source-state-snapshot.json') and root_snapshot(evidence/'restore-state')==private_json(evidence/'restore-state-snapshot.json') and metadata_snapshot(p)==private_json(evidence/'restore-hdd-snapshot.json')
         protected=preservation_snapshot(p.storage);assert all(protected.get(n)==v for n,v in b['protectedFiles'].items());no_active_work()
         source=Path(b['source']);assert source.parent==common.APPS and source.name==b['containerName'] and re.fullmatch('wdv-container-publish-[a-f0-9]{32}',source.name)
-        if live:assert inventory(Path(b['root']),p.reader,data,p.acl)==private_json(evidence/'physical-final.json')
+        if live:
+            assert inventory(Path(b['root']),p.reader,data,p.acl)==private_json(evidence/'physical-final.json')
+            if preserved:
+                assert (evidence/'failure.json').exists() and not (evidence/'verified.json').exists()
+                missing=subprocess.run(['docker','inspect',b['containerId']],capture_output=True);assert missing.returncode!=0 and b'no such' in missing.stderr.lower()
         else:
-            assert not os.path.lexists(source);missing=subprocess.run(['docker','inspect',b['containerId']],capture_output=True);assert missing.returncode!=0 and b'no such' in missing.stderr.lower();assert private_json(evidence/'verified.json')['candidateOnly'] is True and private_json(evidence/'final-protected.json')==protected
-    return dict(candidateOnly=True,installedOrRpcOrUi=False,cases=7,sources=2,restoreChildHdd=hdd_children,livePhysicalReread=live,sourceBytesRereadAfterCleanup=False,sourceAndContainerAbsent=not live,oldProtectedFilesPreserved=len(b['protectedFiles']),coreUnchanged=11)
+            assert not os.path.lexists(source);missing=subprocess.run(['docker','inspect',b['containerId']],capture_output=True);assert missing.returncode!=0 and b'no such' in missing.stderr.lower()
+            if recovered:assert private_json(evidence/'recovered-readonly.json')['originalWholeGatePassed'] is False and not (evidence/'verified.json').exists()
+            else:assert private_json(evidence/'verified.json')['candidateOnly'] is True
+            assert private_json(evidence/'final-protected.json')==protected
+    return dict(candidateOnly=True,installedOrRpcOrUi=False,cases=7,sources=2,restoreChildHdd=hdd_children,livePhysicalReread=live,preservedSourceRecheck=preserved,originalWholeGatePassed=False if preserved or recovered else True,sourceBytesRereadAfterCleanup=False,sourceAndContainerAbsent=not live,oldProtectedFilesPreserved=len(b['protectedFiles']),coreUnchanged=11)
 
 if __name__=='__main__':
     try:
-        assert os.geteuid()==0 and (len(sys.argv)==2 or len(sys.argv)==3 and sys.argv[2]=='--live');os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0';live=len(sys.argv)==3;value=verify(sys.argv[1],live)
-        p=Path(__file__).resolve().parents[2]/'deploy/artifacts'/sys.argv[1]/('live-independent.json' if live else 'final-independent.json')
+        assert os.geteuid()==0 and (len(sys.argv)==2 or len(sys.argv)==3 and sys.argv[2] in ('--live','--preserved','--recovered-final'));os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0';live=sys.argv[2:] in (['--live'],['--preserved']);preserved=sys.argv[2:]==['--preserved'];recovered=sys.argv[2:]==['--recovered-final'];value=verify(sys.argv[1],live,preserved=preserved,recovered=recovered)
+        p=Path(__file__).resolve().parents[2]/'deploy/artifacts'/sys.argv[1]/('preserved-independent.json' if preserved else 'recovered-final-independent.json' if recovered else 'live-independent.json' if live else 'final-independent.json')
         with p.open('x') as stream:json.dump(value,stream)
         print(json.dumps(dict(recursiveRestoreIndependent='passed',**value)))
     except BaseException as error:
