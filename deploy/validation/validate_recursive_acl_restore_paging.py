@@ -71,7 +71,8 @@ def no_restore_records(identifier):
     with namespace(io,True) as fd:absent(fd,operation+'.json');absent(fd,operation)
 
 
-def main():
+def main(ready_logout=False):
+    assert type(ready_logout) is bool
     global PHASE
     assert os.geteuid()==0 and len(sys.argv)==4;os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision,binary_name,probe_revision=sys.argv[1:];assert all(re.fullmatch('[a-f0-9]{40}',v) for v in (revision,probe_revision))
@@ -79,7 +80,11 @@ def main():
     assert binary.parent.parent==repo/'deploy/artifacts' and re.fullmatch(r'terminal-probe\.[A-Za-z0-9]+',binary.parent.name) and binary.name=='TerminalProbe'
     trusted(binary);trusted(binary.parent,True);subprocess.run(['sha256sum','--quiet','-c','SHA256SUMS'],cwd=binary.parent,check=True,capture_output=True)
     assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip(),'FREEZE_PAGING_GATE_FIRST'
-    validation_revision=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();hashes=source_closure(repo,validation_revision,seeds=SOURCES)
+    validation_revision=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();seeds=SOURCES
+    if ready_logout:
+        from recursive_acl_restore_ready_logout import SOURCES as extra_sources
+        seeds=(*SOURCES,*extra_sources)
+    hashes=source_closure(repo,validation_revision,seeds=seeds)
     assert all(hashlib.sha256((repo/'deploy/validation'/n).read_bytes()).hexdigest()==sha for n,sha in hashes.items())
     probe_hashes={}
     for name in PROBE_SOURCES:
@@ -94,7 +99,7 @@ def main():
         raw=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name]);assert (Path('/usr/local/libexec')/name).read_bytes()==raw;host_hashes[name]=hashlib.sha256(raw).hexdigest()
     io=installed();restore_before=restore_database();assert restore_before['active']==0
     before=preservation_snapshot(storage);directories=root_snapshot(Path('/var/lib/whaledeck-container-directories'));core=owned.common.core_snapshot();hosts=host_identity(revision);sql=database();no_active_work()
-    evidence=repo/'deploy/artifacts'/('recursive-acl-restore-paging-'+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
+    evidence=repo/'deploy/artifacts'/(('recursive-acl-restore-ready-logout-' if ready_logout else 'recursive-acl-restore-paging-')+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
     print(json.dumps(dict(actualRecursiveRestorePaging='started',evidence=evidence.name)),flush=True)
     probe=None
     try:
@@ -115,7 +120,7 @@ def main():
             inspected=json.loads(owned.common.command(['docker','inspect',fixture['identifier']]))[0]
             location=dict(containerId=fixture['identifier'],instanceId=str(inspected['State']['Pid'])+':'+inspected['State']['StartedAt'])
             b=dict(revision=revision,probeRevision=probe_revision,validationSourceRevision=validation_revision,validationSourceSha256=hashes,probeSourceSha256=probe_hashes,probeBinarySha256=hashlib.sha256(binary.read_bytes()).hexdigest(),sourceHashes=host_hashes,**location,
-                containerName=inspected['Name'].lstrip('/'),source=str(fixture['folder']),root=str(root),evidence=str(evidence),restoreDatabase=restore_before,restoreRootBefore=snapshot(io.restoreState),restoreHddBefore=hdd_snapshot(io,True),sourceRootBefore=snapshot(io.sourceState),original=inventory(root,reader,data,acl),bytesPerFile=len(data),sha256=hashlib.sha256(data).hexdigest().upper(),coreBefore=core,hostIdentity=hosts,protectedFiles=before,directoryRoot=directories,database=sql,sourceDevice=root.stat().st_dev)
+                restoreReadyLogout=ready_logout,containerName=inspected['Name'].lstrip('/'),source=str(fixture['folder']),root=str(root),evidence=str(evidence),restoreDatabase=restore_before,restoreRootBefore=snapshot(io.restoreState),restoreHddBefore=hdd_snapshot(io,True),sourceRootBefore=snapshot(io.sourceState),original=inventory(root,reader,data,acl),bytesPerFile=len(data),sha256=hashlib.sha256(data).hexdigest().upper(),coreBefore=core,hostIdentity=hosts,protectedFiles=before,directoryRoot=directories,database=sql,sourceDevice=root.stat().st_dev)
             with storage.target(create_namespace=False,read_only=True) as (cfg,fd):storage.attest(cfg,fd,read_only=True);b['hddDevice']=os.fstat(fd).st_dev
             (evidence/'baseline.json').write_text(json.dumps(b))
             PHASE='one-new-signed-capture';probe=Probe(binary,evidence,dict(revision=revision,probeRevision=probe_revision,**location,coreId=core['/whaledeck-api'][0]),mode='container-recursive-acl-page-capture')
@@ -133,43 +138,48 @@ def main():
             with ExitStack() as users:
                 admin=users.enter_context(temporary_user(True));ordinary=users.enter_context(temporary_user(False));env={**os.environ};env.pop('VALIDATION_USERNAME',None);env.pop('VALIDATION_PASSWORD',None)
                 with (evidence/'browser.stdout').open('w') as out,(evidence/'browser.stderr').open('w') as err:
-                    process=subprocess.Popen(['node',str(repo/'deploy/validation/validate_recursive_acl_restore_paging.mjs'),revision],stdin=subprocess.PIPE,stdout=out,stderr=err,env=env,text=True)
+                    process=subprocess.Popen(['node',str(repo/'deploy/validation'/('validate_recursive_acl_restore_ready_logout.mjs' if ready_logout else 'validate_recursive_acl_restore_paging.mjs')),revision],stdin=subprocess.PIPE,stdout=out,stderr=err,env=env,text=True)
                     try:
                         process.stdin.write(json.dumps(dict(fixture=browser_fixture,credentials=dict(admin=dict(zip(('username','password'),admin)),ordinary=dict(zip(('username','password'),ordinary))))));process.stdin.close()
-                        for index,label in enumerate(LABELS):
-                            PHASE='real-restore-preview-'+label;signal=wait_case(process,evidence,'paging-'+label)
-                            page_proof(signal,b,row,metadata,index);page_proof(signal['selected'],b,row,metadata,0,selection=True)
-                            if signals:assert all(signal[k]==signals[0][k] for k in ('ready','registered','key','body','reference','pages','selected','duplicateRegistrationId'))
-                            sql=sql_snapshot(signal['ready']['id']);ready_proof(signal,b,row,metadata,sql);no_restore_records(signal['ready']['id']);signals.append(signal)
-                            (evidence/('paging-'+label+'.sql.json')).write_text(json.dumps(sql))
-                            prove_pages(signal['pages'],b,{operation:summary(row,metadata)})
-                            audits=audit_rows(signal['subject']);prove_audits(audits,signal['subject'],b,signal['pages'],[signal['selected'],*signals])
-                            (evidence/('paging-'+label+'.audit.json')).write_text(json.dumps(audits))
+                        if ready_logout:
+                            from recursive_acl_restore_ready_logout import exercise
+                            exercise(process,evidence,b,row,metadata,root,reader,data,acl,storage)
+                        else:
+                            for index,label in enumerate(LABELS):
+                                PHASE='real-restore-preview-'+label;signal=wait_case(process,evidence,'paging-'+label)
+                                page_proof(signal,b,row,metadata,index);page_proof(signal['selected'],b,row,metadata,0,selection=True)
+                                if signals:assert all(signal[k]==signals[0][k] for k in ('ready','registered','key','body','reference','pages','selected','duplicateRegistrationId'))
+                                sql=sql_snapshot(signal['ready']['id']);ready_proof(signal,b,row,metadata,sql);no_restore_records(signal['ready']['id']);signals.append(signal)
+                                (evidence/('paging-'+label+'.sql.json')).write_text(json.dumps(sql))
+                                prove_pages(signal['pages'],b,{operation:summary(row,metadata)})
+                                audits=audit_rows(signal['subject']);prove_audits(audits,signal['subject'],b,signal['pages'],[signal['selected'],*signals])
+                                (evidence/('paging-'+label+'.audit.json')).write_text(json.dumps(audits))
+                                assert inventory(root,reader,data,acl)==row['after'] and verify_capture(evidence,b,row,storage)==metadata;unchanged(b,storage)
+                                acknowledge(evidence,'paging-'+label,dict(physicalSourceAndReadyVerified=True))
+                            PHASE='canceled-and-normal-identities';auth=wait_case(process,evidence,'paging-auth');assert auth['signals']==signals and auth['subject']==signals[0]['subject']
+                            sql=sql_snapshot(auth['result']['id']);canceled_proof(auth,b,row,metadata,sql);no_restore_records(auth['result']['id']);(evidence/'canceled.sql.json').write_text(json.dumps(sql))
+                            ordinary_result=auth['ordinary'];assert ordinary_result['subject']!=auth['subject'] and ordinary_result['denied']==[403]*6 and ordinary_result['anonymous']==auth['adminAnonymous']==[401]*6 and ordinary_result['uiRequests']==0
+                            for logout in (auth['adminLogout'],ordinary_result['logout']):assert logout['normalUiLogout'] and logout['providerNavigationObserved'] and logout['bffStatus']==401 and logout['identityStatus'] in (401,403)
+                            assert audit_rows(ordinary_result['subject'])==[];prove_audits(audit_rows(auth['subject']),auth['subject'],b,auth['pages'],[signals[0]['selected'],*signals])
+                            assert query("SELECT count(*) FROM audit_events WHERE actor_subject=:'subject' AND action LIKE 'containers.files.recursive-acl-restore.%';",subject=ordinary_result['subject'])==0
+                            assert restore_database()==dict(intents=restore_before['intents']+1,executions=restore_before['executions'],active=0)
                             assert inventory(root,reader,data,acl)==row['after'] and verify_capture(evidence,b,row,storage)==metadata;unchanged(b,storage)
-                            acknowledge(evidence,'paging-'+label,dict(physicalSourceAndReadyVerified=True))
-                        PHASE='canceled-and-normal-identities';auth=wait_case(process,evidence,'paging-auth');assert auth['signals']==signals and auth['subject']==signals[0]['subject']
-                        sql=sql_snapshot(auth['result']['id']);canceled_proof(auth,b,row,metadata,sql);no_restore_records(auth['result']['id']);(evidence/'canceled.sql.json').write_text(json.dumps(sql))
-                        ordinary_result=auth['ordinary'];assert ordinary_result['subject']!=auth['subject'] and ordinary_result['denied']==[403]*6 and ordinary_result['anonymous']==auth['adminAnonymous']==[401]*6 and ordinary_result['uiRequests']==0
-                        for logout in (auth['adminLogout'],ordinary_result['logout']):assert logout['normalUiLogout'] and logout['providerNavigationObserved'] and logout['bffStatus']==401 and logout['identityStatus'] in (401,403)
-                        assert audit_rows(ordinary_result['subject'])==[];prove_audits(audit_rows(auth['subject']),auth['subject'],b,auth['pages'],[signals[0]['selected'],*signals])
-                        assert query("SELECT count(*) FROM audit_events WHERE actor_subject=:'subject' AND action LIKE 'containers.files.recursive-acl-restore.%';",subject=ordinary_result['subject'])==0
-                        assert restore_database()==dict(intents=restore_before['intents']+1,executions=restore_before['executions'],active=0)
-                        assert inventory(root,reader,data,acl)==row['after'] and verify_capture(evidence,b,row,storage)==metadata;unchanged(b,storage)
-                        acknowledge(evidence,'paging-auth',dict(canceledNoWriteAndAuthorityVerified=True));assert process.wait(timeout=90)==0,'ACTUAL_RESTORE_PAGING_BROWSER_FAILED'
+                            acknowledge(evidence,'paging-auth',dict(canceledNoWriteAndAuthorityVerified=True));assert process.wait(timeout=90)==0,'ACTUAL_RESTORE_PAGING_BROWSER_FAILED'
                     finally:
                         if process.poll() is None:
                             process.terminate()
                             try:process.wait(timeout=15)
                             except subprocess.TimeoutExpired:process.kill();process.wait(timeout=10)
+            verifier='verify_recursive_acl_restore_ready_logout.py' if ready_logout else 'verify_recursive_acl_restore_paging.py'
             PHASE='independent-live-before-cleanup'
-            with (evidence/'independent-live.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation/verify_recursive_acl_restore_paging.py'),evidence.name,'--live'],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
+            with (evidence/'independent-live.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation'/verifier),evidence.name,'--live'],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
             assert inventory(root,reader,data,acl)==row['after'];remove_proved(root,reader,data,acl,row['after'])
         PHASE='after-exact-cleanup';assert not fixture['folder'].exists();final=unchanged(b,storage)
         (evidence/'final-preservation.json').write_text(json.dumps(final))
-        (evidence/'verified.json').write_text(json.dumps(dict(revision=revision,signedCaptures=1,objects=26,restorePreviewOffsets=[0,25,0,25],restoreExecutions=0,canceled=1,sourceAndContainerAbsent=True,historiesRetained=True,coreUnchanged=11,realRestoreSnapshotPagination=True)))
+        (evidence/'verified.json').write_text(json.dumps(dict(revision=revision,signedCaptures=1,objects=26,restorePreviewOffsets=[0] if ready_logout else [0,25,0,25],restoreExecutions=0,canceled=0 if ready_logout else 1,sourceAndContainerAbsent=True,historiesRetained=True,coreUnchanged=11,realRestoreSnapshotPagination=not ready_logout,readyLogoutNaturalExpiry=ready_logout)))
         PHASE='independent-final-after-cleanup'
-        with (evidence/'independent-final.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation/verify_recursive_acl_restore_paging.py'),evidence.name],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
-        print(json.dumps(dict(actualRecursiveRestorePaging='passed',evidence=evidence.name,objects=26,restorePreviewOffsets=[0,25,0,25],restoreExecutions=0)),flush=True)
+        with (evidence/'independent-final.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation'/verifier),evidence.name],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
+        print(json.dumps(dict(actualRecursiveRestorePaging='passed',readyLogoutNaturalExpiry=ready_logout,evidence=evidence.name,objects=26,restorePreviewOffsets=[0] if ready_logout else [0,25,0,25],restoreExecutions=0)),flush=True)
     except BaseException as error:
         import traceback
         frames=traceback.extract_tb(error.__traceback__);last=frames[-1] if frames else None
