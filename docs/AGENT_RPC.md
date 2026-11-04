@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-04 c020c24正常覆盖后，两宿主实际exe/DLL映射与六组件/HTTP同源，安装validator通过，沿用1.53。没有增加RPC/capability或重放已完成的原生文件操作；本批不把安装检查冒充新的真实业务RPC/HDD页面整链。[标准发布、生产迁移与未验边界](qa/CONTAINER_RECURSIVE_ACL_RELEASE.md)。
+
 2026-11-04 递归ACL管理员API/Vue候选c020c24已接现有Workflow和1.53协议；本批不新增RPC、capability、helper、签名域或安装。原登记、确认、取消及异常明确处置均走已实现专用业务，不由Controller或浏览器直接访问Root/Docker。回环/浏览器夹具不能替代安装态RPC与真人整链；后续准确CI、标准覆盖与实际文件/HDD验证。[候选、失败与未验边界](qa/CONTAINER_RECURSIVE_ACL_API_UI.md)。
 
 2026-11-04 递归ACL持久化候选224f57c通过真实隔离PG：新增真实仓储/EF迁移20261103235841、18CHECK及不可变历史/回执MAC、双Job/outbox/审计原子事务、租约与原Started；9类旧容器写入+宿主锁对称共享fence/路径预算，DI/Worker与取消路由已接。新类型专属原生阶段实际执行，1宏门禁无跳过通过、两库/SDK清理成功、外部投递0；合成Agent回执/身份/测试时钟不冒充真实Root或进程重启。4649Unit/491Integration（7默认原生跳过）、8范围/3状态工具及Release零警告错误通过，34源码SHA与三候选CLI来源核对。运行前后11核心/两宿主7cb3935、7配置账本、153/58HDD字节九字段保持、活动0，生产新表实际缺席。尚无生产迁移/新Worker运行/公开API/Vue/真人整链；下一批管理员API与页面再CI/标准覆盖和实盘签收，故障/递归恢复/删除及其余59项继续。[真实DB分项与失败/未验边界](qa/CONTAINER_RECURSIVE_ACL_PERSISTENCE.md)。
