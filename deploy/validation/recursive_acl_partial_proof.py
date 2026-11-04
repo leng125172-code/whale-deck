@@ -66,6 +66,16 @@ def require_ack(before,after,subject,unknown=False):
     assert after['executionJob']['phase']=='Acknowledged'
 
 
+def entry_checkpoint(record,index,present,unknown):
+    """A started marker precedes child journal creation; absence is Unknown evidence."""
+    assert type(present) is type(unknown) is bool
+    if index<=record['startedThrough']:
+        if present:return True
+        assert unknown and index>record['finishedThrough'],'STARTED_CHILD_RECORD_MISSING'
+    else:assert not present,'UNSTARTED_CHILD_RECORD_PRESENT'
+    return False
+
+
 def verify_records(data,baseline,before,after,storage,directory,prefix,read_only=False):
     unknown=baseline.get('kind')=='target-removed'
     assert prefix in ('partial','ack');require_phase(data,prefix=='ack',unknown=unknown)
@@ -103,7 +113,7 @@ def verify_records(data,baseline,before,after,storage,directory,prefix,read_only
                     assert cp['command']==dict(containerId=row['container_id'],instanceId=row['instance_id'],path=path,expectedVersion=file_version(baseline,path,old['identity']),aclType='access',entries=plan['command']['fileEntries' if PATHS[relative]=='File' else 'directoryEntries'])
                     assert cp['targetMode']==acl_mode(cp['command']['entries'])
                     child_path=STATE/(operation+'.entries')/(cid+'.json');phase='NotStarted';version='';changed=False
-                    if index<=record['startedThrough']:
+                    if entry_checkpoint(record,index,child_path.exists(),unknown):
                         trusted(child_path);child_raw=child_path.read_bytes();child=json.loads(child_raw)
                         assert child['operationId']==cid and child['owner']==row['owner_hash'] and child['plan']==cp
                         phase=child['state'];assert phase in (('Completed','Aborted','Preparing','Prepared','Applying','Unknown') if unknown else ('Completed','Aborted'))
@@ -120,7 +130,9 @@ def verify_records(data,baseline,before,after,storage,directory,prefix,read_only
                             assert h['historyDigest']==child['historyDigest']==digest(b'whaledeck-container-recursive-acl-entry-history-v1\n',unsigned(h,'historyDigest'))
                             archive(directory,prefix+'.'+cid+'.hdd.json',hr,read_only);histories+=1
                         children.append(dict(id=cid,state=phase,historyVerified=child['historyVerified']))
-                    else:assert not child_path.exists() and actual==old
+                    else:
+                        assert not child_path.exists() and actual==old
+                        if unknown and index<=record['startedThrough']:phase='Unrecorded'
                     outcomes.append(dict(id=cid,state=phase,version=version,changed=changed))
                 assert {v.name for v in (STATE/(operation+'.entries')).glob('*.json')}=={v['id']+'.json' for v in children}
                 assert {v for v in os.listdir(child_fd) if v.endswith('.json')}=={v['id']+'.json' for v in children if v['historyVerified']}

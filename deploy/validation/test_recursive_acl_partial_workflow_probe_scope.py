@@ -8,7 +8,7 @@ from recursive_acl_restart_proof import require_only_transients,owner_unit
 from recursive_acl_partial_unknown_proof import require_unknown_identity,remove_unknown_target
 from pathlib import Path
 import unittest
-from recursive_acl_partial_proof import require_phase,require_ack,require_case
+from recursive_acl_partial_proof import require_phase,require_ack,require_case,entry_checkpoint
 from validate_container_recursive_acl_partial import selected_case,create_tree
 from verify_container_recursive_acl_partial import target
 
@@ -138,6 +138,23 @@ class RecursiveAclPartialWorkflowScope(unittest.TestCase):
         self.assertIn("phase:'failed',atStep:phase,failureType:error?.name,bffStatus,identityStatus",helper)
         for secret in ('error.message','error.stack','response.headers()', 'cookies()', 'storageState('):self.assertNotIn(secret,helper)
         self.assertNotIn('context.request.post',helper[helper.index('}catch(error)'):])
+
+    def test_started_marker_without_child_record_is_only_unknown_not_an_aborted_entry(self):
+        record=dict(startedThrough=1,finishedThrough=0)
+        self.assertTrue(entry_checkpoint(record,0,True,True));self.assertFalse(entry_checkpoint(record,1,False,True));self.assertFalse(entry_checkpoint(record,2,False,True))
+        for index,present,unknown in ((0,False,True),(1,False,False),(2,True,True)):
+            with self.subTest(index=index,present=present,unknown=unknown),self.assertRaises(AssertionError):entry_checkpoint(record,index,present,unknown)
+        with self.assertRaises(AssertionError):entry_checkpoint(record,1,0,True)
+
+    def test_resume_only_targets_recorded_failure_and_never_replays_original_execution(self):
+        from recover_recursive_acl_partial_unknown import target,CASE
+        self.assertEqual(CASE,target(CASE).name)
+        for name in ('../escape','container-recursive-acl-partial-'+'a'*32):
+            with self.assertRaises(AssertionError):target(name)
+        text=(ROOT/'recover_recursive_acl_partial_unknown.py').read_text()
+        for forbidden in ('remove_owned(', 'docker rm', "'confirm.json'", 'rmtree(', 'os.kill(', 'SIGKILL'):self.assertNotIn(forbidden,text)
+        self.assertIn('originalGatePassed=False,resumedRecoveryPassed=True',text)
+        self.assertIn("browser(repo,sys.argv[1],'recovery'",text)
 
     def test_partial_revocation_preserves_the_real_result_and_denies_old_context(self):
         subject='11111111-1111-4111-8111-111111111111';p=phase();p['row'].update(actor_subject=subject,cancel_requested_at_utc=None);p['executionJob']['cancel_requested_at_utc']=None
