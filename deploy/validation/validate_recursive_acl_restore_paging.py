@@ -59,12 +59,12 @@ def unchanged(b,storage):
     assert all(actual.get(k)==v for k,v in b['protectedFiles'].items()) and len(actual)==len(b['protectedFiles'])+54
     io=installed()
     for current,old in ((snapshot(io.restoreState),b['restoreRootBefore']),(hdd_snapshot(io,True),b['restoreHddBefore'])):
-        assert all(current.get(k)==v for k,v in old.items()) if b.get('restorePrewriteCancel',False) else current==old
+        assert all(current.get(k)==v for k,v in old.items()) if (b.get('restorePrewriteCancel',False) or b.get('restoreInflightLogout',False)) else current==old
     current=snapshot(io.sourceState);assert all(current.get(k)==v for k,v in b['sourceRootBefore'].items())
     assert root_snapshot(Path('/var/lib/whaledeck-container-directories'))==b['directoryRoot']
     current_core=owned.common.core_snapshot()
     for name,old in b['coreBefore'].items():
-        assert current_core[name][:3]==tuple(old[:3]) if b.get('restorePrewriteCancel',False) and name=='/whaledeck-worker' else current_core[name]==tuple(old)
+        assert current_core[name][:3]==tuple(old[:3]) if (b.get('restorePrewriteCancel',False) or b.get('restoreInflightLogout',False)) and name=='/whaledeck-worker' else current_core[name]==tuple(old)
     assert host_identity(b['revision'])==b['hostIdentity'] and database()==b['database']
     no_active_work();return actual
 
@@ -75,8 +75,9 @@ def no_restore_records(identifier):
     with namespace(io,True) as fd:absent(fd,operation+'.json');absent(fd,operation)
 
 
-def main(ready_logout=False,prewrite_cancel=False):
-    assert type(ready_logout) is type(prewrite_cancel) is bool and not (ready_logout and prewrite_cancel)
+def main(ready_logout=False,prewrite_cancel=False,inflight_logout=False):
+    assert all(type(v) is bool for v in (ready_logout,prewrite_cancel,inflight_logout)) and sum((ready_logout,prewrite_cancel,inflight_logout))<=1
+    executing=prewrite_cancel or inflight_logout
     global PHASE
     assert os.geteuid()==0 and len(sys.argv)==4;os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision,binary_name,probe_revision=sys.argv[1:];assert all(re.fullmatch('[a-f0-9]{40}',v) for v in (revision,probe_revision))
@@ -88,8 +89,9 @@ def main(ready_logout=False,prewrite_cancel=False):
     if ready_logout:
         from recursive_acl_restore_ready_logout import SOURCES as extra_sources
         seeds=(*SOURCES,*extra_sources)
-    if prewrite_cancel:
-        from recursive_acl_restore_prewrite import SOURCES as extra_sources
+    if executing:
+        from recursive_acl_restore_prewrite import SOURCES as extra_sources,LOGOUT_SOURCES
+        if inflight_logout:extra_sources=(*extra_sources,*LOGOUT_SOURCES)
         seeds=(*SOURCES,*extra_sources)
     hashes=source_closure(repo,validation_revision,seeds=seeds)
     assert all(hashlib.sha256((repo/'deploy/validation'/n).read_bytes()).hexdigest()==sha for n,sha in hashes.items())
@@ -106,11 +108,11 @@ def main(ready_logout=False,prewrite_cancel=False):
         raw=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name]);assert (Path('/usr/local/libexec')/name).read_bytes()==raw;host_hashes[name]=hashlib.sha256(raw).hexdigest()
     io=installed();restore_before=restore_database();assert restore_before['active']==0
     before=preservation_snapshot(storage);directories=root_snapshot(Path('/var/lib/whaledeck-container-directories'));core=owned.common.core_snapshot();hosts=host_identity(revision);sql=database();no_active_work()
-    evidence=repo/'deploy/artifacts'/(('recursive-acl-restore-prewrite-cancel-' if prewrite_cancel else 'recursive-acl-restore-ready-logout-' if ready_logout else 'recursive-acl-restore-paging-')+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
+    evidence=repo/'deploy/artifacts'/(('recursive-acl-restore-inflight-logout-' if inflight_logout else 'recursive-acl-restore-prewrite-cancel-' if prewrite_cancel else 'recursive-acl-restore-ready-logout-' if ready_logout else 'recursive-acl-restore-paging-')+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
     print(json.dumps(dict(actualRecursiveRestorePaging='started',evidence=evidence.name)),flush=True)
     probe=None
     try:
-        with owned.fixture(restartable_core=('whaledeck-worker',) if prewrite_cancel else ()) as fixture:
+        with owned.fixture(restartable_core=('whaledeck-worker',) if executing else ()) as fixture:
             PHASE='new-26-object-fixture';root=fixture['folder']/'recursive-tree';root.mkdir(mode=0o750);data=content(fixture['identifier'])
             for relative in FILES:(root/relative).write_bytes(data)
             for index,(relative,kind) in enumerate(PATHS.items()):
@@ -127,7 +129,7 @@ def main(ready_logout=False,prewrite_cancel=False):
             inspected=json.loads(owned.common.command(['docker','inspect',fixture['identifier']]))[0]
             location=dict(containerId=fixture['identifier'],instanceId=str(inspected['State']['Pid'])+':'+inspected['State']['StartedAt'])
             b=dict(revision=revision,probeRevision=probe_revision,validationSourceRevision=validation_revision,validationSourceSha256=hashes,probeSourceSha256=probe_hashes,probeBinarySha256=hashlib.sha256(binary.read_bytes()).hexdigest(),sourceHashes=host_hashes,**location,
-                restorePrewriteCancel=prewrite_cancel,restoreReadyLogout=ready_logout,containerName=inspected['Name'].lstrip('/'),source=str(fixture['folder']),root=str(root),evidence=str(evidence),restoreDatabase=restore_before,restoreRootBefore=snapshot(io.restoreState),restoreHddBefore=hdd_snapshot(io,True),sourceRootBefore=snapshot(io.sourceState),original=inventory(root,reader,data,acl),bytesPerFile=len(data),sha256=hashlib.sha256(data).hexdigest().upper(),coreBefore=core,hostIdentity=hosts,protectedFiles=before,directoryRoot=directories,database=sql,sourceDevice=root.stat().st_dev)
+                restorePrewriteCancel=prewrite_cancel,restoreInflightLogout=inflight_logout,restoreReadyLogout=ready_logout,containerName=inspected['Name'].lstrip('/'),source=str(fixture['folder']),root=str(root),evidence=str(evidence),restoreDatabase=restore_before,restoreRootBefore=snapshot(io.restoreState),restoreHddBefore=hdd_snapshot(io,True),sourceRootBefore=snapshot(io.sourceState),original=inventory(root,reader,data,acl),bytesPerFile=len(data),sha256=hashlib.sha256(data).hexdigest().upper(),coreBefore=core,hostIdentity=hosts,protectedFiles=before,directoryRoot=directories,database=sql,sourceDevice=root.stat().st_dev)
             with storage.target(create_namespace=False,read_only=True) as (cfg,fd):storage.attest(cfg,fd,read_only=True);b['hddDevice']=os.fstat(fd).st_dev
             (evidence/'baseline.json').write_text(json.dumps(b))
             PHASE='one-new-signed-capture';probe=Probe(binary,evidence,dict(revision=revision,probeRevision=probe_revision,**location,coreId=core['/whaledeck-api'][0]),mode='container-recursive-acl-page-capture')
@@ -140,17 +142,17 @@ def main(ready_logout=False,prewrite_cancel=False):
             result=json.loads(response['result']);row=dict(request=dict(operationId=operation,owner='B'*64,plan=plan),result=result,before=b['original'],after=inventory(root,reader,data,acl))
             (evidence/'capture.json').write_text(json.dumps(row));metadata=verify_capture(evidence,b,row,storage,archive=True)
             closing=probe;probe=None;closing.close(True);unchanged(b,storage)
-            browser_fixture={k:b[k] for k in ('revision','containerId','instanceId','containerName','evidence')};browser_fixture.update(captureId=operation,historyDigest=result['historyDigest'])
+            browser_fixture={k:b[k] for k in ('revision','containerId','instanceId','containerName','evidence')};browser_fixture.update(captureId=operation,historyDigest=result['historyDigest'],inflightLogout=inflight_logout)
             signals=[]
             with ExitStack() as users:
                 admin=users.enter_context(temporary_user(True));ordinary=users.enter_context(temporary_user(False));env={**os.environ};env.pop('VALIDATION_USERNAME',None);env.pop('VALIDATION_PASSWORD',None)
                 with (evidence/'browser.stdout').open('w') as out,(evidence/'browser.stderr').open('w') as err:
-                    process=subprocess.Popen(['node',str(repo/'deploy/validation'/('validate_recursive_acl_restore_prewrite.mjs' if prewrite_cancel else 'validate_recursive_acl_restore_ready_logout.mjs' if ready_logout else 'validate_recursive_acl_restore_paging.mjs')),revision],stdin=subprocess.PIPE,stdout=out,stderr=err,env=env,text=True)
+                    process=subprocess.Popen(['node',str(repo/'deploy/validation'/('validate_recursive_acl_restore_inflight_logout.mjs' if inflight_logout else 'validate_recursive_acl_restore_prewrite.mjs' if prewrite_cancel else 'validate_recursive_acl_restore_ready_logout.mjs' if ready_logout else 'validate_recursive_acl_restore_paging.mjs')),revision],stdin=subprocess.PIPE,stdout=out,stderr=err,env=env,text=True)
                     try:
                         process.stdin.write(json.dumps(dict(fixture=browser_fixture,credentials=dict(admin=dict(zip(('username','password'),admin)),ordinary=dict(zip(('username','password'),ordinary))))));process.stdin.close()
-                        if prewrite_cancel:
+                        if executing:
                             from recursive_acl_restore_prewrite import exercise
-                            exercise(process,evidence,b,row,metadata,root,reader,data,acl,storage,fixture)
+                            exercise(process,evidence,b,row,metadata,root,reader,data,acl,storage,fixture,logout=inflight_logout)
                         elif ready_logout:
                             from recursive_acl_restore_ready_logout import exercise
                             exercise(process,evidence,b,row,metadata,root,reader,data,acl,storage)
@@ -180,16 +182,16 @@ def main(ready_logout=False,prewrite_cancel=False):
                             process.terminate()
                             try:process.wait(timeout=15)
                             except subprocess.TimeoutExpired:process.kill();process.wait(timeout=10)
-            verifier='verify_recursive_acl_restore_prewrite.py' if prewrite_cancel else 'verify_recursive_acl_restore_ready_logout.py' if ready_logout else 'verify_recursive_acl_restore_paging.py'
+            verifier='verify_recursive_acl_restore_inflight_logout.py' if inflight_logout else 'verify_recursive_acl_restore_prewrite.py' if prewrite_cancel else 'verify_recursive_acl_restore_ready_logout.py' if ready_logout else 'verify_recursive_acl_restore_paging.py'
             PHASE='independent-live-before-cleanup'
             with (evidence/'independent-live.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation'/verifier),evidence.name,'--live'],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
             assert inventory(root,reader,data,acl)==row['after'];remove_proved(root,reader,data,acl,row['after'])
         PHASE='after-exact-cleanup';assert not fixture['folder'].exists();final=unchanged(b,storage)
         (evidence/'final-preservation.json').write_text(json.dumps(final))
-        (evidence/'verified.json').write_text(json.dumps(dict(revision=revision,signedCaptures=1,objects=26,restorePreviewOffsets=[0] if ready_logout or prewrite_cancel else [0,25,0,25],restoreExecutions=int(prewrite_cancel),canceled=0 if ready_logout else 1,sourceAndContainerAbsent=True,historiesRetained=True,coreUnchanged=11,realRestoreSnapshotPagination=not (ready_logout or prewrite_cancel),readyLogoutNaturalExpiry=ready_logout,restorePrewriteCancel=prewrite_cancel)))
+        (evidence/'verified.json').write_text(json.dumps(dict(revision=revision,signedCaptures=1,objects=26,restorePreviewOffsets=[0] if ready_logout or executing else [0,25,0,25],restoreExecutions=int(executing),canceled=0 if ready_logout else 1,sourceAndContainerAbsent=True,historiesRetained=True,coreUnchanged=11,realRestoreSnapshotPagination=not (ready_logout or executing),readyLogoutNaturalExpiry=ready_logout,restorePrewriteCancel=prewrite_cancel,restoreInflightLogout=inflight_logout)))
         PHASE='independent-final-after-cleanup'
         with (evidence/'independent-final.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation'/verifier),evidence.name],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
-        print(json.dumps(dict(actualRecursiveRestorePaging='passed',readyLogoutNaturalExpiry=ready_logout,evidence=evidence.name,objects=26,restorePreviewOffsets=[0] if ready_logout or prewrite_cancel else [0,25,0,25],restoreExecutions=int(prewrite_cancel))),flush=True)
+        print(json.dumps(dict(actualRecursiveRestorePaging='passed',readyLogoutNaturalExpiry=ready_logout,evidence=evidence.name,objects=26,restorePreviewOffsets=[0] if ready_logout or executing else [0,25,0,25],restoreExecutions=int(executing))),flush=True)
     except BaseException as error:
         import traceback
         frames=traceback.extract_tb(error.__traceback__);last=frames[-1] if frames else None

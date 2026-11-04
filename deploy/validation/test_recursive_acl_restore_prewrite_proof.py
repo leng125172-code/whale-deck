@@ -71,7 +71,7 @@ class RestorePrewriteScopeTests(unittest.TestCase):
         for name in ('../escape','recursive-acl-restore-paging-'+'a'*32,'recursive-acl-restore-prewrite-cancel-'+'A'*32):
             with self.subTest(name=name),self.assertRaises(AssertionError):verify(name)
         source=(Path(__file__).parent/'validate_recursive_acl_restore_prewrite.mjs').read_text()
-        for marker in ('确认递归ACL恢复','确认请求取消','dismissedWithoutWrite:true','normalDualLogout:true','ordinary-normal-dual-logout'):self.assertIn(marker,source)
+        for marker in ('确认递归ACL恢复','确认请求取消','dismissedWithoutWrite:!inflightLogout','normalDualLogout:true','ordinary-normal-dual-logout'):self.assertIn(marker,source)
         for marker in ('.route(','.addCookies(','sessionStorage.setItem'):self.assertNotIn(marker,source)
 
     def test_fd_binding_requires_exact_restore_argv_root_uid_and_both_kernel_inodes(self):

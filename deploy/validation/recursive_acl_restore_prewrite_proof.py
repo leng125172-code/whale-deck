@@ -72,12 +72,19 @@ def early_abort_proof(request,receipt,bundle,source,frame,before,after,attrs):
     return dict(aggregateHdd=1,childHdd=verified,counts=[root[k] for k in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')])
 
 
-def sql_proof(data,ready_signal,initial,b,source_meta):
+def cancellation_cause(row,*,logout=False):
+    assert type(logout) is bool
+    assert row['cancel_requested_at_utc'] is None if logout else bool(row['cancel_requested_at_utc'])
+    return Counter() if logout else Counter({('cancel-requested','Accepted',row['execution_job_id']):1})
+
+
+def sql_proof(data,ready_signal,initial,b,source_meta,*,logout=False):
     row=data['row'];old=initial['row'];result=ready_signal['terminal'];subject=ready_signal['subject']
     assert row['actor_subject']==subject==old['actor_subject'] and row['container_id']==b['containerId'] and row['instance_id']==b['instanceId'] and row['relative_path']=='work/recursive-tree'
     for key in ('id','idempotency_key','login_binding','owner_hash','command_json','request_hash','plan_json','plan_hash','ready_expires_at_utc'):typed_equal(row[key],old[key])
     assert row['state']==result['state']==data['executionJob']['state']=='Canceled' and row['result_code']==result['resultCode']=='CONTAINER_RECURSIVE_ACL_RESTORE_CANCELED'
-    assert row['cancel_requested_at_utc'] and row['confirmed_at_utc'] and row['root_started_at_utc'] and row['completed_at_utc'] and row['publish_barrier'] is False and row['lease_token'] is row['lease_expires_at_utc'] is None
+    cause=cancellation_cause(row,logout=logout)
+    assert row['confirmed_at_utc'] and row['root_started_at_utc'] and row['completed_at_utc'] and row['publish_barrier'] is False and row['lease_token'] is row['lease_expires_at_utc'] is None
     assert all(type(data[k]) is int and data[k]>=0 for k in ('pending','accepted','confirmed','events'))
     assert data['pending']==0 and data['accepted']==data['confirmed']==1 and data['events']>=4 and data['planJob']['state']=='Succeeded'
     assert data['planJob']['job_type']=='containers.files.recursive-acl-restore-plan' and data['executionJob']['job_type']=='containers.files.recursive-acl-restore'
@@ -94,7 +101,7 @@ def sql_proof(data,ready_signal,initial,b,source_meta):
     assert receipt['operationId']==uuid.UUID(row['execution_job_id']).hex and receipt['state']==row['root_state']=='Aborted'
     for key in ('completedCount','changedCount','abortedCount','notStartedCount','unknownCount','outcomeDigest','historyMayExist','historyVerified','historyDigest','historyAvailable','bindingCurrent'):
         column=re.sub(r'(?<!^)(?=[A-Z])','_',key).lower();typed_equal(receipt[key],row[column])
-    wanted=Counter({('plan-accepted','Accepted',row['id']):1,('plan-result','Ready',row['id']):1,('confirmed','Accepted',row['execution_job_id']):1,('cancel-requested','Accepted',row['execution_job_id']):1,('result','Canceled',row['execution_job_id']):1});seen=Counter();ids=set()
+    wanted=Counter({('plan-accepted','Accepted',row['id']):1,('plan-result','Ready',row['id']):1,('confirmed','Accepted',row['execution_job_id']):1,('result','Canceled',row['execution_job_id']):1})+cause;seen=Counter();ids=set()
     for audit in data['audits']:
         assert audit['id'] not in ids;ids.add(audit['id']);assert audit['actor_subject']==subject and audit['target_type']=='container' and audit['target_id']==row['container_id']
         prefix='containers.files.recursive-acl-restore.';assert audit['action'].startswith(prefix) and 0<len(audit['trace_id'])<=128

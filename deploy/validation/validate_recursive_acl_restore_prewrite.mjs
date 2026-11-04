@@ -17,6 +17,7 @@ try{
  const packet=JSON.parse(await readFile('/dev/stdin','utf8')),fixture=packet.fixture,credentials=packet.credentials
  const base='http://127.0.0.1:8080',endpoint=`/api/v1/containers/${fixture.containerId}/files/recursive-acls/history`
  assert.equal(process.argv[2],fixture.revision);assert.match(fixture.captureId,/^[a-f0-9]{32}$/);assert.match(fixture.historyDigest,/^[A-F0-9]{64}$/)
+ const inflightLogout=fixture.inflightLogout===true;assert.equal(inflightLogout,process.argv[1].endsWith('/validate_recursive_acl_restore_inflight_logout.mjs'));assert.equal(typeof(fixture.inflightLogout??false),'boolean')
  evidence=fixture.evidence;browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true})
  const context=await browser.newContext({viewport:{width:320,height:600},colorScheme:'dark',reducedMotion:'reduce'});context.setDefaultTimeout(30_000);page=await context.newPage()
  phase='admin-visible-login';const admin=await loginVisible(page,context,base,'/containers',true,credentials.admin)
@@ -83,19 +84,45 @@ try{
  await writeSignal(evidence,'pending-result.json',pending)
  assert.equal((await waitSignal(evidence,'action-verified.json',180000)).boundPrewrite,true)
  phase='actual-inflight';await dialog.getByRole('button',{name:'查询原递归ACL恢复任务',exact:true}).click();await expect(dialog.getByText('正在逐项恢复ACL',{exact:true})).toBeVisible({timeout:30000})
- await page.screenshot({path:join(evidence,'inflight.png')})
- phase='actual-cancel';await dialog.getByRole('button',{name:'请求取消递归ACL恢复',exact:true}).click();await page.getByRole('button',{name:'继续等待',exact:true}).click();assert.equal(counts.cancellations,0)
- await dialog.getByRole('button',{name:'请求取消递归ACL恢复',exact:true}).click();await page.getByRole('button',{name:'确认请求取消',exact:true}).click()
- await writeSignal(evidence,'action-result.json',{id:ready.id,subject:admin.subject,cancellations:counts.cancellations})
+ await dialog.getByRole('status').scrollIntoViewIfNeeded();await expect(dialog.getByRole('status')).toBeInViewport({ratio:1});await page.screenshot({path:join(evidence,'inflight.png')})
+ let logout,terminal,hintsCleared,logoutIsolation=null,adminReloginLogout=null
+ if(inflightLogout){
+  phase='inflight-normal-dual-logout';await closePermissionDetails(page,dialog)
+  logout=await logoutFromUserMenu(page,context,base,undefined,v=>writeSignal(evidence,'inflight-logout-'+v.phase+'.json',v))
+  hintsCleared=await page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-restore-hints-v1')===null);assert.equal(hintsCleared,true)
+  await expect(page.getByRole('heading',{name:'使用工作站账号登录',exact:true})).toBeVisible();await page.screenshot({path:join(evidence,'original-logout.png')})
+ }else{
+  phase='actual-cancel';await dialog.getByRole('button',{name:'请求取消递归ACL恢复',exact:true}).click();await page.getByRole('button',{name:'继续等待',exact:true}).click();assert.equal(counts.cancellations,0)
+  await dialog.getByRole('button',{name:'请求取消递归ACL恢复',exact:true}).click();await page.getByRole('button',{name:'确认请求取消',exact:true}).click()
+ }
+ await writeSignal(evidence,'action-result.json',{id:ready.id,subject:admin.subject,cancellations:counts.cancellations,logoutDuringExecution:inflightLogout,logout:logout??null})
  const settled=await waitSignal(evidence,'settled-verified.json');assert.equal(settled.id,ready.id);assert.equal(settled.state,'Canceled')
- phase='terminal-ui';await dialog.getByRole('button',{name:'查询原递归ACL恢复任务',exact:true}).click();await expect(dialog.getByText('已取消',{exact:true})).toBeVisible({timeout:30000})
- const terminal=await query();assert.equal(terminal.state,'Canceled');assert.equal(terminal.executionJobId,pending.executionJobId);assert.equal(terminal.receipt.state,'Aborted');assert.equal(terminal.receipt.changedCount,0);assert.equal(terminal.receipt.unknownCount,0)
- await page.screenshot({path:join(evidence,'terminal.png')});await closePermissionDetails(page,dialog)
- phase='normal-dual-logout';const logout=await logoutFromUserMenu(page,context,base)
- const hintsCleared=await page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-restore-hints-v1')===null);assert.equal(hintsCleared,true)
+ if(!inflightLogout){
+  phase='terminal-ui';await dialog.getByRole('button',{name:'查询原递归ACL恢复任务',exact:true}).click();await expect(dialog.getByText('已取消',{exact:true})).toBeVisible({timeout:30000})
+  terminal=await query();assert.equal(terminal.state,'Canceled');assert.equal(terminal.executionJobId,pending.executionJobId);assert.equal(terminal.receipt.state,'Aborted');assert.equal(terminal.receipt.changedCount,0);assert.equal(terminal.receipt.unknownCount,0)
+  await page.screenshot({path:join(evidence,'terminal.png')});await closePermissionDetails(page,dialog)
+  phase='normal-dual-logout';logout=await logoutFromUserMenu(page,context,base)
+  hintsCleared=await page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-restore-hints-v1')===null);assert.equal(hintsCleared,true)
+ }
  const queryBody={instanceId:fixture.instanceId,path:'work/recursive-tree'}
  const urls=[base+restoreEndpoint+'/'+ready.id,base+restoreEndpoint+'/by-key/'+key,base+'/api/v1/files/container-recursive-acl-restores/recovery',base+'/api/v1/files/container-recursive-acl-restores/recovery/'+ready.id,base+endpoint+'?'+new URLSearchParams({...queryBody,after:'',take:'25',expectedVersion:''}),base+endpoint+'/'+fixture.captureId+'?'+new URLSearchParams({...queryBody,expectedHistoryDigest:fixture.historyDigest,offset:'0',take:'25'})]
- const anonymous=await denied(context,urls,401);assert.deepEqual(counts,{registrations:1,confirmations:1,cancellations:1,uploads:0})
+ const anonymous=await denied(context,urls,401);assert.deepEqual(counts,{registrations:1,confirmations:1,cancellations:inflightLogout?0:1,uploads:0})
+ if(inflightLogout){
+  phase='same-subject-new-login';const relogin=await loginVisible(page,context,base,'/containers',true,credentials.admin);assert.equal(relogin.subject,admin.subject)
+  const newLoginLookups=[];for(const url of urls.slice(0,2))newLoginLookups.push((await context.request.get(url)).status());assert.deepEqual(newLoginLookups,[404,404])
+  const hintsAbsentAfterRelogin=await page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-restore-hints-v1')===null);assert.equal(hintsAbsentAfterRelogin,true)
+  await openPermissionFiles(page,fixture);const oldTaskButtons=await page.getByRole('button',{name:'查看递归ACL恢复任务',exact:true}).count();assert.equal(oldTaskButtons,0);await page.screenshot({path:join(evidence,'new-login-no-old-task.png')})
+  const recovered=await context.request.get(base+'/api/v1/files/container-recursive-acl-restores/recovery/'+ready.id);assert.equal(recovered.status(),200);assert.ok(recovered.headers()['cache-control']?.includes('no-store'));terminal=await recovered.json()
+  assert.equal(terminal.id,ready.id);assert.equal(terminal.state,'Canceled');assert.equal(terminal.receipt.state,'Aborted');assert.equal(terminal.receipt.changedCount,0);assert.equal(terminal.receipt.unknownCount,0)
+  phase='original-job-terminal-ui';const listing=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1/jobs'&&r.request().method()==='GET');await page.goto(base+'/jobs')
+  const jobsResponse=await listing;assert.equal(jobsResponse.status(),200);const jobs=await jobsResponse.json(),jobIndex=jobs.findIndex(v=>v.id===pending.executionJobId);assert.ok(jobIndex>=0);assert.equal(jobs[jobIndex].state,'Canceled')
+  await page.locator('.el-table__body-wrapper tbody tr').nth(jobIndex).getByRole('button',{name:'详情',exact:true}).click()
+  const drawer=page.getByRole('dialog',{name:'任务详情',exact:true});await expect(drawer.getByText(pending.executionJobId,{exact:true})).toBeVisible();await expect(drawer.getByText('Canceled',{exact:true})).toBeVisible()
+  assert.equal(await drawer.getByRole('button',{name:'取消任务',exact:true}).count(),0);assert.equal(await drawer.getByRole('button',{name:'重新预检并重试',exact:true}).count(),0)
+  await page.screenshot({path:join(evidence,'terminal.png')});await drawer.locator('.el-drawer__close-btn').click()
+  adminReloginLogout=await logoutFromUserMenu(page,context,base);const adminAnonymous=await denied(context,urls,401)
+  logoutIsolation={reloginSubject:relogin.subject,newLoginLookups,hintsAbsentAfterRelogin,oldTaskButtons,jobId:jobs[jobIndex].id,jobState:jobs[jobIndex].state,adminAnonymous}
+ }
  const ordinaryContext=await browser.newContext({viewport:{width:320,height:600},colorScheme:'dark',reducedMotion:'reduce'});ordinaryContext.setDefaultTimeout(30000);const ordinaryPage=await ordinaryContext.newPage();page=ordinaryPage
  phase='ordinary-visible-login';const ordinary=await loginVisible(page,ordinaryContext,base,'/',false,credentials.ordinary)
  let uiRequests=0;page.on('request',r=>{if([endpoint,restoreEndpoint,'/api/v1/files/container-recursive-acl-restores/recovery'].some(p=>new URL(r.url()).pathname.startsWith(p)))uiRequests++})
@@ -105,7 +132,7 @@ try{
  await page.screenshot({path:join(evidence,'ordinary-denied.png')});await page.getByRole('button',{name:'首页',exact:true}).click();await expect(page).toHaveURL(base+'/')
  phase='ordinary-normal-dual-logout';const ordinaryLogout=await logoutFromUserMenu(page,ordinaryContext,base),ordinaryAnonymous=await denied(ordinaryContext,urls,401)
  const ordinaryResult={subject:ordinary.subject,denied:ordinaryDenied,posts:deniedPosts,anonymous:ordinaryAnonymous,uiRequests,logout:ordinaryLogout}
- const result={ordinary:ordinaryResult,revision:fixture.revision,subject:admin.subject,readySignal,pending,terminal,pages,requests,...counts,dismissedWithoutWrite:true,normalDualLogout:true,logout,hintsCleared,anonymous,actualUi:true,prewriteCancellation:true}
+ const result={ordinary:ordinaryResult,revision:fixture.revision,subject:admin.subject,readySignal,pending,terminal,pages,requests,...counts,dismissedWithoutWrite:!inflightLogout,logoutDuringExecution:inflightLogout,logoutIsolation,adminReloginLogout,normalDualLogout:true,logout,hintsCleared,anonymous,actualUi:true,prewriteCancellation:!inflightLogout}
  await writeSignal(evidence,'final-auth-result.json',result);assert.equal((await waitSignal(evidence,'final-auth-verified.json')).prewriteNoChangeAndHistoryVerified,true)
  await writeFile(join(evidence,'browser.json'),JSON.stringify(result),{mode:0o600,flag:'wx'});await ordinaryContext.close();await context.close();await browser.close();browser=undefined
  console.log(JSON.stringify({recursiveAclRestorePrewrite:'passed',actualUi:true}))

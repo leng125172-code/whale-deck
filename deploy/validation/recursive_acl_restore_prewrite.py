@@ -19,6 +19,7 @@ from validate_container_directory_restart import Worker,preflight
 from bound_container_recursive_acl_restore_cut import freeze_before_first_restore,OBSERVER_WAIT_SECONDS
 
 SOURCES=('validate_recursive_acl_restore_prewrite.py','validate_recursive_acl_restore_prewrite.mjs','recursive_acl_restore_prewrite.py','recursive_acl_restore_prewrite_proof.py','bound_container_recursive_acl_restore_cut.py','verify_recursive_acl_restore_prewrite.py','test_recursive_acl_restore_prewrite_proof.py')
+LOGOUT_SOURCES=('validate_recursive_acl_restore_inflight_logout.py','validate_recursive_acl_restore_inflight_logout.mjs','verify_recursive_acl_restore_inflight_logout.py','test_recursive_acl_restore_inflight_logout.py')
 
 def wait_named(process,evidence,name):
     assert name in ('pending','action','final-auth')
@@ -78,7 +79,8 @@ def drain_original(identifier,evidence):
         time.sleep(.5)
 
 
-def exercise(process,evidence,b,row,m,root,reader,content,acl,storage,fixture):
+def exercise(process,evidence,b,row,m,root,reader,content,acl,storage,fixture,*,logout=False):
+    assert type(logout) is bool
     import validate_recursive_acl_restore_paging as gate
     gate.PHASE='confirmed-prewrite-ready';signal=wait_signal(process,evidence,'ready');page_proof(signal,b,row,m,0);page_proof(signal['selected'],b,row,m,0,selection=True)
     initial=sql_snapshot(signal['ready']['id']);ready_proof(signal,b,row,m,initial);gate.no_restore_records(signal['ready']['id']);(evidence/'ready.sql.json').write_text(json.dumps(initial))
@@ -115,7 +117,7 @@ def exercise(process,evidence,b,row,m,root,reader,content,acl,storage,fixture):
         manifest_proof(request['plan'],meta,source,before,attribute_digest(),operation_id=request['operationId'],owner=request['owner'])
         assert meta['historyDigest']==held.record['historyDigest'] and current()==before
         (evidence/'cut-root.json').write_text(json.dumps(held.record));(evidence/'cut.sql.json').write_text(json.dumps(cut));(evidence/'bound-helper.json').write_text(json.dumps(dict(pid=held.pid,unit=held.cgroup,proof=held.proof)))
-        gate.PHASE='actual-prewrite-cancel';began=time.monotonic()
+        gate.PHASE='actual-inflight-logout' if logout else 'actual-prewrite-cancel';began=time.monotonic()
         with ThreadPoolExecutor(max_workers=1) as pool:
             exit_watch=pool.submit(held.wait_exit_seconds,began,15);acknowledge(evidence,'action',dict(boundPrewrite=True))
             action=wait_named(process,evidence,'action');elapsed=exit_watch.result(timeout=16)
@@ -130,10 +132,14 @@ def exercise(process,evidence,b,row,m,root,reader,content,acl,storage,fixture):
         (evidence/'terminal.sql.json').write_text(json.dumps(final))
         acknowledge(evidence,'settled',dict(id=r['id'],state='Canceled'))
         gate.PHASE='terminal-ui-and-identities';ui=wait_named(process,evidence,'final-auth')
-        req,receipt=sql_proof(final,ui,initial,b,summary(row,m));records=read_early(io,req,evidence/'early-records',create=True)
+        req,receipt=sql_proof(final,ui,initial,b,summary(row,m),logout=logout);records=read_early(io,req,evidence/'early-records',create=True)
         proof=early_abort_proof(req,receipt,records,source,frame,before,current(),attribute_digest())
         assert (evidence/'cut-hdd.json').read_bytes()==(evidence/'early-records/hdd.json').read_bytes()
-        assert ui['registrations']==ui['confirmations']==ui['cancellations']==1 and ui['uploads']==0 and ui['dismissedWithoutWrite'] is True
+        assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==int(not logout) and ui['uploads']==0
+        if logout:
+            from recursive_acl_restore_logout_proof import authority_proof
+            authority_proof(ui)
+        else:assert ui['dismissedWithoutWrite'] is True
         assert ui['readySignal']==signal and ui['normalDualLogout'] and ui['anonymous']==[401]*6
         assert ui['logout']['normalUiLogout'] and ui['logout']['providerNavigationObserved'] and ui['logout']['bffStatus']==401 and ui['logout']['identityStatus'] in (401,403)
         assert ui['ordinary']['subject']!=signal['subject'] and ui['ordinary']['denied']==[403]*6 and ui['ordinary']['posts']==[403]*2 and ui['ordinary']['anonymous']==[401]*6 and ui['ordinary']['uiRequests']==0
