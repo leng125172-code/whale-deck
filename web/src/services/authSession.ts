@@ -119,10 +119,12 @@ async function loadAuthSession() {
 
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 2500)
+  let identityKnown = false
 
   try {
     const resolved = await apiRequest<CurrentUser>('auth/me', { signal: controller.signal })
     if (current !== generation) return
+    identityKnown = true
     user.value = resolved
     authenticated.value = true
     unavailable.value = false
@@ -130,20 +132,25 @@ async function loadAuthSession() {
     if (current !== generation) return
     authenticated.value = false
     user.value = null
-    unavailable.value = !(reason instanceof ApiError && reason.status === 401)
+    identityKnown = reason instanceof ApiError && [401, 403].includes(reason.status)
+    unavailable.value = !identityKnown
   } finally {
     window.clearTimeout(timeout)
     if (current === generation) {
       reconcileFileBrowserLocation(user.value?.subject, user.value?.isAdministrator === true)
-      reconcileDirectoryHints(user.value?.subject, user.value?.isAdministrator === true)
-      reconcileCopyHints(user.value?.subject, user.value?.isAdministrator === true)
-      reconcilePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
-      reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
-      reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
-      reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
-      reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
-      reconcileRecursiveAclHints(user.value?.subject, user.value?.isAdministrator === true)
-      reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
+      // Opaque original IDs survive unknown identity; they grant no UI or API access.
+      // Authoritative denial, subject/role change and explicit logout still clear them.
+      if (identityKnown) {
+        reconcileDirectoryHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileCopyHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcilePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileRecursiveAclHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileMoveHints(user.value?.subject, user.value?.isAdministrator === true)
+      }
       initialized.value = true
     }
   }

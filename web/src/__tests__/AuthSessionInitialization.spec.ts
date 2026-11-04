@@ -128,3 +128,88 @@ it('keeps same-admin hint on refresh, clears on downgrade and logout without a F
   const { navigateToLogout } = await import('@/services/logoutNavigation')
   expect(navigateToLogout).toHaveBeenCalledOnce()
 })
+
+const recursiveReference = {
+  subject: 'admin',
+  containerId: 'a'.repeat(64),
+  key: 'ab12ab12-ab12-4b12-ab12-ab12ab12ab12',
+  id: 'cd12cd12-cd12-4d12-ad12-cd12cd12cd12',
+}
+async function pendingReference() {
+  const hints = await import('@/services/containerRecursiveAclHints')
+  hints.saveRecursiveAclHint(recursiveReference)
+  return hints
+}
+
+it.each([503, 'network', 'abort'])(
+  'retains only the opaque original reference while initial identity is unavailable: %s',
+  async (reason) => {
+    const hints = await pendingReference()
+    rememberFileBrowserLocation('admin', { rootId: 'whaledeck.files.shared', path: 'private' })
+    const { ApiError } = await import('@/services/apiClient')
+    request.mockRejectedValueOnce(
+      reason === 503
+        ? new ApiError('temporarily unavailable', 503, {})
+        : reason === 'abort'
+          ? new DOMException('aborted', 'AbortError')
+          : new TypeError('network unavailable'),
+    )
+    const { authSession } = await import('@/services/authSession')
+    await authSession.initialize()
+    expect(authSession.authenticated.value).toBe(false)
+    expect(authSession.user.value).toBeNull()
+    expect(authSession.unavailable.value).toBe(true)
+    expect(sessionStorage.getItem(fileBrowserLocationKey)).toBeNull()
+    expect(hints.recursiveAclHint('admin', recursiveReference.containerId)).toEqual(
+      recursiveReference,
+    )
+    expect(request).toHaveBeenCalledOnce()
+  },
+)
+
+it.each([401, 403])(
+  'clears original references on authoritative initial denial: %s',
+  async (status) => {
+    const hints = await pendingReference()
+    const { ApiError } = await import('@/services/apiClient')
+    request.mockRejectedValueOnce(new ApiError('denied', status, {}))
+    const { authSession } = await import('@/services/authSession')
+    await authSession.initialize()
+    expect(hints.recursiveAclHint('admin', recursiveReference.containerId)).toBeNull()
+    expect(authSession.user.value).toBeNull()
+    expect(authSession.unavailable.value).toBe(false)
+  },
+)
+
+it.each(['same-admin', 'another-admin', 'ordinary'])(
+  'reconciles retained references after a later authoritative identity: %s',
+  async (identity) => {
+    const hints = await pendingReference()
+    request.mockRejectedValueOnce(new TypeError('network unavailable'))
+    const { authSession } = await import('@/services/authSession')
+    await authSession.initialize()
+    expect(hints.recursiveAclHint('admin', recursiveReference.containerId)).toEqual(
+      recursiveReference,
+    )
+    request.mockResolvedValueOnce({
+      subject: identity === 'another-admin' ? 'another-admin' : 'admin',
+      isAdministrator: identity !== 'ordinary',
+    })
+    await authSession.refresh()
+    expect(hints.recursiveAclHint('admin', recursiveReference.containerId)).toEqual(
+      identity === 'same-admin' ? recursiveReference : null,
+    )
+  },
+)
+
+it('explicit logout clears opaque references even after unavailable initial identity', async () => {
+  const hints = await pendingReference()
+  request.mockRejectedValueOnce(new TypeError('network unavailable'))
+  const { authSession } = await import('@/services/authSession')
+  await authSession.initialize()
+  expect(hints.recursiveAclHint('admin', recursiveReference.containerId)).toEqual(
+    recursiveReference,
+  )
+  await authSession.logout()
+  expect(hints.recursiveAclHint('admin', recursiveReference.containerId)).toBeNull()
+})
