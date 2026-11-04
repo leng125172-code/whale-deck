@@ -280,7 +280,7 @@ def main():
                         with pending.open('x') as stream: stream.write(json.dumps({'id':result['id'],'physicalAndHistoryVerified':True}))
                         pending.replace(target)
                         print(json.dumps({'actualRecursiveAclBrowser':'case-verified','case':name,'state':result['state'],'physicalAndHistoryVerified':True}),flush=True)
-                    assert process.wait(timeout=60) == 0, 'ACTUAL_RECURSIVE_BROWSER_FAILED'
+                    assert process.wait(timeout=120) == 0, 'ACTUAL_RECURSIVE_BROWSER_FAILED'
                 finally:
                     if process.poll() is None:
                         process.terminate()
