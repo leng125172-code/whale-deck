@@ -1411,3 +1411,36 @@ service ContainerRecursiveAclService {
   rpc Inspect(ContainerRecursiveAclRequest) returns (ContainerRecursiveAclReceipt);
   rpc Discard(ContainerRecursiveAclRequest) returns (ContainerRecursiveAclReceipt);
 }
+
+// Independent bounded recursive ACL history reads, protocol 1.54. No write/restore method.
+message ContainerRecursiveAclHistoryListRequest {
+  ContainerFileLocation location = 1; string after = 2; uint32 take = 3; string expected_version = 4; RequestContext context = 5;
+}
+message ContainerRecursiveAclHistoryReadRequest {
+  ContainerFileLocation location = 1; string capture_id = 2; string expected_history_digest = 3;
+  optional uint32 offset = 4; uint32 take = 5; RequestContext context = 6;
+}
+// Counts describe the complete captured plan, never the outcome of its execution.
+message ContainerRecursiveAclHistorySummary {
+  string capture_id = 1; string history_digest = 2; optional int64 created_at_unix_ms = 3;
+  string source_instance_id = 4; string changed_acl_type = 5; string manifest_digest = 6;
+  optional uint32 entry_count = 7; optional uint32 file_count = 8;
+  optional uint32 directory_count = 9; optional uint32 change_count = 10;
+}
+message ContainerRecursiveAclHistoryPage {
+  ContainerFileLocation location = 1; string version = 2; repeated ContainerRecursiveAclHistorySummary entries = 3;
+  string next_after = 4; optional uint32 scanned_count = 5; optional uint32 invalid_count = 6; optional bool complete = 7;
+}
+message ContainerRecursiveAclHistoryEntry {
+  string relative_path = 1; string kind = 2; optional uint32 original_mode = 3;
+  repeated ContainerAclEntry access_acl = 4; repeated ContainerAclEntry default_acl = 5;
+}
+message ContainerRecursiveAclHistorySnapshot {
+  ContainerFileLocation location = 1; ContainerRecursiveAclHistorySummary summary = 2;
+  optional uint32 offset = 3; repeated ContainerRecursiveAclHistoryEntry entries = 4;
+  optional bool complete = 5; optional uint32 next_offset = 6;
+}
+service ContainerRecursiveAclHistoryService {
+  rpc List(ContainerRecursiveAclHistoryListRequest) returns (ContainerRecursiveAclHistoryPage);
+  rpc Read(ContainerRecursiveAclHistoryReadRequest) returns (ContainerRecursiveAclHistorySnapshot);
+}

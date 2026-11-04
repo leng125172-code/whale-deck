@@ -80,6 +80,7 @@ app.MapGrpcService<ContainerPermissionGrpcService>();
 app.MapGrpcService<ContainerOwnershipGrpcService>();
 app.MapGrpcService<ContainerAclGrpcService>();
 app.MapGrpcService<ContainerAclHistoryGrpcService>();
+app.MapGrpcService<ContainerRecursiveAclHistoryGrpcService>();
 app.MapGrpcService<ContainerCopyGrpcService>();
 app.MapGrpcService<ContainerMoveGrpcService>();
 app.MapGrpcService<ContainerHistoryGrpcService>();

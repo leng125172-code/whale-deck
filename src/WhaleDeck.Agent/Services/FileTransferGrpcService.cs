@@ -304,17 +304,17 @@ public sealed partial class FileTransferRunner
             }
             var newline = driver.Buffer.AsSpan(driver.BufferOffset, driver.BufferCount).IndexOf((byte)'\n');
             var count = newline < 0 ? driver.BufferCount : newline;
-            if (bytes.Length + count > 65536) throw new InvalidOperationException("FILES_OUTPUT_LIMIT");
+            if (bytes.Length + count > (driver.IsContainerRecursiveAclHistory ? 128 * 1024 : 65536)) throw new InvalidOperationException("FILES_OUTPUT_LIMIT");
             bytes.Write(driver.Buffer, driver.BufferOffset, count);
             var consumed = count + (newline < 0 ? 0 : 1); driver.BufferCount -= consumed; driver.BufferOffset += consumed;
             if (newline >= 0)
             {
                 var document = JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 8 });
-                if ((driver.IsContainerRecursiveAcl || driver.IsContainerAclHistory || driver.IsContainerAcl || driver.IsContainerRecursiveOwnership || driver.IsContainerRecursivePermission || driver.IsContainerRead || driver.IsContainerWrite || driver.IsContainerHistory || driver.IsContainerDirectory || driver.IsContainerPermission || driver.IsContainerOwnership || driver.IsContainerCopy || driver.IsContainerMove) && document.RootElement.TryGetProperty("type", out var type) && type.GetString() == "error")
+                if ((driver.IsContainerRecursiveAclHistory || driver.IsContainerRecursiveAcl || driver.IsContainerAclHistory || driver.IsContainerAcl || driver.IsContainerRecursiveOwnership || driver.IsContainerRecursivePermission || driver.IsContainerRead || driver.IsContainerWrite || driver.IsContainerHistory || driver.IsContainerDirectory || driver.IsContainerPermission || driver.IsContainerOwnership || driver.IsContainerCopy || driver.IsContainerMove) && document.RootElement.TryGetProperty("type", out var type) && type.GetString() == "error")
                 {
                     var code = document.RootElement.TryGetProperty("code", out var error) && error.ValueKind == JsonValueKind.String ? error.GetString() : null;
                     document.Dispose();
-                    throw driver.IsContainerRecursiveAcl ? ContainerRecursiveAclPolicy.Failure(code) : driver.IsContainerAclHistory ? ContainerAclHistoryPolicy.Failure(code) : driver.IsContainerAcl ? ContainerAclPolicy.Failure(code) : driver.IsContainerRecursiveOwnership ? ContainerRecursiveOwnershipPolicy.Failure(code) : driver.IsContainerRecursivePermission ? ContainerRecursivePermissionPolicy.Failure(code) : driver.IsContainerOwnership ? ContainerOwnershipPolicy.Failure(code) : driver.IsContainerPermission ? ContainerPermissionPolicy.Failure(code) : driver.IsContainerMove ? ContainerMovePolicy.Failure(code) : driver.IsContainerCopy ? ContainerCopyPolicy.Failure(code) : driver.IsContainerDirectory ? ContainerDirectoryPolicy.Failure(code) : driver.IsContainerHistory ? ContainerHistoryPolicy.Failure(code) : driver.IsContainerWrite ? ContainerUploadPolicy.Failure(code) : ContainerFilePolicy.Failure(code);
+                    throw driver.IsContainerRecursiveAclHistory ? ContainerRecursiveAclHistoryPolicy.Failure(code) : driver.IsContainerRecursiveAcl ? ContainerRecursiveAclPolicy.Failure(code) : driver.IsContainerAclHistory ? ContainerAclHistoryPolicy.Failure(code) : driver.IsContainerAcl ? ContainerAclPolicy.Failure(code) : driver.IsContainerRecursiveOwnership ? ContainerRecursiveOwnershipPolicy.Failure(code) : driver.IsContainerRecursivePermission ? ContainerRecursivePermissionPolicy.Failure(code) : driver.IsContainerOwnership ? ContainerOwnershipPolicy.Failure(code) : driver.IsContainerPermission ? ContainerPermissionPolicy.Failure(code) : driver.IsContainerMove ? ContainerMovePolicy.Failure(code) : driver.IsContainerCopy ? ContainerCopyPolicy.Failure(code) : driver.IsContainerDirectory ? ContainerDirectoryPolicy.Failure(code) : driver.IsContainerHistory ? ContainerHistoryPolicy.Failure(code) : driver.IsContainerWrite ? ContainerUploadPolicy.Failure(code) : ContainerFilePolicy.Failure(code);
                 }
                 return document;
             }
@@ -366,13 +366,14 @@ public sealed partial class FileTransferRunner
         var ownership = ContainerOwnershipAction(action);
         var acl = ContainerAclAction(action);
         var aclHistory = ContainerAclHistoryAction(action);
+        var recursiveAclHistory = ContainerRecursiveAclHistoryAction(action);
         var copy = ContainerCopyAction(action);
         var move = ContainerMoveAction(action);
         var start = new ProcessStartInfo("/usr/bin/sudo") { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         start.ArgumentList.Add("-n"); start.ArgumentList.Add(Helper);
-        var transport = recursiveAcl ? "container-file-recursive-acl" : aclHistory ? "container-file-acl-history" : acl ? "container-file-acl" : recursiveOwnership ? "container-file-recursive-ownership" : recursivePermission ? "container-file-recursive-permissions" : ownership ? "container-file-ownership" : permission ? "container-file-permissions" : move ? "container-file-moves" : copy ? "container-file-copies" : directory ? "container-file-directories" : history ? "container-file-history" : containerWrite ? "container-file-write" : container ? "container-file-transport" : "file-transport";
+        var transport = recursiveAclHistory ? "container-file-recursive-acl-history" : recursiveAcl ? "container-file-recursive-acl" : aclHistory ? "container-file-acl-history" : acl ? "container-file-acl" : recursiveOwnership ? "container-file-recursive-ownership" : recursivePermission ? "container-file-recursive-permissions" : ownership ? "container-file-ownership" : permission ? "container-file-permissions" : move ? "container-file-moves" : copy ? "container-file-copies" : directory ? "container-file-directories" : history ? "container-file-history" : containerWrite ? "container-file-write" : container ? "container-file-transport" : "file-transport";
         start.ArgumentList.Add(invocation is null ? transport : transport + "-stop");
-        if (invocation is null) start.ArgumentList.Add(recursiveAcl ? action["container-recursive-acl:".Length..] : aclHistory ? action["container-acl-history:".Length..] : acl ? action["container-acl:".Length..] : recursiveOwnership ? action["container-recursive-ownership:".Length..] : recursivePermission ? action["container-recursive-permission:".Length..] : ownership ? action[20..] : permission ? action[21..] : move || copy ? action[15..] : directory ? action[20..] : history ? action[8..] : containerWrite ? action[16..] : container ? action[10..] : action);
+        if (invocation is null) start.ArgumentList.Add(recursiveAclHistory ? action["container-recursive-acl-history:".Length..] : recursiveAcl ? action["container-recursive-acl:".Length..] : aclHistory ? action["container-acl-history:".Length..] : acl ? action["container-acl:".Length..] : recursiveOwnership ? action["container-recursive-ownership:".Length..] : recursivePermission ? action["container-recursive-permission:".Length..] : ownership ? action[20..] : permission ? action[21..] : move || copy ? action[15..] : directory ? action[20..] : history ? action[8..] : containerWrite ? action[16..] : container ? action[10..] : action);
         start.ArgumentList.Add(id); if (invocation is not null) start.ArgumentList.Add(invocation);
         start.Environment.Clear(); start.Environment["PATH"] = "/usr/sbin:/usr/bin:/sbin:/bin"; start.Environment["LANG"] = "C.UTF-8";
         return start;
@@ -395,6 +396,7 @@ public sealed partial class FileTransferRunner
         public bool IsContainerRecursiveOwnership => ContainerRecursiveOwnershipAction(action);
         public bool IsContainerRecursivePermission => ContainerRecursivePermissionAction(action);
         public bool IsContainerPermission => ContainerPermissionAction(action);
+        public bool IsContainerRecursiveAclHistory => ContainerRecursiveAclHistoryAction(action);
         public bool IsContainerAclHistory => ContainerAclHistoryAction(action);
         public bool IsContainerAcl => ContainerAclAction(action);
         public bool IsContainerOwnership => ContainerOwnershipAction(action);

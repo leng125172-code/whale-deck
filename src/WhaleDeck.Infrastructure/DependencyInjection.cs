@@ -238,6 +238,7 @@ public static class DependencyInjection
         services.AddSingleton<IContainerOwnershipGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerAclGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerAclHistoryGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddSingleton<IContainerRecursiveAclHistoryGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerAclRestoreSourceGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerCopyGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerMoveGateway>(provider => provider.GetRequiredService<AgentGateway>());
