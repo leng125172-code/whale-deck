@@ -55,6 +55,8 @@ try{
       phase='inflight-normal-visible-logout';await closePermissionDetails(page,dialog);logout=await logoutFromUserMenu(page,context,base);await writeSignal(directory,'owner-logout.json',logout)
       await expect(page.getByRole('region',{name:'容器递归ACL修改任务',exact:true})).toHaveCount(0)
       await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-hints-v1'))).toBe(null);hintsCleared=true
+      await expect(page.getByRole('status',{name:'正在启动 WhaleDeck 协同平台',exact:true})).toHaveCount(0)
+      await expect(page.getByRole('heading',{name:'使用工作站账号登录',exact:true})).toBeVisible()
       await page.screenshot({path:join(directory,'owner-logged-out.png')})
     }
     await writeSignal(directory,'action-done.json',{id,subject:profile.subject})
