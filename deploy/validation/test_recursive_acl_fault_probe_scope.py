@@ -9,6 +9,7 @@ from bound_container_recursive_acl_cut import child_id, first_entry_boundary, fr
 from validate_container_recursive_acl_faults import selected_kinds, terminal_state, terminal_summary, verify_revoked_browser, require_authority_change
 from recursive_acl_restart_proof import require_only_transients, owner_unit, restart_allowed, lease_held, verify_lease, RESTART_KEYS
 from verify_container_recursive_acl_faults import target
+from recover_recursive_acl_worker_partial import target as worker_recovery_target
 
 ROOT=Path(__file__).resolve().parent
 
@@ -19,6 +20,10 @@ def record():
 
 
 class RecursiveAclFaultProbeScope(unittest.TestCase):
+    def test_worker_recovery_is_restricted_to_the_original_failed_recorder_run(self):
+        for name in ('../escape','container-recursive-acl-faults-'+'a'*32,'container-recursive-acl-browser-c78f9daecb5c443cb2eb3694474409f3'):
+            with self.subTest(name=name),self.assertRaises(AssertionError):worker_recovery_target(name)
+
     def test_terminal_summary_is_serializable_sql_state_with_either_child_count(self):
         import json
         for state in ('Failed','Canceled'):

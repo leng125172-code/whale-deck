@@ -24,9 +24,14 @@ UNIT='wd-qa-recursive-acl-restarts-b510cfb.service'
 INVOCATION='5cb84e9913304237be3b59381535c551'
 
 
+def target(name):
+    assert name==NAME
+    return Path(__file__).resolve().parents[2]/'deploy/artifacts'/name
+
+
 def recover(name):
     assert name==NAME and os.geteuid()==0;os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
-    repo=Path(__file__).resolve().parents[2];p=repo/'deploy/artifacts'/name;d=p/'worker-crash'
+    repo=Path(__file__).resolve().parents[2];p=target(name);d=p/'worker-crash'
     assert not (p/'verified.json').exists() and not (d/'verified.json').exists() and not (p/'agent-restart').exists() and not (p/'recovered-worker-partial.json').exists()
     scope=private_json(p/'scope.json');b=private_json(d/'baseline.json');ui=private_json(d/'browser.json');ready=private_json(d/'ready.json')
     assert scope['kinds']==['worker-crash','agent-restart'] and b['kind']==ui['kind']=='worker-crash'
@@ -58,7 +63,7 @@ def recover(name):
     content=hashlib.shake_256(('recursive-acl-fault:'+b['containerId']).encode()).digest(b['bytesPerFile']);assert hashlib.sha256(content).hexdigest().upper()==b['sha256']
     physical=inventory(folder/'recursive-tree',reader,content,acl);assert physical==b['original']==private_json(d/'cut-physical.json')==private_json(d/'physical-final.json')
     missing=subprocess.run(['docker','inspect',b['containerId']],capture_output=True,timeout=15);assert missing.returncode!=0 and b'no such' in missing.stderr.lower()
-    original=folder/'original.bin';s=original.lstat();expected=hashlib.shake_256(('owned-container-original:'+folder.name).encode()).digest(owned.common.SIZE)
+    original=folder/'original.bin';s=original.lstat();original_identity=owned.common.fingerprint(original);expected=hashlib.shake_256(('owned-container-original:'+folder.name).encode()).digest(owned.common.SIZE)
     assert stat.S_ISREG(s.st_mode) and not original.is_symlink() and s.st_nlink==1 and s.st_uid==s.st_gid==1000 and stat.S_IMODE(s.st_mode)==0o640 and original.read_bytes()==expected
     proof=dict(originalWholeGatePassed=False,originalFailure='TypeError serializing a set-valued summary state',workerPermanentAndPhysicalSubcaseVerified=True,
         originalStructuredServiceRestartReceiptSaved=False,exactHelperExitDurationPersisted=False,noWorkerFaultRepeated=True,agentRestartNotRun=True,
@@ -66,7 +71,7 @@ def recover(name):
         recoveryRevision=current,recoverySourceSha256=closure,oldProtectedFilesUnchanged=len(scope['preservedFiles']))
     (p/'recovery-before-cleanup.json').write_text(json.dumps(proof))
     remove_proved(folder/'recursive-tree',reader,content,b['original'],acl)
-    assert {v.name for v in folder.iterdir()}=={'original.bin'} and original.lstat()==s and original.read_bytes()==expected
+    assert {v.name for v in folder.iterdir()}=={'original.bin'} and owned.common.fingerprint(original)==original_identity and original.read_bytes()==expected
     original.unlink();folder.rmdir();assert not folder.exists()
     proof['exactSourceAndContainerAbsent']=True
     (p/'recovered-worker-partial.json').write_text(json.dumps(proof));return proof
