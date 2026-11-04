@@ -110,10 +110,12 @@ def main():
                     restore('killed-before-entry',access,'kill-before')
                 final=inventory(root,p.reader,data,p.acl);(evidence/'physical-final.json').write_text(json.dumps(final));(evidence/'restore-hdd-snapshot.json').write_text(json.dumps(metadata_snapshot(p)))
                 (evidence/'source-state-snapshot.json').write_text(json.dumps(root_snapshot(evidence/'source-state')));(evidence/'restore-state-snapshot.json').write_text(json.dumps(root_snapshot(evidence/'restore-state')))
+                PHASE='independent-live-before-cleanup'
                 with (evidence/'independent-live.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation/verify_recursive_acl_restore_kernel.py'),evidence.name,'--live'],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
                 assert inventory(root,p.reader,data,p.acl)==final;remove_proved(root,p.reader,data,final,p.acl)
             protected=preservation_snapshot(p.storage);assert all(protected.get(n)==v for n,v in old.items()) and owned.common.core_snapshot()==core and host_identity(b['installedRevision'])==hosts and root_snapshot(Path('/var/lib/whaledeck-container-directories'))==directories;no_active_work()
             (evidence/'final-protected.json').write_text(json.dumps(protected));(evidence/'verified.json').write_text(json.dumps(dict(candidateOnly=True,installedOrRpcOrUi=False,cases=7,normalSourceCaptures=2,exactSourceAndContainerAbsent=True,oldProtectedFilesPreserved=len(old))))
+        PHASE='independent-final-after-cleanup'
         with (evidence/'independent-final.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation/verify_recursive_acl_restore_kernel.py'),evidence.name],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
         print(json.dumps(dict(recursiveAclRestoreKernel='passed',evidence=evidence.name,cases=7)),flush=True)
     except BaseException as error:
