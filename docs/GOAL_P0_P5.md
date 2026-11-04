@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-04 递归ACL Partial取消与不同管理员处置真实整链通过：冻结8e6e472，唯一Invocatione21c3f70ec344190aa84c8969ac6f163准确退出0。新资源真实首项ACL修改后取消，产品5.020秒结束helper，Partial/保护保持、五计数1/1/1/2/0；1完成/1中止/2未开始，Root与其余源保持，1聚合+1子HDD/3Root留存。另一真实管理员原owner404，先暂不处置ACK0且完整SQL/源/历史不变，再一次明确ACK→Acknowledged/执行Job Failed/保护释放；原执行/计数/Root/HDD字节保留，不回滚/续做。两正常双端退出/匿名401、5张320明暗真PNG、独立含唯一不同主体审计/准确清理通过。106工具/8范围通过；旧495文件/两宿主b880208保持，11核心healthy，18意图8S/5C/1E/3F/1A、执行16/Job34、活动0。产品仍1.53不发布；其他Partial/Unknown/跨写入故障、递归恢复/删除及59项继续，不升完整完成率。[实盘、处置及边界](qa/CONTAINER_RECURSIVE_ACL_PARTIAL_REAL_UI.md)。
+
 2026-11-04 递归ACL Worker写前强杀新资源完整复验通过：冻结020e25f/已修记录器，唯一Invocation4c079324438a42e2a72900ff163b22b5准确退出0。真实身份/页面确认后准确强杀同Worker，结构化重启前后inspect/service及helper退出0.111秒已落盘；原租约自然等待86.457秒/41样本，原执行Failed/INTERRUPTED、Root Aborted、五计数0/0/0/4/0，全树保持/1聚合HDD、原页面正常双端退出与独立核验/准确清理通过。旧c78原总失败及缺失回执不补签，不重放旧任务。493旧文件及两宿主PID/来源保持，11核心healthy，17意图8S/5C/1E/3F、执行15/Job32、活动0，产品仍b880208/1.53。85c2228新增首项ACL已完成/其余原样的Partial观察器，仅5项离线候选、未运行实机cut或业务页面整链；102工具/8范围通过。继续Partial/写后/Unknown等故障、递归恢复/删除及59项，不升完整完成率。[新门禁、原失败与候选边界](qa/CONTAINER_RECURSIVE_ACL_WORKER_RECHECK.md)。
 
 2026-11-04 递归ACL进程中断分项：b510cfb的Worker原租约自然等待86.610秒/41样本、原执行Failed/INTERRUPTED、Root Aborted和全树保持/页面退出原件已只读补核；最终记录器状态变量被集合覆盖而TypeError，原总门禁退出1保留，精确耗时/重启前inspect未保存，不补签或重发强杀。00ec3f7修复后新资源仅Agent重启完整实机及独立通过，Invocation1cc4eb470b764d01a7315018c31a2819准确退出0；Agent3598741→3795144、维护3598736保持，helper退出0.054秒，5维护样本全200不推断瞬时零中断。Failed/Aborted、五计数0/0/0/4/0、全树保持/1聚合HDD，正常双端退出/准确清理通过。97工具/8范围通过；起始489及Agent前491文件保持，11核心healthy，16意图8S/5C/1E/2F、执行14/Job30、活动0，产品仍b880208/1.53未发布。Worker结构化缺口、写后/Partial/Unknown等故障、递归恢复/删除及59项继续，不升完整完成率。[实机、失败与边界](qa/CONTAINER_RECURSIVE_ACL_RESTARTS.md)。

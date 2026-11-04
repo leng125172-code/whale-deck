@@ -1,5 +1,7 @@
 # 递归ACL Worker强杀新资源完整复验与Partial观察器候选
 
+后续接续：8e6e472已将观察器接入[真实Partial取消及不同管理员处置整链](CONTAINER_RECURSIVE_ACL_PARTIAL_REAL_UI.md)。下文85c2228仅离线候选是当时事实，不改写旧证据或把新场景并入旧Worker运行。
+
 2026-11-04，承接[原进程中断证据及记录器失败](CONTAINER_RECURSIVE_ACL_RESTARTS.md)。**使用已修记录器和全新隔离资源，Worker写前强杀/原租约恢复门禁及独立核验通过，当前缺失的结构化证据已在新场景补齐。** 原c78批次总门禁依然失败，原任务、旧文件和缺失回执不改写、不重放。部分写入观察器另列为仅离线候选，不当作Partial真实验收。
 
 ## 新Worker场景的实际来源与控制
