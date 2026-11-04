@@ -5,6 +5,7 @@
     "e2e/acl-job-results.spec.ts",
     "e2e/job-events.spec.ts",
     "e2e/container-acl-history.spec.ts",
+    "e2e/container-recursive-acl-history.spec.ts",
     "e2e/container-acl-restores.spec.ts",
     "e2e/container-acls.spec.ts",
     "e2e/container-detail.spec.ts",

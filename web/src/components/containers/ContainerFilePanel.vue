@@ -12,6 +12,7 @@ import ContainerCopyPanel from '@/components/containers/ContainerCopyPanel.vue'
 import ContainerPermissionPanel from '@/components/containers/ContainerPermissionPanel.vue'
 import ContainerAclPanel from '@/components/containers/ContainerAclPanel.vue'
 import ContainerAclHistoryPanel from '@/components/containers/ContainerAclHistoryPanel.vue'
+import ContainerRecursiveAclHistoryPanel from '@/components/containers/ContainerRecursiveAclHistoryPanel.vue'
 import { canAclContainerEntry } from '@/services/containerAcls'
 import ContainerOwnershipPanel from '@/components/containers/ContainerOwnershipPanel.vue'
 import ContainerRecursivePermissionPanel from '@/components/containers/ContainerRecursivePermissionPanel.vue'
@@ -56,6 +57,7 @@ const copier = ref<InstanceType<typeof ContainerCopyPanel> | null>(null)
 const permissionEditor = ref<InstanceType<typeof ContainerPermissionPanel> | null>(null)
 const aclEditor = ref<InstanceType<typeof ContainerAclPanel> | null>(null)
 const aclHistory = ref<InstanceType<typeof ContainerAclHistoryPanel> | null>(null)
+const recursiveAclHistory = ref<InstanceType<typeof ContainerRecursiveAclHistoryPanel> | null>(null)
 const ownershipEditor = ref<InstanceType<typeof ContainerOwnershipPanel> | null>(null)
 const recursivePermissionEditor = ref<InstanceType<
   typeof ContainerRecursivePermissionPanel
@@ -328,6 +330,13 @@ onBeforeUnmount(() => {
       "
       @refresh="load(path)"
       @locked="permissionLocked = $event"
+    />
+    <ContainerRecursiveAclHistoryPanel
+      v-if="target"
+      ref="recursiveAclHistory"
+      :target="target"
+      :path="path"
+      :disabled="!!busy"
     />
     <ContainerAclHistoryPanel
       v-if="target"
@@ -710,6 +719,14 @@ onBeforeUnmount(() => {
           <el-button
             v-if="!entry.isProtected && entry.kind === 'Directory'"
             link
+            :disabled="!!busy"
+            :aria-label="`递归ACL历史 ${entry.name}`"
+            @click="recursiveAclHistory?.open(entry)"
+            >递归ACL历史</el-button
+          >
+          <el-button
+            v-if="!entry.isProtected && entry.kind === 'Directory'"
+            link
             :disabled="
               !!busy ||
               uploadLocked ||
@@ -961,7 +978,7 @@ onBeforeUnmount(() => {
 }
 .container-files__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 85px auto;
+  grid-template-columns: minmax(0, 1fr) 85px;
   align-items: center;
   gap: 8px;
   padding: 9px 0;
@@ -990,11 +1007,13 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .container-files__entry-actions {
+  grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  min-width: 90px;
+  min-width: 0;
 }
 .container-files__entry-actions .el-button + .el-button {
   margin-left: 0;

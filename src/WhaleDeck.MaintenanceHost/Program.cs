@@ -37,6 +37,7 @@ builder.Services.AddReverseProxy()
             ContainerUploadProxyConfiguration.CreateRoute(),
             MetricProxyConfiguration.CreateRoute(),
             .. ContainerAclHistoryProxyConfiguration.CreateRoutes(),
+            .. ContainerRecursiveAclHistoryProxyConfiguration.CreateRoutes(),
             new Yarp.ReverseProxy.Configuration.RouteConfig
             {
                 RouteId = "authentik",
@@ -64,6 +65,7 @@ builder.Services.AddReverseProxy()
         ContainerUploadProxyConfiguration.CreateCluster(),
         MetricProxyConfiguration.CreateCluster(),
         ContainerAclHistoryProxyConfiguration.CreateCluster(),
+        ContainerRecursiveAclHistoryProxyConfiguration.CreateCluster(),
         new Yarp.ReverseProxy.Configuration.ClusterConfig
         {
             ClusterId = "gateway",

@@ -77,6 +77,8 @@ public static class DependencyInjection
         services.AddScoped<IContainerFileHistoryRepository, ContainerFileHistoryRepository>();
         services.AddScoped<ContainerFileHistoryService>();
         services.AddScoped<ContainerAclHistoryService>();
+        services.AddScoped<ContainerRecursiveAclHistoryService>();
+        services.AddScoped<IContainerRecursiveAclHistoryAudit, ContainerRecursiveAclHistoryAudit>();
         services.AddScoped<ContainerFileRestoreService>();
         services.AddSingleton<IFileGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddScoped<FileManagementService>();
