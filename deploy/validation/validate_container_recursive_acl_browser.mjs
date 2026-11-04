@@ -159,7 +159,7 @@ try {
   const frame = error?.stack?.split('\n').find(line => line.includes('validate_container_recursive_acl_browser.mjs:'))?.trim()
   if(activePage&&evidence&&!phase.includes('login')&&!phase.includes('logout')){
     const hint=await activePage.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-hints-v1')).catch(()=>null)
-    await writeFile(join(evidence,'failed-reference.json'),JSON.stringify({phase,url:activePage.url(),hint}),{mode:0o600}).catch(()=>{})
+    await writeFile(join(evidence,'failed-reference.json'),JSON.stringify({phase,path:new URL(activePage.url()).pathname,hint}),{mode:0o600}).catch(()=>{})
   }
   if (activePage && evidence && phase!=='startup'&&!phase.includes('login')&&!phase.includes('logout')) await activePage.screenshot({ path: join(evidence, 'failed-product-page.png') }).catch(() => {})
   console.error(JSON.stringify({ recursiveAclBrowser: 'failed', phase, failureType: error?.name, frame }))
