@@ -1,5 +1,7 @@
 # 当前完成比例与代码量估算
 
+2026-11-06独立回收恢复已标准覆盖：准确3d80d17的CI12项全成功，六组件/HTTP及生产迁移1/CHECK19/fence14/guard1通过；新意图/活动0，旧16回收行、2346保护内容和八数据库原身份按边界保持。55维护采样全200不签瞬时连续，三真实资源一致/匿名401；尚无本批真实身份恢复任务，继续Vue/Jobs/原inode/HDD整链、故障及长期清理和59项。[发布与准确边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_RELEASE.md)。
+
 2026-11-06独立恢复Jobs摘要候选：f08d53e3固定17字段、原回收/本恢复ID派生校验、Unknown/null归属及迟到证明处置、任务服务和Vue白名单已接；5463 Unit/741 Integration（7默认原生跳过）、1369前端单元/4构建预览组合/真实隔离PG投影与8范围通过。原失败保留，生产保持未部署；继续准确CI、标准发布和真实身份文件HDD任务页整链。[摘要与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_JOB_RESULTS.md)。
 
 2026-11-06独立恢复API/Vue候选：f6cb18db接严格sourceIntentId输入、分页MAC校验来源目录、新确认/查询/取消及独立Unknown处置；5437 Unit/741 Integration（7默认原生跳过）、1351前端单元、35HTTP/7来源新检查、10构建预览交互和真实隔离PG目录查询通过。布局/环境/夹具失败保留，生产未迁移部署/Root与身份保持；Jobs投影、真实整链及59项继续。[候选、预览和真实边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_API_UI.md)。

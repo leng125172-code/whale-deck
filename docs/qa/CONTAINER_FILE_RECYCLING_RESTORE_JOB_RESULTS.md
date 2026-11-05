@@ -1,5 +1,7 @@
 # 独立回收恢复Jobs安全摘要候选
 
+2026-11-06后续：本候选已随准确3d80d17完成CI全12项、标准覆盖及生产迁移/实际来源核验，见[发布记录](CONTAINER_FILE_RECYCLING_RESTORE_RELEASE.md)。本页以下保留当时的候选与未部署事实；真实身份、文件/HDD和任务页恢复整链仍未执行，不以发布补签。
+
 2026-11-06，候选f08d53e33c2bc96f9fbc9b42d5f9617f92571c65，承接[API/Vue候选](CONTAINER_FILE_RECYCLING_RESTORE_API_UI.md)。已接后台快照/任务服务白名单、前端任务摘要和真实PG投影验收；生产未部署，本批不签真实身份/文件/HDD页面整链。
 
 ## 固定白名单与引用归属
