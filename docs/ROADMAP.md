@@ -1,5 +1,7 @@
 # WhaleDeck 分阶段开发任务
 
+2026-11-06独立恢复写后Worker强杀已实机通过：3e9f44e9全新来源准确本Root Applying/原来源Restored/原inode已返回、三FD与当前HDD切点，固定Worker SIGKILL后原helper0.111秒退出；同容器镜像恢复，原lease自然87.465秒/41样本后同执行Succeeded/Completed、本操作归属true/成功claim保留，取消0不冒称写前Failed。原Job/权限/双端退出与清理前后独立通过，报告键仅改名后三次只读复核；124工具/8范围，2346保护/11核心限定保持，Root54-HDD57/恢复Root32。继续其他写后/Unknown矩阵与59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_WORKER.md)。
+
 2026-11-06独立恢复写后页面取消已全新资源实机通过：52b7e0cb准确本Root Applying/原来源Restored/原inode已返回切点，固定进程三FD与当前HDD复核后唯一取消POST202，原pidfd5.861秒退出；同执行Succeeded/Completed、本操作已恢复、成功claim保留，不冒称Canceled。原Job/权限/两次双端退出及清理前后独立通过；120工具/8范围。首轮旧文案等待失败与只读收尾错误保留，不重放/补签；2346保护/11核心及3d80保持，Root52-HDD55/恢复Root29。继续其余写后/Unknown等矩阵和59项。[实机与失败边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_CANCEL.md)。
 
 2026-11-06独立恢复写后切点候选f2d556bd已验证：仅本Root Applying/原来源已Restored/精确claim与原inode回归且trash缺席可计切点，沿用固定进程/三FD/pidfd与停后重验；11新/116关联root零跳过，真实临时rename+SourceReturned自有子进程SIGKILL与局部恢复Completed/不重做rename通过。HDD/存活有明确替身，未做安装RPC或真实页面写后；只读拒绝8终态、2346保护/11核心和旧业务Root-HDD保持，生产信号/RPC/身份变更0。接全新资源实机写后与Unknown等矩阵/长期清理及59项。[候选与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_RETURNED_CUT.md)。

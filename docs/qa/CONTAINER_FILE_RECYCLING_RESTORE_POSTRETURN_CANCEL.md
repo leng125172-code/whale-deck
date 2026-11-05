@@ -1,5 +1,7 @@
 # 独立恢复：原件已归还后的真实页面取消
 
+2026-11-06后续：另一个全新来源的写后Worker强杀/自然租约已实机通过，取消请求为0且同执行保留Succeeded/Completed，见[Worker记录](CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_WORKER.md)。以下保留晚到取消的原始边界，不混用触发或补签其余故障。
+
 2026-11-06，修订工具 `52b7e0cbc185db1a2765bd8ed4e58fc60da4eb98` 在保持3d80d17的实际部署上，以全新来源完成“原inode已返回、本恢复最终journal尚未落盘”切点的页面取消。最终保留Succeeded/Completed及本操作归属，而不是把晚到取消写成Canceled/Aborted。
 
 正式门禁 `whaledeck-qa-restore-postreturn-cancel-fixed`，Invocation `b6f034ab2c264708b335c7da5a8eac52`，exited/0；清理前后两个独立进程均passed。4项新专项结合回归共120项Linux root通过、零跳过，8范围、Python/Node语法通过。仅签此写后取消组合，完整写后/Unknown故障矩阵与59项交付仍未完成。
