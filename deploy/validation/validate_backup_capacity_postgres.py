@@ -147,11 +147,13 @@ def run_native(suite, report):
             assert len(runs) == 1 and runs[0].get('outcome') == 'Passed', 'Native result is not one complete passed execution'
             phases = re.findall(r'INBOX_PHASE=([a-z-]{1,160})', output)
             if suite == 'dispatch':
+                assert 'container-recycle-restore-job-safe-summary-source-attribution-nullable-audit-projection' in phases, 'Independent restore safe job summary was not executed'
                 assert 'container-recycle-restore-source-locked-persistent-nullable-unknown-fourteen-fences-audited' in phases, 'Independent recycle restore persistence boundaries were not executed'
                 assert 'container-acl-restore-source-mac-immutable-audited-new-jobs' in phases, 'ACL restore persistence boundaries were not executed'
                 assert 'container-recursive-acl-persistent-manifest-partial-unknown-immutable-both-fences-audited' in phases, 'Recursive ACL persistence boundaries were not executed'
                 assert 'container-recursive-acl-restore-persistent-manifest-partial-unknown-immutable-both-fences-audited' in phases, 'Recursive ACL restore persistence boundaries were not executed'
             if suite == 'dispatch':
+                assert 'container-recycle-restore-job-safe-summary-source-attribution-nullable-audit-projection' in phases, 'Independent restore safe job summary was not executed'
                 assert 'container-recycle-restore-source-locked-persistent-nullable-unknown-fourteen-fences-audited' in phases, 'Independent recycle restore persistence boundaries were not executed'
                 assert 'recursive-acl-restore-flat-unknown-ack-original-facts' in phases, '26-object Unknown/ACK persistence boundaries were not executed'
                 assert 'container-recycle-persistent-original-facts-nullable-unknown-twelve-peer-fences-audited' in phases, 'Recycle persistence boundaries were not executed'

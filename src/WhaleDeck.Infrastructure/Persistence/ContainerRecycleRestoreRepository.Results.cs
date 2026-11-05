@@ -124,7 +124,7 @@ public sealed partial class ContainerRecycleRestoreRepository
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
     }
     private string? JobResult(ContainerRecycleRestoreIntent row, OperationJob job) =>
-        ContainerRecycleRestoreWorkflowValidation.HasValidBinding(row, protector) ? JsonSerializer.Serialize(new { intentId=row.Id, jobId=job.Id, sourceIntentId=row.SourceIntentId, state=row.State, receiptState=row.RootState, row.SourceState, row.SourceRetained, row.SourceRestored, row.RestoredByThisOperation, row.HistoryVerified, row.HistoryAvailable, row.PublishBarrier }) : null;
+        ContainerRecycleRestoreWorkflowValidation.HasValidBinding(row, protector) ? ContainerRecycleRestoreJobResults.Snapshot(row, row.ExecutionJobId == job.Id) : null;
     private async Task FinishJob(OperationJob job, ContainerRecycleRestoreIntent row, string state, string phase, string code, CancellationToken cancellationToken)
     {
         job.State = state; job.Phase = phase; job.CompletedAtUtc = Now(); job.ErrorCode = state == "Succeeded" ? null : code;

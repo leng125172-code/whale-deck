@@ -50,10 +50,19 @@ public sealed partial class NativeNotificationDispatchTests
         ContainerRecycleRestoreConfirmation Claims(ContainerRecycleRestoreIntent row)=>new(row.Id,row.ActorSubject,row.LoginBinding,row.PlanHash!,row.ReadyExpiresAtUtc!.Value);
         ContainerRecycleRestoreReceiptDto Receipt(ContainerRecycleRestoreIntent row,string state)
         {var p=Plan(row);return new(row.ExecutionJobId!.Value,p.Command.Source.OperationId,p.Fingerprint,p.TargetProof,state,state=="Completed",false,state!="Aborted",state!="Aborted"?p.Command.HistoryDigest:"",state!="Aborted",state=="Completed"?"Restored":null,state=="Completed"?false:null,state=="Completed"?true:null,state=="Unknown"?null:state=="Completed");}
+        async Task JobFacts(ContainerRecycleRestoreIntent row,bool execution)
+        {
+            var id=execution?row.ExecutionJobId!.Value:row.Id;var job=await second.OperationJobs.AsNoTracking().SingleAsync(j=>j.Id==id);
+            var projected=await new OperationService(new JobRepository(second)).FindAsync(id,default);Assert.NotNull(projected!.ResultJson);Assert.Equal(ContainerRecycleRestoreJobResults.ForJob(job),projected.ResultJson);
+            var summary=JsonSerializer.Deserialize<ContainerRecycleRestoreJobResults.Summary>(projected.ResultJson,RecycleJobJson)!;
+            Assert.Equal(row.Id,summary.IntentId);Assert.Equal(row.SourceIntentId,summary.SourceIntentId);Assert.Equal(ContainerRecycleRestoreWorkflowValidation.ReadCommand(row).Source.OperationId,summary.SourceOperationId);
+            Assert.Equal(row.RootState,summary.ReceiptState);Assert.Equal(row.SourceState,summary.SourceState);Assert.Equal(row.RestoredByThisOperation,summary.RestoredByThisOperation);Assert.Equal(row.PublishBarrier,summary.PublishBarrier);
+            foreach(var secret in new[]{row.ActorSubject,row.LoginBinding,row.TraceId,row.OwnerHash,row.ContainerId,row.InstanceId,row.RelativePath,row.SourceProofHash,row.RequestHash,row.PlanHash,row.ExecutionHash,row.ReceiptHash,row.HistoryDigest})if(secret is not null)Assert.DoesNotContain(secret,projected.ResultJson,StringComparison.Ordinal);
+        }
         async Task<ContainerRecycleRestoreIntent> Ready(ContainerRecycleIntent original)
         {
             var row=Row(original);await repo.EnqueueAsync(row,default);var claimed=(await repo.ClaimAsync(clock.GetUtcNow(),default))!;Assert.Equal(row.Id,claimed.Id);
-            Assert.True(await repo.MarkPlanningAsync(claimed,default));await repo.FinishPlanningAsync(claimed,Plan(row),"CONTAINER_RECYCLE_RESTORE_READY",default);return (await repo.FindAsync(row.Id,default))!;
+            Assert.True(await repo.MarkPlanningAsync(claimed,default));await repo.FinishPlanningAsync(claimed,Plan(row),"CONTAINER_RECYCLE_RESTORE_READY",default);var ready=(await repo.FindAsync(row.Id,default))!;await JobFacts(ready,false);return ready;
         }
         async Task<ContainerRecycleRestoreIntent> Pending(ContainerRecycleRestoreIntent ready)
         {await repo.ConfirmAsync(actor,Claims(ready),ready.Version,default);var claimed=(await repo.ClaimAsync(clock.GetUtcNow(),default))!;Assert.Equal(ready.Id,claimed.Id);return claimed;}
@@ -132,18 +141,18 @@ public sealed partial class NativeNotificationDispatchTests
             {await using var tx=await second.Database.BeginTransactionAsync();var error=await Assert.ThrowsAsync<PostgresException>(()=>ClonePeer(table));Assert.Equal(PostgresErrorCodes.ObjectNotInPrerequisiteState,error.SqlState);await tx.RollbackAsync();second.ChangeTracker.Clear();}
             await Rejected($"INSERT INTO file_path_locks(path_hash,operation_id,scope_kind) VALUES ({hash},{pending.Id},'Legacy')","FILES_TARGET_BUSY");
             var unknown=Receipt(pending,"Unknown");Assert.True(await repo.FinishAsync(pending,"Unknown","CONTAINER_RECYCLE_RESTORE_RESULT_UNKNOWN",unknown,default));
-            var held=(await other.FindAsync(pending.Id,default))!;Assert.True(held.PublishBarrier);Assert.Null(held.SourceRetained);Assert.Null(held.SourceRestored);Assert.Null(held.RestoredByThisOperation);Assert.Null(await repo.ClaimAsync(clock.GetUtcNow(),default));
+            var held=(await other.FindAsync(pending.Id,default))!;await JobFacts(held,true);Assert.True(held.PublishBarrier);Assert.Null(held.SourceRetained);Assert.Null(held.SourceRestored);Assert.Null(held.RestoredByThisOperation);Assert.Null(await repo.ClaimAsync(clock.GetUtcNow(),default));
             await Rejected($"UPDATE container_recycle_restore_intents SET source_proof_hash={new string('F',64)} WHERE id={held.Id}","container_recycle_restore_request_immutable");
             await Rejected($"UPDATE container_recycle_restore_intents SET restored_by_this_operation=false WHERE id={held.Id}","container_recycle_restore_fact_immutable");
             await Rejected($"DELETE FROM container_recycle_restore_intents WHERE id={held.Id}","container_recycle_restore_permanent_intent");
             var admin=actor with{Subject="another-native-restore-admin",LoginBinding=new('9',64)};await repo.AcknowledgeAsync(admin,held.Id,held.Version,unknown,default);
-            var acknowledged=(await other.FindAsync(held.Id,default))!;Assert.False(acknowledged.PublishBarrier);Assert.Null(acknowledged.RestoredByThisOperation);Assert.Equal("Unknown",acknowledged.RootState);
+            var acknowledged=(await other.FindAsync(held.Id,default))!;await JobFacts(acknowledged,true);Assert.False(acknowledged.PublishBarrier);Assert.Null(acknowledged.RestoredByThisOperation);Assert.Equal("Unknown",acknowledged.RootState);
             var proofSource=await Source();var forged=Row(proofSource,new('F',64));
             Assert.Equal("CONTAINER_RECYCLE_RESTORE_SOURCE_CHANGED",(await Assert.ThrowsAsync<InvalidOperationException>(()=>repo.EnqueueAsync(forged,default))).Message);
             Assert.False(await second.OperationJobs.AnyAsync(j=>j.Id==forged.Id));
             var canceledReady=await Ready(await Source());await repo.CancelAsync(actor,canceledReady.Id,default);Assert.Null((await other.FindAsync(canceledReady.Id,default))!.ExecutionJobId);
             var canceled=await Pending(await Ready(await Source()));await repo.CancelAsync(actor,canceled.Id,default);
-            Assert.True(await repo.FinishAsync(canceled,"Canceled","CONTAINER_RECYCLE_RESTORE_CANCELED",Receipt(canceled,"Aborted"),default));var canceledResult=(await other.FindAsync(canceled.Id,default))!;
+            Assert.True(await repo.FinishAsync(canceled,"Canceled","CONTAINER_RECYCLE_RESTORE_CANCELED",Receipt(canceled,"Aborted"),default));var canceledResult=(await other.FindAsync(canceled.Id,default))!;await JobFacts(canceledResult,true);
             Assert.False(canceledResult.RestoredByThisOperation);Assert.Null(canceledResult.SourceRetained);Assert.False(canceledResult.HistoryVerified);
             var rejectSource=await Source();
             var normal=await Pending(await Ready(await Source()));Assert.Equal(ContainerFileUploadStartResult.Started,await repo.StartedAsync(normal,clock.GetUtcNow(),default));await repo.DeferAsync(normal,default);clock.Offset+=TimeSpan.FromSeconds(7);
@@ -159,13 +168,17 @@ public sealed partial class NativeNotificationDispatchTests
             }
             finally{await second.Database.ExecuteSqlRawAsync("DROP TRIGGER wdv_recycle_restore_audit_reject ON audit_events; DROP FUNCTION wdv_recycle_restore_audit_reject();");}
             Assert.True(await other.FinishAsync(reclaimed,"Succeeded","CONTAINER_RECYCLE_RESTORE_COMPLETED",Receipt(reclaimed,"Completed"),default));
-            var finished=(await repo.FindAsync(normal.Id,default))!;Assert.True(finished.RestoredByThisOperation);Assert.Equal("Restored",finished.SourceState);Assert.True(ContainerRecycleRestoreWorkflowValidation.HasValidBinding(finished,protector));
+            var finished=(await repo.FindAsync(normal.Id,default))!;await JobFacts(finished,true);Assert.True(finished.RestoredByThisOperation);Assert.Equal("Restored",finished.SourceState);Assert.True(ContainerRecycleRestoreWorkflowValidation.HasValidBinding(finished,protector));
             Assert.Equal(sourceBefore,JsonSerializer.Serialize(await sourceRepo.FindAsync(source.Id,default)));
+            var late=await Pending(await Ready(await Source()));Assert.Equal(ContainerFileUploadStartResult.Started,await repo.StartedAsync(late,clock.GetUtcNow(),default));
+            Assert.True(await repo.FinishAsync(late,"Unknown","CONTAINER_RECYCLE_RESTORE_RESULT_UNKNOWN",null,default));var missing=(await other.FindAsync(late.Id,default))!;Assert.Null(missing.ReceiptJson);
+            await repo.AcknowledgeAsync(admin,late.Id,missing.Version,Receipt(late,"Completed"),default);var lateAck=(await other.FindAsync(late.Id,default))!;Assert.Equal("Acknowledged",lateAck.State);Assert.True(lateAck.RestoredByThisOperation);await JobFacts(lateAck,true);
             var migration=db.Database.GetMigrations().Last();Assert.EndsWith("_ContainerRecycleRestoreIntents",migration,StringComparison.Ordinal);
             var migrations=db.Database.GetMigrations().ToArray();var errorDown=await Assert.ThrowsAsync<PostgresException>(()=>db.GetService<IMigrator>().MigrateAsync(migrations[^2]));Assert.Equal("container_recycle_restore_downgrade_requires_empty_table",errorDown.MessageText);
             Assert.False(await db.ContainerRecycleRestoreIntents.AnyAsync(r=>r.CompletedAtUtc==null||r.PublishBarrier||r.LeaseToken!=null));
             Assert.False(await db.OutboxMessages.AnyAsync(m=>(m.MessageType=="ContainerRecycleRestoreRequested"||m.MessageType=="ContainerRecycleRestoreCancellationRequested")&&m.ProcessedAtUtc==null));
             Assert.True(await db.AuditEvents.AnyAsync(a=>a.Action=="containers.files.recycle-restore.unknown-acknowledged"&&a.ActorSubject==admin.Subject));
+            Console.WriteLine("INBOX_PHASE=container-recycle-restore-job-safe-summary-source-attribution-nullable-audit-projection");
             Console.WriteLine("INBOX_PHASE=container-recycle-restore-source-locked-persistent-nullable-unknown-fourteen-fences-audited");
         }
         finally{await second.ContainerFileUploadOperations.Where(r=>uploadIds.Contains(r.Id)).ExecuteDeleteAsync();await second.ContainerDirectoryOperations.Where(r=>directoryIds.Contains(r.Id)).ExecuteDeleteAsync();File.Delete(keyPath);}

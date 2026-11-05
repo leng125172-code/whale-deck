@@ -6,6 +6,16 @@ namespace WhaleDeck.UnitTests.Application;
 
 public sealed partial class ContainerRecycleRestoreWorkflowTests
 {
+    [Fact]
+    public async Task MissingReceiptUnknownCanRecordLateCompletedProofDuringAcknowledgement()
+    {
+        using var f=new Fixture();await f.Create();f.Gateway.ApplyHandler=_=>throw new IOException("lost apply reply");
+        await f.Dispatcher.TickAsync(default);f.Clock.Now=f.Clock.Now.AddMinutes(16);f.Gateway.DiscardFailure=new IOException("lost inspection/fence reply");
+        await f.Dispatcher.TickAsync(default);var row=f.Repository.Row!;Assert.Equal("Unknown",row.State);Assert.Null(row.ReceiptJson);Assert.True(row.PublishBarrier);
+        f.Gateway.DiscardFailure=null;f.Gateway.Receipt=Gateway.ReceiptFor(f.Gateway.LastOperation!,"Completed");
+        await f.Service.AcknowledgeAsync(f.Actor,row.Id,new(row.Version,true),default);
+        Assert.Equal("Acknowledged",row.State);Assert.Equal("Completed",row.RootState);Assert.True(row.RestoredByThisOperation);Assert.False(row.PublishBarrier);Assert.Equal(1,f.Gateway.Applies);
+    }
     [Theory][InlineData(false,0)][InlineData(true,-1)]
     public async Task ConfirmationMustBeExplicitAndVersionValid(bool confirmed,long version)
     {
