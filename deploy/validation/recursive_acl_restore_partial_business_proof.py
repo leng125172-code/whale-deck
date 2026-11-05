@@ -14,9 +14,11 @@ from validate_container_recursive_acl_restore_browser import expected_execution
 PREFIX='CONTAINER_RECURSIVE_ACL_RESTORE_'
 STABLE=('id','idempotency_key','ready_expires_at_utc','actor_subject','login_binding','container_id','instance_id','relative_path','owner_hash','command_json','request_hash','plan_json','plan_hash','execution_hash','execution_job_id','confirmed_at_utc','execution_expires_at_utc','root_started_at_utc','root_state','completed_count','changed_count','aborted_count','not_started_count','unknown_count','outcome_digest','history_digest','history_verified','history_may_exist','cancel_requested_at_utc')
 
-def audits(data,*,resolver=None):
+def audits(data,*,resolver=None,logout=False):
+    assert type(logout) is bool
     row=data['row'];pid=row['id'];eid=row['execution_job_id'];actor=row['actor_subject']
     wanted=Counter({('plan-accepted','Accepted',pid,actor):1,('plan-result','Ready',pid,actor):1,('confirmed','Accepted',eid,actor):1,('cancel-requested','Accepted',eid,actor):1,('result','Partial',eid,actor):1})
+    if logout:del wanted[('cancel-requested','Accepted',eid,actor)]
     if resolver is not None:wanted[('partial-acknowledged','Partial',eid,resolver)]+=1
     seen=Counter();ids=set()
     for a in data['audits']:
@@ -26,12 +28,14 @@ def audits(data,*,resolver=None):
         seen[(a['action'].removeprefix(prefix),a['result'],a['job_id'],a['actor_subject'])]+=1;typed_equal(json_projection(a['detail_json']),metadata(row))
     assert seen==wanted
 
-def phase(data,*,ack=False):
+def phase(data,*,ack=False,logout=False):
+    assert type(logout) is bool
     row=data['row'];job=data['executionJob'];assert type(ack) is bool
     assert row['state']==('Acknowledged' if ack else 'Partial') and row['root_state']=='Partial'
     assert row['result_code']==PREFIX+('PARTIAL_ACKNOWLEDGED' if ack else 'PARTIAL_REQUIRES_ACKNOWLEDGEMENT')
     assert row['publish_barrier'] is (not ack) and bool(row['completed_at_utc']) is ack and row['lease_token'] is row['lease_expires_at_utc'] is None
-    assert row['confirmed_at_utc'] and row['root_started_at_utc'] and row['cancel_requested_at_utc']
+    assert row['confirmed_at_utc'] and row['root_started_at_utc']
+    assert row['cancel_requested_at_utc'] is None if logout else bool(row['cancel_requested_at_utc'])
     assert row['history_may_exist'] is row['history_verified'] is True
     assert job['state']==('Failed' if ack else 'Running') and job['phase']==('Acknowledged' if ack else 'AwaitingContainerRecursiveAclRestoreResolution')
     assert bool(job['completed_at_utc']) is ack and job['cancel_requested_at_utc']==row['cancel_requested_at_utc']
@@ -57,11 +61,11 @@ def phase(data,*,ack=False):
     assert data['planJob']['state']=='Succeeded' and data['planJob']['idempotency_key']==row['idempotency_key'] and job['idempotency_key']==row['execution_job_id']
     return dict(operationId=receipt['operationId'],owner=row['owner_hash'],plan=plan),receipt
 
-def require_partial(data,ready_signal,initial,baseline,source_summary,api_result,job_observation):
+def require_partial(data,ready_signal,initial,baseline,source_summary,api_result,job_observation,*,logout=False):
     ready_job_proof(ready_signal,initial);row=data['row'];old=initial['row'];subject=ready_signal['subject']
     assert row['actor_subject']==old['actor_subject']==subject and row['container_id']==baseline['containerId'] and row['instance_id']==baseline['instanceId'] and row['relative_path']=='work/recursive-tree'
     for key in ('id','idempotency_key','login_binding','owner_hash','command_json','request_hash','plan_json','plan_hash','ready_expires_at_utc'):typed_equal(row[key],old[key])
-    typed_equal(data['planJob'],initial['planJob']);request,receipt=phase(data);audits(data)
+    typed_equal(data['planJob'],initial['planJob']);request,receipt=phase(data,logout=logout);audits(data,logout=logout)
     assert row['acknowledged_by'] is row['acknowledgement_json'] is None
     typed_equal(request['plan']['restoreSource'],source_summary)
     assert api_result['id']==api_result['planningJobId']==row['id'] and api_result['executionJobId']==row['execution_job_id'] and api_result['state']=='Partial' and api_result['resultCode']==row['result_code']
@@ -73,14 +77,14 @@ def require_partial(data,ready_signal,initial,baseline,source_summary,api_result
     job_proof(job_observation,data['executionJob'],projection(row,request['plan'],execution=True),prefix='job-fault-partial-execution')
     return request,receipt
 
-def require_acknowledged(before,after,resolver,api_result,job_observation):
-    phase(before);request,receipt=phase(after,ack=True);old=before['row'];row=after['row']
+def require_acknowledged(before,after,resolver,api_result,job_observation,*,logout=False):
+    phase(before,logout=logout);request,receipt=phase(after,ack=True,logout=logout);old=before['row'];row=after['row']
     assert type(resolver) is str and resolver and resolver!=old['actor_subject'] and row['acknowledged_by']==resolver and row['version']>old['version']
     for key in STABLE:typed_equal(row[key],old[key])
     typed_equal(after['planJob'],before['planJob'])
     prior=managed_receipt(old['receipt_json']);facts=lambda r:{k:v for k,v in r.items() if k not in ('replayed','bindingCurrent','historyAvailable')}
     typed_equal(facts(prior),facts(receipt));typed_equal(managed_receipt(row['acknowledgement_json']),receipt)
-    audits(after,resolver=resolver)
+    audits(after,resolver=resolver,logout=logout)
     assert api_result['id']==row['id'] and api_result['state']=='Acknowledged' and api_result['executionJobId']==row['execution_job_id'] and api_result['resultCode']==row['result_code']
     assert api_result['planningJobId']==row['id'] and api_result['confirmation'] is None and type(api_result['version']) is int and api_result['version']==row['version']
     typed_equal(api_result['restoreSource'],request['plan']['restoreSource'])

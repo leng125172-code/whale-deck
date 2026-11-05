@@ -22,6 +22,7 @@ from validate_container_directory_restart import Worker,preflight
 from validate_container_upload_recovery_agent import trusted
 from bound_container_recursive_acl_restore_cut import freeze_after_first_restore,OBSERVER_WAIT_SECONDS
 
+LOGOUT_SOURCES=('validate_recursive_acl_restore_partial_logout.py','validate_recursive_acl_restore_partial_logout.mjs','test_recursive_acl_restore_partial_logout.py','verify_recursive_acl_restore_partial_logout.py')
 PACKETS=('partial','recovery-dismissed','recovery','final-auth')
 SOURCES=('recursive_acl_restore_partial_workflow.py','installed_ui_restore_partial_resolution.mjs','validate_recursive_acl_restore_partial_cancel.py','validate_recursive_acl_restore_partial_cancel.mjs','verify_recursive_acl_restore_partial_cancel.py','test_recursive_acl_restore_partial_workflow.py')
 def wait_packet(process,evidence,name):
@@ -36,20 +37,25 @@ def normal_logout(value):
     assert value['normalUiLogout'] is value['providerNavigationObserved'] is value['finalLoginPage'] is True
     assert value['postStatus'] in (302,303) and value['bffStatus']==401 and value['identityStatus'] in (401,403)
 
-def authority_proof(partial,recovery,ordinary,dismissed):
+def authority_proof(partial,recovery,ordinary,dismissed,*,logout=False):
+    assert type(logout) is bool
     assert type(partial['subject']) is type(recovery['subject']) is type(ordinary['subject']) is str
     assert all((partial['subject'],recovery['subject'],ordinary['subject'])) and len({partial['subject'],recovery['subject'],ordinary['subject']})==3
     assert partial['id']==recovery['id']==dismissed['id'] and recovery['subject']==dismissed['subject']
-    for key,value in (('registrations',1),('confirmations',1),('cancellations',1),('uploads',0)):assert type(partial[key]) is int and partial[key]==value
+    for key,value in (('registrations',1),('confirmations',1),('cancellations',0 if logout else 1),('uploads',0)):assert type(partial[key]) is int and partial[key]==value
     assert type(recovery['acknowledgements']) is int and recovery['acknowledgements']==1
     assert type(dismissed['acknowledgements']) is int and dismissed['acknowledgements']==0 and type(dismissed['ownedLookup']) is int and dismissed['ownedLookup']==404
     for values,wanted in ((partial['anonymous'],[401]*9),(recovery['anonymous'],[401]*9),(ordinary['denied'],[403]*9),(ordinary['posts'],[403]*3),(ordinary['anonymous'],[401]*9)):
         assert type(values) is list and all(type(v) is int for v in values);assert values==wanted
     assert type(ordinary['uiRequests']) is int and ordinary['uiRequests']==0
     for value in (partial['logout'],recovery['logout'],ordinary['logout']):normal_logout(value)
+    if logout:
+        normal_logout(partial['executionLogout']);assert partial['executionAnonymous']==[401]*9
+        assert partial['reloginSubject']==partial['subject'] and partial['oldLookups']==[404,404] and partial['hintsCleared'] is True and type(partial['originalAcknowledgements']) is int and partial['originalAcknowledgements']==0
 
 def exercise(process,evidence,b,row,metadata,root,reader,content,acl,storage,fixture):
     import validate_recursive_acl_restore_paging as gate
+    logout=b.get('restorePartialLogout',False);assert type(logout) is bool
     fixture['retain_unsettled']=True;worker=held=None;identifier=None
     save=lambda name,value:(evidence/name).write_text(json.dumps(value))
     current=lambda:inventory(root,reader,content,acl)
@@ -78,14 +84,14 @@ def exercise(process,evidence,b,row,metadata,root,reader,content,acl,storage,fix
         with ThreadPoolExecutor(max_workers=1) as pool:
             exit_watch=pool.submit(held.wait_exit_seconds,began,15);acknowledge(evidence,'action',dict(boundFirstCompleted=True))
             action=wait_named(process,evidence,'action');elapsed=exit_watch.result(timeout=16)
-        assert elapsed is not None and elapsed<15 and action['id']==identifier and action['subject']==signal['subject'] and action['cancellations']==1
+        assert elapsed is not None and elapsed<15 and action['id']==identifier and action['subject']==signal['subject'] and action['cancellations']==int(not logout)
         save('product-helper-exit.json',dict(seconds=elapsed,validatorKilledHelper=False));held.release();held=None
         deadline=time.monotonic()+145
         while True:
             partial=sql_snapshot(identifier)
             if partial['row']['state']=='Partial' and partial['row']['lease_token'] is None:break
             assert partial['row']['state'] in ('Pending','Applying','Partial') and time.monotonic()<deadline;time.sleep(.5)
-        request,receipt=phase(partial);records=read_partial_first(io,request,evidence/'partial-records',create=True)
+        request,receipt=phase(partial,logout=logout);records=read_partial_first(io,request,evidence/'partial-records',create=True)
         from recursive_acl_restore_rpc_proof import child_id
         sub=child_id(request['operationId'],0)
         for name in ('hdd.json',sub+'.root.json',sub+'.hdd.json'):
@@ -94,15 +100,15 @@ def exercise(process,evidence,b,row,metadata,root,reader,content,acl,storage,fix
         save('partial.sql.json',partial);save('partial-record-proof.json',proof);acknowledge(evidence,'settled',dict(id=identifier,state='Partial'))
         ui=wait_packet(process,evidence,'partial');typed_equal(ui['readySignal'],signal);typed_equal(ui['pending'],pending)
         assert ui['id']==identifier and ui['subject']==signal['subject']
-        require_partial(partial,signal,initial,b,summary(row,metadata),ui['result'],ui['job']);normal_logout(ui['logout']);assert ui['anonymous']==[401]*9
-        assert ui['registrations']==ui['confirmations']==ui['cancellations']==1 and ui['uploads']==0
+        require_partial(partial,signal,initial,b,summary(row,metadata),ui['result'],ui['job'],logout=logout);normal_logout(ui['logout']);assert ui['anonymous']==[401]*9
+        assert ui['registrations']==ui['confirmations']==1 and ui['cancellations']==int(not logout) and ui['uploads']==0
         typed_equal(sql_snapshot(identifier),partial);typed_equal(current(),physical);acknowledge(evidence,'partial',dict(partialPhysicalVerified=True))
         dismissed=wait_packet(process,evidence,'recovery-dismissed');assert dismissed['id']==identifier and dismissed['subject']!=signal['subject'] and dismissed['acknowledgements']==0 and dismissed['ownedLookup']==404
         typed_equal(sql_snapshot(identifier),partial);read_partial_first(io,request,evidence/'partial-records');typed_equal(current(),physical)
         acknowledge(evidence,'recovery-allow',dict(originalFactsPreserved=True))
         recovery=wait_packet(process,evidence,'recovery');after=sql_snapshot(identifier)
         assert recovery['subject']==dismissed['subject'] and recovery['acknowledgements']==1
-        req,ack_receipt=require_acknowledged(partial,after,recovery['subject'],recovery['result'],recovery['job']);typed_equal(req,request)
+        req,ack_receipt=require_acknowledged(partial,after,recovery['subject'],recovery['result'],recovery['job'],logout=logout);typed_equal(req,request)
         normal_logout(recovery['logout']);assert recovery['anonymous']==[401]*9
         partial_first_proof(req,ack_receipt,read_partial_first(io,req,evidence/'partial-records'),source,frame,row['after'],current(),attribute_digest());typed_equal(current(),physical);save('acknowledged.sql.json',after)
         acknowledge(evidence,'recovery-done',dict(ackAndPhysicalPreserved=True))
@@ -111,7 +117,7 @@ def exercise(process,evidence,b,row,metadata,root,reader,content,acl,storage,fix
         ordinary=final['ordinary'];assert len({ordinary['subject'],recovery['subject'],signal['subject']})==3
         assert ordinary['denied']==[403]*9 and ordinary['posts']==[403]*3 and ordinary['anonymous']==[401]*9 and ordinary['uiRequests']==0
         normal_logout(ordinary['logout'])
-        authority_proof(ui,recovery,ordinary,dismissed)
+        authority_proof(ui,recovery,ordinary,dismissed,logout=logout)
         from validate_metric_continuity import query
         assert query("SELECT count(*) FROM audit_events WHERE actor_subject=:'subject' AND action LIKE 'containers.files.recursive-acl-restore.%';",subject=ordinary['subject'])==0
         typed_equal(sql_snapshot(identifier),after);typed_equal(current(),physical);verify_capture(evidence,b,row,storage)

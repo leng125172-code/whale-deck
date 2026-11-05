@@ -19,7 +19,8 @@ try{
  const packet=JSON.parse(await readFile('/dev/stdin','utf8')),fixture=packet.fixture,credentials=packet.credentials
  const base='http://127.0.0.1:8080',endpoint=`/api/v1/containers/${fixture.containerId}/files/recursive-acls/history`
  assert.equal(process.argv[2],fixture.revision);assert.match(fixture.captureId,/^[a-f0-9]{32}$/);assert.match(fixture.historyDigest,/^[A-F0-9]{64}$/)
- const partialCancel=fixture.partialCancel===true;assert.equal(typeof(fixture.partialCancel??false),'boolean');assert.equal(partialCancel,process.argv[1].endsWith('/validate_recursive_acl_restore_partial_cancel.mjs'))
+ const partialCancel=fixture.partialCancel===true;assert.equal(typeof(fixture.partialCancel??false),'boolean');assert.equal(partialCancel,(process.argv[1].endsWith('/validate_recursive_acl_restore_partial_cancel.mjs')||process.argv[1].endsWith('/validate_recursive_acl_restore_partial_logout.mjs')))
+ const partialLogout=fixture.partialLogout===true;assert.equal(typeof(fixture.partialLogout??false),'boolean');assert.equal(partialLogout,process.argv[1].endsWith('/validate_recursive_acl_restore_partial_logout.mjs'));assert.ok(!partialLogout||partialCancel)
  const jobResults=fixture.jobResults===true;assert.equal(typeof(fixture.jobResults??false),'boolean');assert.equal(jobResults,partialCancel||process.argv[1].endsWith('/validate_recursive_acl_restore_job_results.mjs'))
  const inflightLogout=fixture.inflightLogout===true;assert.equal(inflightLogout,jobResults&&!partialCancel||process.argv[1].endsWith('/validate_recursive_acl_restore_inflight_logout.mjs'));assert.equal(typeof(fixture.inflightLogout??false),'boolean')
  evidence=fixture.evidence;browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true})

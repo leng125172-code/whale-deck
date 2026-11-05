@@ -18,19 +18,41 @@ export async function runPartialResolution(f){
  let phase='first-completed-wait',activePage=page,resolverContext,ordinaryContext
  try{
   assert.equal((await waitSignal(evidence,'action-verified.json',180000)).boundFirstCompleted,true)
-  phase='normal-cancel';await dialog.getByRole('button',{name:'查询原递归ACL恢复任务',exact:true}).click();await expect(dialog.getByText('正在逐项恢复ACL',{exact:true}).first()).toBeVisible()
+  const logoutCase=fixture.partialLogout===true;assert.equal(typeof(fixture.partialLogout??false),'boolean')
+  phase='original-applying';await dialog.getByRole('button',{name:'查询原递归ACL恢复任务',exact:true}).click();await expect(dialog.getByText('正在逐项恢复ACL',{exact:true}).first()).toBeVisible()
   await page.screenshot({path:join(evidence,'inflight.png')})
-  await dialog.getByRole('button',{name:'请求取消递归ACL恢复',exact:true}).click();await page.getByRole('button',{name:'继续等待',exact:true}).click();assert.equal(counts.cancellations,0)
-  await dialog.getByRole('button',{name:'请求取消递归ACL恢复',exact:true}).click();await page.getByRole('button',{name:'确认请求取消',exact:true}).click()
-  await expect.poll(()=>counts.cancellations).toBe(1);await writeSignal(evidence,'action-result.json',{id,subject:admin.subject,cancellations:counts.cancellations})
+  let executionLogout=null,executionAnonymous=null,reloginSubject=null,oldLookups=null,hintsCleared=null,originalAcknowledgements=0,result
+  page.on('request',r=>{if(new URL(r.url()).pathname===recovery+'/acknowledge'&&r.method()==='POST')originalAcknowledgements++})
+  if(logoutCase){
+   phase='execution-normal-logout';await closePermissionDetails(page,dialog);executionLogout=await logoutFromUserMenu(page,context,base);executionAnonymous=await statuses(context,401)
+   hintsCleared=await page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-restore-hints-v1')===null);assert.equal(hintsCleared,true)
+   await page.screenshot({path:join(evidence,'execution-logout.png')});assert.equal(counts.cancellations,0)
+  }else{
+   phase='normal-cancel';await dialog.getByRole('button',{name:'请求取消递归ACL恢复',exact:true}).click();await page.getByRole('button',{name:'继续等待',exact:true}).click();assert.equal(counts.cancellations,0)
+   await dialog.getByRole('button',{name:'请求取消递归ACL恢复',exact:true}).click();await page.getByRole('button',{name:'确认请求取消',exact:true}).click();await expect.poll(()=>counts.cancellations).toBe(1)
+  }
+  await writeSignal(evidence,'action-result.json',{id,subject:admin.subject,cancellations:counts.cancellations})
   const settled=await waitSignal(evidence,'settled-verified.json',180000);assert.equal(settled.id,id);assert.equal(settled.state,'Partial')
-  phase='partial-original-task';await dialog.getByRole('button',{name:'查询原递归ACL恢复任务',exact:true}).click();await expect(dialog.getByText('部分修改，保护已保留',{exact:true}).first()).toBeVisible()
-  const result=await query();assert.equal(result.state,'Partial');assert.equal(result.executionJobId,pending.executionJobId);assert.equal(result.receipt.state,'Partial')
+  if(logoutCase){
+   phase='same-subject-visible-login';const relogin=await loginVisible(page,context,base,'/files',true,credentials.admin);reloginSubject=relogin.subject;assert.equal(reloginSubject,admin.subject)
+   oldLookups=[];for(const u of urls.slice(0,2))oldLookups.push((await context.request.get(u)).status());assert.deepEqual(oldLookups,[404,404])
+   assert.equal(await page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-restore-hints-v1')===null),true)
+   const r=await context.request.get(base+recovery);assert.equal(r.status(),200);assert.ok(r.headers()['cache-control']?.includes('no-store'));result=await r.json()
+   phase='same-subject-read-only-recovery';await page.getByRole('button',{name:'容器递归ACL恢复异常',exact:true}).click()
+   const rd=page.getByRole('dialog',{name:'容器递归ACL恢复异常处置',exact:true}),row=rd.locator('.recursive-acl-restore-recovery__row').filter({hasText:id})
+   await expect(row).toHaveCount(1);await expect(row).toContainText('部分修改，保护已保留');await page.screenshot({path:join(evidence,'partial.png')})
+   await rd.locator('.el-dialog__headerbtn').click();await page.screenshot({path:join(evidence,'relogin-isolation.png')});assert.equal(originalAcknowledgements,0)
+  }else{
+   phase='partial-original-task';await dialog.getByRole('button',{name:'查询原递归ACL恢复任务',exact:true}).click();await expect(dialog.getByText('部分修改，保护已保留',{exact:true}).first()).toBeVisible()
+   result=await query();await page.screenshot({path:join(evidence,'partial.png')})
+  }
+  assert.equal(result.state,'Partial');assert.equal(result.executionJobId,pending.executionJobId);assert.equal(result.receipt.state,'Partial')
   assert.deepEqual(['completedCount','changedCount','abortedCount','notStartedCount','unknownCount'].map(k=>result.receipt[k]),[1,1,0,25,0])
-  await page.screenshot({path:join(evidence,'partial.png')});const partialJob=await job(context,pending.executionJobId,'Partial','job-fault-partial-execution')
-  await closePermissionDetails(page,dialog);phase='original-normal-logout';const logout=await logoutFromUserMenu(page,context,base),anonymous=await statuses(context,401)
-  assert.deepEqual(counts,{registrations:1,confirmations:1,cancellations:1,uploads:0})
-  const partial={id,subject:admin.subject,readySignal,pending,result,job:partialJob,logout,anonymous,...counts}
+  const partialJob=await job(context,pending.executionJobId,'Partial','job-fault-partial-execution')
+  if(!logoutCase)await closePermissionDetails(page,dialog)
+  phase='original-normal-logout';const logout=await logoutFromUserMenu(page,context,base),anonymous=await statuses(context,401)
+  assert.deepEqual(counts,{registrations:1,confirmations:1,cancellations:logoutCase?0:1,uploads:0})
+  const partial={id,subject:admin.subject,readySignal,pending,result,job:partialJob,logout,anonymous,...counts,...(logoutCase?{executionLogout,executionAnonymous,reloginSubject,oldLookups,hintsCleared,originalAcknowledgements}:{})}
   await writeSignal(evidence,'partial-result.json',partial);assert.equal((await waitSignal(evidence,'partial-verified.json')).partialPhysicalVerified,true)
   resolverContext=await browser.newContext({viewport:{width:320,height:600},colorScheme:'dark',reducedMotion:'reduce'});resolverContext.setDefaultTimeout(30000);activePage=await resolverContext.newPage()
   phase='resolver-visible-login';const resolver=await loginVisible(activePage,resolverContext,base,'/files',true,credentials.resolver);assert.notEqual(resolver.subject,admin.subject)
