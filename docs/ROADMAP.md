@@ -10,6 +10,8 @@
 
 ## 当前P1/P2文件推进点（2026-11-05）
 
+2026-11-05 回收执行中HDD已验证/源未移除切点取消已在新资源实机通过：最终9e7500f4，精确MainPID/Invocation/cgroup/双FD和pidfd后STOP，实际Vue明确取消，原helper1.754秒退出；Canceled/Aborted、源inode字节属性与真实Canceled HDD原件保持，原Job摘要/普通8匿名4拒绝/双端退出、清理前后独立证明通过。47工具/8范围，127成功证据与107+111旧失败保留，未验证partial也保留；Root8→10/HDD11→13，2346保护/11核心保持。仅签该切点，继续退出/撤权/重启/Unknown、恢复和59项。[实机与失败边界](qa/CONTAINER_FILE_RECYCLING_INFLIGHT_CANCEL.md)。
+
 2026-11-05 回收执行中切点QA候选645d859b已实现：完整原计划/源inode字节属性、当前systemd MainPID/Invocation/cgroup及双内核FD绑定后才允许pidfd STOP，未STOP不发CONT；12专项/44关联/8范围通过。正向Proc为替身、文件与自有子进程为实际临时I/O，未对生产helper发信号或签取消实机。2346保护/11核心/Root6-HDD9保持。继续新资源真实取消门禁及退出/撤权/重启/Unknown、恢复和59项，不升完成率。[观察器与边界](qa/CONTAINER_FILE_RECYCLING_CUT_CANDIDATE.md)。
 
 2026-11-05 回收Ready正常退出/重登隔离/自然到期已在新资源实机通过：76475a18门禁，原会话401、新同Subject旧ID/key/确认404，两次正常双端退出；168观测约297秒自然Expired，SQL晚原期限0.134秒，无执行/取消，原规划Job历史保持。清理前后独立证明、普通8/匿名4拒绝、原件和Root6/HDD9、2346保护/11核心保持。117新证据/旧109失败封存均保留；初版弹窗遮挡退出超时原门禁仍失败。32工具/8范围通过并补CI覆盖，继续执行中矩阵/恢复和59项，不升完成率。[实际结果与失败边界](qa/CONTAINER_FILE_RECYCLING_READY_LOGOUT.md)。

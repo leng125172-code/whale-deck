@@ -1,5 +1,7 @@
 # 当前完成比例与代码量估算
 
+2026-11-05回收执行中取消分项补充：HDD已验证/源未移除切点已实际通过，旧失败与partial保留；不折算其余故障或完整功能。59项、25%–35%粗估、AI子计划0%和旧代码量快照保持。[准确边界](qa/CONTAINER_FILE_RECYCLING_INFLIGHT_CANCEL.md)。
+
 2026-11-05回收切点工具候选补充：仅QA绑定/临时文件与子进程验证，不计执行中取消实机通过。59项、25%–35%粗估、AI子计划0%和旧代码量快照保持。[工具边界](qa/CONTAINER_FILE_RECYCLING_CUT_CANDIDATE.md)。
 
 2026-11-05回收Ready退出分项补充：真实重登隔离/自然Expired通过，旧门禁失败保留；不计执行中故障或恢复业务完成。59项、25%–35%粗估、AI子计划0%和旧代码量快照保持。[实机分项](qa/CONTAINER_FILE_RECYCLING_READY_LOGOUT.md)。
