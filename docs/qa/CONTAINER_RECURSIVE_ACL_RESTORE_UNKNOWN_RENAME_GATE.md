@@ -1,5 +1,7 @@
 # 首项恢复后固定重命名Unknown与跨管理员处置实机门禁
 
+后续已有[当前已处置任务说明区四场景只读补验](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_NOTE_VISIBILITY.md)。它不回填下述原Unknown阶段、原上下文或13张图，原308文件及本页历史边界保持。
+
 2026-11-05，承接[Unknown业务与隔离PG候选](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_BUSINESS_PROOF.md)。验证源码冻结 `d4e484aa5ca405ca611430c3660319d5f369c5ad`、产品仍为 `34153d2`；一次全新资源门禁已完整通过。只签26对象access首项恢复后 `item-01.bin`→`renamed-item-01.bin` 这一形态，不重放或改判旧Partial任务。
 
 ## 真实执行与原件事实

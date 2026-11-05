@@ -1,5 +1,7 @@
 # 当前完成比例与代码量估算
 
+2026-11-05说明区补验：当前已处置Unknown任务的明暗/小大屏完整说明只读可视证据已补齐，未重放ACL写入或回填原Unknown阶段。135证据封存/220root工具与当前四场景不提升主任务、阶段或整体完成率；容器删除仍未实现，59项、25%–35%粗估、AI子计划0%及旧代码量快照保持。[事实与下一切片](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_NOTE_VISIBILITY.md)。
+
 2026-11-05固定重命名Unknown分项补充：全新26对象真实Root/HDD、Authentik/Vue/Job与不同管理员处置、权限/退出及前后独立清理已一次通过，只签该固定形态，说明内容签DOM而非单独完整截图。308文件封存与212项工具测试不替代其余故障或整项验收；59项/阶段完整签收、整体25%–35%粗估、AI子计划0%及旧代码量快照保持。[实机分项与未签范围](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RENAME_GATE.md)。
 
 2026-11-05 Unknown业务候选补充：独立26对象业务proof及真实隔离PG持久化/ACK/SQL保护通过，真实Root回执、HDD、权威身份与页面整链仍未执行。198项root测试（含18专项）、1项复合PG用例及145证据封存不折算产品完成率；59项/阶段完整签收、整体25%–35%粗估、AI子计划0%与旧代码量快照保持。[验证与事实边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_BUSINESS_PROOF.md)。

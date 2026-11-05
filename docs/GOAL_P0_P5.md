@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-05 已处置Unknown任务完整说明区只读可视补验通过：冻结d26d2bc，新临时管理员真实登录，在320/1440×明暗四组合逐段核对Unknown/ACK说明、实际HTML主题及完整视口矩形，8张说明图+2张Job图；业务写请求0、正常双端退出/匿名401与临时身份清理通过。仅签当前Acknowledged/原回执Unknown，不回填原Unknown阶段或原会话。原308封存与SQL/2346保护/11核心宿主及业务前后保持，产品仍34153d2；新增8项包含于220root工具零跳过，135证据/112源码闭包封存。已核对宿主FileArchives是删除首片复用点，容器Overwrite备份不能冒充Trash，继续普通单文件容器回收内核及剩余矩阵/59项，不升完成率。[可视补验与删除切片边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_NOTE_VISIBILITY.md)。
+
 2026-11-05 固定26对象首项恢复后重命名Unknown及跨管理员处置已一次实机通过：冻结d4e484a/产品34153d2，真实签名来源RPC与三Authentik/Vue身份，首项item-00真实改变1后，精确pidfd暂停并在自有树固定item-01→renamed-item-01不覆盖重命名；恢复原helper后0.248秒退出，Unknown0/0/0/0/26/空摘要与首项原件分别证明。原页面/Jobs、另一管理员暂不处置ACK0→明确ACK1、原Unknown事实/Ready Job保持、普通9GET/3POST403、三正常退出/匿名401及前后独立复核/精确清理通过。13真PNG/127冻结源码、308文件封存；Unknown说明全文签DOM，未单独框定整段截图。212root工具零跳过；旧145/32/30封存保持，保护2292→2346、来源Root1964/恢复Root257-HDD169/目录94，恢复24意图19执行/活动0，普通62/56/118与11核心/宿主版本保持，仅原Worker停启。余Unknown原因/直接迟到RPC/故障组合、删除及59项继续，不升整项完成率。[实机、原件与准确边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RENAME_GATE.md)。
 
 2026-11-05 固定26对象Unknown业务证据候选与隔离PG通过：7f043f8新增独立SQL/API/Job/审计前后校验，只接受已知回执RESULT_UNKNOWN/0/0/0/0/26/空outcomeDigest，ACK仅释放保护且Unknown事实与警告保持，不填入原件已证明的首项改变1。18专项包含于关联198项root工具零跳过，另3状态检查及.NET10集成构建通过；真实隔离PG复合测试1项明确执行新26对象phase，SQL写入保护/原规划执行与回执保持/唯一不同主体ACK/Failed Job及清理通过，Root回执与主体/DOM仍构造。145证据/130验证闭包封存，旧32发布/30中断封存及2292保护、11核心/宿主/业务前后保持，产品仍34153d2。保留2构造夹具失败、CS1503与首次root Git启动拒绝；继续真实Root/身份/UI/独立Unknown门禁、余矩阵/删除及59项，不升完成率。[业务、PG及未验边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_BUSINESS_PROOF.md)。
