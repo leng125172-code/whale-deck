@@ -33,3 +33,5 @@ Completed只归属本恢复操作，SourceOperationId、完整计划/目标证�
 后续先实现真实持久化/迁移、来源锁下复核和全部writer保护、真实PG事务/租约验收，再Worker/API/Vue、准确CI与标准部署及真实身份/原文件/HDD整链；完整故障矩阵、长期清理及其他59项继续。当前完整主项0/59、阶段0/6、25%–35%工作量粗估和AI子计划0%保持，17项移出不算完成。
 
 项目图谱whale-deck/container-recycle已按本批稳定eventId回执同步active，pending移入synced；未标阶段或完整功能完成。
+
+2026-11-06后续：[持久化候选](CONTAINER_FILE_RECYCLING_RESTORE_PERSISTENCE.md)已接具体EF Repository/迁移/共享保护和Worker源码，并通过独立真实PG宏验收；本记录原文按当时边界保留，不转签生产部署或页面完成。

@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-06独立恢复持久化候选：a222316f/最终工具0714a7b7，EF迁移20261105184338、来源行锁内MAC复核、19CHECK/14双向围栏、租约/双Job-Outbox-审计原子性与Worker接线通过真实隔离PG。5430 Unit/706 Integration（7默认原生跳过）/8范围通过，三次夹具失败及清理保留；生产表仍无、Root与两宿主/四容器保持，API/Vue与真人整链待完成。[真实PG及边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_PERSISTENCE.md)。
+
 2026-11-06独立恢复内部编排候选：0a714ec8新增永久意图模型/仓储契约、已授权原回收意图来源解析与完整source MAC、新确认/执行ID及Inspect优先/Unknown保护；54新/5428 Unit、705 Integration（7默认原生跳过）与8范围通过。两次实读生产保持，恢复业务表/EF映射及运行时Workflow仍无；继续真实PG/共享保护/Worker/API/Vue和真人整链，59项及原完成率不变。[候选与准确边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_BUSINESS.md)。
 
 2026-11-06首轮自有失败来源已离线原inode归位并精确清理：b3d00e1c，原容器已自然退出，仅QA收尾、无产品恢复RPC或实例重绑定；旧Trashed Root/HDD及失败证据逐字节保留。两次独立检查/第三次实读、121工具/8范围通过，2346保护/11核心/Root32-HDD35/恢复Root5/目录96保持。接独立永久业务/真实PG/Worker/API/Vue及真人整链，59项及原完成率不变。[人工收尾与产品边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_OWNED_RECOVERY.md)。
