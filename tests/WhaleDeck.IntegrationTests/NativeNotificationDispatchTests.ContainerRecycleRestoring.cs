@@ -85,16 +85,16 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Contains(table,peers);var seedSql = table switch {
                 "container_file_upload_operations" => "SELECT id AS \"Value\" FROM container_file_upload_operations LIMIT 1",
                 "container_directory_operations" => "SELECT id AS \"Value\" FROM container_directory_operations LIMIT 1",
-                "container_copy_intents" => "SELECT id AS \"Value\" FROM container_copy_intents WHERE completed_at_utc IS NOT NULL LIMIT 1",
-                "container_move_intents" => "SELECT id AS \"Value\" FROM container_move_intents WHERE completed_at_utc IS NOT NULL LIMIT 1",
-                "container_permission_intents" => "SELECT id AS \"Value\" FROM container_permission_intents WHERE completed_at_utc IS NOT NULL LIMIT 1",
-                "container_ownership_intents" => "SELECT id AS \"Value\" FROM container_ownership_intents WHERE completed_at_utc IS NOT NULL LIMIT 1",
-                "container_recursive_permission_intents" => "SELECT id AS \"Value\" FROM container_recursive_permission_intents WHERE completed_at_utc IS NOT NULL LIMIT 1",
-                "container_recursive_ownership_intents" => "SELECT id AS \"Value\" FROM container_recursive_ownership_intents WHERE completed_at_utc IS NOT NULL LIMIT 1",
-                "container_acl_intents" => "SELECT id AS \"Value\" FROM container_acl_intents WHERE completed_at_utc IS NOT NULL LIMIT 1",
-                "container_recursive_acl_intents" => "SELECT id AS \"Value\" FROM container_recursive_acl_intents WHERE completed_at_utc IS NOT NULL LIMIT 1",
-                "container_recursive_acl_restore_intents" => "SELECT id AS \"Value\" FROM container_recursive_acl_restore_intents WHERE completed_at_utc IS NOT NULL LIMIT 1",
-                "container_recycle_intents" => "SELECT id AS \"Value\" FROM container_recycle_intents WHERE completed_at_utc IS NOT NULL LIMIT 1",
+                "container_copy_intents" => "SELECT id AS \"Value\" FROM container_copy_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_move_intents" => "SELECT id AS \"Value\" FROM container_move_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_permission_intents" => "SELECT id AS \"Value\" FROM container_permission_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_ownership_intents" => "SELECT id AS \"Value\" FROM container_ownership_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recursive_permission_intents" => "SELECT id AS \"Value\" FROM container_recursive_permission_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recursive_ownership_intents" => "SELECT id AS \"Value\" FROM container_recursive_ownership_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_acl_intents" => "SELECT id AS \"Value\" FROM container_acl_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recursive_acl_intents" => "SELECT id AS \"Value\" FROM container_recursive_acl_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recursive_acl_restore_intents" => "SELECT id AS \"Value\" FROM container_recursive_acl_restore_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recycle_intents" => "SELECT id AS \"Value\" FROM container_recycle_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
                 _ => throw new InvalidOperationException("unknown fixed fence table") };
             var seed=await second.Database.SqlQueryRaw<Guid>(seedSql).SingleAsync();
             var id=Guid.NewGuid();var execution=Guid.NewGuid();var key=Guid.NewGuid();var now=clock.GetUtcNow();
