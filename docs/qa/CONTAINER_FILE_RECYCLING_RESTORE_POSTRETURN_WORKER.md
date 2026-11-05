@@ -1,5 +1,7 @@
 # 独立恢复：原件归还后Worker强杀与自然租约
 
+2026-11-06后续：另一个全新来源的写后Agent重启已实机验收，Worker/维护进程及所有容器保持，见[Agent记录](CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_AGENT.md)。以下保留Worker强杀与自然租约的原始边界，不将两种故障混用。
+
 2026-11-06，工具 `3e9f44e928673c97d99ad91675d18b0fe38f6758` 在保持3d80d17部署上，以全新自有来源和临时真实Authentik管理员，完成写后Worker强杀。原件已经返回时，同一执行在原租约自然到期后保留Succeeded/Completed，不套用写前Failed/Aborted结果。
 
 unit `whaledeck-qa-restore-restart-9df12ab8c703`，Invocation `0195733f2f5d4b539858de29dfcc51f2`，exited/0；清理前/后独立进程均passed。4项新专项结合回归共124项Linux root通过、零跳过，8范围与Python/Node语法通过。仅签此单一写后Worker组合，Agent/退出/撤权写后及Unknown等矩阵仍待。

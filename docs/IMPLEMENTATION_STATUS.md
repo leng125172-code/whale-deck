@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-06独立恢复写后Agent重启已实机通过：bbf5a2ce全新来源准确本Root Applying/原来源Restored/原inode返回、三FD和当前HDD切点，固定Agent重启后原helper0.010秒退出；Agent新PID/维护PID及全部容器保持，同执行Succeeded/Completed/本操作归属true，成功claim保留、取消0。152维护样本全200/healthy/Ready/no-store不签瞬时连续；原Job/权限/双端退出和清理前后独立passed，128工具/8范围，2346保护/11核心限定保持，Root56-HDD59/恢复Root35。继续写后退出/撤权、Unknown等矩阵与59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_AGENT.md)。
+
 2026-11-06独立恢复写后Worker强杀已实机通过：3e9f44e9全新来源准确本Root Applying/原来源Restored/原inode已返回、三FD与当前HDD切点，固定Worker SIGKILL后原helper0.111秒退出；同容器镜像恢复，原lease自然87.465秒/41样本后同执行Succeeded/Completed、本操作归属true/成功claim保留，取消0不冒称写前Failed。原Job/权限/双端退出与清理前后独立通过，报告键仅改名后三次只读复核；124工具/8范围，2346保护/11核心限定保持，Root54-HDD57/恢复Root32。继续其他写后/Unknown矩阵与59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_WORKER.md)。
 
 2026-11-06独立恢复写后页面取消已全新资源实机通过：52b7e0cb准确本Root Applying/原来源Restored/原inode已返回切点，固定进程三FD与当前HDD复核后唯一取消POST202，原pidfd5.861秒退出；同执行Succeeded/Completed、本操作已恢复、成功claim保留，不冒称Canceled。原Job/权限/两次双端退出及清理前后独立通过；120工具/8范围。首轮旧文案等待失败与只读收尾错误保留，不重放/补签；2346保护/11核心及3d80保持，Root52-HDD55/恢复Root29。继续其余写后/Unknown等矩阵和59项。[实机与失败边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_CANCEL.md)。
