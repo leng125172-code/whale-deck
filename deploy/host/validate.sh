@@ -64,7 +64,7 @@ for recycle_restore_state in /var/lib/whaledeck-container-recycle-restores /var/
   [[ ! -L $recycle_restore_state ]]
   assert_metadata "$recycle_restore_state" '700:root:root'
 done
-for module in /usr/local/libexec/whaledeck-container-permissions.py /usr/local/libexec/whaledeck-container-permission-transport.py /usr/local/libexec/whaledeck-container-recycling.py /usr/local/libexec/whaledeck-container-recycle-restores.py /usr/local/libexec/whaledeck-container-recycle-transport.py; do
+for module in /usr/local/libexec/whaledeck-container-permissions.py /usr/local/libexec/whaledeck-container-permission-transport.py /usr/local/libexec/whaledeck-container-recycling.py /usr/local/libexec/whaledeck-container-recycle-restores.py /usr/local/libexec/whaledeck-container-recycle-transport.py /usr/local/libexec/whaledeck-container-recycle-restore-transport.py; do
   assert_metadata "$module" '750:root:root'
   [[ ! -L "$module" && $(stat -c %h "$module") == 1 ]]
 done

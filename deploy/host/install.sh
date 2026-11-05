@@ -111,6 +111,7 @@ done
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycling.py" /usr/local/libexec/whaledeck-container-recycling.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-restores.py" /usr/local/libexec/whaledeck-container-recycle-restores.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-transport.py" /usr/local/libexec/whaledeck-container-recycle-transport.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-restore-transport.py" /usr/local/libexec/whaledeck-container-recycle-restore-transport.py
 [[ ! -L /var/lib/whaledeck-container-recursive-permissions ]] || exit 1
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-recursive-permissions
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-permissions.py" /usr/local/libexec/whaledeck-container-recursive-permissions.py

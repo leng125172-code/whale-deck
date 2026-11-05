@@ -25,6 +25,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
             method.StartsWith(ContainerRecursivePermissionBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerPermissionBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecycleBinding.Service, StringComparison.Ordinal) ||
+            method.StartsWith(ContainerRecycleRestoreBinding.Service,StringComparison.Ordinal) ||
             method.StartsWith(ContainerOwnershipBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerAclHistoryBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecursiveAclHistoryBinding.Service, StringComparison.Ordinal) ||
@@ -110,6 +111,11 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         method is ContainerRecursiveAclRestoreBinding.Service + "Plan" or ContainerRecursiveAclRestoreBinding.Service + "Apply" or
             ContainerRecursiveAclRestoreBinding.Service + "Inspect" or ContainerRecursiveAclRestoreBinding.Service + "Discard" &&
         ValidateContentBound(token, method, requestHash, ContainerRecursiveAclRestoreBinding.Payload);
+
+    public bool ValidateContainerRecycleRestore(string? token,string method,string? requestHash) =>
+        method is ContainerRecycleRestoreBinding.Service+"Plan" or ContainerRecycleRestoreBinding.Service+"Apply" or
+            ContainerRecycleRestoreBinding.Service+"Inspect" or ContainerRecycleRestoreBinding.Service+"Discard" &&
+        ValidateContentBound(token,method,requestHash,ContainerRecycleRestoreBinding.Payload);
 
     public bool ValidateContainerRecycle(string? token, string method, string? requestHash) =>
         method is ContainerRecycleBinding.Service + "Plan" or ContainerRecycleBinding.Service + "Apply" or
@@ -213,7 +219,9 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     private void Authorize(ServerCallContext context)
     {
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");
-        var valid = context.Method.StartsWith(ContainerRecycleBinding.Service, StringComparison.Ordinal)
+        var valid = context.Method.StartsWith(ContainerRecycleRestoreBinding.Service,StringComparison.Ordinal)
+            ? validator.ValidateContainerRecycleRestore(token,context.Method,context.RequestHeaders.GetValue(ContainerRecycleRestoreBinding.Header))
+            : context.Method.StartsWith(ContainerRecycleBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerRecycle(token, context.Method, context.RequestHeaders.GetValue(ContainerRecycleBinding.Header))
             : context.Method.StartsWith(ContainerRecursiveAclRestoreBinding.Service, StringComparison.Ordinal)
             ? validator.ValidateContainerRecursiveAclRestore(token, context.Method, context.RequestHeaders.GetValue(ContainerRecursiveAclRestoreBinding.Header))
