@@ -1,5 +1,7 @@
 # 独立恢复写入前切点候选
 
+2026-11-06后续：该候选已接入全新资源真实页面执行中取消门禁，准确Applying/原件与当前HDD切点、原helper退出及Canceled/Aborted已分项通过，见[实机记录](CONTAINER_FILE_RECYCLING_RESTORE_INFLIGHT_CANCEL.md)。以下保留候选当时未发生产信号/未做新RPC的事实，不补签其余故障场景。
+
 2026-11-06，最终候选 `033f80ebbdf677f714b74de0fae85f1ac05a81e7` 新增QA专用 `bound_container_recycle_restore_cut.py`，为后续全新资源的执行中取消/退出等故障门禁准备准确切点。本批未修改产品、安装宿主、发布或创建业务操作；没有向生产helper发送SIGSTOP/SIGCONT，不签收真实执行中取消。
 
 ## 新工具的准入与拒绝

@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-06独立恢复执行中写前取消已实机通过：91b5b16d全新资源真实Auth/Vue确认后，原helper经三内核FD/Invocation/claim及当前SQL/原件/HDD匹配暂停；页面唯一取消，原pidfd约3.272秒退出（计时始于放行前），Canceled/Aborted、来源仍Trashed/本操作未恢复、claim清除、Outbox0。原Job/普通9匿名5拒绝/两次双端退出及清理前后独立通过；55工具/8范围，2346保护/11核心及3d80保持，Root38-HDD41/恢复Root13。仅此切点，继续其余故障/长期清理和59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_INFLIGHT_CANCEL.md)。
+
 2026-11-06独立恢复写前切点候选033f80eb已验证：新恢复/原来源/claim与原留存完整绑定，固定restore进程的MainPID/Invocation/cgroup及三个内核FD匹配后才可pidfd暂停，停止后重验；12新/51关联root检查零跳过。两项夹具路径初稿失败保留，真实只读拒绝两Completed及实际Agent，2346保护/11核心/业务Root-HDD保持，生产信号和新RPC均0。真实页面执行中取消仍待；继续故障矩阵/长期清理和59项。[候选及准确边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_CUT_CANDIDATE.md)。
 
 2026-11-06独立回收恢复常规真实整链已通过：32146117全新资源/临时真实Authentik身份，Vue来源回收→Ready取消→另建恢复成功、17字段Jobs/原inode/HDD、普通9/匿名5拒绝、两次双端退出与5旧引用隔离，清理前后独立通过。首轮jsonb/退出诊断失败及新意图API收尾保留；2346保护/11核心与3d80部署保持，Root36-HDD39/恢复Root11。执行中故障、长期清理及59项继续，不升整项完成率。[真实页面与失败边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_REAL_UI.md)。
