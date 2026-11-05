@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-05 首项恢复后正常取消Partial与不同管理员处置真实整链通过：2f58e6f冻结新26对象/三身份，准确pidfd/双FD/Invocation暂停首项完成0/0；页面取消、产品4.312秒停原helper，Partial1/1/0/25/0、原SQL/Job与完整树及Root-HDD一致。原用户正常双端退出，另一管理员原所有者入口404、暂不处置POST0后父级核对原件，再一次明确ACK→同Job Failed/Acknowledged；原计数/回执事实/HDD与首项取消前后原件字节保持，围栏释放/outbox归零。三身份正常退出、9GET/3POST普通403与匿名401、私有请求0、前后独立核验与精确清理通过。128工具零跳过/13真实图/178证据封存，旧3封存保持；保护2130→2184，来源Root1802/恢复Root244-HDD160/目录94，恢复21意图16执行/活动0，普通62意图56执行118Job保持。11核心及ac90911两宿主保持，仅原Worker重启，无产品覆盖/旧任务重放；GitTLS首失败重试成功，CI41954774676仍运行。只签首项0/0形态，其他Partial/Unknown、故障组合、删除/维护连续性及59项继续，不升整项完成率。[真实Partial取消与处置](qa/CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_CANCEL_GATE.md)。
+
 2026-11-05 Partial取消/处置业务证据候选完成：原26对象计划、确定性执行ID、原登录/容器/来源/Ready历史与SQL/API/Job绑定；Partial Running/围栏保留/消息未清，另一管理员ACK后Acknowledged-Failed/围栏释放/消息归零，五原审计加一处置审计、原计数/摘要保持及当前HDD可用变化分别核对。新增9项、关联121工具零跳过，语法/CI YAML通过；首轮损坏JSON负向夹具及误中断言失败保留，改为合法指纹变化后通过。全为构造SQL/API/DOM证据，未签真PG/取消/真实管理员页面或部署。继续父门禁/独立清理、余矩阵/删除及59项，不升完成率。[业务校验与范围](qa/CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_BUSINESS_PROOF.md)。
 
 2026-11-05 首项恢复完成边界候选接入：新增严格26对象access/Root Applying 0/0观察分支，复用准确pidfd/双FD/cgroup/Invocation；暂停后原件Root一致及首项真实改变/其余树保持才移交持有，失败SIGCONT/关FD，不重放。Applying首项事实与终态Partial计数/回执分层，旧首写前/Partial入口不放宽。112关联root工具零跳过，含2个临时实盘Applying/Partial区分和4个进程替身范围/移交清理检查；未命中工作站实际helper或签真实身份/SQL/处置整链。继续新资源取消/Partial/处置及精确清理、余矩阵/删除和59项，不升完成率。[首项完成边界与证据限制](qa/CONTAINER_RECURSIVE_ACL_RESTORE_FIRST_COMPLETED_CUT.md)。

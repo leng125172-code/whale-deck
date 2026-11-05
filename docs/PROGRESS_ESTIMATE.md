@@ -17,6 +17,8 @@
 
 ## 历史进度补充
 
+2026-11-05补充：[恢复首项后取消与另一管理员处置](qa/CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_CANCEL_GATE.md)已完成真实身份/文件/HDD/任务页及前后独立验收，只签该Partial形态。整体25%–35%粗估、59项/阶段完整签收计数、AI子计划0%与旧代码量快照保持，不把验收工具增长当作新增产品完成。
+
 2026-11-04补充：[Partial实时移组/停用及另一管理员处置](qa/CONTAINER_RECURSIVE_ACL_PARTIAL_REVOCATION.md)两项已实机/独立通过；其他矩阵、恢复和删除继续，整体粗估/59项与阶段完整签收计数及旧代码量快照保持。
 
 2026-11-04补充：[Partial正常退出与不同管理员处置](qa/CONTAINER_RECURSIVE_ACL_PARTIAL_LOGOUT.md)已实机/独立签收本场景；启动失败及原截图边界保留，其他矩阵继续。整体粗估、59项/阶段完整签收计数与旧代码量快照保持。
