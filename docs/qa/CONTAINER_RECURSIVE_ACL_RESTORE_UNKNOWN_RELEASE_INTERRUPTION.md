@@ -1,5 +1,7 @@
 # Unknown UI 发布中断与只读恢复核验
 
+后续状态：本次中断及其原件不改判；依赖下载恢复后，另一次显式标准发布已完成，见[新发布与生产后置核验](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RELEASE.md)。以下“当前”描述均指本次中断核验发生时，混合版本缺口已由后续独立尝试关闭，真实Unknown处置仍未签收。
+
 2026-11-05，承接[Unknown 原件与 UI 候选](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RECORDS.md)。准确候选 `34153d2c454942b2665902772b7d5e48226cf7db` 的 CI `41965780773` 已 completed/success，12 个 job 全部成功。这关闭了等待 CI 终态的前置条件，但本次标准覆盖被主机重启打断，**发布未成功，新 UI 与真实 Unknown 处置整链均未签收**。
 
 ## 单次发布与中断事实
