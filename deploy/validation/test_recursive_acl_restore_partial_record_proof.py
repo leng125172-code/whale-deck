@@ -2,7 +2,7 @@
 import copy,os,unittest
 from pathlib import Path
 from recursive_acl_restore_agent_io import read_bundle
-from recursive_acl_restore_partial_record_proof import read_partial_first,partial_first_proof
+from recursive_acl_restore_partial_record_proof import read_partial_first,partial_first_proof,read_applying_first,completed_first_facts
 from recursive_acl_restore_record_proof import records_proof
 import test_recursive_acl_restore_record_probe_scope as native
 
@@ -14,7 +14,12 @@ class PartialRestoreRecordTests(unittest.TestCase):
         bundle,self.frame=read_bundle(self.f.io,source,False,self.f.archive/'source',create=True);self.source['metadata']=bundle['metadata']
         self.assertEqual(records_proof(self.source,bundle,restore=False,attribute_digest=self.f.attrs),4)
         self.before=k.b.snapshot();self.request=k.request(source,result);flag=[False]
-        k.engine.cancelled=lambda:flag[0];k.engine.checkpoint=lambda phase,index:flag.__setitem__(0,True) if phase=='AfterEntry' and index==0 else None
+        k.engine.cancelled=lambda:flag[0]
+        def checkpoint(phase,index):
+            if phase=='AfterEntry' and index==0:
+                self.applying_bundle=read_applying_first(self.f.io,self.request,self.f.archive/'applying',create=True)
+                self.applying_after=k.b.snapshot();flag[0]=True
+        k.engine.checkpoint=checkpoint
         with self.assertRaises(k.b.base.r.Rejected):k.engine.apply(self.request,k.b.base.session)
         self.receipt=k.engine.inspect(self.request,k.b.base.session);self.after=k.b.snapshot();self.folder=self.f.archive/'partial'
         self.bundle=read_partial_first(self.f.io,self.request,self.folder,create=True)
@@ -59,5 +64,13 @@ class PartialRestoreRecordTests(unittest.TestCase):
         try:
             with self.assertRaises(AssertionError):read_partial_first(self.f.io,self.request,self.folder)
         finally:path.chmod(0o600)
+
+    def test_actual_applying_first_completion_is_distinct_from_terminal_partial(self):
+        proof=completed_first_facts(self.request,self.applying_bundle,self.source,self.frame,self.before,self.applying_after,self.f.attrs)
+        self.assertEqual(proof['completedChildHdd'],1);self.assertNotIn('counts',proof);self.assertEqual(self.applying_bundle['root']['state'],'Applying')
+        with self.assertRaises(AssertionError):self.prove(bundle=self.applying_bundle)
+
+    def test_reader_never_relabels_terminal_partial_as_applying(self):
+        with self.assertRaises(AssertionError):read_applying_first(self.f.io,self.request,self.f.archive/'applying')
 
 if __name__=='__main__':unittest.main()

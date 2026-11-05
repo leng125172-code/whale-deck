@@ -91,6 +91,24 @@ def invocation_proof(pid,unit):
 
 
 def freeze_before_first_restore(row, source, container_pid, original, inventory,observe=lambda value:None,armed=None):
+    return _freeze_restore(row,source,container_pid,original,inventory,observe,armed)
+
+def freeze_after_first_restore(row,source,container_pid,original,inventory,source_capture,source_frame,attributes_digest,archive,observe=lambda value:None,armed=None):
+    assert os.geteuid()==0
+    from validate_container_upload_recovery_agent import trusted
+    archive=Path(archive);trusted(archive.parent,True)
+    assert not archive.exists(),'FIRST_COMPLETED_ARCHIVE_ALREADY_EXISTS'
+    return _freeze_restore(row,source,container_pid,original,inventory,observe,armed,(source_capture,source_frame,attributes_digest,archive))
+
+def completed_entry_boundary(record):
+    # Keep the same owned 26-object access scope as the prewrite gate.
+    p=record['plan'];assert all(type(p[k]) is int for k in ('entryCount','changeCount','fileCount','directoryCount'))
+    assert p['restoreSource']['changedAclType']=='access' and p['entryCount']==p['changeCount']==26 and p['fileCount']==25 and p['directoryCount']==1
+    assert type(record['startedThrough']) is type(record['finishedThrough']) is int
+    return (record['state']=='Applying' and record['historyVerified'] is record['historyMayExist'] is True
+        and re.fullmatch('[A-F0-9]{64}',record['historyDigest']) is not None and record['startedThrough']==record['finishedThrough']==0)
+
+def _freeze_restore(row, source, container_pid, original, inventory,observe,armed,completed=None):
     assert os.geteuid() == 0 and re.fullmatch('[a-f0-9]{64}', row['container_id'])
     source = Path(source)
     assert source.parent == Path('/data/WhaleDeck/apps') and re.fullmatch('wdv-container-publish-[a-f0-9]{32}', source.name)
@@ -125,7 +143,8 @@ def freeze_before_first_restore(row, source, container_pid, original, inventory,
                 observed_state=record['state'];observe(dict(stage='state-observed',state=observed_state,elapsedMs=round((time.monotonic()-began)*1000)))
             if record and record['state'] in ('Completed', 'Partial', 'Unknown', 'Aborted'):
                 observe(dict(stage='already-terminal',state=record['state'],startedThrough=record['startedThrough'],finishedThrough=record['finishedThrough']));return None
-            if descriptor is not None and record and first_entry_boundary(record):
+            boundary=first_entry_boundary if completed is None else completed_entry_boundary
+            if descriptor is not None and record and boundary(record):
                 if not pidfd_same(descriptor,pid,started) or not bound_fds(pid, root_identity, operation_lock(lock)): return None
                 try: signal.pidfd_send_signal(descriptor, signal.SIGSTOP)
                 except ProcessLookupError: return None
@@ -140,7 +159,17 @@ def freeze_before_first_restore(row, source, container_pid, original, inventory,
                 assert pidfd_same(descriptor,pid,started) and bound_fds(pid, root_identity, operation_lock(lock)), 'STOPPED_RESTORE_FD_BINDING_CHANGED'
                 service=invocation_proof(pid,group)
                 frozen = record_for(row);observe(dict(stage='stopped-record',state=frozen['state'],startedThrough=frozen['startedThrough'],finishedThrough=frozen['finishedThrough']))
-                if first_entry_boundary(frozen) and inventory() == original:
+                if completed is not None and boundary(frozen):
+                    from recursive_acl_restore_agent_io import installed
+                    from recursive_acl_restore_partial_record_proof import read_applying_first,completed_first_facts
+                    capture,frame,attrs,archive=completed
+                    request=dict(operationId=operation,owner=row['owner_hash'],plan=frozen['plan'])
+                    bundle=read_applying_first(installed(),request,archive,create=True)
+                    assert bundle['root']==frozen,'FIRST_COMPLETED_ROOT_CHANGED_WHILE_STOPPED'
+                    facts=completed_first_facts(request,bundle,capture,frame,original,inventory(),attrs)
+                    proof=dict(**service,**facts,pidfdStartTimePinned=True,processStartTicks=started,twoKernelFdProofs=True,rootPhase='Applying',firstRestoreCompleted=True,startedThrough=0,finishedThrough=0)
+                    held=HeldCopy(pid,descriptor,group,frozen,proof);descriptor=None;return held
+                if completed is None and boundary(frozen) and inventory() == original:
                     child = receipt_json(STATE / (operation + '.entries') / (child_id(operation, 0) + '.json'))
                     if child is not None:
                         assert child['state'] in ('Preparing', 'Prepared', 'Applying') and child['aclConfirmed'] is child['actualIdentity'] is None and child['version']==''

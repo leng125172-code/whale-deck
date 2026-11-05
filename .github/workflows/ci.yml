@@ -167,6 +167,8 @@ jobs:
           node --test deploy/validation/test_restore_job_observation_contract.mjs
           python3 -W error -m py_compile deploy/validation/recursive_acl_restore_partial_record_proof.py deploy/validation/test_recursive_acl_restore_partial_record_proof.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_partial_record_proof.py
+          python3 -W error -m py_compile deploy/validation/bound_container_recursive_acl_restore_cut.py deploy/validation/test_recursive_acl_restore_partial_cut.py
+          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_partial_cut.py
           python3 -W error -m py_compile deploy/validation/reconcile_recursive_acl_restore_logout.py deploy/validation/test_reconcile_recursive_acl_restore_logout.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_reconcile_recursive_acl_restore_logout.py
           python3 -W error -m py_compile deploy/validation/validate_container_file_publishing.py deploy/validation/recover_recursive_acl_restore_prewrite.py deploy/validation/test_recover_recursive_acl_restore_prewrite.py

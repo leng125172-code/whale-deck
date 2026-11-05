@@ -13,13 +13,14 @@ from recursive_acl_restore_record_proof import ROOT,CHILD,COUNTS,receipt_proof
 from verify_container_recursive_acl import file_version
 from validate_container_upload_recovery_agent import trusted
 
-def read_partial_first(io,request,folder,*,create=False):
+def _read_first(io,request,folder,phase,*,create=False):
+    assert phase in ('Applying','Partial')
     op=request['operationId'];sub=child_id(op,0)
     if create:folder.mkdir(mode=0o700,parents=True,exist_ok=True)
     trusted(io.restoreState,True);trusted(folder,True)
     def save(name,raw):archive_raw(folder,name,raw,create)
     raw,root,_=read_at(None,str(io.restoreState/(op+'.json')));save('root.json',raw)
-    assert root['state']=='Partial' and type(root['startedThrough']) is type(root['finishedThrough']) is int and root['startedThrough']==root['finishedThrough']==0
+    assert root['state']==phase and type(root['startedThrough']) is type(root['finishedThrough']) is int and root['startedThrough']==root['finishedThrough']==0
     directory=io.restoreState/(op+'.entries')
     trusted(directory,True)
     assert {p.name for p in directory.iterdir() if p.suffix=='.json'}=={sub+'.json'}
@@ -36,14 +37,19 @@ def read_partial_first(io,request,folder,*,create=False):
         finally:os.close(batch)
     return dict(root=root,metadata=meta,children=[dict(root=cr,hdd=hdd)])
 
-def partial_first_proof(request,receipt,bundle,source,frame,before,after,attrs):
+def read_partial_first(io,request,folder,*,create=False):
+    return _read_first(io,request,folder,'Partial',create=create)
+
+def read_applying_first(io,request,folder,*,create=False):
+    return _read_first(io,request,folder,'Applying',create=create)
+
+def completed_first_facts(request,bundle,source,frame,before,after,attrs):
     plan=request['plan'];op=request['operationId'];sub=child_id(op,0);root=bundle['root'];n=plan['entryCount']
     fields(root,ROOT);integer(root['schemaVersion'],1,1);integer(n,2,10000)
     for k in ('operationId','owner','plan'):typed_equal(root[k],request[k])
-    assert root['state']=='Partial' and root['historyMayExist'] is root['historyVerified'] is True
-    assert type(root['startedThrough']) is type(root['finishedThrough']) is int and root['startedThrough']==root['finishedThrough']==0
+    assert root['state'] in ('Applying','Partial') and root['historyMayExist'] is root['historyVerified'] is True
     for k in COUNTS:integer(root[k],0,n)
-    assert [root[k] for k in COUNTS]==[1,1,0,n-1,0]
+    assert type(root['startedThrough']) is type(root['finishedThrough']) is int and root['startedThrough']==root['finishedThrough']==0
     source_proof(plan,source,frame,before)
     entries=manifest_proof(plan,bundle['metadata'],source,before,attrs,operation_id=op,owner=request['owner'])
     assert bundle['metadata']['historyDigest']==root['historyDigest'] and len(bundle['children'])==1
@@ -66,8 +72,16 @@ def partial_first_proof(request,receipt,bundle,source,frame,before,after,attrs):
     assert before.keys()==after.keys()
     for p in before.keys()-{rel}:typed_equal(after[p],before[p])
     assert cr['version']==file_version(plan['command'],cp['command']['path'],identity)
+    return dict(aggregateHdd=1,completedChildHdd=1,firstRelativePath=rel,otherEntriesUnchanged=n-1)
+
+def partial_first_proof(request,receipt,bundle,source,frame,before,after,attrs):
+    proof=completed_first_facts(request,bundle,source,frame,before,after,attrs)
+    root=bundle['root'];op=request['operationId'];n=request['plan']['entryCount'];cr=bundle['children'][0]['root']
+    assert root['state']=='Partial'
+    for k in COUNTS:integer(root[k],0,n)
+    assert [root[k] for k in COUNTS]==[1,1,0,n-1,0]
     outcomes=[dict(id=child_id(op,i),state='Completed' if i==0 else 'NotStarted',version=cr['version'] if i==0 else '',changed=i==0) for i in range(n)]
     assert root['outcomeDigest']==digest(b'whaledeck-recursive-acl-restore-outcomes-v1\n',outcomes)
     assert type(receipt['replayed']) is bool
     receipt_proof(receipt,request,root,restore=True,binding=False,replayed=receipt['replayed'])
-    return dict(aggregateHdd=1,completedChildHdd=1,firstRelativePath=rel,counts=[root[k] for k in COUNTS],otherEntriesUnchanged=n-1)
+    return dict(**proof,counts=[root[k] for k in COUNTS])
