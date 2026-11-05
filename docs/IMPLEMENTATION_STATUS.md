@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 2026-11-05 回收同CID实例变化+正常退出Unknown组合已新资源实机通过：05fc50c4，PID1417914→1419903、CID/镜像/挂载/安全预算保持，宿主及新命名空间原文件九字段/字节属性保持；原helper7.723秒退出（含重启与随后退出）。Unknown/Running/保护和Outbox1保持，另一管理员暂不处置后全快照不变，再唯一ACK至Acknowledged/Job Failed/Outbox0；原绑定、null源事实及Root-HDD保持，ACK后新实例仍活。86工具/8范围、143证据/102源码、页面/审计/权限拒绝/两次退出及清理前后独立通过，Root24→26/HDD27→29、2346保护/11核心保持。仅签该组合，继续跨写入、独立恢复及59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_INSTANCE_CHANGE.md)。
+
 - 2026-11-05 回收源路径移位消失+正常退出Unknown已在全新资源实机通过：门禁dd2cd970，原helper1.802秒退出；Unknown/Running保留保护与1条Outbox，源事实null、原inode/字节另名保持。另一管理员“暂不处置”后SQL/Root-HDD/物理完全不变，再唯一ACK202至Acknowledged/Job Failed、保护释放/Outbox0，原事实/执行保持。实际页面/审计、普通8匿名4拒绝、两次双端退出及清理前后独立通过；78工具/8范围，139成功及131失败/API补救记录保留，各100源码，Root20→24/HDD23→27、2346保护/11核心保持。原零Outbox断言及Node超时已修正，旧门禁不补签；继续实例变化/跨写入、恢复和59项。[实机与失败边界](qa/CONTAINER_FILE_RECYCLING_UNKNOWN.md)。
 
 - 2026-11-05 回收执行中Worker强杀/Agent重启两项已在HDD已验证、源未移除切点实机通过：门禁62e19fb5，原helper0.098/0.011秒退出；Worker原租约自然83.592秒/40采样，原绑定/保护/源保持，期限后原执行Failed/Aborted、不重做移除。原权限、页面/Job摘要、普通8匿名4拒绝、双端退出及清理前后独立通过；Agent约30.723秒重启/维护153样本200不签瞬时连续。68工具/8范围、130+128证据各98源码，Root16→20/HDD19→23、2346保护/11核心保持，旧失败partial保留。继续Unknown/跨写入、独立恢复和59项。[实机及边界](qa/CONTAINER_FILE_RECYCLING_RESTARTS.md)。
