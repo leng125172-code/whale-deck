@@ -6,6 +6,7 @@ import {chromium,expect} from '../../web/node_modules/@playwright/test/index.mjs
 import {loginVisible,openPermissionFiles,closePermissionDetails,writeSignal,waitSignal} from './installed_ui_permission_session.mjs'
 import {logoutFromUserMenu} from './installed_ui_logout.mjs'
 import {observeJob} from './installed_ui_restore_job_results.mjs'
+import {runPartialResolution} from './installed_ui_restore_partial_resolution.mjs'
 
 let phase='startup',browser,page,evidence
 function proof(response){
@@ -18,8 +19,9 @@ try{
  const packet=JSON.parse(await readFile('/dev/stdin','utf8')),fixture=packet.fixture,credentials=packet.credentials
  const base='http://127.0.0.1:8080',endpoint=`/api/v1/containers/${fixture.containerId}/files/recursive-acls/history`
  assert.equal(process.argv[2],fixture.revision);assert.match(fixture.captureId,/^[a-f0-9]{32}$/);assert.match(fixture.historyDigest,/^[A-F0-9]{64}$/)
- const jobResults=fixture.jobResults===true;assert.equal(typeof(fixture.jobResults??false),'boolean');assert.equal(jobResults,process.argv[1].endsWith('/validate_recursive_acl_restore_job_results.mjs'))
- const inflightLogout=fixture.inflightLogout===true;assert.equal(inflightLogout,jobResults||process.argv[1].endsWith('/validate_recursive_acl_restore_inflight_logout.mjs'));assert.equal(typeof(fixture.inflightLogout??false),'boolean')
+ const partialCancel=fixture.partialCancel===true;assert.equal(typeof(fixture.partialCancel??false),'boolean');assert.equal(partialCancel,process.argv[1].endsWith('/validate_recursive_acl_restore_partial_cancel.mjs'))
+ const jobResults=fixture.jobResults===true;assert.equal(typeof(fixture.jobResults??false),'boolean');assert.equal(jobResults,partialCancel||process.argv[1].endsWith('/validate_recursive_acl_restore_job_results.mjs'))
+ const inflightLogout=fixture.inflightLogout===true;assert.equal(inflightLogout,jobResults&&!partialCancel||process.argv[1].endsWith('/validate_recursive_acl_restore_inflight_logout.mjs'));assert.equal(typeof(fixture.inflightLogout??false),'boolean')
  evidence=fixture.evidence;browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true})
  const context=await browser.newContext({viewport:{width:320,height:600},colorScheme:'dark',reducedMotion:'reduce'});context.setDefaultTimeout(30_000);page=await context.newPage()
  phase='admin-visible-login';const admin=await loginVisible(page,context,base,'/containers',true,credentials.admin)
@@ -89,6 +91,10 @@ try{
  phase='actual-confirmation';const confirming=page.waitForResponse(r=>new URL(r.url()).pathname===restoreEndpoint+'/'+ready.id+'/confirm'&&r.request().method()==='POST')
  await dialog.getByRole('button',{name:'确认递归ACL恢复',exact:true}).click();const response=await confirming;assert.equal(response.status(),202);const pending=await response.json();assert.equal(pending.state,'Pending');assert.ok(pending.executionJobId)
  await writeSignal(evidence,'pending-result.json',pending)
+ if(partialCancel){
+  phase='partial-resolution';await runPartialResolution({browser,context,page,base,fixture,credentials,admin,dialog,readySignal,pending,counts,rawReady,query});browser=undefined
+  console.log(JSON.stringify({restorePartialResolution:'passed',actualUi:true}))
+ }else{
  assert.equal((await waitSignal(evidence,'action-verified.json',180000)).boundPrewrite,true)
  phase='actual-inflight';await dialog.getByRole('button',{name:'查询原递归ACL恢复任务',exact:true}).click();await expect(dialog.getByText('正在逐项恢复ACL',{exact:true})).toBeVisible({timeout:30000})
  await dialog.getByRole('status').scrollIntoViewIfNeeded();await expect(dialog.getByRole('status')).toBeInViewport({ratio:1});await page.screenshot({path:join(evidence,'inflight.png')})
@@ -157,6 +163,7 @@ try{
  await writeSignal(evidence,'final-auth-result.json',result);assert.equal((await waitSignal(evidence,'final-auth-verified.json')).prewriteNoChangeAndHistoryVerified,true)
  await writeFile(join(evidence,'browser.json'),JSON.stringify(result),{mode:0o600,flag:'wx'});await ordinaryContext.close();await context.close();await browser.close();browser=undefined
  console.log(JSON.stringify({recursiveAclRestorePrewrite:'passed',actualUi:true}))
+ }
 }catch(error){
  if(page&&evidence&&!phase.includes('login')&&!phase.includes('logout'))await page.screenshot({path:join(evidence,'prewrite-failed.png')}).catch(()=>{})
  console.error(JSON.stringify({recursiveAclRestorePrewrite:'failed',phase,failureType:error?.name}))

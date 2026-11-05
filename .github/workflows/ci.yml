@@ -171,6 +171,10 @@ jobs:
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_partial_cut.py
           python3 -W error -m py_compile deploy/validation/recursive_acl_restore_partial_business_proof.py deploy/validation/test_recursive_acl_restore_partial_business_proof.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_partial_business_proof.py
+          python3 -W error -m py_compile deploy/validation/recursive_acl_restore_partial_workflow.py deploy/validation/verify_recursive_acl_restore_partial_cancel.py deploy/validation/validate_recursive_acl_restore_partial_cancel.py deploy/validation/test_recursive_acl_restore_partial_workflow.py
+          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_partial_workflow.py
+          node --check deploy/validation/installed_ui_restore_partial_resolution.mjs
+          node --check deploy/validation/validate_recursive_acl_restore_partial_cancel.mjs
           python3 -W error -m py_compile deploy/validation/reconcile_recursive_acl_restore_logout.py deploy/validation/test_reconcile_recursive_acl_restore_logout.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_reconcile_recursive_acl_restore_logout.py
           python3 -W error -m py_compile deploy/validation/validate_container_file_publishing.py deploy/validation/recover_recursive_acl_restore_prewrite.py deploy/validation/test_recover_recursive_acl_restore_prewrite.py
