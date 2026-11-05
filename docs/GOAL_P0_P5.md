@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-05 Partial取消/处置业务证据候选完成：原26对象计划、确定性执行ID、原登录/容器/来源/Ready历史与SQL/API/Job绑定；Partial Running/围栏保留/消息未清，另一管理员ACK后Acknowledged-Failed/围栏释放/消息归零，五原审计加一处置审计、原计数/摘要保持及当前HDD可用变化分别核对。新增9项、关联121工具零跳过，语法/CI YAML通过；首轮损坏JSON负向夹具及误中断言失败保留，改为合法指纹变化后通过。全为构造SQL/API/DOM证据，未签真PG/取消/真实管理员页面或部署。继续父门禁/独立清理、余矩阵/删除及59项，不升完成率。[业务校验与范围](qa/CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_BUSINESS_PROOF.md)。
+
 2026-11-05 首项恢复完成边界候选接入：新增严格26对象access/Root Applying 0/0观察分支，复用准确pidfd/双FD/cgroup/Invocation；暂停后原件Root一致及首项真实改变/其余树保持才移交持有，失败SIGCONT/关FD，不重放。Applying首项事实与终态Partial计数/回执分层，旧首写前/Partial入口不放宽。112关联root工具零跳过，含2个临时实盘Applying/Partial区分和4个进程替身范围/移交清理检查；未命中工作站实际helper或签真实身份/SQL/处置整链。继续新资源取消/Partial/处置及精确清理、余矩阵/删除和59项，不升完成率。[首项完成边界与证据限制](qa/CONTAINER_RECURSIVE_ACL_RESTORE_FIRST_COMPLETED_CUT.md)。
 
 2026-11-05 Partial首项原件证明候选通过临时实盘：补齐现有Completed/Aborted验证器不覆盖Partial的缺口，固定首项Completed/实际改变、其余未开始及Root 0/0，完整来源/计划/身份/ACL/逐项HDD/outcomeDigest/回执绑定，拒绝多余原件和不可信路径。新增8项、关联106工具零跳过；实际临时ACL取消后Partial1/1/0/3/0及其余树保持/FD重开通过。容器、存储和故障检查点是显式夹具，HDD为临时格式原件，未签安装RPC/生产SQL/真实身份页面或独立进程；第二项已启动/Unknown形态不支持。继续准确首项边界与取消/处置整链、余故障、删除和59项，不升完成率。[首项Partial原件与边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_RECORDS.md)。
