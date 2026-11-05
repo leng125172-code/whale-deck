@@ -1,5 +1,7 @@
 # 容器普通文件可恢复删除内核候选
 
+后续已有[1.56协议、SDK与受限传输候选](CONTAINER_FILE_RECYCLING_RPC.md)，尚未安装或签真实RPC。本页早期未接协议说明保留为对应内核批次状态，不改变原实盘证据的源码和范围。
+
 2026-11-05，承接[文件管理与下一切片](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_NOTE_VISIBILITY.md)。本批实现内部普通文件Trash捕获、原inode私有留存、空缺原路径恢复、幂等与中断判定。新模块尚未安装，不提供CLI/RPC或BFF按钮；签名协议/SDK、最小helper授权、永久业务/共享写入保护、Worker和Vue仍待接入，不计完整删除功能已交付。
 
 ## 已实现的内核
