@@ -19,3 +19,16 @@
 只读复核发现6cd2d4d的工作流选择标志与报告结果混用：原baseline restorePartialCancel=true及verified/independent结果partialCancellation=true，与零取消事实冲突。因此原报告分类不接受，不把退出记作取消。原文件不改写，私有目录`recursive-acl-restore-partial-logout-265f8993c57441a0ad2ad5f4324c7801`177份原件和错误报告已由ORIGINAL_EVIDENCE_SHA256.json封存，清单摘要`395bf7d5830b58f6f69e52831e7c4b15cacc2ef6348cc52560c49373e4f0a407`。
 
 修复把工作流机制restorePartialWorkflow与实际restorePartialCancel/restorePartialLogout分开，报告统一由partial_outcome产生，正常退出partialCancellation=false。新增精确绑定这个已清理旧目录的只读重核脚本，必须冻结修复源码、验证原封存不变，再重读实际SQL/Root/HDD及全部原界面/权限/退出证据，单独产出修正回执；不修改原报告、不新建身份、无浏览器或变更/清理调用，不重放原恢复或ACK。完整新运行的标准verifier不接受旧错误标记，历史兼容入口仅允许此一目录、logout且非live；其他目录或模式均拒绝。修复后的只读签收结果须在后续回执中记录，此处不先报通过。
+
+## 修复后只读重核签收
+
+冻结修复8cf660b后，限定原目录的重核进程退出0，重新验证所有原177文件封存摘要一致、实际现存SQL与原始API/Job/审计、来源及恢复Root-HDD、原三身份正常退出/权限与同主体重登隔离、原清理前物理证明及清理后资源/身份缺席。重核明确physicalTreeReread=false/sourceBytesRereadAfterCleanup=false，不把归档物理快照冒充重新读取已删除源字节。原恢复、原退出和原ACK均未重做；单独正确结果为partialRecovery=true、partialLogout=true、partialCancellation=false、legacyOutcomeFlagIncorrect=true，原错误报告仍不接受。
+
+单独回执目录`restore-partial-logout-report-recheck-28b0ae8354064b57afc17e53af0b683e`保存verification/provenance两文件及SHA256清单，清单摘要`198e3adc99941ba76c51dc6bb4ffdceb1868f6888f8f84e11f4eae46cf3ac99e`；provenance记录修复源完整SHA/导入闭包、原177文件及封存不变、originalReportAccepted=false/originalOperationsReplayed=false。修复源关联137项root工具零跳过（在首轮134基础新增汇总/历史例外/目录约束检查），新标准门禁报告调用同一纯分类函数，但未为验证此标记重跑全新实机。本次只签原正常退出业务分项与修复后的只读校验，不补签原错误分类，也不把它合算为正常取消场景。
+
+原实机的15张320×600暗色PNG包含执行中正常退出、同主体重登只读列表与规划/Partial/处置摘要；人工查看重登只读恢复列表，DOM/API/SQL实际证明旧ID-key404、引用清空、原用户ACK0。另一管理员先暂不处置POST0、核对后一次ACK，同原Job Failed/Acknowledged、五计数1/1/0/25/0及原Root/HDD/物理保持。普通9GET/3POST403、三身份正常双端退出后401、原意图已ACK/活动0及准确清理由两原独立进程留证并由修复进程只读复核。
+
+旧2184保护保持/总2238，来源Root1856、恢复Root248/HDD163、目录Root94；恢复22意图/17执行/活动0，普通ACL62意图/56执行/118Job保持。原11核心与两宿主ac90911保持，仅本批原Worker受控重启；两个Git索引仍1000:1000/664。源/HDD同device和维护连续性旧限制保留。后续新故障门禁仍须验证新汇总格式、其他Partial形态与Unknown/撤权/重启/磁盘组合、可恢复删除和其余59项，不提升完整完成率。
+
+
+收尾：范围8项、758本地链接/缺失0、metadata/diff检查通过，两个Git索引1000:1000/664。项目图谱事件whale-deck.container-acl.8cf660b.restore-partial-logout-report-recheck已取得project/key/event匹配、duplicate=false回执，pending移入synced，阶段active。原unit及日志/错误标记封存后才停止本批已退出QA unit；修复只读进程未修改任何原文件。
