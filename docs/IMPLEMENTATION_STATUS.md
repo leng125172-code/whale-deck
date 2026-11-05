@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 2026-11-05 Partial首项原件证明候选通过临时实盘：补齐现有Completed/Aborted验证器不覆盖Partial的缺口，固定首项Completed/实际改变、其余未开始及Root 0/0，完整来源/计划/身份/ACL/逐项HDD/outcomeDigest/回执绑定，拒绝多余原件和不可信路径。新增8项、关联106工具零跳过；实际临时ACL取消后Partial1/1/0/3/0及其余树保持/FD重开通过。容器、存储和故障检查点是显式夹具，HDD为临时格式原件，未签安装RPC/生产SQL/真实身份页面或独立进程；第二项已启动/Unknown形态不支持。继续准确首项边界与取消/处置整链、余故障、删除和59项，不升完成率。[首项Partial原件与边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_RECORDS.md)。
+
 - 2026-11-05 恢复故障摘要观察候选完成：共享Jobs工具支持Partial/Unknown的Running及专属phase、Acknowledged的Failed/专属phase与明确非成功警告；补充原计划/来源/实际计数、原回执与历史事实保持校验，当前绑定/HDD可用允许重新观测，无回执Unknown补获四类回执仍用原Unknown结果码。98关联root工具/5Node契约零跳过、语法/CI YAML及只读复核通过；全为候选/构造证据，未新增真实故障、处置或部署验收。上批eb477a4准确CI41945001041已全成功。仍需全新资源故障摘要整链、余矩阵、可恢复删除/维护连续性及59项，不升完成率。[观察候选及证据边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_FAULT_JOB_OBSERVATION.md)。
 
 - 2026-11-05 成功恢复任务摘要五场景实机通过：eb477a4冻结108验证源码，全新容器完成8轮来源及4成功恢复/1确认前取消；5个Ready规划与4个Succeeded执行Job的26字段、23标签及值对应原SQL/完整文件/Root-HDD，五次规划历史整行保持。access真改/无须改/default恢复/清除的五计数分别4/4/0/0/0、4/0/0/0/0、4/2/0/0/0、4/2/0/0/0，noop来源原修改4独立于本次0；Ready取消无执行Job。原上下文管理员/普通用户正常双端退出，Jobs列表与9详情401/403、普通Jobs私有请求0，两独立前后复核/准确清理通过。90工具零跳过，78真实图含18摘要图，326证据封存/旧5封存保持；旧2060保护保持/总2130、来源Root1748/恢复Root240-HDD157/目录94，恢复20意图15执行/活动0，普通62意图56执行118Job；11核心及两宿主ac90911保持，无产品覆盖/Worker重启/旧任务重放。Partial/Unknown/处置摘要、余故障矩阵、可恢复删除、维护连续性及59项仍待，不升整项完成率。[五场景摘要及实机证据](qa/CONTAINER_RECURSIVE_ACL_RESTORE_SUCCESS_JOB_RESULTS.md)。
