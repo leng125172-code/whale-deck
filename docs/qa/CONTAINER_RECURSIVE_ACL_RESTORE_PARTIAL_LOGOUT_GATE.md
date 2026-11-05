@@ -2,6 +2,18 @@
 
 2026-11-05，承接[首项后明确取消](CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_CANCEL_GATE.md)。本批新增独立partial_logout模式和证据前缀，共用准确首项完成边界、原件、业务与前后独立核验；不重放旧意图或把取消证据改名补签。仅验收工具变更，无产品发布。
 
+## 最新：修复后的全新资源标准门禁通过
+
+a3ec2192b936540ae56b3448db7e1b51e556f47a冻结127份验证源码，使用另一套新容器/26对象、一次新签名来源捕获及三临时身份，运行标准入口、无legacy_report例外。原用户在准确首项完成0/0和完整树/原件核验后正常BFF/Authentik退出，取消POST0、SQL及Job取消时间null、无取消审计；产品4.594832593924366秒结束原helper，实际Partial五计数1/1/0/25/0。原退出9路401、引用清空，同主体正常重登旧ID/key404，只读全局异常入口核对且原用户ACK0；再次正常退出，再由另一管理员暂不处置POST0、父级复核原SQL/Root-HDD/物理保持后明确ACK一次，同Job Failed/Acknowledged、原事实保持、围栏释放/outbox归零。普通9GET/3POST403、私有请求0、三身份正常双端退出后401及所有唯一审计均通过。
+
+完整新门禁的verified.json直接记录partialRecovery=true、partialCancellation=false、partialLogout=true；baseline机制restorePartialWorkflow=true、实际restorePartialCancel=false/restorePartialLogout=true。清理前及清理后两个独立结果同样为退出true/取消false、legacyOutcomeFlagIncorrect=false。清理前实际复读全部文件/原件，准确清理容器/源及三身份后才进行清理后只读复核；后者明确不重读已删除源字节。关闭了只读纠正之后“新报告未从新实机入口生成”的缺口；下文6cd错误报告与8cf独立纠正保留，不改写或补签。
+
+unit whaledeck-qa-restore-partial-logout-a3ec219，Invocation3729b0c5367543e59fc336e80b1fc34d，准确MainPID0/SubState=exited/Result=success/ExecMainStatus0。私有新证据`recursive-acl-restore-partial-logout-9ade46f517824f3a89c8b57dccbf58cc`共179文件，逐项SHA256通过，清单摘要`0f80c2c42cc17f3db2c76a2c03f058ba8a6841eb9256975cebca0f129da6c934`。137关联root工具零跳过，日志归档；15真PNG均320×600暗色。旧177错误原件封存、独立2文件纠正回执及正常取消178文件三份封存逐项保持。
+
+旧2238保护原件保持，总2292；来源Root1910、恢复Root252/HDD166、目录Root94。恢复23意图/18执行/活动0，普通ACL62意图/56执行/118Job保持。11核心及两宿主实际PID/来源ac90911保持，仅本批原Worker受控停止启动；两Git索引1000:1000/664。没有产品覆盖、迁移、权限配置/网络修改、主机重启或旧任务重放。只签首项已完成、第二项未开始的正常退出与跨管理员处置；其他Partial形态、Unknown、撤权/重启/来源/磁盘等组合及容器可恢复删除/长期清理、维护连续性和其余59项仍待，不提高整项完成率。源/HDD同device与旧维护失败保留。
+
+截至本记录，准确a3ec219的CI41960404079仍in_progress，未报全成功；准确8cf660b的CI41959004833已completed/success，不拿旧CI替代当前来源。
+
 ## 实机前候选记录
 
 新26对象/三身份/一次签名来源捕获，原用户在准确首项完成0/0、完整树及HDD原件核对后，从正常菜单执行BFF/Authentik退出，不调用cancel。独立要求取消POST0、SQL/Job取消时间null、没有cancel-requested审计；产品须在15秒内结束原helper并结算Partial1/1/0/25/0。原退出即9路401，引用清空；同Subject正常重登后旧ID/key404，不能取回原登录绑定，仅通过全局管理员只读异常入口和Jobs核对历史结果，原用户ACK0，再正常退出。
@@ -32,3 +44,6 @@
 
 
 收尾：范围8项、758本地链接/缺失0、metadata/diff检查通过，两个Git索引1000:1000/664。项目图谱事件whale-deck.container-acl.8cf660b.restore-partial-logout-report-recheck已取得project/key/event匹配、duplicate=false回执，pending移入synced，阶段active。原unit及日志/错误标记封存后才停止本批已退出QA unit；修复只读进程未修改任何原文件。
+
+
+新门禁收尾：范围8项、760本地链接/缺失0、metadata/diff检查通过，两Git索引1000:1000/664。项目图谱事件whale-deck.container-acl.a3ec219.restore-partial-logout-standard取得project/key/event匹配、duplicate=false回执，pending移入synced，阶段active。新QA unit准确回执和日志封存后才停止该已退出unit，未操作原已清理任务。
