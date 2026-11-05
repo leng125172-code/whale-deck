@@ -3668,6 +3668,284 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerRecycleRestoreIntent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AcknowledgedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("acknowledged_by");
+
+                    b.Property<string>("AcknowledgementJson")
+                        .HasColumnType("text")
+                        .HasColumnName("acknowledgement_json");
+
+                    b.Property<string>("ActorSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("actor_subject");
+
+                    b.Property<bool?>("BindingCurrent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("binding_current");
+
+                    b.Property<DateTimeOffset?>("CancelRequestedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancel_requested_at_utc");
+
+                    b.Property<string>("CommandJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("command_json");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at_utc");
+
+                    b.Property<string>("ContainerId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("container_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTimeOffset?>("ExecutionExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("execution_expires_at_utc");
+
+                    b.Property<string>("ExecutionHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("execution_hash");
+
+                    b.Property<Guid?>("ExecutionJobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_job_id");
+
+                    b.Property<bool?>("HistoryAvailable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("history_available");
+
+                    b.Property<string>("HistoryDigest")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("history_digest");
+
+                    b.Property<bool>("HistoryVerified")
+                        .HasColumnType("boolean")
+                        .HasColumnName("history_verified");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("InstanceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("instance_id");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_expires_at_utc");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at_utc");
+
+                    b.Property<string>("OwnerHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("owner_hash");
+
+                    b.Property<string>("PlanHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("plan_hash");
+
+                    b.Property<string>("PlanJson")
+                        .HasColumnType("text")
+                        .HasColumnName("plan_json");
+
+                    b.Property<DateTimeOffset>("PlanningExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("planning_expires_at_utc");
+
+                    b.Property<bool>("PublishBarrier")
+                        .HasColumnType("boolean")
+                        .HasColumnName("publish_barrier");
+
+                    b.Property<DateTimeOffset?>("ReadyExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ready_expires_at_utc");
+
+                    b.Property<string>("ReceiptHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("receipt_hash");
+
+                    b.Property<string>("ReceiptJson")
+                        .HasColumnType("text")
+                        .HasColumnName("receipt_json");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("relative_path");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_hash");
+
+                    b.Property<bool?>("RestoredByThisOperation")
+                        .HasColumnType("boolean")
+                        .HasColumnName("restored_by_this_operation");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("result_code");
+
+                    b.Property<DateTimeOffset?>("RootStartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("root_started_at_utc");
+
+                    b.Property<string>("RootState")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("root_state");
+
+                    b.Property<Guid>("SourceIntentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_intent_id");
+
+                    b.Property<string>("SourceProofHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_proof_hash");
+
+                    b.Property<bool?>("SourceRestored")
+                        .HasColumnType("boolean")
+                        .HasColumnName("source_restored");
+
+                    b.Property<bool?>("SourceRetained")
+                        .HasColumnType("boolean")
+                        .HasColumnName("source_retained");
+
+                    b.Property<string>("SourceState")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("source_state");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("state");
+
+                    b.Property<string>("TraceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("trace_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionJobId")
+                        .IsUnique()
+                        .HasFilter("execution_job_id IS NOT NULL");
+
+                    b.HasIndex("LeaseToken")
+                        .IsUnique()
+                        .HasFilter("lease_token IS NOT NULL");
+
+                    b.HasIndex("PublishBarrier")
+                        .IsUnique()
+                        .HasFilter("publish_barrier");
+
+                    b.HasIndex("SourceIntentId");
+
+                    b.HasIndex("ActorSubject", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("ContainerId", "CompletedAtUtc");
+
+                    b.HasIndex("NextAttemptAtUtc", "Id")
+                        .HasFilter("completed_at_utc IS NULL");
+
+                    b.ToTable("container_recycle_restore_intents", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_container_recycle_restore_ack", "(state = 'Acknowledged') = (acknowledged_by IS NOT NULL AND acknowledgement_json IS NOT NULL) AND (acknowledged_by IS NULL) = (acknowledgement_json IS NULL) AND (acknowledgement_json IS NULL OR receipt_json IS NOT NULL AND octet_length(acknowledgement_json) BETWEEN 1 AND 32768)");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_barrier", "(NOT publish_barrier OR (completed_at_utc IS NULL AND root_started_at_utc IS NOT NULL AND execution_job_id IS NOT NULL)) AND (root_started_at_utc IS NULL OR execution_job_id IS NOT NULL AND (publish_barrier OR completed_at_utc IS NOT NULL)) AND (state <> 'Applying' OR publish_barrier)");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_execution", "(execution_job_id IS NULL AND confirmed_at_utc IS NULL AND execution_expires_at_utc IS NULL AND execution_hash IS NULL) OR (execution_job_id IS NOT NULL AND execution_job_id <> id AND execution_job_id <> (command_json::jsonb->'Source'->>'OperationId')::uuid AND execution_job_id <> '00000000-0000-0000-0000-000000000000'::uuid AND plan_json IS NOT NULL AND confirmed_at_utc IS NOT NULL AND confirmed_at_utc >= created_at_utc AND confirmed_at_utc < ready_expires_at_utc AND execution_expires_at_utc IS NOT NULL AND execution_expires_at_utc = confirmed_at_utc + INTERVAL '15 minutes' AND execution_hash IS NOT NULL AND execution_hash ~ '^[A-F0-9]{64}$')");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_hashes", "login_binding ~ '^[A-F0-9]{64}$' AND owner_hash ~ '^[A-F0-9]{64}$' AND request_hash ~ '^[A-F0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_history", "(NOT history_verified OR history_digest = command_json::jsonb->>'HistoryDigest') AND ((history_digest IS NOT NULL) = history_verified) AND (history_digest IS NULL OR history_digest ~ '^[A-F0-9]{64}$') AND (execution_job_id IS NOT NULL OR root_state IS NULL AND NOT history_verified AND history_digest IS NULL) AND (root_started_at_utc IS NOT NULL OR root_state IS NULL OR root_state = 'Aborted')");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_identity", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND idempotency_key <> '00000000-0000-0000-0000-000000000000'::uuid AND container_id ~ '^[a-f0-9]{64}$' AND octet_length(relative_path) BETWEEN 1 AND 4096 AND length(actor_subject) BETWEEN 1 AND 256 AND length(trace_id) BETWEEN 1 AND 128 AND octet_length(command_json) BETWEEN 1 AND 65536");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_lease", "(lease_token IS NULL) = (lease_expires_at_utc IS NULL)");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_lifetime", "created_at_utc > TIMESTAMPTZ '1970-01-01 00:00:00+00' AND planning_expires_at_utc = created_at_utc + INTERVAL '15 minutes' AND version >= 0");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_phase", "(state NOT IN ('Ready','Pending','Applying','Unknown','Succeeded','Superseded','Acknowledged') OR plan_json IS NOT NULL) AND (state NOT IN ('Pending','Applying','Unknown','Succeeded','Superseded','Acknowledged') OR execution_job_id IS NOT NULL) AND (state NOT IN ('Queued','Planning','Ready') OR execution_job_id IS NULL)");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_plan", "(plan_json IS NULL AND plan_hash IS NULL AND ready_expires_at_utc IS NULL) OR (plan_json IS NOT NULL AND octet_length(plan_json) BETWEEN 1 AND 65536 AND plan_hash IS NOT NULL AND plan_hash ~ '^[A-F0-9]{64}$' AND ready_expires_at_utc IS NOT NULL AND ready_expires_at_utc > created_at_utc AND ready_expires_at_utc <= planning_expires_at_utc + INTERVAL '5 minutes')");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_planned", "plan_json IS NULL OR whaledeck_recycle_restore_plan_valid(plan_json::jsonb,command_json::jsonb)");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_receipt", "(root_state IS NULL AND NOT history_verified AND history_digest IS NULL AND receipt_json IS NULL AND receipt_hash IS NULL AND source_state IS NULL AND source_retained IS NULL AND source_restored IS NULL AND restored_by_this_operation IS NULL AND binding_current IS NULL AND history_available IS NULL) OR ((root_state IN ('Completed','Aborted','Unknown') AND receipt_json IS NOT NULL AND receipt_hash IS NOT NULL AND receipt_hash ~ '^[A-F0-9]{64}$' AND octet_length(receipt_json) BETWEEN 1 AND 65536 AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL AND binding_current IS NOT NULL AND history_available IS NOT NULL AND (NOT history_available OR history_verified) AND (NOT binding_current OR root_state = 'Completed' AND history_available) AND (source_state IS NULL OR source_state IN ('Trashed','Restored','Aborted','Unknown')) AND CASE WHEN root_state='Unknown' THEN history_verified AND source_retained IS NULL AND source_restored IS NULL AND restored_by_this_operation IS NULL WHEN root_state='Completed' THEN history_verified AND source_state='Restored' AND source_retained=false AND source_restored=true AND restored_by_this_operation=true ELSE restored_by_this_operation=false AND CASE WHEN history_verified THEN source_state='Trashed' AND source_retained=true AND source_restored=false ELSE source_state IS NULL AND source_retained IS NULL AND source_restored IS NULL END END) IS TRUE)");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_receipt_binding", "receipt_json IS NULL OR ((receipt_json::jsonb->>'Id' = execution_job_id::text AND receipt_json::jsonb->>'SourceOperationId' = command_json::jsonb->'Source'->>'OperationId' AND receipt_json::jsonb->>'Fingerprint' = plan_json::jsonb->>'Fingerprint' AND receipt_json::jsonb->>'TargetProof' = plan_json::jsonb->>'TargetProof' AND receipt_json::jsonb->>'State' = root_state AND (receipt_json::jsonb->>'SourceState') IS NOT DISTINCT FROM source_state AND (receipt_json::jsonb->>'SourceRetained')::boolean IS NOT DISTINCT FROM source_retained AND (receipt_json::jsonb->>'SourceRestored')::boolean IS NOT DISTINCT FROM source_restored AND (receipt_json::jsonb->>'RestoredByThisOperation')::boolean IS NOT DISTINCT FROM restored_by_this_operation AND (receipt_json::jsonb->>'BindingCurrent')::boolean = binding_current AND (receipt_json::jsonb->>'HistoryAvailable')::boolean = history_available AND (receipt_json::jsonb->>'HistoryVerified')::boolean = history_verified AND receipt_json::jsonb->>'HistoryDigest' = COALESCE(history_digest,'')) IS TRUE)");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_receipt_shape", "receipt_json IS NULL OR whaledeck_recycle_restore_receipt_valid(receipt_json::jsonb,plan_json::jsonb)");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_requested", "whaledeck_recycle_restore_command_valid(command_json::jsonb,container_id,instance_id,relative_path)");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_result", "((state <> 'Succeeded' OR root_state = 'Completed' AND binding_current) AND (state <> 'Superseded' OR root_state = 'Completed' AND NOT binding_current) AND (state NOT IN ('Succeeded','Superseded') OR history_verified AND root_started_at_utc IS NOT NULL) AND (state <> 'Unknown' OR root_state IS NULL OR root_state = 'Unknown') AND (execution_job_id IS NULL OR state NOT IN ('Canceled','Failed') OR root_state = 'Aborted')) IS TRUE");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_source", "source_intent_id <> id AND source_intent_id <> '00000000-0000-0000-0000-000000000000'::uuid AND source_proof_hash ~ '^[A-F0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_state", "state IN ('Queued','Planning','Ready','Pending','Applying','Unknown','Succeeded','Superseded','Canceled','Failed','Expired','Acknowledged')");
+
+                            t.HasCheckConstraint("ck_container_recycle_restore_terminal", "(completed_at_utc IS NULL) = (state IN ('Queued','Planning','Ready','Pending','Applying','Unknown'))");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerUpdateRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7935,6 +8213,26 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
                         .WithMany()
                         .HasForeignKey("Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerRecycleRestoreIntent", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithMany()
+                        .HasForeignKey("ExecutionJobId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithMany()
+                        .HasForeignKey("Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.ContainerRecycleIntent", null)
+                        .WithMany()
+                        .HasForeignKey("SourceIntentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

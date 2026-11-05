@@ -44,6 +44,7 @@ public sealed partial class NativeNotificationDispatchTests
         await ContainerRecursiveAclBoundaries(options);
         await ContainerRecursiveAclRestoreBoundaries(options);
         await ContainerRecycleBoundaries(options);
+        await ContainerRecycleRestoreBoundaries(options);
         Assert.Equal(beforeLocks, await original.Database.SqlQueryRaw<string>(locksSql).SingleAsync());
         // Keep both databases, including every Unknown/terminal row, until the runner removes its owned resources.
     }

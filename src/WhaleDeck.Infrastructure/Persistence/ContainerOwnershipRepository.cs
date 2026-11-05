@@ -151,6 +151,7 @@ public sealed partial class ContainerOwnershipRepository(PlatformDbContext db, I
         if (await db.FilePathLocks.AnyAsync(cancellationToken) || await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) || await db.ContainerOwnershipIntents.AnyAsync(r => r.PublishBarrier && r.Id != row.Id, cancellationToken) ||
             await db.ContainerAclIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerRecycleRestoreIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecycleIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursiveAclRestoreIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursiveAclIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||

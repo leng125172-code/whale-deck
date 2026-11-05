@@ -19,6 +19,8 @@ public sealed class JobRetryServiceTests
     [InlineData("containers.files.recursive-permission-plan")]
     [InlineData("containers.files.recursive-permission")]
     [InlineData("containers.files.recursive-acl-restore-plan")]
+    [InlineData("containers.files.recycle-restore-plan")]
+    [InlineData("containers.files.recycle-restore")]
     [InlineData("containers.files.recycle-plan")]
     [InlineData("containers.files.recycle")]
     [InlineData("containers.files.recursive-acl-restore")]

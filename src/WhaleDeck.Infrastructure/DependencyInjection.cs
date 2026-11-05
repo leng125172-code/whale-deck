@@ -104,6 +104,11 @@ public static class DependencyInjection
         services.AddScoped<IContainerRecursiveAclRestoreRepository, ContainerRecursiveAclRestoreRepository>();
         services.AddScoped<ContainerRecursiveAclRestoreWorkflowService>();
         services.AddScoped<ContainerRecursiveAclRestoreDispatcher>();
+        services.AddSingleton<IContainerRecycleRestoreProtector, FilePlanProtector>();
+        services.AddScoped<IContainerRecycleRestoreRepository, ContainerRecycleRestoreRepository>();
+        services.AddScoped<ContainerRecycleRestoreSourceResolver>();
+        services.AddScoped<ContainerRecycleRestoreWorkflowService>();
+        services.AddScoped<ContainerRecycleRestoreDispatcher>();
         services.AddSingleton<IContainerRecycleProtector, FilePlanProtector>();
         services.AddScoped<IContainerRecycleRepository, ContainerRecycleRepository>();
         services.AddScoped<ContainerRecycleWorkflowService>();

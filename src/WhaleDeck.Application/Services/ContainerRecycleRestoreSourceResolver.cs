@@ -1,5 +1,6 @@
 using WhaleDeck.Application.Abstractions;
 using WhaleDeck.Application.Models;
+using WhaleDeck.Domain.Entities;
 
 namespace WhaleDeck.Application.Services;
 
@@ -12,16 +13,21 @@ public sealed class ContainerRecycleRestoreSourceResolver(IContainerRecycleRepos
         await Authorize(actor, cancellationToken);
         if (id == Guid.Empty) throw new ArgumentException("CONTAINER_RECYCLE_RESTORE_SOURCE_REQUIRED");
         var row = await sources.FindAsync(id, cancellationToken) ?? throw new KeyNotFoundException("CONTAINER_RECYCLE_RESTORE_SOURCE_NOT_FOUND");
+        if (row.Id != id) throw Changed();
+        var resolved = FromRow(row, sourceProtector, protector);
+        await Authorize(actor, cancellationToken); return resolved;
+    }
+    public static ResolvedContainerRecycleRestoreSource FromRow(ContainerRecycleIntent row, IContainerRecycleProtector sourceProtector, IContainerRecycleRestoreProtector protector)
+    {
         if (!ContainerRecycleWorkflowValidation.HasValidBinding(row, sourceProtector)) throw Changed();
         var receipt = ContainerRecycleWorkflowValidation.ReadReceipt(row);
-        if (row.Id != id || row.State != "Succeeded" || row.CompletedAtUtc is null || row.PublishBarrier || row.CancelRequestedAtUtc is not null ||
+        if (row.State != "Succeeded" || row.CompletedAtUtc is null || row.PublishBarrier || row.CancelRequestedAtUtc is not null ||
             row.ExecutionJobId is null || row.RootStartedAtUtc is null || receipt is not { State: "Trashed", HistoryVerified: true, HistoryAvailable: true, BindingCurrent: true, SourceRetained: true, SourceRestored: false }) throw Changed();
         var original = ContainerRecycleWorkflowValidation.Reference(row);
         var command = ContainerRecycleRestoreWorkflowValidation.SnapshotCommand(new(new(original.Id, original.Owner, original.Plan), receipt.HistoryDigest));
-        var binding = new ContainerRecycleRestoreSourceBinding(id, row.RequestHash, row.PlanHash!, row.ExecutionHash!, row.ReceiptHash!, command);
+        var binding = new ContainerRecycleRestoreSourceBinding(row.Id, row.RequestHash, row.PlanHash!, row.ExecutionHash!, row.ReceiptHash!, command);
         var proof = protector.FingerprintRecycleRestoreSource(binding);
-        await Authorize(actor, cancellationToken);
-        return new(id, proof, command);
+        return new(row.Id, proof, command);
     }
     private async Task Authorize(TerminalActor actor, CancellationToken token)
     {
