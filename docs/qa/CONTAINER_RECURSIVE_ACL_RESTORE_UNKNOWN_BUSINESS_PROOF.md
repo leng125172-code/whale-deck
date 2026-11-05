@@ -1,5 +1,7 @@
 # 26对象Unknown业务证据候选与隔离PostgreSQL验证
 
+后续：新增独立门禁后，固定26对象首项后重命名Unknown及跨管理员处置已有[单次实机分项验收](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RENAME_GATE.md)。本页原候选/构造与未验状态按发生时保留，不将隔离PG回执重新归类为真实Root或身份证据。
+
 2026-11-05，承接[Unknown原件证明](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RECORDS.md)和[标准覆盖](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RELEASE.md)。候选源码冻结 `7f043f8a42866394bdd834b8a380f0db187f7374`，本批新增独立的固定26对象Unknown SQL/API/Job/审计校验器，并扩展真实隔离PostgreSQL门禁。产品与实际部署仍为 `34153d2`；没有新增真实Root故障、Authentik登录、Vue处置或覆盖发布。
 
 ## 固定业务形态
