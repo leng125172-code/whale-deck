@@ -100,10 +100,13 @@ class RestoreWireProofTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(AssertionError): proof.proto_receipt({**value, **changes}, q)
 
     def test_capability_and_framing_need_the_correct_phase_protocol_and_job(self):
-        error = dict(terminalProbe='failed', phase='capabilities', code='CONTAINER_RECYCLE_RESTORE_CAPABILITY_UNAVAILABLE', failureType='InvalidOperationException', rpcStatus=None, fileCode=None)
+        error = dict(terminalProbe='failed', phase='capabilities', code='CONTAINER_RECYCLE_RESTORE_CAPABILITY_UNAVAILABLE', failureType='InvalidOperationException', rpcStatus=None, fileCode=None,
+            capabilityObservation=dict(protocolMajor=1, protocolMinor=56, sourceCapability=True, restoreCapability=False))
         self.assertEqual(proof.capability_refusal(1, '', error)['operationFramesSent'], 0)
         for changes in (dict(code='CONTAINER_RECYCLE_CAPABILITY_UNAVAILABLE'), dict(phase='apply'), dict(rpcStatus='Unavailable')):
             with self.subTest(changes=changes), self.assertRaises(AssertionError): proof.capability_refusal(1, '', {**error, **changes})
+        for key, value in (('protocolMajor', 2), ('protocolMinor', 57), ('protocolMinor', True), ('sourceCapability', False), ('restoreCapability', True)):
+            with self.subTest(key=key, value=value), self.assertRaises(AssertionError): proof.capability_refusal(1, '', {**error, 'capabilityObservation': {**error['capabilityObservation'], key: value}})
         q = request(); header = dict(revision='a'*40, probeRevision='b'*40, containerId='a'*64, coreId='b'*64, instanceId=q['plan']['command']['source']['plan']['command']['instanceId'])
         frame = dict(kind='ready', revision=header['revision'], probeRevision=header['probeRevision'], protocolMinor=56)
         with self.assertRaises(AssertionError): proof.ready_proof(frame, header)

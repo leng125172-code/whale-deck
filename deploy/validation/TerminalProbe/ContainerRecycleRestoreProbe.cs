@@ -15,6 +15,7 @@ internal static class ContainerRecycleRestoreProbe
 {
     public static string Phase { get; private set; } = "startup";
     public static string FailureCode { get; private set; } = "";
+    public static object? CapabilityObservation { get; private set; }
     public static async Task RunAsync()
     {
         Require(OperatingSystem.IsLinux());
@@ -36,6 +37,8 @@ internal static class ContainerRecycleRestoreProbe
         using var channel = GrpcChannel.ForAddress("http://localhost", new() { HttpHandler = handler });
         Phase = "capabilities";
         var caps = await new AgentService.AgentServiceClient(channel).GetCapabilitiesAsync(new(), deadline: DateTime.UtcNow.AddSeconds(10), cancellationToken: lifetime.Token);
+        CapabilityObservation = new { protocolMajor = caps.ProtocolMajor, protocolMinor = caps.ProtocolMinor,
+            sourceCapability = caps.Capabilities.Contains("docker.files.recycle"), restoreCapability = caps.Capabilities.Contains("docker.files.recycle.restore") };
         // An older installation must refuse before reading the signing key or sending any operation.
         if (!(caps.ProtocolMajor == 1 && caps.ProtocolMinor >= 57 && caps.Capabilities.Contains("docker.files.recycle.restore") && caps.Capabilities.Contains("docker.files.recycle")))
         {

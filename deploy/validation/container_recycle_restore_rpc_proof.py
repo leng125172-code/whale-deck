@@ -36,9 +36,12 @@ def identity(value):
 
 def capability_refusal(exit_code, stdout, error):
     assert type(exit_code) is int and exit_code == 1 and stdout == ''
-    fields(error, ('terminalProbe', 'phase', 'code', 'failureType', 'rpcStatus', 'fileCode'))
-    typed_equal(error, dict(terminalProbe='failed', phase='capabilities', code='CONTAINER_RECYCLE_RESTORE_CAPABILITY_UNAVAILABLE', failureType='InvalidOperationException', rpcStatus=None, fileCode=None))
-    return dict(capabilityRejectedBeforeKey=True, operationFramesSent=0)
+    fields(error, ('terminalProbe', 'phase', 'code', 'failureType', 'rpcStatus', 'fileCode', 'capabilityObservation'))
+    typed_equal({k: v for k, v in error.items() if k != 'capabilityObservation'}, dict(terminalProbe='failed', phase='capabilities', code='CONTAINER_RECYCLE_RESTORE_CAPABILITY_UNAVAILABLE', failureType='InvalidOperationException', rpcStatus=None, fileCode=None))
+    caps = error['capabilityObservation']; fields(caps, ('protocolMajor', 'protocolMinor', 'sourceCapability', 'restoreCapability'))
+    integer(caps['protocolMajor'], 1, 1); integer(caps['protocolMinor'], 0, 56)
+    assert caps['sourceCapability'] is True and caps['restoreCapability'] is False
+    return dict(capabilityRejectedBeforeKey=True, operationFramesSent=0, observedProtocolMajor=1, observedProtocolMinor=caps['protocolMinor'], sourceCapability=True, restoreCapability=False)
 
 
 def ready_proof(value, header):
@@ -133,6 +136,10 @@ def claim_proof(claim, request):
 
 
 def record_proof(request, receipt, root, claim, source_root, history, *, data_sha256, data_size):
+    # This joins a returned terminal RPC receipt to quiescent records. A raw
+    # AbortedSaved crash cut may still hold its claim before clear_claim; that
+    # snapshot has no returned receipt and needs Inspect/recovery first. Do not
+    # silently sign it as a completed cancellation or remove a claim here.
     request_proof(request)
     typed_equal(proto_receipt({k: v for k, v in receipt.items() if k not in OPTIONAL or v is not None}, request), receipt)
     fields(root, RECORD); integer(root['schemaVersion'], 1, 1)
