@@ -182,6 +182,7 @@ public sealed partial class ContainerUploadHttpTests
         public RecursiveOwnerHttpFixture RecursiveOwner { get; }=new();
         public RecursiveAclHttpFixture RecursiveAcl { get; }=new();
         public RecursiveAclRestoreHttpFixture RecursiveAclRestore { get; }=new();
+        public RecycleHttpFixture Recycle { get; }=new();
         public AclHttpFixture Acl { get; }=new();
         public AclHistoryHttpFixture AclHistory { get; }=new();
         public RecursiveAclHistoryHttpFixture RecursiveAclHistory { get; }=new();
@@ -213,6 +214,8 @@ public sealed partial class ContainerUploadHttpTests
             builder.Services.AddSingleton(new ContainerAclWorkflowService(uploads,fixture.Acl,protector,fixture.Acl,TimeProvider.System,fixture.Acl,fixture.AclHistory));
             builder.Services.AddSingleton(new ContainerRecursiveOwnershipWorkflowService(uploads,fixture.RecursiveOwner,protector,fixture.RecursiveOwner,TimeProvider.System,fixture.RecursiveOwner));
             fixture.RecursiveAclRestore.Protector=protector;
+            fixture.Recycle.Protector=protector;
+            builder.Services.AddSingleton(new ContainerRecycleWorkflowService(uploads,fixture.Recycle,protector,fixture.Recycle,TimeProvider.System,fixture.Recycle));
             builder.Services.AddSingleton(new ContainerRecursiveAclRestoreWorkflowService(uploads,fixture.RecursiveAclRestore,protector,fixture.RecursiveAclRestore,TimeProvider.System,fixture.RecursiveAclRestore));
             builder.Services.AddSingleton(new ContainerRecursiveAclWorkflowService(uploads,fixture.RecursiveAcl,protector,fixture.RecursiveAcl,TimeProvider.System,fixture.RecursiveAcl));
             builder.Services.AddSingleton(new ContainerFileHistoryService(uploads,fixture.History,fixture.History,fixture.History));
