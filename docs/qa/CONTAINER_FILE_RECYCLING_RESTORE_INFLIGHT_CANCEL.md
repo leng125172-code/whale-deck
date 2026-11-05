@@ -1,5 +1,7 @@
 # 独立恢复：准确写入前切点的真实页面取消
 
+2026-11-06后续：全新来源的执行中正常双端退出已另行实机验收，取消POST与审计均0，见[退出记录](CONTAINER_FILE_RECYCLING_RESTORE_INFLIGHT_LOGOUT.md)。本页保留此前显式取消的准确边界，不把两种触发混用，也不补签其他故障。
+
 2026-11-06，冻结工具 `91b5b16df692f7857b32067042fe134f6019986f`，对保持3d80d17的实际部署执行一轮全新自有资源验收。正常可见Authentik登录、Vue创建回收来源并通过SQL/Root/HDD证明后，另建独立恢复、在准确Applying切点暂停该helper，再由页面明确取消。没有重放旧任务、模拟响应、注入会话、数据库编辑或产品测试钩子。
 
 门禁 `whaledeck-qa-restore-inflight-cancel-first`，Invocation `a7b358797b5345b29d2f983a243fabb5`，exited/0；清理前、清理后的两个独立进程均passed。源码新增4项结合原关联检查共55项通过，Linux root零跳过，8范围及Python/Node语法通过。本批只签以下单一故障切点，完整权限/恢复故障矩阵仍未完成。
