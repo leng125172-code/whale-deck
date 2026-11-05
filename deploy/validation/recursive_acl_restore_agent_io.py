@@ -99,10 +99,12 @@ def absent(fd, name):
 def archive_raw(folder, name, raw, create):
     path = folder / name
     if path.exists():
-        trusted(path); assert path.read_bytes() == raw, 'PRIVATE_ARCHIVE_CHANGED'
+        trusted(path); assert stat.S_IMODE(path.stat().st_mode)==0o600, 'PRIVATE_ARCHIVE_MODE'
+        assert path.read_bytes() == raw, 'PRIVATE_ARCHIVE_CHANGED'
     else:
         assert create, 'PRIVATE_ARCHIVE_MISSING'
-        with path.open('xb') as stream: stream.write(raw)
+        descriptor=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o600)
+        with os.fdopen(descriptor,'wb') as stream: stream.write(raw)
 
 
 def read_bundle(io, request, restore, folder, *, create=False):

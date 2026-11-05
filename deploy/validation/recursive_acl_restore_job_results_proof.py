@@ -12,6 +12,7 @@ SOURCES=('validate_recursive_acl_restore_job_results.py','validate_recursive_acl
 FIELDS='schemaVersion intentId jobId stage state code aclType entryCount fileCount directoryCount changeCount completedCount changedCount abortedCount notStartedCount unknownCount receiptState bindingCurrent historyMayExist historyVerified historyAvailable publishBarrier sourceEntryCount sourceFileCount sourceDirectoryCount sourceChangedCount'.split()
 COUNTS=('completedCount','changedCount','abortedCount','notStartedCount','unknownCount')
 IMAGES={'job-planning-counts.png','job-planning-metadata.png','job-execution-counts.png','job-execution-metadata.png'}
+UNKNOWN_WARNING='当前结果仍含不确定性。已有计数仅表示聚合回执已证明的部分，0不代表未发生修改；没有回执时保持未证明。请核对原任务、逐项记录和HDD历史。'
 
 def column(key):return re.sub(r'(?<!^)(?=[A-Z])','_',key).lower()
 
@@ -61,9 +62,11 @@ def job_proof(observed,sql,expected,*,prefix=None):
     typed_equal(observed['viewport'],dict(width=320,height=600));assert observed['theme']=='dark'
     assert observed['stateText']==dict(Ready='预检已完成，尚未恢复ACL',Succeeded='递归ACL恢复已完成',Canceled='已取消',Partial='部分修改，保护已保留',Unknown='结果未知，保护已保留',Acknowledged='已处置历史结果，不代表整树修改成功')[expected['state']]
     if expected['state']=='Acknowledged':assert observed['acknowledgementWarning']=='管理员处置仅释放业务保护，原计数与不确定性保留，不代表整树恢复成功。'
-    assert '历史事实' in observed['historical'] and '来源原修改数与本次实际修改数分别记录' in observed['historical']
+    uncertain=expected['state']=='Unknown' or expected['receiptState']=='Unknown'
+    if uncertain:assert observed['unknownWarning']==UNKNOWN_WARNING
+    assert '历史事实' in observed['historical'] and ('来源原修改数与本次回执计数分别记录' if uncertain else '来源原修改数与本次实际修改数分别记录') in observed['historical']
     if prefix is not None:
-        typed_equal(observed['labels'],dict(identity=['原意图','阶段','恢复ACL类型'],plan=['计划对象','文件','目录（含根）','计划修改'],actual=['已完成核对','实际修改','已中止','未开始','待证明'],source=['来源对象','来源文件','来源目录','来源原修改'],metadata=['原回执','当时对象绑定有效','可能已有历史','历史已验证','当时历史可用','当时发布围栏保留','结果码']))
+        typed_equal(observed['labels'],dict(identity=['原意图','阶段','恢复ACL类型'],plan=['计划对象','文件','目录（含根）','计划修改'],actual=['已完成核对','回执已证明修改' if uncertain else '实际修改','已中止','未开始','待证明'],source=['来源对象','来源文件','来源目录','来源原修改'],metadata=['原回执','当时对象绑定有效','可能已有历史','历史已验证','当时历史可用','当时发布围栏保留','结果码']))
     prefix=prefix or f"job-{expected['stage']}"
     assert observed['screenshots']==[prefix+'-counts.png',prefix+'-metadata.png']
 

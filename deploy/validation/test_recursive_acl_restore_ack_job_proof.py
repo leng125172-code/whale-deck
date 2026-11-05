@@ -1,7 +1,7 @@
 """Synthetic fault evidence, explicitly not an installed fault/UI acceptance."""
 import copy,json,unittest
 from test_recursive_acl_restore_job_results_proof import fixture
-from recursive_acl_restore_job_results_proof import job_proof,display,COUNTS
+from recursive_acl_restore_job_results_proof import job_proof,display,COUNTS,UNKNOWN_WARNING
 from recursive_acl_restore_ack_job_proof import acknowledgement_facts
 
 WARNING='管理员处置仅释放业务保护，原计数与不确定性保留，不代表整树恢复成功。'
@@ -16,7 +16,8 @@ def acknowledged(s):
 def observe(s):
     o,sql,_=fixture(True);phase={'Partial':'AwaitingContainerRecursiveAclRestoreResolution','Unknown':'AwaitingContainerRecursiveAclRestoreReceipt','Acknowledged':'Acknowledged'}[s['state']];state='Failed' if s['state']=='Acknowledged' else 'Running'
     for j in (o['job'],o['listJob']):j.update(state=state,phase=phase,resultJson=json.dumps(s))
-    sql.update(state=state,phase=phase,result_json=s);o.update(display=display(s),stateText={'Partial':'部分修改，保护已保留','Unknown':'结果未知，保护已保留','Acknowledged':'已处置历史结果，不代表整树修改成功'}[s['state']],acknowledgementWarning=WARNING if s['state']=='Acknowledged' else None)
+    sql.update(state=state,phase=phase,result_json=s);o.update(display=display(s),stateText={'Partial':'部分修改，保护已保留','Unknown':'结果未知，保护已保留','Acknowledged':'已处置历史结果，不代表整树修改成功'}[s['state']],acknowledgementWarning=WARNING if s['state']=='Acknowledged' else None,unknownWarning=UNKNOWN_WARNING if s['state']=='Unknown' or s['receiptState']=='Unknown' else None)
+    if s['state']=='Unknown' or s['receiptState']=='Unknown':o['historical']=o['historical'].replace('本次实际修改数','本次回执计数')
     return o,sql,s
 
 class AckFaultJobTests(unittest.TestCase):
@@ -31,6 +32,10 @@ class AckFaultJobTests(unittest.TestCase):
 
     def test_missing_receipt_must_not_display_zero(self):
         o,sql,s=observe(summary('Unknown',False));self.assertEqual(o['display']['actual'],['未证明']*5);o['display']['actual']=['0']*5
+        with self.assertRaises(AssertionError):job_proof(o,sql,s)
+
+    def test_unknown_aggregate_zero_requires_explicit_nonzero_uncertainty_warning(self):
+        o,sql,s=observe(summary('Unknown'));o['unknownWarning']=None
         with self.assertRaises(AssertionError):job_proof(o,sql,s)
 
     def test_ack_warning_is_required_even_with_completed_receipt(self):

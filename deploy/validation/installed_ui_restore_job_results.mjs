@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import {join} from 'node:path'
 import {expect} from '../../web/node_modules/@playwright/test/index.mjs'
-import {jobState,stateText as stateTexts,requirePhase,acknowledgementWarning} from './restore_job_observation_contract.mjs'
+import {jobState,stateText as stateTexts,requirePhase,acknowledgementWarning,unknownWarning} from './restore_job_observation_contract.mjs'
 
 export const fields='schemaVersion intentId jobId stage state code aclType entryCount fileCount directoryCount changeCount completedCount changedCount abortedCount notStartedCount unknownCount receiptState bindingCurrent historyMayExist historyVerified historyAvailable publishBarrier sourceEntryCount sourceFileCount sourceDirectoryCount sourceChangedCount'.split(' ')
 export const factLabels={identity:['原意图','阶段','恢复ACL类型'],plan:['计划对象','文件','目录（含根）','计划修改'],actual:['已完成核对','实际修改','已中止','未开始','待证明'],source:['来源对象','来源文件','来源目录','来源原修改'],metadata:['原回执','当时对象绑定有效','可能已有历史','历史已验证','当时历史可用','当时发布围栏保留','结果码']}
@@ -35,19 +35,23 @@ export async function observeJob(page,context,base,id,stage,state,evidence,prefi
  const values={},labels={},keys=['identity','plan','actual','source','metadata'],expected=displayed(s)
  for(const [i,key]of keys.entries()){
   const dl=dls.nth(i);values[key]=await dl.locator('dd').allTextContents();values[key]=values[key].map(v=>v.trim());assert.deepEqual(values[key],expected[key])
-  labels[key]=(await dl.locator('dt').allTextContents()).map(v=>v.trim());assert.deepEqual(labels[key],factLabels[key])
+  labels[key]=(await dl.locator('dt').allTextContents()).map(v=>v.trim());const expectedLabels=[...factLabels[key]]
+  if(key==='actual'&&(s.state==='Unknown'||s.receiptState==='Unknown'))expectedLabels[1]='回执已证明修改'
+  assert.deepEqual(labels[key],expectedLabels)
   for(const dt of await dl.locator('dt').all()){await dt.scrollIntoViewIfNeeded();await expect(dt).toBeVisible()}
   for(const dd of await dl.locator('dd').all()){await dd.scrollIntoViewIfNeeded();await expect(dd).toBeVisible()}
  }
  const stateText=await region.locator('p').first().innerText();assert.equal(stateText,stateTexts[state])
  let observedAcknowledgementWarning=null
  if(state==='Acknowledged'){await expect(region.getByText(acknowledgementWarning,{exact:true})).toBeVisible();observedAcknowledgementWarning=acknowledgementWarning}
+ let observedUnknownWarning=null
+ if(s.state==='Unknown'||s.receiptState==='Unknown'){await expect(region.getByRole('note',{name:'未知回执计数限制',exact:true})).toHaveText(unknownWarning);observedUnknownWarning=unknownWarning}
  await page.evaluate(async()=>{await document.fonts.ready})
  await dls.nth(2).locator('dt').first().scrollIntoViewIfNeeded();await page.screenshot({path:join(evidence,`${prefix}-counts.png`)})
  await dls.nth(4).locator('dt').first().scrollIntoViewIfNeeded();await page.screenshot({path:join(evidence,`${prefix}-metadata.png`)})
- const historical=await region.locator('p').last().innerText();assert.ok(historical.includes('历史事实')&&historical.includes('来源原修改数与本次实际修改数分别记录'))
+ const historical=await region.locator('p').last().innerText();assert.ok(historical.includes('历史事实')&&historical.includes(s.state==='Unknown'||s.receiptState==='Unknown'?'来源原修改数与本次回执计数分别记录':'来源原修改数与本次实际修改数分别记录'))
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth))
  assert.equal(await drawer.getByRole('button',{name:'取消任务',exact:true}).count(),0);assert.equal(await drawer.getByRole('button',{name:'重新预检并重试',exact:true}).count(),0)
  await drawer.locator('.el-drawer__close-btn').click()
- return {job,listJob:jobs[index],request:{method:'GET',pathname:'/api/v1/jobs/'+id,status:dr.status()},listRequest:{method:'GET',pathname:'/api/v1/jobs',status:lr.status(),query:Object.fromEntries(new URL(lr.url()).searchParams)},display:values,labels,stateText,acknowledgementWarning:observedAcknowledgementWarning,historical,viewport:page.viewportSize(),theme:await page.evaluate(()=>matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'),screenshots:[`${prefix}-counts.png`,`${prefix}-metadata.png`]}
+ return {job,listJob:jobs[index],request:{method:'GET',pathname:'/api/v1/jobs/'+id,status:dr.status()},listRequest:{method:'GET',pathname:'/api/v1/jobs',status:lr.status(),query:Object.fromEntries(new URL(lr.url()).searchParams)},display:values,labels,stateText,unknownWarning:observedUnknownWarning,acknowledgementWarning:observedAcknowledgementWarning,historical,viewport:page.viewportSize(),theme:await page.evaluate(()=>matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'),screenshots:[`${prefix}-counts.png`,`${prefix}-metadata.png`]}
 }

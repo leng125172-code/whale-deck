@@ -1,8 +1,9 @@
 """Read-only proof of one completed restoration and an untouched remaining tree.
 
-This deliberately accepts only startedThrough=finishedThrough=0, no unknown or
-second started child. Other Partial shapes require their own proof. No writes,
-resume, discard, SQL mutation, helper signalling or authority changes.
+Partial/Applying require startedThrough=finishedThrough=0. The separately named
+Unknown reader permits a second started marker without a second child record;
+its semantic proof belongs to the Unknown validator. No second child receipts
+are ignored. No writes, resume, discard, SQL mutation or helper signalling.
 """
 import os
 from pathlib import Path
@@ -14,13 +15,14 @@ from verify_container_recursive_acl import file_version
 from validate_container_upload_recovery_agent import trusted
 
 def _read_first(io,request,folder,phase,*,create=False):
-    assert phase in ('Applying','Partial')
+    assert phase in ('Applying','Partial','Unknown')
     op=request['operationId'];sub=child_id(op,0)
     if create:folder.mkdir(mode=0o700,parents=True,exist_ok=True)
     trusted(io.restoreState,True);trusted(folder,True)
     def save(name,raw):archive_raw(folder,name,raw,create)
     raw,root,_=read_at(None,str(io.restoreState/(op+'.json')));save('root.json',raw)
-    assert root['state']==phase and type(root['startedThrough']) is type(root['finishedThrough']) is int and root['startedThrough']==root['finishedThrough']==0
+    assert root['state']==phase and type(root['startedThrough']) is type(root['finishedThrough']) is int and root['finishedThrough']==0
+    assert root['startedThrough'] in (0,1) if phase=='Unknown' else root['startedThrough']==0
     directory=io.restoreState/(op+'.entries')
     trusted(directory,True)
     assert {p.name for p in directory.iterdir() if p.suffix=='.json'}=={sub+'.json'}
@@ -42,6 +44,10 @@ def read_partial_first(io,request,folder,*,create=False):
 
 def read_applying_first(io,request,folder,*,create=False):
     return _read_first(io,request,folder,'Applying',create=create)
+
+def read_unknown_first(io,request,folder,*,create=False):
+    # Only one Completed child exists; an advanced marker alone is not a child receipt.
+    return _read_first(io,request,folder,'Unknown',create=create)
 
 def completed_first_facts(request,bundle,source,frame,before,after,attrs):
     plan=request['plan'];op=request['operationId'];sub=child_id(op,0);root=bundle['root'];n=plan['entryCount']

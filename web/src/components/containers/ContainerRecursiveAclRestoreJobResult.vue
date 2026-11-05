@@ -14,6 +14,9 @@ const props = defineProps<{
 const result = computed(() =>
   readRecursiveAclRestoreJobResult(props.resultJson, props.jobType, props.state, props.jobId),
 )
+const uncertain = computed(
+  () => result.value?.state === 'Unknown' || result.value?.receiptState === 'Unknown',
+)
 const fact = (value: boolean | null) => (value === null ? '未证明' : value ? '是' : '否')
 const count = (value: number | null) => (value === null ? '未证明' : String(value))
 </script>
@@ -43,7 +46,7 @@ const count = (value: number | null) => (value === null ? '未证明' : String(v
       <dl aria-label="本次恢复实际结果">
         <dt>已完成核对</dt>
         <dd>{{ count(result.completedCount) }}</dd>
-        <dt>实际修改</dt>
+        <dt>{{ uncertain ? '回执已证明修改' : '实际修改' }}</dt>
         <dd>{{ count(result.changedCount) }}</dd>
         <dt>已中止</dt>
         <dd>{{ count(result.abortedCount) }}</dd>
@@ -79,11 +82,16 @@ const count = (value: number | null) => (value === null ? '未证明' : String(v
         <dd>{{ result.code }}</dd>
       </dl>
       <p>{{ recursiveAclRestoreResult(result.code) }}</p>
+      <p v-if="uncertain" role="note" aria-label="未知回执计数限制">
+        当前结果仍含不确定性。已有计数仅表示聚合回执已证明的部分，0不代表未发生修改；没有回执时保持未证明。请核对原任务、逐项记录和HDD历史。
+      </p>
       <p v-if="result.state === 'Acknowledged'">
         管理员处置仅释放业务保护，原计数与不确定性保留，不代表整树恢复成功。
       </p>
       <p>
-        这是该任务保存时的历史事实，不证明当前目录树或HDD仍可用，也不代表原用户现在仍有权限。来源原修改数与本次实际修改数分别记录。
+        这是该任务保存时的历史事实，不证明当前目录树或HDD仍可用，也不代表原用户现在仍有权限。来源原修改数与{{
+          uncertain ? '本次回执计数' : '本次实际修改数'
+        }}分别记录。
       </p>
     </template>
     <p v-else>

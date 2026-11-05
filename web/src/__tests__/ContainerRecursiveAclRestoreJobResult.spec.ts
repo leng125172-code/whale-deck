@@ -101,6 +101,13 @@ describe('Recursive ACL restore historical job facts', () => {
       }
       expect(parse(v, jobState)).toEqual(v)
       const wrapper = mount(Component, { props: props(v, jobState) })
+      const uncertain = state === 'Unknown' || state === 'Acknowledged'
+      const note = wrapper.find('[aria-label="未知回执计数限制"]')
+      expect(note.exists()).toBe(uncertain)
+      expect((note.exists() ? note.text() : '').includes('0不代表未发生修改')).toBe(uncertain)
+      expect(wrapper.get('[aria-label="本次恢复实际结果"]').findAll('dt')[1]!.text()).toBe(
+        uncertain ? '回执已证明修改' : '实际修改',
+      )
       expect(wrapper.text()).toContain(state === 'Acknowledged' ? '不代表整树恢复成功' : '本次')
       expect(wrapper.text()).not.toContain('未记录可验证')
       wrapper.unmount()
@@ -124,6 +131,7 @@ describe('Recursive ACL restore historical job facts', () => {
     }
     expect(parse(v, 'Running')).toEqual(v)
     const wrapper = mount(Component, { props: props(v, 'Running') })
+    expect(wrapper.get('[aria-label="未知回执计数限制"]').text()).toContain('0不代表未发生修改')
     expect(
       wrapper
         .get('[aria-label="本次恢复实际结果"]')

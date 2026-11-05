@@ -108,6 +108,28 @@ for (const width of [320, 1440])
           historyVerified: false,
           historyAvailable: false,
         },
+        {
+          ...result,
+          state: 'Unknown',
+          code: 'CONTAINER_RECURSIVE_ACL_RESTORE_RESULT_UNKNOWN',
+          receiptState: 'Unknown',
+          completedCount: 0,
+          changedCount: 0,
+          unknownCount: 4,
+          bindingCurrent: false,
+          publishBarrier: true,
+        },
+        {
+          ...result,
+          state: 'Acknowledged',
+          code: 'CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_ACKNOWLEDGED',
+          receiptState: 'Unknown',
+          completedCount: 0,
+          changedCount: 0,
+          unknownCount: 4,
+          bindingCurrent: false,
+          publishBarrier: false,
+        },
       ]
       const jobs = facts.map((facts, i) => {
         const id =
@@ -122,7 +144,7 @@ for (const width of [320, 1440])
             i === 4 || i === 7
               ? 'containers.files.recursive-acl-restore-plan'
               : 'containers.files.recursive-acl-restore',
-          state: [1, 2].includes(i)
+          state: [1, 2, 11].includes(i)
             ? 'Running'
             : i === 3 || i === 7 || i >= 8
               ? 'Failed'
@@ -130,7 +152,7 @@ for (const width of [320, 1440])
           phase:
             i === 1
               ? 'AwaitingContainerRecursiveAclRestoreResolution'
-              : i === 2
+              : i === 2 || i === 11
                 ? 'AwaitingContainerRecursiveAclRestoreReceipt'
                 : i === 3 || i >= 8
                   ? 'Acknowledged'
@@ -138,7 +160,7 @@ for (const width of [320, 1440])
           progressPercent: null,
           errorCode: null,
           createdAtUtc: '2026-11-05T01:00:00Z',
-          completedAtUtc: i === 1 || i === 2 ? null : '2026-11-05T01:01:00Z',
+          completedAtUtc: [1, 2, 11].includes(i) ? null : '2026-11-05T01:01:00Z',
           resultJson: facts ? JSON.stringify({ ...facts, jobId: id }) : null,
         }
       })
@@ -178,41 +200,49 @@ for (const width of [320, 1440])
         if (i === 5 || i === 6) {
           await expect(region).toContainText('不将缺失结果视为零修改或成功')
         } else {
-          await expect(region).toContainText(
-            [
-              '递归ACL恢复已完成',
-              '部分修改，保护已保留',
-              '结果未知，保护已保留',
-              '已处置历史结果，不代表整树修改成功',
-              '预检已完成，尚未恢复ACL',
-              '',
-              '',
-              '递归ACL恢复未完成',
-              '已处置历史结果，不代表整树修改成功',
-              '已处置历史结果，不代表整树修改成功',
-              '已处置历史结果，不代表整树修改成功',
-            ][i]!,
-          )
+          const stateTexts: Record<string, string> = {
+            Succeeded: '递归ACL恢复已完成',
+            Partial: '部分修改，保护已保留',
+            Unknown: '结果未知，保护已保留',
+            Acknowledged: '已处置历史结果，不代表整树修改成功',
+            Ready: '预检已完成，尚未恢复ACL',
+            Failed: '递归ACL恢复未完成',
+          }
+          await expect(region).toContainText(stateTexts[facts[i]!.state]!)
           const actual = region.locator('[aria-label="本次恢复实际结果"]')
           await expect(actual.locator('dd')).toHaveText(
             i === 0 || i === 8
               ? ['4', '4', '0', '0', '0']
               : i === 1 || i === 3 || i === 9
                 ? ['1', '1', '0', '3', '0']
-                : i === 10
-                  ? ['0', '0', '0', '4', '0']
-                  : Array(5).fill('未证明'),
+                : i >= 11
+                  ? ['0', '0', '0', '0', '4']
+                  : i === 10
+                    ? ['0', '0', '0', '4', '0']
+                    : Array(5).fill('未证明'),
           )
           await expect(region.locator('[aria-label="恢复来源原计数"]')).toContainText(
             i === 7 ? '来源原修改未证明' : '来源原修改2',
           )
-          if (i === 3 || i >= 8) {
+          if (i === 3 || (i >= 8 && i !== 11)) {
             await expect(region).toContainText('不代表整树恢复成功')
             await expect(region).not.toContainText('递归ACL恢复已完成')
           }
+          if ([2, 11, 12].includes(i)) {
+            const note = region.getByRole('note', { name: '未知回执计数限制', exact: true })
+            await expect(note).toContainText('0不代表未发生修改')
+            await expect(actual).toContainText('回执已证明修改')
+            await expect(actual).not.toContainText('实际修改0')
+            await note.scrollIntoViewIfNeeded()
+            await expect(note).toBeInViewport()
+            await page.screenshot({
+              path: `${process.env.WHALEDECK_JOB_RESULT_SCREENSHOTS || '../deploy/artifacts/ui-candidates/recursive-acl-restore-job-results'}/warning-${i}-${width}-${colorScheme}.png`,
+              scale: 'css',
+            })
+          }
           await actual.scrollIntoViewIfNeeded()
           await page.screenshot({
-            path: `../deploy/artifacts/ui-candidates/recursive-acl-restore-job-results/result-${i}-${width}-${colorScheme}.png`,
+            path: `${process.env.WHALEDECK_JOB_RESULT_SCREENSHOTS || '../deploy/artifacts/ui-candidates/recursive-acl-restore-job-results'}/result-${i}-${width}-${colorScheme}.png`,
             scale: 'css',
           })
           const body = await drawer.locator('.el-drawer__body').boundingBox()
