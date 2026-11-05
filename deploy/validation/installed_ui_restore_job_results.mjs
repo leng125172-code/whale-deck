@@ -14,7 +14,8 @@ export function displayed(s){
   metadata:[s.receiptState??'未取得',...['bindingCurrent','historyMayExist','historyVerified','historyAvailable','publishBarrier'].map(k=>fact(s[k])),s.code]}
 }
 export async function observeJob(page,context,base,id,stage,state,evidence){
- const listing=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1/jobs'&&r.request().method()==='GET')
+ // AppShell independently polls take=50. Bind the response rendered by JobsView.
+ const listing=page.waitForResponse(r=>{const u=new URL(r.url());return u.pathname==='/api/v1/jobs'&&u.searchParams.get('take')==='100'&&r.request().method()==='GET'})
  await page.goto(base+'/jobs');const lr=await listing;assert.equal(lr.status(),200)
  const jobs=await lr.json(),index=jobs.findIndex(v=>v.id===id);assert.ok(index>=0)
  const detail=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1/jobs/'+id&&r.request().method()==='GET')

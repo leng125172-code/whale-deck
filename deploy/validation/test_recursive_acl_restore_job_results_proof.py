@@ -62,8 +62,18 @@ class JobResultsEvidenceTests(unittest.TestCase):
             o,sql,s=fixture();o[key]=value
             with self.subTest(key=key),self.assertRaises(AssertionError):job_proof(o,sql,s)
 
+    def test_shell_poll_must_not_replace_the_jobs_page_list_response(self):
+        o,sql,s=fixture();o['listRequest']['query']['take']='50'
+        with self.assertRaises(AssertionError):job_proof(o,sql,s)
+
     def test_other_mode_evidence_cannot_be_relabelled(self):
         for name,mode,logout in (('recursive-acl-restore-inflight-logout-'+'a'*32,True,True),('recursive-acl-restore-job-results-ui-'+'a'*32,False,True),('recursive-acl-restore-job-results-ui-'+'a'*32,True,False)):
             with self.subTest(name=name),self.assertRaises(AssertionError):verify(name,logout=logout,job_results=mode)
+
+    def test_failed_ready_cleanup_cannot_target_any_other_run(self):
+        from reconcile_recursive_acl_restore_job_ready_failure import target,NAME
+        self.assertEqual(NAME,target(NAME).name)
+        for name in ('../escape','recursive-acl-restore-job-results-ui-'+'a'*32,'recursive-acl-restore-inflight-logout-'+'a'*32):
+            with self.subTest(name=name),self.assertRaises(AssertionError):target(name)
 
 if __name__=='__main__':unittest.main()
