@@ -8,25 +8,31 @@ import test_recursive_acl_restore_record_probe_scope as native
 
 @unittest.skipUnless(os.geteuid()==0,'temporary private Linux ACL/HDD records required')
 class UnknownRestoreRecordTests(unittest.TestCase):
+    size=4
+    move_from='one.bin'
+    move_to='renamed.bin'
+
+    def seed(self):return self.f.k.seed()
+
     def setUp(self):
         self.f=native.RestoreRecordProofTests();self.f.setUp();self.addCleanup(self.f.doCleanups);k=self.f.k
-        source,result,old=k.seed();self.source=dict(request=source,result=result,before=old,after=k.b.snapshot())
-        bundle,self.frame=read_bundle(self.f.io,source,False,self.f.archive/'source',create=True);self.source['metadata']=bundle['metadata'];self.assertEqual(records_proof(self.source,bundle,restore=False,attribute_digest=self.f.attrs),4)
+        source,result,old=self.seed();self.source=dict(request=source,result=result,before=old,after=k.b.snapshot())
+        bundle,self.frame=read_bundle(self.f.io,source,False,self.f.archive/'source',create=True);self.source['metadata']=bundle['metadata'];self.assertEqual(records_proof(self.source,bundle,restore=False,attribute_digest=self.f.attrs),self.size)
         self.before=k.b.snapshot();self.request=k.request(source,result);self.checkpoints=0
         def checkpoint(phase,index):
             if phase=='AfterEntry' and index==0:
                 self.checkpoints+=1;self.cut_bundle=read_applying_first(self.f.io,self.request,self.f.archive/'cut',create=True);self.cut=k.b.snapshot()
-                (k.b.tree/'one.bin').rename(k.b.tree/'renamed.bin');k.b.paths=tuple('renamed.bin' if p=='one.bin' else p for p in k.b.paths);self.after=k.b.snapshot()
+                (k.b.tree/self.move_from).rename(k.b.tree/self.move_to);k.b.paths=tuple(self.move_to if p==self.move_from else p for p in k.b.paths);self.after=k.b.snapshot()
         k.engine.checkpoint=checkpoint
         with self.assertRaises((OSError,k.b.base.r.Rejected)):k.engine.apply(self.request,k.b.base.session)
         with k.no_write():self.receipt=k.engine.inspect(self.request,k.b.base.session)
         self.bundle=read_unknown_first(self.f.io,self.request,self.f.archive/'unknown',create=True)
 
-    def prove(self,bundle=None,after=None,receipt=None,old='one.bin',new='renamed.bin'):
-        return unknown_renamed_first_proof(self.request,receipt or self.receipt,self.cut_bundle,bundle or self.bundle,self.source,self.frame,self.before,self.cut,after or self.after,self.f.attrs,old,new)
+    def prove(self,bundle=None,after=None,receipt=None,old=None,new=None):
+        return unknown_renamed_first_proof(self.request,receipt or self.receipt,self.cut_bundle,bundle or self.bundle,self.source,self.frame,self.before,self.cut,after or self.after,self.f.attrs,self.move_from if old is None else old,self.move_to if new is None else new)
 
     def test_real_target_rename_keeps_known_write_separate_from_aggregate_unknown(self):
-        result=self.prove();self.assertEqual(result['aggregateCounts'],[0,0,0,0,4]);self.assertEqual(result['knownActualChanges'],1);self.assertTrue(result['aggregateUnknownIsNotZeroActualChanges'])
+        result=self.prove();self.assertEqual(result['aggregateCounts'],[0,0,0,0,self.size]);self.assertEqual(result['knownActualChanges'],1);self.assertTrue(result['aggregateUnknownIsNotZeroActualChanges'])
         self.assertEqual(prefix_archives_unchanged(self.f.archive/'cut',self.f.archive/'unknown',self.request['operationId']),3)
     def test_late_apply_and_inspect_never_resume_writer(self):
         k=self.f.k
@@ -68,5 +74,39 @@ class UnknownRestoreRecordTests(unittest.TestCase):
 
     def test_untested_root_leaf_names_are_not_silently_accepted_as_this_case(self):
         with self.assertRaisesRegex(AssertionError,'SCENARIO_MISMATCH'):self.prove(old='another.bin',new='other.bin')
+
+@unittest.skipUnless(os.geteuid()==0,'temporary private Linux ACL/HDD records required')
+class UnknownFlat26RestoreTests(unittest.TestCase):
+    size=26
+    move_from='item-01.bin'
+    move_to='renamed-item-01.bin'
+    setUp=UnknownRestoreRecordTests.setUp
+    prove=UnknownRestoreRecordTests.prove
+
+    def seed(self):
+        from recursive_acl_history_paging_proof import FILES
+        from test_container_file_recursive_acl import single
+        k=self.f.k
+        # Remove only the fixed initial temporary fixture leaves, not an external tree.
+        for name in ('one.bin','sub/中文.bin'):(k.b.tree/name).unlink()
+        (k.b.tree/'sub').rmdir();k.b.paths=('',*FILES);k.b.content=b'flat-unknown-native-records'*2600
+        for i,name in enumerate(FILES):
+            path=k.b.tree/name;path.write_bytes(k.b.content);os.chown(path,2200+i,3200+i);path.chmod(0o600);os.setxattr(path,'user.preserve',b'ordinary attribute')
+            fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+            try:single.acl.write_acl(fd,'access',single.acl.base_acl(0o600))
+            finally:os.close(fd)
+            os.utime(path,ns=(1700000000123456789,1700000000123456789))
+        old=k.b.snapshot();source=k.b.request('access');result=k.b.engine.apply(source,k.b.base.session)
+        self.assertEqual(result['state'],'Completed');self.assertEqual(result['changedCount'],26)
+        return source,result,old
+
+    test_flat_26_known_first_and_aggregate_unknown=UnknownRestoreRecordTests.test_real_target_rename_keeps_known_write_separate_from_aggregate_unknown
+    test_flat_26_late_apply_does_not_resume=UnknownRestoreRecordTests.test_late_apply_and_inspect_never_resume_writer
+    test_flat_26_rejects_wrong_counts=UnknownRestoreRecordTests.test_unknown_cannot_be_relabelled_as_partial_or_zero_unknown
+
+    def test_flat_26_rejects_small_fixture_pair_and_false_shape(self):
+        with self.assertRaisesRegex(AssertionError,'SCENARIO_MISMATCH'):self.prove(old='one.bin',new='renamed.bin')
+        request=copy.deepcopy(self.request);request['plan']['entryCount']=True
+        with self.assertRaises(AssertionError):unknown_renamed_first_proof(request,self.receipt,self.cut_bundle,self.bundle,self.source,self.frame,self.before,self.cut,self.after,self.f.attrs,self.move_from,self.move_to)
 
 if __name__=='__main__':unittest.main()

@@ -1,8 +1,8 @@
 """Known first restoration plus target rename: distinct conservative Unknown facts.
 
 Read-only proof only. Native/SQL/identity acquisition and owned mutation belong
-to their respective gates, not this validator. Only one.bin -> renamed.bin is
-covered; second child records, container loss and other Unknown shapes reject.
+to their respective gates, not this validator. Only two explicit access-tree
+size/name pairs are covered; other paths, child records and Unknown shapes reject.
 """
 import stat
 from pathlib import PurePosixPath
@@ -13,6 +13,8 @@ from recursive_acl_restore_rpc_proof import fields,integer,manifest_proof
 from recursive_acl_restore_rpc_proof import child_id
 from recursive_acl_restore_agent_io import read_at
 from validate_container_upload_recovery_agent import trusted
+
+RENAME_SCENARIOS={(4,2,2):('one.bin','renamed.bin'),(26,25,1):('item-01.bin','renamed-item-01.bin')}
 
 def prefix_archives_unchanged(cut_folder,unknown_folder,operation):
     trusted(cut_folder,True);trusted(unknown_folder,True);sub=child_id(operation,0)
@@ -36,7 +38,9 @@ def renamed_leaf(cut,after,old,new):
     return dict(oldPath=old,newPath=new,originalInodeRetained=True,onlyRootDirectoryMetadataMayChange=True)
 
 def unknown_renamed_first_proof(request,receipt,cut_bundle,bundle,source,frame,before,cut,after,attrs,old,new):
-    assert (old,new)==('one.bin','renamed.bin'),'UNKNOWN_RENAME_SCENARIO_MISMATCH'
+    p=request['plan'];shape=tuple(p[k] for k in ('entryCount','fileCount','directoryCount'))
+    assert all(type(v) is int for v in shape) and p['restoreSource']['changedAclType']=='access' and p['changeCount']==p['entryCount']
+    assert RENAME_SCENARIOS.get(shape)==(old,new),'UNKNOWN_RENAME_SCENARIO_MISMATCH'
     first=completed_first_facts(request,cut_bundle,source,frame,before,cut,attrs)
     assert cut_bundle['root']['state']=='Applying' and first['firstRelativePath'] not in ('',old)
     renamed=renamed_leaf(cut,after,old,new)

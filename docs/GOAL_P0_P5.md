@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-05 Unknown原件候选补齐26对象固定场景：item-01.bin→renamed-item-01.bin与4对象one.bin场景按数量/形状互斥，真实临时26项捕获与首项恢复后目标变化得到Unknown0/0/0/0/26，已完成首项真实改变1及原件字节保持，迟到不续做；错误形状/计数/名称拒绝。Unknown13专项/关联151工具零跳过，2AST/diff通过；仍为容器/存储显式夹具，未签工作站身份/RPC/SQL。准确34153d2 CI41965780773后端/原生PG-Valkey/安装及前端检查成功，六浏览器分片仍运行；未覆盖发布，不用旧ac脚本/固定指针冒充新核验。继续CI终态/标准发布/真实Unknown处置及删除/59项，不升完成率。[26对象与发布前置](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RECORDS.md)。
+
 2026-11-05 Unknown目标重命名原件/计数展示候选完成：实际临时恢复首项后固定one.bin→renamed.bin，Unknown聚合0/0/0/0/4与已完成首项真实改变1分别证明，Root/HDD/原件字节/精确树与迟到Apply不续做通过。Vue Unknown及处置后Unknown回执改为回执已证明修改，明确0不代表未发生修改/无回执未证明，历史提示同步；JSON/业务计数不伪改。147工具零跳过、1292前端/32专项、类型/构建/lint/格式及最终4明暗尺寸生产预览通过，56图含12说明图；预览身份/API是夹具。归档umask导致2失败、条件expect lint4处及脚本相对路径问题已修复并保留记录，归档显式0600/不放宽读校验。尚未部署或签工作站Unknown/真实身份页面；继续CI覆盖/真实门禁及删除/59项，不升完成率。[原件与UI语义候选](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RECORDS.md)。
 
 2026-11-05 修复后标准Partial正常退出门禁已用全新资源通过：a3ec219冻结127源码/新26对象与三身份，首项后原登录正常双端退出，取消POST0/取消时间null/无取消审计，产品4.595秒停原helper，Partial1/1/0/25/0及完整源/Root-HDD保持；同主体重登旧ID-key404/引用清空/原用户ACK0，另一管理员暂不处置后一次ACK及三身份权限/退出、前后独立核验/准确清理通过。verified与两独立结果均直接生成partialLogout=true/partialCancellation=false、legacyOutcomeFlagIncorrect=false，未使用历史例外，关闭新汇总格式未实机复验缺口，旧错误原报告不补签。137工具零跳过、15真实图、179证据封存/旧3封存保持；保护2238→2292，来源Root1910/恢复Root252-HDD166/目录94，恢复23意图18执行/活动0，普通62意图56执行118Job保持；11核心及ac90911两宿主保持，仅原Worker重启，无产品覆盖或旧任务重放。准确a3ec CI41960404079仍运行/8cf CI已成功，其他Partial/Unknown/撤权/重启及删除/59项继续，不升整项完成率。[新标准退出门禁](qa/CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_LOGOUT_GATE.md)。
