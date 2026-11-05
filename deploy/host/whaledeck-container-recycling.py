@@ -203,7 +203,7 @@ def recycling_type(directory_type):
                 if not record['historyMayExist'] or not re.fullmatch('[A-F0-9]{64}',record['historyDigest']):self.reject('RECEIPT_INVALID')
             elif record['historyDigest']!='':self.reject('RECEIPT_INVALID')
             private=record['privateIdentity'];actual=record['actualIdentity']
-            if private is not None and (type(private) is not list or len(private)!=2 or any(type(n) is not int or n<0 for n in private) or private[1]==0):self.reject('RECEIPT_INVALID')
+            if private is not None and (type(private) is not list or len(private)!=2 or any(type(n) is not int or not 0<=n<=18446744073709551615 for n in private) or private[1]==0):self.reject('RECEIPT_INVALID')
             if record['state'] in ('Retaining','Restoring','Trashed','Restored') and (not record['historyVerified'] or private is None):self.reject('RECEIPT_INVALID')
             if actual is not None and (type(actual) is not list or len(actual)!=9 or any(type(n) is not int for n in actual) or actual[:8]!=record['plan']['sourceIdentity'][:8] or actual[8]<record['plan']['sourceIdentity'][8]):self.reject('RECEIPT_INVALID')
             if (record['state'] in ('Trashed','Restored')) != (actual is not None):self.reject('RECEIPT_INVALID')
@@ -325,5 +325,6 @@ def recycling_type(directory_type):
             return dict(operationId=record['operationId'],containerId=record['plan']['command']['containerId'],instanceId=record['plan']['command']['instanceId'],
                 fingerprint=record['plan']['fingerprint'],targetProof=record['plan']['targetProof'],state=record['state'],bindingCurrent=binding,replayed=replayed,
                 historyMayExist=record['historyMayExist'],historyVerified=record['historyVerified'],historyDigest=record['historyDigest'],historyAvailable=available,
-                sourceRetained=record['state']=='Trashed',sourceRestored=record['state']=='Restored')
+                sourceRetained=(record['state']=='Trashed') if record['state']!='Unknown' else None,
+                sourceRestored=(record['state']=='Restored') if record['state']!='Unknown' else None)
     return ContainerRecycling

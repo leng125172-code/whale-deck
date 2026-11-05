@@ -153,6 +153,7 @@ class LinuxContainerRecycleTests(unittest.TestCase):
         q=self.request();self.engine.apply(q,self.session);(self.state/(q['operationId']+'.json')).unlink()
         with patch.object(self.history,'capture',side_effect=AssertionError('no recapture')):
             r=self.engine.apply(q,self.session);self.assertEqual(r['state'],'Unknown');self.assertTrue(r['historyMayExist'])
+            self.assertIsNone(r['sourceRetained']);self.assertIsNone(r['sourceRestored'])
         self.assertEqual(self.retained(q).read_bytes(),self.content);self.assertFalse(self.leaf.exists())
 
     def test_source_change_after_plan_is_not_captured_or_renamed(self):
@@ -187,6 +188,15 @@ class LinuxContainerRecycleTests(unittest.TestCase):
         with patch.object(self.history,'capture',side_effect=AssertionError('no recapture')):
             self.assertEqual(self.engine.apply(q,self.session)['state'],'Aborted')
         self.assertFalse((self.root/self.engine.PRIVATE).exists())
+
+    def test_late_restore_destination_is_not_replaced_and_uncertainty_is_not_false(self):
+        q=self.request();self.engine.apply(q,self.session)
+        self.engine.checkpoint=lambda phase:self.leaf.write_bytes(b'late foreign source') if phase=='Restoring' else None
+        with self.assertRaises(FileExistsError):self.engine.restore(q,self.session)
+        with patch.object(self.f,'exchange',side_effect=AssertionError('no automatic retry')):
+            r=self.engine.inspect(q,self.session);self.assertEqual(r['state'],'Unknown')
+            self.assertIsNone(r['sourceRetained']);self.assertIsNone(r['sourceRestored'])
+        self.assertEqual(self.leaf.read_bytes(),b'late foreign source');self.assertEqual(self.retained(q).read_bytes(),self.content)
 
 
 if __name__=='__main__':unittest.main()

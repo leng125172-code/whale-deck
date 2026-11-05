@@ -32,7 +32,8 @@ def preservation():
         hosts=host_identity('34153d2c454942b2665902772b7d5e48226cf7db'),restoreDatabase=restore_database(),sourceDatabase=database())
 
 
-def main(revision):
+def main(revision, conflict=False):
+    assert type(conflict) is bool
     assert os.geteuid()==0 and re.fullmatch('[a-f0-9]{40}',revision);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     repo=Path(__file__).resolve().parents[2]
     assert subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()==revision
@@ -76,24 +77,47 @@ def main(revision):
         # Reopen through a real new pidfd/root FD and reattest the actual HDD.
         with reader.ContainerRoot(c,files,docker) as session:
             assert engine.inspect(q,session)['state']=='Trashed'
-            restored=engine.restore(q,session);assert restored['state']=='Restored' and restored['bindingCurrent'];save('restored.json',restored)
-            assert path.read_bytes()==data and list(reader.fingerprint(path.stat()))[:8]==first[:8] and os.getxattr(path,'user.recycle-native')==b'preserved ordinary attribute'
-            observed=list(reader.fingerprint(path.stat()));assert engine.restore(q,session)['replayed'] and list(reader.fingerprint(path.stat()))==observed
-            with history.target(False) as (_,fd):m=history.read(fd,q);assert m['captureState']=='Restored';save('hdd-restored.json',m)
+            if conflict:
+                foreign=b'owned candidate late restore destination; never overwrite'
+                def checkpoint(phase):
+                    if phase=='Restoring':
+                        with path.open('xb') as stream:stream.write(foreign);stream.flush();os.fsync(stream.fileno())
+                engine.checkpoint=checkpoint
+                try:engine.restore(q,session)
+                except FileExistsError:pass
+                else:raise AssertionError('RESTORE_OVERWROTE_LATE_DESTINATION')
+                engine.checkpoint=lambda _:None
+                uncertain=engine.inspect(q,session);assert uncertain['state']=='Unknown' and uncertain['sourceRetained'] is uncertain['sourceRestored'] is None
+                assert path.read_bytes()==foreign and retained.read_bytes()==data and list(reader.fingerprint(retained.stat()))[:8]==first[:8]
+                try:engine.restore(q,session)
+                except reader.Rejected:pass
+                else:raise AssertionError('UNCERTAIN_RESTORE_RESUMED')
+                assert path.read_bytes()==foreign and retained.read_bytes()==data;save('unknown-conflict.json',uncertain)
+                with history.target(False) as (_,fd):m=history.read(fd,q);assert m['captureState']=='Trashed';save('hdd-conflict.json',m)
+            else:
+                restored=engine.restore(q,session);assert restored['state']=='Restored' and restored['bindingCurrent'];save('restored.json',restored)
+                assert path.read_bytes()==data and list(reader.fingerprint(path.stat()))[:8]==first[:8] and os.getxattr(path,'user.recycle-native')==b'preserved ordinary attribute'
+                observed=list(reader.fingerprint(path.stat()));assert engine.restore(q,session)['replayed'] and list(reader.fingerprint(path.stat()))==observed
+                with history.target(False) as (_,fd):m=history.read(fd,q);assert m['captureState']=='Restored';save('hdd-restored.json',m)
+            observed=list(reader.fingerprint(path.stat()))
             save('final-file.json',observed)
         record=json.loads((state/(q['operationId']+'.json')).read_text());private=fixture['folder']/engine.PRIVATE
-        assert list(reader.fingerprint(path.stat()))==observed and path.read_bytes()==data;path.unlink()
+        assert list(reader.fingerprint(path.stat()))==observed and path.read_bytes()==(foreign if conflict else data);path.unlink()
+        if conflict:
+            assert list(reader.fingerprint(retained.stat()))[:8]==first[:8] and retained.read_bytes()==data and os.getxattr(retained,'user.recycle-native')==b'preserved ordinary attribute'
+            retained.unlink()
         assert not list(private.iterdir()) and [private.stat().st_dev,private.stat().st_ino]==record['privateIdentity'] and private.stat().st_uid==0 and private.stat().st_mode&0o777==0o700
         private.rmdir();fixture['retain_unsettled']=False
     after=preservation();assert after==before;save('after.json',after)
     assert not fixture['folder'].exists();save('verified.json',dict(revision=revision,realContainerAndFreshRootSession=True,actualHddAttested=True,
-        originalInodeRestored=True,ordinaryUserXattrPreserved=True,sourceAndContainerAbsent=True,oldProductionUnchanged=True,
+        originalInodeRestored=not conflict,lateRestoreConflict=conflict,unknownFlagsUnproved=conflict,ordinaryUserXattrPreserved=True,sourceAndContainerAbsent=True,oldProductionUnchanged=True,
         installed=False,signedRpc=False,businessUi=False,differentSourceDevice=m['differentSourceDevice']))
-    print(json.dumps(dict(containerRecycleCandidate='passed',evidence=e.name,installed=False,signedRpc=False,businessUi=False)),flush=True)
+    print(json.dumps(dict(containerRecycleCandidate='passed',evidence=e.name,lateRestoreConflict=conflict,installed=False,signedRpc=False,businessUi=False)),flush=True)
 
 
 if __name__=='__main__':
-    try:assert len(sys.argv)==2;main(sys.argv[1])
+    try:
+        assert len(sys.argv)==2 or len(sys.argv)==3 and sys.argv[2]=='--late-restore';main(sys.argv[1],conflict=sys.argv[2:]==['--late-restore'])
     except BaseException as error:
         import traceback
         f=traceback.extract_tb(error.__traceback__)[-1];print(json.dumps(dict(containerRecycleCandidate='failed',type=type(error).__name__,file=Path(f.filename).name,line=f.lineno)),flush=True);raise SystemExit(1) from None
