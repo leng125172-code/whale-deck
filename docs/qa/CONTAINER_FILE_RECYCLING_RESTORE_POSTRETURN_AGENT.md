@@ -1,5 +1,7 @@
 # 独立恢复：原件归还后的Agent重启
 
+2026-11-06后续：另一个全新来源的写后正常双端退出已实机通过，同执行保留Succeeded/Completed；截图发现的Job页尾提示另有未部署修复候选，见[退出记录](CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_LOGOUT.md)。本页保持Agent故障的原始边界。
+
 2026-11-06，工具 `bbf5a2ce289aea321ddf5b0f3c57708bba639029` 在保持3d80d17部署上，使用全新容器、来源和临时真实Authentik管理员，完成写后Agent重启。只有固定Agent重启被本入口允许，没有以强杀Worker、取消、退出或撤权替代故障，没有SQL/时钟改写或旧Apply重放。
 
 unit `whaledeck-qa-restore-restart-0b5a3cf921d7`，Invocation `0f5e1fccd2c54ceca53bc1fc8f999ce7`，exited/0；清理前后独立进程均passed。4项新专项结合回归共128项Linux root通过、零跳过，8范围与Python/Node语法通过。仅签这一个写后Agent组合，其余矩阵及59项交付仍未完成。

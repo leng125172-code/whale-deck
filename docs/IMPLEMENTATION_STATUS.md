@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-06独立恢复写后正常退出已实机通过：01f05323全新来源准确本Root Applying/原来源Restored/原inode返回、三FD/当前HDD切点；真实BFF退出POST被观察时原helper仍活，原pidfd5.848秒退出，同执行Succeeded/Completed与成功claim保留，取消0。两次双端退出/重登三旧引用404及历史200、原Job/权限和清理前后独立passed；132工具/8范围，2346保护/11核心及3d80保持，Root58-HDD61/恢复Root38。另修Job串用ACL提示候选f51f4735，25定向/类型lint构建通过但未部署；继续CI/复验、写后撤权/Unknown与59项。[实机和候选边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_LOGOUT.md)。
+
 2026-11-06独立恢复写后Agent重启已实机通过：bbf5a2ce全新来源准确本Root Applying/原来源Restored/原inode返回、三FD和当前HDD切点，固定Agent重启后原helper0.010秒退出；Agent新PID/维护PID及全部容器保持，同执行Succeeded/Completed/本操作归属true，成功claim保留、取消0。152维护样本全200/healthy/Ready/no-store不签瞬时连续；原Job/权限/双端退出和清理前后独立passed，128工具/8范围，2346保护/11核心限定保持，Root56-HDD59/恢复Root35。继续写后退出/撤权、Unknown等矩阵与59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_AGENT.md)。
 
 2026-11-06独立恢复写后Worker强杀已实机通过：3e9f44e9全新来源准确本Root Applying/原来源Restored/原inode已返回、三FD与当前HDD切点，固定Worker SIGKILL后原helper0.111秒退出；同容器镜像恢复，原lease自然87.465秒/41样本后同执行Succeeded/Completed、本操作归属true/成功claim保留，取消0不冒称写前Failed。原Job/权限/双端退出与清理前后独立通过，报告键仅改名后三次只读复核；124工具/8范围，2346保护/11核心限定保持，Root54-HDD57/恢复Root32。继续其他写后/Unknown矩阵与59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_WORKER.md)。
