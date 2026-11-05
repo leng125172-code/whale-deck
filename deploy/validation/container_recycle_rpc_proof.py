@@ -3,6 +3,7 @@
 Data bytes, namespace identity and cleanup must be checked by the owning gate.
 """
 import base64
+import json
 import re
 import stat
 from acl_history_browser_proof import typed_equal
@@ -17,6 +18,15 @@ PATH='work/recycle-rpc.bin'
 HEADER={'revision','probeRevision','containerId','instanceId','coreId'}
 PLAN_REFUSALS=17
 OPERATION_REFUSALS=14
+
+
+def capability_refusal(exit_code,stdout,error):
+    assert type(exit_code) is int and exit_code==1 and stdout==''
+    fields(error,('terminalProbe','phase','code','failureType','rpcStatus','fileCode'))
+    assert error['terminalProbe']=='failed' and error['phase']=='capabilities'
+    assert error['code']=='CONTAINER_RECYCLE_CAPABILITY_UNAVAILABLE' and error['failureType']=='InvalidOperationException'
+    assert error['rpcStatus'] is error['fileCode'] is None
+    return dict(capabilityRejectedBeforeKey=True,operationFramesSent=0)
 
 
 def ready_proof(value,header):
@@ -83,6 +93,12 @@ def receipt_frame(frame,request):
     assert type(frame['jobId']) is str and re.fullmatch('[a-f0-9]{32}',frame['jobId']) and int(frame['jobId'],16)>0
     assert frame['action'] in ('apply','inspect','discard','restore')
     assert (frame['jobId']!=request['operationId']) if frame['action']=='restore' else frame['jobId']==request['operationId']
+    assert type(frame['result']) is str and len(frame['result'].encode())<=65536
+    def unique(pairs):
+        result={}
+        for k,v in pairs:assert k not in result;result[k]=v
+        return result
+    return proto_receipt(json.loads(frame['result'],object_pairs_hook=unique),request)
 
 
 def record_proof(request,receipt,root,history=None,*,data_sha256=None,data_size=None):

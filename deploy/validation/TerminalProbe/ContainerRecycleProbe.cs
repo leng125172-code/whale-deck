@@ -14,6 +14,7 @@ using WhaleDeck.Contracts.Agent.V1;
 internal static class ContainerRecycleProbe
 {
     public static string Phase { get; private set; } = "startup";
+    public static string FailureCode { get; private set; } = "";
     public static async Task RunAsync()
     {
         Require(OperatingSystem.IsLinux());
@@ -35,7 +36,11 @@ internal static class ContainerRecycleProbe
         Phase="capabilities";
         var caps=await new AgentService.AgentServiceClient(channel).GetCapabilitiesAsync(new(),deadline:DateTime.UtcNow.AddSeconds(10),cancellationToken:lifetime.Token);
         // No key or operation is read until the installed protocol explicitly supports this domain.
-        Require(caps.ProtocolMajor==1 && caps.ProtocolMinor>=56 && caps.Capabilities.Contains("docker.files.recycle"));
+        if (!(caps.ProtocolMajor==1 && caps.ProtocolMinor>=56 && caps.Capabilities.Contains("docker.files.recycle")))
+        {
+            FailureCode="CONTAINER_RECYCLE_CAPABILITY_UNAVAILABLE";
+            throw new InvalidOperationException();
+        }
         var key=await File.ReadAllBytesAsync("/etc/whaledeck/agent-capability.key",lifetime.Token);
         try
         {

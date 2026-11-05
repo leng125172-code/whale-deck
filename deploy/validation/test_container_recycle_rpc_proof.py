@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import unittest
 import uuid
-from container_recycle_rpc_proof import proto_plan,proto_receipt,ready_proof,plan_frame,receipt_frame,record_proof,PATH,FRAME,digest,file_version
+from container_recycle_rpc_proof import proto_plan,proto_receipt,ready_proof,plan_frame,receipt_frame,record_proof,capability_refusal,PATH,FRAME,digest,file_version
 import test_container_file_recycling as native
 
 
@@ -29,6 +29,13 @@ def plan():
 
 
 class RecycleWireProofTests(unittest.TestCase):
+    def test_transport_or_other_startup_failures_are_not_capability_refusals(self):
+        e=dict(terminalProbe='failed',phase='capabilities',code='CONTAINER_RECYCLE_CAPABILITY_UNAVAILABLE',failureType='InvalidOperationException',rpcStatus=None,fileCode=None)
+        self.assertEqual(capability_refusal(1,'',e)['operationFramesSent'],0)
+        for key,bad in [('code',''),('rpcStatus','Unavailable'),('failureType','RpcException'),('phase','startup'),('fileCode','CONTAINER_RECYCLE_UNAVAILABLE')]:
+            changed={**e,key:bad}
+            with self.subTest(key=key),self.assertRaises(AssertionError):capability_refusal(1,'',changed)
+
     def test_complete_plan_roundtrip_and_domain_hash(self):
         p=plan();self.assertEqual(proto_plan(wire_plan(p)),p)
         changed=wire_plan(p);changed['fingerprint']='C'*64
@@ -69,11 +76,16 @@ class RecycleWireProofTests(unittest.TestCase):
 
     def test_restore_frame_requires_new_job_and_other_frames_bind_original(self):
         q=dict(operationId='a'*32,owner='B'*64,plan=plan())
-        p=dict(kind='receipt',action='restore',operationId=q['operationId'],jobId='c'*32,result='{}');receipt_frame(p,q)
+        r=dict(operationId=q['operationId'],containerId=q['plan']['command']['containerId'],instanceId=q['plan']['command']['instanceId'],fingerprint=q['plan']['fingerprint'],targetProof=q['plan']['targetProof'],state='Unknown',bindingCurrent=False,replayed=True,historyMayExist=True,historyVerified=False,historyDigest='',historyAvailable=False)
+        p=dict(kind='receipt',action='restore',operationId=q['operationId'],jobId='c'*32,result=json.dumps(r));receipt_frame(p,q)
         p['jobId']=q['operationId']
         with self.assertRaises(AssertionError):receipt_frame(p,q)
         p['action']='apply';receipt_frame(p,q)
         p['jobId']='c'*32
+        with self.assertRaises(AssertionError):receipt_frame(p,q)
+        p['jobId']=q['operationId'];p['result']='{}'
+        with self.assertRaises(AssertionError):receipt_frame(p,q)
+        p['result']=json.dumps(r)[:-1]+',"state":"Unknown"}'
         with self.assertRaises(AssertionError):receipt_frame(p,q)
 
     def test_boundary_refusals_are_exact_and_bound_to_this_container(self):
