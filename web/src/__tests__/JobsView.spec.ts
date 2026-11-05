@@ -103,6 +103,8 @@ describe('Job retry', () => {
   it.each([
     'containers.files.recycle-plan',
     'containers.files.recycle',
+    'containers.files.recycle-restore-plan',
+    'containers.files.recycle-restore',
     'containers.files.recursive-acl-plan',
     'containers.files.recursive-acl',
     'containers.files.recursive-acl-restore-plan',
@@ -119,6 +121,11 @@ describe('Job retry', () => {
     await flushPromises()
     expect(wrapper.findAll('button').some((b) => b.text() === '重新预检并重试')).toBe(false)
     expect(wrapper.text()).toContain('原任务不会通用重试')
+    const recycle = jobType.startsWith('containers.files.recycle')
+    const expected = recycle ? '前往文件页核对原回收或恢复任务' : '前往文件页核对原递归ACL任务'
+    const unrelated = recycle ? '前往文件页核对原递归ACL任务' : '前往文件页核对原回收或恢复任务'
+    expect(wrapper.text()).toContain(expected)
+    expect(wrapper.text()).not.toContain(unrelated)
     expect(request.mock.calls.some(([path]) => path.includes('/retry'))).toBe(false)
   })
 

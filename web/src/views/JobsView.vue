@@ -40,6 +40,12 @@ const recursiveAclTask = computed(
       'containers.files.recursive-acl-restore-plan',
     ].includes(selected.value.jobType),
 )
+const recursiveAclNotice = computed(
+  () => !!selected.value && selected.value.jobType.startsWith('containers.files.recursive-acl'),
+)
+const recycleNotice = computed(
+  () => !!selected.value && selected.value.jobType.startsWith('containers.files.recycle'),
+)
 const canCancel = computed(
   () =>
     selected.value &&
@@ -388,12 +394,19 @@ onBeforeUnmount(() => {
           </el-descriptions-item>
         </el-descriptions>
         <el-alert
-          v-if="recursiveAclTask"
+          v-if="recursiveAclNotice"
           title="递归ACL只能基于当前目录树生成专属预检并明确确认，原任务不会通用重试；部分修改或未知结果须在文件页核对原任务、实际计数和HDD历史。"
           type="info"
           :closable="false"
         />
-        <el-link v-if="recursiveAclTask" href="/files">前往文件页核对原递归ACL任务</el-link>
+        <el-link v-if="recursiveAclNotice" href="/files">前往文件页核对原递归ACL任务</el-link>
+        <el-alert
+          v-if="recycleNotice"
+          title="回收或恢复请回到容器文件，选择当前对象或原回收来源并生成专属预检。原任务不会通用重试；未知结果请在文件页核对原任务和HDD历史。"
+          type="info"
+          :closable="false"
+        />
+        <el-link v-if="recycleNotice" href="/files">前往文件页核对原回收或恢复任务</el-link>
         <el-alert
           v-if="aclTask"
           title="重新修改 ACL 请回到容器文件，基于当前对象版本生成新预检；未知结果请在文件页面的容器 ACL 恢复入口核对并明确处置。原任务不会自动重复执行。"
