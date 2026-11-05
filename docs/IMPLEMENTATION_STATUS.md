@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 2026-11-05 固定26对象Unknown业务证据候选与隔离PG通过：7f043f8新增独立SQL/API/Job/审计前后校验，只接受已知回执RESULT_UNKNOWN/0/0/0/0/26/空outcomeDigest，ACK仅释放保护且Unknown事实与警告保持，不填入原件已证明的首项改变1。18专项包含于关联198项root工具零跳过，另3状态检查及.NET10集成构建通过；真实隔离PG复合测试1项明确执行新26对象phase，SQL写入保护/原规划执行与回执保持/唯一不同主体ACK/Failed Job及清理通过，Root回执与主体/DOM仍构造。145证据/130验证闭包封存，旧32发布/30中断封存及2292保护、11核心/宿主/业务前后保持，产品仍34153d2。保留2构造夹具失败、CS1503与首次root Git启动拒绝；继续真实Root/身份/UI/独立Unknown门禁、余矩阵/删除及59项，不升完成率。[业务、PG及未验边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_BUSINESS_PROOF.md)。
+
 - 2026-11-05 Unknown摘要修正已标准覆盖并完成生产后置核验：准确34153d2/CI41965780773十二路成功，四镜像预构建实际身份通过后，以新unit/Invocation8976cb0c1daa473bbec91d78a12f6cb3显式重发；六组件/真实HTTP/宿主exe-DLL映射一致，11核心healthy，8数据库平台身份保持。来源Root1910、恢复Root252/HDD166、目录94及恢复23意图18执行/活动0、普通62意图56执行118Job保持；迁移1/CHECK18/fence12/guard1，2292保护文件仅账本内容及限定安装元数据变化，pending已清。57维护样本全200但不签瞬时零中断，实际23648字节前端资源HTTP/容器一致；32文件封存，旧30中断证据保持。关闭混合版本和未部署缺口，未做真实身份/Unknown处置；继续独立26对象真实门禁、余矩阵/删除及59项，不升整项完成率。[覆盖、原件与验收边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RELEASE.md)。
 
 - 2026-11-05 Unknown UI准确34153d2的CI41965780773已12路全部成功；单次标准覆盖在构建阶段被主机重启打断，不接受为发布成功。冷启动回执interrupted/仅恢复控制器/不重放或自动回滚；两个宿主34153d2，三个应用仍ac90911，11核心healthy但StartedAt均已变化。来源Root1910、恢复Root252/HDD166、目录94及恢复23意图18执行/活动0、普通62意图56执行118Job前后保持；2292保护文件仅账本内容变化及限定安装元数据变化。540条有效维护样本全200但1行损坏及重启缺口，不签连续性。新增临时构建强杀/易失状态丢失/显式重试回归，关联58项零跳过；30文件中断证据封存。NuGet仍TLS EOF，未重发覆盖，继续依赖恢复后新基线标准发布和真实Unknown处置/删除及59项，不升完成率。[中断、保持与后续边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RELEASE_INTERRUPTION.md)。
