@@ -1231,6 +1231,36 @@ service ContainerPermissionService {
   rpc Discard(ContainerPermissionRequest) returns (ContainerPermissionReceipt);
 }
 
+// Dedicated ordinary-file Trash authority. Restore references the original Root
+// record but carries a new job context. Unknown source facts stay unproved.
+message ContainerRecycleAttribute { string name = 1; bytes value = 2; }
+message ContainerRecycleCommand { ContainerFileLocation location = 1; string expected_version = 2; }
+message ContainerRecyclePlan {
+  uint32 schema_version = 1; ContainerRecycleCommand command = 2; string target_proof = 3;
+  FileDirectoryIdentity parent_identity = 4; string parent_version = 5;
+  uint32 owner_uid = 6; uint32 owner_gid = 7; string fingerprint = 8;
+  FileObjectIdentity source_identity = 9; int64 source_changed_at_unix_ns = 10;
+  string sha256 = 11; repeated ContainerRecycleAttribute attributes = 12;
+}
+message ContainerRecyclePlanRequest { ContainerRecycleCommand command = 1; RequestContext context = 2; }
+message ContainerRecycleRequest {
+  string operation_id = 1; string owner = 2; ContainerRecyclePlan plan = 3; RequestContext context = 4;
+}
+message ContainerRecycleReceipt {
+  string operation_id = 1; string container_id = 2; string instance_id = 3;
+  string fingerprint = 4; string target_proof = 5; string state = 6;
+  bool binding_current = 7; bool replayed = 8;
+  bool history_may_exist = 9; bool history_verified = 10; string history_digest = 11;
+  bool history_available = 12; optional bool source_retained = 13; optional bool source_restored = 14;
+}
+service ContainerRecycleService {
+  rpc Plan(ContainerRecyclePlanRequest) returns (ContainerRecyclePlan);
+  rpc Apply(ContainerRecycleRequest) returns (ContainerRecycleReceipt);
+  rpc Inspect(ContainerRecycleRequest) returns (ContainerRecycleReceipt);
+  rpc Discard(ContainerRecycleRequest) returns (ContainerRecycleReceipt);
+  rpc Restore(ContainerRecycleRequest) returns (ContainerRecycleReceipt);
+}
+
 // Non-recursive explicit numeric ownership. No implicit root, mode or ACL writes.
 message ContainerOwnershipCommand {
   ContainerFileLocation location = 1; optional uint32 uid = 2; optional uint32 gid = 3; string expected_version = 4;

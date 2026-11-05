@@ -78,6 +78,7 @@ app.MapGrpcService<ContainerRecursiveOwnershipGrpcService>();
 app.MapGrpcService<ContainerRecursiveAclGrpcService>();
 app.MapGrpcService<ContainerRecursiveAclRestoreGrpcService>();
 app.MapGrpcService<ContainerPermissionGrpcService>();
+app.MapGrpcService<ContainerRecycleGrpcService>();
 app.MapGrpcService<ContainerOwnershipGrpcService>();
 app.MapGrpcService<ContainerAclGrpcService>();
 app.MapGrpcService<ContainerAclHistoryGrpcService>();

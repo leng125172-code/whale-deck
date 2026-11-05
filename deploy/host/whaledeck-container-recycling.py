@@ -241,6 +241,7 @@ def recycling_type(directory_type):
                 if record is not None:self.recover(state,record,session);return self.public(record,session,True)
                 if self.history.has_artifacts(request):
                     record=self.new_record(request,'Unknown');record['historyMayExist']=True;self.save(state,record);return self.public(record,session,False)
+                if session is None:self.reject('SESSION_REQUIRED')
                 if self.plan(request['plan']['command'],session)!=request['plan']:self.reject('SOURCE_CHANGED')
                 record=self.new_record(request,'Preparing');self.save(state,record);self.checkpoint('Preparing')
                 try:
@@ -295,6 +296,7 @@ def recycling_type(directory_type):
                 self.recover(state,record,session)
                 if record['state']=='Restored':return self.public(record,session,True)
                 if record['state']!='Trashed':self.reject('RESTORE_UNPROVEN')
+                if session is None:self.reject('SESSION_REQUIRED')
                 plan=record['plan'];c=plan['command']
                 with self.parent(plan,session) as parent:
                     if self.present(parent,c['path'].rsplit('/',1)[-1]):self.reject('TARGET_EXISTS')
@@ -316,8 +318,18 @@ def recycling_type(directory_type):
 
         def inspect(self, request, session=None):
             with self.locked(request) as (state,record):
-                if record is None:return None
+                if record is None:
+                    if not self.history.has_artifacts(request):self.reject('NOT_FOUND')
+                    record=self.new_record(request,'Unknown');record['historyMayExist']=True;self.save(state,record)
                 self.recover(state,record,session);return self.public(record,session,True)
+
+        def discard(self, request, session=None):
+            with self.locked(request) as (state,record):
+                if record is None:
+                    orphan=self.history.has_artifacts(request)
+                    record=self.new_record(request,'Unknown' if orphan else 'Aborted');record['historyMayExist']=orphan;self.save(state,record)
+                else:self.recover(state,record,session)
+                return self.public(record,session,True)
 
         def public(self, record, session, replayed):
             binding=False;available=False;request={k:record[k] for k in self.REQUEST}
