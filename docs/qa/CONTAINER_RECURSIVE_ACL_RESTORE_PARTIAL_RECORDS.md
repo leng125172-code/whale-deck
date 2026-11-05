@@ -17,3 +17,6 @@
 容器会话、存储配置及故障检查点是显式测试夹具；“HDD”在这些测试中是隔离目录里的格式原件，不是生产HDD物理部署或故障注入。FD重开在测试进程内完成，未冒称独立进程验收。只读协作复核未发现确定漏验，指出ctime严格条件；最终实现和测试由主代理复核。本批没有真实Authentik、签名RPC、生产SQL/Job、独立管理员处置或真实页面证据，不提升整项或阶段完成率。
 
 下一步接入全新自有容器、准确pidfd/双FD/Invocation的首项完成边界、正常取消、Partial/处置Jobs与SQL、原件和完整文件核验、前后独立进程及准确清理。第二子项已启动的Partial仍需独立支持；不能为提高门禁成功率放宽此证明。Unknown、其余故障矩阵、可恢复删除/长期清理、维护连续性及59项继续；旧维护失败及源/HDD同device限制保留。
+
+
+收尾：范围8项、750本地链接/缺失0、diff检查通过，两个Git索引1000:1000/664。项目图谱事件whale-deck.container-acl.7f3eb1a.restore-partial-records已取得project/key/event匹配、duplicate=false回执，pending移至synced，阶段保持active。
