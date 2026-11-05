@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-05 回收Unknown跨容器目录延期/释放已实机通过：2507c6a5，全新两容器、另一管理员真实计划/登记，四次自然延期版本2/4/6/8且目录/Root回执缺席、原Unknown/保护/Outbox1/Root-HDD/移位原件保持；暂不处置不释放，唯一ACK后4.914秒同一目录ID开始并Succeeded，实际inode/1000:1000/0750及原页面可见。93工具/8范围，155证据/102源码，清理前后两业务独立核验和精确清理通过；目录Root94→96仅本ID两项，回收Root26→28/HDD29→31、2346保护/11核心及旧失败partial保持。仅签该writer配对，继续独立恢复/长期清理及59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_CROSS_DIRECTORY.md)。
+
 2026-11-05 回收同CID实例变化+正常退出Unknown组合已新资源实机通过：05fc50c4，PID1417914→1419903、CID/镜像/挂载/安全预算保持，宿主及新命名空间原文件九字段/字节属性保持；原helper7.723秒退出（含重启与随后退出）。Unknown/Running/保护和Outbox1保持，另一管理员暂不处置后全快照不变，再唯一ACK至Acknowledged/Job Failed/Outbox0；原绑定、null源事实及Root-HDD保持，ACK后新实例仍活。86工具/8范围、143证据/102源码、页面/审计/权限拒绝/两次退出及清理前后独立通过，Root24→26/HDD27→29、2346保护/11核心保持。仅签该组合，继续跨写入、独立恢复及59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_INSTANCE_CHANGE.md)。
 
 2026-11-05 回收源路径移位消失+正常退出Unknown已在全新资源实机通过：门禁dd2cd970，原helper1.802秒退出；Unknown/Running保留保护与1条Outbox，源事实null、原inode/字节另名保持。另一管理员“暂不处置”后SQL/Root-HDD/物理完全不变，再唯一ACK202至Acknowledged/Job Failed、保护释放/Outbox0，原事实/执行保持。实际页面/审计、普通8匿名4拒绝、两次双端退出及清理前后独立通过；78工具/8范围，139成功及131失败/API补救记录保留，各100源码，Root20→24/HDD23→27、2346保护/11核心保持。原零Outbox断言及Node超时已修正，旧门禁不补签；继续实例变化/跨写入、恢复和59项。[实机与失败边界](qa/CONTAINER_FILE_RECYCLING_UNKNOWN.md)。
