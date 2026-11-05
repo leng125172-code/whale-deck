@@ -54,6 +54,10 @@ fi
         (self.source / 'deploy/build-images.sh').write_text('''#!/usr/bin/env bash
 set -eu
 printf 'build\\n' >> "$FIXTURE_ROOT/events"
+if [[ ${PAUSE_DURING_BUILD:-0} == 1 ]]; then
+  printf 'ready\\n' > "$FIXTURE_ROOT/build-started"
+  sleep 120
+fi
 [[ ${FAIL_BUILD:-0} == 0 ]]
 ''')
         self.git('init', '-q')
@@ -256,6 +260,76 @@ if 'up' in a:
                 self.assertEqual(json.loads((self.root / 'status/status.json').read_text())['state'], 'failed')
                 self.assertFalse((self.state / 'control-recovery.json').exists())
                 self.assertTrue((self.state / 'rollback-src').exists())  # No automatic Git cleanup/replay at boot.
+            finally:
+                if child.poll() is None:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    child.wait(timeout=5)
+
+    def test_build_sigkill_volatile_state_loss_recovers_without_replay_then_explicit_retry(self):
+        # The real shell/Git/checkpoint/ledger run in temporary paths. Only the
+        # builder and Docker boundary are fixtures; no host reboot is performed.
+        env = {**os.environ, 'FIXTURE_ROOT': str(self.root), 'PATH': str(self.bin) + ':' + os.environ['PATH'],
+            'PAUSE_DURING_BUILD': '1'}
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+            child = subprocess.Popen(['bash', str(self.helper), 'update'], env=env,
+                stdout=out, stderr=err, start_new_session=True)
+            try:
+                deadline = time.monotonic() + 8
+                while not (self.root / 'build-started').exists():
+                    self.assertIsNone(child.poll())
+                    self.assertLess(time.monotonic(), deadline)
+                    time.sleep(.02)
+                self.assertEqual(os.getpgid(child.pid), child.pid)
+                pending = self.ledger()['pending']
+                self.assertEqual(pending['revision'], self.b)
+                self.assertEqual(self.ledger()['currentRevision'], self.a)
+                ledger = (self.state / 'deployment-revisions.json').read_bytes()
+                events = self.events.read_bytes()
+                self.assertEqual(events.decode().splitlines(), ['install', 'compose config', 'build'])
+                os.killpg(child.pid, signal.SIGKILL)
+                self.assertEqual(child.wait(timeout=5), -signal.SIGKILL)
+                # Simulate loss of these owned /run equivalents, not a reboot.
+                (self.root / 'status/status.json').unlink()
+                (self.root / 'lock').unlink()
+                for _ in range(2):
+                    result = subprocess.run(['/usr/bin/python3', '-I', str(self.recovery), 'recover'],
+                        env=env, capture_output=True, text=True, timeout=5)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(self.events.read_bytes(), events)
+                    self.assertEqual((self.state / 'deployment-revisions.json').read_bytes(), ledger)
+                    self.assertEqual(self.live.read_text(), self.a)
+                self.assertFalse((self.state / 'control-recovery.json').exists())
+                self.assertEqual(json.loads((self.root / 'status/status.json').read_text())['state'], 'failed')
+                receipts = list(self.state.glob('control-*/receipt.json'))
+                self.assertEqual(len(receipts), 1)
+                original = receipts[0].read_bytes()
+                receipt = json.loads(original)
+                self.assertEqual(receipt['operation'], pending)
+                self.assertEqual(receipt['outcome'], 'interrupted')
+                self.assertTrue(receipt['controlsRestored'])
+                self.assertFalse(receipt['applicationReplayed'])
+                self.assertFalse(receipt['automaticRollback'])
+                for name, raw in self.control.items():
+                    self.assertEqual((self.libexec / name).read_bytes(), raw)
+                retry = self.execute('update')
+                self.assertEqual(retry.returncode, 0, retry.stderr)
+                self.assertEqual(self.ledger()['lastCompleted'], pending)
+                self.assertIsNone(self.ledger()['pending'])
+                self.assertEqual(self.ledger()['currentRevision'], self.b)
+                self.assertEqual(self.ledger()['previousRevision'], self.a)
+                self.assertEqual(self.live.read_text(), self.b)
+                self.assertEqual(json.loads((self.root / 'status/status.json').read_text())['state'], 'healthy')
+                self.assertEqual(receipts[0].read_bytes(), original)
+                receipts = list(self.state.glob('control-*/receipt.json'))
+                self.assertEqual(len(receipts), 2)
+                completed = [json.loads(p.read_text()) for p in receipts if p.read_bytes() != original]
+                self.assertEqual(len(completed), 1)
+                self.assertEqual(completed[0]['operation'], pending)
+                self.assertEqual(completed[0]['outcome'], 'completed')
+                self.assertFalse(completed[0]['applicationReplayed'])
+                self.assertFalse(completed[0]['automaticRollback'])
+                self.assertEqual(self.events.read_text().splitlines(),
+                    ['install', 'compose config', 'build', 'install', 'compose config', 'build', 'compose migrate', 'compose up'])
             finally:
                 if child.poll() is None:
                     os.killpg(child.pid, signal.SIGKILL)
