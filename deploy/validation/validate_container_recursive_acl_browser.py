@@ -209,8 +209,9 @@ def wait_case(process, evidence, name):
     return json.loads(path.read_bytes())
 
 
-def main(history=False,restore=False):
+def main(history=False,restore=False,restore_job_results=False):
     global PHASE
+    assert type(restore_job_results) is bool and (not restore_job_results or restore and not history)
     assert os.geteuid()==0 and len(sys.argv)>=2; os.umask(0o077); os.environ['GIT_OPTIONAL_LOCKS']='0'
     selected=selected_cases(sys.argv[2:])
     assert not history or selected==CASES,'HISTORY_REQUIRES_FULL_NEW_OWNED_FIXTURE'
@@ -226,6 +227,9 @@ def main(history=False,restore=False):
     if restore:
         from validate_container_recursive_acl_restore_browser import SOURCES as restore_sources
         seeds=(*SOURCES,*restore_sources)
+    if restore_job_results:
+        from recursive_acl_restore_success_jobs_proof import SOURCES as job_sources
+        seeds=(*seeds,*job_sources)
     hashes = source_closure(repo,validation_revision,seeds=seeds)
     assert all(hashlib.sha256((repo/'deploy/validation'/n).read_bytes()).hexdigest()==v for n,v in hashes.items())
     hosts=host_identity(revision)
@@ -277,6 +281,7 @@ def main(history=False,restore=False):
         if history:baseline['recursiveHistoryBrowser']=True
         if restore:
             baseline['recursiveRestoreBrowser']=True
+            baseline['restoreJobResults']=restore_job_results
             from recursive_acl_restore_agent_io import installed,snapshot as private_snapshot,hdd_snapshot
             from validate_container_recursive_acl_faults import preservation_snapshot
             io=installed()
@@ -318,6 +323,11 @@ def main(history=False,restore=False):
                         from validate_container_recursive_acl_restore_browser import exercise
                         current=exercise(process,evidence,baseline,results,reader,storage,root,content,acl,current)
                     assert process.wait(timeout=120) == 0, 'ACTUAL_RECURSIVE_BROWSER_FAILED'
+                except BaseException:
+                    if restore_job_results:
+                        from recursive_acl_restore_success_jobs_failure import defer_failed_fixture
+                        defer_failed_fixture(process,evidence,baseline,fixture)
+                    raise
                 finally:
                     if process.poll() is None:
                         process.terminate()
@@ -329,7 +339,8 @@ def main(history=False,restore=False):
             assert browser['anonymousDenied']==4
         if restore:
             PHASE='independent-live-restore-proof-before-cleanup'
-            subprocess.run([sys.executable,str(repo/'deploy/validation/verify_container_recursive_acl_restore_browser.py'),evidence.name,'--live'],check=True)
+            verifier='verify_recursive_acl_restore_success_jobs.py' if restore_job_results else 'verify_container_recursive_acl_restore_browser.py'
+            subprocess.run([sys.executable,str(repo/'deploy/validation'/verifier),evidence.name,'--live'],check=True)
         PHASE = 'proved-source-cleanup'; assert inventory(root,reader,content,acl) == current
         remove_proved(root,reader,content,current,acl)
     PHASE = 'independent-cleanup-preconditions'
@@ -339,6 +350,7 @@ def main(history=False,restore=False):
     verified = {'revision':revision,'actualBrowserAndIdentity':True,'cases':len(selected),'caseLabels':list(selected),'succeeded':len(selected)-1,'canceledBeforeExecution':1,'aggregateHddRecords':len(selected)-1,'childHddRecords':4*(len(selected)-1),'perCasePhysicalBytesAndMetadata':True,'ordinaryDenied':8,'anonymousDenied':4,'normalDualLogout':True,'exactSourceAndContainerAbsent':True,'coreUnchanged':11,'permanentHistoryRetained':True}
     (evidence/'verified.json').write_text(json.dumps(verified))
     print(json.dumps({'actualRecursiveAclBrowser':'passed','evidence':str(evidence),'cases':len(selected)}),flush=True)
+    return evidence.name
 
 
 if __name__ == '__main__':

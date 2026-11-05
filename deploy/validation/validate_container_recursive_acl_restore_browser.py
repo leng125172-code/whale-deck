@@ -101,6 +101,11 @@ def verify_case(signal,baseline,source_item,source,frame,before,after,evidence,i
         children=records_bound_to_business(proof,bundle,source,frame,before,after,attribute_digest())
         assert signal['confirmationReplayId']==result['executionJobId'] and children==4
         if name=='restore-noop':assert before==after
+    if baseline.get('restoreJobResults',False):
+        from recursive_acl_restore_success_jobs_proof import terminal_proof
+        ready_signal=json.loads((evidence/f'job-{name}-ready-result.json').read_bytes());initial=json.loads((evidence/f'job-{name}-ready.sql.json').read_bytes())
+        facts=terminal_proof(signal,ready_signal,initial,data)
+        acl.archive(evidence,f'job-{name}-proof.json',json.dumps(facts,sort_keys=True).encode(),read_only)
     return dict(signal=signal,before=before,after=after,children=children)
 
 
@@ -127,7 +132,20 @@ def exercise(process,evidence,baseline,proofs,reader,storage,root,content,module
     io=installed();preserved_baseline(baseline,io);old={p['result']['name']:p for p in proofs};sources={name:source_proof(evidence,old[name],io,create=True) for name in {v[1] for v in SPECS}}
     (evidence/'source-physical-final.json').write_text(json.dumps(current));restored=[];subject=json.loads((evidence/'access.sql.json').read_bytes())['row']['actor_subject']
     for name,selected,_ in SPECS:
-        retained(evidence,baseline,proofs,restored,storage,io);preserved_baseline(baseline,io);signal=wait_case(process,evidence,name);assert signal['subject']==subject
+        retained(evidence,baseline,proofs,restored,storage,io);preserved_baseline(baseline,io)
+        if baseline.get('restoreJobResults',False):
+            from recursive_acl_restore_success_jobs_proof import ready_proof
+            path=evidence/f'job-{name}-ready-result.json';deadline=time.monotonic()+150
+            while not path.exists():
+                assert process.poll() is None and time.monotonic()<deadline,'SUCCESS_JOBS_READY_DEADLINE';time.sleep(.1)
+            acl.trusted(path);assert path.stat().st_size<=65536;ready_signal=json.loads(path.read_bytes());initial=sql_snapshot(ready_signal['id']);ready_proof(ready_signal,initial,name)
+            assert initial['row']['actor_subject']==subject and initial['row']['container_id']==baseline['containerId'] and initial['row']['instance_id']==baseline['instanceId']
+            typed_equal(ready_signal['source'],expected_summary(old[selected]['result'],sources[selected][0]['metadata']))
+            from validate_recursive_acl_restore_paging import no_restore_records
+            no_restore_records(ready_signal['id']);assert acl.inventory(root,reader,content,module)==current
+            (evidence/f'job-{name}-ready.sql.json').write_text(json.dumps(initial))
+            acknowledge(evidence,f'job-{name}-ready',dict(readySqlAndSourceVerified=True))
+        signal=wait_case(process,evidence,name);assert signal['subject']==subject
         after=acl.inventory(root,reader,content,module)
         checked=verify_case(signal,baseline,old[selected]['result'],*sources[selected],current,after,evidence,io)
         restored.append(checked);current=after;(evidence/'restore-results.json').write_text(json.dumps(restored));(evidence/'physical-final.json').write_text(json.dumps(current))
@@ -135,6 +153,9 @@ def exercise(process,evidence,baseline,proofs,reader,storage,root,content,module
     ordinary=wait_case(process,evidence,'restore-ordinary');assert ordinary['subject']!=subject and ordinary['deniedGet']==[403]*4 and ordinary['deniedPost']==[403]*4 and ordinary['anonymous']==[401]*4 and ordinary['uiRestoreRequests']==0
     assert ordinary['normalDualLogout']['normalUiLogout'] and ordinary['normalDualLogout']['providerNavigationObserved'] and ordinary['normalDualLogout']['bffStatus']==401 and ordinary['normalDualLogout']['identityStatus'] in (401,403)
     assert query("SELECT count(*) FROM audit_events WHERE actor_subject=:'subject' AND action LIKE 'containers.files.recursive-acl-restore.%';",subject=ordinary['subject'])==0
+    if baseline.get('restoreJobResults',False):
+        from recursive_acl_restore_success_jobs_proof import authority_proof
+        authority_proof(ordinary['jobsAuthority'],ordinary,[p['signal']['result'] for p in restored]);typed_equal(ordinary['completedJobs'],[p['signal']['result'] for p in restored])
     retained(evidence,baseline,proofs,restored,storage,io);assert acl.inventory(root,reader,content,module)==current
     acknowledge(evidence,'restore-ordinary',dict(ordinaryAndAnonymousDenied=True))
     summary=dict(cases=5,completed=4,canceledBeforeExecution=1,newChildHdd=16,actualSqlRootHddPerCase=True,sourceCapturesPreserved=True,ordinaryDenied=8,anonymousDenied=4,realSourceSnapshotPagination=False)

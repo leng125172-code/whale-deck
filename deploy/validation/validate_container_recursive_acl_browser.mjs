@@ -6,7 +6,7 @@ import { chromium, expect } from '../../web/node_modules/@playwright/test/index.
 import { loginVisible, openPermissionFiles, closePermissionDetails, writeSignal, waitSignal } from './installed_ui_permission_session.mjs'
 import { logoutFromUserMenu } from './installed_ui_logout.mjs'
 import {runRecursiveHistoryBrowser,historyUrls,historyDenials} from './validate_container_recursive_acl_history_browser.mjs'
-import {runRecursiveRestoreBrowser,restoreUrls,restoreDenials,ordinaryRestorePosts} from './validate_container_recursive_acl_restore_browser.mjs'
+import {runRecursiveRestoreBrowser,restoreUrls,restoreDenials,ordinaryRestorePosts,restoreJobUrls,restoreJobIds} from './validate_container_recursive_acl_restore_browser.mjs'
 
 let phase='startup',browser,evidence,activePage
 const diagnosticStart=Date.now(),diagnostics=[]
@@ -169,6 +169,7 @@ try {
   const paths=[endpoint+'/'+completed[0].id,endpoint+'/by-key/'+crypto.randomUUID(),'/api/v1/files/container-recursive-acls/recovery','/api/v1/files/container-recursive-acls/recovery/'+completed[0].id]
   for(const path of paths)assert.equal((await context.request.get(base+path)).status(),401)
   if(recursiveRestore)assert.deepEqual(await restoreDenials(context,restoreUrls(base,fixture,recursiveRestore)),[401,401,401,401])
+  if(fixture.restoreJobResults){const ids=restoreJobIds(recursiveRestore);assert.equal(new Set(ids).size,9);const adminAnonymous=await restoreDenials(context,restoreJobUrls(base,recursiveRestore));assert.deepEqual(adminAnonymous,Array(10).fill(401));recursiveRestore.jobsAuthority={ids,adminAnonymous}}
   if(recursiveHistory)assert.deepEqual(await historyDenials(context,historyUrls(base,fixture,completed)),[401,401])
   phase='ordinary-visible-login';const ordinaryContext=await browser.newContext({viewport:{width:320,height:600},colorScheme:'dark',reducedMotion:'reduce'}),ordinaryPage=await ordinaryContext.newPage();activePage=ordinaryPage;ordinaryContext.setDefaultTimeout(20_000)
   const ordinaryProfile=await loginVisible(ordinaryPage,ordinaryContext,base,'/',false,credentials.ordinary)
@@ -183,6 +184,12 @@ try {
   const restoreDenied=recursiveRestore?await restoreDenials(ordinaryContext,restoreUrls(base,fixture,recursiveRestore)):null
   const restorePostDenied=recursiveRestore?await ordinaryRestorePosts(ordinaryContext,base,fixture,recursiveRestore,ordinaryHeaders):null
   if(recursiveRestore){assert.deepEqual(restoreDenied,[403,403,403,403]);assert.deepEqual(restorePostDenied,[403,403,403,403]);assert.equal(restorePagePrivateRequests,0)}
+  let jobsDenied=null,jobsUiRequests=0
+  if(fixture.restoreJobResults){
+   jobsDenied=await restoreDenials(ordinaryContext,restoreJobUrls(base,recursiveRestore));assert.deepEqual(jobsDenied,Array(10).fill(403))
+   const trackJobs=r=>{if(new URL(r.url()).pathname.startsWith('/api/v1/jobs'))jobsUiRequests++};ordinaryPage.on('request',trackJobs)
+   await ordinaryPage.goto(base+'/jobs');await expect(ordinaryPage).toHaveURL(base+'/forbidden');assert.equal(jobsUiRequests,0);ordinaryPage.off('request',trackJobs)
+  }
   const historyDenied=recursiveHistory?await historyDenials(ordinaryContext,historyUrls(base,fixture,completed)):null
   if(historyDenied)assert.deepEqual(historyDenied,[403,403])
   await ordinaryPage.getByRole('button',{name:'首页',exact:true}).click();await expect(ordinaryPage).toHaveURL(base+'/')
@@ -199,6 +206,7 @@ try {
   if(recursiveRestore){
     const anonymous=await restoreDenials(ordinaryContext,restoreUrls(base,fixture,recursiveRestore));assert.deepEqual(anonymous,[401,401,401,401])
     restoreOrdinary={subject:ordinaryProfile.subject,deniedGet:restoreDenied,deniedPost:restorePostDenied,anonymous,uiRestoreRequests:restorePagePrivateRequests,normalDualLogout:ordinaryLogout}
+    if(fixture.restoreJobResults){const jobsAnonymous=await restoreDenials(ordinaryContext,restoreJobUrls(base,recursiveRestore));assert.deepEqual(jobsAnonymous,Array(10).fill(401));Object.assign(restoreOrdinary,{jobsDenied,jobsAnonymous,jobsUiRequests,jobsAuthority:recursiveRestore.jobsAuthority,completedJobs:recursiveRestore.completed})}
     await writeSignal(evidence,'restore-ordinary-result.json',restoreOrdinary);assert.equal((await waitSignal(evidence,'restore-ordinary-verified.json')).ordinaryAndAnonymousDenied,true)
   }
   const ordinary={subject:ordinaryProfile.subject,deniedGet:4,deniedPost:4,pagePrivateRequests,logout:ordinaryLogout};await ordinaryContext.close()

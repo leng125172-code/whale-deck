@@ -160,6 +160,8 @@ jobs:
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_job_results_proof.py
           node --check deploy/validation/installed_ui_restore_job_results.mjs
           node --check deploy/validation/validate_recursive_acl_restore_job_results.mjs
+          python3 -W error -m py_compile deploy/validation/recursive_acl_restore_success_jobs_proof.py deploy/validation/recursive_acl_restore_success_jobs_failure.py deploy/validation/validate_recursive_acl_restore_success_jobs.py deploy/validation/verify_recursive_acl_restore_success_jobs.py deploy/validation/test_recursive_acl_restore_success_jobs_proof.py
+          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_success_jobs_proof.py
           python3 -W error -m py_compile deploy/validation/reconcile_recursive_acl_restore_logout.py deploy/validation/test_reconcile_recursive_acl_restore_logout.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_reconcile_recursive_acl_restore_logout.py
           python3 -W error -m py_compile deploy/validation/validate_container_file_publishing.py deploy/validation/recover_recursive_acl_restore_prewrite.py deploy/validation/test_recover_recursive_acl_restore_prewrite.py

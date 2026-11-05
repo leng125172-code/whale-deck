@@ -45,19 +45,23 @@ def safe_summary(raw):
 def api_job(job,sql,expected):
     assert job['id']==sql['id']==expected['jobId']
     assert job['jobType']==sql['job_type']==('containers.files.recursive-acl-restore-plan' if expected['stage']=='planning' else 'containers.files.recursive-acl-restore')
-    assert job['state']==sql['state']==('Succeeded' if expected['stage']=='planning' else 'Canceled')
+    assert expected['state'] in (('Ready','Canceled') if expected['stage']=='planning' else ('Succeeded','Canceled'))
+    assert job['state']==sql['state']==('Succeeded' if expected['state'] in ('Ready','Succeeded') else 'Canceled')
     assert type(job['resultJson']) is str
     typed_equal(safe_summary(job['resultJson']),expected);typed_equal(safe_summary(sql['result_json']),expected)
 
-def job_proof(observed,sql,expected):
+def job_proof(observed,sql,expected,*,prefix=None):
     api_job(observed['job'],sql,expected);api_job(observed['listJob'],sql,expected)
     typed_equal(observed['display'],display(expected))
     typed_equal(observed['request'],dict(method='GET',pathname='/api/v1/jobs/'+expected['jobId'],status=200))
     typed_equal(observed['listRequest'],dict(method='GET',pathname='/api/v1/jobs',status=200,query=dict(take='100')))
     typed_equal(observed['viewport'],dict(width=320,height=600));assert observed['theme']=='dark'
-    assert observed['stateText']==('预检已完成，尚未恢复ACL' if expected['stage']=='planning' else '已取消')
+    assert observed['stateText']==dict(Ready='预检已完成，尚未恢复ACL',Succeeded='递归ACL恢复已完成',Canceled='已取消')[expected['state']]
     assert '历史事实' in observed['historical'] and '来源原修改数与本次实际修改数分别记录' in observed['historical']
-    assert observed['screenshots']==[f"job-{expected['stage']}-counts.png",f"job-{expected['stage']}-metadata.png"]
+    if prefix is not None:
+        typed_equal(observed['labels'],dict(identity=['原意图','阶段','恢复ACL类型'],plan=['计划对象','文件','目录（含根）','计划修改'],actual=['已完成核对','实际修改','已中止','未开始','待证明'],source=['来源对象','来源文件','来源目录','来源原修改'],metadata=['原回执','当时对象绑定有效','可能已有历史','历史已验证','当时历史可用','当时发布围栏保留','结果码']))
+    prefix=prefix or f"job-{expected['stage']}"
+    assert observed['screenshots']==[prefix+'-counts.png',prefix+'-metadata.png']
 
 def ready_job_proof(signal,initial):
     row=initial['row'];plan=managed_plan(row['plan_json']);s=projection(row,plan,execution=False)

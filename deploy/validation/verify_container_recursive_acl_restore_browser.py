@@ -14,18 +14,25 @@ from recursive_acl_restore_agent_io import installed
 from acl_history_browser_proof import typed_equal
 
 
-def live_verify(name):
+def live_verify(name,*,job_results=False):
+    assert type(job_results) is bool
     import hashlib,re,subprocess
     from validate_container_recursive_acl import inventory
     assert re.fullmatch('container-recursive-acl-browser-[a-f0-9]{32}',name)
     evidence=Path(__file__).resolve().parents[2]/'deploy/artifacts'/name
     b=previous.private_json(evidence/'baseline.json');old=previous.private_json(evidence/'results.json');rows=previous.private_json(evidence/'restore-results.json');browser=previous.private_json(evidence/'browser.json');io=installed()
     assert b['recursiveRestoreBrowser'] is True and browser['actualUi'] and browser['normalDualLogout']
+    assert b.get('restoreJobResults',False) is job_results
     assert previous.host_identity(b['revision'])==b['hostIdentity'] and previous.common.core_snapshot()=={k:tuple(v) for k,v in b['coreBefore'].items()}
     from validate_container_recursive_acl_browser import SOURCES,no_active_work
     from validate_container_recursive_acl_restore_browser import SOURCES as restore_sources
     from acl_source_apply_missing_proof import source_closure
-    repo=evidence.parents[2];assert b['validationSourceSha256']==source_closure(repo,b['validationSourceRevision'],seeds=(*SOURCES,*restore_sources))
+    seeds=(*SOURCES,*restore_sources)
+    if job_results:
+        from recursive_acl_restore_success_jobs_proof import SOURCES as job_sources,authority_proof,images
+        seeds=(*seeds,*job_sources);authority_proof(browser['recursiveRestore']['jobsAuthority'],browser['restoreOrdinary'],browser['recursiveRestore']['completed'])
+        assert {p.name for p in evidence.glob('job-*.png')}==images()
+    repo=evidence.parents[2];assert b['validationSourceSha256']==source_closure(repo,b['validationSourceRevision'],seeds=seeds)
     for filename,sha in b['validationSourceSha256'].items():
         assert hashlib.sha256(subprocess.check_output(['git','-C',str(repo),'show',b['validationSourceRevision']+':deploy/validation/'+filename])).hexdigest()==sha
     by_name={p['result']['name']:p for p in old};current=previous.private_json(evidence/'source-physical-final.json')
@@ -45,10 +52,12 @@ def live_verify(name):
     return dict(revision=b['revision'],independentLiveRestoreProof=True,sourceBytesRereadBeforeCleanup=True,physicalObjects=4,restoreCases=5,oldSourcesAndNewRestoreSqlRootHddReopened=True)
 
 
-def verify(name):
-    result=previous.verify(name,restore=True);evidence=Path(__file__).resolve().parents[2]/'deploy/artifacts'/name
+def verify(name,*,job_results=False):
+    assert type(job_results) is bool
+    result=previous.verify(name,restore=True,restore_job_results=job_results);evidence=Path(__file__).resolve().parents[2]/'deploy/artifacts'/name
     saved=lambda filename:previous.private_json(evidence/filename)
     b=saved('baseline.json');browser=saved('browser.json');old=saved('results.json');rows=saved('restore-results.json');accepted=saved('restore-verified.json');io=installed()
+    assert b.get('restoreJobResults',False) is job_results
     assert b['recursiveRestoreBrowser'] is True and len(rows)==len(browser['recursiveRestore']['completed'])==5
     by_name={p['result']['name']:p for p in old};current=saved('source-physical-final.json');children=0
     assert any(e['tag']=='user' and e['id']==0 for e in b['original']['one.bin']['access'])
@@ -65,6 +74,9 @@ def verify(name):
     ordinary=saved('restore-ordinary-result.json');typed_equal(ordinary,browser['restoreOrdinary']);assert ordinary['subject']==browser['ordinary']['subject']!=browser['subject']
     assert ordinary['deniedGet']==ordinary['deniedPost']==[403]*4 and ordinary['anonymous']==[401]*4 and ordinary['uiRestoreRequests']==0
     typed_equal(ordinary['normalDualLogout'],browser['ordinary']['logout']);assert saved('restore-ordinary-verified.json')==dict(ordinaryAndAnonymousDenied=True)
+    if job_results:
+        from recursive_acl_restore_success_jobs_proof import authority_proof
+        authority_proof(restored['jobsAuthority'],ordinary,restored['completed']);typed_equal(ordinary['jobsAuthority'],restored['jobsAuthority']);typed_equal(ordinary['completedJobs'],restored['completed'])
     retained(evidence,b,old,rows,io.storage,io);preserved_baseline(b,io)
     result.update(independentRecursiveAclRestoreBrowser=True,restoreCases=5,restoreCompleted=4,restoreCanceled=1,restoreChildHdd=16,restoreOrdinaryDenied=8,restoreAnonymousDenied=4,sourceBytesRereadAfterCleanup=False,actualRestoreUiSourcePagination=False)
     return result

@@ -3,11 +3,14 @@ import assert from 'node:assert/strict'
 import {join} from 'node:path'
 import {expect} from '../../web/node_modules/@playwright/test/index.mjs'
 import {openPermissionFiles,closePermissionDetails,writeSignal,waitSignal} from './installed_ui_permission_session.mjs'
+import {observeJob} from './installed_ui_restore_job_results.mjs'
 const specs=[['restore-access','access',4],['restore-noop','access',0],['restore-default','clear-default',2],['restore-clear','default',2],['restore-cancel','root',4]]
 const bits=['---','--x','-w-','-wx','r--','r-x','rw-','rwx'],labels={user_obj:'文件属主',user:'指定用户',group_obj:'文件属组',group:'指定组',mask:'mask',other:'其他用户'}
 function httpProof(response){const url=new URL(response.url());assert.equal(new Set(url.searchParams.keys()).size,[...url.searchParams.keys()].length);return {method:response.request().method(),pathname:url.pathname,query:Object.fromEntries(url.searchParams),status:response.status(),noStore:(response.headers()['cache-control']??'').includes('no-store')}}
 export function restoreUrls(base,fixture,summary){const endpoint=`${base}/api/v1/containers/${fixture.containerId}/files/recursive-acl-restores`,id=summary.completed[0].id;return [endpoint+'/'+id,endpoint+'/by-key/'+crypto.randomUUID(),base+'/api/v1/files/container-recursive-acl-restores/recovery',base+'/api/v1/files/container-recursive-acl-restores/recovery/'+id]}
 export async function restoreDenials(context,urls){const results=[];for(const path of urls)results.push((await context.request.get(path)).status());return results}
+export function restoreJobIds(summary){return summary.completed.flatMap(r=>[r.planningJobId,r.executionJobId].filter(v=>v!==null))}
+export function restoreJobUrls(base,summary){return [base+'/api/v1/jobs?take=100',...restoreJobIds(summary).map(id=>base+'/api/v1/jobs/'+id)]}
 export async function ordinaryRestorePosts(context,base,fixture,summary,headers){
  const endpoint=`${base}/api/v1/containers/${fixture.containerId}/files/recursive-acl-restores`,row=summary.completed[0],data=summary.bodies[0],values=[]
  for(const path of [endpoint,endpoint+'/'+row.id+'/confirm',endpoint+'/'+row.id+'/cancel',`${base}/api/v1/files/container-recursive-acl-restores/recovery/${row.id}/acknowledge`])values.push((await context.request.post(path,{headers:{...headers,'Idempotency-Key':row.id},data:path===endpoint?data:{version:row.version,confirmed:true,planHash:'not-authority'}})).status())
@@ -69,6 +72,13 @@ export async function runRecursiveRestoreBrowser(page,context,base,fixture,subje
     }
     await page.screenshot({path:join(fixture.evidence,`${name}-target-${n}.png`)})
    }
+   let jobResults
+   if(fixture.restoreJobResults){
+    const jobPage=await context.newPage()
+    try{jobResults={planning:await observeJob(jobPage,context,base,ready.id,'planning','Ready',fixture.evidence,`job-${name}-planning`)}}finally{await jobPage.close()}
+    await writeSignal(fixture.evidence,`job-${name}-ready-result.json`,{name,id:ready.id,source:snapshot.summary,planning:jobResults.planning})
+    assert.equal((await waitSignal(fixture.evidence,`job-${name}-ready-verified.json`)).readySqlAndSourceVerified,true)
+   }
    let result,replayId=null,cancelDismissed=false
    if(name==='restore-cancel'){
     await dialog.getByRole('button',{name:'请求取消递归ACL恢复',exact:true}).click();await page.getByRole('button',{name:'继续等待',exact:true}).click();assert.equal((await query(ready.id)).state,'Ready');assert.equal(counts.cancellations,0);cancelDismissed=true
@@ -77,8 +87,13 @@ export async function runRecursiveRestoreBrowser(page,context,base,fixture,subje
     await dialog.getByRole('button',{name:'确认递归ACL恢复',exact:true}).click();await expect(dialog.getByText('递归ACL恢复已完成',{exact:true})).toBeVisible({timeout:45000});result=await query(ready.id);assert.equal(result.state,'Succeeded');assert.equal(result.receipt.state,'Completed')
     const repeated=await context.request.post(base+endpoint+'/'+ready.id+'/confirm',{headers:{...headers,'Idempotency-Key':ready.id},data:{planHash:ready.confirmation.planHash,confirmed:true,version:ready.version}});assert.equal(repeated.status(),202);replayId=(await repeated.json()).executionJobId;assert.equal(replayId,result.executionJobId)
    }
+   if(fixture.restoreJobResults){
+    const jobPage=await context.newPage()
+    try{jobResults.execution=result.executionJobId===null?null:await observeJob(jobPage,context,base,result.executionJobId,'execution','Succeeded',fixture.evidence,`job-${name}-execution`)}finally{await jobPage.close()}
+    const historical=await context.request.get(base+'/api/v1/jobs/'+ready.id);assert.equal(historical.status(),200);jobResults.historicalPlanning=await historical.json();assert.equal(jobResults.historicalPlanning.resultJson,jobResults.planning.job.resultJson)
+   }
    await page.screenshot({path:join(fixture.evidence,name+'-result.png')});const response={name,...result};results.push(response);bodies.push(body)
-   await writeSignal(fixture.evidence,name+'-result.json',{name,subject,source:snapshot,sourceRequest:httpProof(read),preview,previewRequest:httpProof(previewResponse),registered,ready,result:response,key,body,originalReference,duplicateRegistrationId:(await duplicate.json()).id,confirmationReplayId:replayId,cancelDismissedWithoutWrite:cancelDismissed})
+   await writeSignal(fixture.evidence,name+'-result.json',{name,subject,source:snapshot,sourceRequest:httpProof(read),preview,previewRequest:httpProof(previewResponse),registered,ready,result:response,key,body,originalReference,duplicateRegistrationId:(await duplicate.json()).id,confirmationReplayId:replayId,cancelDismissedWithoutWrite:cancelDismissed,...(jobResults?{jobResults}:{})})
    const accepted=await waitSignal(fixture.evidence,name+'-verified.json');assert.equal(accepted.id,result.id);assert.equal(accepted.physicalRootHddAndSqlVerified,true)
    await closePermissionDetails(page,dialog)
   }

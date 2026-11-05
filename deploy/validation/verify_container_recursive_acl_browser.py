@@ -24,7 +24,8 @@ from verify_container_recursive_permissions import private_json
 from acl_source_apply_missing_proof import source_closure
 
 
-def verify(name,history=False,restore=False):
+def verify(name,history=False,restore=False,restore_job_results=False):
+    assert type(restore_job_results) is bool and (not restore_job_results or restore and not history)
     assert re.fullmatch('container-recursive-acl-browser-[a-f0-9]{32}',name)
     repo=Path(__file__).resolve().parents[2];evidence=repo/'deploy/artifacts'/name
     from validate_container_upload_recovery_agent import trusted
@@ -50,6 +51,10 @@ def verify(name,history=False,restore=False):
         assert labels==list(CASES) and b['recursiveRestoreBrowser'] is True
         seeds=(*SOURCES,*restore_sources)
     else:assert not b.get('recursiveRestoreBrowser',False)
+    assert b.get('restoreJobResults',False) is restore_job_results
+    if restore_job_results:
+        from recursive_acl_restore_success_jobs_proof import SOURCES as job_sources
+        seeds=(*seeds,*job_sources)
     assert b['validationSourceSha256']==source_closure(repo,b['validationSourceRevision'],seeds=seeds)
     for name,sha in b['validationSourceSha256'].items():
         raw=subprocess.check_output(['git','-C',str(repo),'show',b['validationSourceRevision']+':deploy/validation/'+name]);assert hashlib.sha256(raw).hexdigest()==sha
@@ -72,7 +77,11 @@ def verify(name,history=False,restore=False):
     assert children==accepted['childHddRecords']==4*(count-1) and aggregates==accepted['aggregateHddRecords']==count-1
     assert previous==private_json(evidence/('source-physical-final.json' if restore else 'physical-final.json'))
     target_shots=sum(1 if label in ('default','default-noop','clear-default') else 2 for label in labels)
-    images=list(evidence.glob('*.png'));assert len(images)==2*count+target_shots+1+(7 if history else 0)+(30 if restore else 0) and len(list(evidence.glob('*-targets.png')))==target_shots
+    extra_jobs=18 if restore_job_results else 0
+    images=list(evidence.glob('*.png'));assert len(images)==2*count+target_shots+1+(7 if history else 0)+(30 if restore else 0)+extra_jobs and len(list(evidence.glob('*-targets.png')))==target_shots
+    if restore_job_results:
+        from recursive_acl_restore_success_jobs_proof import images as job_images
+        assert {p.name for p in evidence.glob('job-*.png')}==job_images()
     assert len(list(evidence.glob('*-ready.png')))==count+(5 if restore else 0) and len(list(evidence.glob('*-result.png')))==count+(5 if restore else 0) and (evidence/'ordinary-denied.png').exists()
     for image in images:
         data=image.read_bytes();assert len(data)>1000 and data[:8]==b'\x89PNG\r\n\x1a\n'
