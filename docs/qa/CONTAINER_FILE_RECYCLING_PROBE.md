@@ -1,5 +1,7 @@
 # 回收原生探针与独立证明候选
 
+后续2026-11-05：3725aa7已完成标准宿主安装及普通文件签名RPC/HDD分项，详见[安装态验收](CONTAINER_FILE_RECYCLING_AGENT.md)。下文候选/未安装表述为原批次事实，保留原证据；不以新分项补签其余故障或业务页面。
+
 2026-11-05，承接[1.56协议/SDK/受限传输](CONTAINER_FILE_RECYCLING_RPC.md)。新增独立交互探针及wire/Root/Trash-HDD证明，冻结探针`b7fc8e334c59d4d55860f8bc8382a47d989a1870`、最新Python证明`aa8a39b206279f0cdf802dafe10b84abbdf95dbf`。两版探针按标准脚本从Git archive和固定digest SDK自包含发布；最终探针三份源码与最新验证提交逐字节一致。协议源码3725aa752316ba933a850376786119e528248815的CI41997949781已completed/success、12路全部成功，最新两提交的src/deploy/host与该协议提交无差异。
 
 ## 探针约束

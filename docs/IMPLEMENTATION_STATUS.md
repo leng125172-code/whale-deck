@@ -1,5 +1,6 @@
 # 实施状态与恢复入口
 
+- 2026-11-05 回收安装态分项已通过：准确3725aa7/12路CI后标准安装Agent与MaintenanceHost、Agent协议1.56，实际宿主exe/DLL映射及59helper核验；应用仍34153d2。全新自有普通文件签名RPC完成31拒绝、写前Discard及真实回收/独立job恢复和重放，共13回执；Root/HDD/原inode字节属性与清理前后独立核验通过。2346保护内容/11核心/旧历史业务保持，维护71采样全200不签瞬时连续性；differentSourceDevice=false不签异盘灾备。22专项/8范围通过，25+141证据封存，校验脚本0755例外等原失败保留。继续永久业务、PG共享保护、Worker/API/Vue与真实身份整链、剩余故障和59项，不升整项完成率。[安装、实机与准确边界](qa/CONTAINER_FILE_RECYCLING_AGENT.md)。
 - 2026-11-05 回收原生探针与独立证明候选已准备：探针b7fc8e3/证明aa8a39b2，固定新资源路径、当前进程规划/操作登记、Restore独立job及Unknown未证明字段，有界交互与密钥清零。14专项零跳过，Release0警告错误、自包含包校验通过；当前1.55仅发header后按专属能力码拒绝，操作帧0/未创建资源/生产保持，不签1.56实际操作。协议3725aa7准确CI41997949781已12路成功；初版阶段诊断保留但未按最终门禁接受，最新23文件封存。继续新资源安装父门禁、标准安装/真实签名RPC-HDD及取消兼容，再业务页面和59项，不升完成率。[探针、拒绝与证明边界](qa/CONTAINER_FILE_RECYCLING_PROBE.md)。
 
 - 2026-11-05 回收协议/SDK/受限传输候选3725aa7已实现：协议1.56五Unary及独立能力/完整内容HMAC、Restore新job引用原Root、Unknown可空源事实、UTF8属性顺序与原始字节。固定helper/精确stop与安装清单已接，Recycle先绑定Ready Invocation再发正文；Discard未写围栏、孤儿HDD→Unknown。5149 Unit（含74专项）/518root工具（含8传输）/141安装检查通过；恢复后74专项与集成构建0警告错误回执核对，42证据封存。当前新传输实际未安装，2346保护/核心宿主及业务保持、产品34153d2；无永久业务消费者/API/Worker/Vue。继续原生探针、准确CI与安装态RPC/HDD，再业务整链；不升整项完成率。[协议候选、失败与边界](qa/CONTAINER_FILE_RECYCLING_RPC.md)。
