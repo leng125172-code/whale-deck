@@ -62,12 +62,13 @@ public sealed partial class NativeNotificationDispatchTests
             foreach(var secret in new[]{row.ActorSubject,row.LoginBinding,row.TraceId,row.ContainerId,row.InstanceId,row.RelativePath,row.OwnerHash,row.RequestHash,row.PlanHash,row.ExecutionHash,row.ReceiptHash}) if(secret is not null)Assert.DoesNotContain(secret,projected.ResultJson,StringComparison.Ordinal);
             return value;
         }
-        async Task<ContainerRecursiveAclRestoreIntent> Ready(ContainerRecursiveAclRestoreIntent row)
+        async Task<ContainerRecursiveAclRestoreIntent> Ready(ContainerRecursiveAclRestoreIntent row, ContainerRecursiveAclRestorePlanDto? plan = null)
         {
+            plan ??= Plan(row);
             await repo.EnqueueAsync(row, default); var claimed = Assert.IsType<ContainerRecursiveAclRestoreIntent>(await repo.ClaimAsync(clock.GetUtcNow(), default)); Assert.Equal(row.Id, claimed.Id);
-            Assert.True(await repo.MarkPlanningAsync(claimed, default)); await repo.FinishPlanningAsync(claimed, Plan(row), "CONTAINER_RECURSIVE_ACL_RESTORE_READY", default);
+            Assert.True(await repo.MarkPlanningAsync(claimed, default)); await repo.FinishPlanningAsync(claimed, plan, "CONTAINER_RECURSIVE_ACL_RESTORE_READY", default);
             var ready = (await repo.FindAsync(row.Id, default))!;
-            var facts=await JobFacts(ready,false,"Ready");Assert.Null(facts.CompletedCount);Assert.Equal(1U,facts.SourceChangedCount);Assert.Equal(2U,facts.ChangeCount);
+            var facts=await JobFacts(ready,false,"Ready");Assert.Null(facts.CompletedCount);Assert.Equal(plan.RestoreSource.ChangeCount,facts.SourceChangedCount);Assert.Equal(plan.ChangeCount,facts.ChangeCount);
             return ready;
         }
         async Task<ContainerRecursiveAclRestoreIntent> Pending(ContainerRecursiveAclRestoreIntent row)
@@ -290,6 +291,35 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal(4, ack.UnknownCount); Assert.True(ack.HistoryVerified); Assert.Equal(admin.Subject, ack.AcknowledgedBy);
             var ackFacts=await JobFacts(ack,true,"Acknowledged");Assert.Equal("Unknown",ackFacts.ReceiptState);Assert.Equal(4,ackFacts.UnknownCount);Assert.False(ackFacts.PublishBarrier);
             Assert.Equal("Failed", (await db.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == ack.ExecutionJobId)).State);
+            // The 26-object Unknown case has conservative aggregate counters,
+            // not the Partial counters. Root receipts remain explicit fixtures.
+            var flatRow = Row(); var flatPlan = Plan(flatRow);
+            flatPlan = flatPlan with { EntryCount = 26, FileCount = 25, DirectoryCount = 1, ChangeCount = 26,
+                RestoreSource = flatPlan.RestoreSource with { EntryCount = 26, FileCount = 25, DirectoryCount = 1, ChangeCount = 26 } };
+            var flat = await Applying(await Ready(flatRow, flatPlan));
+            var flatReceipt = Receipt(flat, "Unknown") with { UnknownCount = 26, HistoryVerified = true, HistoryAvailable = true, HistoryDigest = new('7', 64) };
+            Assert.True(await repo.FinishAsync(flat, "Unknown", "CONTAINER_RECURSIVE_ACL_RESTORE_RESULT_UNKNOWN", flatReceipt, default));
+            var flatUnknown = (await other.FindAsync(flat.Id, default))!;
+            Assert.Equal(new int?[] { 0, 0, 0, 0, 26 }, new[] { flatUnknown.CompletedCount, flatUnknown.ChangedCount, flatUnknown.AbortedCount, flatUnknown.NotStartedCount, flatUnknown.UnknownCount });
+            Assert.Equal("", flatUnknown.OutcomeDigest); Assert.True(flatUnknown.PublishBarrier); Assert.Null(flatUnknown.CompletedAtUtc); Assert.Null(flatUnknown.CancelRequestedAtUtc);
+            var flatFacts = await JobFacts(flatUnknown, true, "Unknown"); Assert.Equal(26, flatFacts.UnknownCount); Assert.Equal(0, flatFacts.ChangedCount); Assert.Equal(26U, flatFacts.SourceChangedCount);
+            var flatPlanning = (await second.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == flat.Id)).ResultJson;
+            var flatOriginalReceipt = flatUnknown.ReceiptJson; var flatOriginalPlan = flatUnknown.PlanJson; var flatExecution = flatUnknown.ExecutionJobId;
+            Assert.Null(await repo.ClaimAsync(clock.GetUtcNow(), default));
+            await Rejected($"UPDATE container_recursive_acl_restore_intents SET changed_count=1 WHERE id={flat.Id}", "container_recursive_acl_restore_fact_immutable");
+            await Rejected($"UPDATE container_recursive_acl_restore_intents SET outcome_digest={new string('2', 64)} WHERE id={flat.Id}", "container_recursive_acl_restore_fact_immutable");
+            await other.AcknowledgeAsync(admin, flat.Id, flatUnknown.Version, flatReceipt, default);
+            var flatAck = (await repo.FindAsync(flat.Id, default))!;
+            Assert.Equal("CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_ACKNOWLEDGED", flatAck.ResultCode); Assert.Equal("Unknown", flatAck.RootState); Assert.False(flatAck.PublishBarrier);
+            Assert.Equal(new int?[] { 0, 0, 0, 0, 26 }, new[] { flatAck.CompletedCount, flatAck.ChangedCount, flatAck.AbortedCount, flatAck.NotStartedCount, flatAck.UnknownCount });
+            Assert.Equal(flatOriginalReceipt, flatAck.ReceiptJson); Assert.Equal(flatOriginalReceipt, flatAck.AcknowledgementJson); Assert.Equal(flatOriginalPlan, flatAck.PlanJson); Assert.Equal(flatExecution, flatAck.ExecutionJobId);
+            Assert.Equal("", flatAck.OutcomeDigest); Assert.Equal(admin.Subject, flatAck.AcknowledgedBy); Assert.NotNull(flatAck.CompletedAtUtc);
+            var flatAckFacts = await JobFacts(flatAck, true, "Acknowledged"); Assert.Equal("Unknown", flatAckFacts.ReceiptState); Assert.Equal(26, flatAckFacts.UnknownCount); Assert.Equal(0, flatAckFacts.ChangedCount);
+            var flatJob = await db.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == flatExecution);
+            Assert.Equal("Failed", flatJob.State); Assert.Equal("Acknowledged", flatJob.Phase); Assert.Null(flatJob.CancelRequestedAtUtc);
+            Assert.Equal(flatPlanning, (await db.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == flat.Id)).ResultJson);
+            Assert.Single(await db.AuditEvents.AsNoTracking().Where(a => a.JobId == flatExecution && a.Action == "containers.files.recursive-acl-restore.unknown-acknowledged" && a.Result == "Unknown" && a.ActorSubject == admin.Subject).ToListAsync());
+            Console.WriteLine("INBOX_PHASE=recursive-acl-restore-flat-unknown-ack-original-facts");
             var partial = await Applying(await Ready(Row())); var partialReceipt = Receipt(partial, "Partial");
             Assert.True(await repo.FinishAsync(partial, "Partial", "CONTAINER_RECURSIVE_ACL_RESTORE_PARTIAL_REQUIRES_ACKNOWLEDGEMENT", partialReceipt, default));
             var paused = (await other.FindAsync(partial.Id, default))!;
