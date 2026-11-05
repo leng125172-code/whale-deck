@@ -42,3 +42,5 @@
 当前没有后台发布进程继续执行。后续先恢复依赖下载，再以新的证据目录、发布 unit 和即时基线显式重新调用标准 update；不能复用本次成功标记、旧 StartedAt 或旧固定指针。新的发布需要六组件/HTTP/宿主映射、迁移与保护记录、维护采样重新核对，再执行全新自有资源上的真实 Authentik→Vue→API/Worker→Agent→实际文件/HDD Unknown 与另一管理员处置门禁。
 
 59 项及阶段完整签收计数不变；整体 25%–35% 工作量粗估、酒馆/供应商/看板娘功能 0% 保持。其余故障矩阵、可恢复删除及其余目标继续保留，当前中断不是完成项。
+
+收尾：测试及文档提交 `c3d71fd` 已推送 dev，范围 8 项、本地 Markdown 链接 2076/缺失 0、diff 与 30 文件封存复核通过；没有重发生产 update。项目图谱首次同步传输失败，使用同一 eventId `whale-deck.container-acl.c3d71fd.restore-unknown-release-interruption` 重试后取得 projectId/key/eventId 匹配、duplicate=false 回执，pending 移至 synced，阶段保持 active。主仓库与运行仓库 Git 索引均归用户所有，权限分别 664/644；没有递归更改所有权。
