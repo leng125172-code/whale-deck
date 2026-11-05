@@ -41,3 +41,5 @@ DI已接新保护器/Repository/来源解析/Workflow/Dispatcher，Worker有专�
 继续管理员API/安全确认与恢复列表、Vue/Jobs投影、准确CI和标准部署，再真实身份/原文件/HDD整链及完整故障矩阵、长期清理和其余59项。当前完整主项0/59、阶段0/6、25%–35%工作量粗估及AI子计划0%保持，17项移出不算完成。
 
 项目图谱whale-deck/container-recycle已按本批稳定eventId回执同步active，pending移入synced；整项及阶段未标完成。
+
+2026-11-06后续：[管理员API/Vue候选](CONTAINER_FILE_RECYCLING_RESTORE_API_UI.md)已形成并通过协议/预览及真实PG目录查询检查；本记录原文按当时边界保留，不转签生产部署或真实身份文件整链。
