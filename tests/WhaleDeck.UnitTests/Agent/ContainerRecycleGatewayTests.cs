@@ -19,6 +19,30 @@ namespace WhaleDeck.UnitTests.Agent;
 /// <summary>Isolated SDK projection and full signature validation. Not an installed Agent acceptance.</summary>
 public sealed class ContainerRecycleGatewayTests
 {
+    [Theory]
+    [InlineData(StatusCode.Aborted, "CONTAINER_RECYCLE_SOURCE_CHANGED", "CONTAINER_RECYCLE_SOURCE_CHANGED")]
+    [InlineData(StatusCode.FailedPrecondition, "CONTAINER_RECYCLE_EXTENDED_METADATA_REQUIRED", "CONTAINER_RECYCLE_EXTENDED_METADATA_REQUIRED")]
+    [InlineData(StatusCode.FailedPrecondition, "CONTAINER_FILES_INSTANCE_CHANGED", "CONTAINER_RECYCLE_TARGET_CHANGED")]
+    [InlineData(StatusCode.PermissionDenied, "CONTAINER_FILES_SHARED_CORE_MOUNT", "CONTAINER_RECYCLE_PROTECTED")]
+    [InlineData(StatusCode.ResourceExhausted, "CONTAINER_RECYCLE_ATTRIBUTES_LIMIT", "CONTAINER_RECYCLE_ATTRIBUTES_LIMIT")]
+    public async Task ExactPlanningRefusalsAreTypedButExecutionFailuresRemainUncertain(StatusCode status, string detail, string code)
+    {
+        using var h = new Harness { Status = status, Detail = detail };
+        var rejected = await Assert.ThrowsAsync<App.ContainerRecyclePreflightRejectedException>(() => h.Gateway.PlanContainerRecycleAsync(Actor, Command, default));
+        Assert.Equal(code, rejected.Code);
+        await Assert.ThrowsAsync<RpcException>(() => h.Gateway.ApplyContainerRecycleAsync(Operation, default));
+    }
+
+    [Theory]
+    [InlineData(StatusCode.Unavailable, "CONTAINER_RECYCLE_SOURCE_CHANGED")]
+    [InlineData(StatusCode.Aborted, "CONTAINER_RECYCLE_UNAVAILABLE")]
+    [InlineData(StatusCode.ResourceExhausted, "FILES_BACKUP_CAPACITY_REQUIRED")]
+    [InlineData(StatusCode.DeadlineExceeded, "CONTAINER_RECYCLE_TIMEOUT")]
+    public async Task OtherPlanningFailuresAreNotInventedAsDefinitiveRejections(StatusCode status, string detail)
+    {
+        using var h = new Harness { Status = status, Detail = detail };
+        await Assert.ThrowsAsync<RpcException>(() => h.Gateway.PlanContainerRecycleAsync(Actor, Command, default));
+    }
     private static App.ContainerRecycleCommandDto Command => new(new(new('a', 64), "777:2026-10-27T01:02:03.123456789Z", "work/中文.bin"), new('9', 64));
     private static App.ContainerRecyclePlanDto Plan => new(1,Command,new('A',64),new(101,202),new('B',64),1000,1001,new('C',64),
         new(3,4,0x81A0,2100,3100,1,1048583,1722222222222222222),1733333333333333333,new('8',64),

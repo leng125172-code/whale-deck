@@ -37,11 +37,28 @@ public sealed partial class AgentGateway : IContainerRecycleGateway
             string.IsNullOrWhiteSpace(actor.TraceId) || actor.TraceId.Length > 128 || actor.TraceId.Any(char.IsControl)) throw new ArgumentException("CONTAINER_RECYCLE_CONTEXT_INVALID");
         var request = new ContainerRecyclePlanRequest { Command = RecycleCommand(command), Context = new() { ActorSubject = actor.Subject, TraceId = actor.TraceId } };
         var client = await RecycleClient(cancellationToken);
-        var response = await client.PlanAsync(request, RecycleHeaders("Plan", request), deadline: DateTime.UtcNow.AddSeconds(120), cancellationToken: cancellationToken);
-        var plan = RecyclePlan(response);
-        if (plan.Command != command) throw ContainerRecycleValidation.Invalid();
-        return plan;
+        try
+        {
+            var response = await client.PlanAsync(request, RecycleHeaders("Plan", request), deadline: DateTime.UtcNow.AddSeconds(120), cancellationToken: cancellationToken);
+            var plan = RecyclePlan(response);
+            if (plan.Command != command) throw ContainerRecycleValidation.Invalid();
+            return plan;
+        }
+        catch (RpcException error) when (RecyclePreflightCode(error) is { } code)
+        { throw new ContainerRecyclePreflightRejectedException(code); }
     }
+    private static string? RecyclePreflightCode(RpcException error) => (error.StatusCode, error.Status.Detail) switch
+    {
+        (StatusCode.Aborted, "CONTAINER_RECYCLE_SOURCE_CHANGED") => "CONTAINER_RECYCLE_SOURCE_CHANGED",
+        (StatusCode.FailedPrecondition, "CONTAINER_RECYCLE_SOURCE_UNSUPPORTED") => "CONTAINER_RECYCLE_SOURCE_UNSUPPORTED",
+        (StatusCode.FailedPrecondition, "CONTAINER_RECYCLE_EXTENDED_METADATA_REQUIRED") => "CONTAINER_RECYCLE_EXTENDED_METADATA_REQUIRED",
+        (StatusCode.ResourceExhausted, "CONTAINER_RECYCLE_ATTRIBUTES_LIMIT") => "CONTAINER_RECYCLE_ATTRIBUTES_LIMIT",
+        (StatusCode.PermissionDenied, "CONTAINER_RECYCLE_PROTECTED" or "CONTAINER_PROTECTED" or "CONTAINER_UNSAFE_ISOLATION" or "CONTAINER_UNSAFE_MOUNT" or
+            "CONTAINER_FILES_SHARED_CORE_MOUNT" or "CONTAINER_UPLOAD_PUBLISH_READ_ONLY" or "CONTAINER_UPLOAD_PUBLISH_MOUNT_ROOT") => "CONTAINER_RECYCLE_PROTECTED",
+        (StatusCode.FailedPrecondition, "CONTAINER_RECYCLE_TARGET_CHANGED" or "CONTAINER_FILES_TARGET_MISSING" or "CONTAINER_FILES_INSTANCE_CHANGED" or
+            "CONTAINER_FILES_TARGET_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or "CONTAINER_NOT_RUNNING") => "CONTAINER_RECYCLE_TARGET_CHANGED",
+        _ => null
+    };
     public Task<ContainerRecycleReceiptDto> ApplyContainerRecycleAsync(ContainerRecycleOperationDto operation, CancellationToken cancellationToken) => RecycleAction("Apply", operation, cancellationToken);
     public Task<ContainerRecycleReceiptDto> DiscardContainerRecycleAsync(ContainerRecycleOperationDto operation, CancellationToken cancellationToken) => RecycleAction("Discard", operation, cancellationToken);
     public async Task<ContainerRecycleReceiptDto?> InspectContainerRecycleAsync(ContainerRecycleOperationDto operation, CancellationToken cancellationToken)
