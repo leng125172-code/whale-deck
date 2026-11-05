@@ -57,7 +57,7 @@ class RestoreCutTests(unittest.TestCase):
 
     def test_wrong_parent_private_inode_and_original_receipt_cannot_borrow_the_claim(self):
         path=self.f.base.state/(self.f.ref['operationId']+'.json');old=self.f.base.record(self.f.ref)
-        for change in (dict(owner='D'*64),dict(privateIdentity=[0,1]),dict(actualIdentity=[0]*9),dict(historyDigest='D'*64)):
+        for change in (dict(schemaVersion=2),dict(schemaVersion=True),dict(owner='D'*64),dict(privateIdentity=[0,1]),dict(actualIdentity=[0]*9),dict(historyDigest='D'*64)):
             path.write_text(json.dumps({**old,**change}));path.chmod(0o600)
             with self.subTest(change=change),self.assertRaises(AssertionError):cut.before_return_proof(self.record,self.folder)
         path.write_text(json.dumps(old));path.chmod(0o600)

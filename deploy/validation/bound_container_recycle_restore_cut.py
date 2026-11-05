@@ -63,6 +63,7 @@ def before_return_proof(record,folder):
     assert claim_proof(claim,request),'RESTORE_CUT_SOURCE_CLAIM_MISMATCH'
     original=private_record(SOURCE_STATE/(source['operationId']+'.json'))
     assert original is not None;fields(original,SOURCE_RECORD)
+    assert type(original['schemaVersion']) is int and original['schemaVersion']==1
     for key in ('operationId','owner','plan'):typed_equal(original[key],source[key])
     if original['state']!='Trashed':return None
     assert original['historyMayExist'] is original['historyVerified'] is True and original['historyDigest']==record['historyDigest']
