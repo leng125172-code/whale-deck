@@ -50,7 +50,7 @@ def verify(name,live=False):
         typed_equal(private_json(e/'after.json'),baseline(s['revision']))
     verify_restart(e,f,p['sql']['row'],private_json(e/'before.json'),baseline(s['revision']))
     typed_equal(private_json(e/'prior-business.json'),old_rows(f['containerId']))
-    return dict(independent=True,sourceReread=live,hddReread=True,exactHelperExit=True,restoredBeforeLateCancel=True,terminalCompleted=True)
+    return dict(independent=True,sourceReread=live,hddReread=True,exactHelperExit=True,originalReturnedBeforeWorkerCrash=True,terminalCompleted=True)
 
 
 if __name__=='__main__':
