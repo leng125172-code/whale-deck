@@ -43,9 +43,14 @@ def idle():
 
 
 def old_rows(container):
+    """Hash every column of every other intent, keeping the read bounded.
+
+    Full row JSON now exceeds the shared 64KiB SQL transport limit. SHA256 is
+    computed over PostgreSQL's complete to_jsonb text, never a chosen subset.
+    """
     assert re.fullmatch('[a-f0-9]{64}',container)
-    return query('''SELECT json_build_object('sources',(SELECT COALESCE(json_agg(to_jsonb(c) ORDER BY id),'[]'::json) FROM container_recycle_intents c WHERE container_id<>:'cid'),
-    'restores',(SELECT COALESCE(json_agg(to_jsonb(c) ORDER BY id),'[]'::json) FROM container_recycle_restore_intents c WHERE container_id<>:'cid'));''',cid=container)
+    return query('''SELECT json_build_object('sources',(SELECT COALESCE(json_agg(json_build_object('id',id,'sha256',encode(sha256(convert_to(to_jsonb(c)::text,'UTF8')),'hex')) ORDER BY id),'[]'::json) FROM container_recycle_intents c WHERE container_id<>:'cid'),
+    'restores',(SELECT COALESCE(json_agg(json_build_object('id',id,'sha256',encode(sha256(convert_to(to_jsonb(c)::text,'UTF8')),'hex')) ORDER BY id),'[]'::json) FROM container_recycle_restore_intents c WHERE container_id<>:'cid'));''',cid=container)
 
 
 def prove_result(value,fixture,source,e,*,create=False):
