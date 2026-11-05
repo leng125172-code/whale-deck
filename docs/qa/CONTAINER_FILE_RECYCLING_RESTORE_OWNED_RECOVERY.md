@@ -33,3 +33,5 @@
 首轮自有留存的人工归位与清理已结束。接下来实现独立永久恢复业务：只从可授权的原回收意图解析不可变完整来源/HDD摘要，新意图与新Job独立确认、实时授权/取消/租约、原执行Inspect优先、Unknown保护与回执归属；再真实PG/共享写保护/Worker/API/Vue和真人恢复整链、完整故障矩阵、长期清理及其余59项。当前仍无该独立业务Repository/Domain意图/Dispatcher/API，不能把已有Gateway当成完成。完整主项0/59、阶段0/6、25%–35%工作量粗估和AI子计划0%保持，17项移出不算完成。
 
 项目图谱whale-deck/container-recycle已按稳定eventId回执同步active，pending移入synced；未标整项或阶段完成。
+
+2026-11-06后续：本记录所述当时尚无的Domain意图与编排，已形成[内部业务候选](CONTAINER_FILE_RECYCLING_RESTORE_BUSINESS.md)并通过单元验证；仍无具体持久化Repository/EF迁移或运行时工作流、实际PG及页面证据。本记录原文按当时边界保留。
