@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+- 2026-11-06 独立恢复内核候选da00d990已实现并验证：新ID/journal、原来源/留存inode/HDD摘要预检、持久来源claim、独立Discard及不续做恢复；六个真实自有子进程SIGKILL切点、原子不覆盖和丢记录不冒认成功通过。configured claims目录缺失及矛盾记录边界已收紧，旧传输固定claim路径/错误映射与安装声明已接。23新/48原生组/579原生回归/93工具/215 C#/8范围通过，176证据含162源码；2346保护/11核心/Root28-HDD31/目录96及生产58保持，新namespace未安装。仅原实例临时I/O/显式存活与HDD证明替身，未签专用协议、永久业务或UI实机；继续该链及59项，不升完成率。[候选、发现与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_KERNEL.md)。
+
 - 2026-11-05 回收Unknown跨容器目录延期/释放已实机通过：2507c6a5，全新两容器、另一管理员真实计划/登记，四次自然延期版本2/4/6/8且目录/Root回执缺席、原Unknown/保护/Outbox1/Root-HDD/移位原件保持；暂不处置不释放，唯一ACK后4.914秒同一目录ID开始并Succeeded，实际inode/1000:1000/0750及原页面可见。93工具/8范围，155证据/102源码，清理前后两业务独立核验和精确清理通过；目录Root94→96仅本ID两项，回收Root26→28/HDD29→31、2346保护/11核心及旧失败partial保持。仅签该writer配对，继续独立恢复/长期清理及59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_CROSS_DIRECTORY.md)。
 
 - 2026-11-05 回收同CID实例变化+正常退出Unknown组合已新资源实机通过：05fc50c4，PID1417914→1419903、CID/镜像/挂载/安全预算保持，宿主及新命名空间原文件九字段/字节属性保持；原helper7.723秒退出（含重启与随后退出）。Unknown/Running/保护和Outbox1保持，另一管理员暂不处置后全快照不变，再唯一ACK至Acknowledged/Job Failed/Outbox0；原绑定、null源事实及Root-HDD保持，ACK后新实例仍活。86工具/8范围、143证据/102源码、页面/审计/权限拒绝/两次退出及清理前后独立通过，Root24→26/HDD27→29、2346保护/11核心保持。仅签该组合，继续跨写入、独立恢复及59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_INSTANCE_CHANGE.md)。
