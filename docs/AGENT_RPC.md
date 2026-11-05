@@ -1,5 +1,7 @@
 # WhaleDeck Agent RPC 契约
 
+2026-11-05：1.56协议候选3725aa7的CI已12路成功。回收独立原生探针和wire/Root/HDD证明已冻结，自包含包通过；当前1.55的专属能力拒绝已只读验证，操作帧0，不代表安装态RPC成功。固定当前进程规划和原operation/恢复新job绑定，安装父门禁与实机操作继续待验。[探针与准确边界](qa/CONTAINER_FILE_RECYCLING_PROBE.md)。
+
 2026-11-05：**候选协议1.56，尚未安装**。新增`ContainerRecycleService` Plan/Apply/Inspect/Discard/Restore及`docker.files.recycle`，完整请求/消息类型与方法独立签名，Unknown源事实用optional bool保留未证明；Restore携带新job并引用原Root记录。SDK明确协商1.56能力，固定helper先绑定Ready Invocation再提交正文，原件丢失/取消以围栏和Unknown处理。5149 Unit/518工具/141安装检查通过，均不能替代安装态签名RPC与真实业务页面；当前运行版本仍34153d2。[候选协议与准确验收边界](qa/CONTAINER_FILE_RECYCLING_RPC.md)。
 
 2026-11-04 b880208六组件及实际运行映射同源、安装核验通过；不增加协议/能力。新真实取消止于预检，无execution或Root/HDD写入，不能称为新的Agent Discard/进行中中断验收。旧153/98HDD保持，真实进行中矩阵仍待。[覆盖、真实取消和认证补验及边界](qa/CONTAINER_RECURSIVE_ACL_AUTH_RELEASE.md)。
