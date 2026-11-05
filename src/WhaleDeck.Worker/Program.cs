@@ -37,6 +37,7 @@ builder.Services.AddHostedService<ContainerRecursivePermissionWorker>();
 builder.Services.AddHostedService<ContainerRecursiveOwnershipWorker>();
 builder.Services.AddHostedService<ContainerRecursiveAclWorker>();
 builder.Services.AddHostedService<ContainerRecursiveAclRestoreWorker>();
+builder.Services.AddHostedService<ContainerRecycleWorker>();
 builder.Services.AddHostedService<ContainerMoveWorker>();
 builder.Services.AddHostedService<FileMutationWorker>();
 builder.Services.AddHostedService<FileArchiveWorker>();

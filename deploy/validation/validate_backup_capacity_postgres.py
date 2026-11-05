@@ -151,6 +151,7 @@ def run_native(suite, report):
                 assert 'container-recursive-acl-restore-persistent-manifest-partial-unknown-immutable-both-fences-audited' in phases, 'Recursive ACL restore persistence boundaries were not executed'
             if suite == 'dispatch':
                 assert 'recursive-acl-restore-flat-unknown-ack-original-facts' in phases, '26-object Unknown/ACK persistence boundaries were not executed'
+                assert 'container-recycle-persistent-original-facts-nullable-unknown-twelve-peer-fences-audited' in phases, 'Recycle persistence boundaries were not executed'
             report.update(executedTests=1, passedTests=1, nativePhases=phases, stage='cleanup')
             if suite == 'capacity':
                 print(json.dumps({'nativeBackupCapacityPostgres': 'passed', 'database': 'isolated-and-migrated',
