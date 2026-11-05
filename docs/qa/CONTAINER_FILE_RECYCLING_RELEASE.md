@@ -1,4 +1,20 @@
-# 容器回收版本发布前置与四镜像预构建
+# 容器回收标准覆盖与生产迁移核验
+
+2026-11-05后续：准确58b8174eb1b0d67ca4b0d307fb8adeed568c5a33的CI42017763151已completed/success，12路全部成功（六浏览器分片及frontend聚合均包含）。已显式执行一次标准update：unit whaledeck-dev-recycle-a6a446a40554，Invocation e0ed9c9ec2084cc5a41dc70ac20bcebb，exited/0。未自动回滚dev。
+
+实际六组件（Agent/MaintenanceHost/API/Worker/Gateway/Migrator）、真实HTTP及宿主/proc可执行文件与DLL映射均对齐58b8174。三个应用容器实际替换，八个数据库平台容器原ID/镜像/StartedAt保持，11核心healthy。发布账本current=58b8174、previous=34153d2、pending为空；previous指之前完整发布，不把宿主分项3725aa7冒充完整版本。
+
+生产migration20261105101619_ContainerRecycleIntents已存在，CHECK18/fence13/guard1实际查询通过，新意图0/活动0。2346保护文件内容仅发布账本改变，另限定四项正常安装元数据变化；能力key除ctime外身份不变、内容不变，开发用户NOPASSWD:ALL保持。旧来源/恢复/目录/回收Root-HDD及指定业务计数不变。通用回收业务已上线，但尚未创建真实人类用户的回收任务。
+
+ContainersView/FilesView/JobsView三个实际HTTP资源分别233414/338784/29687字节，与Gateway容器文件逐字节一致。两个匿名回收GET均401、业务写0。原生探针对新Agent只发首行和quit，实际能力响应minor56、stderr空、未发Plan/Apply/Restore等操作帧；合成资源header未创建容器，不将能力读取当作真实业务或身份验收。
+
+维护入口以两秒间隔采样78次、约154.5秒，全200；不证明瞬时零中断。主发布与观测unit终态均成功，后置host validate、原件/业务保持及生产约束核对通过。此前203/EXEC预构建启动错误及18文件子封存保留。
+
+私有总封存container-recycle-release-eaa62cd784ff41aab773749d762a316c共60文件（含原18文件子封存），RELEASE_EVIDENCE_SHA256.json摘要53da2ef35e1d0648d7fb3678312d80975cbaceb95e5b05ee2e942f3330ddceba；含完整CI回执、标准发布/观测/后置证明、实际资源、能力和准确边界。
+
+下一步以全新自有资源和临时真实Authentik身份，验收Vue→Job→Agent→文件/HDD常规整链、原引用/权限/退出，再完整故障矩阵。独立恢复业务、完整元数据/目录、长期清理及其余59项继续；25%–35%粗估、整项/阶段签收和AI子计划0%保持。
+
+## 此前发布前置记录（原文保留，仅代表当时事实）
 
 2026-11-05，目标准确提交58b8174eb1b0d67ca4b0d307fb8adeed568c5a33，包含[回收Job摘要候选](CONTAINER_FILE_RECYCLING_JOB_RESULTS.md)。本批完成运行目录fast-forward、四镜像预构建与内部身份核验，以及发布/后置核验脚本准备；CI尚未全终态，未执行标准覆盖、生产迁移或真实回收任务。
 
