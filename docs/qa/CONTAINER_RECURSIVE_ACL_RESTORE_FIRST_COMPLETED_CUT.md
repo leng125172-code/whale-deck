@@ -15,3 +15,6 @@
 关联112项root工具测试通过、零跳过。新增2个真实临时文件系统测试，在AfterEntry检查点读取实际Applying首项原件，再取得取消后的Partial，证明这两类证据不能互换；既有Partial原件8项、原首写前/业务/任务摘要测试保持。另有4项观察器范围/流程检查，使用显式进程替身，覆盖阶段/类型/26对象范围、拒绝旧归档或非自有路径、成功移交pidfd及物理证明失败后SIGCONT/关闭资源。这4项没有对工作站真实helper发信号，不算安装态边界命中。
 
 4个Python AST、CI YAML及diff检查通过。临时ACL、存储格式原件与容器会话仍为已声明隔离夹具，未取得26对象安装态Partial、真实Authentik/SQL/任务页、不同管理员处置或前后独立进程证据。不能据本候选提高主任务/阶段完成率。下一步在全新资源中接正常取消、Partial Jobs及管理员处置整链，明确处理错过边界、原任务排空和准确清理；第二项已启动形态、Unknown、删除/长期清理、维护连续性及其他59项继续。旧维护失败和源/HDD同device限制保留。
+
+
+收尾：项目图谱事件whale-deck.container-acl.ddc5c9f.restore-first-completed-cut已取得project/key/event匹配且duplicate=false回执，pending移入synced，阶段active。范围8项、752本地链接/缺失0与diff检查通过；不将测试替身信号流程计为工作站实际helper验收。
