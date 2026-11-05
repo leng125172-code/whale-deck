@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-06独立回收恢复常规真实整链已通过：32146117全新资源/临时真实Authentik身份，Vue来源回收→Ready取消→另建恢复成功、17字段Jobs/原inode/HDD、普通9/匿名5拒绝、两次双端退出与5旧引用隔离，清理前后独立通过。首轮jsonb/退出诊断失败及新意图API收尾保留；2346保护/11核心与3d80部署保持，Root36-HDD39/恢复Root11。执行中故障、长期清理及59项继续，不升整项完成率。[真实页面与失败边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_REAL_UI.md)。
+
 2026-11-06独立回收恢复已标准覆盖：准确3d80d17的CI12项全成功，六组件/HTTP及生产迁移1/CHECK19/fence14/guard1通过；新意图/活动0，旧16回收行、2346保护内容和八数据库原身份按边界保持。55维护采样全200不签瞬时连续，三真实资源一致/匿名401；尚无本批真实身份恢复任务，继续Vue/Jobs/原inode/HDD整链、故障及长期清理和59项。[发布与准确边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_RELEASE.md)。
 
 2026-11-06独立恢复Jobs摘要候选：f08d53e3固定17字段、原回收/本恢复ID派生校验、Unknown/null归属及迟到证明处置、任务服务和Vue白名单已接；5463 Unit/741 Integration（7默认原生跳过）、1369前端单元/4构建预览组合/真实隔离PG投影与8范围通过。原失败保留，生产保持未部署；继续准确CI、标准发布和真实身份文件HDD任务页整链。[摘要与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_JOB_RESULTS.md)。

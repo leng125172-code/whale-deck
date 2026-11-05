@@ -1,5 +1,7 @@
 # 独立回收恢复：标准覆盖与生产迁移
 
+2026-11-06后续：全新资源常规真实身份/Vue/Jobs/原inode/HDD整链及Ready取消已分项通过，首轮工具失败与API收尾保留，见[实机记录](CONTAINER_FILE_RECYCLING_RESTORE_REAL_UI.md)。本页以下保留发布当时尚未执行业务的事实；不补签完整故障矩阵。
+
 2026-11-06，准确提交 `3d80d17b7b68c1fd6909a3ff6220b5381217eac7` 已通过 [CI 42104459496](https://github.com/leng125172-code/whale-deck/actions/runs/42104459496)：completed/success，12 个预期检查全部成功，包含 6 个浏览器分片及 frontend 聚合。随后显式执行一次标准维护 update，未自动回滚 dev。
 
 发布 unit `whaledeck-dev-recycle-restore-edffb4451c88`，Invocation `d32836b24a694883b6172bfe30ee24a3`，最终 exited/0。运行目录仅以仓库用户 fast-forward 到准确提交，保留私有配置；只读 Git 使用 GIT_OPTIONAL_LOCKS=0。发现的运行目录 index 归属异常只修正该文件，未递归修改仓库或私有证据权限。
