@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-06独立恢复实时移组/停用两场景已实机通过：146ce5f7两轮全新资源准确Applying/三FD/当前HDD切点，只改对应临时所有者且确认前后原helper仍活，原pidfd2.951/2.877秒退出；取消/原退出POST0，Canceled/Aborted、来源Trashed/未恢复，claim清除、Outbox0。403失权页/登录页、提示清除、另一管理员只读原Job、普通9匿名5拒绝与清理前后独立通过；87工具/8范围，初稿语法失败保留，2346保护/11核心与3d80保持，Root44-HDD47/恢复Root19。继续重启/Unknown等矩阵和59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_REVOCATION.md)。
+
 2026-11-06独立恢复执行中正常退出已实机通过：5ac8641c全新资源准确Applying三FD/原件/HDD切点，原helper存活时观察真实BFF退出POST，原pidfd约3.170秒退出（放行前起计）；取消POST/审计0且取消时间空，Canceled/Aborted、来源Trashed/本操作未恢复。两次Cookie/OIDC退出、重登三旧引用404/历史读取200、原Job/权限与清理前后独立通过；65工具/8范围，2346保护/11核心及3d80保持，Root40-HDD43/恢复Root15。继续撤权、重启等矩阵与59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_INFLIGHT_LOGOUT.md)。
 
 2026-11-06独立恢复执行中写前取消已实机通过：91b5b16d全新资源真实Auth/Vue确认后，原helper经三内核FD/Invocation/claim及当前SQL/原件/HDD匹配暂停；页面唯一取消，原pidfd约3.272秒退出（计时始于放行前），Canceled/Aborted、来源仍Trashed/本操作未恢复、claim清除、Outbox0。原Job/普通9匿名5拒绝/两次双端退出及清理前后独立通过；55工具/8范围，2346保护/11核心及3d80保持，Root38-HDD41/恢复Root13。仅此切点，继续其余故障/长期清理和59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_INFLIGHT_CANCEL.md)。

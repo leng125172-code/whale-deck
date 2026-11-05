@@ -1,5 +1,7 @@
 # 独立恢复：执行中正常双端退出
 
+2026-11-06后续：两轮全新来源的实时移组/停用已另行实机验收，原用户取消与退出POST均0，见[撤权记录](CONTAINER_FILE_RECYCLING_RESTORE_REVOCATION.md)。本页保留正常退出的原始边界，不混用触发原因或补签剩余故障。
+
 2026-11-06，冻结工具 `5ac8641c65a5a24d64b4ba028c5f8c5651dcd79b`，在保持3d80d17的实际部署上，以全新自有容器、来源及临时真实Authentik管理员，完成Applying写入前切点的正常退出验收。没有点击或调用任务取消、模拟响应、注入会话、修改业务数据库或重放旧Apply。
 
 门禁 `whaledeck-qa-restore-inflight-logout-first`，Invocation `a3825b1e48cd4aa99e1c8920f6f203e7`，exited/0；清理前后两个独立进程均passed。4项新专项结合既有退出/切点/协议/原件检查共65项通过，Linux root零跳过；8范围及Python/Node语法通过。本批只签这个切点与正常退出组合，不签完整故障矩阵。
