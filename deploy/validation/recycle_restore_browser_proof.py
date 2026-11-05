@@ -6,12 +6,20 @@ reopen the installed journals/HDD and separately prove the original inode.
 import hashlib
 import uuid
 from acl_history_browser_proof import typed_equal
-from container_recycle_restore_rpc_proof import fields, native_plan_proof, proto_receipt
+from container_recycle_restore_rpc_proof import fields, native_plan_proof, proto_receipt, unique_json
 from validate_container_recycle_browser import native_plan as source_plan
 
 SOURCE_FIELDS = ('SchemaVersion', 'Command', 'TargetProof', 'ParentIdentity', 'ParentVersion', 'OwnerUid', 'OwnerGid', 'Fingerprint', 'SourceIdentity', 'SourceChangedAtUnixNs', 'Sha256', 'Attributes')
 IDENTITY = ('Device', 'Inode', 'Mode', 'OwnerUid', 'OwnerGid', 'LinkCount', 'SizeBytes', 'ModifiedAtUnixNs')
 SUMMARY = ('schemaVersion', 'intentId', 'jobId', 'sourceIntentId', 'sourceOperationId', 'stage', 'state', 'code', 'receiptState', 'sourceState', 'bindingCurrent', 'sourceRetained', 'sourceRestored', 'restoredByThisOperation', 'historyVerified', 'historyAvailable', 'publishBarrier')
+
+
+def stored_object(value):
+    # PostgreSQL to_jsonb projects a jsonb column as an object, while text
+    # columns and HTTP resultJson retain strings. Neither may discard fields.
+    if type(value) is str:value=unique_json(value)
+    assert type(value) is dict
+    return value
 
 
 def guid(value):

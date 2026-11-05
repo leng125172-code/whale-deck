@@ -2,9 +2,9 @@
 
 Pure fixture tests do not establish installed identity, RPC or HDD acceptance.
 """
-import copy,unittest,uuid
+import copy,unittest,uuid,json,subprocess,sys
 from pathlib import Path
-from recycle_restore_browser_proof import managed_plan,managed_receipt,job_summary,execution
+from recycle_restore_browser_proof import managed_plan,managed_receipt,job_summary,execution,stored_object
 from test_container_recycle_restore_rpc_proof import plan,rehash,receipt
 from test_container_recycle_browser_scope import managed as managed_source
 from container_recycle_restore_rpc_proof import native_plan_proof
@@ -17,6 +17,21 @@ def managed(p):
 
 
 class RestoreBrowserProofTests(unittest.TestCase):
+    def test_postgres_jsonb_objects_and_http_strings_keep_the_same_job_facts(self):
+        value={'intentId':'10000000-0000-0000-0000-000000000001','restoredByThisOperation':None}
+        self.assertEqual(stored_object(value),stored_object(json.dumps(value)))
+        for bad in ('[]','{"state":"Ready","state":"Succeeded"}','{"fact":NaN}',[],None):
+            with self.subTest(bad=bad),self.assertRaises(AssertionError):stored_object(bad)
+
+    def test_stubborn_owned_browser_child_is_killed_without_waiting_forever(self):
+        from validate_container_recycle_restore_browser import stop_browser
+        child=subprocess.Popen([sys.executable,'-c','import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print("ready",flush=True);time.sleep(30)'],stdout=subprocess.PIPE,text=True)
+        try:
+            self.assertEqual(child.stdout.readline().strip(),'ready');stop_browser(child,.1);self.assertIsNotNone(child.poll())
+        finally:
+            if child.poll() is None:child.kill();child.wait(timeout=2)
+            child.stdout.close()
+
     def test_managed_plan_preserves_uint64_nanoseconds_and_source_domain(self):
         p=plan();p['privateIdentity']=[0,2**64-1];p['retainedIdentity'][8]=2**63-1;rehash(p)
         value=managed_plan(managed(p));self.assertEqual(p,value);native_plan_proof(value)

@@ -20,7 +20,7 @@ from validate_databases import Api
 from validate_metric_continuity import query
 from acl_source_apply_missing_proof import source_closure
 from acl_history_browser_proof import typed_equal
-from recycle_restore_browser_proof import execution,managed_plan,managed_receipt,job_summary,guid
+from recycle_restore_browser_proof import execution,managed_plan,managed_receipt,job_summary,guid,stored_object
 
 SOURCES=('validate_container_recycle_restore_browser.py','validate_container_recycle_restore_browser.mjs','verify_container_recycle_restore_browser.py','recycle_restore_browser_proof.py','test_recycle_restore_browser_proof.py')
 
@@ -58,7 +58,7 @@ def prove_result(value,fixture,source,e,*,create=False):
     assert plan['command']['historyDigest']==value['sourceHistoryDigest']==source['receipt']['historyDigest']
     assert r['state']==value['state'] and r['completed_at_utc'] and not r['publish_barrier'] and r['lease_token'] is r['lease_expires_at_utc'] is None
     assert data['pending']==0 and data['accepted']==1 and data['planJob']['state']=='Succeeded' and value['confirmation'] is None
-    typed_equal(json.loads(data['planJob']['result_json']),job_summary(json.loads(data['planJob']['result_json']),r,execution_stage=False))
+    typed_equal(stored_object(data['planJob']['result_json']),job_summary(stored_object(data['planJob']['result_json']),r,execution_stage=False))
     typed_equal(source_ui.sql(r['source_intent_id']),source['sql'])
     if r['state']=='Canceled':
         assert r['execution_job_id'] is r['root_started_at_utc'] is r['receipt_json'] is r['root_state'] is None
@@ -76,7 +76,7 @@ def prove_result(value,fixture,source,e,*,create=False):
     q=dict(operationId=uuid.UUID(op).hex,owner=r['owner_hash'],plan=plan);receipt=managed_receipt(value['receipt'],q)
     assert r['history_digest']==receipt['historyDigest']==plan['command']['historyDigest']
     stored=json.loads(r['receipt_json']);typed_equal({k[0].lower()+k[1:]:v for k,v in stored.items()},value['receipt'])
-    job_summary(json.loads(data['executionJob']['result_json']),r,execution_stage=True)
+    job_summary(stored_object(data['executionJob']['result_json']),r,execution_stage=True)
     records=restore_io.read_operation(q,receipt,e/'restore-originals',create=create)
     physical=source_io.physical(Path(fixture['folder']),uuid.UUID(source_op).hex)
     restore_io.physical_proof(physical,fixture['original'],records,receipt)
@@ -105,6 +105,18 @@ def denied(fixture,value):
 def independent(repo,e,live):
     with (e/('independent-live.log' if live else 'independent-final.log')).open('x') as out:
         subprocess.run([sys.executable,str(repo/'deploy/validation/verify_container_recycle_restore_browser.py'),e.name]+(['--live'] if live else []),check=True,stdout=out,stderr=subprocess.STDOUT,timeout=90)
+
+
+def stop_browser(process,grace=3):
+    """Stop only this owning Popen child; never signal a product process."""
+    if process.poll() is not None:return
+    try:process.terminate()
+    except ProcessLookupError:pass
+    try:process.wait(timeout=grace)
+    except subprocess.TimeoutExpired:
+        try:process.kill()
+        except ProcessLookupError:pass
+        process.wait(timeout=grace)
 
 
 def main(revision):
@@ -147,8 +159,13 @@ def main(revision):
                                 save(phase+'-accepted.json',dict(id=value['id']))
                             assert time.monotonic()<deadline,'REAL_RESTORE_BROWSER_DEADLINE';time.sleep(.1)
                         assert process.returncode==0,'REAL_RESTORE_BROWSER_FAILED'
+                    except BaseException as primary:
+                        import traceback
+                        save('browser-primary-failure.json',dict(type=type(primary).__name__,frames=[dict(file=Path(t.filename).name,line=t.lineno,function=t.name) for t in traceback.extract_tb(primary.__traceback__)]))
+                        raise
                     finally:
-                        if process.poll() is None:process.terminate();process.wait(timeout=10)
+                        try:stop_browser(process)
+                        except BaseException as cleanup:save('browser-stop-failure.json',dict(type=type(cleanup).__name__,pid=process.pid))
                 assert source and cancel and success and (e/'browser.stdout').stat().st_size<16384 and (e/'browser.stderr').stat().st_size<16384
                 browser=json.loads((e/'browser.json').read_text());assert browser['normalDualLogout'] and browser['actualUi'] and browser['reloginOriginalReferencesDenied']==5
                 save('fixture.json',fixture);denied(fixture,browser['completed'][1]);independent(repo,e,True)

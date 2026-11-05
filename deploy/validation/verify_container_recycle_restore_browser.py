@@ -17,7 +17,7 @@ from container_recycle_rpc_proof import record_proof as source_record_proof
 from recursive_acl_restore_agent_io import read_at
 import container_recycle_agent_io as source_io
 import container_recycle_restore_agent_io as restore_io
-from recycle_restore_browser_proof import execution,managed_plan,managed_receipt,job_summary
+from recycle_restore_browser_proof import execution,managed_plan,managed_receipt,job_summary,stored_object
 
 
 def verify(name,live=False):
@@ -42,7 +42,7 @@ def verify(name,live=False):
         assert (row['container_id'],row['instance_id'],row['relative_path'])==(f['containerId'],f['instanceId'],'work/recycle-rpc.bin')
         assert not row['publish_barrier'] and row['lease_token'] is row['lease_expires_at_utc'] is None and proof['sql']['pending']==0
         plan=managed_plan(json.loads(row['plan_json']));typed_equal(plan['command']['source'],source['request'])
-        job_summary(json.loads(proof['sql']['planJob']['result_json']),row,execution_stage=False)
+        job_summary(stored_object(proof['sql']['planJob']['result_json']),row,execution_stage=False)
         if phase=='cancel':
             assert row['state']=='Canceled' and row['execution_job_id'] is row['root_started_at_utc'] is row['receipt_json'] is None
             assert proof['sql']['confirmed']==0 and proof['sql']['canceled']==1 and not row['history_verified']
@@ -53,14 +53,14 @@ def verify(name,live=False):
             assert row['binding_current'] is row['source_restored'] is row['restored_by_this_operation'] is row['history_verified'] is True
             assert row['source_retained'] is False and proof['sql']['confirmed']==1
             typed_equal(proof['request']['plan'],plan);typed_equal(managed_receipt(dto['receipt'],proof['request']),proof['receipt'])
-            job_summary(json.loads(proof['sql']['executionJob']['result_json']),row,execution_stage=True)
+            job_summary(stored_object(proof['sql']['executionJob']['result_json']),row,execution_stage=True)
     assert private_json(e/'source-accepted.json')['id']==b['source']['id']
     for key,name in [('root','restore-root.json'),('claim','source-claim.json'),('sourceRoot','source-root.json'),('history','source-hdd.json')]:
         _,value,_=read_at(None,str(e/'restore-originals'/name));typed_equal(value,success['records'][key])
     record_proof(success['request'],success['receipt'],success['records']['root'],success['records']['claim'],success['records']['sourceRoot'],success['records']['history'],data_sha256=success['records']['data']['sha256'],data_size=success['records']['data']['sizeBytes'])
     typed_equal(restore_io.read_operation(success['request'],success['receipt'],e/'restore-originals'),success['records'])
     for http,job in zip(b['jobProofs'],(cancel['sql']['planJob'],success['sql']['executionJob']),strict=True):
-        assert http['id']==job['id'] and http['state']==job['state'];typed_equal(json.loads(http['resultJson']),json.loads(job['result_json']))
+        assert http['id']==job['id'] and http['state']==job['state'];typed_equal(json.loads(http['resultJson']),stored_object(job['result_json']))
     folder=Path(f['folder']);assert folder.parent==common.APPS and folder.name==f['containerName'] and re.fullmatch('wdv-container-publish-[a-f0-9]{32}',folder.name)
     if live:
         c=json.loads(common.command(['docker','inspect',f['containerId']]))[0];verify_container(c,f['containerId'],f['containerName'],folder)
