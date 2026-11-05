@@ -141,6 +141,12 @@ def recycling_type(directory_type):
             if self.r.protected(value['path'],self.f) or any(n.startswith('.whaledeck-') for n in value['path'].split('/')):self.reject('PROTECTED')
             if type(value['expectedVersion']) is not str or not re.fullmatch('[A-F0-9]{64}',value['expectedVersion']):self.reject('VERSION_INVALID')
 
+        @contextlib.contextmanager
+        def parent(self, plan, session):
+            with super().parent(plan,session) as parent:
+                if 'uid' in plan and tuple(self.p.owner(session))!=(plan['uid'],plan['gid']):self.reject('OWNER_CHANGED')
+                yield parent
+
         @staticmethod
         def metadata(i):return [i.st_dev,i.st_ino,i.st_mode,i.st_uid,i.st_gid,i.st_nlink,i.st_size,i.st_mtime_ns,i.st_ctime_ns]
 
@@ -299,6 +305,11 @@ def recycling_type(directory_type):
                         self.history.verify(request,record['historyDigest']);self.guard(c,session,plan['targetProof'])
                         with self.parent(plan,session):pass
                         record.update(state='Restoring',actualIdentity=None);self.save(state,record);self.checkpoint('Restoring')
+                        with self.parent(plan,session):pass
+                        verified_private=self.private(parent,record)
+                        try:
+                            if self.probe_file(verified_private,record['operationId']+'.trash',plan,session)!=actual:self.reject('SOURCE_CHANGED')
+                        finally:os.close(verified_private)
                         self.f.exchange(private,record['operationId']+'.trash',parent,c['path'].rsplit('/',1)[-1],1);os.fsync(private);os.fsync(parent);self.checkpoint('RestoredNamespace')
                     finally:os.close(private)
                 self.recover(state,record,session);return self.public(record,session,False)

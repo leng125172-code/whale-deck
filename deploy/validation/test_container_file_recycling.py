@@ -198,5 +198,17 @@ class LinuxContainerRecycleTests(unittest.TestCase):
             self.assertIsNone(r['sourceRetained']);self.assertIsNone(r['sourceRestored'])
         self.assertEqual(self.leaf.read_bytes(),b'late foreign source');self.assertEqual(self.retained(q).read_bytes(),self.content)
 
+    def test_changed_executor_or_private_directory_cannot_authorize_restore(self):
+        q=self.request();self.engine.apply(q,self.session)
+        with patch.object(self.engine.p,'owner',return_value=(2109,3109)):
+            with self.assertRaisesRegex(self.r.Rejected,'OWNER_CHANGED'):self.engine.restore(q,self.session)
+        self.assertFalse(self.leaf.exists());self.assertEqual(self.retained(q).read_bytes(),self.content)
+        def replace_private(phase):
+            if phase=='Restoring':
+                private=self.root/self.engine.PRIVATE;private.rename(self.root/'retained-original');private.mkdir(mode=0o700)
+        self.engine.checkpoint=replace_private
+        with self.assertRaisesRegex(self.r.Rejected,'PRIVATE_CHANGED'):self.engine.restore(q,self.session)
+        self.assertFalse(self.leaf.exists());self.assertEqual((self.root/'retained-original'/(q['operationId']+'.trash')).read_bytes(),self.content)
+
 
 if __name__=='__main__':unittest.main()
