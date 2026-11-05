@@ -1,5 +1,7 @@
 # 当前完成比例与代码量估算
 
+2026-11-06独立恢复写后切点候选f2d556bd已验证：仅本Root Applying/原来源已Restored/精确claim与原inode回归且trash缺席可计切点，沿用固定进程/三FD/pidfd与停后重验；11新/116关联root零跳过，真实临时rename+SourceReturned自有子进程SIGKILL与局部恢复Completed/不重做rename通过。HDD/存活有明确替身，未做安装RPC或真实页面写后；只读拒绝8终态、2346保护/11核心和旧业务Root-HDD保持，生产信号/RPC/身份变更0。接全新资源实机写后与Unknown等矩阵/长期清理及59项。[候选与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_RETURNED_CUT.md)。
+
 2026-11-06独立恢复Worker强杀/Agent重启已分别实机通过：88b1d2bf全新来源准确Applying/三FD/当前HDD切点，原helper0.114/0.013秒退出；Worker同容器镜像恢复，原租约自然84.681秒/40样本后同执行Failed/Aborted、不改SQL时钟，来源Trashed/未恢复。Agent新PID且维护PID保持，153实际维护样本全200不签瞬时连续。原Job/权限/双端退出及清理前后独立通过；105工具/8范围，2346保护/11核心保持，Root48-HDD51/恢复Root23。继续Unknown等矩阵/长期清理与59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_RESTARTS.md)。
 
 2026-11-06独立恢复实时移组/停用两场景已实机通过：146ce5f7两轮全新资源准确Applying/三FD/当前HDD切点，只改对应临时所有者且确认前后原helper仍活，原pidfd2.951/2.877秒退出；取消/原退出POST0，Canceled/Aborted、来源Trashed/未恢复，claim清除、Outbox0。403失权页/登录页、提示清除、另一管理员只读原Job、普通9匿名5拒绝与清理前后独立通过；87工具/8范围，初稿语法失败保留，2346保护/11核心与3d80保持，Root44-HDD47/恢复Root19。继续重启/Unknown等矩阵和59项。[实机与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_REVOCATION.md)。
