@@ -29,7 +29,12 @@ def browser_proof(b,fixture):
 def main(revision):
     assert os.geteuid()==0 and re.fullmatch('[a-f0-9]{40}',revision);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0';repo=Path(__file__).resolve().parents[2];assert not subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip();sha=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip();closure=source_closure(repo,sha,seeds=SOURCES)
     for n,h in closure.items():assert hashlib.sha256((repo/'deploy/validation'/n).read_bytes()).hexdigest()==h
-    preflight();before=baseline(revision);e=repo/'deploy/artifacts'/('container-recycle-unknown-'+uuid.uuid4().hex);e.mkdir(mode=0o700);save=lambda n,v:(e/n).write_text(json.dumps(v));save('before.json',before);save('source.json',dict(revision=revision,validationRevision=sha,validationSourceSha256=closure));print(json.dumps(dict(actualUnknown='started',evidence=e.name)),flush=True);held=None
+    preflight();before=baseline(revision);e=repo/'deploy/artifacts'/('container-recycle-unknown-'+uuid.uuid4().hex);e.mkdir(mode=0o700)
+    def save(n,v):
+        tmp=e/(n+'.tmp')
+        with tmp.open('x') as out:json.dump(v,out)
+        os.replace(tmp,e/n)
+    save('before.json',before);save('source.json',dict(revision=revision,validationRevision=sha,validationSourceSha256=closure));print(json.dumps(dict(actualUnknown='started',evidence=e.name)),flush=True);held=None
     try:
         with owned.fixture() as f:
             f['retain_unsettled']=True;leaf=f['folder']/'recycle-rpc.bin'

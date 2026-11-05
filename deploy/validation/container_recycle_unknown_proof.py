@@ -51,7 +51,7 @@ def displace(f, fixture, held):
 
 def acknowledgement_audit(execution):
     assert str(uuid.UUID(execution)) == execution
-    return query("SELECT json_build_object('count',count(*),'actors',coalesce(json_agg(actor_subject),'[]'::json)) FROM audit_events WHERE job_id=:'id'::uuid AND action='containers.files.recycle.unknown-acknowledged';", id=execution)
+    return query("SELECT json_build_object('count',count(*),'actors',coalesce(json_agg(actor_subject),'[]'::json),'entries',coalesce(json_agg(json_build_object('result',result,'targetType',target_type,'targetId',target_id,'tracePresent',length(trace_id)>0)),'[]'::json)) FROM audit_events WHERE job_id=:'id'::uuid AND action='containers.files.recycle.unknown-acknowledged';", id=execution)
 
 
 def prove(value, fixture, e, create=False):
@@ -75,7 +75,10 @@ def prove(value, fixture, e, create=False):
     result = job['result_json']; result = json.loads(result) if isinstance(result, str) else result
     assert len(result) == 14 and result['state'] == value['state'] and result['receiptState'] == 'Unknown' and result['sourceRetained'] is result['sourceRestored'] is None and result['publishBarrier'] is (not ack)
     audit = acknowledgement_audit(r['execution_job_id']); assert audit['count'] == (1 if ack else 0)
-    if ack: assert audit['actors'] == [r['acknowledged_by']] and r['acknowledged_by'] != r['actor_subject']
+    if ack:
+        assert audit['actors'] == [r['acknowledged_by']] and r['acknowledged_by'] != r['actor_subject']
+        assert audit['entries'] == [dict(result='Unknown',targetType='container',targetId=fixture['containerId'],tracePresent=True)]
+    else:assert audit['actors']==audit['entries']==[]
     return dict(sql=data, request=q, receipt=receipt, records=records, physical=current, displaced=moved, acknowledgementAudit=audit)
 
 
