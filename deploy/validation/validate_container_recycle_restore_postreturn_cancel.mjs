@@ -86,7 +86,7 @@ try {
   await page.getByRole('button', { name: '确认请求取消', exact: true }).click()
   const canceled = await cancellation; assert.equal(canceled.status(), 202)
   await writeSignal(evidence, 'cancel-response.json', { id: ready.id, status: canceled.status() })
-  await expect(dialog.getByText('恢复已取消', { exact: true })).toBeVisible({ timeout: 60_000 })
+  await expect(dialog.getByText('本次文件恢复已完成', { exact: true })).toBeVisible({ timeout: 60_000 })
   const result = await get(endpoint + '/' + ready.id)
   assert.equal(result.state, 'Succeeded'); assert.equal(result.executionJobId, pending.executionJobId)
   assert.equal(result.receipt.state, 'Completed'); assert.equal(result.receipt.sourceState, 'Restored')
