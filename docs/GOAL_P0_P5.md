@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-05 恢复任务结果ac90911标准覆盖完成：准确CI41935193964的12路全成功后，运行检出从eeb快进并仅一次固定maintenance update，六组件实际CLI/镜像/HTTP同源及两宿主exe/DLL映射通过，Agent2038743/维护2038753。11核心healthy/8数据库平台身份保持，1952保护仅账本内容变、四配置正常元数据更新且key仅ctime变，来源Root1570/恢复Root196-HDD132/目录94及业务账本保持、恢复13意图10执行/活动0；迁移/18CHECK/12fence/1guard与安装动态入口验证通过，NOPASSWD按授权保留，无回滚或旧任务重放。维护240样本239次200/1次ConnectionError，连续性未签；27证据封存。已部署仍待全新真实身份/任务页/文件/HDD摘要整链，再余故障、可恢复删除与59项，不提升完整完成率。[标准发布、数据保持及未验边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_JOB_RESULTS_RELEASE.md)。
+
 2026-11-05 RESTORE任务结果候选ac90911完成：26字段白名单/MAC绑定后快照、同事务持久化、Jobs安全投影及Vue事实展示，来源/计划/实际计数分列，缺回执保持null/未证明，处置保留原回执并接受无先前回执Unknown补获Completed/Partial/Aborted；旧规划Ready保持历史，不回填旧空结果或重放。5075 Unit/660 Integration（7默认原生跳过）、1292前端及8生产预览通过；准确ac真实隔离PG1/1/零跳过、两库/SDK清理与原子回滚/补获回执断言通过。36候选图/60证据封存，所有1952保护/来源Root1570/恢复Root196-HDD132/目录94及11核心/两宿主eeb24dd保持，恢复13意图10执行/活动0。规划TARGET_CHANGED及处置补获过严校验已修，夹具GUID与本地产物检查失败保留。身份/收据/UI接口为显式夹具，尚未部署新版或真实新任务摘要验收；继续准确CI、标准发布/整链和其余59项，不升主任务完成率。[摘要实现、PG与展示边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_JOB_RESULTS.md)。
 
 2026-11-05 RESTORE执行中正常双端退出新资源整链通过：a085e10冻结105源码，准确首写前pidfd/双FD/Invocation及HDD/完整实体验证后正常菜单退出，产品5.356秒结束原helper，Canceled/Aborted及五计数0/0/1/25/0、取消时间null/四审计无取消请求。原6匿名401、同Subject新登录原ID-key404/旧入口缺席、当前管理员回执和同Job终态页面/再次正常退出、普通6GET+2POST403/无私有审计/退出401、清理前后独立复核与准确清理通过。旧1898保护保持/总1952，来源Root1570/恢复Root196-HDD132/目录94，恢复13意图10执行/活动0，11核心healthy/两宿主eeb24dd保持，仅同Worker重启。84测试零跳过，164证据封存/旧四封存保持；只签本新资源分项，不补签479ffa9失败。仍需其余故障、恢复Job结构化结果展示、可恢复删除/长期清理、维护连续性和59项，源/HDD同device限制保留，不升主任务完成率。[真实退出、新登录隔离与边界](qa/CONTAINER_RECURSIVE_ACL_RESTORE_INFLIGHT_LOGOUT.md)。

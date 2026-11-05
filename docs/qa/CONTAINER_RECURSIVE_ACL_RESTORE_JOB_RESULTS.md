@@ -56,3 +56,6 @@ c166bd8真实隔离PG宏门禁执行1/通过1/零跳过，dispatch-9b31be3950724
 
 
 收尾：范围8检查再通过，变更MD的740个本地链接缺失0，diff通过，Git索引1000:1000/664。ac90911准确CI41935193964查询时仍in_progress，617a1f3旧CI41934293674已completed/success，不转签新候选。项目图谱事件whale-deck.container-acl.ac90911.restore-job-summary-candidate已获project/key/event匹配、duplicate=false成功回执，pending移入synced，阶段保持active。
+
+
+后续：ac90911已按准确成功CI标准覆盖并通过安装/数据保护核验；原候选与测试正文保留。见[发布事实及真实业务未验范围](CONTAINER_RECURSIVE_ACL_RESTORE_JOB_RESULTS_RELEASE.md)，不把部署技术核验转签为新任务摘要整链。
