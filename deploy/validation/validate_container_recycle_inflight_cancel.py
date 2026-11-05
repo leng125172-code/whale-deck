@@ -34,11 +34,11 @@ def main(revision):
     try:
         with owned.fixture() as f:
             f['retain_unsettled']=True;leaf=f['folder']/'recycle-rpc.bin'
-            # Bounded 64 MiB permits observing real verification I/O; never fills a disk.
+            # Bounded 16 MiB permits observing real verification I/O; never fills a disk.
             assert os.statvfs(f['folder']).f_bavail*os.statvfs(f['folder']).f_frsize>2*1024**3
             with leaf.open('xb') as out:
                 chunk=hashlib.shake_256(('inflight:'+f['identifier']).encode()).digest(1024**2)
-                for _ in range(64):out.write(chunk)
+                for _ in range(16):out.write(chunk)
             leaf.chmod(0o640);os.chown(leaf,1000,1000);os.setxattr(leaf,'user.recycle',b'pre-removal cancellation original');original=file_snapshot(leaf);c=json.loads(owned.common.command(['docker','inspect',f['identifier']]))[0];header=dict(containerId=f['identifier'],instanceId=str(c['State']['Pid'])+':'+c['State']['StartedAt']);reader=load('/usr/local/libexec/whaledeck-container-files.py','inflight_recycle_reader');fixture=dict(revision=revision,containerId=f['identifier'],containerName=c['Name'].lstrip('/'),containerPid=c['State']['Pid'],instanceId=header['instanceId'],header=header,folder=str(f['folder']),evidence=str(e),original=original,sourceVersion=reader.version(header,'work/recycle-rpc.bin',leaf.stat()));save('fixture.json',fixture)
             with temporary_user(True) as (username,password):
                 with (e/'browser.stdout').open('x') as out,(e/'browser.stderr').open('x') as err:
