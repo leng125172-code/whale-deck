@@ -13,6 +13,10 @@ import { clearAclHints, reconcileAclHints } from '@/services/containerAclHints'
 import { clearOwnershipHints, reconcileOwnershipHints } from '@/services/containerOwnershipHints'
 import { clearRecycleHints, reconcileRecycleHints } from '@/services/containerRecycleHints'
 import {
+  clearRecycleRestoreHints,
+  reconcileRecycleRestoreHints,
+} from '@/services/containerRecycleRestoreHints'
+import {
   clearRecursivePermissionHints,
   reconcileRecursivePermissionHints,
 } from '@/services/containerRecursivePermissionHints'
@@ -61,6 +65,7 @@ function expireSession() {
   clearPermissionHints()
   clearOwnershipHints()
   clearRecycleHints()
+  clearRecycleRestoreHints()
   clearAclHints()
   clearRecursivePermissionHints()
   clearRecursiveOwnershipHints()
@@ -153,6 +158,7 @@ async function loadAuthSession() {
         reconcilePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecycleHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileRecycleRestoreHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
@@ -200,6 +206,7 @@ async function logout() {
   clearPermissionHints()
   clearOwnershipHints()
   clearRecycleHints()
+  clearRecycleRestoreHints()
   clearAclHints()
   clearRecursivePermissionHints()
   clearRecursiveOwnershipHints()
@@ -236,6 +243,7 @@ async function refresh() {
     reconcilePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecycleHints(user.value?.subject, user.value?.isAdministrator === true)
+    reconcileRecycleRestoreHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)

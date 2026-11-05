@@ -14,9 +14,9 @@ public sealed record ConfirmContainerRecycleRestoreCommand(string PlanHash, bool
 { public override string ToString() => nameof(ConfirmContainerRecycleRestoreCommand); }
 public sealed record ContainerRecycleRestoreConfirmationDto(string PlanHash, DateTimeOffset ExpiresAtUtc, string Warning)
 { public override string ToString() => nameof(ContainerRecycleRestoreConfirmationDto); }
-public sealed record ContainerRecycleRestoreIntentDto(Guid Id, Guid PlanningJobId, Guid? ExecutionJobId, Guid SourceIntentId, Guid SourceOperationId,
+public sealed record ContainerRecycleRestoreIntentDto(Guid Id, Guid PlanningJobId, Guid? ExecutionJobId, Guid SourceIntentId, Guid SourceOperationId, string SourceHistoryDigest,
     ContainerFileLocationDto Location, string State, uint? OriginalUid, uint? OriginalGid, uint? OriginalMode, uint? ExecutorUid, uint? ExecutorGid,
-    long? SizeBytes, string? Sha256, int? AttributeCount, DateTimeOffset? ReadyExpiresAtUtc, string? ResultCode, long Version,
+    long SizeBytes, string Sha256, int AttributeCount, DateTimeOffset? ReadyExpiresAtUtc, string? ResultCode, long Version,
     bool HistoryVerified, string? HistoryDigest, ContainerRecycleRestoreReceiptDto? Receipt, ContainerRecycleRestoreConfirmationDto? Confirmation)
 { public override string ToString() => nameof(ContainerRecycleRestoreIntentDto); }
 public sealed record AcknowledgeContainerRecycleRestoreCommand(long Version, bool Confirmed);
@@ -29,3 +29,7 @@ public sealed record ContainerRecycleRestoreSourceBinding(Guid IntentId, string 
 { public override string ToString() => nameof(ContainerRecycleRestoreSourceBinding); }
 public sealed record ResolvedContainerRecycleRestoreSource(Guid IntentId, string ProofHash, ContainerRecycleRestoreCommandDto Command)
 { public override string ToString() => nameof(ResolvedContainerRecycleRestoreSource); }
+
+public sealed record ContainerRecycleRestoreSourceSummary(Guid SourceIntentId, Guid SourceOperationId, ContainerFileLocationDto Location,
+    uint OriginalUid, uint OriginalGid, uint OriginalMode, long SizeBytes, string Sha256, int AttributeCount, string HistoryDigest, DateTimeOffset CompletedAtUtc);
+public sealed record ContainerRecycleRestoreSourcePage(IReadOnlyList<ContainerRecycleRestoreSourceSummary> Items, Guid? Next);

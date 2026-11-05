@@ -109,11 +109,12 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.Equal(19,await db.Database.SqlQueryRaw<int>("SELECT count(*)::integer AS \"Value\" FROM pg_constraint WHERE conrelid='container_recycle_restore_intents'::regclass AND contype='c'").SingleAsync());
             Assert.Equal(14,await db.Database.SqlQueryRaw<int>("SELECT count(*)::integer AS \"Value\" FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid WHERE p.proname='whaledeck_container_recycle_restore_fence' AND NOT t.tgisinternal").SingleAsync());
             await PeerSeeds();
-            var source=await Source();var sourceBefore=JsonSerializer.Serialize(source);var ready=await Ready(source);Assert.Null(await other.ClaimAsync(clock.GetUtcNow(),default));
+            var source=await Source();var catalog=new ContainerRecycleRestoreSourceCatalog(db);Assert.Contains(await catalog.ListAsync(source.ContainerId,26,null,default),r=>r.Id==source.Id);await catalog.ListAsync(source.ContainerId,26,source.Id,default);var sourceBefore=JsonSerializer.Serialize(source);var ready=await Ready(source);Assert.Null(await other.ClaimAsync(clock.GetUtcNow(),default));
             await Assert.ThrowsAsync<InvalidOperationException>(()=>repo.ConfirmAsync(actor,Claims(ready),ready.Version+1,default));
             await using(var tx=await second.Database.BeginTransactionAsync())
             {await second.Database.ExecuteSqlInterpolatedAsync($"SELECT * FROM container_recycle_intents WHERE id={source.Id} FOR UPDATE");var error=await Assert.ThrowsAnyAsync<Exception>(()=>repo.ConfirmAsync(actor,Claims(ready),ready.Version,default));Assert.Equal(PostgresErrorCodes.LockNotAvailable,Assert.IsType<PostgresException>(error.GetBaseException()).SqlState);await tx.RollbackAsync();}
             Assert.Null((await other.FindAsync(ready.Id,default))!.ExecutionJobId);
+            Assert.DoesNotContain(await catalog.ListAsync(source.ContainerId,26,null,default),r=>r.Id==source.Id);
             var pending=await Pending(ready);
             foreach(var table in peers)
             {

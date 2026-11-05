@@ -116,7 +116,7 @@ public sealed class ContainerRecycleRestoreWorkflowService(ContainerFileUploadSe
         var confirmation = ready ? new ContainerRecycleRestoreConfirmationDto(protector.SignRecycleRestoreConfirmation(new(row.Id, row.ActorSubject, row.LoginBinding, row.PlanHash!, row.ReadyExpiresAtUtc!.Value)),
             row.ReadyExpiresAtUtc.Value, "预检不恢复文件。确认后按原回收引用、HDD摘要和留存身份再次检查原容器实例与空缺目标，将原inode返回原路径；不覆盖目标、不重建新实例或目录。断线后查询同一恢复任务，不自动重做。Unknown保留保护，解除保护不代表恢复成功。") : null;
         var source = ContainerRecycleRestoreWorkflowValidation.ReadCommand(row).Source;
-        return new(row.Id, row.Id, row.ExecutionJobId, row.SourceIntentId, source.OperationId, source.Plan.Command.Location, row.State == "Ready" && !ready ? "Expired" : row.State,
+        return new(row.Id, row.Id, row.ExecutionJobId, row.SourceIntentId, source.OperationId, ContainerRecycleRestoreWorkflowValidation.ReadCommand(row).HistoryDigest, source.Plan.Command.Location, row.State == "Ready" && !ready ? "Expired" : row.State,
             plan?.RetainedIdentity.OwnerUid, plan?.RetainedIdentity.OwnerGid, plan?.RetainedIdentity.Mode, plan?.OwnerUid, plan?.OwnerGid,
             source.Plan.SourceIdentity.SizeBytes, source.Plan.Sha256, source.Plan.Attributes.Count, row.ReadyExpiresAtUtc, row.ResultCode, row.Version,
             row.HistoryVerified, row.HistoryDigest, ContainerRecycleRestoreWorkflowValidation.ReadReceipt(row), confirmation);
