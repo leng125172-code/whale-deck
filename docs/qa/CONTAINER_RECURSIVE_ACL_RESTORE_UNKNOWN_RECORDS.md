@@ -1,5 +1,7 @@
 # 目标重命名后的Unknown原件与计数展示候选
 
+当前补充：固定26对象首项后重命名Unknown与另一管理员处置已有[新资源实机分项验收](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RENAME_GATE.md)。本页其余“未部署/未签收/最新”措辞均保留为各候选及发布批次当时的历史状态；不据此扩称其他Unknown组合通过。
+
 后续状态：依赖恢复后，准确34153d2已用新的独立尝试完成[标准覆盖与生产后置核验](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RELEASE.md)，真实Unknown任务/身份与处置尚未签收。下述中断/等待CI记录保持为当时事实，不代表当前仍是混合版本。
 
 最新状态：2026-11-05准确候选CI12路已全成功；随后单次标准覆盖被主机重启打断，新UI及真实Unknown处置仍未签收，详情见[发布中断与只读恢复核验](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RELEASE_INTERRUPTION.md)。以下未发布/等待CI措辞保留为各批次发生时的历史状态。

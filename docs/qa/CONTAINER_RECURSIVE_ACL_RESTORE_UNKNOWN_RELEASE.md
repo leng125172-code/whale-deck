@@ -1,5 +1,7 @@
 # Unknown 摘要修正标准覆盖与生产后置核验
 
+后续：固定26对象重命名Unknown已有[独立实机页面与跨管理员处置分项](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RENAME_GATE.md)。以下未验收说明是本次发布时的边界，原发布证据不改写，也不因此签收其余故障组合。
+
 2026-11-05，[上次发布中断](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RELEASE_INTERRUPTION.md)之后，公开 NuGet 包完整下载恢复，沿用准确 CI `41965780773` 已 12 路成功的产品候选 `34153d2c454942b2665902772b7d5e48226cf7db`。本批完成四镜像预构建、一次新的标准覆盖及生产后置核验，**关闭混合版本和未部署缺口；真实 Unknown 故障/任务页/另一管理员处置整链仍未签收**。
 
 ## 新的发布回执

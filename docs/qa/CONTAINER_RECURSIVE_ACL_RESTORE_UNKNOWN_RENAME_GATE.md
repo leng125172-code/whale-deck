@@ -46,4 +46,4 @@
 
 本批未签直接迟到Apply RPC、容器消失/实例变化、其他Unknown原因、其他写后撤权/重启及跨写入组合，也不重算前像翻页用例。继续剩余故障矩阵、可恢复删除等59项目标；主任务和阶段完整签收、整体25%–35%工作量粗估、AI子计划0%保持。
 
-收尾：准确d4e484a已推送dev，范围8项、2092本地Markdown链接/缺失0、diff及308文件封存再核验通过，两Git索引仍归用户所有。项目图谱事件whale-deck.container-acl.d4e484a.restore-unknown-rename-real-gate取得projectId/key/eventId匹配、duplicate=false回执，pending移至synced、阶段active。本批未取得准确d4的整条CI终态，不将本地/实机通过冒称CI全成功。
+收尾：准确d4e484a已推送dev，范围8项、最终2094本地Markdown链接/缺失0、diff及308文件封存再核验通过，两Git索引仍归用户所有。项目图谱事件whale-deck.container-acl.d4e484a.restore-unknown-rename-real-gate取得projectId/key/eventId匹配、duplicate=false回执，pending移至synced、阶段active。本批未取得准确d4的整条CI终态，不将本地/实机通过冒称CI全成功。
