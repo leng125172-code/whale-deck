@@ -10,6 +10,8 @@
 
 ## 当前P1/P2文件推进点（2026-11-05）
 
+2026-11-05 回收执行中实时移组/停用两项已在HDD已验证、源未移除切点实机通过：门禁d413cb97，精确身份一次变更确认后原helper仍活，产品分别1.789/1.770秒停止；取消/原退出POST均0，SQL取消时间空。原会话403页/登录页及引用清除、不同管理员原Job摘要/零管理写、源/HDD与清理前后独立证明通过。59回收工具/12身份/8范围，各126证据含98源码；Root12→16/HDD15→19、2346保护/11核心及旧失败partial保持。继续重启/Unknown、独立恢复及59项，不升整项完成率。[实机与边界](qa/CONTAINER_FILE_RECYCLING_REVOCATION.md)。
+
 2026-11-05 回收执行中正常退出已在HDD已验证/源未移除切点实机通过：门禁c149b67f，真实BFF退出POST时原pidfd仍活、1.972秒退出；取消POST0/SQL取消时间空，同账号重登旧意图404，两次双端退出与原Job摘要、源/HDD原件、清理前后独立证明通过。53工具/8范围，127证据含启动属主拒绝保留；Root10→12/HDD13→15、2346保护/11核心保持。仅签该切点，继续撤权/停用、重启、Unknown、独立恢复及59项，不升完成率。[实机与边界](qa/CONTAINER_FILE_RECYCLING_INFLIGHT_LOGOUT.md)。
 
 2026-11-05 回收执行中HDD已验证/源未移除切点取消已在新资源实机通过：最终9e7500f4，精确MainPID/Invocation/cgroup/双FD和pidfd后STOP，实际Vue明确取消，原helper1.754秒退出；Canceled/Aborted、源inode字节属性与真实Canceled HDD原件保持，原Job摘要/普通8匿名4拒绝/双端退出、清理前后独立证明通过。47工具/8范围，127成功证据与107+111旧失败保留，未验证partial也保留；Root8→10/HDD11→13，2346保护/11核心保持。仅签该切点，继续退出/撤权/重启/Unknown、恢复和59项。[实机与失败边界](qa/CONTAINER_FILE_RECYCLING_INFLIGHT_CANCEL.md)。
