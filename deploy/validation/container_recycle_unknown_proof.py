@@ -54,12 +54,17 @@ def acknowledgement_audit(execution):
     return query("SELECT json_build_object('count',count(*),'actors',coalesce(json_agg(actor_subject),'[]'::json),'entries',coalesce(json_agg(json_build_object('result',result,'targetType',target_type,'targetId',target_id,'tracePresent',length(trace_id)>0)),'[]'::json)) FROM audit_events WHERE job_id=:'id'::uuid AND action='containers.files.recycle.unknown-acknowledged';", id=execution)
 
 
+def pending_proof(data, acknowledged):
+    # Unknown is deliberately nonterminal; its original execution delivery remains pending.
+    assert type(acknowledged) is bool and type(data['pending']) is int and data['pending']==(0 if acknowledged else 1)
+
+
 def prove(value, fixture, e, create=False):
-    data = sql(value['id']); r = data['row']; ack = value['state'] == 'Acknowledged'
+    data = sql(value['id']); r = data['row']; ack = value['state'] == 'Acknowledged';pending_proof(data,ack)
     assert r['state'] == value['state'] in ('Unknown', 'Acknowledged')
     assert r['actor_subject'] == fixture['subject'] and r['container_id'] == fixture['containerId'] and r['instance_id'] == fixture['instanceId'] and r['relative_path'] == 'work/recycle-rpc.bin'
     assert r['root_started_at_utc'] and r['execution_job_id'] == value['executionJobId'] and r['cancel_requested_at_utc'] is None
-    assert r['lease_token'] is r['lease_expires_at_utc'] is None and data['pending'] == 0 and data['accepted'] == data['confirmed'] == 1 and data['planJob']['state'] == 'Succeeded'
+    assert r['lease_token'] is r['lease_expires_at_utc'] is None and data['accepted'] == data['confirmed'] == 1 and data['planJob']['state'] == 'Succeeded'
     assert r['root_state'] == 'Unknown' and r['source_retained'] is r['source_restored'] is None and r['history_verified'] and r['history_may_exist']
     assert r['publish_barrier'] is (not ack) and bool(r['completed_at_utc']) is ack and bool(r['acknowledged_by']) is ack and bool(r['acknowledgement_json']) is ack
     job = data['executionJob']; assert job['state'] == ('Failed' if ack else 'Running') and job['phase'] == ('Acknowledged' if ack else 'AwaitingContainerRecycleReceipt')

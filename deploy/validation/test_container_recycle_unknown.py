@@ -60,7 +60,7 @@ class RecycleUnknownTests(unittest.TestCase):
 
     def test_unknown_false_fact_is_rejected_before_reading_root(self):
         r=dict(state='Unknown',actor_subject='s',container_id='c',instance_id='i',relative_path='work/recycle-rpc.bin',root_started_at_utc='time',execution_job_id='execution',cancel_requested_at_utc=None,lease_token=None,lease_expires_at_utc=None,root_state='Unknown',source_retained=False,source_restored=None,history_verified=True,history_may_exist=True)
-        data=dict(row=r,pending=0,accepted=1,confirmed=1,planJob=dict(state='Succeeded'))
+        data=dict(row=r,pending=1,accepted=1,confirmed=1,planJob=dict(state='Succeeded'))
         with patch.object(proof,'sql',return_value=data),patch.object(proof,'read_operation') as read,self.assertRaises(AssertionError):proof.prove(dict(id='id',state='Unknown',executionJobId='execution'),dict(subject='s',containerId='c',instanceId='i'),Path('/unused'))
         read.assert_not_called()
 
@@ -74,6 +74,20 @@ class RecycleUnknownTests(unittest.TestCase):
     def test_scope_is_rejected_before_touching_unrelated_source(self):
         with patch.object(proof,'file_snapshot') as read,self.assertRaises(AssertionError):proof.displace(dict(identifier='a'*64,folder=Path('/tmp/unrelated')),dict(containerId='a'*64,folder='/tmp/unrelated'),SimpleNamespace())
         read.assert_not_called()
+
+    def test_unknown_delivery_stays_pending_until_explicit_ack(self):
+        proof.pending_proof(dict(pending=1),False);proof.pending_proof(dict(pending=0),True)
+        for count,acked in [(0,False),(2,False),(1,True),(True,False)]:
+            with self.subTest(count=count,acknowledged=acked),self.assertRaises(AssertionError):proof.pending_proof(dict(pending=count),acked)
+
+    def test_gate_terminates_only_its_own_unresponsive_browser_child(self):
+        code='import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print("ready",flush=True);time.sleep(60)'
+        with subprocess.Popen([sys.executable,'-c',code],stdout=subprocess.PIPE,text=True) as child:
+            try:
+                self.assertEqual(child.stdout.readline().strip(),'ready');gate.stop_child(child,.05);self.assertEqual(child.returncode,-9)
+            finally:
+                child.stdout.close()
+                if child.poll() is None:child.kill();child.wait(timeout=3)
 
     def test_gate_preserves_unsettled_data_and_independently_checks_before_cleanup(self):
         code=Path(gate.__file__).read_text();self.assertLess(code.index("assert held is not None,'EXACT_CUT_MISSED_NO_REPLAY'"),code.index('moved=displace('))

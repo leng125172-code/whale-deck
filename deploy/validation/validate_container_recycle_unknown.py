@@ -18,6 +18,15 @@ from acl_history_browser_proof import typed_equal
 
 SOURCES=('validate_container_recycle_unknown.py','validate_container_recycle_unknown.mjs','verify_container_recycle_unknown.py','test_container_recycle_unknown.py')
 
+def stop_child(process, timeout=10):
+    if process.poll() is None:
+        process.terminate()
+        try:process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # This is exactly the Node child spawned by this gate, never a supplied PID.
+            process.kill();process.wait(timeout=timeout)
+
+
 def browser_proof(b,fixture):
     assert b['actualUi'] and b['subject']==fixture['subject'] and b['recoverySubject']!=b['subject'] and b['registrations']==b['confirmations']==1 and b['cancellations']==0 and b['acknowledgements']==1 and b['managementWrites']==1
     assert b['originalSessionReadStatus']==401 and b['differentAdminOldIdStatus']==404 and b['hintsCleared'] and b['cancelledDecisionPreserved']
@@ -72,7 +81,7 @@ def main(revision):
                         assert process.returncode==0 and held is not None and exited,'ACTUAL_UNKNOWN_FAILED'
                     finally:
                         if held is not None:held.release()
-                        if process.poll() is None:process.terminate();process.wait(timeout=10)
+                        stop_child(process)
                         if 'pool' in locals():pool.shutdown(wait=True,cancel_futures=True)
                 b=json.loads((e/'browser.json').read_text());browser_proof(b,fixture);proof=prove(b['result'],fixture,e);require_ack(unknown,proof,b['recoverySubject']);save('live-proof.json',proof);denied('http://127.0.0.1:8080',fixture,b['result'])
                 with (e/'independent-live.log').open('x') as out:subprocess.run([sys.executable,str(repo/'deploy/validation/verify_container_recycle_unknown.py'),e.name,'--live'],stdout=out,stderr=subprocess.STDOUT,check=True,timeout=90)
@@ -85,7 +94,7 @@ def main(revision):
         print(json.dumps(dict(actualUnknown='passed',evidence=e.name)),flush=True)
     except BaseException as error:
         import traceback
-        t=traceback.extract_tb(error.__traceback__)[-1];save('failure.json',dict(type=type(error).__name__,file=Path(t.filename).name,line=t.lineno));raise
+        t=traceback.extract_tb(error.__traceback__)[-1];frames=[dict(file=Path(v.filename).name,line=v.lineno,function=v.name) for v in traceback.extract_tb(error.__traceback__)];save('failure.json',dict(type=type(error).__name__,file=Path(t.filename).name,line=t.lineno,frames=frames));raise
 
 if __name__=='__main__':
     try:assert len(sys.argv)==2;main(sys.argv[1])
