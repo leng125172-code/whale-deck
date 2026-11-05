@@ -1,5 +1,7 @@
 # 已处置Unknown任务说明区：真实身份只读可视补验
 
+后续删除切片已有[普通文件回收内核候选与分项实盘证据](CONTAINER_FILE_RECYCLING_KERNEL.md)；下述“未实现”保持为本次说明区补验时的历史状态，不代表删除已经安装或完成业务页面。
+
 2026-11-05，承接[固定重命名Unknown实机门禁](CONTAINER_RECURSIVE_ACL_RESTORE_UNKNOWN_RENAME_GATE.md)。本批以新临时管理员正常Authentik登录，只读查看该已完成处置的原执行Job，补充完整说明段的可视证据；没有再次捕获来源、恢复ACL、取消、ACK或重放故障。验证源码 `d26d2bcf4539512095d34c8fcb151137fa1c03e7`，产品仍为 `34153d2`。
 
 ## 实际验收范围
