@@ -1,8 +1,24 @@
 # 恢复任务摘要：真实页面与原始记录核验
 
-2026-11-05，承接[标准发布](CONTAINER_RECURSIVE_ACL_RESTORE_JOB_RESULTS_RELEASE.md)。本批仅推进全新来源的预检Ready与执行中正常退出后Canceled摘要；成功恢复、Partial、Unknown、处置及其他故障组合不能由本分项代签。
+2026-11-05，承接[标准发布](CONTAINER_RECURSIVE_ACL_RESTORE_JOB_RESULTS_RELEASE.md)。全新来源的预检Ready与执行中正常退出后Canceled摘要真实整链已通过；成功恢复、Partial、Unknown、处置及其他故障组合不能由本分项代签。
 
-## 冻结的验收工具候选
+## 本批签收
+
+运行产品ac90911不变，验证工具冻结6cd6fd0378198c48b8407c362fb232c45d396d69。新隔离容器/26对象经一次真实签名捕获，正常Authentik登录、Vue选源和预检、真实Jobs页面列表/详情；26字段及23个页面值分别与原SQL计划/来源Root-HDD/完整物理核对。预检实际五计数保持null并显示“未证明”，来源原修改数26与本次实际修改数分列，没有把缺事实当零。
+
+Vue明确确认一次，原Worker启动原执行；准确pidfd/双FD/cgroup/Invocation在首项写前绑定，完整树与当前HDD前像已验证。原上下文从正常菜单执行BFF与Authentik退出，没有调用取消接口；产品5.208355693961494秒终止原helper。原SQL/Root回执为Canceled/Aborted，五计数完成/修改/中止/未开始/未知=0/0/1/25/0，取消请求时间null、四条工作流审计，无取消请求审计。恢复聚合HDD1/逐项HDD0，源全部字节、身份、ACL及扩展属性保持；并非整树恢复成功。
+
+同Subject正常新登录后原意图ID/key均404、旧入口缺席；当前管理员恢复查询取得原终态，真实Jobs详情展示同一执行的26字段及五计数，来源原修改26独立保留。列表/详情投影和SQL结果逐项一致；原规划Job仍是Ready历史摘要且整行与确认前一致，不改写成Canceled。320×600暗色11张真实页面图保留，其中4张为规划/执行计数与事实区；没有据此签全明暗/全部尺寸或其他结果状态。
+
+原退出、管理员再次正常退出、普通用户及其正常退出后，Jobs列表与双详情分别各3个401/403；普通用户Jobs入口被拒且私有Jobs请求0。恢复原6GET/2写入拒绝、原上下文/普通用户正常双端退出均独立保留，普通用户无私有审计。清理前和清理后两个独立只读进程均通过，所有临时身份、准确容器与源清理，原来源/恢复历史保留，清理后没有冒称重读已删除的源字节。
+
+成功unit为whaledeck-qa-restore-job-ui-6cd6fd0，Invocation83632e30134144aca88792f521d1f154，准确MainPID0/SubState=exited/Result=success/ExecMainStatus0。证据`recursive-acl-restore-job-results-ui-81b345482bb9438b94b6aa29543b034e`的170份文件逐项SHA256通过，清单摘要`24c7c4544d19792cb0bf02d86f7d9fb62129f87ffc13a353712b890c150270f9`；候选60、原发布27、旧退出164及本次失败77的四份封存全部重验保持。
+
+两次新捕获后的保护集合1952→2006→2060，旧原件保持；来源Root1678、恢复Root200/HDD133、目录Root94。恢复15意图/11执行/活动0，普通ACL54意图/49执行/103Job保持。11核心healthy、两宿主PID及ac90911来源保持，仅同ID/镜像Worker按验收重启；两个Git索引仍1000:1000/664。本批无产品覆盖、迁移、自动回滚或旧任务重放。96项关联root工具测试通过，零跳过，含12项新增证据校验；CI终态另查，不能把运行中当成功。
+
+成功恢复、Partial、无回执Unknown、处置补获回执等摘要实机展示与剩余故障矩阵仍待验，可恢复删除/长期清理和其他59项仍须推进。维护入口连续性旧失败与源/HDD同device限制不消除，不提升整项或阶段完成率。
+
+## 候选记录（首次实机前）
 
 `validate_recursive_acl_restore_job_results.py` 显式启用独立模式，复用已有自有26对象、签名捕获、真实Authentik与Vue确认、首写前准确绑定、原上下文正常双端退出、独立物理/SQL/Root/HDD复核和准确清理。新证据使用专属前缀，不能把旧退出或取消证据改名补签；失败仍按原流程等待原执行静止，不能重放或自动处置。
 
@@ -12,8 +28,13 @@
 
 本候选冻结时尚未启动实机门禁。运行产品仍为ac90911，本批仅修改验证工具，无产品发布或数据库迁移；完整实机回执、清理和最终证据封存须另行记录。维护连续性旧失败、源/HDD同device限制保留，59项完成率不提升。
 
-## 首批工具失败与修复候选
+## 首批工具失败与修复记录
 
 8371913首次新资源门禁在`confirmed-prewrite-ready`失败：JobsView发出take=100，AppShell同时轮询take=50，工具只匹配pathname而取到后者；列表/详情和26字段页面值、预检SQL摘要一致，但独立核验明确拒绝错误查询回执。不是运行产品版本不符，也不是摘要数据错误。原证据`recursive-acl-restore-job-results-ui-04fff188d6ee4d6785f1ddfe1539f2cb`保留失败，不补签。
 
 当时未发送确认，执行Job/恢复Root/HDD均不存在；原容器已准确移除，完整物理源保留待核对。修复明确匹配JobsView的take=100，新增AppShell轮询不可替代页面响应的负向测试；专属恢复工具仅允许这次失败目录，等待原Ready自然到期后，核对原SQL、来源Root/HDD、全树和保护集合再准确清理，清理后另进程只读核验。不得重放确认或把此清理记为原门禁通过。修复候选仍须全新资源复验。
+
+后续原Ready自然Expired，执行Job/恢复Root/HDD始终缺席；完整树、来源54份原件及旧1952保护核对后准确清理，另进程只读复核通过，最终保护2006。原失败unit Invocatione6dd3459c68f49d4b6871a58c5ac19b5准确退出1；专属清理unit Invocation4954d6183b4c4ad28a0faf77b8b3f10d准确退出0，原门禁仍失败。77份证据封存摘要`26fd6b38bc90e45f3d2587f10f45c70c72a772df9b2a02cda84329ed3ffd4335`。修复后使用上节另一全新资源通过，未重做原确认或更改原结果。
+
+
+收尾：范围8项、744本地链接/缺失0、8个Python AST、Node语法与diff检查通过；两个Git索引1000:1000/664。项目图谱事件whale-deck.container-acl.6cd6fd0.restore-job-summary-real-ui取得project/key/event匹配且duplicate=false回执，pending移入synced，阶段active。工具CI41941672023的准确head为6cd6fd0，已见后端/原生PG/原生Valkey/安装/前端检查成功，浏览器仍运行，未记全CI成功；没有为纯验收工具改动重复发布产品。
