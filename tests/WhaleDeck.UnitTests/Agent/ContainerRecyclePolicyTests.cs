@@ -99,6 +99,7 @@ public sealed class ContainerRecyclePolicyTests
     {
         Assert.Equal(StatusCode.NotFound,ContainerRecyclePolicy.Failure("CONTAINER_RECYCLE_NOT_FOUND").StatusCode);
         Assert.Equal(StatusCode.Aborted,ContainerRecyclePolicy.Failure("CONTAINER_RECYCLE_TARGET_EXISTS").StatusCode);
+        Assert.Equal(StatusCode.FailedPrecondition,ContainerRecyclePolicy.Failure("CONTAINER_RECYCLE_RESTORE_CLAIMED").StatusCode);
         Assert.Equal("CONTAINER_RECYCLE_UNAVAILABLE",ContainerRecyclePolicy.Failure("private arbitrary detail").Status.Detail);
     }
     [Fact]

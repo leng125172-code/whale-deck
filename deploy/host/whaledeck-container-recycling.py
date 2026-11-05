@@ -10,6 +10,7 @@ import fcntl
 import hashlib
 import json
 import os
+from pathlib import Path
 import re
 import stat
 import time
@@ -125,10 +126,11 @@ def recycling_type(directory_type):
         PRIVATE='.whaledeck-container-recycling-v1'
         LIMIT=65536
 
-        def __init__(self, uploads, publisher, state_path, history):
+        def __init__(self, uploads, publisher, state_path, history, restore_claims_path=None):
             super().__init__(uploads,publisher,state_path)
             if history.f is not self.f:raise ValueError('CONTAINER_RECYCLE_HISTORY_ENGINE_MISMATCH')
             self.history=history
+            self.restore_claims_path=restore_claims_path
 
         def reject(self, suffix):raise self.r.Rejected('CONTAINER_RECYCLE_'+suffix)
 
@@ -290,32 +292,64 @@ def recycling_type(directory_type):
             except (OSError,self.r.Rejected,self.f.Rejected):pass
             self.save(state,record)
 
+        def read_restore_claim(self, request):
+            if self.restore_claims_path is None:return None
+            path=Path(self.restore_claims_path)
+            if not os.path.lexists(path):self.reject('STATE_UNSAFE')
+            if not path.is_absolute() or path!=path.resolve(strict=True):self.reject('STATE_UNSAFE')
+            directory=self.f.trusted_directory(path)
+            try:
+                if stat.S_IMODE(os.fstat(directory).st_mode)!=0o700:self.reject('STATE_UNSAFE')
+                try:fd=os.open(request['operationId']+'.json',os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC,dir_fd=directory)
+                except FileNotFoundError:return None
+                try:
+                    info=os.fstat(fd)
+                    if not stat.S_ISREG(info.st_mode) or info.st_uid!=0 or info.st_nlink!=1 or stat.S_IMODE(info.st_mode)!=0o600 or not 0<info.st_size<=65536:self.reject('STATE_UNSAFE')
+                    raw=os.read(fd,65537)
+                    if len(raw)!=info.st_size:self.reject('STATE_UNSAFE')
+                    value=json.loads(raw,object_pairs_hook=self.f.unique_object)
+                finally:os.close(fd)
+                if type(value) is not dict or set(value)!={'schemaVersion','source','restoreOperationId','restoreOwner','restoreFingerprint'} or type(value['schemaVersion']) is not int or value['schemaVersion']!=1:self.reject('STATE_UNSAFE')
+                self.request(value['source'])
+                if value['source']!=request or type(value['restoreOperationId']) is not str or not re.fullmatch('[a-f0-9]{32}',value['restoreOperationId']) or int(value['restoreOperationId'],16)==0 or value['restoreOperationId']==request['operationId']:self.reject('STATE_UNSAFE')
+                if any(type(value[k]) is not str or not re.fullmatch('[A-F0-9]{64}',value[k]) for k in ('restoreOwner','restoreFingerprint')):self.reject('STATE_UNSAFE')
+                return value
+            finally:os.close(directory)
+
+        def check_restore_claim(self, request, restore_id):
+            claim=self.read_restore_claim(request)
+            if claim is not None and claim['restoreOperationId']!=restore_id:self.reject('RESTORE_CLAIMED')
+            if restore_id is not None and claim is None:self.reject('RESTORE_CLAIMED')
+
         def restore(self, request, session):
             with self.locked(request) as (state,record):
                 if record is None:self.reject('NOT_FOUND')
                 self.recover(state,record,session)
-                if record['state']=='Restored':return self.public(record,session,True)
-                if record['state']!='Trashed':self.reject('RESTORE_UNPROVEN')
-                if session is None:self.reject('SESSION_REQUIRED')
-                plan=record['plan'];c=plan['command']
-                with self.parent(plan,session) as parent:
-                    if self.present(parent,c['path'].rsplit('/',1)[-1]):self.reject('TARGET_EXISTS')
-                    private=self.private(parent,record)
-                    try:
-                        actual=self.probe_file(private,record['operationId']+'.trash',plan,session)
-                        if actual!=record['actualIdentity']:self.reject('SOURCE_CHANGED')
-                        self.history.verify(request,record['historyDigest']);self.guard(c,session,plan['targetProof'])
-                        with self.parent(plan,session):pass
-                        record.update(state='Restoring',actualIdentity=None);self.save(state,record);self.checkpoint('Restoring')
-                        with self.parent(plan,session):pass
-                        verified_private=self.private(parent,record)
-                        try:
-                            if self.probe_file(verified_private,record['operationId']+'.trash',plan,session)!=actual:self.reject('SOURCE_CHANGED')
-                        finally:os.close(verified_private)
-                        self.f.exchange(private,record['operationId']+'.trash',parent,c['path'].rsplit('/',1)[-1],1);os.fsync(private);os.fsync(parent);self.checkpoint('RestoredNamespace')
-                    finally:os.close(private)
-                self.recover(state,record,session);return self.public(record,session,False)
+                return self.restore_locked(request,state,record,session)
 
+        def restore_locked(self, request, state, record, session, restore_id=None):
+            if record['state']=='Restored':return self.public(record,session,True)
+            if record['state']!='Trashed':self.reject('RESTORE_UNPROVEN')
+            self.check_restore_claim(request,restore_id)
+            if session is None:self.reject('SESSION_REQUIRED')
+            plan=record['plan'];c=plan['command']
+            with self.parent(plan,session) as parent:
+                if self.present(parent,c['path'].rsplit('/',1)[-1]):self.reject('TARGET_EXISTS')
+                private=self.private(parent,record)
+                try:
+                    actual=self.probe_file(private,record['operationId']+'.trash',plan,session)
+                    if actual!=record['actualIdentity']:self.reject('SOURCE_CHANGED')
+                    self.history.verify(request,record['historyDigest']);self.guard(c,session,plan['targetProof'])
+                    with self.parent(plan,session):pass
+                    record.update(state='Restoring',actualIdentity=None);self.save(state,record);self.checkpoint('Restoring')
+                    with self.parent(plan,session):pass
+                    verified_private=self.private(parent,record)
+                    try:
+                        if self.probe_file(verified_private,record['operationId']+'.trash',plan,session)!=actual:self.reject('SOURCE_CHANGED')
+                    finally:os.close(verified_private)
+                    self.f.exchange(private,record['operationId']+'.trash',parent,c['path'].rsplit('/',1)[-1],1);os.fsync(private);os.fsync(parent);self.checkpoint('RestoredNamespace')
+                finally:os.close(private)
+            self.recover(state,record,session);return self.public(record,session,False)
         def inspect(self, request, session=None):
             with self.locked(request) as (state,record):
                 if record is None:

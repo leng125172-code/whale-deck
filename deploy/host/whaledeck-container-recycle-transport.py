@@ -73,7 +73,7 @@ def main():
     recycle = load('whaledeck-container-recycling.py')
     history = recycle.history_type(base)(metadata)
     engine_type = recycle.recycling_type(load('whaledeck-container-directories.py').ContainerDirectories)
-    engine = engine_type(upload, publisher, STATE, history)
+    engine = engine_type(upload, publisher, STATE, history, restore_claims_path=Path('/var/lib/whaledeck-container-recycle-restores/claims'))
     files.emit({'type': 'driver', 'invocationId': invocation})
     def expired(_number, _frame): raise Rejected('CONTAINER_RECYCLE_TIMEOUT')
     signal.signal(signal.SIGALRM, expired); signal.alarm(10)
@@ -88,7 +88,7 @@ def error_code(error):
         'MODULE_UNSAFE', 'PLAN_INVALID', 'PROTECTED', 'TARGET_EXISTS', 'SOURCE_CHANGED', 'PARENT_CHANGED',
         'TARGET_CHANGED', 'OWNER_CHANGED', 'STATE_UNSAFE', 'BUSY', 'NOT_FOUND', 'IDEMPOTENCY_CONFLICT', 'RECEIPT_LIMIT',
         'RECEIPT_INVALID', 'PRIVATE_UNSAFE', 'PRIVATE_CHANGED', 'CAPACITY_LOW', 'VERSION_INVALID', 'SOURCE_UNSUPPORTED', 'ATTRIBUTES_LIMIT', 'EXTENDED_METADATA_REQUIRED',
-        'RESTORE_UNPROVEN','SOURCE_CAPACITY','HISTORY_WRITE_FAILED','HISTORY_INCOMPLETE','HISTORY_STATE_CONFLICT','HISTORY_UNSAFE', 'HISTORY_CHANGED', 'HISTORY_LIMIT', 'HISTORY_CAPACITY', 'SESSION_REQUIRED')}
+        'RESTORE_UNPROVEN','RESTORE_CLAIMED','SOURCE_CAPACITY','HISTORY_WRITE_FAILED','HISTORY_INCOMPLETE','HISTORY_STATE_CONFLICT','HISTORY_UNSAFE', 'HISTORY_CHANGED', 'HISTORY_LIMIT', 'HISTORY_CAPACITY', 'SESSION_REQUIRED')}
     codes |= {'CONTAINER_PROTECTED', 'CONTAINER_NOT_RUNNING', 'CONTAINER_UNSAFE_ISOLATION', 'CONTAINER_UNSAFE_MOUNT',
         'CONTAINER_FILES_TARGET_MISSING', 'CONTAINER_FILES_INSTANCE_CHANGED', 'CONTAINER_FILES_TARGET_CHANGED', 'CONTAINER_FILES_ROOT_CHANGED',
         'CONTAINER_FILES_SHARED_CORE_MOUNT', 'CONTAINER_FILES_PATH_INVALID', 'CONTAINER_UPLOAD_PUBLISH_READ_ONLY',

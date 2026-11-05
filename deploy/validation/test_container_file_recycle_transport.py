@@ -16,7 +16,7 @@ class RecycleTransportBoundaryTests(unittest.TestCase):
     def test_unknown_exception_details_are_never_protocol_codes(self):
         for error in (RuntimeError('/private secret'),FileNotFoundError('HDD/socket missing'),RuntimeError('CONTAINER_RECYCLE_NOT_FOUND extra')):
             self.assertEqual(transport.error_code(error),'CONTAINER_RECYCLE_UNAVAILABLE')
-        for code in ('CONTAINER_RECYCLE_NOT_FOUND','CONTAINER_RECYCLE_RESTORE_UNPROVEN','FILES_BACKUP_HDD_REQUIRED','FILES_BACKUP_CAPACITY_REQUIRED'):
+        for code in ('CONTAINER_RECYCLE_NOT_FOUND','CONTAINER_RECYCLE_RESTORE_UNPROVEN','CONTAINER_RECYCLE_RESTORE_CLAIMED','FILES_BACKUP_HDD_REQUIRED','FILES_BACKUP_CAPACITY_REQUIRED'):
             self.assertEqual(transport.error_code(RuntimeError(code)),code)
         self.assertEqual(transport.error_code(OSError(errno.EEXIST,'private path')),'CONTAINER_RECYCLE_TARGET_EXISTS')
 
@@ -30,6 +30,11 @@ class RecycleTransportBoundaryTests(unittest.TestCase):
         self.assertIn('recycle_instance',block);self.assertIn('"$3"',block);self.assertNotIn('CAP_SYS_ADMIN',block);self.assertNotIn('CAP_CHOWN',block)
         self.assertIn('/var/lib/whaledeck-container-recycling',(host/'install.sh').read_text())
         self.assertIn('assert_metadata /var/lib/whaledeck-container-recycling',(host/'validate.sh').read_text())
+        self.assertIn('/var/lib/whaledeck-container-recycle-restores/claims',(host/'install.sh').read_text())
+        self.assertIn('/usr/local/libexec/whaledeck-container-recycle-restores.py',(host/'install.sh').read_text())
+        self.assertIn('/usr/local/libexec/whaledeck-container-recycle-restores.py',(host/'validate.sh').read_text())
+        self.assertIn('/var/lib/whaledeck-container-recycle-restores/claims',(host/'validate.sh').read_text())
+        self.assertIn("restore_claims_path=Path('/var/lib/whaledeck-container-recycle-restores/claims')",(host/'whaledeck-container-recycle-transport.py').read_text())
 
 
 @unittest.skipUnless(os.name=='posix' and os.geteuid()==0,'temporary Linux root required')
