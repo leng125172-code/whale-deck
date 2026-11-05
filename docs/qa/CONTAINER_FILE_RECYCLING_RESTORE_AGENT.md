@@ -45,3 +45,5 @@
 本批只签原实例留存inode恢复及写前取消/重放/迟到调用、原引用与claim归属，source/HDD仍同device，不签异盘灾难恢复。执行中取消/退出/撤权/重启、Unknown及跨写入矩阵，旧失败来源恢复清理、永久意图/真实PG/共享写保护/Worker/API/Vue与真人整链、长期清理及其余59项继续；新增测试CI须看推送后的准确终态，不用产品旧CI代替。完整主项0/59、阶段0/6、25%–35%工作量粗估及AI子计划0%不变；17项移出不算完成。
 
 项目图谱whale-deck/container-recycle已按本批稳定eventId同步active，回执确认，本地pending移入synced；阶段未标completed。
+
+2026-11-06后续：本记录所述“首轮来源仍留存待恢复清理”已由单独的[自有测试来源离线收尾](CONTAINER_FILE_RECYCLING_RESTORE_OWNED_RECOVERY.md)处理。原运行容器自然退出，人工原inode归位和精确清理不计产品恢复；本记录原正文、失败和原件保持，产品永久业务/页面仍待。
