@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import unittest
 import uuid
-from container_recycle_rpc_proof import proto_plan,proto_receipt,ready_proof,plan_frame,receipt_frame,record_proof,capability_refusal,PATH,FRAME,digest,file_version
+from container_recycle_rpc_proof import proto_plan,proto_receipt,ready_proof,plan_frame,receipt_frame,record_proof,capability_refusal,native_plan_proof,PATH,FRAME,digest,file_version
 import test_container_file_recycling as native
 
 
@@ -40,6 +40,17 @@ class RecycleWireProofTests(unittest.TestCase):
         p=plan();self.assertEqual(proto_plan(wire_plan(p)),p)
         changed=wire_plan(p);changed['fingerprint']='C'*64
         with self.assertRaises(AssertionError):proto_plan(changed)
+
+    def test_native_record_plan_does_not_skip_strict_validation_when_rehashed(self):
+        native_plan_proof(plan())
+        for kind in ('string-size','boolean-owner','extra'):
+            p=plan()
+            if kind=='string-size':p['sourceIdentity'][6]='3'
+            elif kind=='boolean-owner':p['uid']=True
+            else:p['hostPath']='/etc'
+            p['command']['expectedVersion']=file_version(p['command'],PATH,p['sourceIdentity'])
+            p['fingerprint']=digest(b'whaledeck-container-recycle-plan-v1\n',{k:v for k,v in p.items() if k!='fingerprint'})
+            with self.subTest(kind=kind),self.assertRaises(AssertionError):native_plan_proof(p)
 
     def test_exact_fields_and_zero_presence_cannot_be_silently_dropped(self):
         for path in ((),('command',),('command','location'),('sourceIdentity',),('parentIdentity',)):

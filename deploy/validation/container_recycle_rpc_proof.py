@@ -79,6 +79,20 @@ def proto_receipt(value,request):
     return result
 
 
+def native_plan_proof(plan):
+    fields(plan,('schemaVersion','command','targetProof','parentIdentity','parentVersion','uid','gid','fingerprint','sourceIdentity','sha256','attributes'))
+    c=plan['command'];fields(c,('containerId','instanceId','path','expectedVersion'))
+    identity=plan['sourceIdentity'];assert type(identity) is list and len(identity)==9
+    parent=plan['parentIdentity'];assert type(parent) is list and len(parent)==2
+    attrs=plan['attributes'];assert type(attrs) is list
+    for item in attrs:assert type(item) is list and len(item)==2
+    wire=dict(schemaVersion=plan['schemaVersion'],command=dict(location={k:c[k] for k in ('containerId','instanceId','path')},expectedVersion=c['expectedVersion']),
+        targetProof=plan['targetProof'],parentIdentity=dict(device=str(parent[0]),inode=str(parent[1])),parentVersion=plan['parentVersion'],
+        ownerUid=plan['uid'],ownerGid=plan['gid'],fingerprint=plan['fingerprint'],sha256=plan['sha256'],attributes=[dict(name=n,value=v) for n,v in attrs],
+        sourceIdentity={k:v if k in ('mode','ownerUid','ownerGid') else str(v) for k,v in zip(FRAME[:8],identity[:8],strict=True)},sourceChangedAtUnixNs=str(identity[8]))
+    typed_equal(proto_plan(wire),plan)
+
+
 def plan_frame(frame,header,*,boundaries):
     assert type(boundaries) is bool;fields(frame,('kind','plan','boundaryRefusals'))
     assert frame['kind']=='plan';integer(frame['boundaryRefusals'],PLAN_REFUSALS if boundaries else 0,PLAN_REFUSALS if boundaries else 0)
@@ -105,9 +119,7 @@ def record_proof(request,receipt,root,history=None,*,data_sha256=None,data_size=
     fields(request,('operationId','owner','plan'));assert re.fullmatch('[a-f0-9]{32}',request['operationId']) and int(request['operationId'],16)>0;hash_value(request['owner'])
     wire={k:v for k,v in receipt.items() if k not in ('sourceRetained','sourceRestored') or v is not None}
     typed_equal(proto_receipt(wire,request),receipt)
-    plan=request['plan'];hash_value(plan['fingerprint'])
-    assert plan['fingerprint']==digest(b'whaledeck-container-recycle-plan-v1\n',{k:v for k,v in plan.items() if k!='fingerprint'})
-    assert file_version(plan['command'],plan['command']['path'],plan['sourceIdentity'])==plan['command']['expectedVersion']
+    plan=request['plan'];native_plan_proof(plan)
     fields(root,ROOT);integer(root['schemaVersion'],1,1)
     for key in ('operationId','owner','plan'):typed_equal(root[key],request[key])
     assert root['state'] in ('Trashed','Restored','Aborted','Unknown')
