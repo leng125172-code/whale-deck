@@ -5,6 +5,7 @@ import {join} from 'node:path'
 import {chromium,expect} from '../../web/node_modules/@playwright/test/index.mjs'
 import {loginVisible,openPermissionFiles,closePermissionDetails,writeSignal,waitSignal} from './installed_ui_permission_session.mjs'
 import {logoutFromUserMenu} from './installed_ui_logout.mjs'
+import {observeJob} from './installed_ui_restore_job_results.mjs'
 
 let phase='startup',browser,page,evidence
 function proof(response){
@@ -17,7 +18,8 @@ try{
  const packet=JSON.parse(await readFile('/dev/stdin','utf8')),fixture=packet.fixture,credentials=packet.credentials
  const base='http://127.0.0.1:8080',endpoint=`/api/v1/containers/${fixture.containerId}/files/recursive-acls/history`
  assert.equal(process.argv[2],fixture.revision);assert.match(fixture.captureId,/^[a-f0-9]{32}$/);assert.match(fixture.historyDigest,/^[A-F0-9]{64}$/)
- const inflightLogout=fixture.inflightLogout===true;assert.equal(inflightLogout,process.argv[1].endsWith('/validate_recursive_acl_restore_inflight_logout.mjs'));assert.equal(typeof(fixture.inflightLogout??false),'boolean')
+ const jobResults=fixture.jobResults===true;assert.equal(typeof(fixture.jobResults??false),'boolean');assert.equal(jobResults,process.argv[1].endsWith('/validate_recursive_acl_restore_job_results.mjs'))
+ const inflightLogout=fixture.inflightLogout===true;assert.equal(inflightLogout,jobResults||process.argv[1].endsWith('/validate_recursive_acl_restore_inflight_logout.mjs'));assert.equal(typeof(fixture.inflightLogout??false),'boolean')
  evidence=fixture.evidence;browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true})
  const context=await browser.newContext({viewport:{width:320,height:600},colorScheme:'dark',reducedMotion:'reduce'});context.setDefaultTimeout(30_000);page=await context.newPage()
  phase='admin-visible-login';const admin=await loginVisible(page,context,base,'/containers',true,credentials.admin)
@@ -54,6 +56,11 @@ try{
  async function checkReference(){const values=JSON.parse(await page.evaluate(()=>sessionStorage.getItem('whaledeck-container-recursive-acl-restore-hints-v1')));assert.deepEqual(values.find(v=>v.containerId===fixture.containerId),reference)}
  await checkReference();await page.reload();await openPermissionFiles(page,fixture);await checkReference();await page.getByRole('button',{name:'查看递归ACL恢复任务',exact:true}).click();await expect(dialog.getByText('预检已完成，尚未恢复ACL',{exact:true})).toBeVisible({timeout:30000})
  let readySignal
+ let jobResultProof=null
+ if(jobResults){
+  phase='planning-job-real-summary';const jobPage=await context.newPage()
+  try{jobResultProof={planning:await observeJob(jobPage,context,base,ready.id,'planning','Ready',evidence)}}finally{await jobPage.close()}
+ }
  for(let index=0;index<1;index++){
   phase='restore-preview-before-logout'
   if(index===2){await page.setViewportSize({width:1440,height:600});await page.emulateMedia({colorScheme:'light'})}
@@ -72,7 +79,7 @@ try{
   for(const name of ['关闭','确认递归ACL恢复','请求取消递归ACL恢复'])await expect(dialog.getByRole('button',{name,exact:true})).toBeInViewport({ratio:1})
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth))
   const screenshot=`paging-${index}.png`;await page.screenshot({path:join(evidence,screenshot)})
-  const signal={subject:admin.subject,index,snapshot:value,request:proof(r),pages:[...pages],screenshot,selected,registered,ready,key,body,reference,duplicateRegistrationId};readySignal=signal
+  const signal={subject:admin.subject,index,snapshot:value,request:proof(r),pages:[...pages],screenshot,selected,registered,ready,key,body,reference,duplicateRegistrationId,...(jobResults?{jobResults:{planning:jobResultProof.planning}}:{})};readySignal=signal
   await writeSignal(evidence,'ready-result.json',signal)
   const verified=await waitSignal(evidence,'ready-verified.json');assert.equal(verified.readySqlPhysicalSourceVerified,true);assert.equal(verified.workerStopped,true)
  }
@@ -107,6 +114,8 @@ try{
  const queryBody={instanceId:fixture.instanceId,path:'work/recursive-tree'}
  const urls=[base+restoreEndpoint+'/'+ready.id,base+restoreEndpoint+'/by-key/'+key,base+'/api/v1/files/container-recursive-acl-restores/recovery',base+'/api/v1/files/container-recursive-acl-restores/recovery/'+ready.id,base+endpoint+'?'+new URLSearchParams({...queryBody,after:'',take:'25',expectedVersion:''}),base+endpoint+'/'+fixture.captureId+'?'+new URLSearchParams({...queryBody,expectedHistoryDigest:fixture.historyDigest,offset:'0',take:'25'})]
  const anonymous=await denied(context,urls,401);assert.deepEqual(counts,{registrations:1,confirmations:1,cancellations:inflightLogout?0:1,uploads:0})
+ const jobUrls=[base+'/api/v1/jobs?take=100',base+'/api/v1/jobs/'+ready.id,base+'/api/v1/jobs/'+pending.executionJobId]
+ if(jobResults)jobResultProof.originalAnonymous=await denied(context,jobUrls,401)
  if(inflightLogout){
   phase='same-subject-new-login';const relogin=await loginVisible(page,context,base,'/containers',true,credentials.admin);assert.equal(relogin.subject,admin.subject)
   const newLoginLookups=[];for(const url of urls.slice(0,2))newLoginLookups.push((await context.request.get(url)).status());assert.deepEqual(newLoginLookups,[404,404])
@@ -120,19 +129,31 @@ try{
   const drawer=page.getByRole('dialog',{name:'任务详情',exact:true});await expect(drawer.getByText(pending.executionJobId,{exact:true})).toBeVisible();await expect(drawer.locator('.el-tag').filter({hasText:/^Canceled$/})).toBeVisible()
   assert.equal(await drawer.getByRole('button',{name:'取消任务',exact:true}).count(),0);assert.equal(await drawer.getByRole('button',{name:'重新预检并重试',exact:true}).count(),0)
   await page.screenshot({path:join(evidence,'terminal.png')});await drawer.locator('.el-drawer__close-btn').click()
+  if(jobResults){
+   phase='execution-job-real-summary';jobResultProof.execution=await observeJob(page,context,base,pending.executionJobId,'execution','Canceled',evidence)
+   const historical=await context.request.get(base+'/api/v1/jobs/'+ready.id);assert.equal(historical.status(),200);jobResultProof.historicalPlanning=await historical.json()
+   assert.equal(jobResultProof.historicalPlanning.resultJson,jobResultProof.planning.job.resultJson)
+  }
   adminReloginLogout=await logoutFromUserMenu(page,context,base);const adminAnonymous=await denied(context,urls,401)
+  if(jobResults)jobResultProof.adminAnonymous=await denied(context,jobUrls,401)
   logoutIsolation={reloginSubject:relogin.subject,newLoginLookups,hintsAbsentAfterRelogin,oldTaskButtons,jobId:jobs[jobIndex].id,jobState:jobs[jobIndex].state,adminAnonymous}
  }
  const ordinaryContext=await browser.newContext({viewport:{width:320,height:600},colorScheme:'dark',reducedMotion:'reduce'});ordinaryContext.setDefaultTimeout(30000);const ordinaryPage=await ordinaryContext.newPage();page=ordinaryPage
  phase='ordinary-visible-login';const ordinary=await loginVisible(page,ordinaryContext,base,'/',false,credentials.ordinary)
  let uiRequests=0;page.on('request',r=>{if([endpoint,restoreEndpoint,'/api/v1/files/container-recursive-acl-restores/recovery'].some(p=>new URL(r.url()).pathname.startsWith(p)))uiRequests++})
  await page.goto(base+'/containers');await expect(page).toHaveURL(base+'/forbidden');assert.equal(uiRequests,0);const ordinaryDenied=await denied(ordinaryContext,urls,403)
+ if(jobResults){
+  jobResultProof.ordinaryDenied=await denied(ordinaryContext,jobUrls,403)
+  let privateJobsRequests=0;const recordJobs=r=>{if(new URL(r.url()).pathname.startsWith('/api/v1/jobs'))privateJobsRequests++};page.on('request',recordJobs)
+  await page.goto(base+'/jobs');await expect(page).toHaveURL(base+'/forbidden');assert.equal(privateJobsRequests,0);page.off('request',recordJobs);jobResultProof.ordinaryJobUiRequests=privateJobsRequests
+ }
  const anti=await(await ordinaryContext.request.get(base+'/api/v1/auth/csrf')).json(),deniedPosts=[]
  for(const action of ['confirm','cancel']){const r=await ordinaryContext.request.post(base+restoreEndpoint+'/'+ready.id+'/'+action,{headers:{Origin:base,[anti.headerName]:anti.token,'Idempotency-Key':ready.id},data:action==='confirm'?{planHash:rawReady.confirmation.planHash,confirmed:true,version:rawReady.version}:undefined});assert.equal(r.status(),403);deniedPosts.push(r.status())}
  await page.screenshot({path:join(evidence,'ordinary-denied.png')});await page.getByRole('button',{name:'首页',exact:true}).click();await expect(page).toHaveURL(base+'/')
  phase='ordinary-normal-dual-logout';const ordinaryLogout=await logoutFromUserMenu(page,ordinaryContext,base),ordinaryAnonymous=await denied(ordinaryContext,urls,401)
+ if(jobResults)jobResultProof.ordinaryAnonymous=await denied(ordinaryContext,jobUrls,401)
  const ordinaryResult={subject:ordinary.subject,denied:ordinaryDenied,posts:deniedPosts,anonymous:ordinaryAnonymous,uiRequests,logout:ordinaryLogout}
- const result={ordinary:ordinaryResult,revision:fixture.revision,subject:admin.subject,readySignal,pending,terminal,pages,requests,...counts,dismissedWithoutWrite:!inflightLogout,logoutDuringExecution:inflightLogout,logoutIsolation,adminReloginLogout,normalDualLogout:true,logout,hintsCleared,anonymous,actualUi:true,prewriteCancellation:!inflightLogout}
+ const result={ordinary:ordinaryResult,revision:fixture.revision,subject:admin.subject,readySignal,pending,terminal,pages,requests,...counts,dismissedWithoutWrite:!inflightLogout,logoutDuringExecution:inflightLogout,logoutIsolation,adminReloginLogout,normalDualLogout:true,logout,hintsCleared,anonymous,actualUi:true,prewriteCancellation:!inflightLogout,...(jobResults?{jobResults:jobResultProof}:{})}
  await writeSignal(evidence,'final-auth-result.json',result);assert.equal((await waitSignal(evidence,'final-auth-verified.json')).prewriteNoChangeAndHistoryVerified,true)
  await writeFile(join(evidence,'browser.json'),JSON.stringify(result),{mode:0o600,flag:'wx'});await ordinaryContext.close();await context.close();await browser.close();browser=undefined
  console.log(JSON.stringify({recursiveAclRestorePrewrite:'passed',actualUi:true}))

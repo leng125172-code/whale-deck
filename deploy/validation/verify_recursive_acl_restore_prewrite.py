@@ -24,11 +24,15 @@ from validate_container_file_publishing import common
 from acl_source_apply_missing_proof import source_closure
 from verify_container_recursive_acl_agent import proto_plan,ready_proof
 
-def verify(name,live=False,*,logout=False):
+def verify(name,live=False,*,logout=False,job_results=False):
     assert type(logout) is type(live) is bool
-    prefix='recursive-acl-restore-inflight-logout-' if logout else 'recursive-acl-restore-prewrite-cancel-'
+    assert type(job_results) is bool and (not job_results or logout)
+    prefix='recursive-acl-restore-job-results-ui-' if job_results else 'recursive-acl-restore-inflight-logout-' if logout else 'recursive-acl-restore-prewrite-cancel-'
     assert re.fullmatch(prefix+'[a-f0-9]{32}',name)
     seeds=(*SOURCES,*LOGOUT_SOURCES) if logout else SOURCES
+    if job_results:
+        from recursive_acl_restore_job_results_proof import SOURCES as JOB_SOURCES
+        seeds=(*seeds,*JOB_SOURCES)
     repo=Path(__file__).resolve().parents[2];evidence=repo/'deploy/artifacts'/name;trusted(evidence,True)
     saved=lambda name:private_json(evidence/name)
     b=saved('baseline.json');row=saved('capture.json');browser=saved('browser.json')
@@ -57,9 +61,13 @@ def verify(name,live=False,*,logout=False):
     from validate_container_recursive_acl_restore_browser import sql_snapshot,attribute_digest,expected_execution
     from acl_history_browser_proof import typed_equal
     assert b['restorePrewriteCancel'] is (not logout) and b.get('restoreInflightLogout',False) is logout and browser['prewriteCancellation'] is (not logout) and browser['actualUi']
+    assert b.get('restoreJobResults',False) is job_results
     signal=saved('ready-result.json');initial=saved('ready.sql.json');page_proof(signal,b,row,metadata,0);page_proof(signal['selected'],b,row,metadata,0,selection=True);ready_business(signal,b,row,metadata,initial)
     typed_equal(browser,saved('final-auth-result.json'));typed_equal(signal,browser['readySignal']);typed_equal(browser['pending'],saved('pending-result.json'))
     current=sql_snapshot(signal['ready']['id']);typed_equal(current,saved('terminal.sql.json'));request,receipt=sql_proof(current,browser,initial,b,summary(row,metadata),logout=logout)
+    if job_results:
+        from recursive_acl_restore_job_results_proof import case_proof
+        typed_equal(case_proof(browser,initial,current),saved('job-results-proof.json'))
     assert current['row']['execution_job_id']==expected_execution(signal['ready']['id'])==browser['pending']['executionJobId']
     pending=saved('pending.sql.json');assert pending['row']['state']=='Pending' and pending['row']['root_started_at_utc'] is None and pending['row']['publish_barrier'] is False and pending['row']['execution_job_id']==current['row']['execution_job_id']
     io=installed();source_bundle,frame=read_bundle(io,row['request'],False,evidence/'bound-source');typed_equal(frame,saved('source-frame.json'));source=dict(**row,metadata=source_bundle['metadata'])
@@ -79,7 +87,11 @@ def verify(name,live=False,*,logout=False):
     pages=signal['pages'];prove_pages(pages,b,{capture:summary(row,metadata)});audits=audit_rows(signal['subject']);typed_equal(audits,saved('history-audits.json'));prove_audits(audits,signal['subject'],b,pages,[signal['selected'],signal]);assert audit_rows(browser['ordinary']['subject'])==[]
     assert restore_database()==dict(intents=b['restoreDatabase']['intents']+1,executions=b['restoreDatabase']['executions']+1,active=0)
     before_worker=saved('worker-before.json');after_worker=saved('worker-after.json');assert before_worker['Id']==after_worker['Id'] and before_worker['Image']==after_worker['Image'] and before_worker['State']['StartedAt']!=after_worker['State']['StartedAt'] and after_worker['State']['Running'] and after_worker['State']['Health']['Status']=='healthy'
-    images=list(evidence.glob('*.png'));assert {p.name for p in images}==({'selection.png','paging-0.png','inflight.png','terminal.png','ordinary-denied.png'}|({'original-logout.png','new-login-no-old-task.png'} if logout else set()))
+    expected_images={'selection.png','paging-0.png','inflight.png','terminal.png','ordinary-denied.png'}|({'original-logout.png','new-login-no-old-task.png'} if logout else set())
+    if job_results:
+        from recursive_acl_restore_job_results_proof import IMAGES
+        expected_images|=IMAGES
+    images=list(evidence.glob('*.png'));assert {p.name for p in images}==expected_images
     for image in images:
         raw=image.read_bytes();assert raw[:8]==b'\x89PNG\r\n\x1a\n' and len(raw)>1000 and struct.unpack('>II',raw[16:24])==(320,600)
     api=requests.Session();api.trust_env=False;api.headers['Authorization']='Bearer '+require(container_environment(),'Authentication__Authentik__ApiToken')

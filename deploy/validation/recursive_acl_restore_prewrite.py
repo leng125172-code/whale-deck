@@ -84,6 +84,9 @@ def exercise(process,evidence,b,row,m,root,reader,content,acl,storage,fixture,*,
     import validate_recursive_acl_restore_paging as gate
     gate.PHASE='confirmed-prewrite-ready';signal=wait_signal(process,evidence,'ready');page_proof(signal,b,row,m,0);page_proof(signal['selected'],b,row,m,0,selection=True)
     initial=sql_snapshot(signal['ready']['id']);ready_proof(signal,b,row,m,initial);gate.no_restore_records(signal['ready']['id']);(evidence/'ready.sql.json').write_text(json.dumps(initial))
+    if b.get('restoreJobResults',False):
+        from recursive_acl_restore_job_results_proof import ready_job_proof
+        ready_job_proof(signal,initial)
     prove_pages(signal['pages'],b,{row['request']['operationId']:summary(row,m)});audits=audit_rows(signal['subject']);prove_audits(audits,signal['subject'],b,signal['pages'],[signal['selected'],signal]);(evidence/'history-audits.json').write_text(json.dumps(audits))
     io=installed();bundle,frame=read_bundle(io,row['request'],False,evidence/'bound-source',create=True);source=dict(**row,metadata=bundle['metadata']);(evidence/'source-frame.json').write_text(json.dumps(frame))
     before=row['after'];current=lambda:inventory(root,reader,content,acl)
@@ -140,6 +143,9 @@ def exercise(process,evidence,b,row,m,root,reader,content,acl,storage,fixture,*,
             from recursive_acl_restore_logout_proof import authority_proof
             authority_proof(ui)
         else:assert ui['dismissedWithoutWrite'] is True
+        if b.get('restoreJobResults',False):
+            from recursive_acl_restore_job_results_proof import case_proof
+            (evidence/'job-results-proof.json').write_text(json.dumps(case_proof(ui,initial,final)))
         assert ui['readySignal']==signal and ui['normalDualLogout'] and ui['anonymous']==[401]*6
         assert ui['logout']['normalUiLogout'] and ui['logout']['providerNavigationObserved'] and ui['logout']['bffStatus']==401 and ui['logout']['identityStatus'] in (401,403)
         assert ui['ordinary']['subject']!=signal['subject'] and ui['ordinary']['denied']==[403]*6 and ui['ordinary']['posts']==[403]*2 and ui['ordinary']['anonymous']==[401]*6 and ui['ordinary']['uiRequests']==0
