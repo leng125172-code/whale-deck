@@ -10,6 +10,8 @@
 
 ## 当前P1/P2文件推进点（2026-11-06）
 
+2026-11-06独立恢复Jobs摘要候选：f08d53e3固定17字段、原回收/本恢复ID派生校验、Unknown/null归属及迟到证明处置、任务服务和Vue白名单已接；5463 Unit/741 Integration（7默认原生跳过）、1369前端单元/4构建预览组合/真实隔离PG投影与8范围通过。原失败保留，生产保持未部署；继续准确CI、标准发布和真实身份文件HDD任务页整链。[摘要与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_JOB_RESULTS.md)。
+
 2026-11-06独立恢复API/Vue候选：f6cb18db接严格sourceIntentId输入、分页MAC校验来源目录、新确认/查询/取消及独立Unknown处置；5437 Unit/741 Integration（7默认原生跳过）、1351前端单元、35HTTP/7来源新检查、10构建预览交互和真实隔离PG目录查询通过。布局/环境/夹具失败保留，生产未迁移部署/Root与身份保持；Jobs投影、真实整链及59项继续。[候选、预览和真实边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_API_UI.md)。
 
 2026-11-06独立恢复持久化候选：a222316f/最终工具0714a7b7，EF迁移20261105184338、来源行锁内MAC复核、19CHECK/14双向围栏、租约/双Job-Outbox-审计原子性与Worker接线通过真实隔离PG。5430 Unit/706 Integration（7默认原生跳过）/8范围通过，三次夹具失败及清理保留；生产表仍无、Root与两宿主/四容器保持，API/Vue与真人整链待完成。[真实PG及边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_PERSISTENCE.md)。

@@ -39,3 +39,5 @@ Files页面新增独立恢复异常处置，先选择原Unknown历史，再明�
 继续Jobs安全投影与结果展示、准确CI、标准部署/生产迁移及真实身份/目录来源/原inode/HDD恢复整链，再完整故障矩阵、长期清理及其余59项。当前完整主项0/59、阶段0/6、25%–35%工作量粗估及AI子计划0%保持；17项移出不算完成。
 
 项目图谱whale-deck/container-recycle已按本批稳定eventId回执同步active，pending移入synced；未标阶段或整项完成。
+
+2026-11-06后续：[独立恢复Jobs摘要候选](CONTAINER_FILE_RECYCLING_RESTORE_JOB_RESULTS.md)已接并通过白名单、构建预览及真实PG任务投影检查。本记录原文按当时边界保留，生产部署与真实身份文件整链仍待。
