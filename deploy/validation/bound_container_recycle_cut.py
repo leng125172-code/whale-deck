@@ -76,7 +76,7 @@ def freeze_before_removal(row,source,container_pid):
     assert os.geteuid()==0 and re.fullmatch('[a-f0-9]{64}',row['container_id']) and type(container_pid) is int and container_pid>1 and row['instance_id'].startswith(str(container_pid)+':')
     source=Path(source);assert source.parent==Path('/data/WhaleDeck/apps') and re.fullmatch('wdv-container-publish-[a-f0-9]{32}',source.name) and source.resolve(strict=True)==source and not source.is_symlink()
     plan=native_plan(json.loads(row['plan_json']));assert list(identity(source))==plan['parentIdentity'];root_identity=identity(Path('/proc')/str(container_pid)/'root');lock=STATE/(uuid.UUID(row['execution_job_id']).hex+'.lock');fd=None;pid=group=invocation=None
-    deadline=time.monotonic()+85;stopped=False
+    deadline=time.monotonic()+105;stopped=False
     try:
         while time.monotonic()<deadline:
             if fd is None and lock.exists():
