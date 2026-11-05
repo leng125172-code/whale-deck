@@ -131,10 +131,11 @@ def run_native(suite, report):
                 sql_states = sorted(set(re.findall(r'\b([0-9A-Z]{5}):\s', output)))
                 source_lines = re.findall(r'NativeNotification(?:Inbox|Dispatch|Snapshot)Tests(?:\.[A-Za-z0-9_-]{1,80})?\.cs:line ([0-9]+)', output)
                 source_locations = re.findall(r'(NativeNotification(?:Inbox|Dispatch|Snapshot)Tests(?:\.[A-Za-z0-9_-]{1,80})?\.cs):line ([0-9]+)', output)
+                constraints = sorted(set(re.findall(r'constraint "(ck_[a-z0-9_]{1,120})"', output)))
                 assertions = sorted(set(re.findall(r'Assert\.([A-Za-z]{1,40})\(\) Failure', output)))
                 raise RuntimeError('Isolated native ' + suite + ' test failed: ' + ('\n'.join(diagnostics) if diagnostics else
                     'native failure types=' + ','.join(error_types) + ' sdkMutexStartupFailed=' + str(startup_failed) + ' SQLSTATE=' + ','.join(sql_states) +
-                    ' inboxSourceLines=' + ','.join(source_lines[:8]) + ' assertions=' + ','.join(assertions) +
+                    ' constraints=' + ','.join(constraints) + ' inboxSourceLines=' + ','.join(source_lines[:8]) + ' assertions=' + ','.join(assertions) +
                     ' sourceLocations=' + ','.join(name + ':' + line for name, line in source_locations[:8]) +
                     ' publicPhases=' + ','.join(re.findall(r'INBOX_PHASE=([a-z-]{1,160})', output)[-5:]) + '; private output withheld'))
             results = ET.parse(scratch_path / 'results/native.trx').getroot()

@@ -102,7 +102,7 @@ public sealed partial class NativeNotificationDispatchTests
             var patch=" || jsonb_build_object('receipt_json',NULL,'receipt_hash',NULL,'acl_confirmed',NULL,'root_state',NULL,'source_retained',NULL,'source_restored',NULL,'destination_published',NULL,'source_removed',NULL,'completed_count',NULL,'changed_count',NULL,'aborted_count',NULL,'not_started_count',NULL,'unknown_count',NULL,'outcome_digest',NULL,'binding_current',NULL,'history_available',NULL,'history_may_exist',FALSE,'history_verified',FALSE,'history_digest',NULL)";
             if(table!="container_file_upload_operations" && table!="container_directory_operations")patch+=" || jsonb_build_object('execution_job_id',@execution)";
             var sql="INSERT INTO "+table+" SELECT (jsonb_populate_record(NULL::"+table+",to_jsonb(t) || jsonb_build_object('id',@id,'idempotency_key',@key,'completed_at_utc',NULL,'lease_token',NULL,'lease_expires_at_utc',NULL,'publish_barrier',TRUE,'root_started_at_utc',@now,'state',@state,'published_version',NULL,'acknowledged_by',NULL,'acknowledgement_json',NULL)"+patch+")).* FROM "+table+" t WHERE id=@seed";
-            Assert.Equal(1,await second.Database.ExecuteSqlRawAsync(sql,new NpgsqlParameter("id",id),new NpgsqlParameter("key",key),new NpgsqlParameter("execution",execution),new NpgsqlParameter("now",now),new NpgsqlParameter("state",table=="container_file_upload_operations"?"Publishing":table=="container_directory_operations"?"Creating":"Applying"),new NpgsqlParameter("seed",seed)));
+            Assert.Equal(1,await second.Database.ExecuteSqlRawAsync(sql,new NpgsqlParameter("id",id),new NpgsqlParameter("key",key),new NpgsqlParameter("execution",execution),new NpgsqlParameter("now",now),new NpgsqlParameter("state",table=="container_file_upload_operations"?"Ready":"Pending"),new NpgsqlParameter("seed",seed)));
         }
         try
         {
@@ -117,6 +117,7 @@ public sealed partial class NativeNotificationDispatchTests
             var pending=await Pending(ready);
             foreach(var table in peers)
             {
+                Console.WriteLine("INBOX_PHASE=restore-peer-inverse-"+table.Replace('_','-'));
                 await using var tx=await second.Database.BeginTransactionAsync();await ClonePeer(table);
                 await Rejected($"UPDATE container_recycle_restore_intents SET publish_barrier=true,root_started_at_utc={clock.GetUtcNow()},state='Applying' WHERE id={pending.Id}","CONTAINER_RECYCLE_RESTORE_TARGET_BUSY");await tx.RollbackAsync();second.ChangeTracker.Clear();
             }
