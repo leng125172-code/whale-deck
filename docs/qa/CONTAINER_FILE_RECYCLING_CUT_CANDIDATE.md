@@ -1,0 +1,17 @@
+# 容器回收执行中停止点观察器候选
+
+2026-11-05，源码645d859b，新增bound_container_recycle_cut.py和12项专项。本批仅完成QA观察器与授权边界测试，未对生产helper发送SIGSTOP/SIGCONT，未签执行中取消、退出、撤权或重启实机验收。产品58b8174及已签常规/Ready分项保持。
+
+切点定义：原操作Root状态为Preparing或Retaining、HDD原件已验证，原路径仍是原inode/完整字节/属性，尚未移入私有回收区。私有目录若已存在，必须与Root持久身份相符且为空；未绑定mkdir窗口、源已缺席或已终态不计切点，不因错过而授权重做Apply。
+
+暂停前要求原SQL执行ID与Root完整计划/owner/容器实例/固定work/recycle-rpc.bin一致，独立重算计划fingerprint与源version。只接受固定安装态apply命令、root UID、固定格式systemd服务、当前MainPID与InvocationID、进程实际cgroup及环境InvocationID一致，并同时持有该容器根FD和原操作锁FD。pidfd打开后再次复核，再发送STOP；观察实际停止后重读Root和原文件完整证明。
+
+失败路径仅对本观察器确实停止的pidfd发送CONT，并始终关闭未交出的描述符；未停止、拒绝授权或进程退出不向新/无关进程发送恢复信号。成功交出句柄后由外层门禁负责有界释放和观察产品停止，观察器本身不杀进程、不改Root/SQL、不替换安装helper、没有产品RPC或任意PID参数入口。
+
+12专项通过：完整计划/owner/实例绑定，篡改/链接/大小/属性原件拒绝，终态和未验证状态不计数，未绑定私有目录不计数，错私有inode/额外文件拒绝，非自有作用域在pidfd前拒绝，argv/cgroup/Invocation与双FD共同授权。Proc正向绑定用明确双替身，源文件与inode/hash/xattr是实际临时Linux I/O；另用实际自有sleep子进程证明“即使持有双FD也因错误命令拒绝”，以及pidfd恢复/退出观测和未STOP时不发CONT。它们不是安装态helper成功切点或真实业务取消证明。
+
+关联44项回收工具测试以ResourceWarning为错误通过，范围8项通过，Python编译通过。当前2346保护文件、11核心、既有业务与Root6/HDD9只读基线保持。评审初次读取旧快照误报PROC常量缺失，当前文件及实际测试已核实；基于PID路径采样的风险通过固定Invocation/MainPID、双FD与pidfd后的复核收紧，另补未STOP不发CONT，未声称拥有通用PID控制能力。
+
+下一步在全新自有资源中接真实确认/取消流程，在切点计时观察产品终止原helper，核对Aborted/Unknown的实际SQL/Root/HDD及源保持；失败或错过保持原证据、不重做写入。随后正常退出、实时撤权、重启与Unknown/跨写入矩阵，独立恢复/长期清理和59项继续。完整签收、25%–35%粗估及酒馆/看板娘0%功能进度保持。
+
+私有证据container-recycle-cut-candidate-61d4791417dd4ac685b5f00a509d97f8封存6文件，清单摘要4705791fe20a7598d24621602f56e9f69929c463b958b03a18580ac0cca9db6b；含两份冻结源码、测试日志、安装态只读保持及边界记录。最新CI终态未在本批核验。
