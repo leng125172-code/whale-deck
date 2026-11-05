@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiRequest, apiUrl, createIdempotencyKey } from '@/services/apiClient'
 import { stageSecret, subscribeToJob, type OperationPlan } from '@/services/operations'
+import ContainerRecycleJobResult from '@/components/containers/ContainerRecycleJobResult.vue'
 import ContainerAclJobResult from '@/components/containers/ContainerAclJobResult.vue'
 import ContainerRecursiveAclRestoreJobResult from '@/components/containers/ContainerRecursiveAclRestoreJobResult.vue'
 import { readAclJobResult } from '@/services/containerAclJobResults'
@@ -30,6 +31,8 @@ const recursiveAclTask = computed(
     [
       'containers.files.recursive-acl',
       'containers.files.recursive-acl-plan',
+      'containers.files.recycle',
+      'containers.files.recycle-plan',
       'containers.files.recursive-acl-restore',
       'containers.files.recursive-acl-restore-plan',
     ].includes(selected.value.jobType),
@@ -337,6 +340,17 @@ onBeforeUnmount(() => {
                   'containers.files.recursive-acl-restore',
                   'containers.files.recursive-acl-restore-plan',
                 ].includes(selected.jobType)
+              "
+              :job-id="selected.id"
+              :job-type="selected.jobType"
+              :state="selected.state"
+              :result-json="selected.resultJson"
+            />
+            <ContainerRecycleJobResult
+              v-else-if="
+                ['containers.files.recycle', 'containers.files.recycle-plan'].includes(
+                  selected.jobType,
+                )
               "
               :job-id="selected.id"
               :job-type="selected.jobType"

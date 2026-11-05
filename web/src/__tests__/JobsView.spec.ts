@@ -101,6 +101,8 @@ describe('Job retry', () => {
     expect(wrapper.findAll('button').some((b) => b.text() === '重新预检并重试')).toBe(false)
   })
   it.each([
+    'containers.files.recycle-plan',
+    'containers.files.recycle',
     'containers.files.recursive-acl-plan',
     'containers.files.recursive-acl',
     'containers.files.recursive-acl-restore-plan',

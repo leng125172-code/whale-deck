@@ -27,7 +27,7 @@ public sealed partial class ContainerRecycleRepository
         if (state == "Unknown" && row.RootStartedAtUtc is not null) row.HistoryMayExist = true;
         row.NextAttemptAtUtc = now.AddSeconds(30); row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
         if (terminal) { await FinishJob(job, row, state == "Succeeded" ? "Succeeded" : state == "Canceled" ? "Canceled" : "Failed", state, code, cancellationToken); await Processed(job.Id, now, cancellationToken); }
-        else { job.State = "Running"; job.Phase = "AwaitingContainerRecycleReceipt"; job.ErrorCode = code; job.ResultJson = null; job.Version++; await Event(job, code, cancellationToken); }
+        else { job.State = "Running"; job.Phase = "AwaitingContainerRecycleReceipt"; job.ErrorCode = code; job.ResultJson = JobResult(row, job); job.Version++; await Event(job, code, cancellationToken); }
         Audit(row, job.Id, row.ActorSubject, row.TraceId, "result", state); await db.SaveChangesAsync(cancellationToken); return true;
     }, cancellationToken);
     public Task AcknowledgeAsync(TerminalActor actor, Guid id, long version, ContainerRecycleReceiptDto receipt, CancellationToken cancellationToken) => Transaction(async () =>
@@ -114,10 +114,12 @@ public sealed partial class ContainerRecycleRepository
         var sequence = (await db.OperationJobEvents.Where(e => e.JobId == job.Id).MaxAsync(e => (long?)e.Sequence, cancellationToken) ?? 0) + 1;
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
     }
+    private string? JobResult(ContainerRecycleIntent row, OperationJob job) =>
+        ContainerRecycleWorkflowValidation.HasValidBinding(row, protector) ? ContainerRecycleJobResults.Snapshot(row, row.ExecutionJobId == job.Id) : null;
     private async Task FinishJob(OperationJob job, ContainerRecycleIntent row, string state, string phase, string code, CancellationToken cancellationToken)
     {
         job.State = state; job.Phase = phase; job.CompletedAtUtc = Now(); job.ErrorCode = state == "Succeeded" ? null : code;
-        job.ResultJson = null;
+        job.ResultJson = JobResult(row, job);
         job.ProgressPercent = state == "Succeeded" ? (short)100 : null; job.Version++; await Event(job, code, cancellationToken);
     }
     private void Audit(ContainerRecycleIntent row, Guid jobId, string actor, string trace, string action, string result) => db.AuditEvents.Add(new()

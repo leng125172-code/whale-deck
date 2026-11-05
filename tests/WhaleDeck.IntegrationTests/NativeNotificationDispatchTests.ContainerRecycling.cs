@@ -16,6 +16,7 @@ namespace WhaleDeck.IntegrationTests;
 
 public sealed partial class NativeNotificationDispatchTests
 {
+    private static readonly JsonSerializerOptions RecycleJobJson = new(JsonSerializerDefaults.Web);
     private static readonly string[] RecycleFenceTables = ["container_file_upload_operations", "container_directory_operations", "container_copy_intents", "container_move_intents", "container_permission_intents", "container_ownership_intents", "container_recursive_permission_intents", "container_recursive_ownership_intents", "container_acl_intents", "container_recursive_acl_intents", "container_recursive_acl_restore_intents"];
     // Real isolated PostgreSQL; all identity, plan and Root-receipt values are explicit fixtures.
     private static async Task ContainerRecycleBoundaries(DbContextOptions<PlatformDbContext> options)
@@ -41,10 +42,18 @@ public sealed partial class NativeNotificationDispatchTests
         ContainerRecycleReceiptDto Receipt(ContainerRecycleIntent row,string state)=>new(row.ExecutionJobId!.Value,row.ContainerId,row.InstanceId,new('E',64),new('C',64),state,
             state is "Trashed" or "Restored",false,state!="Aborted",state is "Trashed" or "Restored",state is "Trashed" or "Restored"?new('8',64):"",state is "Trashed" or "Restored",
             state=="Unknown"?null:state=="Trashed",state=="Unknown"?null:state=="Restored");
+        async Task JobFacts(ContainerRecycleIntent row, bool execution)
+        {
+            var id=execution?row.ExecutionJobId!.Value:row.Id;var job=await second.OperationJobs.AsNoTracking().SingleAsync(j=>j.Id==id);
+            var projection=await new OperationService(new JobRepository(second)).FindAsync(id,default);Assert.NotNull(projection!.ResultJson);
+            Assert.Equal(ContainerRecycleJobResults.ForJob(job),projection.ResultJson);var summary=JsonSerializer.Deserialize<ContainerRecycleJobResults.Summary>(projection.ResultJson,RecycleJobJson)!;
+            Assert.Equal(row.Id,summary.IntentId);Assert.Equal(id,summary.JobId);Assert.Equal(row.State,summary.State);Assert.Equal(row.RootState,summary.ReceiptState);Assert.Equal(row.SourceRetained,summary.SourceRetained);Assert.Equal(row.SourceRestored,summary.SourceRestored);Assert.Equal(row.PublishBarrier,summary.PublishBarrier);
+            foreach(var secret in new[]{row.ActorSubject,row.LoginBinding,row.TraceId,row.OwnerHash,row.ContainerId,row.InstanceId,row.RelativePath,row.RequestHash,row.PlanHash,row.ExecutionHash,row.ReceiptHash})if(secret is not null)Assert.DoesNotContain(secret,projection.ResultJson,StringComparison.Ordinal);
+        }
         async Task<ContainerRecycleIntent> Ready(ContainerRecycleIntent row)
         {
             await repo.EnqueueAsync(row,default);var claimed=Assert.IsType<ContainerRecycleIntent>(await repo.ClaimAsync(clock.GetUtcNow(),default));Assert.Equal(row.Id,claimed.Id);
-            Assert.True(await repo.MarkPlanningAsync(claimed,default));await repo.FinishPlanningAsync(claimed,Plan(row),"CONTAINER_RECYCLE_READY",default);return (await repo.FindAsync(row.Id,default))!;
+            Assert.True(await repo.MarkPlanningAsync(claimed,default));await repo.FinishPlanningAsync(claimed,Plan(row),"CONTAINER_RECYCLE_READY",default);var ready=(await repo.FindAsync(row.Id,default))!;await JobFacts(ready,false);return ready;
         }
         async Task<ContainerRecycleIntent> Pending(ContainerRecycleIntent row)
         {await repo.ConfirmAsync(actor,Claims(row),row.Version,default);var claimed=Assert.IsType<ContainerRecycleIntent>(await repo.ClaimAsync(clock.GetUtcNow(),default));Assert.Equal(row.Id,claimed.Id);return claimed;}
@@ -121,7 +130,7 @@ public sealed partial class NativeNotificationDispatchTests
             var applied=await Applying(ready);Assert.Null(await other.ClaimAsync(clock.GetUtcNow(),default));
             await Rejected($"UPDATE container_recycle_intents SET execution_job_id={Guid.NewGuid()} WHERE id={ready.Id}","container_recycle_execution_immutable");
             Assert.True(await repo.FinishAsync(applied,"Succeeded","CONTAINER_RECYCLE_TRASHED",Receipt(applied,"Trashed"),default));
-            var finished=(await other.FindAsync(ready.Id,default))!;Assert.True(ContainerRecycleWorkflowValidation.HasValidBinding(finished,protector));Assert.True(finished.SourceRetained);Assert.False(finished.SourceRestored);
+            var finished=(await other.FindAsync(ready.Id,default))!;Assert.True(ContainerRecycleWorkflowValidation.HasValidBinding(finished,protector));await JobFacts(finished,true);Assert.True(finished.SourceRetained);Assert.False(finished.SourceRestored);
             Assert.Equal("Succeeded",(await second.OperationJobs.AsNoTracking().SingleAsync(j=>j.Id==finished.ExecutionJobId)).State);
             await Rejected($"UPDATE container_recycle_intents SET version=version+1 WHERE id={ready.Id}","container_recycle_terminal_immutable");
             await Rejected($"DELETE FROM container_recycle_intents WHERE id={ready.Id}","container_recycle_permanent_intent");
@@ -159,14 +168,14 @@ public sealed partial class NativeNotificationDispatchTests
             }
             var unknownReceipt=Receipt(blocked,"Unknown") with{HistoryVerified=true,HistoryDigest=new('8',64),HistoryAvailable=true};
             Assert.True(await repo.FinishAsync(blocked,"Unknown","CONTAINER_RECYCLE_RESULT_UNKNOWN",unknownReceipt,default));
-            var unknown=(await other.FindAsync(blocked.Id,default))!;Assert.Null(unknown.SourceRetained);Assert.Null(unknown.SourceRestored);Assert.True(unknown.PublishBarrier);Assert.Null(await repo.ClaimAsync(clock.GetUtcNow(),default));
+            var unknown=(await other.FindAsync(blocked.Id,default))!;await JobFacts(unknown,true);Assert.Null(unknown.SourceRetained);Assert.Null(unknown.SourceRestored);Assert.True(unknown.PublishBarrier);Assert.Null(await repo.ClaimAsync(clock.GetUtcNow(),default));
             await Rejected($"UPDATE container_recycle_intents SET source_retained=false WHERE id={unknown.Id}","container_recycle_fact_immutable");
             var wrong=unknownReceipt with{State="Aborted",SourceRetained=false,SourceRestored=false};await Assert.ThrowsAsync<InvalidOperationException>(()=>other.AcknowledgeAsync(actor,unknown.Id,unknown.Version,wrong,default));
             var receiptJson=JsonNode.Parse(ContainerRecycleWorkflowValidation.Serialize(unknownReceipt))!;receiptJson["SourceRetained"]=false;
             Assert.False(await db.Database.SqlQuery<bool>($"SELECT whaledeck_recycle_receipt_valid({receiptJson.ToJsonString()}::jsonb,{unknown.PlanJson}::jsonb) AS \"Value\"").SingleAsync());
             var admin=actor with{Subject="native-other-recycle-admin",LoginBinding=new('F',64)};
             await other.AcknowledgeAsync(admin,unknown.Id,unknown.Version,unknownReceipt with{HistoryAvailable=false,Replayed=true},default);
-            var ack=(await repo.FindAsync(unknown.Id,default))!;Assert.Equal("Acknowledged",ack.State);Assert.Equal("Unknown",ack.RootState);Assert.False(ack.PublishBarrier);Assert.False(ack.HistoryAvailable);Assert.True(ack.HistoryVerified);Assert.True(ContainerRecycleWorkflowValidation.HasValidBinding(ack,protector));
+            var ack=(await repo.FindAsync(unknown.Id,default))!;await JobFacts(ack,true);Assert.Equal("Acknowledged",ack.State);Assert.Equal("Unknown",ack.RootState);Assert.False(ack.PublishBarrier);Assert.False(ack.HistoryAvailable);Assert.True(ack.HistoryVerified);Assert.True(ContainerRecycleWorkflowValidation.HasValidBinding(ack,protector));
             // Inverse SQL direction: every legacy publisher blocks a raw recycle start.
             var inverse=await Pending(await Ready(Row()));
             foreach(var pair in seeds)
@@ -211,6 +220,7 @@ public sealed partial class NativeNotificationDispatchTests
             Assert.False(await db.OutboxMessages.AnyAsync(m=>(m.MessageType=="ContainerRecycleRequested"||m.MessageType=="ContainerRecycleCancellationRequested")&&m.ProcessedAtUtc==null));
             Assert.True(await db.AuditEvents.AnyAsync(a=>a.Action=="containers.files.recycle.unknown-acknowledged"&&a.ActorSubject==admin.Subject));
             Console.WriteLine("INBOX_PHASE=container-recycle-persistent-original-facts-nullable-unknown-twelve-peer-fences-audited");
+            Console.WriteLine("INBOX_PHASE=container-recycle-job-safe-summary-projected-original-unknown-ack");
         }
         finally
         {await second.ContainerFileUploadOperations.Where(r=>uploadIds.Contains(r.Id)).ExecuteDeleteAsync();await second.ContainerDirectoryOperations.Where(r=>directoryIds.Contains(r.Id)).ExecuteDeleteAsync();File.Delete(keyPath);}
