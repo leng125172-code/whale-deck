@@ -1,5 +1,7 @@
 # 独立恢复：原件归还后、最终回执前切点候选
 
+2026-11-06后续：候选已接全新来源真实页面写后取消，最终同执行Succeeded/Completed及归属已分项验收；首轮工具失败保留，见[实机记录](CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_CANCEL.md)。以下保留候选当时未发生产信号/未做RPC的事实，不补签其余写后故障。
+
 2026-11-06，候选 `f2d556bd3b79c370598b532446a08a71f31574da` 新增QA专用 `bound_container_recycle_restore_returned_cut.py`。本批完成写后切点定义、真实临时原inode归还与局部恢复检查、生产只读保持核对；没有安装、发布、向生产helper发信号、调用新恢复RPC或真实身份/页面写后验收。不能将候选通过写成写后故障矩阵完成。
 
 ## 接受的窄切点
