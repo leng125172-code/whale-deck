@@ -178,6 +178,7 @@ jobs:
           python3 -W error -m py_compile deploy/validation/validate_recursive_acl_restore_partial_logout.py deploy/validation/verify_recursive_acl_restore_partial_logout.py deploy/validation/test_recursive_acl_restore_partial_logout.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_recursive_acl_restore_partial_logout.py
           node --check deploy/validation/validate_recursive_acl_restore_partial_logout.mjs
+          python3 -W error -m py_compile deploy/validation/recheck_recursive_acl_restore_partial_logout_report.py
           python3 -W error -m py_compile deploy/validation/reconcile_recursive_acl_restore_logout.py deploy/validation/test_reconcile_recursive_acl_restore_logout.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_reconcile_recursive_acl_restore_logout.py
           python3 -W error -m py_compile deploy/validation/validate_container_file_publishing.py deploy/validation/recover_recursive_acl_restore_prewrite.py deploy/validation/test_recover_recursive_acl_restore_prewrite.py

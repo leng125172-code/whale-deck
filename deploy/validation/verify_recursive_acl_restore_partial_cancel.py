@@ -49,18 +49,19 @@ def acquisition(name,seeds):
     metadata=verify_capture(evidence,b,row,storage);actual=unchanged(b,storage);capture=row['request']['operationId']
     return repo,evidence,saved,b,row,browser,reader,acl,storage,data,metadata,actual
 
-def verify(name,live=False,*,logout=False):
+def verify(name,live=False,*,logout=False,legacy_report=False):
     assert type(live) is type(logout) is bool
+    assert type(legacy_report) is bool and (not legacy_report or logout and not live and name=='recursive-acl-restore-partial-logout-265f8993c57441a0ad2ad5f4324c7801')
     assert re.fullmatch(('recursive-acl-restore-partial-logout-' if logout else 'recursive-acl-restore-partial-cancel-')+'[a-f0-9]{32}',name)
     from recursive_acl_restore_job_results_proof import SOURCES as JOB_SOURCES
-    from recursive_acl_restore_partial_workflow import SOURCES as PARTIAL_SOURCES,normal_logout,authority_proof
+    from recursive_acl_restore_partial_workflow import SOURCES as PARTIAL_SOURCES,normal_logout,authority_proof,partial_outcome
     seeds=(*SOURCES,*JOB_SOURCES,*PARTIAL_SOURCES)
     if logout:
         from recursive_acl_restore_partial_workflow import LOGOUT_SOURCES
         seeds=(*seeds,*LOGOUT_SOURCES)
     repo,evidence,saved,b,row,browser,reader,acl,storage,data,metadata,actual=acquisition(name,seeds)
     assert b.get('restorePartialLogout',False) is logout
-    assert b['restorePartialCancel'] is b['restoreJobResults'] is True and b['restorePrewriteCancel'] is b['restoreInflightLogout'] is b['restoreReadyLogout'] is False
+    assert b.get('restorePartialWorkflow',b['restorePartialCancel']) is True and b['restorePartialCancel'] is (True if legacy_report else not logout) and b['restoreJobResults'] is True and b['restorePrewriteCancel'] is b['restoreInflightLogout'] is b['restoreReadyLogout'] is False
     from recursive_acl_restore_paging_proof import page_proof,ready_proof as ready_business
     from recursive_acl_restore_job_results_proof import ready_job_proof
     from recursive_acl_restore_partial_business_proof import require_partial,require_acknowledged
@@ -123,8 +124,8 @@ def verify(name,live=False,*,logout=False):
     else:
         assert not os.path.lexists(source_path);missing=subprocess.run(['docker','inspect',b['containerId']],capture_output=True,timeout=15);assert missing.returncode!=0 and b'no such' in missing.stderr.lower()
         assert saved('live-independent.json')['physicalTreeReread'] is True;typed_equal(saved('final-preservation.json'),actual)
-        accepted=saved('verified.json');assert accepted['objects']==26 and accepted['restoreExecutions']==1 and accepted['partialCancellation'] is True and accepted.get('partialLogout',False) is logout and accepted['canceled']==0 and accepted['sourceAndContainerAbsent'] is True
-    return dict(revision=b['revision'],independentReadOnly=True,physicalTreeReread=live,sourceBytesRereadAfterCleanup=False,counts=proof['counts'],temporaryIdentitiesAbsent=True,sourceAndContainerAbsent=not live,partialCancellation=True,partialLogout=logout,acknowledgedByDifferentAdministrator=True,productStoppedHelperSeconds=timing['seconds'],oldProtected=len(b['protectedFiles']),finalProtected=len(actual))
+        accepted=saved('verified.json');assert accepted['objects']==26 and accepted['restoreExecutions']==1 and accepted['partialCancellation'] is (True if legacy_report else not logout) and accepted.get('partialLogout',False) is logout and accepted['canceled']==0 and accepted['sourceAndContainerAbsent'] is True
+    return dict(revision=b['revision'],independentReadOnly=True,physicalTreeReread=live,sourceBytesRereadAfterCleanup=False,counts=proof['counts'],temporaryIdentitiesAbsent=True,sourceAndContainerAbsent=not live,**partial_outcome(logout),legacyOutcomeFlagIncorrect=legacy_report,acknowledgedByDifferentAdministrator=True,productStoppedHelperSeconds=timing['seconds'],oldProtected=len(b['protectedFiles']),finalProtected=len(actual))
 
 if __name__=='__main__':
     try:

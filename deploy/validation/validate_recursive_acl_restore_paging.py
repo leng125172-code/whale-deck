@@ -59,12 +59,12 @@ def unchanged(b,storage):
     assert all(actual.get(k)==v for k,v in b['protectedFiles'].items()) and len(actual)==len(b['protectedFiles'])+54
     io=installed()
     for current,old in ((snapshot(io.restoreState),b['restoreRootBefore']),(hdd_snapshot(io,True),b['restoreHddBefore'])):
-        assert all(current.get(k)==v for k,v in old.items()) if (b.get('restorePrewriteCancel',False) or b.get('restoreInflightLogout',False) or b.get('restorePartialCancel',False)) else current==old
+        assert all(current.get(k)==v for k,v in old.items()) if (b.get('restorePrewriteCancel',False) or b.get('restoreInflightLogout',False) or b.get('restorePartialCancel',False) or b.get('restorePartialLogout',False)) else current==old
     current=snapshot(io.sourceState);assert all(current.get(k)==v for k,v in b['sourceRootBefore'].items())
     assert root_snapshot(Path('/var/lib/whaledeck-container-directories'))==b['directoryRoot']
     current_core=owned.common.core_snapshot()
     for name,old in b['coreBefore'].items():
-        assert current_core[name][:3]==tuple(old[:3]) if (b.get('restorePrewriteCancel',False) or b.get('restoreInflightLogout',False) or b.get('restorePartialCancel',False)) and name=='/whaledeck-worker' else current_core[name]==tuple(old)
+        assert current_core[name][:3]==tuple(old[:3]) if (b.get('restorePrewriteCancel',False) or b.get('restoreInflightLogout',False) or b.get('restorePartialCancel',False) or b.get('restorePartialLogout',False)) and name=='/whaledeck-worker' else current_core[name]==tuple(old)
     assert host_identity(b['revision'])==b['hostIdentity'] and database()==b['database']
     no_active_work();return actual
 
@@ -140,7 +140,7 @@ def main(ready_logout=False,prewrite_cancel=False,inflight_logout=False,job_resu
             inspected=json.loads(owned.common.command(['docker','inspect',fixture['identifier']]))[0]
             location=dict(containerId=fixture['identifier'],instanceId=str(inspected['State']['Pid'])+':'+inspected['State']['StartedAt'])
             b=dict(revision=revision,probeRevision=probe_revision,validationSourceRevision=validation_revision,validationSourceSha256=hashes,probeSourceSha256=probe_hashes,probeBinarySha256=hashlib.sha256(binary.read_bytes()).hexdigest(),sourceHashes=host_hashes,**location,
-                restorePartialLogout=partial_logout,restorePartialCancel=partial_cancel,restorePrewriteCancel=prewrite_cancel,restoreInflightLogout=inflight_logout,restoreJobResults=job_results,restoreReadyLogout=ready_logout,containerName=inspected['Name'].lstrip('/'),source=str(fixture['folder']),root=str(root),evidence=str(evidence),restoreDatabase=restore_before,restoreRootBefore=snapshot(io.restoreState),restoreHddBefore=hdd_snapshot(io,True),sourceRootBefore=snapshot(io.sourceState),original=inventory(root,reader,data,acl),bytesPerFile=len(data),sha256=hashlib.sha256(data).hexdigest().upper(),coreBefore=core,hostIdentity=hosts,protectedFiles=before,directoryRoot=directories,database=sql,sourceDevice=root.stat().st_dev)
+                restorePartialWorkflow=partial_cancel,restorePartialLogout=partial_logout,restorePartialCancel=partial_cancel and not partial_logout,restorePrewriteCancel=prewrite_cancel,restoreInflightLogout=inflight_logout,restoreJobResults=job_results,restoreReadyLogout=ready_logout,containerName=inspected['Name'].lstrip('/'),source=str(fixture['folder']),root=str(root),evidence=str(evidence),restoreDatabase=restore_before,restoreRootBefore=snapshot(io.restoreState),restoreHddBefore=hdd_snapshot(io,True),sourceRootBefore=snapshot(io.sourceState),original=inventory(root,reader,data,acl),bytesPerFile=len(data),sha256=hashlib.sha256(data).hexdigest().upper(),coreBefore=core,hostIdentity=hosts,protectedFiles=before,directoryRoot=directories,database=sql,sourceDevice=root.stat().st_dev)
             with storage.target(create_namespace=False,read_only=True) as (cfg,fd):storage.attest(cfg,fd,read_only=True);b['hddDevice']=os.fstat(fd).st_dev
             (evidence/'baseline.json').write_text(json.dumps(b))
             PHASE='one-new-signed-capture';probe=Probe(binary,evidence,dict(revision=revision,probeRevision=probe_revision,**location,coreId=core['/whaledeck-api'][0]),mode='container-recursive-acl-page-capture')
@@ -204,7 +204,11 @@ def main(ready_logout=False,prewrite_cancel=False,inflight_logout=False,job_resu
             assert inventory(root,reader,data,acl)==expected;remove_proved(root,reader,data,acl,expected)
         PHASE='after-exact-cleanup';assert not fixture['folder'].exists();final=unchanged(b,storage)
         (evidence/'final-preservation.json').write_text(json.dumps(final))
-        (evidence/'verified.json').write_text(json.dumps(dict(revision=revision,signedCaptures=1,objects=26,restorePreviewOffsets=[0] if ready_logout or executing else [0,25,0,25],restoreExecutions=int(executing),**(dict(partialCancellation=True,partialLogout=partial_logout) if partial_cancel else {}),canceled=0 if ready_logout or partial_cancel else 1,sourceAndContainerAbsent=True,historiesRetained=True,coreUnchanged=11,realRestoreSnapshotPagination=not (ready_logout or executing),readyLogoutNaturalExpiry=ready_logout,restorePartialLogout=partial_logout,restorePartialCancel=partial_cancel,restorePrewriteCancel=prewrite_cancel,restoreInflightLogout=inflight_logout)))
+        outcome={}
+        if partial_cancel:
+            from recursive_acl_restore_partial_workflow import partial_outcome
+            outcome=partial_outcome(partial_logout)
+        (evidence/'verified.json').write_text(json.dumps(dict(revision=revision,signedCaptures=1,objects=26,restorePreviewOffsets=[0] if ready_logout or executing else [0,25,0,25],restoreExecutions=int(executing),**outcome,canceled=0 if ready_logout or partial_cancel else 1,sourceAndContainerAbsent=True,historiesRetained=True,coreUnchanged=11,realRestoreSnapshotPagination=not (ready_logout or executing),readyLogoutNaturalExpiry=ready_logout,restorePartialWorkflow=partial_cancel,restorePartialLogout=partial_logout,restorePartialCancel=partial_cancel and not partial_logout,restorePrewriteCancel=prewrite_cancel,restoreInflightLogout=inflight_logout)))
         PHASE='independent-final-after-cleanup'
         with (evidence/'independent-final.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation'/verifier),evidence.name],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
         print(json.dumps(dict(actualRecursiveRestorePaging='passed',readyLogoutNaturalExpiry=ready_logout,evidence=evidence.name,objects=26,restorePreviewOffsets=[0] if ready_logout or executing else [0,25,0,25],restoreExecutions=int(executing))),flush=True)

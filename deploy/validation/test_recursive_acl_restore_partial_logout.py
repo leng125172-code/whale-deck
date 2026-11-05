@@ -3,7 +3,7 @@ import copy,unittest
 from test_recursive_acl_restore_partial_business_proof import fixture
 from test_recursive_acl_restore_partial_workflow import packets
 from recursive_acl_restore_partial_business_proof import require_partial,require_acknowledged
-from recursive_acl_restore_partial_workflow import authority_proof
+from recursive_acl_restore_partial_workflow import authority_proof,partial_outcome
 from verify_recursive_acl_restore_partial_cancel import verify
 from validate_recursive_acl_restore_paging import main
 
@@ -46,5 +46,20 @@ class PartialLogoutTests(unittest.TestCase):
             with self.subTest(name=name),self.assertRaises(AssertionError):verify(name,logout=mode)
         with self.assertRaises(AssertionError):main(partial_logout=True)
         with self.assertRaises(AssertionError):main(partial_cancel=True,job_results=True,partial_logout='yes')
+
+    def test_machine_report_keeps_logout_distinct_from_explicit_cancel(self):
+        self.assertEqual(partial_outcome(True),dict(partialRecovery=True,partialCancellation=False,partialLogout=True))
+        self.assertEqual(partial_outcome(False),dict(partialRecovery=True,partialCancellation=True,partialLogout=False))
+        with self.assertRaises(AssertionError):partial_outcome('yes')
+
+    def test_legacy_report_exception_is_read_only_and_exact_run_only(self):
+        for kwargs in (dict(name='recursive-acl-restore-partial-logout-'+'a'*32,logout=True),dict(name='recursive-acl-restore-partial-logout-265f8993c57441a0ad2ad5f4324c7801',logout=False),dict(name='recursive-acl-restore-partial-logout-265f8993c57441a0ad2ad5f4324c7801',logout=True,live=True)):
+            with self.subTest(kwargs=kwargs),self.assertRaises(AssertionError):verify(**kwargs,legacy_report=True)
+
+    def test_report_recheck_cannot_select_any_other_original_run(self):
+        from recheck_recursive_acl_restore_partial_logout_report import target,NAME
+        self.assertEqual(target(NAME).name,NAME)
+        for name in ('../escape','recursive-acl-restore-partial-logout-'+'a'*32,'recursive-acl-restore-partial-cancel-'+'a'*32):
+            with self.subTest(name=name),self.assertRaises(AssertionError):target(name)
 
 if __name__=='__main__':unittest.main()

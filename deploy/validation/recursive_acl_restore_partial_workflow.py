@@ -23,6 +23,10 @@ from validate_container_upload_recovery_agent import trusted
 from bound_container_recursive_acl_restore_cut import freeze_after_first_restore,OBSERVER_WAIT_SECONDS
 
 LOGOUT_SOURCES=('validate_recursive_acl_restore_partial_logout.py','validate_recursive_acl_restore_partial_logout.mjs','test_recursive_acl_restore_partial_logout.py','verify_recursive_acl_restore_partial_logout.py')
+def partial_outcome(logout):
+    assert type(logout) is bool
+    return dict(partialRecovery=True,partialCancellation=not logout,partialLogout=logout)
+
 PACKETS=('partial','recovery-dismissed','recovery','final-auth')
 SOURCES=('recursive_acl_restore_partial_workflow.py','installed_ui_restore_partial_resolution.mjs','validate_recursive_acl_restore_partial_cancel.py','validate_recursive_acl_restore_partial_cancel.mjs','verify_recursive_acl_restore_partial_cancel.py','test_recursive_acl_restore_partial_workflow.py')
 def wait_packet(process,evidence,name):
