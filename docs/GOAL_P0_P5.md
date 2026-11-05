@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-05 回收执行中正常退出已在HDD已验证/源未移除切点实机通过：门禁c149b67f，真实BFF退出POST时原pidfd仍活、1.972秒退出；取消POST0/SQL取消时间空，同账号重登旧意图404，两次双端退出与原Job摘要、源/HDD原件、清理前后独立证明通过。53工具/8范围，127证据含启动属主拒绝保留；Root10→12/HDD13→15、2346保护/11核心保持。仅签该切点，继续撤权/停用、重启、Unknown、独立恢复及59项，不升完成率。[实机与边界](qa/CONTAINER_FILE_RECYCLING_INFLIGHT_LOGOUT.md)。
+
 2026-11-05 回收执行中HDD已验证/源未移除切点取消已在新资源实机通过：最终9e7500f4，精确MainPID/Invocation/cgroup/双FD和pidfd后STOP，实际Vue明确取消，原helper1.754秒退出；Canceled/Aborted、源inode字节属性与真实Canceled HDD原件保持，原Job摘要/普通8匿名4拒绝/双端退出、清理前后独立证明通过。47工具/8范围，127成功证据与107+111旧失败保留，未验证partial也保留；Root8→10/HDD11→13，2346保护/11核心保持。仅签该切点，继续退出/撤权/重启/Unknown、恢复和59项。[实机与失败边界](qa/CONTAINER_FILE_RECYCLING_INFLIGHT_CANCEL.md)。
 
 2026-11-05 回收执行中切点QA候选645d859b已实现：完整原计划/源inode字节属性、当前systemd MainPID/Invocation/cgroup及双内核FD绑定后才允许pidfd STOP，未STOP不发CONT；12专项/44关联/8范围通过。正向Proc为替身、文件与自有子进程为实际临时I/O，未对生产helper发信号或签取消实机。2346保护/11核心/Root6-HDD9保持。继续新资源真实取消门禁及退出/撤权/重启/Unknown、恢复和59项，不升完成率。[观察器与边界](qa/CONTAINER_FILE_RECYCLING_CUT_CANDIDATE.md)。
