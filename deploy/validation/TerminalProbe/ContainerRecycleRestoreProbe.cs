@@ -161,8 +161,11 @@ internal static class ContainerRecycleRestoreProbe
                     {
                         var changed = operation.Clone();
                         switch (field) { case "source": changed.Plan.Command.Source.Owner = new('E', 64); break; case "history": changed.Plan.Command.HistoryDigest = new('E', 64); break;
-                            case "private": changed.Plan.PrivateIdentity.Inode++; break; case "ctime": changed.Plan.RetainedChangedAtUnixNs++; break; case "fingerprint": changed.Plan.Fingerprint = new('E', 64); break;
+                            case "private": changed.Plan.PrivateIdentity.Inode++; break; case "ctime": changed.Plan.RetainedChangedAtUnixNs++; break; case "fingerprint": changed.Plan.ParentVersion = new('E', 64); break;
                             case "owner": changed.Owner = new('E', 64); break; case "actor": changed.Context.ActorSubject += "-changed"; break; case "trace": changed.Context.TraceId += "-changed"; break; default: changed.Context.IdempotencyKey = Guid.NewGuid().ToString("N"); break; }
+                        // Keep the body structurally valid so this tests signed
+                        // binding, rather than failing the earlier plan parser.
+                        changed.Plan.Fingerprint = ContainerRecycleRestoreWire.Fingerprint(changed.Plan);
                         await Reject(async () => await client.ApplyAsync(changed, Headers("Apply", operation), Until(), lifetime.Token), StatusCode.PermissionDenied);
                     }
                     foreach (var variant in new[] { "recycle-domain", "permission-domain", "generic-domain" })

@@ -16,6 +16,18 @@ public sealed class ContainerRecycleRestorePolicyTests
         p.Fingerprint=ContainerRecycleRestoreWire.Fingerprint(p);return p;
     }
     internal static ContainerRecycleRestoreRequest Request()=>new(){OperationId="cc0a8865343e49bdb01a72680131bf39",Owner=new('E',64),Plan=Plan(),Context=new(){ActorSubject="synthetic-admin",TraceId="synthetic-trace",JobId="cc0a8865343e49bdb01a72680131bf39",IdempotencyKey="bb0a8865343e49bdb01a72680131bf39"}};
+    [Theory]
+    [InlineData("source")][InlineData("history")][InlineData("private")][InlineData("ctime")][InlineData("parent-version")]
+    public void StructurallyValidRehashedTamperingStillChangesTheSignedRequest(string field)
+    {
+        var original=Request();var changed=original.Clone();
+        switch(field){case "source":changed.Plan.Command.Source.Owner=new('F',64);break;case "history":changed.Plan.Command.HistoryDigest=new('F',64);break;
+            case "private":changed.Plan.PrivateIdentity.Inode++;break;case "ctime":changed.Plan.RetainedChangedAtUnixNs++;break;default:changed.Plan.ParentVersion=new('F',64);break;}
+        changed.Plan.Fingerprint=ContainerRecycleRestoreWire.Fingerprint(changed.Plan);
+        ContainerRecycleRestorePolicy.Request(changed);
+        Assert.NotEqual(original.Plan.Fingerprint,changed.Plan.Fingerprint);
+        Assert.NotEqual(ContainerRecycleRestoreBinding.Hash(original),ContainerRecycleRestoreBinding.Hash(changed));
+    }
     internal static object ReceiptInput(ContainerRecycleRestoreRequest q,string state="Completed",bool claimed=true)=>new
     {
         operationId=q.OperationId,sourceOperationId=q.Plan.Command.Source.OperationId,fingerprint=q.Plan.Fingerprint,targetProof=q.Plan.TargetProof,state,bindingCurrent=state=="Completed",replayed=true,
