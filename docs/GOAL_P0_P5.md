@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-06独立恢复写前切点候选033f80eb已验证：新恢复/原来源/claim与原留存完整绑定，固定restore进程的MainPID/Invocation/cgroup及三个内核FD匹配后才可pidfd暂停，停止后重验；12新/51关联root检查零跳过。两项夹具路径初稿失败保留，真实只读拒绝两Completed及实际Agent，2346保护/11核心/业务Root-HDD保持，生产信号和新RPC均0。真实页面执行中取消仍待；继续故障矩阵/长期清理和59项。[候选及准确边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_CUT_CANDIDATE.md)。
+
 2026-11-06独立回收恢复常规真实整链已通过：32146117全新资源/临时真实Authentik身份，Vue来源回收→Ready取消→另建恢复成功、17字段Jobs/原inode/HDD、普通9/匿名5拒绝、两次双端退出与5旧引用隔离，清理前后独立通过。首轮jsonb/退出诊断失败及新意图API收尾保留；2346保护/11核心与3d80部署保持，Root36-HDD39/恢复Root11。执行中故障、长期清理及59项继续，不升整项完成率。[真实页面与失败边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_REAL_UI.md)。
 
 2026-11-06独立回收恢复已标准覆盖：准确3d80d17的CI12项全成功，六组件/HTTP及生产迁移1/CHECK19/fence14/guard1通过；新意图/活动0，旧16回收行、2346保护内容和八数据库原身份按边界保持。55维护采样全200不签瞬时连续，三真实资源一致/匿名401；尚无本批真实身份恢复任务，继续Vue/Jobs/原inode/HDD整链、故障及长期清理和59项。[发布与准确边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_RELEASE.md)。
