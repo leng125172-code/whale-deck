@@ -120,7 +120,7 @@ public sealed partial class ContainerUploadHttpTests
         f.Recycle.MakeReady();var ready=(await owner.GetFromJsonAsync<ContainerRecycleIntentDto>($"{RecycleBase}/{initial.Id:D}"))!;
         using var confirm=Write(owner,HttpMethod.Post,$"{RecycleBase}/{ready.Id:D}/confirm",token,JsonContent.Create(new{planHash=ready.Confirmation!.PlanHash,confirmed=true,version=ready.Version}),ready.Id.ToString("D"));
         using var confirmed=await owner.SendAsync(confirm);Assert.Equal(HttpStatusCode.Accepted,confirmed.StatusCode);f.Recycle.MakeUnknown();
-        using var admin=await f.Client("another-admin",true);var csrf=await Csrf(admin);var url=$"/api/v1/files/container-recycles/recovery/{ready.Id:D}";
+        f.Directory.AdditionalAdmin="another-admin";using var admin=await f.Client("another-admin",true);var csrf=await Csrf(admin);var url=$"/api/v1/files/container-recycles/recovery/{ready.Id:D}";
         var unknown=(await admin.GetFromJsonAsync<ContainerRecycleIntentDto>(url))!;Assert.Null(unknown.Receipt!.SourceRetained);Assert.Null(unknown.Receipt.SourceRestored);
         using var refuse=Write(admin,HttpMethod.Post,url+"/acknowledge",csrf,JsonContent.Create(new{version=unknown.Version,confirmed=false}),ready.Id.ToString("D"));
         using var refused=await admin.SendAsync(refuse);Assert.Equal(HttpStatusCode.BadRequest,refused.StatusCode);Assert.Equal(0,f.Recycle.Mutations);
