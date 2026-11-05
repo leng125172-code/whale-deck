@@ -103,7 +103,7 @@ def freeze_before_removal(row,source,container_pid):
                 frozen=record_for(row);proof=pre_removal_proof(frozen,source)
                 if proof is None:return None
                 assert unit_identity(group)==(pid,invocation) and bound_process(pid,group,invocation,root_identity,operation_lock(lock))
-                proof.update(twoKernelFdProofs=True,invocationId=invocation,cgroup=group)
+                proof.update(twoKernelFdProofs=True,pid=pid,containerRootIdentity=list(root_identity),operationLockIdentity=list(operation_lock(lock)),invocationId=invocation,cgroup=group)
                 held=HeldCopy(pid,fd,group,frozen,proof);fd=None;return held
             time.sleep(.0005)
         return None
