@@ -59,12 +59,12 @@ def unchanged(b,storage):
     assert all(actual.get(k)==v for k,v in b['protectedFiles'].items()) and len(actual)==len(b['protectedFiles'])+54
     io=installed()
     for current,old in ((snapshot(io.restoreState),b['restoreRootBefore']),(hdd_snapshot(io,True),b['restoreHddBefore'])):
-        assert all(current.get(k)==v for k,v in old.items()) if (b.get('restorePrewriteCancel',False) or b.get('restoreInflightLogout',False) or b.get('restorePartialCancel',False) or b.get('restorePartialLogout',False)) else current==old
+        assert all(current.get(k)==v for k,v in old.items()) if (b.get('restorePrewriteCancel',False) or b.get('restoreInflightLogout',False) or b.get('restorePartialCancel',False) or b.get('restorePartialLogout',False) or b.get('restoreUnknownRename',False)) else current==old
     current=snapshot(io.sourceState);assert all(current.get(k)==v for k,v in b['sourceRootBefore'].items())
     assert root_snapshot(Path('/var/lib/whaledeck-container-directories'))==b['directoryRoot']
     current_core=owned.common.core_snapshot()
     for name,old in b['coreBefore'].items():
-        assert current_core[name][:3]==tuple(old[:3]) if (b.get('restorePrewriteCancel',False) or b.get('restoreInflightLogout',False) or b.get('restorePartialCancel',False) or b.get('restorePartialLogout',False)) and name=='/whaledeck-worker' else current_core[name]==tuple(old)
+        assert current_core[name][:3]==tuple(old[:3]) if (b.get('restorePrewriteCancel',False) or b.get('restoreInflightLogout',False) or b.get('restorePartialCancel',False) or b.get('restorePartialLogout',False) or b.get('restoreUnknownRename',False)) and name=='/whaledeck-worker' else current_core[name]==tuple(old)
     assert host_identity(b['revision'])==b['hostIdentity'] and database()==b['database']
     no_active_work();return actual
 
@@ -75,11 +75,11 @@ def no_restore_records(identifier):
     with namespace(io,True) as fd:absent(fd,operation+'.json');absent(fd,operation)
 
 
-def main(ready_logout=False,prewrite_cancel=False,inflight_logout=False,job_results=False,partial_cancel=False,partial_logout=False):
-    assert all(type(v) is bool for v in (ready_logout,prewrite_cancel,inflight_logout,partial_cancel)) and sum((ready_logout,prewrite_cancel,inflight_logout,partial_cancel))<=1
-    assert type(job_results) is bool and (not job_results or inflight_logout or partial_cancel) and (not partial_cancel or job_results)
+def main(ready_logout=False,prewrite_cancel=False,inflight_logout=False,job_results=False,partial_cancel=False,partial_logout=False,unknown_rename=False):
+    assert all(type(v) is bool for v in (ready_logout,prewrite_cancel,inflight_logout,partial_cancel,unknown_rename)) and sum((ready_logout,prewrite_cancel,inflight_logout,partial_cancel,unknown_rename))<=1
+    assert type(job_results) is bool and (not job_results or inflight_logout or partial_cancel or unknown_rename) and (not partial_cancel or job_results) and (not unknown_rename or job_results)
     assert type(partial_logout) is bool and (not partial_logout or partial_cancel)
-    executing=prewrite_cancel or inflight_logout or partial_cancel
+    executing=prewrite_cancel or inflight_logout or partial_cancel or unknown_rename
     global PHASE
     assert os.geteuid()==0 and len(sys.argv)==4;os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     revision,binary_name,probe_revision=sys.argv[1:];assert all(re.fullmatch('[a-f0-9]{40}',v) for v in (revision,probe_revision))
@@ -104,6 +104,9 @@ def main(ready_logout=False,prewrite_cancel=False,inflight_logout=False,job_resu
         if partial_logout:
             from recursive_acl_restore_partial_workflow import LOGOUT_SOURCES as logout_sources
             seeds=(*seeds,*logout_sources)
+    if unknown_rename:
+        from recursive_acl_restore_unknown_workflow import SOURCES as unknown_sources
+        seeds=(*seeds,*unknown_sources)
     hashes=source_closure(repo,validation_revision,seeds=seeds)
     assert all(hashlib.sha256((repo/'deploy/validation'/n).read_bytes()).hexdigest()==sha for n,sha in hashes.items())
     probe_hashes={}
@@ -119,7 +122,7 @@ def main(ready_logout=False,prewrite_cancel=False,inflight_logout=False,job_resu
         raw=subprocess.check_output(['git','-C',str(repo),'show',revision+':deploy/host/'+name]);assert (Path('/usr/local/libexec')/name).read_bytes()==raw;host_hashes[name]=hashlib.sha256(raw).hexdigest()
     io=installed();restore_before=restore_database();assert restore_before['active']==0
     before=preservation_snapshot(storage);directories=root_snapshot(Path('/var/lib/whaledeck-container-directories'));core=owned.common.core_snapshot();hosts=host_identity(revision);sql=database();no_active_work()
-    evidence=repo/'deploy/artifacts'/(('recursive-acl-restore-partial-logout-' if partial_logout else 'recursive-acl-restore-partial-cancel-' if partial_cancel else 'recursive-acl-restore-job-results-ui-' if job_results else 'recursive-acl-restore-inflight-logout-' if inflight_logout else 'recursive-acl-restore-prewrite-cancel-' if prewrite_cancel else 'recursive-acl-restore-ready-logout-' if ready_logout else 'recursive-acl-restore-paging-')+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
+    evidence=repo/'deploy/artifacts'/(('recursive-acl-restore-unknown-rename-' if unknown_rename else 'recursive-acl-restore-partial-logout-' if partial_logout else 'recursive-acl-restore-partial-cancel-' if partial_cancel else 'recursive-acl-restore-job-results-ui-' if job_results else 'recursive-acl-restore-inflight-logout-' if inflight_logout else 'recursive-acl-restore-prewrite-cancel-' if prewrite_cancel else 'recursive-acl-restore-ready-logout-' if ready_logout else 'recursive-acl-restore-paging-')+uuid.uuid4().hex);evidence.mkdir(mode=0o700)
     print(json.dumps(dict(actualRecursiveRestorePaging='started',evidence=evidence.name)),flush=True)
     probe=None
     try:
@@ -140,7 +143,7 @@ def main(ready_logout=False,prewrite_cancel=False,inflight_logout=False,job_resu
             inspected=json.loads(owned.common.command(['docker','inspect',fixture['identifier']]))[0]
             location=dict(containerId=fixture['identifier'],instanceId=str(inspected['State']['Pid'])+':'+inspected['State']['StartedAt'])
             b=dict(revision=revision,probeRevision=probe_revision,validationSourceRevision=validation_revision,validationSourceSha256=hashes,probeSourceSha256=probe_hashes,probeBinarySha256=hashlib.sha256(binary.read_bytes()).hexdigest(),sourceHashes=host_hashes,**location,
-                restorePartialWorkflow=partial_cancel,restorePartialLogout=partial_logout,restorePartialCancel=partial_cancel and not partial_logout,restorePrewriteCancel=prewrite_cancel,restoreInflightLogout=inflight_logout,restoreJobResults=job_results,restoreReadyLogout=ready_logout,containerName=inspected['Name'].lstrip('/'),source=str(fixture['folder']),root=str(root),evidence=str(evidence),restoreDatabase=restore_before,restoreRootBefore=snapshot(io.restoreState),restoreHddBefore=hdd_snapshot(io,True),sourceRootBefore=snapshot(io.sourceState),original=inventory(root,reader,data,acl),bytesPerFile=len(data),sha256=hashlib.sha256(data).hexdigest().upper(),coreBefore=core,hostIdentity=hosts,protectedFiles=before,directoryRoot=directories,database=sql,sourceDevice=root.stat().st_dev)
+                restoreUnknownRename=unknown_rename,restorePartialWorkflow=partial_cancel,restorePartialLogout=partial_logout,restorePartialCancel=partial_cancel and not partial_logout,restorePrewriteCancel=prewrite_cancel,restoreInflightLogout=inflight_logout,restoreJobResults=job_results,restoreReadyLogout=ready_logout,containerName=inspected['Name'].lstrip('/'),source=str(fixture['folder']),root=str(root),evidence=str(evidence),restoreDatabase=restore_before,restoreRootBefore=snapshot(io.restoreState),restoreHddBefore=hdd_snapshot(io,True),sourceRootBefore=snapshot(io.sourceState),original=inventory(root,reader,data,acl),bytesPerFile=len(data),sha256=hashlib.sha256(data).hexdigest().upper(),coreBefore=core,hostIdentity=hosts,protectedFiles=before,directoryRoot=directories,database=sql,sourceDevice=root.stat().st_dev)
             with storage.target(create_namespace=False,read_only=True) as (cfg,fd):storage.attest(cfg,fd,read_only=True);b['hddDevice']=os.fstat(fd).st_dev
             (evidence/'baseline.json').write_text(json.dumps(b))
             PHASE='one-new-signed-capture';probe=Probe(binary,evidence,dict(revision=revision,probeRevision=probe_revision,**location,coreId=core['/whaledeck-api'][0]),mode='container-recursive-acl-page-capture')
@@ -153,16 +156,19 @@ def main(ready_logout=False,prewrite_cancel=False,inflight_logout=False,job_resu
             result=json.loads(response['result']);row=dict(request=dict(operationId=operation,owner='B'*64,plan=plan),result=result,before=b['original'],after=inventory(root,reader,data,acl))
             (evidence/'capture.json').write_text(json.dumps(row));metadata=verify_capture(evidence,b,row,storage,archive=True)
             closing=probe;probe=None;closing.close(True);unchanged(b,storage)
-            browser_fixture={k:b[k] for k in ('revision','containerId','instanceId','containerName','evidence')};browser_fixture.update(captureId=operation,historyDigest=result['historyDigest'],inflightLogout=inflight_logout,jobResults=job_results,partialCancel=partial_cancel,partialLogout=partial_logout)
+            browser_fixture={k:b[k] for k in ('revision','containerId','instanceId','containerName','evidence')};browser_fixture.update(captureId=operation,historyDigest=result['historyDigest'],inflightLogout=inflight_logout,jobResults=job_results,partialCancel=partial_cancel,partialLogout=partial_logout,unknownRename=unknown_rename)
             signals=[]
             with ExitStack() as users:
                 admin=users.enter_context(temporary_user(True));ordinary=users.enter_context(temporary_user(False));env={**os.environ};env.pop('VALIDATION_USERNAME',None);env.pop('VALIDATION_PASSWORD',None)
-                resolver=users.enter_context(temporary_user(True)) if partial_cancel else None
+                resolver=users.enter_context(temporary_user(True)) if (partial_cancel or unknown_rename) else None
                 with (evidence/'browser.stdout').open('w') as out,(evidence/'browser.stderr').open('w') as err:
-                    process=subprocess.Popen(['node',str(repo/'deploy/validation'/('validate_recursive_acl_restore_partial_logout.mjs' if partial_logout else 'validate_recursive_acl_restore_partial_cancel.mjs' if partial_cancel else 'validate_recursive_acl_restore_job_results.mjs' if job_results else 'validate_recursive_acl_restore_inflight_logout.mjs' if inflight_logout else 'validate_recursive_acl_restore_prewrite.mjs' if prewrite_cancel else 'validate_recursive_acl_restore_ready_logout.mjs' if ready_logout else 'validate_recursive_acl_restore_paging.mjs')),revision],stdin=subprocess.PIPE,stdout=out,stderr=err,env=env,text=True)
+                    process=subprocess.Popen(['node',str(repo/'deploy/validation'/('validate_recursive_acl_restore_unknown_rename.mjs' if unknown_rename else 'validate_recursive_acl_restore_partial_logout.mjs' if partial_logout else 'validate_recursive_acl_restore_partial_cancel.mjs' if partial_cancel else 'validate_recursive_acl_restore_job_results.mjs' if job_results else 'validate_recursive_acl_restore_inflight_logout.mjs' if inflight_logout else 'validate_recursive_acl_restore_prewrite.mjs' if prewrite_cancel else 'validate_recursive_acl_restore_ready_logout.mjs' if ready_logout else 'validate_recursive_acl_restore_paging.mjs')),revision],stdin=subprocess.PIPE,stdout=out,stderr=err,env=env,text=True)
                     try:
-                        process.stdin.write(json.dumps(dict(fixture=browser_fixture,credentials=dict(admin=dict(zip(('username','password'),admin)),ordinary=dict(zip(('username','password'),ordinary)),**(dict(resolver=dict(zip(('username','password'),resolver))) if partial_cancel else {})))));process.stdin.close()
-                        if partial_cancel:
+                        process.stdin.write(json.dumps(dict(fixture=browser_fixture,credentials=dict(admin=dict(zip(('username','password'),admin)),ordinary=dict(zip(('username','password'),ordinary)),**(dict(resolver=dict(zip(('username','password'),resolver))) if (partial_cancel or unknown_rename) else {})))));process.stdin.close()
+                        if unknown_rename:
+                            from recursive_acl_restore_unknown_workflow import exercise
+                            exercise(process,evidence,b,row,metadata,root,reader,data,acl,storage,fixture)
+                        elif partial_cancel:
                             from recursive_acl_restore_partial_workflow import exercise
                             exercise(process,evidence,b,row,metadata,root,reader,data,acl,storage,fixture)
                         elif executing:
@@ -197,21 +203,27 @@ def main(ready_logout=False,prewrite_cancel=False,inflight_logout=False,job_resu
                             process.terminate()
                             try:process.wait(timeout=15)
                             except subprocess.TimeoutExpired:process.kill();process.wait(timeout=10)
-            verifier='verify_recursive_acl_restore_partial_logout.py' if partial_logout else 'verify_recursive_acl_restore_partial_cancel.py' if partial_cancel else 'verify_recursive_acl_restore_job_results.py' if job_results else 'verify_recursive_acl_restore_inflight_logout.py' if inflight_logout else 'verify_recursive_acl_restore_prewrite.py' if prewrite_cancel else 'verify_recursive_acl_restore_ready_logout.py' if ready_logout else 'verify_recursive_acl_restore_paging.py'
+            verifier='verify_recursive_acl_restore_unknown_rename.py' if unknown_rename else 'verify_recursive_acl_restore_partial_logout.py' if partial_logout else 'verify_recursive_acl_restore_partial_cancel.py' if partial_cancel else 'verify_recursive_acl_restore_job_results.py' if job_results else 'verify_recursive_acl_restore_inflight_logout.py' if inflight_logout else 'verify_recursive_acl_restore_prewrite.py' if prewrite_cancel else 'verify_recursive_acl_restore_ready_logout.py' if ready_logout else 'verify_recursive_acl_restore_paging.py'
             PHASE='independent-live-before-cleanup'
             with (evidence/'independent-live.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation'/verifier),evidence.name,'--live'],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
-            expected=json.loads((evidence/'partial-final-physical.json').read_bytes()) if partial_cancel else row['after']
-            assert inventory(root,reader,data,acl)==expected;remove_proved(root,reader,data,acl,expected)
+            expected=json.loads((evidence/('unknown-final-physical.json' if unknown_rename else 'partial-final-physical.json')).read_bytes()) if (partial_cancel or unknown_rename) else row['after']
+            if unknown_rename:
+                from recursive_acl_restore_unknown_physical import inventory as renamed_inventory,remove_proved as remove_renamed
+                assert renamed_inventory(root,reader,data,acl)==expected;remove_renamed(root,reader,data,acl,expected)
+                fixture['retain_unsettled']=False
+            else:
+                assert inventory(root,reader,data,acl)==expected;remove_proved(root,reader,data,acl,expected)
         PHASE='after-exact-cleanup';assert not fixture['folder'].exists();final=unchanged(b,storage)
         (evidence/'final-preservation.json').write_text(json.dumps(final))
         outcome={}
+        if unknown_rename:outcome=dict(unknownRename=True,unknownRecovery=True)
         if partial_cancel:
             from recursive_acl_restore_partial_workflow import partial_outcome
             outcome=partial_outcome(partial_logout)
-        (evidence/'verified.json').write_text(json.dumps(dict(revision=revision,signedCaptures=1,objects=26,restorePreviewOffsets=[0] if ready_logout or executing else [0,25,0,25],restoreExecutions=int(executing),**outcome,canceled=0 if ready_logout or partial_cancel else 1,sourceAndContainerAbsent=True,historiesRetained=True,coreUnchanged=11,realRestoreSnapshotPagination=not (ready_logout or executing),readyLogoutNaturalExpiry=ready_logout,restorePartialWorkflow=partial_cancel,restorePartialLogout=partial_logout,restorePartialCancel=partial_cancel and not partial_logout,restorePrewriteCancel=prewrite_cancel,restoreInflightLogout=inflight_logout)))
+        (evidence/'verified.json').write_text(json.dumps(dict(revision=revision,signedCaptures=1,objects=26,restorePreviewOffsets=[0] if ready_logout or executing else [0,25,0,25],restoreExecutions=int(executing),**outcome,canceled=0 if ready_logout or partial_cancel or unknown_rename else 1,sourceAndContainerAbsent=True,historiesRetained=True,coreUnchanged=11,realRestoreSnapshotPagination=not (ready_logout or executing),readyLogoutNaturalExpiry=ready_logout,restoreUnknownRename=unknown_rename,restorePartialWorkflow=partial_cancel,restorePartialLogout=partial_logout,restorePartialCancel=partial_cancel and not partial_logout,restorePrewriteCancel=prewrite_cancel,restoreInflightLogout=inflight_logout)))
         PHASE='independent-final-after-cleanup'
         with (evidence/'independent-final.log').open('x') as stream:subprocess.run([sys.executable,str(repo/'deploy/validation'/verifier),evidence.name],stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
-        print(json.dumps(dict(actualRecursiveRestorePaging='passed',readyLogoutNaturalExpiry=ready_logout,evidence=evidence.name,objects=26,restorePreviewOffsets=[0] if ready_logout or executing else [0,25,0,25],restoreExecutions=int(executing))),flush=True)
+        print(json.dumps(dict(actualRecursiveRestorePaging='passed',**outcome,restoreUnknownRename=unknown_rename,readyLogoutNaturalExpiry=ready_logout,evidence=evidence.name,objects=26,restorePreviewOffsets=[0] if ready_logout or executing else [0,25,0,25],restoreExecutions=int(executing))),flush=True)
     except BaseException as error:
         import traceback
         frames=traceback.extract_tb(error.__traceback__);last=frames[-1] if frames else None

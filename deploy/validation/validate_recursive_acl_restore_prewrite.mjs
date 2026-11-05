@@ -7,6 +7,7 @@ import {loginVisible,openPermissionFiles,closePermissionDetails,writeSignal,wait
 import {logoutFromUserMenu} from './installed_ui_logout.mjs'
 import {observeJob} from './installed_ui_restore_job_results.mjs'
 import {runPartialResolution} from './installed_ui_restore_partial_resolution.mjs'
+import {runUnknownResolution} from './installed_ui_restore_unknown_resolution.mjs'
 
 let phase='startup',browser,page,evidence
 function proof(response){
@@ -19,10 +20,11 @@ try{
  const packet=JSON.parse(await readFile('/dev/stdin','utf8')),fixture=packet.fixture,credentials=packet.credentials
  const base='http://127.0.0.1:8080',endpoint=`/api/v1/containers/${fixture.containerId}/files/recursive-acls/history`
  assert.equal(process.argv[2],fixture.revision);assert.match(fixture.captureId,/^[a-f0-9]{32}$/);assert.match(fixture.historyDigest,/^[A-F0-9]{64}$/)
+ const unknownRename=fixture.unknownRename===true;assert.equal(typeof(fixture.unknownRename??false),'boolean');assert.equal(unknownRename,process.argv[1].endsWith('/validate_recursive_acl_restore_unknown_rename.mjs'))
  const partialCancel=fixture.partialCancel===true;assert.equal(typeof(fixture.partialCancel??false),'boolean');assert.equal(partialCancel,(process.argv[1].endsWith('/validate_recursive_acl_restore_partial_cancel.mjs')||process.argv[1].endsWith('/validate_recursive_acl_restore_partial_logout.mjs')))
  const partialLogout=fixture.partialLogout===true;assert.equal(typeof(fixture.partialLogout??false),'boolean');assert.equal(partialLogout,process.argv[1].endsWith('/validate_recursive_acl_restore_partial_logout.mjs'));assert.ok(!partialLogout||partialCancel)
- const jobResults=fixture.jobResults===true;assert.equal(typeof(fixture.jobResults??false),'boolean');assert.equal(jobResults,partialCancel||process.argv[1].endsWith('/validate_recursive_acl_restore_job_results.mjs'))
- const inflightLogout=fixture.inflightLogout===true;assert.equal(inflightLogout,jobResults&&!partialCancel||process.argv[1].endsWith('/validate_recursive_acl_restore_inflight_logout.mjs'));assert.equal(typeof(fixture.inflightLogout??false),'boolean')
+ const jobResults=fixture.jobResults===true;assert.equal(typeof(fixture.jobResults??false),'boolean');assert.equal(jobResults,unknownRename||partialCancel||process.argv[1].endsWith('/validate_recursive_acl_restore_job_results.mjs'))
+ const inflightLogout=fixture.inflightLogout===true;assert.equal(inflightLogout,jobResults&&!partialCancel&&!unknownRename||process.argv[1].endsWith('/validate_recursive_acl_restore_inflight_logout.mjs'));assert.equal(typeof(fixture.inflightLogout??false),'boolean')
  evidence=fixture.evidence;browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true})
  const context=await browser.newContext({viewport:{width:320,height:600},colorScheme:'dark',reducedMotion:'reduce'});context.setDefaultTimeout(30_000);page=await context.newPage()
  phase='admin-visible-login';const admin=await loginVisible(page,context,base,'/containers',true,credentials.admin)
@@ -92,7 +94,10 @@ try{
  phase='actual-confirmation';const confirming=page.waitForResponse(r=>new URL(r.url()).pathname===restoreEndpoint+'/'+ready.id+'/confirm'&&r.request().method()==='POST')
  await dialog.getByRole('button',{name:'确认递归ACL恢复',exact:true}).click();const response=await confirming;assert.equal(response.status(),202);const pending=await response.json();assert.equal(pending.state,'Pending');assert.ok(pending.executionJobId)
  await writeSignal(evidence,'pending-result.json',pending)
- if(partialCancel){
+ if(unknownRename){
+  phase='unknown-resolution';await runUnknownResolution({browser,context,page,base,fixture,credentials,admin,dialog,readySignal,pending,counts,rawReady,query});browser=undefined
+  console.log(JSON.stringify({restoreUnknownResolution:'passed',actualUi:true}))
+ }else if(partialCancel){
   phase='partial-resolution';await runPartialResolution({browser,context,page,base,fixture,credentials,admin,dialog,readySignal,pending,counts,rawReady,query});browser=undefined
   console.log(JSON.stringify({restorePartialResolution:'passed',actualUi:true}))
  }else{
