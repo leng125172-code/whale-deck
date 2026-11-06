@@ -1,8 +1,10 @@
 """Internal ordinary-file Trash capture/retention/empty-path restore kernel.
 
 No CLI/RPC/installation or host-root alias. A future permanent workflow must
-authorize and fence the path before calling this kernel. No purge, overwrite,
-recursive removal or automatic replay of an uncertain namespace mutation.
+authorize and fence the path before calling this kernel. Originals purge is a
+separate candidate module; its Purging/Purged source/history states are read
+here, without exposing deletion through these capture/restore methods. No
+overwrite, recursive removal or automatic uncertain namespace replay.
 """
 import base64
 import contextlib
@@ -59,7 +61,7 @@ def history_type(base_history):
             value=self.storage.read_json(directory,request['operationId']+'.json',131072)
             expected=self.expected(request)
             if set(value)!=set(expected)|{'state','captureState','historyDigest','createdAtUnixMs','differentSourceDevice'} or any(value[k]!=v for k,v in expected.items()):self.reject('HISTORY_CHANGED')
-            if value['state']!='Verified' or value['captureState'] not in ('Pending','Trashed','Restored','Canceled'):self.reject('HISTORY_INCOMPLETE')
+            if value['state']!='Verified' or value['captureState'] not in ('Pending','Trashed','Restored','Canceled','Purged'):self.reject('HISTORY_INCOMPLETE')
             if type(value['createdAtUnixMs']) is not int or not 0<=value['createdAtUnixMs']<=253402300799999 or type(value['differentSourceDevice']) is not bool or value['historyDigest']!=self.digest(value):self.reject('HISTORY_CHANGED')
             self.storage.verify_data(directory,request['operationId'],expected)
             return value
@@ -122,7 +124,7 @@ def recycling_type(directory_type):
         COMMAND={'containerId','instanceId','path','expectedVersion'}
         PLAN=directory_type.PLAN|{'sourceIdentity','sha256','attributes'}
         RECORD={'schemaVersion','operationId','owner','plan','state','privateIdentity','historyMayExist','historyVerified','historyDigest','actualIdentity'}
-        TERMINAL=('Trashed','Restored','Aborted','Unknown')
+        TERMINAL=('Trashed','Restored','Aborted','Unknown','Purged')
         PRIVATE='.whaledeck-container-recycling-v1'
         LIMIT=65536
 
@@ -205,7 +207,7 @@ def recycling_type(directory_type):
         def validate_record(self, record, operation):
             if type(record) is not dict or set(record)!=self.RECORD or type(record['schemaVersion']) is not int or record['schemaVersion']!=1:self.reject('RECEIPT_INVALID')
             self.request({k:record[k] for k in self.REQUEST})
-            if record['operationId']!=operation or record['state'] not in (*self.TERMINAL,'Preparing','Retaining','Restoring'):self.reject('RECEIPT_INVALID')
+            if record['operationId']!=operation or record['state'] not in (*self.TERMINAL,'Preparing','Retaining','Restoring','Purging'):self.reject('RECEIPT_INVALID')
             if any(type(record[k]) is not bool for k in ('historyMayExist','historyVerified')) or type(record['historyDigest']) is not str:self.reject('RECEIPT_INVALID')
             if record['historyVerified']:
                 if not record['historyMayExist'] or not re.fullmatch('[A-F0-9]{64}',record['historyDigest']):self.reject('RECEIPT_INVALID')
@@ -213,6 +215,7 @@ def recycling_type(directory_type):
             private=record['privateIdentity'];actual=record['actualIdentity']
             if private is not None and (type(private) is not list or len(private)!=2 or any(type(n) is not int or not 0<=n<=18446744073709551615 for n in private) or private[1]==0):self.reject('RECEIPT_INVALID')
             if record['state'] in ('Retaining','Restoring','Trashed','Restored') and (not record['historyVerified'] or private is None):self.reject('RECEIPT_INVALID')
+            if record['state'] in ('Purging','Purged') and (not record['historyVerified'] or private is None):self.reject('RECEIPT_INVALID')
             if actual is not None and (type(actual) is not list or len(actual)!=9 or any(type(n) is not int for n in actual) or actual[:8]!=record['plan']['sourceIdentity'][:8] or actual[8]<record['plan']['sourceIdentity'][8]):self.reject('RECEIPT_INVALID')
             if (record['state'] in ('Trashed','Restored')) != (actual is not None):self.reject('RECEIPT_INVALID')
 
@@ -338,7 +341,7 @@ def recycling_type(directory_type):
                 finally:os.close(fd)
                 if type(value) is not dict or set(value)!={'schemaVersion','source','operationId','owner','fingerprint','state'} or type(value['schemaVersion']) is not int or value['schemaVersion']!=1:self.reject('STATE_UNSAFE')
                 self.request(value['source']);self.f.identity(value['operationId'])
-                if encode(value['source'])!=encode(request) or value['operationId']==request['operationId'] or value['state'] not in ('Reserved','Released','Unknown'):self.reject('STATE_UNSAFE')
+                if encode(value['source'])!=encode(request) or value['operationId']==request['operationId'] or value['state'] not in ('Reserved','Released','Unknown','Deleting','Purged'):self.reject('STATE_UNSAFE')
                 if any(type(value[k]) is not str or not re.fullmatch('[A-F0-9]{64}',value[k]) for k in ('owner','fingerprint')):self.reject('STATE_UNSAFE')
                 return value
             finally:os.close(directory)
