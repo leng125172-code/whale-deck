@@ -295,6 +295,9 @@ jobs:
           node --check deploy/validation/validate_container_recycle_restore_instance.mjs
           python3 -W error -m py_compile deploy/validation/restore_claim_loss_proof.py deploy/validation/restore_unknown_proof.py deploy/validation/validate_container_recycle_restore_unknown.py deploy/validation/verify_container_recycle_restore_unknown.py
           node --check deploy/validation/validate_container_recycle_restore_unknown.mjs
+          python3 -W error -m py_compile deploy/validation/owned_container_alias.py deploy/validation/restore_cross_directory_proof.py deploy/validation/validate_container_recycle_restore_cross_directory.py deploy/validation/verify_container_recycle_restore_cross_directory.py
+          node --check deploy/validation/restore_cross_directory.mjs
+          node --check deploy/validation/validate_container_recycle_restore_cross_directory.mjs
 
   backend:
     runs-on: ubuntu-latest

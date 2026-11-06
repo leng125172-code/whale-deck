@@ -18,7 +18,7 @@ unit `whaledeck-qa-restore-unknown-620bd560` / Invocation `bd3f18582e8c4351bcd54
 
 未知阶段意图Unknown、执行Job Running/AwaitingContainerRecycleRestoreReceipt、17字段摘要保留publishBarrier=true，原投递仍待处理。原会话退出后匿名401；不同管理员的原owned-ID请求404，但专属恢复历史200。真实Jobs页显示未知和未证明归属，通用重试按钮缺席；文件页恢复异常行显示尚未证明本操作归属及HDD曾验证。
 
-另一管理员先点击“暂不处置”：确认请求/管理写入0，原保护、未知字段、Root/claim/HDD和原件完整保持。自然只读重核可能推进version/nextAttempt/replayed，证明函数明确只允许这些调度变化，不修改SQL时钟或定时器，也不伪造完整行字节不变。再次刷新原任务后，仅一次明确ACK，唯一审计属于不同主体且结果Unknown、原CID/执行及trace存在。
+另一管理员先点击“暂不处置”：确认请求/管理写入0，原保护、未知字段、Root/claim/HDD和原件完整保持。后续源码复核确认当前ClaimAsync排除Unknown；本轮原始初始/暂缓SQL也实际完全相同，跨写入工具已加强为完整SQL保持，不能声称有自然调度推进。API回执的replayed纯观察位仍与归属事实分开；没有修改SQL时钟或定时器。再次刷新原任务后，仅一次明确ACK，唯一审计属于不同主体且结果Unknown、原CID/执行及trace存在。
 
 确认后意图Acknowledged、Job Failed/Acknowledged、publishBarrier=false、投递处理完毕；Root仍Unknown，归属仍null，原记录/claim/来源Root/HDD及原件事实不变。没有恢复/重做原操作、没有删除HDD或把未知压成false。原所有者及观察者各一次正常BFF/OIDC双端退出，普通9个、匿名5个请求拒绝，取消和retry为0；恢复观察者唯一业务写入就是ACK。
 

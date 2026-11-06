@@ -90,7 +90,8 @@ def acknowledgement_audit(identifier):
 
 def stable_unknown(before,after):
     a,z=before['sql']['row'],after['sql']['row'];same_operation(a,z);assert a['state']==z['state']=='Unknown' and a['publish_barrier'] is z['publish_barrier'] is True
-    # Normal read-only dispatch may renew/reinspect and advance retry/version timestamps.
+    # Unknown is excluded from ClaimAsync; no decline operation may advance SQL.
+    typed_equal(before['sql'],after['sql'])
     for key in ('root_state','source_state','source_retained','source_restored','restored_by_this_operation','binding_current','history_digest','history_verified','history_available','cancel_requested_at_utc','acknowledged_by','acknowledgement_json'):typed_equal(a[key],z[key])
     for key in ('records','physical','claimRebuild','acknowledgementAudit'):typed_equal(before[key],after[key])
     facts=lambda r:{k:v for k,v in r.items() if k!='replayed'};typed_equal(facts(before['receipt']),facts(after['receipt']))
