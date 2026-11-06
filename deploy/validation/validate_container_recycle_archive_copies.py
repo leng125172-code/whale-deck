@@ -115,6 +115,9 @@ def main(revision):
             typed_equal(stable,dict(source=snapshot(state),purge=snapshot(purge_state),hdd=payload_snapshot(hdd_folder)))
             claim=source.read_restore_claim(ref);typed_equal(claim,engine.claim(copy_request))
             save('archive-copy.json',dict(request=copy_request,reserved=reserved_copy,receipt=copied,canceledRequest=canceled_request,canceledReceipt=canceled,root=own_copy,actual=actual,original=initial,claim=claim,protectedBefore=stable,protectedAfter=dict(source=snapshot(state),purge=snapshot(purge_state),hdd=payload_snapshot(hdd_folder)),journals=snapshot(archive_state),claims=snapshot(restore_state),actualNewInode=True,archiveCopyPerformed=True,replayDidNotChangeTarget=True,oldLifecyclesPreserved=True))
+            with (e/'independent-live.log').open('x') as log:
+                subprocess.run([sys.executable,str(repo/'deploy/validation/verify_container_recycle_archive_copies.py'),e.name,'--live'],check=True,stdout=log,stderr=subprocess.STDOUT,timeout=120)
+            live=json.loads((e/'live-target-reread.json').read_text());assert live['actualLiveNewInodeReread'] and live['containerInstanceCurrent'];typed_equal(live['actual'],actual)
             # Exact QA cleanup removes this proved new copy, never a recovery
             # rollback or the old purged inode. The Completed journal/claim stay.
             typed_equal(file_snapshot(leaf),actual);leaf.unlink();assert not list(stage.iterdir()) and [stage.stat().st_dev,stage.stat().st_ino]==own_copy['privateIdentity'];stage.rmdir()
