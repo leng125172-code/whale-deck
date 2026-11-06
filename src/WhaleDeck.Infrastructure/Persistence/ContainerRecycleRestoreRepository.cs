@@ -151,7 +151,8 @@ public sealed partial class ContainerRecycleRestoreRepository(PlatformDbContext 
         Validate(row); var job = await Job(row, true, cancellationToken); now = Now();
         if (row.CancelRequestedAtUtc is not null || job.CancelRequestedAtUtc is not null) return ContainerFileUploadStartResult.Canceled;
         if (row.ExecutionExpiresAtUtc <= now) return ContainerFileUploadStartResult.Expired;
-        if (await db.ContainerRecycleIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+        if (await db.ContainerRecyclePurgeIntents.AnyAsync(r=>r.PublishBarrier,cancellationToken) ||
+            await db.ContainerRecycleIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursiveAclRestoreIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursiveOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursivePermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||

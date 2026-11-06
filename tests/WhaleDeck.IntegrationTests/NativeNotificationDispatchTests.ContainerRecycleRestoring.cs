@@ -173,8 +173,9 @@ public sealed partial class NativeNotificationDispatchTests
             var late=await Pending(await Ready(await Source()));Assert.Equal(ContainerFileUploadStartResult.Started,await repo.StartedAsync(late,clock.GetUtcNow(),default));
             Assert.True(await repo.FinishAsync(late,"Unknown","CONTAINER_RECYCLE_RESTORE_RESULT_UNKNOWN",null,default));var missing=(await other.FindAsync(late.Id,default))!;Assert.Null(missing.ReceiptJson);
             await repo.AcknowledgeAsync(admin,late.Id,missing.Version,Receipt(late,"Completed"),default);var lateAck=(await other.FindAsync(late.Id,default))!;Assert.Equal("Acknowledged",lateAck.State);Assert.True(lateAck.RestoredByThisOperation);await JobFacts(lateAck,true);
-            var migration=db.Database.GetMigrations().Last();Assert.EndsWith("_ContainerRecycleRestoreIntents",migration,StringComparison.Ordinal);
-            var migrations=db.Database.GetMigrations().ToArray();var errorDown=await Assert.ThrowsAsync<PostgresException>(()=>db.GetService<IMigrator>().MigrateAsync(migrations[^2]));Assert.Equal("container_recycle_restore_downgrade_requires_empty_table",errorDown.MessageText);
+            var restoreMigration=db.GetService<IMigrationsAssembly>();var restoreEntry=Assert.Single(restoreMigration.Migrations,x=>x.Key.EndsWith("_ContainerRecycleRestoreIntents",StringComparison.Ordinal));
+            var actualDown=restoreMigration.CreateMigration(restoreEntry.Value,db.Database.ProviderName!);var guard=actualDown.DownOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>().First().Sql;
+            var errorDown=await Assert.ThrowsAsync<PostgresException>(()=>db.Database.ExecuteSqlRawAsync(guard));Assert.Equal("container_recycle_restore_downgrade_requires_empty_table",errorDown.MessageText);
             Assert.False(await db.ContainerRecycleRestoreIntents.AnyAsync(r=>r.CompletedAtUtc==null||r.PublishBarrier||r.LeaseToken!=null));
             Assert.False(await db.OutboxMessages.AnyAsync(m=>(m.MessageType=="ContainerRecycleRestoreRequested"||m.MessageType=="ContainerRecycleRestoreCancellationRequested")&&m.ProcessedAtUtc==null));
             Assert.True(await db.AuditEvents.AnyAsync(a=>a.Action=="containers.files.recycle-restore.unknown-acknowledged"&&a.ActorSubject==admin.Subject));

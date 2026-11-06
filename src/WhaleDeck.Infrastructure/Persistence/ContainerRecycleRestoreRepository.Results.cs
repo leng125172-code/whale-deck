@@ -49,6 +49,7 @@ public sealed partial class ContainerRecycleRestoreRepository
         var ordinaryPermissions = await db.ContainerPermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursivePermissions = await db.ContainerRecursivePermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var acls = await db.ContainerAclIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
+        var purgePeers = await db.ContainerRecyclePurgeIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var otherRestores = await db.ContainerRecycleRestoreIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null && r.Id != row.Id).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var originalAcls = await db.ContainerRecursiveAclIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursiveOwnerships = await db.ContainerRecursiveOwnershipIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
@@ -59,8 +60,8 @@ public sealed partial class ContainerRecycleRestoreRepository
             .Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
         var moves = await db.ContainerMoveIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null)
             .Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
-        if (recycles.Length + recursiveAclRestores.Length + recursiveOwnerships.Length + ownerships.Length + acls.Length + otherRestores.Length + originalAcls.Length + recursivePermissions.Length + ordinaryPermissions.Length + directories.Length + uploads.Length + copies.Length + moves.Length > 64 ||
-            recycles.Concat(recursiveAclRestores).Concat(ownerships).Concat(recursiveOwnerships).Concat(recursivePermissions).Concat(otherRestores).Concat(originalAcls).Concat(acls).Concat(ordinaryPermissions).Concat(directories).Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
+        if (recycles.Length + recursiveAclRestores.Length + recursiveOwnerships.Length + ownerships.Length + acls.Length + purgePeers.Length + otherRestores.Length + originalAcls.Length + recursivePermissions.Length + ordinaryPermissions.Length + directories.Length + uploads.Length + copies.Length + moves.Length > 64 ||
+            recycles.Concat(recursiveAclRestores).Concat(ownerships).Concat(recursiveOwnerships).Concat(recursivePermissions).Concat(otherRestores).Concat(purgePeers).Concat(originalAcls).Concat(acls).Concat(ordinaryPermissions).Concat(directories).Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
             copies.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath)) ||
             moves.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath)))
             throw new InvalidOperationException("CONTAINER_RECYCLE_RESTORE_TARGET_BUSY");
@@ -79,6 +80,7 @@ public sealed partial class ContainerRecycleRestoreRepository
     }
     private async Task EnsureSource(ContainerRecycleRestoreIntent row, CancellationToken cancellationToken)
     {
+        if(await db.ContainerRecyclePurgeIntents.AnyAsync(x=>x.SourceIntentId==row.SourceIntentId&&(x.CompletedAtUtc==null||x.PurgeApplied==true||x.RootState=="Unknown"),cancellationToken))throw new InvalidOperationException("CONTAINER_RECYCLE_RESTORE_SOURCE_CHANGED");
         var original = await db.ContainerRecycleIntents.FromSqlInterpolated($"SELECT * FROM container_recycle_intents WHERE id={row.SourceIntentId} FOR UPDATE").AsNoTracking().SingleOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException("CONTAINER_RECYCLE_RESTORE_SOURCE_CHANGED");
         var current = ContainerRecycleRestoreSourceResolver.FromRow(original, sourceProtector, protector);

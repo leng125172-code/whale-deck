@@ -420,6 +420,7 @@ public sealed class Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> lo
             .Where(item => item.MessageType != "ContainerCopyRequested" && item.MessageType != "ContainerCopyCancellationRequested")
             .Where(item => item.MessageType != "ContainerRecursivePermissionRequested" && item.MessageType != "ContainerRecursivePermissionCancellationRequested")
             .Where(item => item.MessageType != "ContainerRecursiveAclRestoreRequested" && item.MessageType != "ContainerRecursiveAclRestoreCancellationRequested")
+            .Where(item => item.MessageType != "ContainerRecyclePurgeRequested" && item.MessageType != "ContainerRecyclePurgeCancellationRequested")
             .Where(item => item.MessageType != "ContainerRecycleRestoreRequested" && item.MessageType != "ContainerRecycleRestoreCancellationRequested")
             .Where(item => item.MessageType != "ContainerRecycleRequested" && item.MessageType != "ContainerRecycleCancellationRequested")
             .Where(item => item.MessageType != "ContainerRecursiveAclRequested" && item.MessageType != "ContainerRecursiveAclCancellationRequested")
