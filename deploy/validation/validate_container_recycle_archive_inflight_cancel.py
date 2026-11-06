@@ -164,7 +164,7 @@ def main(revision):
     save('before.json',before);save('source.json',dict(revision=revision,validationRevision=sha,validationSourceSha256=closure));print(json.dumps(dict(actualArchiveInflightCancel='started',evidence=e.name)),flush=True)
     try:
         with owned.fixture() as f:
-            f['retain_unsettled']=True;leaf=f['folder']/'recycle-rpc.bin';leaf.write_bytes(hashlib.shake_256(('real-independent-purge:'+f['identifier']).encode()).digest(4*1024**2+7))
+            f['retain_unsettled']=True;leaf=f['folder']/'recycle-rpc.bin';leaf.write_bytes(hashlib.shake_256(('real-independent-purge:'+f['identifier']).encode()).digest(1024**2+7))
             os.chown(leaf,1000,1000);leaf.chmod(0o640);os.setxattr(leaf,'user.recycle',b'actual originals purge original');original=source_io.file_snapshot(leaf)
             c=json.loads(owned.common.command(['docker','inspect',f['identifier']]))[0];header=dict(containerId=f['identifier'],instanceId=str(c['State']['Pid'])+':'+c['State']['StartedAt'])
             reader=load('/usr/local/libexec/whaledeck-container-files.py','real_purge_reader')
