@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-07归档Reserved执行中正常退出已实机签收：06bb0087冻结138源码，实际BFF导航POST时原pidfd仍活着、5.449341秒退出，目标意图/执行Job取消时间null且双ID取消审计0；Canceled/Aborted/未复制、两条双端退出receipt/同Subject重登9旧引用404、19字段实际Jobs、9普通/5匿名拒绝、准确收尾及live/final/第三次当前HDD重读通过。240真实证据/13真图，504回收root零跳过/11新专项/8范围/14 CI合同/语法通过。首轮停在Authentik空登录页失败及SQL-derived收尾保留，未改认证或签根因修复。总59/29/27/8活动0、Root-HDD145/141/恢复82/目录98/purge52/archive12，旧业务/2346保护/11核心/21模块/f318d9ab保持。上批45ac准确CI12路success；新CI、余矩阵/长期策略/维护/大文件/退出稳定性及59项继续，整项0/59、阶段0/6、工程25%–35%、酒馆/Live2D功能0%保持，17项移出不算完成。[正常退出、原失败与边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_INFLIGHT_LOGOUT.md)。
+
 2026-11-07归档Reserved执行中取消已实机签收：45ac608a冻结134源码，五FD/原pidfd、实际SQL预留回执/Root及当前HDD数据和元数据对齐后页面取消，原helper5.556657秒退出；Canceled/Aborted/未复制、19字段实际Jobs、9普通/5匿名拒绝、双退出与9旧引用隔离、准确收尾及live/final/第三次当前重读通过。218真实证据/12真图，493回收root零跳过及最终11专项/8范围/14 CI合同/语法通过；64MiB原预检与4MiB清理页面超时均保留并安全收尾，大文件耗时问题未签。生产57/29/23/4活动0、Root-HDD139/137/恢复82/目录98/purge48/archive8，旧业务/2346保护/11核心/f318d9ab保持。上批fd0准确CI12路success；新CI、余故障/长期策略/维护和59项继续，整项0/59、阶段0/6、工程25%–35%、酒馆/Live2D功能0%不变，17项移出不算完成。[实机取消、失败原件与边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_INFLIGHT_CANCEL.md)。
 
 2026-11-07归档复制前切点候选fd0d4970已验证：五FD/原pidfd与Root Reserved、source/purge/marker/claim及当前HDD字节/历史元数据摘要绑定；Applying及后续拒绝，证明失败和句柄清理不恢复Apply。15专项纳入完整482回收root零跳过，8范围/14 CI合同/两文件编译通过；125证据含119冻结源码封存。当前双基线及上批最终基线/四类业务全行hash一致，54/29/19/2、活动0，f318d9ab/21安装模块/2346保护/11核心保持。仅隔离候选，无安装态信号或业务写入；真实页面执行中取消/退出与余故障、长期策略/维护/59项仍待，整项0/59、阶段0/6、工程25%–35%、酒馆/Live2D功能0%不变。[切点候选与验收边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_CUT_CANDIDATE.md)。
