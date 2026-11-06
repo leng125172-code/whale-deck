@@ -284,11 +284,13 @@ jobs:
           sudo python3 -m unittest discover -s deploy/validation -p test_tree_copies.py
           sudo python3 -m unittest discover -s deploy/validation -p test_tree_moves.py
 
-      - name: Check post-return restore authority gate without production access
+      - name: Check post-return restore authority and binding gates without production access
         run: |
           python3 -W error -m py_compile deploy/validation/validate_container_recycle_restore_postreturn_revocation.py deploy/validation/verify_container_recycle_restore_postreturn_revocation.py
           node --check deploy/validation/validate_container_recycle_restore_postreturn_revocation.mjs
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_restore_postreturn_revocation_proof.py
+          python3 -W error -m py_compile deploy/validation/restore_superseded_proof.py deploy/validation/validate_container_recycle_restore_superseded.py deploy/validation/verify_container_recycle_restore_superseded.py
+          node --check deploy/validation/validate_container_recycle_restore_superseded.mjs
 
   backend:
     runs-on: ubuntu-latest
