@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-06链接修复093f44a9准确CI12项与标准发布通过，真实身份Jobs四类型/桌面明色和320暗色8场景签收，正常双端退出/匿名401、管理写入与retry0；74文件封存。写后移组/停用工具05d3ae4a分别全新资源实机通过，原pidfd5.390/5.478秒、同执行Succeeded/Completed/成功claim与取消0、各普通9匿名5拒绝及清理前后独立通过；68关联root检查全过。原启动拒绝、ctime清理总失败及独立收尾均保留不补签，最终2346保护/11核心/093f44a9宿主保持、32回收18恢复/活动0，Root64-HDD67/恢复47。继续Superseded/Unknown、跨写入、长期清理和59项。[链接发布](qa/CONTAINER_FILE_RECYCLING_RESTORE_FOOTER_REAL_UI.md)与[撤权实机和失败边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_REVOCATION.md)。
+
 2026-11-06链接注册修复093f44a9四镜像/两宿主预构建及707校验通过，生产150adfd/2346保护/11核心/29回收15恢复和Root-HDD保持；准确CI仍待浏览器全终态。补3项真实临时inode写后检查，21相关root全过零跳过：已证明返回但当前绑定失效为Completed/Superseded，不能硬签Unknown；非安装RPC/SQL/UI实机验收。继续准确CI/标准覆盖/真实页，再撤权和按事实分流的故障矩阵/长期清理及59项。[预构建与结果边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_RETURNED_OUTCOMES.md)。
 
 2026-11-06页尾150adfd准确CI12项全绿、标准发布与六组件/迁移核验通过；64维护样本全200不签瞬时连续，2346保护/11核心限定保持及29回收15恢复完整行不变。真实Jobs首项发现生产漏注册ElLink，未签页面；修复注册并增加真实bootstrap链接回归，旧产物失败保留，候选8预览/25单元/类型lint构建通过。继续新准确CI/覆盖/全新真实页复验，再写后撤权、Unknown、长期清理及59项。[发布、真实失败与候选](qa/CONTAINER_FILE_RECYCLING_RESTORE_FOOTER_BOOTSTRAP.md)。
