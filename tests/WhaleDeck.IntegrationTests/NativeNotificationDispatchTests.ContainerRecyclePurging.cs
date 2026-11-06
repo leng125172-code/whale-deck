@@ -52,17 +52,72 @@ public sealed partial class NativeNotificationDispatchTests
         {var row=Row(src);await repo.EnqueueAsync(row,default);var claim=(await repo.ClaimAsync(clock.GetUtcNow(),default))!;Assert.Equal(row.Id,claim.Id);Assert.True(await repo.MarkPlanningAsync(claim,default));await repo.FinishPlanningAsync(claim,Plan(row),"CONTAINER_RECYCLE_PURGE_READY",default);return (await repo.FindAsync(row.Id,default))!;}
         async Task<ContainerRecyclePurgeIntent> Pending(ContainerRecyclePurgeIntent r)
         {await repo.ConfirmAsync(actor,Claims(r),r.Version,default);return (await repo.ClaimAsync(clock.GetUtcNow(),default))!;}
+        var uploadIds=new List<Guid>();var directoryIds=new List<Guid>();
+        async Task PeerSeeds()
+        {
+            var now = ContainerFileUploadIntentValidation.CanonicalTime(clock.GetUtcNow()); var id = Guid.NewGuid(); uploadIds.Add(id); const string subject = "native-recursive-upload-peer";
+            var target = new ContainerFileUploadTargetDto(new(new('d', 64), "888:2026-10-30T01:02:03Z", "work/upload-" + id.ToString("N")), new('B', 64), new('C', 64), "ABSENT", 0);
+            var binding = new ContainerFileUploadBinding(id, Guid.NewGuid(), subject, actor.LoginBinding, actor.TraceId, target, 0, Convert.ToHexString(SHA256.HashData([])), new('F', 64), now, now.AddMinutes(15));
+            var upload = new ContainerFileUploadOperation { Id = id, IdempotencyKey = binding.IdempotencyKey, ActorSubject = subject, LoginBinding = actor.LoginBinding, TraceId = actor.TraceId,
+                OwnerHash = ContainerFileUploadIntentValidation.Owner(subject, actor.LoginBinding), ContainerId = target.Location.ContainerId, InstanceId = target.Location.InstanceId,
+                RelativePath = target.Location.Path, TargetProof = target.TargetProof, ExpectedParentVersion = target.ExpectedParentVersion, ExpectedVersion = "ABSENT", SizeBytes = 0,
+                Sha256 = binding.Sha256, PlanHash = binding.PlanHash, RequestHash = protector.FingerprintContainerUpload(binding), CreatedAtUtc = now, ExpiresAtUtc = binding.ExpiresAtUtc, NextAttemptAtUtc = now };
+            await new ContainerFileUploadRepository(second, protector).EnqueueAsync(upload, default);
+            id = Guid.NewGuid(); directoryIds.Add(id); const string directorySubject = "native-recursive-directory-peer";
+            var plan = new ContainerDirectoryPlanDto(1, new(new(new('e', 64), "999:2026-10-30T01:02:03Z", "work/directory-" + id.ToString("N")), "0750"), new('B', 64), new(1, 2), new('C', 64), 1000, 1001, new('D', 64));
+            var frozen = new ContainerDirectoryBindingDto(id, Guid.NewGuid(), directorySubject, actor.LoginBinding, actor.TraceId, ContainerDirectoryWorkflowValidation.Owner(directorySubject, actor.LoginBinding), plan, new('E', 64), now, now.AddMinutes(15));
+            var directory = new ContainerDirectoryOperation { Id = id, IdempotencyKey = frozen.IdempotencyKey, ActorSubject = directorySubject, LoginBinding = actor.LoginBinding, TraceId = actor.TraceId,
+                OwnerHash = frozen.Owner, ContainerId = plan.Command.Location.ContainerId, InstanceId = plan.Command.Location.InstanceId, RelativePath = plan.Command.Location.Path,
+                PlanJson = System.Text.Json.JsonSerializer.Serialize(plan, ContainerDirectoryWorkflowValidation.Json), PlanHash = frozen.PlanHash, RequestHash = protector.FingerprintDirectory(frozen),
+                CreatedAtUtc = now, ExpiresAtUtc = frozen.ExpiresAtUtc, NextAttemptAtUtc = now };
+            await new ContainerDirectoryRepository(second, protector).EnqueueAsync(directory, now.AddMinutes(5), default);
+        }
+        var peers=RecycleFenceTables.Concat(["container_recycle_intents","container_recycle_restore_intents"]).ToArray();
+        async Task ClonePeer(string table)
+        {
+            Assert.Contains(table,peers);var seedSql = table switch {
+                "container_file_upload_operations" => "SELECT id AS \"Value\" FROM container_file_upload_operations LIMIT 1",
+                "container_directory_operations" => "SELECT id AS \"Value\" FROM container_directory_operations LIMIT 1",
+                "container_copy_intents" => "SELECT id AS \"Value\" FROM container_copy_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_move_intents" => "SELECT id AS \"Value\" FROM container_move_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_permission_intents" => "SELECT id AS \"Value\" FROM container_permission_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_ownership_intents" => "SELECT id AS \"Value\" FROM container_ownership_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recursive_permission_intents" => "SELECT id AS \"Value\" FROM container_recursive_permission_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recursive_ownership_intents" => "SELECT id AS \"Value\" FROM container_recursive_ownership_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_acl_intents" => "SELECT id AS \"Value\" FROM container_acl_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recursive_acl_intents" => "SELECT id AS \"Value\" FROM container_recursive_acl_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recursive_acl_restore_intents" => "SELECT id AS \"Value\" FROM container_recursive_acl_restore_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recycle_intents" => "SELECT id AS \"Value\" FROM container_recycle_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                "container_recycle_restore_intents" => "SELECT id AS \"Value\" FROM container_recycle_restore_intents WHERE completed_at_utc IS NOT NULL AND execution_job_id IS NOT NULL AND plan_json IS NOT NULL LIMIT 1",
+                _ => throw new InvalidOperationException("unknown fixed fence table") };
+            var seed=await second.Database.SqlQueryRaw<Guid>(seedSql).SingleAsync();
+            var id=Guid.NewGuid();var execution=Guid.NewGuid();var key=Guid.NewGuid();var now=clock.GetUtcNow();
+            second.OperationJobs.AddRange(new OperationJob{Id=id,ActorSubject="native-restore-fence",IdempotencyKey=key.ToString("D"),JobType="native.restore.fence"},new OperationJob{Id=execution,ActorSubject="native-restore-fence",IdempotencyKey=execution.ToString("D"),JobType="native.restore.fence"});await second.SaveChangesAsync();
+            var patch=" || jsonb_build_object('source_state',NULL,'restored_by_this_operation',NULL,'receipt_json',NULL,'receipt_hash',NULL,'acl_confirmed',NULL,'root_state',NULL,'source_retained',NULL,'source_restored',NULL,'destination_published',NULL,'source_removed',NULL,'completed_count',NULL,'changed_count',NULL,'aborted_count',NULL,'not_started_count',NULL,'unknown_count',NULL,'outcome_digest',NULL,'binding_current',NULL,'history_available',NULL,'history_may_exist',FALSE,'history_verified',FALSE,'history_digest',NULL)";
+            if(table!="container_file_upload_operations" && table!="container_directory_operations")patch+=" || jsonb_build_object('execution_job_id',@execution)";
+            var sql="INSERT INTO "+table+" SELECT (jsonb_populate_record(NULL::"+table+",to_jsonb(t) || jsonb_build_object('id',@id,'idempotency_key',@key,'completed_at_utc',NULL,'lease_token',NULL,'lease_expires_at_utc',NULL,'publish_barrier',TRUE,'root_started_at_utc',@now,'state',@state,'published_version',NULL,'acknowledged_by',NULL,'acknowledgement_json',NULL)"+patch+")).* FROM "+table+" t WHERE id=@seed";
+            Assert.Equal(1,await second.Database.ExecuteSqlRawAsync(sql,new NpgsqlParameter("id",id),new NpgsqlParameter("key",key),new NpgsqlParameter("execution",execution),new NpgsqlParameter("now",now),new NpgsqlParameter("state",table=="container_file_upload_operations"?"Ready":"Pending"),new NpgsqlParameter("seed",seed)));
+        }
         try
         {
             Assert.Equal(21,await db.Database.SqlQueryRaw<int>("SELECT count(*)::integer AS \"Value\" FROM pg_constraint WHERE conrelid='container_recycle_purge_intents'::regclass AND contype='c'").SingleAsync());
             Assert.Equal(15,await db.Database.SqlQueryRaw<int>("SELECT count(*)::integer AS \"Value\" FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid WHERE p.proname='whaledeck_container_recycle_purge_fence' AND NOT t.tgisinternal").SingleAsync());
+            await PeerSeeds();
             var src=await Source();var original=JsonSerializer.Serialize(src);var ready=await Ready(src);Assert.Null(await other.ClaimAsync(clock.GetUtcNow(),default));
             await Assert.ThrowsAsync<InvalidOperationException>(()=>repo.ConfirmAsync(actor,Claims(ready),ready.Version+1,default));
             await using(var tx=await second.Database.BeginTransactionAsync())
             {await second.Database.ExecuteSqlInterpolatedAsync($"SELECT * FROM container_recycle_intents WHERE id={src.Id} FOR UPDATE");var ex=await Assert.ThrowsAnyAsync<Exception>(()=>repo.ConfirmAsync(actor,Claims(ready),ready.Version,default));Assert.Equal(PostgresErrorCodes.LockNotAvailable,Assert.IsType<PostgresException>(ex.GetBaseException()).SqlState);await tx.RollbackAsync();}
             var pending=await Pending(ready);
             Assert.Equal(ContainerFileUploadStartResult.LeaseLost,await repo.ApplyingAsync(pending,clock.GetUtcNow(),default));
+            foreach(var table in peers)
+            {
+                await using var tx=await second.Database.BeginTransactionAsync();await ClonePeer(table);
+                var blocked=await Assert.ThrowsAsync<PostgresException>(()=>second.Database.ExecuteSqlInterpolatedAsync($"UPDATE container_recycle_purge_intents SET publish_barrier=true,root_started_at_utc={clock.GetUtcNow()},state='Reserving' WHERE id={pending.Id}"));Assert.Equal(PostgresErrorCodes.ObjectNotInPrerequisiteState,blocked.SqlState);await tx.RollbackAsync();second.ChangeTracker.Clear();
+            }
             Assert.Equal(ContainerFileUploadStartResult.Started,await repo.StartedAsync(pending,clock.GetUtcNow(),default));
+            foreach(var table in peers)
+            {await using var tx=await second.Database.BeginTransactionAsync();var blocked=await Assert.ThrowsAsync<PostgresException>(()=>ClonePeer(table));Assert.Equal(PostgresErrorCodes.ObjectNotInPrerequisiteState,blocked.SqlState);await tx.RollbackAsync();second.ChangeTracker.Clear();}
+
             var hostHash=FileManagementService.Hash("purge-host-lock:"+pending.Id);var lockError=await Assert.ThrowsAsync<PostgresException>(()=>second.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO file_path_locks(path_hash,operation_id,scope_kind) VALUES ({hostHash},{pending.Id},'Legacy')"));Assert.Equal(PostgresErrorCodes.ObjectNotInPrerequisiteState,lockError.SqlState);
             Assert.True(await repo.ReservedAsync(pending,Receipt(pending,"Reserved"),default));
             await using(var tx=await second.Database.BeginTransactionAsync())
@@ -78,13 +133,14 @@ public sealed partial class NativeNotificationDispatchTests
             var normalSource=await Source();var normalSourceBefore=JsonSerializer.Serialize(normalSource);var normal=await Pending(await Ready(normalSource));Assert.Equal(ContainerFileUploadStartResult.Started,await repo.StartedAsync(normal,clock.GetUtcNow(),default));Assert.True(await repo.ReservedAsync(normal,Receipt(normal,"Reserved"),default));await repo.DeferAsync(normal,default);clock.Offset+=TimeSpan.FromSeconds(7);var reclaimed=(await other.ClaimAsync(clock.GetUtcNow(),default))!;Assert.Equal(normal.Id,reclaimed.Id);Assert.False(await repo.RenewAsync(normal,clock.GetUtcNow(),default));
             Assert.Equal(ContainerFileUploadStartResult.Started,await other.ApplyingAsync(reclaimed,clock.GetUtcNow(),default));Assert.False(await repo.FinishAsync(normal,"Succeeded","CONTAINER_RECYCLE_PURGE_COMPLETED",Receipt(normal,"Completed"),default));Assert.True(await other.FinishAsync(reclaimed,"Succeeded","CONTAINER_RECYCLE_PURGE_COMPLETED",Receipt(reclaimed,"Completed"),default));
             var done=(await repo.FindAsync(normal.Id,default))!;Assert.True(done.PurgeApplied);Assert.True(ContainerRecyclePurgeWorkflowValidation.HasValidBinding(done,protector));Assert.Equal(normalSourceBefore,JsonSerializer.Serialize(await sourceRepo.FindAsync(normalSource.Id,default)));Assert.Equal(original,JsonSerializer.Serialize(await sourceRepo.FindAsync(src.Id,default)));await Assert.ThrowsAnyAsync<Exception>(()=>repo.EnqueueAsync(Row(normalSource),default));
-            var rollback=Row(await Source());await second.Database.ExecuteSqlRawAsync("CREATE FUNCTION wdv_purge_audit_reject() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF NEW.action LIKE 'containers.files.recycle-purge.%' THEN RAISE EXCEPTION 'test audit fault'; END IF; RETURN NEW; END $f$; CREATE TRIGGER wdv_purge_audit_reject BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION wdv_purge_audit_reject();");
-            try{await Assert.ThrowsAsync<DbUpdateException>(()=>repo.EnqueueAsync(rollback,default));Assert.False(await second.OperationJobs.AnyAsync(j=>j.Id==rollback.Id));Assert.False(await second.ContainerRecyclePurgeIntents.AnyAsync(j=>j.Id==rollback.Id));}
+            var rollback=Row(await Source());var failedFinish=await Pending(await Ready(await Source()));Assert.Equal(ContainerFileUploadStartResult.Started,await repo.StartedAsync(failedFinish,clock.GetUtcNow(),default));Assert.True(await repo.ReservedAsync(failedFinish,Receipt(failedFinish,"Reserved"),default));Assert.Equal(ContainerFileUploadStartResult.Started,await repo.ApplyingAsync(failedFinish,clock.GetUtcNow(),default));await second.Database.ExecuteSqlRawAsync("CREATE FUNCTION wdv_purge_audit_reject() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF NEW.action LIKE 'containers.files.recycle-purge.%' THEN RAISE EXCEPTION 'test audit fault'; END IF; RETURN NEW; END $f$; CREATE TRIGGER wdv_purge_audit_reject BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION wdv_purge_audit_reject();");
+            try{await Assert.ThrowsAsync<DbUpdateException>(()=>repo.EnqueueAsync(rollback,default));Assert.False(await second.OperationJobs.AnyAsync(j=>j.Id==rollback.Id));Assert.False(await second.ContainerRecyclePurgeIntents.AnyAsync(j=>j.Id==rollback.Id));await Assert.ThrowsAsync<DbUpdateException>(()=>repo.FinishAsync(failedFinish,"Succeeded","CONTAINER_RECYCLE_PURGE_COMPLETED",Receipt(failedFinish,"Completed"),default));var stillApplying=(await other.FindAsync(failedFinish.Id,default))!;Assert.Equal("Applying",stillApplying.State);Assert.True(stillApplying.PublishBarrier);Assert.Null(stillApplying.ReceiptJson);}
             finally{await second.Database.ExecuteSqlRawAsync("DROP TRIGGER wdv_purge_audit_reject ON audit_events; DROP FUNCTION wdv_purge_audit_reject();");}
+            Assert.True(await repo.FinishAsync(failedFinish,"Succeeded","CONTAINER_RECYCLE_PURGE_COMPLETED",Receipt(failedFinish,"Completed"),default));
             var migrations=db.Database.GetMigrations().ToArray();Assert.EndsWith("_ContainerRecyclePurgeIntents",migrations[^1],StringComparison.Ordinal);var down=await Assert.ThrowsAsync<PostgresException>(()=>db.GetService<IMigrator>().MigrateAsync(migrations[^2]));Assert.Equal("container_recycle_purge_downgrade_requires_empty_table",down.MessageText);
             Assert.False(await db.ContainerRecyclePurgeIntents.AnyAsync(r=>r.CompletedAtUtc==null||r.PublishBarrier||r.LeaseToken!=null));Assert.False(await db.OutboxMessages.AnyAsync(m=>(m.MessageType=="ContainerRecyclePurgeRequested"||m.MessageType=="ContainerRecyclePurgeCancellationRequested")&&m.ProcessedAtUtc==null));
             Console.WriteLine("INBOX_PHASE=container-recycle-purge-two-phase-source-locked-fifteen-fences-nullable-audited");
         }
-        finally{File.Delete(keyPath);}
+        finally{await second.ContainerFileUploadOperations.Where(x=>uploadIds.Contains(x.Id)).ExecuteDeleteAsync();await second.ContainerDirectoryOperations.Where(x=>directoryIds.Contains(x.Id)).ExecuteDeleteAsync();File.Delete(keyPath);}
     }
 }
