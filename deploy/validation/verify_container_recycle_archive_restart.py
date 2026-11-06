@@ -23,7 +23,7 @@ from recycle_archive_browser_proof import execution, managed_plan, receipt_join,
 import container_recycle_archive_agent_io as archive_io
 import container_recycle_purge_agent_io as purge_io
 
-from archive_restart_terminal_proof import terminal_proof
+from archive_restart_terminal_proof import terminal_proof,explicit_cancel_absent
 from archive_inflight_cancel_proof import cut_proof,reservation_proof
 from container_recycle_archive_restart_proof import verify_restart
 from bound_container_recycle_archive_cut import GROUP
@@ -69,7 +69,8 @@ def verify(name, live=False):
             for suffix in ('.json','.lock'):assert not (archive_io.STATE/(uuid.UUID(execution(row['id'])).hex+suffix)).exists()
         else:
             terminal_proof(data,f,purge['sql']['row'],b)
-            assert query("SELECT to_json(count(*)) FROM audit_events WHERE job_id=:'job'::uuid AND action='containers.files.recycle-archive.cancel-requested'",job=row['execution_job_id'])==proof['cancelAuditCount']==1
+            count=query("SELECT to_json(count(*)) FROM audit_events WHERE job_id IN (:'intent'::uuid,:'job'::uuid) AND action='containers.files.recycle-archive.cancel-requested'",intent=row['id'],job=row['execution_job_id'])
+            assert count==proof['cancelAuditCount'];explicit_cancel_absent(row,count)
             assert data['confirmed']==1 and data['canceled']==0
             typed_equal(proof['request']['plan'],plan);typed_equal(receipt_join(row,dto['receipt'],proof['request']),proof['receipt'])
             job_summary(stored_object(data['executionJob']['result_json']),row,purge['sql']['row'],execution_stage=True)

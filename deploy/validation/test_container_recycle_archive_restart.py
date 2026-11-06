@@ -106,5 +106,13 @@ class ArchiveRestartTests(unittest.TestCase):
         for bad in ('cleanup_new_copy','requests.post','os.unlink','os.rmdir','subprocess.Popen'):self.assertNotIn(bad,calls)
         self.assertIn('verify_restart',calls);self.assertIn('natural_lease',parent)
 
+    def test_independent_restart_verifier_requires_zero_audit_for_both_ids(self):
+        from archive_restart_terminal_proof import explicit_cancel_absent
+        v,_,_,_=sample();explicit_cancel_absent(v['row'],0)
+        for n in (1,True,None,'0'):
+            with self.subTest(n=n),self.assertRaises(AssertionError):explicit_cancel_absent(v['row'],n)
+        s=(Path(__file__).parent/'verify_container_recycle_archive_restart.py').read_text()
+        self.assertIn("job_id IN (:'intent'::uuid,:'job'::uuid)",s);self.assertIn('explicit_cancel_absent(row,count)',s);self.assertNotIn("proof['cancelAuditCount']==1",s)
+
 
 if __name__=='__main__':unittest.main()
