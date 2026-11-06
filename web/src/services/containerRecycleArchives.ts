@@ -225,6 +225,8 @@ export function assertArchiveIntent(
     !validDirectoryId(v.sourceOperationId) ||
     !validDirectoryId(v.purgeOperationId) ||
     v.purgeOperationId === v.sourceOperationId ||
+    v.sourceIntentId === v.purgeOperationId ||
+    v.sourceIntentId === v.sourceOperationId ||
     v.id === v.sourceIntentId ||
     v.id === v.purgeOperationId ||
     v.id === v.sourceOperationId ||

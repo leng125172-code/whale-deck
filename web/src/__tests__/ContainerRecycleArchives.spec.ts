@@ -264,3 +264,12 @@ it('keeps historical Completed when current binding is gone and rejects substitu
   bad.receipt!.publishedIdentity!.inode = '9007199254740994'
   expect(() => assertArchiveAdvance(v, bad)).toThrow(/归档|来源/)
 })
+
+it.each(['purgeOperationId', 'sourceOperationId'] as const)(
+  'rejects recovery-only source identity collision with %s',
+  (field) => {
+    const v = ready()
+    v.sourceIntentId = v[field]
+    expect(() => assertArchiveIntent(v)).toThrow(/归档|来源/)
+  },
+)
