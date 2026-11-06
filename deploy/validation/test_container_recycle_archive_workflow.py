@@ -11,12 +11,12 @@ def transcript():
     def steps(op,profile):
         q=fixture.request(p,op)
         for action,state in profile:frames.append(dict(kind='archive-receipt',action=action,operationId=op,jobId=op,result=json.dumps(fixture.receipt(q,state,True if state=='Completed' else None))))
-    steps(cancel,workflow.CANCEL);frames.append(dict(kind='archive-plan',plan=json.dumps(fixture.wire_plan(p)),boundaryRefusals=0));steps(normal,workflow.NORMAL);frames.append(copy.deepcopy(frames[18]));frames.append(dict(kind='done'));return frames,header
+    steps(cancel,workflow.CANCEL);frames.append(dict(kind='archive-plan',plan=json.dumps(fixture.wire_plan(p)),boundaryRefusals=0));steps(normal,workflow.NORMAL);frames.append(copy.deepcopy(frames[18]));q=fixture.request(p,normal);frames.append(dict(kind='archive-receipt',action='archive-inspect',operationId=normal,jobId=normal,result=json.dumps(fixture.receipt(q,'Completed',False))));frames.append(dict(kind='done'));return frames,header
 
 
 class ArchiveWorkflowTests(unittest.TestCase):
     def test_all_three_stages_and_five_ids_are_bound_without_physical_claim(self):
-        f,h=transcript();s=workflow.transcript_proof(f,h);self.assertEqual(s['archiveReceiptFrames'],11);self.assertEqual(s['archivePlanRefusals'],22);self.assertFalse(s['physicalNamespaceChecked'])
+        f,h=transcript();s=workflow.transcript_proof(f,h);self.assertEqual(s['archiveReceiptFrames'],12);self.assertEqual(s['archivePlanRefusals'],22);self.assertFalse(s['physicalNamespaceChecked'])
 
     def test_missing_duplicated_reordered_wrong_id_or_count_never_signs(self):
         for kind in ('missing','duplicate','order','job','count','old-id','source-end'):
@@ -34,6 +34,15 @@ class ArchiveWorkflowTests(unittest.TestCase):
         for kind in ('unknown','binding'):
             f,h=transcript();q=fixture.request();f[29]['result']=json.dumps(fixture.receipt(q,'Unknown' if kind=='unknown' else 'Completed',None))
             with self.subTest(kind=kind),self.assertRaises(AssertionError):workflow.transcript_proof(f,h)
+
+    def test_live_prefix_is_not_a_finished_probe_and_cleanup_has_separate_binding_observation(self):
+        f,h=transcript();prefix=workflow.prefix_proof(f[:34],h);self.assertFalse(prefix['closed']);self.assertFalse(prefix['afterCleanupBindingObserved'])
+        q=fixture.request()
+        result=workflow.transcript_proof(f,h);self.assertTrue(result['closed']);self.assertTrue(result['afterCleanupBindingObserved']);self.assertEqual(result['archiveReceiptFrames'],12)
+        f[34]['result']=json.dumps(fixture.receipt(q,'Completed',True))
+        with self.assertRaises(AssertionError):workflow.transcript_proof(f,h)
+        f,h=transcript();f.pop(34)
+        with self.assertRaises(AssertionError):workflow.transcript_proof(f,h)
 
 
 if __name__=='__main__':unittest.main()
