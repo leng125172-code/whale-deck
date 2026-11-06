@@ -1,5 +1,102 @@
 import { test, expect } from '@playwright/test'
 test.use({ baseURL: process.env.WHALEDECK_PRODUCTION_PREVIEW_URL || 'http://127.0.0.1:5174' })
+
+for (const width of [320, 1440])
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`${width}px ${colorScheme}: real bootstrap recovery links`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 })
+      await page.emulateMedia({ colorScheme })
+      await page.addInitScript(() =>
+        sessionStorage.setItem('whaledeck-preview-authenticated', 'true'),
+      )
+      const errors: string[] = [],
+        writes: string[] = [],
+        retries: string[] = []
+      page.on('pageerror', (error) => errors.push(error.message))
+      const types = [
+        'containers.files.recycle',
+        'containers.files.recycle-plan',
+        'containers.files.recycle-restore',
+        'containers.files.recycle-restore-plan',
+        'containers.files.recursive-acl',
+        'containers.files.recursive-acl-plan',
+        'containers.files.recursive-acl-restore',
+        'containers.files.recursive-acl-restore-plan',
+      ]
+      const jobs = types.map((jobType, index) => ({
+        id: `footer-${index}`,
+        jobType,
+        state: 'Failed',
+        phase: 'Failed',
+        progressPercent: null,
+        errorCode: null,
+        resultJson: null,
+        createdAtUtc: '2026-11-06T00:00:00Z',
+        completedAtUtc: '2026-11-06T00:01:00Z',
+      }))
+      await page.route('**/api/v1/**', async (route) => {
+        const request = route.request(),
+          path = new URL(request.url()).pathname.replace('/api/v1/', '')
+        if (request.method() !== 'GET') writes.push(path)
+        if (/^jobs\/[^/]+\/retry/.test(path)) retries.push(path)
+        if (path.endsWith('/events'))
+          return route.fulfill({ contentType: 'text/event-stream', body: ': fixture history\n\n' })
+        if (path === 'auth/me')
+          return route.fulfill({
+            json: {
+              subject: 'preview-user',
+              name: 'Preview User',
+              groups: [],
+              isAdministrator: true,
+              permissionExpiresAtUtc: new Date(Date.now() + 7200000).toISOString(),
+            },
+          })
+        return route.fulfill({
+          json:
+            path === 'jobs'
+              ? jobs
+              : (jobs.find((job) => path === `jobs/${job.id}`) ??
+                (path.startsWith('notifications') ? { items: [], unreadCount: 0 } : [])),
+        })
+      })
+      await page.goto('/jobs')
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
+        .toBe(colorScheme === 'dark')
+      for (const [index, job] of jobs.entries()) {
+        await page
+          .locator('.jobs-page .el-table__body tr')
+          .nth(index)
+          .getByRole('button', { name: '详情', exact: true })
+          .click()
+        const drawer = page.getByRole('dialog', { name: '任务详情', exact: true })
+        const recycle = job.jobType.startsWith('containers.files.recycle')
+        const own = recycle ? '前往文件页核对原回收或恢复任务' : '前往文件页核对原递归ACL任务'
+        const other = recycle ? '前往文件页核对原递归ACL任务' : '前往文件页核对原回收或恢复任务'
+        const link = drawer.getByRole('link', { name: own, exact: true })
+        await expect(link).toBeVisible()
+        await expect(link).toHaveAttribute('href', '/files')
+        expect(await link.evaluate((element) => element.tagName)).toBe('A')
+        await expect(drawer.getByRole('link', { name: other, exact: true })).toHaveCount(0)
+        await expect(
+          drawer.getByRole('button', { name: '重新预检并重试', exact: true }),
+        ).toHaveCount(0)
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+          ),
+        ).toBe(true)
+        if (index === jobs.length - 1) {
+          await link.click()
+          await expect(page).toHaveURL(/\/files$/)
+        } else await drawer.getByRole('button', { name: 'Close this dialog', exact: true }).click()
+      }
+      expect(errors).toEqual([])
+      expect(writes).toEqual([])
+      expect(retries).toEqual([])
+    })
+  }
+
 for (const width of [320, 1440])
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`${width}px ${colorScheme}: ACL historical summary and legacy empty results`, async ({
