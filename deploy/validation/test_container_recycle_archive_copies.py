@@ -10,6 +10,7 @@ import select
 import signal
 import stat
 import unittest
+import uuid
 from types import SimpleNamespace
 from unittest.mock import patch
 import test_container_recycle_archive_fences as fences
@@ -190,6 +191,11 @@ class ArchiveCopyTests(unittest.TestCase):
     def test_completed_no_session_repairs_only_exact_claim_and_keeps_historical_result(self):
         self.reserve();self.engine.apply(self.q,self.session);self.f.claim().unlink();before=snapshot(self.base.root);record=self.record()
         r=self.engine.inspect(self.q);self.assertEqual(r['state'],'Completed');self.assertTrue(r['archiveCopied']);self.assertIsNone(r['bindingCurrent']);self.assertEqual(record,self.record());self.assertEqual(before,snapshot(self.base.root));self.assertEqual(json.loads(self.f.claim().read_bytes()),self.engine.claim(self.q))
+
+    def test_completed_with_foreign_claim_keeps_history_but_never_verifies_current_binding(self):
+        self.reserve();self.engine.apply(self.q,self.session);record=self.record();before=snapshot(self.base.root)
+        claim=json.loads(self.f.claim().read_bytes());claim.update(restoreOperationId=uuid.uuid4().hex,restoreOwner='B'*64,restoreFingerprint='B'*64);self.f.claim().write_text(json.dumps(claim));raw=self.f.claim().read_bytes()
+        result=self.engine.inspect(self.q,self.session);self.assertEqual(result['state'],'Completed');self.assertTrue(result['archiveCopied']);self.assertTrue(result['sourceFenced']);self.assertFalse(result['ownedFence']);self.assertFalse(result['bindingCurrent']);self.assertEqual(record,self.record());self.assertEqual(before,snapshot(self.base.root));self.assertEqual(raw,self.f.claim().read_bytes())
 
 
 if __name__=='__main__':unittest.main()

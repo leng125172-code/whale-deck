@@ -263,6 +263,7 @@ public static class DependencyInjection
         services.AddSingleton<IContainerRecycleGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerRecycleRestoreGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerRecyclePurgeGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddSingleton<IContainerRecycleArchiveGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerOwnershipGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerAclGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerAclHistoryGateway>(provider => provider.GetRequiredService<AgentGateway>());

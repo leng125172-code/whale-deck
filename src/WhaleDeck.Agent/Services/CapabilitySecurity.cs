@@ -27,6 +27,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
             method.StartsWith(ContainerRecycleBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecycleRestoreBinding.Service,StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecyclePurgeBinding.Service,StringComparison.Ordinal) ||
+            method.StartsWith(ContainerRecycleArchiveBinding.Service,StringComparison.Ordinal) ||
             method.StartsWith(ContainerOwnershipBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerAclHistoryBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecursiveAclHistoryBinding.Service, StringComparison.Ordinal) ||
@@ -112,6 +113,11 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         method is ContainerRecursiveAclRestoreBinding.Service + "Plan" or ContainerRecursiveAclRestoreBinding.Service + "Apply" or
             ContainerRecursiveAclRestoreBinding.Service + "Inspect" or ContainerRecursiveAclRestoreBinding.Service + "Discard" &&
         ValidateContentBound(token, method, requestHash, ContainerRecursiveAclRestoreBinding.Payload);
+
+    public bool ValidateContainerRecycleArchive(string? token,string method,string? requestHash) =>
+        method is ContainerRecycleArchiveBinding.Service+"Plan" or ContainerRecycleArchiveBinding.Service+"Reserve" or ContainerRecycleArchiveBinding.Service+"Apply" or
+            ContainerRecycleArchiveBinding.Service+"Inspect" or ContainerRecycleArchiveBinding.Service+"Discard" &&
+        ValidateContentBound(token,method,requestHash,ContainerRecycleArchiveBinding.Payload);
 
     public bool ValidateContainerRecyclePurge(string? token,string method,string? requestHash) =>
         method is ContainerRecyclePurgeBinding.Service+"Plan" or ContainerRecyclePurgeBinding.Service+"Reserve" or ContainerRecyclePurgeBinding.Service+"Apply" or
@@ -225,7 +231,9 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     private void Authorize(ServerCallContext context)
     {
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");
-        var valid = context.Method.StartsWith(ContainerRecyclePurgeBinding.Service,StringComparison.Ordinal)
+        var valid = context.Method.StartsWith(ContainerRecycleArchiveBinding.Service,StringComparison.Ordinal)
+            ? validator.ValidateContainerRecycleArchive(token,context.Method,context.RequestHeaders.GetValue(ContainerRecycleArchiveBinding.Header))
+            : context.Method.StartsWith(ContainerRecyclePurgeBinding.Service,StringComparison.Ordinal)
             ? validator.ValidateContainerRecyclePurge(token,context.Method,context.RequestHeaders.GetValue(ContainerRecyclePurgeBinding.Header))
             : context.Method.StartsWith(ContainerRecycleRestoreBinding.Service,StringComparison.Ordinal)
             ? validator.ValidateContainerRecycleRestore(token,context.Method,context.RequestHeaders.GetValue(ContainerRecycleRestoreBinding.Header))
