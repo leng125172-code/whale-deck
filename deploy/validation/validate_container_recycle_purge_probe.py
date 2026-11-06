@@ -26,11 +26,11 @@ def main(revision,binary_name,probe_revision):
     assert os.geteuid()==0 and re.fullmatch('[a-f0-9]{40}',revision) and re.fullmatch('[a-f0-9]{40}',probe_revision)
     os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0';repo=Path(__file__).resolve().parents[2]
     git=lambda *a:subprocess.check_output(['git','-c','safe.directory='+str(repo),'-C',str(repo),*a])
-    assert not git('status','--porcelain').strip() and git('rev-parse','HEAD').decode().strip()==probe_revision
-    closure=source_closure(repo,probe_revision,seeds=SOURCES);paths={str(Path('deploy/validation')/n):h for n,h in closure.items()}
+    assert not git('status','--porcelain').strip();validation_revision=git('rev-parse','HEAD').decode().strip()
+    closure=source_closure(repo,validation_revision,seeds=SOURCES);paths={str(Path('deploy/validation')/n):h for n,h in closure.items()};origins={n:validation_revision for n in paths}
     tracked=git('ls-files','deploy/host/*.py','deploy/validation/TerminalProbe/*','src/WhaleDeck.Contracts/*','src/WhaleDeck.Contracts/Protos/*','Directory.*','global.json','NuGet.config','.images.env').decode().splitlines()
     tracked+=['deploy/host/whaledeck-privileged','deploy/host/install.sh','deploy/validation/publish-terminal-probe.sh']
-    for n in tracked:paths[n]=hashlib.sha256(git('show',probe_revision+':'+n)).hexdigest()
+    for n in tracked:paths[n]=hashlib.sha256(git('show',probe_revision+':'+n)).hexdigest();origins[n]=probe_revision
     binary=Path(binary_name);assert binary.parent.parent==repo/'deploy/artifacts' and re.fullmatch(r'terminal-probe\.[A-Za-z0-9]+',binary.parent.name) and binary.name=='TerminalProbe';trusted(binary);trusted(binary.parent,True)
     subprocess.run(['sha256sum','--quiet','-c','SHA256SUMS'],cwd=binary.parent,check=True,capture_output=True)
     idle();before=baseline(revision);rows=old_rows('0'*64);state=Path('/var/lib/whaledeck-container-recycle-purges');assert not os.path.lexists(state)
@@ -41,10 +41,10 @@ def main(revision,binary_name,probe_revision):
     try:
         frozen=e/'source';frozen.mkdir(mode=0o700);normalized=[]
         for n,h in paths.items():
-            raw=git('show',probe_revision+':'+n);actual=(repo/n).read_bytes();assert hashlib.sha256(raw).hexdigest()==h and (raw==actual or raw==actual.replace(b'\r\n',b'\n')),n
+            raw=git('show',origins[n]+':'+n);actual=(repo/n).read_bytes();assert hashlib.sha256(raw).hexdigest()==h and (raw==actual or raw==actual.replace(b'\r\n',b'\n')),n
             if raw!=actual:normalized.append(n)
             p=frozen/n;p.parent.mkdir(parents=True,exist_ok=True,mode=0o700);p.write_bytes(raw)
-        save('source.json',dict(productRevision=revision,probeRevision=probe_revision,sourceSha256=paths,normalizedWorktreePaths=normalized,frozenBeforeProbe=True,binary=str(binary)))
+        save('source.json',dict(productRevision=revision,validationRevision=validation_revision,probeRevision=probe_revision,sourceRevisions=origins,sourceSha256=paths,normalizedWorktreePaths=normalized,frozenBeforeProbe=True,binary=str(binary)))
         tests={}
         for pattern in ('test_container_file_recycl*.py','test_container_recycle*.py','test_scope_baseline.py'):
             result=subprocess.run([sys.executable,'-W','error::ResourceWarning','-m','unittest','discover','-s','deploy/validation','-p',pattern],cwd=repo,text=True,capture_output=True,timeout=150)

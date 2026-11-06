@@ -37,7 +37,7 @@ def read_operation(q,receipt,source_before,history_before,folder,*,create=False)
             info=os.fstat(fd);assert (info.st_uid,info.st_gid,stat.S_IMODE(info.st_mode))==(0,0,0o700);io.storage.attest(config,fd,read_only=True)
             saved['storeIdentity']=[info.st_dev,info.st_ino];saved['storageHash']=digest(b'',config)
             raw,saved['history'],_=read_at(fd,source_op+'.json');archive_raw(folder,'source-hdd.json',raw,create)
-            saved['data']=source_io.file_snapshot(Path(os.readlink('/proc/self/fd/'+str(fd)))/(source_op+'.data'));assert saved['data'] is not None
+            saved['data']=source_io.file_snapshot(Path('/proc/self/fd/'+str(fd))/(source_op+'.data'));assert saved['data'] is not None
             io.storage.attest(config,fd,read_only=True);assert [os.fstat(fd).st_dev,os.fstat(fd).st_ino]==saved['storeIdentity']
         finally:os.close(fd)
     record_proof(q,receipt,saved['root'],saved['marker'],saved['sourceRoot'],saved['history'],source_before,history_before,saved['data'],store_identity=saved['storeIdentity'],storage_hash=saved['storageHash'])
