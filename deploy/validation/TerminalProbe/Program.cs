@@ -27,6 +27,7 @@ try
     else if (args.Length == 1 && args[0] == "container-recursive-acl") await ContainerRecursiveAclProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "container-recursive-acl-page-capture") await ContainerRecursiveAclProbe.RunAsync(paging:true);
     else if (args.Length == 1 && args[0] == "container-recursive-ownership") await ContainerRecursiveOwnershipProbe.RunAsync();
+    else if (args.Length == 1 && args[0] == "container-recycle-purges") await ContainerRecyclePurgeProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "container-recycle-restores") await ContainerRecycleRestoreProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "container-recycling") await ContainerRecycleProbe.RunAsync();
     else if (args.Length == 1 && args[0] == "container-permissions") await ContainerPermissionProbe.RunAsync();
@@ -51,6 +52,13 @@ catch (Exception error)
     var rpc = error as RpcException;
     var detail = rpc?.Status.Detail;
     var ownFileCode = detail is { Length: <= 80 } && (detail.StartsWith("FILES_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_RECYCLE_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_ACL_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_RECURSIVE_ACL_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_RECURSIVE_PERMISSION_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_PERMISSION_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_DIRECTORY_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_COPY_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_UPLOAD_", StringComparison.Ordinal) || detail.StartsWith("CONTAINER_HISTORY_", StringComparison.Ordinal)) && detail.All(c => char.IsAsciiLetterUpper(c) || c == '_') ? detail : null;
+    if (args is ["container-recycle-purges"])
+    {
+        Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = ContainerRecyclePurgeProbe.Phase,
+            code = ContainerRecyclePurgeProbe.FailureCode, failureType = error.GetType().Name, rpcStatus = rpc?.StatusCode.ToString(), fileCode = ownFileCode,
+            capabilityObservation = ContainerRecyclePurgeProbe.CapabilityObservation }));
+        return 1;
+    }
     if (args is ["container-recycle-restores"])
     {
         Console.Error.WriteLine(JsonSerializer.Serialize(new { terminalProbe = "failed", phase = ContainerRecycleRestoreProbe.Phase,

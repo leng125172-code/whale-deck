@@ -299,6 +299,7 @@ jobs:
           node --check deploy/validation/restore_cross_directory.mjs
           node --check deploy/validation/validate_container_recycle_restore_cross_directory.mjs
           python3 -W error -m py_compile deploy/host/whaledeck-container-recycle-purge-plan.py deploy/host/whaledeck-container-recycle-purge-fences.py deploy/host/whaledeck-container-recycle-purges.py deploy/host/whaledeck-container-recycle-purge-transport.py deploy/validation/validate_container_recycle_purge_plan.py deploy/validation/validate_container_recycle_purge_fences.py deploy/validation/validate_container_recycle_purges.py
+          python3 -W error -m py_compile deploy/validation/container_recycle_purge_rpc_proof.py deploy/validation/container_recycle_purge_agent_io.py deploy/validation/validate_container_recycle_purge_probe.py
 
   backend:
     runs-on: ubuntu-latest
