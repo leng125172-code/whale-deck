@@ -13,7 +13,7 @@ jobs:
   installer:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Check shell syntax and side-effect-free preview
         run: |
           bash -n install.sh
@@ -305,7 +305,7 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
@@ -345,7 +345,7 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
@@ -392,7 +392,7 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
@@ -424,7 +424,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
       - uses: actions/setup-node@v5
@@ -470,7 +470,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
       - uses: actions/setup-node@v5
@@ -497,7 +497,7 @@ jobs:
     needs: [frontend_checks, frontend_browser]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
       - name: Require preflight and every browser shard
