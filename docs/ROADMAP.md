@@ -1,5 +1,7 @@
 # WhaleDeck 分阶段开发任务
 
+2026-11-06长期清理只读预检候选13b6b3d0已验证：15专项/74关联Linux root零跳过、14前端CI合同通过；全新真实容器及当前配置HDD中生成/重核计划，两份负载和journal保持，匹配私有恢复claim阻止预检。原生QA恢复及自有fixture精确清理通过，35文件封存；2346保护/11核心/093f44a9、36回收22恢复/活动0、生产Root72/恢复59/目录98保持，HDD75→77只增本轮两历史文件。仅只读候选，未安装/RPC/永久清理业务/页面/实际purge/留存策略，计划不是删除授权；来源围栏、真实清理和59项继续。[实机候选与缺口](qa/CONTAINER_FILE_RECYCLING_PURGE_PREFLIGHT.md)。
+
 2026-11-06独立恢复Unknown下共享宿主bind的跨容器目录延期/释放已实机通过：6098176f全新主/别名不同CID真实绑定同一目录，Unknown保护期间同目录意图自然延期版本2/4/6/8，产物/终态Root回执缺席、原Unknown完整SQL/Root/HDD/原件保持；不同管理员暂缓后唯一ACK，原目录ID在ACK后3.448秒开始并Succeeded，实际inode/1000:1000/0750与真实页面/匿名401通过。5专项/77关联root零跳过、清理前后独立通过，217文件/147源码闭包封存；别名只删容器，主fixture最终清理共享目录。2346保护/11核心/093f44a9保持，36回收22恢复/活动0，Root72-HDD75/恢复59/目录98。只签此组合，其他适用故障/跨写入、长期清理与59项继续。[实机与共享范围](qa/CONTAINER_FILE_RECYCLING_RESTORE_CROSS_DIRECTORY.md)。
 
 2026-11-06独立恢复真正Unknown/跨管理员处置已实机通过：7bee0baa在原件已返回而本恢复仍Applying的精确三FD/当前HDD切点，仅NOREPLACE隔离本轮claim；原helper受控继续后从移动前起计2.444秒结束，产品重建围栏并保存Unknown/null归属。不同真实管理员暂不处置保持保护和原事实，再唯一ACK→Acknowledged/Job Failed/保护释放，Root仍Unknown/归属仍null，原件/来源Root/claim/HDD保持；两正常双端退出/普通9匿名5拒绝/取消retry0及清理前后独立通过。65相关root零跳过，193文件/137源码闭包封存；准备期断言/投影/语法失败另记。2346保护/11核心/093f44a9保持，35回收21恢复/活动0，Root70-HDD73/恢复56。只签此Unknown，跨写入/长期清理和59项继续。[实机及失败边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_UNKNOWN.md)。
