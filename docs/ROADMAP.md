@@ -1,5 +1,7 @@
 # WhaleDeck 分阶段开发任务
 
+2026-11-06清理Reserved实时移组与账号停用两项已实机通过：04bf8d3e各冻结132源码，原pidfd在权威确认前后仍活、分别2.715745/2.746904秒退出；原用户logout/cancel0、双Job取消时间null/审计0，Canceled/Aborted且未清理。失权页/敏感引用清空、异Subject管理员只读原终态并仅新建专用恢复、同inode/16字段Jobs/准确清理及每项前后独立和第三次当前HDD重读通过。两批各190条证据/3真图、139 root+12身份范围零跳过；旧业务/2346保护/11核心及9694af1c保持，总45回收27恢复9清理/活动0，Root-HDD100/101/恢复74/目录98/purge18。旧CI浏览器时序失败与首版15/1保留，912bd27b收紧故障切点后16预览通过，仍待新CI完整终态；余故障/留存/归档恢复/维护连续性和59项继续。[实机、原失败与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_REVOCATION.md)。
+
 2026-11-06清理Reserved执行中正常退出及同Subject新登录隔离已实机通过：7ce51c8b冻结128源码，实际BFF退出POST被观察时原pidfd仍活，2.874483秒退出；意图/执行Job取消时间null、双Job取消审计0、页面cancel POST0，Canceled/Aborted/未删除事实对应SQL/Root/HDD/16字段Jobs。两正常双端退出、3旧引用404、普通9/匿名5拒绝、同inode专用QA恢复/准确清理及前后两独立和第三次当前HDD重读通过；186条证据/3真PNG、131 root零跳过/14 CI合同/8范围通过。旧业务/2346保护/11核心及9694af1c保持，总43回收25恢复7清理/活动0，Root-HDD94/97/恢复68/目录98/purge14。仅签该组合，余故障/留存/归档恢复/维护连续性及59项继续。[实机与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_INFLIGHT_LOGOUT.md)。
 
 2026-11-06清理执行中Reserved切点取消已用全新资源实机通过：4d25ccfc修正随机传输ID与执行ID混同，四FD/原pidfd证明后真实页面取消，3.015795秒原helper退出，Canceled/Aborted与未删除事实对应SQL/Root/HDD/16字段Jobs；专用QA恢复同inode后准确清理，前后两独立及第三次当前HDD重读通过。127冻结源码/184条成功证据/3真PNG，124 root零跳过/14 CI合同/8范围通过，三次原失败及准确处置另封存。旧业务/2346保护/11核心及9694af1c保持，总42回收24恢复6清理/活动0，Root-HDD91/95（含失败partial）/恢复65/目录98/purge12。仅签该组合，余故障、留存/归档恢复、维护连续性及59项继续。[实机、原失败与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_INFLIGHT_CANCEL.md)。
