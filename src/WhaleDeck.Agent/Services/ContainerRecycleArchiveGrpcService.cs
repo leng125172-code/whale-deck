@@ -24,4 +24,3 @@ public sealed class ContainerRecycleArchiveGrpcService(FileTransferRunner runner
         return ContainerRecycleArchivePolicy.Receipt(result.RootElement,request);
     }
 }
-
