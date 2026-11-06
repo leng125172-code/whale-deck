@@ -316,7 +316,39 @@ def recycling_type(directory_type):
                 return value
             finally:os.close(directory)
 
+        def read_purge_fence(self, request):
+            """Candidate source fence in the existing trusted source registry.
+
+            Callers that mutate source/claims must hold this source's lock.
+            A Released marker is a durable cancellation, not a missing record.
+            """
+            self.request(request)
+            if not self.state_path.is_absolute() or self.state_path!=self.state_path.resolve(strict=True):self.reject('STATE_UNSAFE')
+            directory=self.f.trusted_directory(self.state_path)
+            try:
+                if stat.S_IMODE(os.fstat(directory).st_mode)!=0o700:self.reject('STATE_UNSAFE')
+                try:fd=os.open(request['operationId']+'.purge.json',os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC,dir_fd=directory)
+                except FileNotFoundError:return None
+                try:
+                    info=os.fstat(fd)
+                    if not stat.S_ISREG(info.st_mode) or info.st_uid!=0 or info.st_gid!=0 or info.st_nlink!=1 or stat.S_IMODE(info.st_mode)!=0o600 or not 0<info.st_size<=65536:self.reject('STATE_UNSAFE')
+                    raw=os.read(fd,65537)
+                    if len(raw)!=info.st_size:self.reject('STATE_UNSAFE')
+                    value=json.loads(raw,object_pairs_hook=self.f.unique_object)
+                finally:os.close(fd)
+                if type(value) is not dict or set(value)!={'schemaVersion','source','operationId','owner','fingerprint','state'} or type(value['schemaVersion']) is not int or value['schemaVersion']!=1:self.reject('STATE_UNSAFE')
+                self.request(value['source']);self.f.identity(value['operationId'])
+                if encode(value['source'])!=encode(request) or value['operationId']==request['operationId'] or value['state'] not in ('Reserved','Released','Unknown'):self.reject('STATE_UNSAFE')
+                if any(type(value[k]) is not str or not re.fullmatch('[A-F0-9]{64}',value[k]) for k in ('owner','fingerprint')):self.reject('STATE_UNSAFE')
+                return value
+            finally:os.close(directory)
+
+        def check_purge_fence(self, request, purge_id=None):
+            fence=self.read_purge_fence(request)
+            if fence is not None and fence['state']!='Released' and not (fence['state']=='Reserved' and purge_id is not None and fence['operationId']==purge_id):self.reject('PURGE_CLAIMED')
+
         def check_restore_claim(self, request, restore_id):
+            self.check_purge_fence(request)
             claim=self.read_restore_claim(request)
             if claim is not None and claim['restoreOperationId']!=restore_id:self.reject('RESTORE_CLAIMED')
             if restore_id is not None and claim is None:self.reject('RESTORE_CLAIMED')
@@ -347,6 +379,7 @@ def recycling_type(directory_type):
                     try:
                         if self.probe_file(verified_private,record['operationId']+'.trash',plan,session)!=actual:self.reject('SOURCE_CHANGED')
                     finally:os.close(verified_private)
+                    self.check_purge_fence(request)
                     self.f.exchange(private,record['operationId']+'.trash',parent,c['path'].rsplit('/',1)[-1],1);os.fsync(private);os.fsync(parent);self.checkpoint('RestoredNamespace')
                 finally:os.close(private)
             self.recover(state,record,session);return self.public(record,session,False)

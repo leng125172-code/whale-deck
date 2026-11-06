@@ -34,38 +34,49 @@ class ContainerRecyclePurgePreflight:
         if session is None:self.reject('SESSION_REQUIRED')
         ref=command['source'];source=self._source
         with source.locked(ref) as (_,record):
-            # This rejects non-Trashed sources, missing/unsafe/any active restore
-            # claim, changed namespace/private inode/content/attributes and HDD.
-            selected=self._restore.source_plan({k:command[k] for k in ('source','historyDigest')},record,session)
-            with source.history.target(False) as (configuration,directory),source.history.gate(directory):
-                history=source.history.read(directory,ref)
-                if history['historyDigest']!=command['historyDigest'] or history['captureState']!='Trashed':self.reject('HISTORY_CHANGED')
-                info=os.stat(ref['operationId']+'.data',dir_fd=directory,follow_symlinks=False)
-                fd=source.f.open_at(directory,ref['operationId']+'.data',os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
-                try:
-                    if not os.path.samestat(info,os.fstat(fd)):self.reject('HISTORY_CHANGED')
-                    archive=source.metadata(info)
-                    checksum=hashlib.sha256();count=0
-                    while chunk:=os.read(fd,source.f.CHUNK):
-                        session.revalidate();count+=len(chunk)
-                        if count>history['sizeBytes']:self.reject('HISTORY_CHANGED')
-                        checksum.update(chunk)
-                    if count!=history['sizeBytes'] or checksum.hexdigest().upper()!=history['sha256']:self.reject('HISTORY_CHANGED')
-                    if archive[3:6]!=[0,0,1] or archive[2]&0o7777!=0o600:self.reject('HISTORY_CHANGED')
-                    source.history.storage.attest(configuration,directory)
-                    result=dict(schemaVersion=1,command=json.loads(encode(command)),targetProof=selected['targetProof'],parentIdentity=selected['parentIdentity'],parentVersion=selected['parentVersion'],uid=selected['uid'],gid=selected['gid'],privateIdentity=selected['privateIdentity'],retainedIdentity=selected['retainedIdentity'],
-                        sourceRecordDigest=hashlib.sha256(b'whaledeck-container-recycle-purge-source-v1\n'+encode(record)).hexdigest().upper(),historyMetadataDigest=hashlib.sha256(b'whaledeck-container-recycle-purge-history-v1\n'+encode(history)).hexdigest().upper(),historyCreatedAtUnixMs=history['createdAtUnixMs'],storageHash=hashlib.sha256(encode(configuration)).hexdigest().upper(),storeIdentity=[os.fstat(directory).st_dev,os.fstat(directory).st_ino],archiveIdentity=archive,archiveBytes=history['sizeBytes'],archiveSha256=history['sha256'])
-                    # The attestation and exact data inode must still be current.
-                    if source.metadata(os.fstat(fd))!=archive or source.metadata(os.stat(ref['operationId']+'.data',dir_fd=directory,follow_symlinks=False))!=archive:self.reject('HISTORY_CHANGED')
-                finally:os.close(fd)
-            source.guard(ref['plan']['command'],session,selected['targetProof'])
-            if source.read_restore_claim(ref) is not None:self.reject('SOURCE_BUSY')
-            result['fingerprint']=self.digest(result)
-            return result
+            return self.plan_locked(command,record,session)
+
+    def plan_locked(self,command,record,session,purge_id=None):
+        """Internal: caller holds the original source lock throughout use."""
+        self.command(command)
+        if session is None:self.reject('SESSION_REQUIRED')
+        ref=command['source'];source=self._source
+        # This rejects non-Trashed sources, missing/unsafe/any active restore
+        # claim, changed namespace/private inode/content/attributes and HDD.
+        selected=self._restore.source_plan({k:command[k] for k in ('source','historyDigest')},record,session,purge_id)
+        with source.history.target(False) as (configuration,directory),source.history.gate(directory):
+            history=source.history.read(directory,ref)
+            if history['historyDigest']!=command['historyDigest'] or history['captureState']!='Trashed':self.reject('HISTORY_CHANGED')
+            info=os.stat(ref['operationId']+'.data',dir_fd=directory,follow_symlinks=False)
+            fd=source.f.open_at(directory,ref['operationId']+'.data',os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+            try:
+                if not os.path.samestat(info,os.fstat(fd)):self.reject('HISTORY_CHANGED')
+                archive=source.metadata(info)
+                checksum=hashlib.sha256();count=0
+                while chunk:=os.read(fd,source.f.CHUNK):
+                    session.revalidate();count+=len(chunk)
+                    if count>history['sizeBytes']:self.reject('HISTORY_CHANGED')
+                    checksum.update(chunk)
+                if count!=history['sizeBytes'] or checksum.hexdigest().upper()!=history['sha256']:self.reject('HISTORY_CHANGED')
+                if archive[3:6]!=[0,0,1] or archive[2]&0o7777!=0o600:self.reject('HISTORY_CHANGED')
+                source.history.storage.attest(configuration,directory)
+                result=dict(schemaVersion=1,command=json.loads(encode(command)),targetProof=selected['targetProof'],parentIdentity=selected['parentIdentity'],parentVersion=selected['parentVersion'],uid=selected['uid'],gid=selected['gid'],privateIdentity=selected['privateIdentity'],retainedIdentity=selected['retainedIdentity'],
+                    sourceRecordDigest=hashlib.sha256(b'whaledeck-container-recycle-purge-source-v1\n'+encode(record)).hexdigest().upper(),historyMetadataDigest=hashlib.sha256(b'whaledeck-container-recycle-purge-history-v1\n'+encode(history)).hexdigest().upper(),historyCreatedAtUnixMs=history['createdAtUnixMs'],storageHash=hashlib.sha256(encode(configuration)).hexdigest().upper(),storeIdentity=[os.fstat(directory).st_dev,os.fstat(directory).st_ino],archiveIdentity=archive,archiveBytes=history['sizeBytes'],archiveSha256=history['sha256'])
+                # The attestation and exact data inode must still be current.
+                if source.metadata(os.fstat(fd))!=archive or source.metadata(os.stat(ref['operationId']+'.data',dir_fd=directory,follow_symlinks=False))!=archive:self.reject('HISTORY_CHANGED')
+            finally:os.close(fd)
+        source.guard(ref['plan']['command'],session,selected['targetProof'])
+        source.check_purge_fence(ref,purge_id)
+        if source.read_restore_claim(ref) is not None:self.reject('SOURCE_BUSY')
+        result['fingerprint']=self.digest(result)
+        return result
+
+    def validate_plan(self,value):
+        if type(value) is not dict or set(value)!=self.PLAN or type(value['schemaVersion']) is not int or value['schemaVersion']!=1 or type(value['fingerprint']) is not str or not re.fullmatch('[A-F0-9]{64}',value['fingerprint']) or value['fingerprint']!=self.digest(value):self.reject('PLAN_INVALID')
+        self.command(value['command'])
 
     def revalidate(self,value,session):
-        if type(value) is not dict or set(value)!=self.PLAN or type(value['schemaVersion']) is not int or value['schemaVersion']!=1 or type(value['fingerprint']) is not str or not re.fullmatch('[A-F0-9]{64}',value['fingerprint']) or value['fingerprint']!=self.digest(value):self.reject('PLAN_INVALID')
-        self.command(value['command']);current=self.plan(value['command'],session)
+        self.validate_plan(value);current=self.plan(value['command'],session)
         # Canonical bytes distinguish bool/float from integral identities and
         # never drop unknown fields while comparing the fresh native view.
         if encode(current)!=encode(value):self.reject('PLAN_CHANGED')

@@ -95,6 +95,7 @@ def restores_type(directory_type):
             return dict(schemaVersion=1,source=request['plan']['command']['source'],restoreOperationId=request['operationId'],restoreOwner=request['owner'],restoreFingerprint=request['plan']['fingerprint'])
 
         def write_claim(self, request):
+            self.source.check_purge_fence(request['plan']['command']['source'])
             value=self.claim(request)
             if len(json.dumps(value,separators=(',',':')).encode())>65536:self.reject('RECEIPT_LIMIT')
             with self.claims() as directory:
@@ -109,8 +110,9 @@ def restores_type(directory_type):
             with self.claims() as directory:
                 os.unlink(original['operationId']+'.json',dir_fd=directory);os.fsync(directory)
 
-        def source_plan(self, command, record, session):
+        def source_plan(self, command, record, session, purge_id=None):
             original=command['source']; plan=original['plan']
+            self.source.check_purge_fence(original,purge_id)
             if record is None or record['state']!='Trashed' or not record['historyVerified'] or record['historyDigest']!=command['historyDigest']: self.reject('SOURCE_CHANGED')
             if self.source.read_restore_claim(original) is not None: self.reject('SOURCE_BUSY')
             if session is None: self.reject('SESSION_REQUIRED')
