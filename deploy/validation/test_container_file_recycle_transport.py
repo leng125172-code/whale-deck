@@ -25,7 +25,11 @@ class RecycleTransportBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(transport.Rejected,'ACTION_INVALID'):transport.execute('shell',{},None,None,None,None)
         host=Path(__file__).resolve().parents[1]/'host'
         for name in ('whaledeck-privileged','install.sh','validate.sh'):subprocess.run(['bash','-n',str(host/name)],check=True,capture_output=True)
-        shell=(host/'whaledeck-privileged').read_text();start=shell.index('  container-file-recycling)');end=shell.index('  container-file-permissions)',start);block=shell[start:end]
+        shell=(host/'whaledeck-privileged').read_text();cases=[]
+        for action in ('container-file-recycling','container-file-recycling-stop'):
+            start=shell.index('  '+action+')\n');end=shell.index('\n    ;;',start)+len('\n    ;;');cases.append(shell[start:end])
+        block='\n'.join(cases)
+        self.assertNotIn('  container-file-recycle-archives)',block)
         self.assertIn('"$2" == restore',block);self.assertIn('RestrictAddressFamilies=AF_UNIX',block);self.assertIn('KillMode=control-group',block)
         self.assertIn('recycle_instance',block);self.assertIn('"$3"',block);self.assertNotIn('CAP_SYS_ADMIN',block);self.assertNotIn('CAP_CHOWN',block)
         self.assertIn('/var/lib/whaledeck-container-recycling',(host/'install.sh').read_text())

@@ -23,7 +23,11 @@ class RestoreTransportBoundaries(unittest.TestCase):
     def test_installer_and_scope_are_fixed_without_extra_capabilities(self):
         root=Path(__file__).resolve().parents[1]/'host'
         for name in ('whaledeck-privileged','install.sh','validate.sh'):subprocess.run(['bash','-n',str(root/name)],check=True,capture_output=True)
-        shell=(root/'whaledeck-privileged').read_text();start=shell.index('  container-file-recycle-restores)');end=shell.index('  container-file-permissions)',start);scope=shell[start:end]
+        shell=(root/'whaledeck-privileged').read_text();cases=[]
+        for action in ('container-file-recycle-restores','container-file-recycle-restores-stop'):
+            start=shell.index('  '+action+')\n');end=shell.index('\n    ;;',start)+len('\n    ;;');cases.append(shell[start:end])
+        scope='\n'.join(cases)
+        self.assertNotIn('  container-file-recycle-archives)',scope)
         for required in ('whaledeck-container-recycle-restores-$3','KillMode=control-group','RestrictAddressFamilies=AF_UNIX','CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_SYS_PTRACE','recycle_restore_instance','"$3"'):
             self.assertIn(required,scope)
         self.assertNotIn('CAP_CHOWN',scope);self.assertNotIn('CAP_SYS_ADMIN',scope);self.assertNotIn('"$2" == restore',scope)
