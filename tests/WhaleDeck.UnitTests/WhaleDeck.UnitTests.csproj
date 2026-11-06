@@ -16,6 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../deploy/validation/TerminalProbe/ContainerRecycleArchiveProbeMutations.cs" Link="Agent/ContainerRecycleArchiveProbeMutations.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 

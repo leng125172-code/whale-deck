@@ -7,7 +7,7 @@ import container_recycle_archive_rpc_proof as proof
 
 class ArchiveProbeScopeTests(unittest.TestCase):
     def setUp(self):
-        p=Path(__file__).resolve().parent/'TerminalProbe';self.s=(p/'ContainerRecycleArchiveProbe.cs').read_text();self.main=(p/'Program.cs').read_text()
+        p=Path(__file__).resolve().parent/'TerminalProbe';self.s=(p/'ContainerRecycleArchiveProbe.cs').read_text();self.mutations=(p/'ContainerRecycleArchiveProbeMutations.cs').read_text();self.main=(p/'Program.cs').read_text()
 
     def test_capability_gate_and_own_failure_shape_precede_key_or_any_operation(self):
         gate=self.s.index('caps.ProtocolMinor >= 59');key=self.s.index('File.ReadAllBytesAsync("/etc/whaledeck/agent-capability.key"');self.assertLess(gate,key);self.assertIn('CONTAINER_RECYCLE_ARCHIVE_CAPABILITY_UNAVAILABLE',self.s[:key]);self.assertIn('caps.Capabilities.Contains("docker.files.recycle.archive")',self.s[:key]);self.assertIn('CryptographicOperations.ZeroMemory(key)',self.s)
@@ -25,7 +25,8 @@ class ArchiveProbeScopeTests(unittest.TestCase):
         block=self.s.split('if(action=="archive-reject")',1)[1].split('Phase=action+"-value"',1)[0]
         mutations=re.search(r'foreach\(var field in new\[\]\{([^}]+)\}',block).group(1);self.assertEqual(len(re.findall('"[^"]+"',mutations)),20)
         self.assertEqual(proof.OPERATION_REFUSALS,20+4+1+2+1+1+1+1);self.assertEqual(proof.PLAN_REFUSALS,1+6+1+10+3+1)
-        self.assertIn('old.Fingerprint=ContainerRecyclePurgeWire.Fingerprint(old)',block);self.assertIn('changed.Plan.Fingerprint=ContainerRecycleArchiveWire.Fingerprint(changed.Plan)',block);self.assertIn('ContainerRecycleArchiveBinding.Hash(changed)!=ContainerRecycleArchiveBinding.Hash(archiveOperation)',block)
+        self.assertIn('old.Fingerprint=ContainerRecyclePurgeWire.Fingerprint(old)',self.mutations);self.assertIn('changed.Plan.Fingerprint=ContainerRecycleArchiveWire.Fingerprint(changed.Plan)',self.mutations);self.assertIn('ContainerRecycleArchiveBinding.Hash(changed)!=ContainerRecycleArchiveBinding.Hash(archiveOperation)',block)
+        self.assertIn('purge.Fingerprint=ContainerRecyclePurgeWire.Fingerprint(purge)',self.mutations);self.assertIn('MutateArchivePlan(request,field)',self.s);self.assertIn('MutateArchiveOperation(archiveOperation,field)',block)
 
 
 if __name__=='__main__':unittest.main()

@@ -11,7 +11,7 @@ using WhaleDeck.Contracts;
 using WhaleDeck.Contracts.Agent.V1;
 
 /// <summary>Parent-paced, fixed-resource probe. Each reply must be independently checked before the next mutation.</summary>
-internal static class ContainerRecycleArchiveProbe
+internal static partial class ContainerRecycleArchiveProbe
 {
     public static string Phase { get; private set; } = "startup";
     public static string FailureCode { get; private set; } = "";
@@ -135,7 +135,7 @@ internal static class ContainerRecycleArchiveProbe
                         await Reject(async()=>await archiveClient.PlanAsync(request,Headers("Reserve",request,archive:true),Until(),lifetime.Token),StatusCode.PermissionDenied);
                         foreach(var field in new[]{"purge-id","purge-owner","source-path","source-bytes","source-attribute","archive","store","history","actor","trace"})
                         {
-                            var changed=request.Clone();switch(field){case "purge-id":changed.Command.Purge.OperationId=Guid.NewGuid().ToString("N");break;case "purge-owner":changed.Command.Purge.Owner=new('E',64);break;case "source-path":changed.Command.Purge.Plan.Command.Source.Plan.Command.Location.Path="work/other.bin";break;case "source-bytes":changed.Command.Purge.Plan.Command.Source.Plan.Sha256=new('E',64);break;case "source-attribute":changed.Command.Purge.Plan.Command.Source.Plan.Attributes[0].Value=ByteString.CopyFrom([1,2,3]);break;case "archive":changed.Command.Purge.Plan.ArchiveIdentity.Inode++;break;case "store":changed.Command.Purge.Plan.StoreIdentity.Inode++;break;case "history":changed.Command.HistoryDigest=new('E',64);break;case "actor":changed.Context.ActorSubject+="-changed";break;default:changed.Context.TraceId+="-changed";break;}
+                            var changed=MutateArchivePlan(request,field);
                             Require(ContainerRecycleArchiveBinding.Hash(changed)!=ContainerRecycleArchiveBinding.Hash(request));await Reject(async()=>await archiveClient.PlanAsync(changed,Headers("Plan",request,archive:true),Until(),lifetime.Token),StatusCode.PermissionDenied);
                         }
                         var bad=request.Clone();bad.Command.Mode="All";await Reject(async()=>await archiveClient.PlanAsync(bad,Headers("Plan",bad,archive:true),Until(),lifetime.Token),StatusCode.InvalidArgument);
@@ -163,9 +163,7 @@ internal static class ContainerRecycleArchiveProbe
                         Require(archiveStates[archiveId]=="unreserved");
                         foreach(var field in new[]{"operation-job","owner","purge-id","purge-owner","source-owner","source-attribute","private","deleted-time","parent-version","source-record","purge-record","purge-marker","history-meta","storage","store","archive","archive-time","actor","trace","key"})
                         {
-                            var changed=archiveOperation.Clone();var old=changed.Plan.Command.Purge.Plan;
-                            switch(field){case "operation-job":changed.OperationId=changed.Context.JobId=Guid.NewGuid().ToString("N");break;case "owner":changed.Owner=new('E',64);break;case "purge-id":changed.Plan.Command.Purge.OperationId=Guid.NewGuid().ToString("N");break;case "purge-owner":changed.Plan.Command.Purge.Owner=new('E',64);break;case "source-owner":old.Command.Source.Owner=new('E',64);break;case "source-attribute":old.Command.Source.Plan.Attributes[0].Value=ByteString.CopyFrom([1,2,3]);break;case "private":changed.Plan.PrivateIdentity=changed.Plan.PrivateIdentity is null?old.PrivateIdentity.Clone():null;break;case "deleted-time":old.RetainedChangedAtUnixNs++;changed.Plan.DeletedChangedAtUnixNs=old.RetainedChangedAtUnixNs;break;case "parent-version":changed.Plan.ParentVersion=new('E',64);break;case "source-record":changed.Plan.SourceRecordDigest=new('E',64);break;case "purge-record":changed.Plan.PurgeRecordDigest=new('E',64);break;case "purge-marker":changed.Plan.PurgeMarkerDigest=new('E',64);break;case "history-meta":changed.Plan.HistoryMetadataDigest=new('E',64);break;case "storage":old.StorageHash=new('E',64);changed.Plan.StorageHash=old.StorageHash;break;case "store":old.StoreIdentity.Inode++;changed.Plan.StoreIdentity=old.StoreIdentity.Clone();break;case "archive":old.ArchiveIdentity.Inode++;changed.Plan.ArchiveIdentity=old.ArchiveIdentity.Clone();break;case "archive-time":old.ArchiveChangedAtUnixNs++;changed.Plan.ArchiveChangedAtUnixNs=old.ArchiveChangedAtUnixNs;break;case "actor":changed.Context.ActorSubject+="-changed";break;case "trace":changed.Context.TraceId+="-changed";break;default:changed.Context.IdempotencyKey=Guid.NewGuid().ToString("N");break;}
-                            old.Fingerprint=ContainerRecyclePurgeWire.Fingerprint(old);changed.Plan.Fingerprint=ContainerRecycleArchiveWire.Fingerprint(changed.Plan);Require(ContainerRecycleArchiveBinding.Hash(changed)!=ContainerRecycleArchiveBinding.Hash(archiveOperation));
+                            var changed=MutateArchiveOperation(archiveOperation,field);Require(ContainerRecycleArchiveBinding.Hash(changed)!=ContainerRecycleArchiveBinding.Hash(archiveOperation));
                             await Reject(async()=>await archiveClient.ApplyAsync(changed,Headers("Apply",archiveOperation,archive:true),Until(),lifetime.Token),StatusCode.PermissionDenied);
                         }
                         foreach(var variant in new[]{"recycle-domain","purge-domain","restore-domain","generic-domain"})await Reject(async()=>await archiveClient.ApplyAsync(archiveOperation,Headers("Apply",archiveOperation,variant:variant,archive:true),Until(),lifetime.Token),StatusCode.PermissionDenied);
