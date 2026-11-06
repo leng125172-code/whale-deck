@@ -291,6 +291,8 @@ jobs:
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_restore_postreturn_revocation_proof.py
           python3 -W error -m py_compile deploy/validation/restore_superseded_proof.py deploy/validation/validate_container_recycle_restore_superseded.py deploy/validation/verify_container_recycle_restore_superseded.py
           node --check deploy/validation/validate_container_recycle_restore_superseded.mjs
+          python3 -W error -m py_compile deploy/validation/restore_instance_proof.py deploy/validation/validate_container_recycle_restore_instance.py deploy/validation/verify_container_recycle_restore_instance.py
+          node --check deploy/validation/validate_container_recycle_restore_instance.mjs
 
   backend:
     runs-on: ubuntu-latest
