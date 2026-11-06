@@ -19,6 +19,7 @@ NAMES=('whaledeck-files.py','whaledeck-container-files.py','whaledeck-container-
 
 def main(revision):
     assert os.geteuid()==0 and re.fullmatch('[a-f0-9]{40}',revision);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0';repo=Path(__file__).resolve().parents[2]
+    os.environ.update(GIT_CONFIG_COUNT='1',GIT_CONFIG_KEY_0='safe.directory',GIT_CONFIG_VALUE_0=str(repo))
     git=lambda *a:subprocess.check_output(['git','-c','safe.directory='+str(repo),'-C',str(repo),*a])
     assert not git('status','--porcelain').strip();sha=git('rev-parse','HEAD').decode().strip();idle();before=baseline(revision);rows=old_rows('0'*64)
     e=repo/'deploy/artifacts'/('container-recycle-archive-plan-'+uuid.uuid4().hex);e.mkdir(mode=0o700)
