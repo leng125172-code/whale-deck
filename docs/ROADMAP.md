@@ -1,5 +1,7 @@
 # WhaleDeck 分阶段开发任务
 
+2026-11-06独立恢复Superseded新组合实机通过：3daded65全新来源原inode返回后，精确三FD/当前HDD和原helper停止态重核，仅NOREPLACE移动本轮原件；真实正常退出POST时原helper仍活，原pidfd5.807秒退出，同执行Superseded/Completed/历史归属true而绑定false，取消/ACK/retry0。两次双端退出/同subject重登三旧引用404、真实Job17字段/普通9匿名5拒绝及清理前后独立通过；9专项/47相关root零跳过。169文件封存，2346保护/11核心/093f44a9保持，33回收19恢复/活动0，Root66-HDD69/恢复50。只签目标移走+退出，实例变化/真正Unknown/跨写入/长期清理及59项继续。[实机与准确边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_SUPERSEDED.md)。
+
 2026-11-06链接修复093f44a9准确CI12项与标准发布通过，真实身份Jobs四类型/桌面明色和320暗色8场景签收，正常双端退出/匿名401、管理写入与retry0；74文件封存。写后移组/停用工具05d3ae4a分别全新资源实机通过，原pidfd5.390/5.478秒、同执行Succeeded/Completed/成功claim与取消0、各普通9匿名5拒绝及清理前后独立通过；68关联root检查全过。原启动拒绝、ctime清理总失败及独立收尾均保留不补签，最终2346保护/11核心/093f44a9宿主保持、32回收18恢复/活动0，Root64-HDD67/恢复47。继续Superseded/Unknown、跨写入、长期清理和59项。[链接发布](qa/CONTAINER_FILE_RECYCLING_RESTORE_FOOTER_REAL_UI.md)与[撤权实机和失败边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_REVOCATION.md)。
 
 2026-11-06链接注册修复093f44a9四镜像/两宿主预构建及707校验通过，生产150adfd/2346保护/11核心/29回收15恢复和Root-HDD保持；准确CI仍待浏览器全终态。补3项真实临时inode写后检查，21相关root全过零跳过：已证明返回但当前绑定失效为Completed/Superseded，不能硬签Unknown；非安装RPC/SQL/UI实机验收。继续准确CI/标准覆盖/真实页，再撤权和按事实分流的故障矩阵/长期清理及59项。[预构建与结果边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_RETURNED_OUTCOMES.md)。
