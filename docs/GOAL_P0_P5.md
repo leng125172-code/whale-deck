@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-07归档复制内部业务候选f7c05f79已验证：独立意图/来源MAC、成功清理与原回收双记录证明、分域确认、预留/Reserved证明/Apply三入口及只观察原ID的恢复分派；历史复制inode事实不因当前绑定失效改写。74新专项、5875 Unit零跳过/782 Integration通过7默认原生跳过、585文件/453回收root零跳过、8范围/14 CI合同通过，Release构建零警告错误；CA1725及CRLF封存差异失败事实保留。404证据含388源码及2 Git原件封存；原宿主PID/运行checkout保持，新业务未接EF/DI/Worker或生产RPC。继续真实PG/migration/共享保护、Job/Outbox/审计、API/Vue/Jobs与真人整链及59项；17项移出不算完成，整项0/59、阶段0/6、工程25%–35%、酒馆/Live2D功能0%不变。[内部业务、检查与边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_BUSINESS.md)。
+
 2026-11-07归档1.59标准宿主安装与新资源签名RPC/HDD分项通过：产品3f41895b准确CI12路success，标准publish/install/validate及21安装模块核验通过；修正探针bcba2fc5完成22计划/31操作拒绝、取消及实际新inode复制，36帧、live/final/第三次独立重读和准确QA收尾通过。首批结构校验失败与处置原样保留；共享变异30专项、5801 Unit零跳过/782 Integration通过7默认原生跳过、585文件/453回收root零跳过及14 CI合同/8范围/4安装比较通过。62安装+197原失败+279新成功证据封存，53回收29恢复17清理/活动0、2346保护及11核心保持；两个宿主3f41895b，应用与运行checkout仍9694af1c。维护23采样有1次ConnectionError，不签连续性；永久归档业务/真实PG/共享保护/Worker/API/Vue/Jobs及真实身份页面、故障/留存/claim收尾与59项继续，17项移出不算完成。整项0/59、阶段0/6、粗估25%–35%、酒馆/Live2D功能0%不变。[安装态原件、失败与验收边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_AGENT.md)。
 
 2026-11-07归档安装态父级/只读采集/独立放行候选b7670f99已验证：固定Root/claim/HDD FD与原字节join、null旧private、新inode/空stage物理证明、五ID有限增量、live34帧不关闭/最终强制36帧含收尾后历史true绑定false，清理前独立放行及parent-leaf FD核对接入。18专项/完整585文件与453回收零跳过、14 CI合同/8范围/7语法通过；初版缺失异常差异保留修正。144证据/129源码含124Python闭包封存，53回收29恢复17清理/全Root-HDD/2346保护/11核心/9694af1c保持；准确417 CI12路全success。未安装或跑新写入门禁，本批新CI、版本能力切换/标准安装/正向RPC-HDD与永久业务页面及59项继续，17项移出不算完成。[父级、独立实读与准确边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_GATE_CANDIDATE.md)。
