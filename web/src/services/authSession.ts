@@ -1,3 +1,4 @@
+import { clearRecyclePurgeHints, reconcileRecyclePurgeHints } from './containerRecyclePurgeHints'
 import {
   clearRecursiveAclRestoreHints,
   reconcileRecursiveAclRestoreHints,
@@ -66,6 +67,7 @@ function expireSession() {
   clearOwnershipHints()
   clearRecycleHints()
   clearRecycleRestoreHints()
+  clearRecyclePurgeHints()
   clearAclHints()
   clearRecursivePermissionHints()
   clearRecursiveOwnershipHints()
@@ -159,6 +161,7 @@ async function loadAuthSession() {
         reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecycleHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecycleRestoreHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileRecyclePurgeHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
@@ -207,6 +210,7 @@ async function logout() {
   clearOwnershipHints()
   clearRecycleHints()
   clearRecycleRestoreHints()
+  clearRecyclePurgeHints()
   clearAclHints()
   clearRecursivePermissionHints()
   clearRecursiveOwnershipHints()
@@ -244,6 +248,7 @@ async function refresh() {
     reconcileOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecycleHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecycleRestoreHints(user.value?.subject, user.value?.isAdministrator === true)
+    reconcileRecyclePurgeHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
