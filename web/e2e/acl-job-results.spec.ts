@@ -20,6 +20,8 @@ for (const width of [320, 1440])
         'containers.files.recycle-restore-plan',
         'containers.files.recycle-purge',
         'containers.files.recycle-purge-plan',
+        'containers.files.recycle-archive',
+        'containers.files.recycle-archive-plan',
         'containers.files.recursive-acl',
         'containers.files.recursive-acl-plan',
         'containers.files.recursive-acl-restore',

@@ -69,7 +69,7 @@ try {
   await coordinate('armed',{id:ready.id,sourceIntentId:source.id,sourceOperationId:source.executionJobId,version:ready.version})
   await dialog.getByRole('button',{name:'确认留存清理',exact:true}).click()
   const confirm=page.getByRole('dialog',{name:'确认清理留存原件',exact:true})
-  await expect(confirm).toContainText('当前尚未提供清理后的归档恢复入口')
+  await expect(confirm).toContainText('恢复须走独立归档复制入口并重新核验HDD备份')
   await confirm.getByRole('button',{name:'确认删除留存原件',exact:true}).click()
   phase='wait-exact-predelete-cut'
   const cut=await waitSignal(evidence,'cut-held.json',110000);assert.equal(cut.id,ready.id)

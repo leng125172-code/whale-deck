@@ -107,6 +107,8 @@ describe('Job retry', () => {
     'containers.files.recycle-restore',
     'containers.files.recycle-purge',
     'containers.files.recycle-purge-plan',
+    'containers.files.recycle-archive',
+    'containers.files.recycle-archive-plan',
     'containers.files.recursive-acl-plan',
     'containers.files.recursive-acl',
     'containers.files.recursive-acl-restore-plan',
