@@ -1,5 +1,7 @@
 # WhaleDeck 分阶段开发任务
 
+2026-11-06独立恢复写后实时撤权候选已补齐：精确returned-cut/当前HDD后仅变更本轮临时所有者，原pidfd退出、同执行Succeeded/Completed/成功claim及取消0须独立核验。7新增/63相关root测试全通过零跳过，静态复核通过；生产2346保护/11核心/29回收15恢复及Root-HDD保持，新实机撤权未运行。继续页尾准确CI/标准发布和真实页复验，再两轮写后撤权及59项。[候选与边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_REVOCATION_CANDIDATE.md)。
+
 2026-11-06任务页尾修复发布目标150adfd四镜像/两宿主预构建与707校验通过，2346保护/11核心/29回收15恢复完整行及Root-HDD保持，25定向通过。准确CI42131426329仍有6浏览器分片运行；私有标准发布/生产核验/只读真实Jobs门禁已准备但未执行，生产仍3d80。继续准确CI、标准覆盖与真实页尾复验，再写后撤权/Unknown、长期清理及59项。[预构建与恢复入口](qa/CONTAINER_FILE_RECYCLING_RESTORE_FOOTER_PREBUILD.md)。
 
 2026-11-06独立恢复写后正常退出已实机通过：01f05323全新来源准确本Root Applying/原来源Restored/原inode返回、三FD/当前HDD切点；真实BFF退出POST被观察时原helper仍活，原pidfd5.848秒退出，同执行Succeeded/Completed与成功claim保留，取消0。两次双端退出/重登三旧引用404及历史200、原Job/权限和清理前后独立passed；132工具/8范围，2346保护/11核心及3d80保持，Root58-HDD61/恢复Root38。另修Job串用ACL提示候选f51f4735，25定向/类型lint构建通过但未部署；继续CI/复验、写后撤权/Unknown与59项。[实机和候选边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_POSTRETURN_LOGOUT.md)。
