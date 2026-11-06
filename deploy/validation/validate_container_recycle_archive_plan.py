@@ -17,6 +17,18 @@ from recursive_acl_restore_agent_io import snapshot
 NAMES=('whaledeck-files.py','whaledeck-container-files.py','whaledeck-container-terminal.py','whaledeck-container-upload.py','whaledeck-container-publish.py','whaledeck-file-backups.py','whaledeck-container-directories.py','whaledeck-container-permissions.py','whaledeck-container-recycling.py','whaledeck-container-recycle-restores.py','whaledeck-container-recycle-purge-plan.py','whaledeck-container-recycle-purge-fences.py','whaledeck-container-recycle-purges.py','whaledeck-container-recycle-archive-plan.py')
 
 
+def payload_snapshot(root):
+    # HDD includes binary .data payloads. The journal snapshot helper parses
+    # every nonempty file as JSON and must never be used for this namespace.
+    assert root.resolve(strict=True)==root and root.is_dir()
+    result={}
+    for path in root.iterdir():
+        assert path.is_file() and not path.is_symlink()
+        result[path.name]=file_snapshot(path)
+        assert result[path.name] is not None
+    return result
+
+
 def main(revision):
     assert os.geteuid()==0 and re.fullmatch('[a-f0-9]{40}',revision);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0';repo=Path(__file__).resolve().parents[2]
     os.environ.update(GIT_CONFIG_COUNT='1',GIT_CONFIG_KEY_0='safe.directory',GIT_CONFIG_VALUE_0=str(repo))
@@ -49,6 +61,7 @@ def main(revision):
     with owned.fixture() as f:
         f['retain_unsettled']=True;leaf=f['folder']/'purge-kernel.bin';data=hashlib.shake_256(('purge-kernel:'+f['identifier']).encode()).digest(1024**2+7);leaf.write_bytes(data);os.chown(leaf,1000,1000);leaf.chmod(0o640);os.setxattr(leaf,'user.retention',b'preflight keeps both copies')
         initial=file_snapshot(leaf);c=json.loads(owned.common.command(['docker','inspect',f['identifier']]))[0]
+        save('fixture-initial.json',dict(containerId=f['identifier'],containerName=c['Name'].lstrip('/'),folder=str(f['folder']),parentIdentity=[f['folder'].stat().st_dev,f['folder'].stat().st_ino],original=file_snapshot(f['folder']/'original.bin'),selected=initial))
         command=dict(containerId=f['identifier'],instanceId=str(c['State']['Pid'])+':'+c['State']['StartedAt'],path='work/'+leaf.name)
         with reader.ContainerRoot(command,files,docker) as session:
             ref=dict(operationId=uuid.uuid4().hex,owner=hashlib.sha256(f['identifier'].encode()).hexdigest().upper(),plan=source.plan({**command,'expectedVersion':reader.version(command,command['path'],leaf.stat())},session))
@@ -82,7 +95,7 @@ def main(revision):
             except reader.Rejected as error:assert str(error).endswith('RESTORE_UNPROVEN')
             archive=load(bundle/NAMES[13],'archive_preflight_candidate').ContainerRecycleArchivePreflight(purger)
             archive_command=dict(purge=reservation,historyDigest=captured['historyDigest'],mode='ArchiveCopy')
-            def unchanged():return dict(source=snapshot(state),restore=snapshot(restore_state),purge=snapshot(purge_state),hdd=snapshot(hdd_folder))
+            def unchanged():return dict(source=snapshot(state),restore=snapshot(restore_state),purge=snapshot(purge_state),hdd=payload_snapshot(hdd_folder))
             preflight_before=unchanged();archive_plan=archive.plan(archive_command,session);typed_equal(archive.revalidate(archive_plan,session),archive_plan);typed_equal(unchanged(),preflight_before)
             assert archive_plan['deletedIdentity']==retained_before['identity'] and archive_plan['archiveSha256']==initial['sha256'] and archive_plan['archiveIdentity']==archive_before['identity']
             assert not leaf.exists() and not retained.exists() and not pending.exists()

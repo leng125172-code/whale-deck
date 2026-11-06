@@ -8,6 +8,7 @@ import json
 import os
 import uuid
 import unittest
+import hashlib
 from unittest.mock import patch
 
 import test_container_recycle_purges as purges
@@ -194,6 +195,18 @@ class ArchivePlanTests(unittest.TestCase):
             return result
         with patch.object(self.source,'guard',side_effect=expire),self.assertRaisesRegex(RuntimeError,'late session invalid'):self.plan()
         self.assertEqual(before,self.state())
+
+    def test_actual_hdd_binary_snapshot_is_not_a_json_journal_snapshot(self):
+        from validate_container_recycle_archive_plan import payload_snapshot
+        before=self.state();saved=payload_snapshot(self.base.target);name=self.f.hdd().name
+        self.assertEqual(saved[name]['sha256'],hashlib.sha256(self.base.content).hexdigest().upper());self.assertEqual(saved[name]['sizeBytes'],len(self.base.content));self.assertEqual(before,self.state())
+
+    def test_hdd_payload_snapshot_rejects_symlinks_and_directories(self):
+        from validate_container_recycle_archive_plan import payload_snapshot
+        leaf=self.base.target/'foreign-link';leaf.symlink_to(self.f.hdd())
+        with self.assertRaises(AssertionError):payload_snapshot(self.base.target)
+        leaf.unlink();leaf.mkdir()
+        with self.assertRaises(AssertionError):payload_snapshot(self.base.target)
 
 
 if __name__=='__main__':unittest.main()
