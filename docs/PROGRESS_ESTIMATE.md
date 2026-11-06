@@ -1,5 +1,7 @@
 # 当前完成比例与代码量估算
 
+2026-11-06独立恢复真正Unknown/跨管理员处置已实机通过：7bee0baa在原件已返回而本恢复仍Applying的精确三FD/当前HDD切点，仅NOREPLACE隔离本轮claim；原helper受控继续后从移动前起计2.444秒结束，产品重建围栏并保存Unknown/null归属。不同真实管理员暂不处置保持保护和原事实，再唯一ACK→Acknowledged/Job Failed/保护释放，Root仍Unknown/归属仍null，原件/来源Root/claim/HDD保持；两正常双端退出/普通9匿名5拒绝/取消retry0及清理前后独立通过。65相关root零跳过，193文件/137源码闭包封存；准备期断言/投影/语法失败另记。2346保护/11核心/093f44a9保持，35回收21恢复/活动0，Root70-HDD73/恢复56。只签此Unknown，跨写入/长期清理和59项继续。[实机及失败边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_UNKNOWN.md)。
+
 2026-11-06独立恢复返回后同CID实例变化已实机通过：b1a9faa4精确returned-cut/当前HDD/三FD与13表其他工作0门禁，仅重启自有CID一次，PID3180251→3184123/StartedAt变化、配置/原件完整快照保持；原pidfd从重启前起计1.968秒结束（含受控SIGCONT），再正常双端退出/同subject重登三旧引用404，同执行Superseded/Completed/历史归属true而绑定false。真实Job17字段/普通9匿名5拒绝及清理前后独立通过，9专项/64相关root零跳过；178文件/126源码闭包封存，2346保护/11核心/093f44a9保持，34回收20恢复/活动0，Root68-HDD71/恢复53。只签本组合，真正Unknown/跨写入/长期清理与59项继续。[实机、时序和边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_INSTANCE_CHANGE.md)。
 
 2026-11-06独立恢复Superseded新组合实机通过：3daded65全新来源原inode返回后，精确三FD/当前HDD和原helper停止态重核，仅NOREPLACE移动本轮原件；真实正常退出POST时原helper仍活，原pidfd5.807秒退出，同执行Superseded/Completed/历史归属true而绑定false，取消/ACK/retry0。两次双端退出/同subject重登三旧引用404、真实Job17字段/普通9匿名5拒绝及清理前后独立通过；9专项/47相关root零跳过。169文件封存，2346保护/11核心/093f44a9保持，33回收19恢复/活动0，Root66-HDD69/恢复50。只签目标移走+退出，实例变化/真正Unknown/跨写入/长期清理及59项继续。[实机与准确边界](qa/CONTAINER_FILE_RECYCLING_RESTORE_SUPERSEDED.md)。
