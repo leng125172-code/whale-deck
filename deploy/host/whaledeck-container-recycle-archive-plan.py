@@ -87,36 +87,51 @@ class ContainerRecycleArchivePreflight:
         purge=command['purge'];p=purge['plan'];ref=p['command']['source'];source=self.source
         # Same lock order as purge; no call to inspect/reconcile (those write).
         with self.existing_record(self.purges,purge) as deleted,self.existing_record(source,ref) as original:
-            marker=source.read_purge_fence(ref)
-            if deleted['state']!='Completed' or not deleted['unlinkConfirmed'] or not self.purges.matches(marker,purge) or marker['state']!='Purged':self.reject('PURGE_UNCONFIRMED')
-            if original['state']!='Purged' or original['actualIdentity'] is not None or not original['historyVerified'] or original['historyDigest']!=command['historyDigest']:self.reject('SOURCE_CHANGED')
-            historical={**original,'state':'Trashed','actualIdentity':p['retainedIdentity']}
-            if self.record_digest(b'whaledeck-container-recycle-purge-source-v1\n',historical)!=p['sourceRecordDigest']:self.reject('SOURCE_CHANGED')
-            if source.read_restore_claim(ref) is not None:self.reject('SOURCE_BUSY')
-            selected=self.namespace(ref,original,purge,session)
-            with source.history.target(False) as (configuration,directory),self.existing_lock(directory,'history.lock'):
-                history=source.history.read(directory,ref)
-                if history['captureState']!='Purged' or history['historyDigest']!=command['historyDigest'] or self.record_digest(b'whaledeck-container-recycle-purge-history-v1\n',{**history,'captureState':'Trashed'})!=p['historyMetadataDigest']:self.reject('HISTORY_CHANGED')
-                def attest():
-                    source.history.storage.attest(configuration,directory,read_only=True)
-                    if self.record_digest(b'',configuration)!=p['storageHash'] or [os.fstat(directory).st_dev,os.fstat(directory).st_ino]!=p['storeIdentity']:self.reject('HISTORY_CHANGED')
-                attest();name=ref['operationId']+'.data';fd=source.f.open_at(directory,name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
-                try:
-                    identity=source.metadata(os.fstat(fd))
-                    def data_current():
-                        if source.metadata(os.fstat(fd))!=identity or source.metadata(os.stat(name,dir_fd=directory,follow_symlinks=False))!=identity:self.reject('HISTORY_CHANGED')
-                    if identity!=p['archiveIdentity'] or not stat.S_ISREG(identity[2]) or (identity[2]&0o7777,identity[3],identity[4],identity[5])!=(0o600,0,0,1):self.reject('HISTORY_CHANGED')
-                    checksum=hashlib.sha256();count=0
-                    while chunk:=os.read(fd,source.f.CHUNK):
-                        session.revalidate();count+=len(chunk);checksum.update(chunk)
-                        if count>p['archiveBytes']:self.reject('HISTORY_CHANGED')
-                    if count!=p['archiveBytes'] or checksum.hexdigest().upper()!=p['archiveSha256']:self.reject('HISTORY_CHANGED')
-                    data_current();attest()
-                    result=dict(schemaVersion=1,command=json.loads(encode(command)),**selected,deletedIdentity=list(p['retainedIdentity']),sourceRecordDigest=self.record_digest(b'archive-source-v1\n',original),purgeRecordDigest=self.record_digest(b'archive-purge-v1\n',deleted),purgeMarkerDigest=self.record_digest(b'archive-marker-v1\n',marker),historyMetadataDigest=self.record_digest(b'archive-history-v1\n',history),storageHash=p['storageHash'],storeIdentity=list(p['storeIdentity']),archiveIdentity=identity,archiveBytes=count,archiveSha256=p['archiveSha256'])
-                finally:os.close(fd)
-            if encode(selected)!=encode(self.namespace(ref,original,purge,session)):self.reject('TARGET_CHANGED')
-            if source.read_restore_claim(ref) is not None:self.reject('SOURCE_BUSY')
-            session.revalidate()
+            return self.plan_locked(command,session,deleted,original)
+
+    def check_claim(self,ref,expected_claim):
+        actual=self.source.read_restore_claim(ref)
+        if encode(actual)!=encode(expected_claim):self.reject('SOURCE_BUSY')
+
+    def plan_locked(self,command,session,deleted,original,expected_claim=None):
+        """Internal: caller holds both purge and original source locks.
+
+        A reservation may revalidate only its exact shared source claim. Public
+        planning continues to reject every claim, including the caller's own.
+        """
+        self.command(command)
+        if session is None:self.reject('SESSION_REQUIRED')
+        purge=command['purge'];p=purge['plan'];ref=p['command']['source'];source=self.source
+        marker=source.read_purge_fence(ref)
+        if deleted['state']!='Completed' or not deleted['unlinkConfirmed'] or not self.purges.matches(marker,purge) or marker['state']!='Purged':self.reject('PURGE_UNCONFIRMED')
+        if original['state']!='Purged' or original['actualIdentity'] is not None or not original['historyVerified'] or original['historyDigest']!=command['historyDigest']:self.reject('SOURCE_CHANGED')
+        historical={**original,'state':'Trashed','actualIdentity':p['retainedIdentity']}
+        if self.record_digest(b'whaledeck-container-recycle-purge-source-v1\n',historical)!=p['sourceRecordDigest']:self.reject('SOURCE_CHANGED')
+        self.check_claim(ref,expected_claim)
+        selected=self.namespace(ref,original,purge,session)
+        with source.history.target(False) as (configuration,directory),self.existing_lock(directory,'history.lock'):
+            history=source.history.read(directory,ref)
+            if history['captureState']!='Purged' or history['historyDigest']!=command['historyDigest'] or self.record_digest(b'whaledeck-container-recycle-purge-history-v1\n',{**history,'captureState':'Trashed'})!=p['historyMetadataDigest']:self.reject('HISTORY_CHANGED')
+            def attest():
+                source.history.storage.attest(configuration,directory,read_only=True)
+                if self.record_digest(b'',configuration)!=p['storageHash'] or [os.fstat(directory).st_dev,os.fstat(directory).st_ino]!=p['storeIdentity']:self.reject('HISTORY_CHANGED')
+            attest();name=ref['operationId']+'.data';fd=source.f.open_at(directory,name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+            try:
+                identity=source.metadata(os.fstat(fd))
+                def data_current():
+                    if source.metadata(os.fstat(fd))!=identity or source.metadata(os.stat(name,dir_fd=directory,follow_symlinks=False))!=identity:self.reject('HISTORY_CHANGED')
+                if identity!=p['archiveIdentity'] or not stat.S_ISREG(identity[2]) or (identity[2]&0o7777,identity[3],identity[4],identity[5])!=(0o600,0,0,1):self.reject('HISTORY_CHANGED')
+                checksum=hashlib.sha256();count=0
+                while chunk:=os.read(fd,source.f.CHUNK):
+                    session.revalidate();count+=len(chunk);checksum.update(chunk)
+                    if count>p['archiveBytes']:self.reject('HISTORY_CHANGED')
+                if count!=p['archiveBytes'] or checksum.hexdigest().upper()!=p['archiveSha256']:self.reject('HISTORY_CHANGED')
+                data_current();attest()
+                result=dict(schemaVersion=1,command=json.loads(encode(command)),**selected,deletedIdentity=list(p['retainedIdentity']),sourceRecordDigest=self.record_digest(b'archive-source-v1\n',original),purgeRecordDigest=self.record_digest(b'archive-purge-v1\n',deleted),purgeMarkerDigest=self.record_digest(b'archive-marker-v1\n',marker),historyMetadataDigest=self.record_digest(b'archive-history-v1\n',history),storageHash=p['storageHash'],storeIdentity=list(p['storeIdentity']),archiveIdentity=identity,archiveBytes=count,archiveSha256=p['archiveSha256'])
+            finally:os.close(fd)
+        if encode(selected)!=encode(self.namespace(ref,original,purge,session)):self.reject('TARGET_CHANGED')
+        self.check_claim(ref,expected_claim)
+        session.revalidate()
         result['fingerprint']=self.digest(result);return result
 
     def validate_plan(self,value):
