@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-06真正Unlinked写后实时移组/账号停用两项已实机通过：0ba57b99各冻结139源码，五FD原inode nlink0与完整字节属性证明后仅改生成QA权威身份，原pidfd在变更确认前后仍活、分别6.133427/6.231488秒退出。原用户logout/cancel0、两取消时间null/双审计0，Unknown只保留1条原执行消息；另一管理员只读/暂不处置0写后一次ACK，原Job Failed/Acknowledged但Root/marker Unknown、SourcePurging/HDDTrashed和null事实不改。真实Jobs16字段、每项前后独立与第三次HDD重读、准确空目录/fixture收尾通过，未重建原件或创建恢复意图；两批各193条证据/5真图，171 root+12身份范围零跳过/14 CI合同/8范围。旧业务/2346保护/11核心及9694af1c保持，总51回收29恢复15清理/活动0，Root-HDD118/113/恢复80/目录98/purge30。准确CI完整终态及余矩阵/留存/归档恢复/维护连续性/59项继续。[真实写后撤权及边界](qa/CONTAINER_FILE_RECYCLING_PURGE_UNLINKED_REVOCATION.md)。
+
 2026-11-06真实Unlinked写后正常退出/Unknown及跨管理员处置已实机通过：c6d88f1a冻结135源码，五FD原inode nlink0/字节属性证明，真实BFF退出POST被观察时原pidfd仍活、6.289177秒退出；两取消时间null/审计0/页面cancel0，Unknown只保留原执行1条消息。不同管理员只读/暂不处置0写后一次ACK，原Job Failed/Acknowledged但Root/marker Unknown、Source Purging/HDD Trashed与null事实不改；实际Jobs16字段/5真图、准确空目录/fixture收尾、前后独立和第三次当前HDD重读通过，无原件重建或归档恢复。189条证据、165 root零跳过/14 CI合同/8范围；旧业务/2346保护/11核心及9694af1c保持，总49回收29恢复13清理/活动0，Root-HDD112/109/恢复80/目录98/purge26。准确CI完整终态及余矩阵/留存/归档恢复/维护连续性/59项继续。[实机及边界](qa/CONTAINER_FILE_RECYCLING_PURGE_UNLINKED_LOGOUT.md)。
 
 2026-11-06真正Unlinked写后取消/Unknown与跨管理员处置已实机通过：16635e53冻结131源码，五FD原inode nlink0/完整字节属性与三个名称缺席，Root Removing且未durable-confirm；页面取消后原pidfd6.232066秒退出，Unknown/null/围栏及2待处置Outbox保持。原用户正常退出、不同管理员只读/暂不处置0写后一次ACK，原Job Failed/Acknowledged但Root/marker Unknown、Source Purging/HDD Trashed不改；实际Jobs16字段/5真图、准确空目录与fixture收尾、前后两独立和第三次当前HDD重读通过，不重建原件或冒充归档恢复。184条证据、159 root零跳过/14 CI合同/8范围；旧业务/2346保护/11核心与9694af1c保持，总48回收29恢复12清理/活动0，Root-HDD109/107/恢复80/目录98/purge24。准确fefa CI12项全success，本批新CI及余矩阵/留存/归档恢复/维护连续性/59项继续。[真实写后、处置与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_UNLINKED_UNKNOWN.md)。
