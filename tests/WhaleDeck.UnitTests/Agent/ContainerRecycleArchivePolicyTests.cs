@@ -68,6 +68,6 @@ public sealed class ContainerRecycleArchivePolicyTests
         foreach(var number in new[]{"true","1.5","9007199254740993.0"}){var node=JsonNode.Parse(raw)!;node["archiveBytes"]=JsonNode.Parse(number);using var doc=JsonDocument.Parse(node.ToJsonString());Assert.Throws<InvalidOperationException>(()=>ContainerRecycleArchivePolicy.PlanOutput(doc.RootElement,p.Command));}
     }
     [Fact]
-    public async Task CandidateDoesNotAdvertiseReadinessOrUpgradeTheRunningProtocol()
-    {var c=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.Equal(58U,c.ProtocolMinor);Assert.DoesNotContain("docker.files.recycle.archive",c.Capabilities);}
+    public async Task ArchiveCapabilitiesDeclareSeparateProtocolAndDedicatedCapability()
+    {var c=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.Equal(59U,c.ProtocolMinor);Assert.Contains("docker.files.recycle.archive",c.Capabilities);}
 }

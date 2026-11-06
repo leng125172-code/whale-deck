@@ -12,7 +12,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = 58,
+            ProtocolMinor = 59,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
@@ -20,6 +20,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
             "docker.files.recycle",
             "docker.files.recycle.restore",
             "docker.files.recycle.purge",
+            "docker.files.recycle.archive",
             "docker.files.move-intents",
             "docker.files.recursive-permission-intents",
             "docker.files.recursive-ownership-intents",

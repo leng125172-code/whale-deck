@@ -59,7 +59,7 @@ public sealed class ContainerRecursiveOwnershipPolicyTests
     public async Task AdvertisedOwnershipCapabilityRequiresProtocol150()
     {
         var caps = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
-        Assert.Equal(1U, caps.ProtocolMajor); Assert.Equal(58U, caps.ProtocolMinor);
+        Assert.Equal(1U, caps.ProtocolMajor); Assert.Equal(59U, caps.ProtocolMinor);
         Assert.Contains("docker.files.recursive-ownership-intents", caps.Capabilities);
     }
     [Theory]
