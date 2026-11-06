@@ -101,8 +101,9 @@ def job_summary(value, row, *, execution_stage):
     return value
 
 
-def retained_history(before, after):
-    """Compare two separately acquired HDD observations, including after cleanup."""
+def retained_history(before, after, *, purged=False):
+    """Only a proved purge may change captureState; archive bytes/identity stay fixed."""
+    assert type(purged) is bool
     for v in (before, after):
         fields(v, ('history', 'data', 'storeIdentity', 'storageHash'))
         h, data = v['history'], v['data']
@@ -112,7 +113,7 @@ def retained_history(before, after):
         assert type(h['operationId']) is str and len(h['operationId']) == 32 and uuid.UUID(h['operationId']).hex == h['operationId'] and uuid.UUID(h['operationId']).int
         assert type(h['schemaVersion']) is int and h['schemaVersion'] == 1
         assert h['resourceType'] == 'ContainerFileTrash' and h['storageId'] == 'database-platform.backup.hdd'
-        assert h['captureKind'] == 'Trash' and h['state'] == 'Verified' and h['captureState'] == 'Trashed'
+        assert h['captureKind'] == 'Trash' and h['state'] == 'Verified' and h['captureState'] in (('Trashed', 'Purged') if purged else ('Trashed',))
         assert type(h['createdAtUnixMs']) is int and 0 <= h['createdAtUnixMs'] <= 253402300799999
         assert type(h['differentSourceDevice']) is bool
         assert type(h['sizeBytes']) is type(data['sizeBytes']) is int and 0 <= h['sizeBytes'] <= 1073741824
@@ -135,5 +136,9 @@ def retained_history(before, after):
         assert type(v['storeIdentity']) is list and len(v['storeIdentity']) == 2
         assert all(type(n) is int and 0 <= n <= 2**64-1 for n in v['storeIdentity']) and v['storeIdentity'][1] > 0
         source.hash_value(v['storageHash'])
-    typed_equal(before, after)
+    if purged:
+        assert after['history']['captureState'] == 'Purged'
+        typed_equal(after, {**before, 'history': {**before['history'], 'captureState': 'Purged'}})
+    else:
+        typed_equal(before, after)
     return dict(hddHistoryAndFullDataSnapshotEqual=True)

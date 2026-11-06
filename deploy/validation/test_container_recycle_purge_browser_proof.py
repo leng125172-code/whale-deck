@@ -125,6 +125,19 @@ class BrowserProofTests(unittest.TestCase):
         bad=dict(history={},data={},storeIdentity=[0,0],storageHash='0'*64)
         with self.assertRaises(AssertionError):retained_history(bad,copy.deepcopy(bad))
 
+    def test_completed_purge_only_advances_capture_state_and_keeps_all_archive_facts(self):
+        before=hdd();after=copy.deepcopy(before);after['history']['captureState']='Purged'
+        self.assertTrue(retained_history(before,after,purged=True)['hddHistoryAndFullDataSnapshotEqual'])
+        retained_history(after,copy.deepcopy(after),purged=True)
+        with self.assertRaises(AssertionError):retained_history(before,after)
+        with self.assertRaises(AssertionError):retained_history(after,before,purged=True)
+        for kind in ('inode','bytes','metadata'):
+            bad=copy.deepcopy(after)
+            if kind=='inode':bad['data']['identity'][1]+=1
+            elif kind=='bytes':bad['data']['sha256']='0'*64
+            else:bad['history']['createdAtUnixMs']+=1
+            with self.subTest(kind=kind),self.assertRaises(AssertionError):retained_history(before,bad,purged=True)
+
     def test_matching_invalid_frames_or_attributes_are_still_refused(self):
         for kind in ('inode', 'store', 'bool', 'attributes'):
             bad=hdd()
