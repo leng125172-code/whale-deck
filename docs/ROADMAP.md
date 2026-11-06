@@ -1,5 +1,7 @@
 # WhaleDeck 分阶段开发任务
 
+2026-11-06归档恢复独立日志/共享来源预留候选cb531a56已通过全新容器/实际HDD：新ID Reserved及同格式来源mutex阻止竞争，明确Aborted后才释放，第二ID接手时旧ID晚到不改新claim；原Purged来源/清理/marker/HDD保持，不复制或重建原件。26新专项/140关联root零跳过含5强杀切点、14 CI合同/8范围，实机/独立/第三次HDD与日志重读通过；159证据/15宿主+116验证源码封存。53回收29恢复17清理、2346保护/11核心/生产9694af1c保持，HDD仅本轮121→123；上批准确CI仍待三浏览器终态。本批新CI、实际复制/新inode发布/RPC安装/永久业务页面及其余59项继续，17项移出不算完成。[来源保护、实机与边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_FENCES.md)。
+
 2026-11-06归档副本恢复只读预检候选60c1eae9已通过全新容器/实际HDD分项：仅Completed/Purged/unlinkConfirmed来源，已有锁/无claim、当前空位和完整归档绑定；Unknown拒绝且不调和写入。114 root零跳过/14 CI合同/8范围、原失败精确收尾及全新门禁/独立与第三次HDD重读通过，151文件封存/14宿主+114验证源码，原件未重建、复制/安装/RPC/UI均未实现。53回收29恢复17清理完整业务、2346保护/11核心及生产9694af1c保持，HDD仅两套自有来源117→121；准确03be CI12路全success。本批新CI、实际归档复制/永久业务/页面、其余故障/留存/维护连续性与59项继续，17项移出不算完成。[候选、原失败与真实边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_PREFLIGHT.md)。
 
 2026-11-06真正Unlinked写后Worker强杀/自然租约与Agent重启两项已实机通过：221c74b2各冻结145源码，原helper0.110948/0.012095秒退出；旧lease真实等87.070058秒/40个到期前完整样本、原token围栏与Root/marker/source字节和HDD保持，首次Unknown结果审计21:17:53.434315晚原expiry21:17:51.775678。原ID Unknown/null、一条消息/零取消，另一管理员只读/暂不处置后一次ACK，RootUnknown/SourcePurging/HDDTrashed不改；实际Jobs16字段、原Unknown页、准确fixture收尾及每项前后独立/第三次HDD重读通过，无原件重建/恢复意图。207/203条证据、各5真图，179 root零跳过/14 CI合同/8范围；只同WorkerStartedAt和AgentPID变，维护152采样全200-Ready，旧业务/2346保护保持，总53回收29恢复17清理/活动0，Root-HDD124/117/恢复80/目录98/purge34。准确CI终态及余Unknown/共享写入/留存/归档恢复/维护连续性/59项继续。[真实写后故障与审计时序](qa/CONTAINER_FILE_RECYCLING_PURGE_UNLINKED_RESTARTS.md)。
