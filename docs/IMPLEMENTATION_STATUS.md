@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-06归档复制内核d5395d51与门禁7768ab50已分项实机通过：在独立Reserved/来源claim下从实际HDD复制为新inode，原UID/GID/mode/mtime/user属性与字节匹配，NOREPLACE发布及重复不写；旧Purged来源/清理/marker/HDD保持。24专项/164关联root零跳过含9写入中断及Completed强杀、14 CI合同/8范围；全新资源存活副本独立实读、精确QA清理后独立和第三次HDD/日志重读通过。166最终证据/16宿主+117验证源码，首批成功/测试替身失败另存；53回收29恢复17清理、2346保护/11核心/生产9694af1c保持，HDD两套来源123→127。上批ad5 CI12路全success，本批新CI、协议安装/永久业务页面/故障矩阵、成功claim和暂存清理及59项继续，17项移出不算完成。[实际复制、新inode与边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_COPIES.md)。
+
 2026-11-06归档恢复独立日志/共享来源预留候选cb531a56已通过全新容器/实际HDD：新ID Reserved及同格式来源mutex阻止竞争，明确Aborted后才释放，第二ID接手时旧ID晚到不改新claim；原Purged来源/清理/marker/HDD保持，不复制或重建原件。26新专项/140关联root零跳过含5强杀切点、14 CI合同/8范围，实机/独立/第三次HDD与日志重读通过；159证据/15宿主+116验证源码封存。53回收29恢复17清理、2346保护/11核心/生产9694af1c保持，HDD仅本轮121→123；上批准确CI仍待三浏览器终态。本批新CI、实际复制/新inode发布/RPC安装/永久业务页面及其余59项继续，17项移出不算完成。[来源保护、实机与边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_FENCES.md)。
 
 2026-11-06归档副本恢复只读预检候选60c1eae9已通过全新容器/实际HDD分项：仅Completed/Purged/unlinkConfirmed来源，已有锁/无claim、当前空位和完整归档绑定；Unknown拒绝且不调和写入。114 root零跳过/14 CI合同/8范围、原失败精确收尾及全新门禁/独立与第三次HDD重读通过，151文件封存/14宿主+114验证源码，原件未重建、复制/安装/RPC/UI均未实现。53回收29恢复17清理完整业务、2346保护/11核心及生产9694af1c保持，HDD仅两套自有来源117→121；准确03be CI12路全success。本批新CI、实际归档复制/永久业务/页面、其余故障/留存/维护连续性与59项继续，17项移出不算完成。[候选、原失败与真实边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_PREFLIGHT.md)。
