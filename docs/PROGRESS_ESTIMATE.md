@@ -1,5 +1,7 @@
 # 当前完成比例与代码量估算
 
+2026-11-07归档安装态父级/只读采集/独立放行候选b7670f99已验证：固定Root/claim/HDD FD与原字节join、null旧private、新inode/空stage物理证明、五ID有限增量、live34帧不关闭/最终强制36帧含收尾后历史true绑定false，清理前独立放行及parent-leaf FD核对接入。18专项/完整585文件与453回收零跳过、14 CI合同/8范围/7语法通过；初版缺失异常差异保留修正。144证据/129源码含124Python闭包封存，53回收29恢复17清理/全Root-HDD/2346保护/11核心/9694af1c保持；准确417 CI12路全success。未安装或跑新写入门禁，本批新CI、版本能力切换/标准安装/正向RPC-HDD与永久业务页面及59项继续，17项移出不算完成。[父级、独立实读与准确边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_GATE_CANDIDATE.md)。
+
 2026-11-07归档原生探针/独立证明候选a50d72f6已自包含发布：source→purge→ArchiveCopy逐帧放行、22/31拒绝矩阵、35帧/五ID与旧事实join，15新专项通过；真实1.58在读key前拒绝且零业务帧，未安装/升能力或签正向RPC。上批53ff CI installer两个旧case截取误收archive-CHOWN失败，原日志/精确源码留存，修复后完整585文件/438回收零跳过及14 CI合同/8范围通过；编译变量冲突与采集umask失败也留存，未接受中间封存。最终178证据/148源码含112Python闭包；53回收29恢复17清理/全部Root-HDD/2346保护/11核心/9694af1c保持。本批新CI、安装态父采集器/版本切换/标准安装/正向RPC与业务页面和59项继续，17项移出不算完成。[探针、旧版拒绝与原失败](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_PROBE_CANDIDATE.md)。
 
 2026-11-06归档Agent执行/固定Root传输候选fd6a73ea及校验838345cb已验证：五动作映射/Runner、Invocation前禁正文、64KiB与Archive深度16/其余8、精确依赖缺失拒绝、三写路径与专用CHOWN、安装/后置声明接入；协议仍1.58且无新cap，未安装。5771 Unit零跳过/782 Integration通过7原生默认跳过、178 root零跳过/14 CI合同/8范围；真实systemd提取profile复验RO三组/CHOWN/无SYS_ADMIN，原/run夹具失败与精确收尾留证，44文件/14源码封存。53回收29恢复17清理/全部Root-HDD/2346保护/11核心/9694af1c保持，上批准确3af CI12路success。本批新CI、原生探针/版本切换/标准安装/正向RPC与业务页面及59项继续，17项移出不算完成。[执行适配、权限实证与边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_EXECUTION_CANDIDATE.md)。
