@@ -14,7 +14,7 @@ from recycle_purge_browser_proof import managed_plan as old_plan
 SOURCES=('validate_container_recycle_archive_inflight_cancel.py','validate_container_recycle_archive_inflight_cancel.mjs','verify_container_recycle_archive_inflight_cancel.py','archive_inflight_cancel_proof.py','test_container_recycle_archive_inflight_cancel.py','bound_container_recycle_archive_cut.py','test_container_recycle_archive_cut_scope.py')
 from concurrent.futures import ThreadPoolExecutor
 from bound_container_recycle_archive_cut import freeze_before_copy
-from archive_inflight_cancel_proof import terminal_proof,cut_proof,exit_proof
+from archive_inflight_cancel_proof import terminal_proof,cut_proof,exit_proof,reservation_proof
 
 
 
@@ -109,6 +109,18 @@ def observe_cut(identifier,folder,pid,diagnostics):
         if row['execution_job_id']:return freeze_before_copy(row,folder,pid,diagnostics)
         assert row['state']=='Ready';time.sleep(.005)
     diagnostics['missReason']='NO_ORIGINAL_EXECUTION';return None
+
+
+def settle_cut(pool,future,held):
+    # Joining already waits for the observer. Retrieve its result after joining,
+    # including a late success; never drop custody due to a result timeout.
+    try:
+        if held is not None:held.release()
+    finally:
+        pool.shutdown(wait=True,cancel_futures=True)
+        if held is None and future is not None and not future.cancelled():
+            late=future.result()
+            if late is not None:late.release()
 
 
 def independent(repo,e,live):
@@ -207,7 +219,7 @@ def main(revision):
                                 if held is None:
                                     row=archive_sql(arc_ready['sql']['row']['id'])['row'];save('cut-missed.json',dict(id=row['id'],noReplay=True));save('cut-held.json',dict(id=row['id'],executionJobId=row['execution_job_id'],missed=True));continue
                                 current=archive_sql(arc_ready['sql']['row']['id']);q={k:held.record[k] for k in ('operationId','owner','plan')};cut_proof(held.record,current,held.proof,q)
-                                records=archive_io.read_operation(q,dict(operationId=q['operationId'],sourceOperationId=source['request']['operationId'],purgeOperationId=success['request']['operationId'],fingerprint=q['plan']['fingerprint'],state='Reserved',sourceFenced=True,ownedFence=True,archiveCopied=False,bindingCurrent=False,publishedIdentity=None),success['records'],e/'cut-originals',create=True)
+                                records=archive_io.read_operation(q,reservation_proof(current['row'],q),success['records'],e/'cut-originals',create=True)
                                 physical=archive_io.physical(f['folder'],q);archive_io.physical_proof(physical,fixture['original'],q,records,dict(state='Reserved',archiveCopied=False))
                                 hdd=hdd_observation(source['request']['operationId']);retained_history(source['hdd'],hdd,purged=True)
                                 save('cut-current.json',dict(records=records,physical=physical,hdd=hdd));save('cut-sql.json',current);save('cut-record.json',held.record);save('cut-proof.json',held.proof)
@@ -224,13 +236,9 @@ def main(revision):
                         raise
                     finally:
                         try:
-                            # A still-running observer may own an original stopped helper.
-                            if held is None and cut_future is not None:
-                                try:held=cut_future.result(timeout=110)
-                                except BaseException:pass
-                            if held is not None:held.release()
+                            settle_cut(pool,cut_future,held)
                         finally:
-                            stop_browser(process);pool.shutdown(wait=True,cancel_futures=True)
+                            stop_browser(process)
                 assert source and cancel and ready and final and success and arc_cancel and arc_ready and arc_final and arc_success and (e/'browser.stdout').stat().st_size<16384 and (e/'browser.stderr').stat().st_size<16384
                 browser=json.loads((e/'browser.json').read_text());assert browser['normalDualLogout'] and browser['actualUi'] and browser['reloginOriginalReferencesDenied']==9
                 terminal_proof(archive_sql(browser['archives'][1]['id']),fixture,success['sql']['row'],browser);save('fixture.json',fixture);denied_archive(fixture,browser['archives'][1]);independent(repo,e,True)

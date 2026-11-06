@@ -1,6 +1,6 @@
 """Pure archive cancellation/cut joins. Synthetic inputs are not live acceptance."""
 from acl_history_browser_proof import typed_equal
-from recycle_archive_browser_proof import execution,stored_object,job_summary,managed_plan
+from recycle_archive_browser_proof import execution,stored_object,job_summary,managed_plan,receipt_join
 from container_recycle_archive_rpc_proof import fields,RECORD
 
 
@@ -22,6 +22,14 @@ def terminal_proof(value,fixture,purge_row,browser=None):
     return dict(originalExecutionCanceled=True,rootAborted=True,archiveCopied=False,durableApplyMarkerIsNotCopy=True)
 
 
+def reservation_proof(row,request):
+    raw=stored_object(row['reservation_json']);dto={k[0].lower()+k[1:]:v for k,v in raw.items()}
+    receipt=receipt_join(dict(receipt_json=row['reservation_json']),dto,request)
+    assert receipt['state']=='Reserved' and receipt['sourceFenced'] is receipt['ownedFence'] is True and receipt['archiveCopied'] is False
+    assert receipt['publishedIdentity'] is None and (receipt['bindingCurrent'] is False or receipt['bindingCurrent'] is None)
+    return receipt
+
+
 def cut_proof(record,sql,proof,request):
     fields(record,RECORD)
     for key in ('operationId','owner','plan'):typed_equal(record[key],request[key])
@@ -30,6 +38,7 @@ def cut_proof(record,sql,proof,request):
     assert r['owner_hash']==request['owner'];typed_equal(managed_plan(stored_object(r['plan_json'])),request['plan'])
     assert r['state']=='Applying' and r['publish_barrier'] is True and r['receipt_json'] is None
     assert all(r[k] for k in ('root_started_at_utc','reservation_json','apply_started_at_utc'))
+    reservation_proof(r,request)
     for key in ('fiveKernelFdProofs','currentHddFdAttested','sourceClaimMatches','targetAbsent','stageAbsent','copyingNotEntered','hddDataReread','hddMetadataJoined'):assert proof[key] is True
     p=request['plan'];assert proof['rootPhase']=='Reserved' and proof['hddSha256']==p['archiveSha256'] and proof['hddMetadataDigest']==p['historyMetadataDigest'] and proof['storageHash']==p['storageHash']
     typed_equal(proof['hddIdentity'],p['archiveIdentity']);typed_equal(proof['archiveFdIdentity'],p['archiveIdentity'][:2]);typed_equal(proof['storeIdentity'],p['storeIdentity'])

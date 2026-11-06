@@ -1,8 +1,9 @@
 """Pure negative joins and safety contracts; not real installed cancellation."""
-import ast,copy,json,unittest,uuid
+import ast,copy,json,time,unittest,uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from archive_inflight_cancel_proof import terminal_proof,cut_proof,exit_proof
-from test_container_recycle_archive_browser_proof import rows,managed
+from test_container_recycle_archive_browser_proof import rows,managed,public
 from test_container_recycle_archive_rpc_proof import request
 
 
@@ -20,6 +21,7 @@ def cut_sample():
     v,_,_,_=sample();q=request();q['operationId']=v['row']['execution_job_id'].replace('-','')
     r=dict(schemaVersion=1,**q,state='Reserved',privateIdentity=None,pendingIdentity=None,preparedIdentity=None,publishedIdentity=None,parentAfterStage='')
     sql=copy.deepcopy(v);sql['row'].update(state='Applying',publish_barrier=True,receipt_json=None,owner_hash=q['owner'],plan_json=json.dumps(managed(q['plan'])))
+    sql['row']['reservation_json']=json.dumps({k[0].upper()+k[1:]:value for k,value in public(q,'Reserved').items()})
     p=q['plan'];proof=dict(rootPhase='Reserved',fiveKernelFdProofs=True,currentHddFdAttested=True,sourceClaimMatches=True,targetAbsent=True,stageAbsent=True,copyingNotEntered=True,hddDataReread=True,hddMetadataJoined=True,hddSha256=p['archiveSha256'],hddMetadataDigest=p['historyMetadataDigest'],storageHash=p['storageHash'],hddIdentity=p['archiveIdentity'],archiveFdIdentity=p['archiveIdentity'][:2],storeIdentity=p['storeIdentity'],containerRootIdentity=[1,50001],archiveLockIdentity=[1,50002],purgeLockIdentity=[1,50003],sourceLockIdentity=[1,50004])
     return r,sql,proof,q
 
@@ -62,6 +64,29 @@ class ArchiveCancelProofTests(unittest.TestCase):
         exit_proof(e,a,r['id'])
         for key,bad in (('elapsedSeconds',21),('elapsedSeconds',True),('observedWithOriginalPidfd',False),('actionMonotonicNs',400),('beganMonotonicNs',250)):
             with self.subTest(key=key),self.assertRaises(AssertionError):exit_proof({**e,key:bad},a,r['id'])
+
+    def test_actual_sql_reservation_must_match_original_root_and_request(self):
+        r,s,p,q=cut_sample()
+        for key,bad in (('Id',str(uuid.uuid4())),('Fingerprint','0'*64),('State','Aborted'),('OwnedFence',False),('ArchiveCopied',True)):
+            broken=copy.deepcopy(s);raw=json.loads(broken['row']['reservation_json']);raw[key]=bad;broken['row']['reservation_json']=json.dumps(raw)
+            with self.subTest(key=key),self.assertRaises(AssertionError):cut_proof(r,broken,p,q)
+
+    def test_late_observer_success_is_joined_and_released(self):
+        from validate_container_recycle_archive_inflight_cancel import settle_cut
+        released=[]
+        class Handle:
+            def release(self):released.append(True)
+        pool=ThreadPoolExecutor(max_workers=1)
+        def observe():time.sleep(.03);return Handle()
+        future=pool.submit(observe);self.assertFalse(future.done());settle_cut(pool,future,None)
+        self.assertEqual(released,[True]);self.assertTrue(future.done())
+
+    def test_existing_handle_is_released_even_if_observer_already_failed(self):
+        from validate_container_recycle_archive_inflight_cancel import settle_cut
+        released=[]
+        class Handle:
+            def release(self):released.append(True)
+        pool=ThreadPoolExecutor(max_workers=1);future=pool.submit(lambda:None);settle_cut(pool,future,Handle());self.assertEqual(released,[True])
 
     def test_gate_uses_private_stdin_visible_cancel_and_no_replay(self):
         root=Path(__file__).parent;node=(root/'validate_container_recycle_archive_inflight_cancel.mjs').read_text();parent=(root/'validate_container_recycle_archive_inflight_cancel.py').read_text()

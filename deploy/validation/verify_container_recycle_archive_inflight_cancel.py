@@ -23,18 +23,13 @@ from recycle_archive_browser_proof import execution, managed_plan, receipt_join,
 import container_recycle_archive_agent_io as archive_io
 import container_recycle_purge_agent_io as purge_io
 
-from archive_inflight_cancel_proof import terminal_proof,cut_proof,exit_proof
+from archive_inflight_cancel_proof import terminal_proof,cut_proof,exit_proof,reservation_proof
 from bound_container_recycle_archive_cut import GROUP
 from bound_container_ownership_cut import operation_lock
 from container_recycle_archive_rpc_proof import record_proof
 from recursive_acl_restore_agent_io import read_at
 import container_recycle_agent_io as source_io
 from validate_metric_continuity import query
-
-
-def public_receipt_from_cut(q):
-    # A derived Root/claim assertion, not an additional RPC receipt observation.
-    return dict(operationId=q['operationId'],sourceOperationId=q['plan']['command']['purge']['plan']['command']['source']['operationId'],purgeOperationId=q['plan']['command']['purge']['operationId'],fingerprint=q['plan']['fingerprint'],state='Reserved',sourceFenced=True,ownedFence=True,archiveCopied=False,bindingCurrent=False,publishedIdentity=None)
 
 
 def verify(name, live=False):
@@ -79,7 +74,7 @@ def verify(name, live=False):
     cut=private_json(e/'cut-record.json');cut_sql=private_json(e/'cut-sql.json');proof=private_json(e/'cut-proof.json');cut_proof(cut,cut_sql,proof,success['request'])
     assert cut_sql['row']['id']==success['sql']['row']['id']
     cut_current=private_json(e/'cut-current.json');typed_equal(cut_current['records']['root'],cut)
-    reserved=public_receipt_from_cut(success['request'])
+    reserved=reservation_proof(cut_sql['row'],success['request'])
     records=cut_current['records'];p=success['request']['plan']
     record_proof(success['request'],reserved,records['root'],records['claim'],records['sourceRoot'],records['purgeRoot'],records['marker'],records['history'],records['data'],source_before=purge['records']['sourceRoot'],purge_before=purge['records']['root'],marker_before=purge['records']['marker'],history_before=purge['records']['history'],data_before=purge['records']['data'],store_identity=records['storeIdentity'],storage_hash=records['storageHash'])
     for key,name in (('root','archive-root.json'),('claim','source-claim.json'),('sourceRoot','source-root.json'),('purgeRoot','purge-root.json'),('marker','purge-marker.json'),('history','source-hdd.json')):
