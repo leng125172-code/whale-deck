@@ -1,5 +1,7 @@
 # WhaleDeck 分阶段开发任务
 
+2026-11-06清理持久化/共享保护候选b2c4b9c0及a6e45e8c已通过真实隔离PG：EF迁移20261106060735、21 CHECK/15双向写入口、来源行锁内MAC、Reserved与Apply入口分离、租约/Job-Outbox-审计原子性与Worker接线通过；两轮实际宏各1执行1通过，新增完整peer和Finish审计回滚。5616 Unit/742 Integration（7默认原生跳过）/8范围/14 CI合同通过，62文件/45源码封存。生产/原业务完全保持，清理业务表仍无、未部署；管理员API/Vue、真人整链及59项继续。[真实PG与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_PERSISTENCE.md)。
+
 2026-11-06清理内部业务编排候选2f89445f已验证：独立来源MAC/确认、新意图/执行ID、Root预留入口/Reserved证明/不可逆Apply入口分离，重领只观察/取消原ID；62新检查含长调用撤权，5616 Unit/741 Integration（7原生默认跳过）/8范围/14 CI合同通过。385文件/377源码封存，测试编译/ACK时间/过期助手失败另记；真实生产/原业务保持，purge业务表仍无，未注册仓储或Worker/未部署。继续真实PG持久化/共享保护、页面整链及59项。[候选与真实边界](qa/CONTAINER_FILE_RECYCLING_PURGE_BUSINESS.md)。
 
 2026-11-06清理1.58标准安装及签名RPC/HDD分项通过：产品857e018d准确CI12项成功，两个宿主build/runtime/新模块/空Root核验通过，四容器与运行checkout仍093f44a9。门禁a4f71264全新来源及两个新ID完成18/26拒绝、取消/迟到不清理、实际清理/重复不删、20帧/11新3原回执及live/final独立核验与第三次保持；3新范围+19证明/234相关root通过。724+209文件封存，2346保护/11核心/36回收22恢复及活动0保持，Root75-HDD83/恢复59/目录98/purge4。维护5采样含1次ConnectionError后恢复200，不签连续性；永久业务页面、故障/策略/归档恢复与59项继续。[实机及维护发现](qa/CONTAINER_FILE_RECYCLING_PURGE_AGENT.md)。
