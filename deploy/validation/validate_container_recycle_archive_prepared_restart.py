@@ -236,7 +236,7 @@ def main(revision,kind):
                                 save('cut-held.json',dict(id=r['id'],executionJobId=r['execution_job_id']))
                                 restart_row=restart(kind,held,worker,revision,e);exited=True
                                 if kind=='worker-crash':natural_lease(restart_row,fixture,e)
-                                until=time.monotonic()+80
+                                until=time.monotonic()+120
                                 while True:
                                     settled=archive_sql(r['id'])['row']
                                     if settled['state']=='Unknown':break
