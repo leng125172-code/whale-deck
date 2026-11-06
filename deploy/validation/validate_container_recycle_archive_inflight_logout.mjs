@@ -41,6 +41,27 @@ try {
     await writeSignal(evidence, name + '-completed.json', { subject: profile.subject, result: value })
     assert.equal((await waitSignal(evidence, name + '-accepted.json', 60_000)).id, value.id)
   }
+  async function diagnosedLogout(label) {
+    const navigation=[]
+    const requested=request=>{
+      if(!request.isNavigationRequest() || navigation.length>=20)return
+      const url=new URL(request.url())
+      // Booleans and origin/path only: never persist token/state/query values.
+      navigation.push({kind:'request',method:request.method(),origin:url.origin,path:url.pathname,hasIdTokenHint:url.searchParams.has('id_token_hint'),hasPostLogoutRedirect:url.searchParams.has('post_logout_redirect_uri')})
+    }
+    const responded=response=>{
+      if(!response.request().isNavigationRequest() || navigation.length>=20)return
+      const url=new URL(response.url());navigation.push({kind:'response',status:response.status(),origin:url.origin,path:url.pathname})
+    }
+    page.on('request',requested);page.on('response',responded)
+    try {
+      return await logoutFromUserMenu(page,context,base,undefined,async observation=>{
+        const url=new URL(page.url());await writeSignal(evidence,label+'-'+observation.phase+'.json',{...observation,pageOrigin:url.origin,pagePath:url.pathname})
+      })
+    } finally {
+      page.off('request',requested);page.off('response',responded);await writeSignal(evidence,label+'-navigation.json',{navigation})
+    }
+  }
   phase = 'page-create-original-recycle-source'
   let files = await openPermissionFiles(page, fixture)
   await files.getByRole('button', { name: '回收 recycle-rpc.bin', exact: true }).click()
@@ -177,7 +198,7 @@ try {
           logoutMarkerWrite=writeSignal(evidence,'logout-request-began.json',{actualNavigationPost:true,path:url.pathname,id:ready.id,executionJobId:cut.executionJobId,monotonicNs:process.hrtime.bigint().toString()})
       })
       await page.screenshot({path:join(evidence,'held-before-logout.png')});await closePermissionDetails(page,dialog)
-      firstLogout=await logoutFromUserMenu(page,context,base);assert.ok(logoutMarkerWrite);await logoutMarkerWrite;await writeSignal(evidence,'first-logout.json',firstLogout)
+      firstLogout=await diagnosedLogout('first-logout');assert.ok(logoutMarkerWrite);await logoutMarkerWrite;await writeSignal(evidence,'first-logout.json',firstLogout)
       const anonymous=await context.request.get(base+archiveEndpoint+'/'+ready.id);assert.equal(anonymous.status(),401)
       phase='visible-relogin';const again=await loginVisible(page,context,base);assert.equal(again.subject,profile.subject)
       const paths=[endpoint+'/'+completed[0].id,endpoint+'/'+completed[1].id,...keys.map(k=>endpoint+'/by-key/'+k),recycle+'/'+source.id,archiveEndpoint+'/'+archives[0].id,archiveEndpoint+'/'+ready.id,...archiveKeys.map(k=>archiveEndpoint+'/by-key/'+k)],statuses=[]
@@ -233,7 +254,7 @@ try {
   assert.equal(mutations.filter(p => p === endpoint).length, 2); assert.equal(mutations.filter(p => p.startsWith(endpoint+'/')&&p.endsWith('/cancel')).length, 1)
   assert.equal(mutations.filter(p => p.startsWith(endpoint + '/') && p.endsWith('/confirm')).length, 1)
   assert.ok((await Promise.all(headerChecks)).every(Boolean))
-  phase='second-normal-dual-logout';const finalLogout=await logoutFromUserMenu(page,context,base)
+  phase='second-normal-dual-logout';const finalLogout=await diagnosedLogout('second-logout')
   assert.ok(firstLogout && logoutSession)
   assert.equal(mutations.filter(x=>x===archiveEndpoint+'/'+archives[1].id+'/cancel').length,0)
   await writeSignal(evidence,'browser.json',{revision,containerId:fixture.containerId,subject:profile.subject,source,completed,keys,jobProofs,archives,archiveKeys,archiveJobProofs,mutations,normalDualLogout:true,normalDualLogouts:2,reloginOriginalReferencesDenied:9,actualUi:true,...logoutSession,logoutReceipts:[firstLogout,finalLogout]})
@@ -241,7 +262,7 @@ try {
   console.log(JSON.stringify({ actualArchiveInflightLogoutBrowser: 'passed', purgeCases: 2, archiveCases: 2 }))
 } catch (error) {
   const frame = error?.stack?.split('\n').find(line => line.includes('validate_container_recycle_archive_inflight_logout.mjs:'))?.trim()
-  if (page && evidence && !['startup', 'visible-login', 'visible-relogin'].includes(phase))
+  if (page && evidence && new URL(page.url()).origin==='http://127.0.0.1:8080' && new URL(page.url()).pathname!=='/login' && !['startup', 'visible-login', 'visible-relogin'].includes(phase))
     await page.screenshot({ path: join(evidence, 'failed-product-page.png') }).catch(() => {})
   console.error(JSON.stringify({ actualArchiveInflightLogoutBrowser: 'failed', phase, failureType: error?.name, frame }))
   if (browser) await browser.close().catch(() => {})

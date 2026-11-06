@@ -72,5 +72,11 @@ class ArchiveLogoutProofTests(unittest.TestCase):
         for forbidden in ('cleanup_new_copy','requests.post','os.unlink','os.rmdir','subprocess.Popen'):self.assertNotIn(forbidden,calls)
         for expected in ('reservation_proof','cut_proof','exit_proof','record_proof','archive_io.read_operation','archive_io.physical','hdd_observation','source_closure'):self.assertIn(expected,calls)
 
+    def test_logout_diagnostics_exclude_token_values_and_login_screenshots(self):
+        s=(Path(__file__).parent/'validate_container_recycle_archive_inflight_logout.mjs').read_text();diagnostic=s.split('async function diagnosedLogout(label)',1)[1].split("phase = 'page-create-original-recycle-source'",1)[0]
+        self.assertIn('navigation.length>=20',diagnostic);self.assertIn("searchParams.has('id_token_hint')",diagnostic)
+        for forbidden in ('url.href','url.search,','searchParams.get(','.allHeaders(','.postData('):self.assertNotIn(forbidden,diagnostic)
+        self.assertIn("new URL(page.url()).origin==='http://127.0.0.1:8080'",s);self.assertIn("new URL(page.url()).pathname!=='/login'",s)
+
 
 if __name__=='__main__':unittest.main()
