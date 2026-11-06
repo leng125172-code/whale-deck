@@ -105,7 +105,9 @@ def main(revision):
     save('before.json',before);save('source.json',dict(revision=revision,validationRevision=sha,validationSourceSha256=closure));print(json.dumps(dict(actualPurgeInflightCancel='started',evidence=e.name)),flush=True)
     try:
         with owned.fixture() as f:
-            f['retain_unsettled']=True;leaf=f['folder']/'recycle-rpc.bin';leaf.write_bytes(hashlib.shake_256(('purge-inflight-cancel:'+f['identifier']).encode()).digest(1024**2+7));leaf.chmod(0o640);os.chown(leaf,1000,1000);os.setxattr(leaf,'user.recycle',b'purge cancellation original');original=source_io.file_snapshot(leaf)
+            # Bounded 32 MiB fixture gives the real archive/guard hashing window
+            # time for four-FD observation; no installed hook or fake delay.
+            f['retain_unsettled']=True;leaf=f['folder']/'recycle-rpc.bin';leaf.write_bytes(hashlib.shake_256(('purge-inflight-cancel:'+f['identifier']).encode()).digest(32*1024**2+7));leaf.chmod(0o640);os.chown(leaf,1000,1000);os.setxattr(leaf,'user.recycle',b'purge cancellation original');original=source_io.file_snapshot(leaf)
             c=json.loads(owned.common.command(['docker','inspect',f['identifier']]))[0];header=dict(containerId=f['identifier'],instanceId=str(c['State']['Pid'])+':'+c['State']['StartedAt']);reader=load('/usr/local/libexec/whaledeck-container-files.py','purge_ready_reader')
             fixture=dict(revision=revision,containerId=f['identifier'],containerName=c['Name'].lstrip('/'),instanceId=header['instanceId'],header=header,containerPid=c['State']['Pid'],folder=str(f['folder']),evidence=str(e),original=original,sourceVersion=reader.version(header,'work/recycle-rpc.bin',leaf.stat()))
             save('fixture-initial.json',fixture);save('prior-business.json',old_rows(f['identifier']))
@@ -136,7 +138,9 @@ def main(revision):
                             if armed and held is None and not missed:
                                 row=sql(armed['sql']['row']['id'])['row']
                                 if row['execution_job_id']:
-                                    held=freeze_before_delete(row,f['folder'],fixture['containerPid'])
+                                    diagnostics={}
+                                    try:held=freeze_before_delete(row,f['folder'],fixture['containerPid'],diagnostics)
+                                    finally:save('cut-observation.json',diagnostics)
                                     if held is None:
                                         missed=True;save('cut-missed.json',dict(id=row['id'],noReplay=True));save('cut-held.json',dict(id=row['id'],executionJobId=row['execution_job_id'],missed=True));continue
                                     current=sql(row['id']);actual=current['row'];assert actual['state']=='Applying' and actual['root_started_at_utc'] and actual['reservation_json'] and actual['apply_started_at_utc'] and actual['publish_barrier'] and actual['receipt_json'] is None

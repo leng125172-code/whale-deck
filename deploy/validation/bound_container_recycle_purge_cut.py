@@ -114,7 +114,10 @@ def settle_unheld(descriptor,stopped):
     finally:os.close(descriptor)
 
 
-def freeze_before_delete(row,folder,container_pid):
+def freeze_before_delete(row,folder,container_pid,diagnostics=None):
+    if diagnostics is None:diagnostics={}
+    assert type(diagnostics) is dict
+    diagnostics.update(boundOriginal=False,stopSent=False,cutAccepted=False)
     assert os.geteuid()==0 and re.fullmatch('[a-f0-9]{64}',row['container_id']) and type(container_pid) is int and container_pid>1 and row['instance_id'].startswith(str(container_pid)+':')
     folder=Path(folder);assert folder.parent==Path('/data/WhaleDeck/apps') and re.fullmatch('wdv-container-publish-[a-f0-9]{32}',folder.name) and folder.resolve(strict=True)==folder and not folder.is_symlink()
     assert row['execution_job_id']==execution(row['id']);p=managed_plan(stored_object(row['plan_json']));assert list(identity(folder))==p['parentIdentity']
@@ -132,29 +135,33 @@ def freeze_before_delete(row,folder,container_pid):
                         if bound_process(current,candidate.name,nonce,root,*locks,archive):
                             try:fd=os.pidfd_open(current)
                             except ProcessLookupError:continue
-                            pid,group,invocation=current,candidate.name,nonce;break
+                            pid,group,invocation=current,candidate.name,nonce;diagnostics.update(boundOriginal=True,pid=pid,invocationId=invocation,cgroup=group);break
                 try:r=record_for(row)
                 except FileNotFoundError:r=None
-                if r is not None and r['state'] not in ('Preparing','Reserved'):return None
+                if r is not None:
+                    diagnostics['lastRootState']=r['state']
+                    if r['state'] not in ('Preparing','Reserved'):
+                        diagnostics['missReason']='ROOT_ALREADY_PAST_RESERVED';return None
                 if fd is not None and r is not None and r['state']=='Reserved':
                     locks=(operation_lock(own),operation_lock(old))
                     if unit_identity(group)!=(pid,invocation) or not bound_process(pid,group,invocation,root,*locks,archive):return None
                     try:signal.pidfd_send_signal(fd,signal.SIGSTOP)
                     except ProcessLookupError:return None
-                    stopped=True;until=time.monotonic()+2
+                    stopped=True;diagnostics['stopSent']=True;until=time.monotonic()+2
                     while True:
                         state=(PROC/str(pid)/'stat').read_text().rsplit(')',1)[1].split()[0]
                         if state in ('T','t'):break
                         if state=='Z':return None
                         assert time.monotonic()<until,'PURGE_STOP_NOT_OBSERVED';time.sleep(.0005)
-                    frozen=record_for(row);proof=before_delete_proof(frozen,folder)
-                    if proof is None:return None
+                    frozen=record_for(row);diagnostics['stoppedRootState']=frozen['state'];proof=before_delete_proof(frozen,folder)
+                    if proof is None:
+                        diagnostics['missReason']='STOPPED_PROOF_NOT_RESERVED';return None
                     assert unit_identity(group)==(pid,invocation) and bound_process(pid,group,invocation,root,operation_lock(own),operation_lock(old),archive)
                     proof.update(hdd,fourKernelFdProofs=True,pid=pid,containerRootIdentity=list(root),purgeLockIdentity=list(operation_lock(own)),sourceLockIdentity=list(operation_lock(old)),archiveFdIdentity=list(archive),invocationId=invocation,cgroup=group)
                     held=HeldCopy(pid,fd,group,frozen,proof);break
                 time.sleep(.0005)
         if held is not None:
-            fd=None;return held
+            fd=None;diagnostics['cutAccepted']=True;return held
         return None
     finally:
         if fd is not None:settle_unheld(fd,stopped)

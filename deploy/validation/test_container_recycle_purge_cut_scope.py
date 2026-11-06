@@ -118,7 +118,7 @@ class PurgeCutTests(unittest.TestCase):
             ident=str(uuid.uuid4());op=cut.execution(ident);src='a'*32;group='whaledeck-container-recycle-purges-'+uuid.UUID(op).hex+'.service';inv='b'*32
             cg=root/'groups';cg.mkdir();(cg/group).mkdir()
             for path in (state/(uuid.UUID(op).hex+'.lock'),source/(src+'.lock')):path.touch(mode=0o600)
-            child=subprocess.Popen(['/bin/sleep','20']);opened=[];real_open=os.pidfd_open;real_path=Path;checked=[]
+            child=subprocess.Popen(['/bin/sleep','20']);diagnostics={};opened=[];real_open=os.pidfd_open;real_path=Path;checked=[]
             def opened_pidfd(pid):
                 self.assertEqual(pid,child.pid);fd=real_open(pid);opened.append(fd);return fd
             def path(value):
@@ -135,9 +135,10 @@ class PurgeCutTests(unittest.TestCase):
             try:
                 with patch.multiple(cut,STATE=state,SOURCE_STATE=source,CGROUP=cg),patch.object(cut,'Path',side_effect=path),patch.object(cut,'managed_plan',return_value=plan),patch.object(cut,'current_archive',side_effect=archive),patch.object(cut,'unit_identity',return_value=(child.pid,inv)),patch.object(cut,'bound_process',return_value=True),patch.object(cut,'record_for',return_value={'state':'Reserved'}),patch.object(cut,'before_delete_proof',return_value={}),patch.object(cut.os,'pidfd_open',side_effect=opened_pidfd):
                     if fail_exit:
-                        with self.assertRaisesRegex(RuntimeError,'attest failure'):cut.freeze_before_delete(row,'/data/WhaleDeck/apps/'+folder.name,child.pid)
+                        with self.assertRaisesRegex(RuntimeError,'attest failure'):cut.freeze_before_delete(row,'/data/WhaleDeck/apps/'+folder.name,child.pid,diagnostics)
                     else:
-                        held=cut.freeze_before_delete(row,'/data/WhaleDeck/apps/'+folder.name,child.pid);self.assertIsNotNone(held);self.assertEqual(checked,[True]);self.assertIsNotNone(held.descriptor);held.release()
+                        held=cut.freeze_before_delete(row,'/data/WhaleDeck/apps/'+folder.name,child.pid,diagnostics);self.assertIsNotNone(held);self.assertEqual(checked,[True]);self.assertIsNotNone(held.descriptor);held.release()
+                self.assertTrue(diagnostics['boundOriginal'] and diagnostics['stopSent']);self.assertEqual(diagnostics['stoppedRootState'],'Reserved');self.assertEqual(diagnostics['cutAccepted'],not fail_exit)
                 self.assertEqual(len(opened),1)
                 with self.assertRaises(OSError):os.fstat(opened[0])
                 until=time.monotonic()+2
