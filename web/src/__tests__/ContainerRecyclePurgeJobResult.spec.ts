@@ -101,6 +101,7 @@ it.each([false, true])('reservation recorded=%s does not prove deletion', (recor
   expect(read(r)).not.toBeNull()
   expect(read({ ...r, purgeApplied: false })).toBeNull()
   expect(render(r).text()).toContain('尚未进入删除')
+  expect(render(r).text()).toContain(recorded ? '原件保护已预留' : '正在预留原件保护')
 })
 it('apply marker and absent receipt cannot invent a completed outcome', () => {
   const r: RecyclePurgeJobResult = {

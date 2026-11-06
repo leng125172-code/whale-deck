@@ -30,7 +30,9 @@ const fact = (v: boolean | null) => (v === null ? '未证明' : v ? '是' : '否
         {{
           result.stage === 'planning' && result.state === 'Failed'
             ? '预检失败，未进入清理执行'
-            : titles[result.state]
+            : result.state === 'Reserving' && result.reservationRecorded
+              ? '原件保护已预留，尚未进入删除'
+              : titles[result.state]
         }}
       </p>
       <dl>

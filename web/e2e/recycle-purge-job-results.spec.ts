@@ -185,6 +185,8 @@ for (const width of [320, 1440])
         else if (current === 'Succeeded') await expect(region).toContainText('留存原件清理已完成')
         if (['Unknown', 'NoReceipt'].includes(current!))
           await expect(drawer.getByRole('button', { name: '取消任务', exact: true })).toHaveCount(0)
+        if (current === 'Reserved')
+          await expect(region).toContainText('原件保护已预留，尚未进入删除')
         await expect(drawer).not.toContainText('/must-not-render')
         await expect(
           drawer.getByRole('button', { name: '重新预检并重试', exact: true }),
