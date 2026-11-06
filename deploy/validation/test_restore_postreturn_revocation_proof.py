@@ -64,5 +64,24 @@ class PostreturnRevocationProofTests(unittest.TestCase):
         self.assertLess(s.index('independent(repo,e,True)'),s.index('leaf.unlink()'));self.assertNotIn('retained.unlink()',s)
         for forbidden in ('page.route(', 'addCookies(', 'storageState:', "name: '确认请求取消'"):self.assertNotIn(forbidden,browser)
 
+    def test_cleanup_accepts_rename_ctime_only_with_exact_independent_returned_snapshot(self):
+        original=dict(identity=[2049,77,0o100640,1000,1000,1,7,10,11],sha256='A'*64,attributes=[['user.test','value']],sizeBytes=7)
+        actual=copy.deepcopy(original);actual['identity'][8]=19
+        gate.cleanup_returned_proof(actual,original,dict(physical=dict(source=copy.deepcopy(actual),retained=None)))
+        with self.assertRaises(AssertionError):gate.cleanup_returned_proof(actual,original,dict(physical=dict(source=original,retained=None)))
+
+    def test_cleanup_rejects_new_inode_changed_bytes_stale_verifier_or_retained_copy(self):
+        original=dict(identity=[2049,77,0o100640,1000,1000,1,7,10,11],sha256='A'*64,attributes=[['user.test','value']],sizeBytes=7)
+        actual=copy.deepcopy(original);actual['identity'][8]=19
+        for key,value in [('sha256','B'*64),('attributes',[]),('sizeBytes',8)]:
+            bad=copy.deepcopy(actual);bad[key]=value
+            with self.subTest(key=key),self.assertRaises(AssertionError):gate.cleanup_returned_proof(bad,original,dict(physical=dict(source=copy.deepcopy(bad),retained=None)))
+        for offset in range(8):
+            bad=copy.deepcopy(actual);bad['identity'][offset]+=1
+            with self.subTest(identity=offset),self.assertRaises(AssertionError):gate.cleanup_returned_proof(bad,original,dict(physical=dict(source=copy.deepcopy(bad),retained=None)))
+        with self.assertRaises(AssertionError):gate.cleanup_returned_proof(actual,original,dict(physical=dict(source=actual,retained=actual)))
+        stale=copy.deepcopy(actual);stale['identity'][8]+=1
+        with self.assertRaises(AssertionError):gate.cleanup_returned_proof(stale,original,dict(physical=dict(source=actual,retained=None)))
+
 
 if __name__=='__main__':unittest.main()

@@ -4,7 +4,7 @@
 No retries of a missed Apply. Unsettled owned resources and all histories stay.
 Only this invocation's independently proved returned original may be removed.
 """
-import hashlib,json,os,re,select,subprocess,sys,time,uuid,threading
+import hashlib,json,os,re,select,stat,subprocess,sys,time,uuid,threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import validate_container_file_publishing as owned
@@ -44,6 +44,16 @@ def browser_proof(b,fixture):
     from recycle_restore_browser_proof import SUMMARY
     assert set(safe)==set(SUMMARY)
     for key,expected in dict(schemaVersion=1,intentId=value['id'],jobId=job['id'],sourceIntentId=value['sourceIntentId'],sourceOperationId=value['sourceOperationId'],stage='execution',state='Succeeded',code='CONTAINER_RECYCLE_RESTORE_COMPLETED',receiptState='Completed',sourceState='Restored',bindingCurrent=True,sourceRetained=False,sourceRestored=True,restoredByThisOperation=True,historyAvailable=True,historyVerified=True,publishBarrier=False).items():typed_equal(safe[key],expected)
+
+
+def cleanup_returned_proof(actual,original,proof):
+    # Rename changes ctime. Require the exact independently verified returned
+    # snapshot, all original stable identity fields and bytes, never a new file.
+    typed_equal(actual,proof['physical']['source'])
+    assert actual is not None and proof['physical']['retained'] is None
+    typed_equal(actual['identity'][:8],original['identity'][:8])
+    assert type(actual['identity'][8]) is int and actual['identity'][8]>=original['identity'][8]
+    for key in ('sha256','attributes','sizeBytes'):typed_equal(actual[key],original[key])
 
 
 def independent(repo,e,live):
@@ -123,7 +133,9 @@ def main(revision,kind):
                 b=json.loads((e/'browser.json').read_text());browser_proof(b,fixture)
                 save('fixture.json',fixture);denied(fixture,b['result']);independent(repo,e,True)
             op=source['request']['operationId'];p=json.loads((e/'live-proof.json').read_text());private=f['folder']/source_io.PRIVATE
-            typed_equal(source_io.file_snapshot(leaf),fixture['original']);assert p['physical']['retained'] is None;leaf.unlink();i=private.lstat();assert [i.st_dev,i.st_ino]==p['records']['sourceRoot']['privateIdentity'] and not private.is_symlink() and not list(private.iterdir());private.rmdir();f['retain_unsettled']=False
+            cleanup_returned_proof(source_io.file_snapshot(leaf),fixture['original'],p)
+            i=private.lstat();assert [i.st_dev,i.st_ino]==p['records']['sourceRoot']['privateIdentity'] and not private.is_symlink() and not list(private.iterdir()) and i.st_uid==i.st_gid==0 and stat.S_IMODE(i.st_mode)==0o700
+            leaf.unlink();private.rmdir();f['retain_unsettled']=False
         after=baseline(revision);preserved(before,after,op,p['request']['operationId']);save('after.json',after);typed_equal(old_rows(fixture['containerId']),json.loads((e/'prior-business.json').read_text()));idle()
         save('verified.json',dict(realUiRevocation=True,exactHelperExit=True,returnedOriginalRetainedUntilIndependentProof=True,productRestorePerformed=True,ownedFixtureRemoved=True,historiesRetained=True,ordinaryDenied=9,anonymousDenied=5,ownerLogoutPosts=0))
         independent(repo,e,False);print(json.dumps(dict(restorePostreturnRevocation='passed',evidence=e.name)),flush=True)
