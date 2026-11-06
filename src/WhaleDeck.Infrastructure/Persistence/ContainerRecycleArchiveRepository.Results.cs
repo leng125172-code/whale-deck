@@ -23,7 +23,7 @@ public sealed partial class ContainerRecycleArchiveRepository
         Facts(row, receipt);
         row.NextAttemptAtUtc = now.AddSeconds(30); row.LeaseToken = null; row.LeaseExpiresAtUtc = null; row.Version++;
         if (terminal) { await FinishJob(job, row, state == "Succeeded" ? "Succeeded" : state == "Canceled" ? "Canceled" : "Failed", state, code, cancellationToken); await Processed(job.Id, now, cancellationToken); }
-        else { job.State = "Running"; job.Phase = "AwaitingContainerRecycleArchiveReceipt"; job.ErrorCode = code; job.Version++; await Event(job, code, cancellationToken); }
+        else { job.State = "Running"; job.Phase = "AwaitingContainerRecycleArchiveReceipt"; job.ErrorCode = code; job.ResultJson=await JobResult(row,job,cancellationToken); job.Version++; await Event(job, code, cancellationToken); }
         Audit(row, job.Id, row.ActorSubject, row.TraceId, "result", state); await db.SaveChangesAsync(cancellationToken); return true;
     }, cancellationToken);
     public Task AcknowledgeAsync(TerminalActor actor, Guid id, long version, ContainerRecycleArchiveReceiptDto receipt, CancellationToken cancellationToken) => Transaction(async () =>
@@ -122,9 +122,18 @@ public sealed partial class ContainerRecycleArchiveRepository
         var sequence = (await db.OperationJobEvents.Where(e => e.JobId == job.Id).MaxAsync(e => (long?)e.Sequence, cancellationToken) ?? 0) + 1;
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
     }
+    private async Task<string?> JobResult(ContainerRecycleArchiveIntent row,OperationJob job,CancellationToken token)
+    {
+        if(!ContainerRecycleArchiveWorkflowValidation.HasValidBinding(row,protector))return null;
+        var source=await db.ContainerRecyclePurgeIntents.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==row.SourceIntentId,token);
+        if(source is null||!ContainerRecyclePurgeWorkflowValidation.HasValidBinding(source,purgeProtector))return null;
+        var json=ContainerRecycleArchiveJobResults.Snapshot(row,job.Id==row.ExecutionJobId,source.SourceIntentId);
+        return ContainerRecycleArchiveJobResults.ForJob(new OperationJob{Id=job.Id,JobType=job.JobType,State=job.State,ActorSubject=job.ActorSubject,IdempotencyKey=job.IdempotencyKey,ResultJson=json});
+    }
     private async Task FinishJob(OperationJob job, ContainerRecycleArchiveIntent row, string state, string phase, string code, CancellationToken cancellationToken)
     {
         job.State = state; job.Phase = phase; job.CompletedAtUtc = Now(); job.ErrorCode = state == "Succeeded" ? null : code;
+        job.ResultJson=await JobResult(row,job,cancellationToken);
 
         job.ProgressPercent = state == "Succeeded" ? (short)100 : null; job.Version++; await Event(job, code, cancellationToken);
     }

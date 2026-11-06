@@ -15,6 +15,15 @@ public sealed partial class ContainerRecycleArchiveWorkflowTests
         Assert.Contains("\"inode\":\"998\"",text,StringComparison.Ordinal);
         Assert.Contains("\"publishedChangedAtUnixNs\":\"9223372036854775807\"",text,StringComparison.Ordinal);
     }
+    [Fact]
+    public async Task JobSnapshotContainsOnlyNineteenHistoricalFields()
+    {
+        using var f=new Fixture();await f.Ready();var row=f.Repository.Row!;
+        var text=ContainerRecycleArchiveJobResults.Snapshot(row,false,f.Original.Row.Id);
+        Assert.Equal(19,System.Text.Json.JsonDocument.Parse(text).RootElement.EnumerateObject().Count());
+        foreach(var secret in new[]{row.ActorSubject,row.LoginBinding,row.TraceId,row.OwnerHash,row.ContainerId,row.InstanceId,row.RelativePath,row.SourceProofHash,row.RequestHash,row.PlanHash!,f.Command.HistoryDigest})Assert.DoesNotContain(secret,text,StringComparison.Ordinal);
+        Assert.NotNull(ContainerRecycleArchiveJobResults.ForJob(new(){Id=row.Id,JobType="containers.files.recycle-archive-plan",State="Succeeded",ActorSubject=row.ActorSubject,IdempotencyKey=row.IdempotencyKey.ToString("D"),ResultJson=text}));
+    }
     private sealed class Catalog(IReadOnlyList<ContainerRecycleArchiveSourceRows> rows) : IContainerRecycleArchiveSourceCatalog
     {
         public int Calls { get; private set; }

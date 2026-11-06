@@ -266,7 +266,7 @@ async function confirm() {
   confirmingCancel.value = true
   try {
     await ElMessageBox.confirm(
-      '确认不可撤销地删除这份留存原件？HDD备份会保留，但当前尚未提供清理后的归档恢复入口。',
+      '确认不可撤销地删除这份留存原件？HDD备份会保留，但恢复须走独立归档复制入口并重新核验HDD备份。',
       '确认清理留存原件',
       {
         type: 'warning',
@@ -405,7 +405,7 @@ defineExpose({ open })
     destroy-on-close
   >
     <el-alert
-      title="来源列表是历史回收摘要。预检将重新核验实际留存文件、HDD摘要及原容器实例；确认后只删除这份留存原件，HDD备份保留；删除不可撤销，当前尚未提供归档恢复入口。"
+      title="来源列表是历史回收摘要。预检将重新核验实际留存文件、HDD摘要及原容器实例；确认后只删除这份留存原件，HDD备份保留；删除不可撤销，恢复须走独立归档复制入口并重新核验HDD备份。"
       type="info"
       :closable="false"
     />

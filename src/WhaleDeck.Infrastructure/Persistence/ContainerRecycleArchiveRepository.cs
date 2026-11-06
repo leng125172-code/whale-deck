@@ -166,7 +166,7 @@ public sealed partial class ContainerRecycleArchiveRepository(PlatformDbContext 
             await db.ContainerMoveIntents.AnyAsync(r => r.PublishBarrier, cancellationToken)) return ContainerFileUploadStartResult.Busy;
         await EnsureSource(row, cancellationToken);
         row.State = "Reserving"; row.RootStartedAtUtc = now; row.PublishBarrier = true; row.Version++;
-        job.State = "Running"; job.Phase = "ReservingContainerRecycleArchive"; job.StartedAtUtc ??= now; job.Version++;
+        job.State = "Running"; job.Phase = "ReservingContainerRecycleArchive"; job.StartedAtUtc ??= now; job.ResultJson=await JobResult(row,job,cancellationToken); job.Version++;
 
         await Event(job, "CONTAINER_RECYCLE_ARCHIVE_RESERVING", cancellationToken); await db.SaveChangesAsync(cancellationToken);
         claimed.State = row.State; claimed.RootStartedAtUtc = now; claimed.PublishBarrier = true; return ContainerFileUploadStartResult.Started;
@@ -179,7 +179,7 @@ public sealed partial class ContainerRecycleArchiveRepository(PlatformDbContext 
         await EnsureSource(row,cancellationToken);var text=ContainerRecycleArchiveWorkflowValidation.Serialize(receipt);
         if(row.ReservationJson is not null&&row.ReservationJson!=text)throw new InvalidOperationException("CONTAINER_RECYCLE_ARCHIVE_FACT_CHANGED");
         row.ReservationJson=text;row.ReservationHash=protector.FingerprintRecycleArchiveReceipt(new(ContainerRecycleArchiveWorkflowValidation.Reference(row),receipt));row.Version++;
-        var job=await Job(row,true,cancellationToken);job.Phase="ContainerRecycleArchiveReserved";job.Version++;await Event(job,"CONTAINER_RECYCLE_ARCHIVE_RESERVED",cancellationToken);await db.SaveChangesAsync(cancellationToken);
+        var job=await Job(row,true,cancellationToken);job.Phase="ContainerRecycleArchiveReserved";job.ResultJson=await JobResult(row,job,cancellationToken);job.Version++;await Event(job,"CONTAINER_RECYCLE_ARCHIVE_RESERVED",cancellationToken);await db.SaveChangesAsync(cancellationToken);
         claimed.ReservationJson=row.ReservationJson;claimed.ReservationHash=row.ReservationHash;return true;
     },cancellationToken);
     public Task<ContainerFileUploadStartResult> ApplyingAsync(ContainerRecycleArchiveIntent claimed,DateTimeOffset now,CancellationToken cancellationToken)=>Transaction(async()=>
@@ -188,7 +188,7 @@ public sealed partial class ContainerRecycleArchiveRepository(PlatformDbContext 
         Validate(row);var job=await Job(row,true,cancellationToken);now=Now();
         if(row.CancelRequestedAtUtc is not null||job.CancelRequestedAtUtc is not null)return ContainerFileUploadStartResult.Canceled;
         if(row.ExecutionExpiresAtUtc<=now)return ContainerFileUploadStartResult.Expired;
-        await EnsureSource(row,cancellationToken);row.ApplyStartedAtUtc=now;row.State="Applying";row.Version++;job.Phase="ApplyingContainerRecycleArchive";job.Version++;
+        await EnsureSource(row,cancellationToken);row.ApplyStartedAtUtc=now;row.State="Applying";row.Version++;job.Phase="ApplyingContainerRecycleArchive";job.ResultJson=await JobResult(row,job,cancellationToken);job.Version++;
         await Event(job,"CONTAINER_RECYCLE_ARCHIVE_APPLYING",cancellationToken);await db.SaveChangesAsync(cancellationToken);claimed.ApplyStartedAtUtc=now;claimed.State=row.State;return ContainerFileUploadStartResult.Started;
     },cancellationToken);
     public Task<bool> RenewAsync(ContainerRecycleArchiveIntent claimed, DateTimeOffset now, CancellationToken cancellationToken) => Transaction(async () =>

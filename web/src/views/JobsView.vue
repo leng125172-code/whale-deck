@@ -6,10 +6,12 @@ import { stageSecret, subscribeToJob, type OperationPlan } from '@/services/oper
 import ContainerRecycleJobResult from '@/components/containers/ContainerRecycleJobResult.vue'
 import ContainerRecycleRestoreJobResult from '@/components/containers/ContainerRecycleRestoreJobResult.vue'
 import ContainerRecyclePurgeJobResult from '@/components/containers/ContainerRecyclePurgeJobResult.vue'
+import ContainerRecycleArchiveJobResult from '@/components/containers/ContainerRecycleArchiveJobResult.vue'
 import ContainerAclJobResult from '@/components/containers/ContainerAclJobResult.vue'
 import ContainerRecursiveAclRestoreJobResult from '@/components/containers/ContainerRecursiveAclRestoreJobResult.vue'
 import { readAclJobResult } from '@/services/containerAclJobResults'
 import { readRecyclePurgeJobResult } from '@/services/containerRecyclePurgeJobResults'
+import { readRecycleArchiveJobResult } from '@/services/containerRecycleArchiveJobResults'
 import type { Job, JobEvent } from '@/services/contracts'
 
 const jobs = ref<Job[]>([])
@@ -38,6 +40,8 @@ const recursiveAclTask = computed(
       'containers.files.recycle-restore-plan',
       'containers.files.recycle-purge',
       'containers.files.recycle-purge-plan',
+      'containers.files.recycle-archive',
+      'containers.files.recycle-archive-plan',
       'containers.files.recycle',
       'containers.files.recycle-plan',
       'containers.files.recursive-acl-restore',
@@ -60,6 +64,7 @@ const canCancel = computed(
         'AwaitingContainerRecursiveAclResolution',
         'AwaitingContainerRecursiveAclReceipt',
         'AwaitingContainerRecyclePurgeReceipt',
+        'AwaitingContainerRecycleArchiveReceipt',
         'AwaitingContainerRecursiveAclRestoreResolution',
         'AwaitingContainerRecursiveAclRestoreReceipt',
       ].includes(selected.value.phase)
@@ -68,6 +73,16 @@ const canCancel = computed(
       selected.value.jobType === 'containers.files.recycle-purge' &&
       (selected.value.phase === 'AwaitingContainerRecyclePurgeReceipt' ||
         readRecyclePurgeJobResult(
+          selected.value.resultJson,
+          selected.value.id,
+          selected.value.jobType,
+          selected.value.state,
+        )?.state === 'Unknown')
+    ) &&
+    !(
+      selected.value.jobType === 'containers.files.recycle-archive' &&
+      (selected.value.phase === 'AwaitingContainerRecycleArchiveReceipt' ||
+        readRecycleArchiveJobResult(
           selected.value.resultJson,
           selected.value.id,
           selected.value.jobType,
@@ -375,6 +390,18 @@ onBeforeUnmount(() => {
                 ['containers.files.recycle-purge', 'containers.files.recycle-purge-plan'].includes(
                   selected.jobType,
                 )
+              "
+              :job-id="selected.id"
+              :job-type="selected.jobType"
+              :state="selected.state"
+              :result-json="selected.resultJson"
+            />
+            <ContainerRecycleArchiveJobResult
+              v-else-if="
+                [
+                  'containers.files.recycle-archive',
+                  'containers.files.recycle-archive-plan',
+                ].includes(selected.jobType)
               "
               :job-id="selected.id"
               :job-type="selected.jobType"

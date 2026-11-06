@@ -115,7 +115,7 @@ public sealed class ContainerRecyclePurgeWorkflowService(ContainerFileUploadServ
         Validate(row); var plan = row.PlanJson is null ? null : ContainerRecyclePurgeWorkflowValidation.ReadPlan(row);
         var ready = row.State == "Ready" && row.CancelRequestedAtUtc is null && row.ReadyExpiresAtUtc > clock.GetUtcNow();
         var confirmation = ready ? new ContainerRecyclePurgeConfirmationDto(protector.SignRecyclePurgeConfirmation(new(row.Id, row.ActorSubject, row.LoginBinding, row.PlanHash!, row.ReadyExpiresAtUtc!.Value)),
-            row.ReadyExpiresAtUtc.Value, "预检不会删除原件。确认后重新检查原来源、留存inode和HDD备份，仅清理这份留存原件并保留备份；原件删除不可撤销，当前尚未提供清理后的归档恢复入口。断线后查询同一任务，不自动重做。Unknown保留保护，明确处置不代表清理成功。") : null;
+            row.ReadyExpiresAtUtc.Value, "预检不会删除原件。确认后重新检查原来源、留存inode和HDD备份，仅清理这份留存原件并保留备份；原件删除不可撤销，恢复须走独立归档复制入口并重新核验HDD备份。断线后查询同一任务，不自动重做。Unknown保留保护，明确处置不代表清理成功。") : null;
         var source = ContainerRecyclePurgeWorkflowValidation.ReadCommand(row).Source;
         return new(row.Id, row.Id, row.ExecutionJobId, row.SourceIntentId, source.OperationId, ContainerRecyclePurgeWorkflowValidation.ReadCommand(row).HistoryDigest, source.Plan.Command.Location, row.State == "Ready" && !ready ? "Expired" : row.State,
             plan?.RetainedIdentity.OwnerUid, plan?.RetainedIdentity.OwnerGid, plan?.RetainedIdentity.Mode, plan?.OwnerUid, plan?.OwnerGid,

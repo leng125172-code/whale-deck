@@ -44,7 +44,7 @@ for (const width of [320, 1440])
       await button.click()
       await expect(
         page.getByRole('dialog', { name: '确认清理留存原件', exact: true }),
-      ).toContainText('当前尚未提供清理后的归档恢复入口')
+      ).toContainText('恢复须走独立归档复制入口并重新核验HDD备份')
       await page.getByRole('button', { name: '暂不清理', exact: true }).click()
       expect(c.state.writes).toHaveLength(1)
       await confirm(page)

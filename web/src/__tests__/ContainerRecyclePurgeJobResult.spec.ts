@@ -51,7 +51,7 @@ it('shows original and purge references as historical facts without action butto
   expect(w.text()).toContain('留存原件清理已完成')
   expect(w.text()).toContain(source)
   expect(w.text()).toContain('预留证明不等于已经删除')
-  expect(w.text()).toContain('当前尚未提供清理后的归档恢复入口')
+  expect(w.text()).toContain('恢复须走独立归档复制入口并重新核验HDD备份')
   expect(w.findAll('button')).toHaveLength(0)
 })
 it.each(['Ready', 'Expired', 'Canceled', 'Failed'])(
