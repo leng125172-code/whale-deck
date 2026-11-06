@@ -1,6 +1,6 @@
 """Frozen QA fixture only: verify actual systemd RO mounts and CAP_CHOWN.
 
-The parent creates a private /run fixture, then applies the candidate profile
+The parent creates a private /var/lib fixture, then applies the candidate profile
 with only its three writable paths translated into this disposable tree.
 """
 import errno
@@ -13,7 +13,7 @@ import stat
 
 def main():
     assert os.geteuid()==0;os.umask(0o077);root=Path(__file__).resolve().parent
-    assert root.parent==Path('/run') and re.fullmatch('whaledeck-qa-archive-sandbox-[a-f0-9]{32}',root.name)
+    assert root.parent==Path('/var/lib') and re.fullmatch('whaledeck-qa-archive-sandbox-[a-f0-9]{32}',root.name)
     assert root.stat().st_uid==0 and stat.S_IMODE(root.stat().st_mode)==0o700
     original=b'archive-sandbox-readonly\n';refused=[]
     for name in ('source','purge','hdd'):
