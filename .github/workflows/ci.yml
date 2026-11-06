@@ -36,6 +36,7 @@ jobs:
           python3 -m unittest discover -s deploy/validation -p test_container_terminal.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_file*.py'
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_recycle*.py'
+          python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_archive_*proof.py'
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_recursive_*_probe_scope.py'
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_acl*agent_probe_scope.py'
           python3 -W error -m py_compile deploy/validation/bound_container_recursive_permission_cut.py deploy/validation/validate_container_recursive_permission_browser.py deploy/validation/verify_container_recursive_permission_browser.py deploy/validation/validate_container_recursive_permission_faults.py deploy/validation/verify_container_recursive_permission_faults.py
