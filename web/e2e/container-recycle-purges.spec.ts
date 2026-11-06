@@ -67,14 +67,37 @@ test('lost registration reload queries original key without resubmitting', async
   await open(page)
   await modal(page).getByRole('button', { name: '选择此来源', exact: true }).click()
   await modal(page).getByRole('button', { name: '生成留存清理预检', exact: true }).click()
-  await expect(
-    modal(page).getByRole('button', { name: '重试原清理登记', exact: true }),
-  ).toBeVisible()
-  await page.reload()
-  await page.getByRole('button', { name: '详情', exact: true }).first().click()
-  await page.getByRole('button', { name: '容器文件', exact: true }).click()
-  await expect.poll(() => c.state.reads.includes(`/by-key/${c.state.key}`)).toBe(true)
+  const retry = modal(page).getByRole('button', { name: '重试原清理登记', exact: true })
+  await expect(retry).toBeVisible()
+  // The hint renders before the original POST reaches the fixture. Reload only
+  // after the server accepted that exact registration and lost its response.
+  await expect.poll(() => c.state.lostQueue).toBe(true)
+  await expect(retry).toBeEnabled()
   expect(c.state.writes).toHaveLength(1)
+  const originalKey = c.state.key
+  expect(originalKey).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/)
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(
+            sessionStorage.getItem('whaledeck-container-recycle-purge-hints-v1') ?? '[]',
+          )[0],
+      ),
+    )
+    .toMatchObject({ containerId: c.source.location.containerId, key: originalKey, id: null })
+  c.state.reads.length = 0
+  await page.reload()
+  await page
+    .locator('.container-card')
+    .filter({ hasText: 'demo-web' })
+    .getByRole('button', { name: '详情', exact: true })
+    .click()
+  await page.getByRole('button', { name: '容器文件', exact: true }).click()
+  await expect(page.getByRole('region', { name: '容器文件', exact: true })).toBeVisible()
+  await expect.poll(() => c.state.reads.includes(`/by-key/${originalKey}`)).toBe(true)
+  expect(c.state.writes).toHaveLength(1)
+  expect(c.state.writes[0]!.key).toBe(originalKey)
 })
 test('Unknown preserves null fact and never offers repeat or cancellation', async ({ page }) => {
   const c = await installRecyclePurgeFixture(page, { unknown: true })
