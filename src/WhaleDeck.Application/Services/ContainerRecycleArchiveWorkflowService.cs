@@ -120,7 +120,14 @@ public sealed class ContainerRecycleArchiveWorkflowService(ContainerFileUploadSe
         return new(row.Id, row.Id, row.ExecutionJobId, row.SourceIntentId, command.Purge.OperationId, source.OperationId, command.HistoryDigest, source.Plan.Command.Location, row.State == "Ready" && !ready ? "Expired" : row.State,
             plan?.DeletedIdentity.OwnerUid, plan?.DeletedIdentity.OwnerGid, plan?.DeletedIdentity.Mode, plan?.OwnerUid, plan?.OwnerGid,
             source.Plan.SourceIdentity.SizeBytes, source.Plan.Sha256, source.Plan.Attributes.Count, row.ReadyExpiresAtUtc, row.ResultCode, row.Version,
-            row.ReservationJson is not null, row.ArchiveCopied, ContainerRecycleArchiveWorkflowValidation.ReadReceipt(row), confirmation);
+            row.ReservationJson is not null, row.ArchiveCopied, ReceiptSummary(ContainerRecycleArchiveWorkflowValidation.ReadReceipt(row)), confirmation);
+    }
+    private static ContainerRecycleArchiveReceiptSummary? ReceiptSummary(ContainerRecycleArchiveReceiptDto? r)
+    {
+        if(r is null)return null;
+        var i=r.PublishedIdentity;
+        var published=i is null?null:new ContainerRecycleArchivePublishedIdentity(i.Device.ToString(System.Globalization.CultureInfo.InvariantCulture),i.Inode.ToString(System.Globalization.CultureInfo.InvariantCulture),i.Mode,i.OwnerUid,i.OwnerGid,i.LinkCount.ToString(System.Globalization.CultureInfo.InvariantCulture),i.SizeBytes,i.ModifiedAtUnixNs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return new(r.Id,r.SourceOperationId,r.PurgeOperationId,r.Fingerprint,r.State,r.SourceFenced,r.OwnedFence,r.ArchiveCopied,r.BindingCurrent,published,r.PublishedChangedAtUnixNs?.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
     public async Task RequireCurrentSourceAsync(ContainerRecycleArchiveIntent row, TerminalActor actor, CancellationToken cancellationToken)
     {

@@ -17,6 +17,7 @@ import { canAclContainerEntry } from '@/services/containerAcls'
 import ContainerRecyclePanel from '@/components/containers/ContainerRecyclePanel.vue'
 import ContainerRecycleRestorePanel from '@/components/containers/ContainerRecycleRestorePanel.vue'
 import ContainerRecyclePurgePanel from '@/components/containers/ContainerRecyclePurgePanel.vue'
+import ContainerRecycleArchivePanel from '@/components/containers/ContainerRecycleArchivePanel.vue'
 import { canRecycleContainerEntry } from '@/services/containerRecycles'
 import ContainerOwnershipPanel from '@/components/containers/ContainerOwnershipPanel.vue'
 import ContainerRecursivePermissionPanel from '@/components/containers/ContainerRecursivePermissionPanel.vue'
@@ -84,6 +85,7 @@ const editorLocked = ref(false),
   recycleLocked = ref(false),
   recycleRestoreLocked = ref(false),
   recyclePurgeLocked = ref(false),
+  recycleArchiveLocked = ref(false),
   ownershipLocked = ref(false),
   aclLocked = ref(false),
   recursivePermissionLocked = ref(false),
@@ -272,6 +274,7 @@ onBeforeUnmount(() => {
         <el-button
           v-if="target"
           :disabled="
+            recycleArchiveLocked ||
             !!busy ||
             uploadLocked ||
             editorLocked ||
@@ -332,6 +335,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -359,6 +363,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="!!busy"
       :restore-disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -386,6 +391,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="!!busy"
       :restore-disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -412,6 +418,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -437,6 +444,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         recyclePurgeLocked ||
         recycleLocked ||
         ownershipLocked ||
@@ -462,6 +470,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         recycleRestoreLocked ||
         recycleLocked ||
         ownershipLocked ||
@@ -482,12 +491,40 @@ onBeforeUnmount(() => {
       @refresh="load(path)"
       @locked="recyclePurgeLocked = $event"
     />
+
+    <ContainerRecycleArchivePanel
+      v-if="target"
+      :target="target"
+      :path="path"
+      :disabled="
+        recyclePurgeLocked ||
+        recycleRestoreLocked ||
+        recycleLocked ||
+        ownershipLocked ||
+        aclLocked ||
+        !!busy ||
+        editorLocked ||
+        historyLocked ||
+        uploadLocked ||
+        directoryLocked ||
+        copyLocked ||
+        moveLocked ||
+        permissionLocked ||
+        recursivePermissionLocked ||
+        recursiveOwnershipLocked ||
+        recursiveAclLocked ||
+        recursiveAclRestoreLocked
+      "
+      @refresh="load(path)"
+      @locked="recycleArchiveLocked = $event"
+    />
     <ContainerRecyclePanel
       v-if="target"
       ref="recycleEditor"
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         recyclePurgeLocked ||
         recycleRestoreLocked ||
         ownershipLocked ||
@@ -514,6 +551,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         aclLocked ||
         !!busy ||
         editorLocked ||
@@ -537,6 +575,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -563,6 +602,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -589,6 +629,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -615,6 +656,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -640,6 +682,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -666,6 +709,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -691,6 +735,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -717,6 +762,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -744,6 +790,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         uploadLocked ||
         historyLocked ||
@@ -771,6 +818,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        recycleArchiveLocked ||
         !!busy ||
         uploadLocked ||
         editorLocked ||
@@ -828,6 +876,7 @@ onBeforeUnmount(() => {
             v-if="!entry.isProtected && ['File', 'Directory'].includes(entry.kind)"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -856,6 +905,7 @@ onBeforeUnmount(() => {
             v-if="!entry.isProtected && entry.kind === 'File'"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -884,6 +934,7 @@ onBeforeUnmount(() => {
             v-if="!entry.isProtected && ['File', 'Directory'].includes(entry.kind)"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -912,6 +963,7 @@ onBeforeUnmount(() => {
             v-if="!entry.isProtected && ['File', 'Directory'].includes(entry.kind)"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -956,6 +1008,7 @@ onBeforeUnmount(() => {
             v-if="!entry.isProtected && entry.kind === 'Directory'"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -984,6 +1037,7 @@ onBeforeUnmount(() => {
             v-if="!entry.isProtected && entry.kind === 'Directory'"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1012,6 +1066,7 @@ onBeforeUnmount(() => {
             v-if="!entry.isProtected && entry.kind === 'Directory'"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1041,6 +1096,7 @@ onBeforeUnmount(() => {
             v-if="!entry.isProtected && ['File', 'Directory'].includes(entry.kind)"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1073,6 +1129,7 @@ onBeforeUnmount(() => {
             v-if="!entry.isProtected && ['File', 'Directory'].includes(entry.kind)"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1101,6 +1158,7 @@ onBeforeUnmount(() => {
             v-if="textEligible(entry)"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1127,6 +1185,7 @@ onBeforeUnmount(() => {
             v-if="entry.kind === 'File' && !entry.isProtected"
             link
             :disabled="
+              recycleArchiveLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||

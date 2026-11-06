@@ -50,9 +50,9 @@ public sealed partial class NativeNotificationDispatchTests
         ContainerRecyclePurgeReceiptDto PurgeReceipt(ContainerRecyclePurgeIntent r,string state)=>new(r.ExecutionJobId!.Value,ContainerRecyclePurgeWorkflowValidation.ReadCommand(r).Source.OperationId,ContainerRecyclePurgeWorkflowValidation.ReadPlan(r).Fingerprint,state,state!="Aborted",state!="Aborted",state=="Unknown"?null:state=="Completed");
         ContainerRecyclePurgeConfirmation PurgeClaims(ContainerRecyclePurgeIntent r)=>new(r.Id,r.ActorSubject,r.LoginBinding,r.PlanHash!,r.ReadyExpiresAtUtc!.Value);
 
-        async Task<(ContainerRecyclePurgeIntent Purge,ContainerRecycleIntent Original)> Source()
+        async Task<(ContainerRecyclePurgeIntent Purge,ContainerRecycleIntent Original)> Source(string? containerId=null)
         {
-            var original=await Original();var row=PurgeRow(original);await purgeRepo.EnqueueAsync(row,default);
+            var original=await Original(containerId);var row=PurgeRow(original);await purgeRepo.EnqueueAsync(row,default);
             var claimed=(await purgeRepo.ClaimAsync(clock.GetUtcNow(),default))!;Assert.Equal(row.Id,claimed.Id);Assert.True(await purgeRepo.MarkPlanningAsync(claimed,default));
             await purgeRepo.FinishPlanningAsync(claimed,PurgePlan(row),"CONTAINER_RECYCLE_PURGE_READY",default);row=(await purgeRepo.FindAsync(row.Id,default))!;
             await purgeRepo.ConfirmAsync(actor,PurgeClaims(row),row.Version,default);claimed=(await purgeRepo.ClaimAsync(clock.GetUtcNow(),default))!;
@@ -143,6 +143,15 @@ public sealed partial class NativeNotificationDispatchTests
 
         try
         {
+            var catalog=new ContainerRecycleArchiveSourceCatalog(second);var catalogCid=new string('c',64);
+            var catalogSources=new[]{await Source(catalogCid),await Source(catalogCid),await Source(catalogCid)};
+            var page1=await catalog.ListAsync(catalogCid,2,null,default);Assert.Equal(2,page1.Count);
+            var page2=await catalog.ListAsync(catalogCid,2,page1[^1].Purge.Id,default);Assert.Single(page2);
+            Assert.Equal(3,page1.Concat(page2).Select(x=>x.Purge.Id).Distinct().Count());
+            foreach(var item in page1.Concat(page2))Assert.NotNull(ContainerRecycleArchiveSourceResolver.FromRows(item.Purge,item.Original,protector,protector,protector));
+            var sourceReady=await Ready(catalogSources[0]);Assert.DoesNotContain(await catalog.ListAsync(catalogCid,4,null,default),x=>x.Purge.Id==sourceReady.SourceIntentId);
+            await repo.CancelAsync(actor,sourceReady.Id,default);Assert.Equal(3,(await catalog.ListAsync(catalogCid,4,null,default)).Count);
+            Console.WriteLine("INBOX_PHASE=container-recycle-archive-source-catalog-uuid-pagination-active-exclusion-cancel-release");
             await PeerSeeds();purgePeerSourceId=(await Original(new('f',64))).Id;var src=await Source();var original=JsonSerializer.Serialize(src.Original);var purge=JsonSerializer.Serialize(src.Purge);
             var ready=await Ready(src);Assert.Null(await other.ClaimAsync(clock.GetUtcNow(),default));
             await Assert.ThrowsAsync<InvalidOperationException>(()=>repo.ConfirmAsync(actor,Claims(ready),ready.Version+1,default));
@@ -177,8 +186,8 @@ public sealed partial class NativeNotificationDispatchTests
             await Assert.ThrowsAnyAsync<Exception>(()=>repo.EnqueueAsync(Row(src),default));
             var corrupt=Row(await Source(),new('0',64));await Assert.ThrowsAsync<InvalidOperationException>(()=>repo.EnqueueAsync(corrupt,default));Assert.False(await second.OperationJobs.AnyAsync(x=>x.Id==corrupt.Id));
             var cancel=await Pending(await Ready(await Source()));await new JobRepository(second).RequestCancellationAsync(cancel.ExecutionJobId!.Value,actor.Subject,default);Assert.True(await repo.CancellationRequestedAsync(cancel.Id,default));Assert.True(await second.OutboxMessages.AnyAsync(m=>m.MessageType=="ContainerRecycleArchiveCancellationRequested"&&m.ProcessedAtUtc==null));Assert.True(await repo.FinishAsync(cancel,"Canceled","CONTAINER_RECYCLE_ARCHIVE_CANCELED",Receipt(cancel,"Aborted"),default));
-            var normalSource=await Source();var normal=await Pending(await Ready(normalSource));await ReserveAndApply(normal);await repo.DeferAsync(normal,default);clock.Offset+=TimeSpan.FromSeconds(7);var reclaimed=(await other.ClaimAsync(clock.GetUtcNow(),default))!;Assert.Equal(normal.Id,reclaimed.Id);Assert.False(await repo.RenewAsync(normal,clock.GetUtcNow(),default));
-            Assert.False(await repo.FinishAsync(normal,"Succeeded","CONTAINER_RECYCLE_ARCHIVE_COMPLETED",Receipt(normal,"Completed"),default));Assert.True(await other.FinishAsync(reclaimed,"Succeeded","CONTAINER_RECYCLE_ARCHIVE_COMPLETED",Receipt(reclaimed,"Completed",false),default));var done=(await repo.FindAsync(normal.Id,default))!;Assert.True(done.ArchiveCopied);Assert.False(done.BindingCurrent);Assert.True(ContainerRecycleArchiveWorkflowValidation.HasValidBinding(done,protector));await Assert.ThrowsAnyAsync<Exception>(()=>repo.EnqueueAsync(Row(normalSource),default));
+            var normalSource=catalogSources[1];var normal=await Pending(await Ready(normalSource));await ReserveAndApply(normal);await repo.DeferAsync(normal,default);clock.Offset+=TimeSpan.FromSeconds(7);var reclaimed=(await other.ClaimAsync(clock.GetUtcNow(),default))!;Assert.Equal(normal.Id,reclaimed.Id);Assert.False(await repo.RenewAsync(normal,clock.GetUtcNow(),default));
+            Assert.False(await repo.FinishAsync(normal,"Succeeded","CONTAINER_RECYCLE_ARCHIVE_COMPLETED",Receipt(normal,"Completed"),default));Assert.True(await other.FinishAsync(reclaimed,"Succeeded","CONTAINER_RECYCLE_ARCHIVE_COMPLETED",Receipt(reclaimed,"Completed",false),default));var done=(await repo.FindAsync(normal.Id,default))!;Assert.DoesNotContain(await catalog.ListAsync(catalogCid,4,null,default),x=>x.Purge.Id==done.SourceIntentId);Assert.True(done.ArchiveCopied);Assert.False(done.BindingCurrent);Assert.True(ContainerRecycleArchiveWorkflowValidation.HasValidBinding(done,protector));await Assert.ThrowsAnyAsync<Exception>(()=>repo.EnqueueAsync(Row(normalSource),default));
             Assert.Equal(original,JsonSerializer.Serialize(await sourceRepo.FindAsync(src.Original.Id,default)));Assert.Equal(purge,JsonSerializer.Serialize(await purgeRepo.FindAsync(src.Purge.Id,default)));
             var rollback=Row(await Source());var failed=await Pending(await Ready(await Source()));await ReserveAndApply(failed);
             await second.Database.ExecuteSqlRawAsync("CREATE FUNCTION wdv_archive_audit_reject() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF NEW.action LIKE 'containers.files.recycle-archive.%' THEN RAISE EXCEPTION 'test audit fault'; END IF; RETURN NEW; END $f$; CREATE TRIGGER wdv_archive_audit_reject BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION wdv_archive_audit_reject();");

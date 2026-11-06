@@ -47,6 +47,7 @@ import ContainerAclRecoveryPanel from '@/components/files/ContainerAclRecoveryPa
 import ContainerRecycleRecoveryPanel from '@/components/files/ContainerRecycleRecoveryPanel.vue'
 import ContainerRecycleRestoreRecoveryPanel from '@/components/files/ContainerRecycleRestoreRecoveryPanel.vue'
 import ContainerRecyclePurgeRecoveryPanel from '@/components/files/ContainerRecyclePurgeRecoveryPanel.vue'
+import ContainerRecycleArchiveRecoveryPanel from '@/components/files/ContainerRecycleArchiveRecoveryPanel.vue'
 import ContainerOwnershipRecoveryPanel from '@/components/files/ContainerOwnershipRecoveryPanel.vue'
 import ContainerRecursivePermissionRecoveryPanel from '@/components/files/ContainerRecursivePermissionRecoveryPanel.vue'
 import ContainerRecursiveAclRestoreRecoveryPanel from '@/components/files/ContainerRecursiveAclRestoreRecoveryPanel.vue'
@@ -669,6 +670,7 @@ onBeforeUnmount(() => {
         <ContainerRecycleRecoveryPanel />
         <ContainerRecycleRestoreRecoveryPanel />
         <ContainerRecyclePurgeRecoveryPanel />
+        <ContainerRecycleArchiveRecoveryPanel />
         <ContainerAclRecoveryPanel />
         <ContainerRecursivePermissionRecoveryPanel />
         <ContainerRecursiveOwnershipRecoveryPanel />

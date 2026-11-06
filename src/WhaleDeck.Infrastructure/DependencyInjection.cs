@@ -114,6 +114,8 @@ public static class DependencyInjection
         services.AddSingleton<IContainerRecycleArchiveProtector, FilePlanProtector>();
         services.AddScoped<IContainerRecycleArchiveRepository, ContainerRecycleArchiveRepository>();
         services.AddScoped<ContainerRecycleArchiveSourceResolver>();
+        services.AddScoped<IContainerRecycleArchiveSourceCatalog,ContainerRecycleArchiveSourceCatalog>();
+        services.AddScoped<ContainerRecycleArchiveSourcesService>();
         services.AddScoped<ContainerRecycleArchiveWorkflowService>();
         services.AddScoped<ContainerRecycleArchiveDispatcher>();
         services.AddSingleton<IContainerRecycleRestoreProtector, FilePlanProtector>();
