@@ -185,7 +185,7 @@ def preserved_restart(before, after, source_op, restore_op, purge_op, service, k
 
 def verify_restart(e, fixture, final, before, after):
     read = lambda n: json.loads((e/n).read_text())
-    service = read('service-restart.json'); start = read('restart-start-sql.json'); row = start['row'];assert read('service-fault-attempt.json')==dict(kind=fixture['kind'],id=row['id'],executionJobId=row['execution_job_id'],scopeVerified=True); same_operation(row, final); lease_held(row, start)
+    service = read('service-restart.json'); start = read('restart-start-sql.json'); row = start['row'];same_operation(read('cut-sql.json')['row'],row);assert read('service-fault-attempt.json')==dict(kind=fixture['kind'],id=row['id'],executionJobId=row['execution_job_id'],scopeVerified=True); same_operation(row, final); lease_held(row, start)
     source=read('source-proof.json');preserved_restart(before,after,source['request']['operationId'],read('restored-proof.json')['request']['operationId'],final['execution_job_id'].replace('-',''),service,fixture['kind'])
     x = read('helper-exit.json'); assert x['observedWithOriginalPidfd'] and x['measurementBeginsBeforeServiceFault'] and 0 < x['elapsedSeconds'] < 20
     if fixture['kind'] == 'worker-crash':

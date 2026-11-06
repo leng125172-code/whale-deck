@@ -97,7 +97,7 @@ if __name__=='__main__':
     try:
         assert os.geteuid()==0 and (len(sys.argv)==2 or sys.argv[2:]==['--live']);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0';live=sys.argv[2:]==['--live'];v=verify(sys.argv[1],live);p=Path(__file__).resolve().parents[2]/'deploy/artifacts'/sys.argv[1]/('independent-live.json' if live else 'independent-final.json')
         with p.open('x') as out:json.dump(v,out)
-        print(json.dumps(dict(purgeInflightLogoutIndependent='passed',**v)))
+        print(json.dumps(dict(purgeRestartIndependent='passed',**v)))
     except BaseException as error:
         import traceback
-        t=traceback.extract_tb(error.__traceback__)[-1];print(json.dumps(dict(purgeInflightLogoutIndependent='failed',type=type(error).__name__,file=Path(t.filename).name,line=t.lineno)));raise SystemExit(1) from None
+        t=traceback.extract_tb(error.__traceback__)[-1];print(json.dumps(dict(purgeRestartIndependent='failed',type=type(error).__name__,file=Path(t.filename).name,line=t.lineno)));raise SystemExit(1) from None
