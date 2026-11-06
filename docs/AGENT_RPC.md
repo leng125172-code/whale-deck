@@ -595,3 +595,12 @@ Agent 不提供“执行命令”“执行脚本”或任意 unit 名称接口�
 2026-10-27 内部历史属性发布引擎6e088f4已通过真实Docker/HDD验证，但未安装、未增加protobuf或对外能力。未来签名Stage须将restoreSource(captureId/captureHash/path)整体入请求MAC；不允许浏览器或API提交原始UID/GID/mode。新恢复root journal schema4由旧reader拒绝，原1/2/3不变。产品仍minor42、仅内容恢复，见[属性引擎证据](qa/CONTAINER_RESTORATION_ATTRIBUTES.md)。
 
 2026-10-27：minor43已安装于06b6eed Agent/维护入口。ContainerUploadHeader字段10 restore_source(capture_id/capture_hash/path)整体入现有内容指纹与单次签名；SDK仅在major1/minor43且独立属性及历史能力齐全时发送。Root由完整HDD来源派生普通属性，schema4/专用32KiB回执及封存预算；旧普通header和schema1/2/3不变，低版旧reader拒绝新恢复。实际签名两次发布/来源篡改/重放/错误摘要拒绝已通过；业务显式策略/迁移和页面仍待，见[安装态证据](qa/CONTAINER_RESTORATION_RPC.md)。
+
+
+## 12. 归档复制执行候选（尚未安装）
+
+ContainerRecycleArchiveService 的 Plan/Reserve/Apply/Inspect/Discard 已有源码执行映射。独立请求域绑定完整 Protobuf 与方法、actor/context及新执行/原清理/原来源，SDK最小版本1.59及显式archive capability；当前Agent源码仍1.58且不宣告此能力，不能据服务描述符推断安装就绪。
+
+固定 Root transport 只允许五动作和内置模块，自己的archive journal/共享restore claims/应用目录可写，source/purge/HDD只读；仅本单元加入CAP_CHOWN，不加SYS_ADMIN。driver Ready绑定Invocation前没有操作字节，单行64KiB/Archive JSON深度16、其他驱动仍8；结束必须结果+EOF/成功退出。依赖SOURCE_NOT_FOUND不是私有操作NOT_FOUND，不得被SDK转成未执行。
+
+原生探针、版本切换、标准安装与实际正向签名RPC/HDD仍待完成；候选测试、实际沙箱保护和保持边界见[执行候选](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_EXECUTION_CANDIDATE.md)。

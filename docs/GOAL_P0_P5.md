@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-06归档Agent执行/固定Root传输候选fd6a73ea及校验838345cb已验证：五动作映射/Runner、Invocation前禁正文、64KiB与Archive深度16/其余8、精确依赖缺失拒绝、三写路径与专用CHOWN、安装/后置声明接入；协议仍1.58且无新cap，未安装。5771 Unit零跳过/782 Integration通过7原生默认跳过、178 root零跳过/14 CI合同/8范围；真实systemd提取profile复验RO三组/CHOWN/无SYS_ADMIN，原/run夹具失败与精确收尾留证，44文件/14源码封存。53回收29恢复17清理/全部Root-HDD/2346保护/11核心/9694af1c保持，上批准确3af CI12路success。本批新CI、原生探针/版本切换/标准安装/正向RPC与业务页面及59项继续，17项移出不算完成。[执行适配、权限实证与边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_EXECUTION_CANDIDATE.md)。
+
 2026-11-06归档独立协议/SDK候选3b88a657已验证：五Unary/完整Protobuf与method分域HMAC、三ID/19字段计划、新inode与nullable回执、capability>=1.59门禁及异步输入冻结；服务未Map/Runner-Root传输未接/未宣告新能力或安装。5752 Unit零跳过/782 Integration通过7默认原生跳过、165 root零跳过/14 CI合同/8范围，C#与Python指纹互验。实际1.58只读沙箱SDK拒绝且归档操作0/真实key未读；99证据/16源码+52构建封存，原26夹具失败/编译和日志启动问题保留。53回收29恢复17清理及全Root/HDD/2346保护/11核心/9694af1c前后保持，上批准确d955 CI12路success。本批新CI、服务端执行/标准安装/正向RPC与业务页面及59项继续，17项移出不算完成。[协议、SDK与准确边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_RPC_SDK_CANDIDATE.md)。
 
 2026-11-06归档复制内核d5395d51与门禁7768ab50已分项实机通过：在独立Reserved/来源claim下从实际HDD复制为新inode，原UID/GID/mode/mtime/user属性与字节匹配，NOREPLACE发布及重复不写；旧Purged来源/清理/marker/HDD保持。24专项/164关联root零跳过含9写入中断及Completed强杀、14 CI合同/8范围；全新资源存活副本独立实读、精确QA清理后独立和第三次HDD/日志重读通过。166最终证据/16宿主+117验证源码，首批成功/测试替身失败另存；53回收29恢复17清理、2346保护/11核心/生产9694af1c保持，HDD两套来源123→127。上批ad5 CI12路全success，本批新CI、协议安装/永久业务页面/故障矩阵、成功claim和暂存清理及59项继续，17项移出不算完成。[实际复制、新inode与边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_COPIES.md)。
