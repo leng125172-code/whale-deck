@@ -18,6 +18,8 @@ for (const width of [320, 1440])
         'containers.files.recycle-plan',
         'containers.files.recycle-restore',
         'containers.files.recycle-restore-plan',
+        'containers.files.recycle-purge',
+        'containers.files.recycle-purge-plan',
         'containers.files.recursive-acl',
         'containers.files.recursive-acl-plan',
         'containers.files.recursive-acl-restore',
@@ -71,8 +73,10 @@ for (const width of [320, 1440])
           .click()
         const drawer = page.getByRole('dialog', { name: '任务详情', exact: true })
         const recycle = job.jobType.startsWith('containers.files.recycle')
-        const own = recycle ? '前往文件页核对原回收或恢复任务' : '前往文件页核对原递归ACL任务'
-        const other = recycle ? '前往文件页核对原递归ACL任务' : '前往文件页核对原回收或恢复任务'
+        const own = recycle ? '前往文件页核对原回收、恢复或清理任务' : '前往文件页核对原递归ACL任务'
+        const other = recycle
+          ? '前往文件页核对原递归ACL任务'
+          : '前往文件页核对原回收、恢复或清理任务'
         const link = drawer.getByRole('link', { name: own, exact: true })
         await expect(link).toBeVisible()
         await expect(link).toHaveAttribute('href', '/files')
