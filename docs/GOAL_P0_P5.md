@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-06真正Unlinked写后取消/Unknown与跨管理员处置已实机通过：16635e53冻结131源码，五FD原inode nlink0/完整字节属性与三个名称缺席，Root Removing且未durable-confirm；页面取消后原pidfd6.232066秒退出，Unknown/null/围栏及2待处置Outbox保持。原用户正常退出、不同管理员只读/暂不处置0写后一次ACK，原Job Failed/Acknowledged但Root/marker Unknown、Source Purging/HDD Trashed不改；实际Jobs16字段/5真图、准确空目录与fixture收尾、前后两独立和第三次当前HDD重读通过，不重建原件或冒充归档恢复。184条证据、159 root零跳过/14 CI合同/8范围；旧业务/2346保护/11核心与9694af1c保持，总48回收29恢复12清理/活动0，Root-HDD109/107/恢复80/目录98/purge24。准确fefa CI12项全success，本批新CI及余矩阵/留存/归档恢复/维护连续性/59项继续。[真实写后、处置与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_UNLINKED_UNKNOWN.md)。
+
 2026-11-06清理Reserved Worker强杀/自然租约与Agent重启两项已实机通过：f9d0f302/8cf2ee15各冻结133源码，原helper分别0.112131/0.011648秒退出；旧租约真实等待84.081474秒/39次原token围栏和Root/marker/原件HDD保持，原ID Failed/INTERRUPTED-Aborted未清理、取消/故障前退出0。专用QA同inode恢复/16字段Jobs/准确清理及每项前后独立和第三次当前HDD重读通过；197/194条证据及各3真图，149 root零跳过/14 CI合同/8范围通过。Worker只同ID/image StartedAt变，Agent只实例变/维护152采样全200-Ready；旧业务/2346保护保持，总47回收29恢复11清理/活动0，Root-HDD106/105/恢复80/目录98/purge22。Worker旧stdout标签保留并修正后续标签，原弹窗即时终态未单签；准确dd8d CI12项全成功，本批新CI及余故障/归档恢复/维护连续性/59项继续。[实机、标签原件与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_RESTARTS.md)。
 
 2026-11-06清理Reserved实时移组与账号停用两项已实机通过：04bf8d3e各冻结132源码，原pidfd在权威确认前后仍活、分别2.715745/2.746904秒退出；原用户logout/cancel0、双Job取消时间null/审计0，Canceled/Aborted且未清理。失权页/敏感引用清空、异Subject管理员只读原终态并仅新建专用恢复、同inode/16字段Jobs/准确清理及每项前后独立和第三次当前HDD重读通过。两批各190条证据/3真图、139 root+12身份范围零跳过；旧业务/2346保护/11核心及9694af1c保持，总45回收27恢复9清理/活动0，Root-HDD100/101/恢复74/目录98/purge18。旧CI浏览器时序失败与首版15/1保留，912bd27b收紧故障切点后16预览通过，仍待新CI完整终态；余故障/留存/归档恢复/维护连续性和59项继续。[实机、原失败与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_REVOCATION.md)。
