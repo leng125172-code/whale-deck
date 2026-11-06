@@ -136,15 +136,14 @@ def freeze_before_delete(row,folder,container_pid,diagnostics=None):
                             try:fd=os.pidfd_open(current)
                             except ProcessLookupError:continue
                             pid,group,invocation=current,candidate.name,nonce;diagnostics.update(boundOriginal=True,pid=pid,invocationId=invocation,cgroup=group);break
-                try:r=record_for(row)
-                except FileNotFoundError:r=None
-                if r is not None:
-                    diagnostics['lastRootState']=r['state']
-                    if r['state'] not in ('Preparing','Reserved'):
-                        diagnostics['missReason']='ROOT_ALREADY_PAST_RESERVED';return None
-                if fd is not None and r is not None and r['state']=='Reserved':
+                if fd is not None:
+                    # Bind again after pidfd_open, then stop that exact process
+                    # immediately. A second systemctl round-trip consumes the
+                    # real hashing window. All plan/state/storage proof remains
+                    # mandatory while stopped, before any UI handoff.
                     locks=(operation_lock(own),operation_lock(old))
-                    if unit_identity(group)!=(pid,invocation) or not bound_process(pid,group,invocation,root,*locks,archive):return None
+                    if select.select([fd],[],[],0)[0] or not bound_process(pid,group,invocation,root,*locks,archive):
+                        diagnostics['missReason']='ORIGINAL_PROCESS_NO_LONGER_BOUND';return None
                     try:signal.pidfd_send_signal(fd,signal.SIGSTOP)
                     except ProcessLookupError:return None
                     stopped=True;diagnostics['stopSent']=True;until=time.monotonic()+2
@@ -153,12 +152,18 @@ def freeze_before_delete(row,folder,container_pid,diagnostics=None):
                         if state in ('T','t'):break
                         if state=='Z':return None
                         assert time.monotonic()<until,'PURGE_STOP_NOT_OBSERVED';time.sleep(.0005)
-                    frozen=record_for(row);diagnostics['stoppedRootState']=frozen['state'];proof=before_delete_proof(frozen,folder)
+                    frozen=record_for(row);diagnostics['lastRootState']=diagnostics['stoppedRootState']=frozen['state'];proof=before_delete_proof(frozen,folder)
                     if proof is None:
                         diagnostics['missReason']='STOPPED_PROOF_NOT_RESERVED';return None
                     assert unit_identity(group)==(pid,invocation) and bound_process(pid,group,invocation,root,operation_lock(own),operation_lock(old),archive)
                     proof.update(hdd,fourKernelFdProofs=True,pid=pid,containerRootIdentity=list(root),purgeLockIdentity=list(operation_lock(own)),sourceLockIdentity=list(operation_lock(old)),archiveFdIdentity=list(archive),invocationId=invocation,cgroup=group)
                     held=HeldCopy(pid,fd,group,frozen,proof);break
+                try:r=record_for(row)
+                except FileNotFoundError:r=None
+                if r is not None:
+                    diagnostics['lastRootState']=r['state']
+                    if r['state'] not in ('Preparing','Reserved'):
+                        diagnostics['missReason']='ROOT_ALREADY_PAST_RESERVED';return None
                 time.sleep(.0005)
         if held is not None:
             fd=None;diagnostics['cutAccepted']=True;return held

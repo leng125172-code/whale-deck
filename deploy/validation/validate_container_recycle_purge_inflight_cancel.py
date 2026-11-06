@@ -105,9 +105,7 @@ def main(revision):
     save('before.json',before);save('source.json',dict(revision=revision,validationRevision=sha,validationSourceSha256=closure));print(json.dumps(dict(actualPurgeInflightCancel='started',evidence=e.name)),flush=True)
     try:
         with owned.fixture() as f:
-            # Bounded 32 MiB fixture gives the real archive/guard hashing window
-            # time for four-FD observation; no installed hook or fake delay.
-            f['retain_unsettled']=True;leaf=f['folder']/'recycle-rpc.bin';leaf.write_bytes(hashlib.shake_256(('purge-inflight-cancel:'+f['identifier']).encode()).digest(32*1024**2+7));leaf.chmod(0o640);os.chown(leaf,1000,1000);os.setxattr(leaf,'user.recycle',b'purge cancellation original');original=source_io.file_snapshot(leaf)
+            f['retain_unsettled']=True;leaf=f['folder']/'recycle-rpc.bin';leaf.write_bytes(hashlib.shake_256(('purge-inflight-cancel:'+f['identifier']).encode()).digest(1024**2+7));leaf.chmod(0o640);os.chown(leaf,1000,1000);os.setxattr(leaf,'user.recycle',b'purge cancellation original');original=source_io.file_snapshot(leaf)
             c=json.loads(owned.common.command(['docker','inspect',f['identifier']]))[0];header=dict(containerId=f['identifier'],instanceId=str(c['State']['Pid'])+':'+c['State']['StartedAt']);reader=load('/usr/local/libexec/whaledeck-container-files.py','purge_ready_reader')
             fixture=dict(revision=revision,containerId=f['identifier'],containerName=c['Name'].lstrip('/'),instanceId=header['instanceId'],header=header,containerPid=c['State']['Pid'],folder=str(f['folder']),evidence=str(e),original=original,sourceVersion=reader.version(header,'work/recycle-rpc.bin',leaf.stat()))
             save('fixture-initial.json',fixture);save('prior-business.json',old_rows(f['identifier']))
