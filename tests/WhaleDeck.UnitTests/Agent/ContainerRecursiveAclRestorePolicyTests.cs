@@ -102,7 +102,7 @@ public sealed class ContainerRecursiveAclRestorePolicyTests
     public async Task RestoreAdvertisementRequiresProtocol155AndIndependentCapability()
     {
         var caps=await new AgentGrpcService(null!).GetCapabilities(new(),null!);
-        Assert.Equal(57U,caps.ProtocolMinor); Assert.Contains("docker.files.recursive-acl-restore-intents",caps.Capabilities);
+        Assert.Equal(58U,caps.ProtocolMinor); Assert.Contains("docker.files.recursive-acl-restore-intents",caps.Capabilities);
     }
     [Theory]
     [InlineData("Completed")][InlineData("Partial")][InlineData("Aborted")][InlineData("Unknown")]

@@ -142,10 +142,10 @@ internal static class ContainerRecyclePolicy
         if (value.GetProperty("sourceRetained").ValueKind != JsonValueKind.Null) result.SourceRetained = value.GetProperty("sourceRetained").GetBoolean();
         if (value.GetProperty("sourceRestored").ValueKind != JsonValueKind.Null) result.SourceRestored = value.GetProperty("sourceRestored").GetBoolean();
         if (result.OperationId != expected.OperationId || result.ContainerId != expected.Plan.Command.Location.ContainerId || result.InstanceId != expected.Plan.Command.Location.InstanceId ||
-            result.Fingerprint != expected.Plan.Fingerprint || result.TargetProof != expected.Plan.TargetProof || result.State is not ("Trashed" or "Restored" or "Aborted" or "Unknown") ||
+            result.Fingerprint != expected.Plan.Fingerprint || result.TargetProof != expected.Plan.TargetProof || result.State is not ("Trashed" or "Restored" or "Aborted" or "Unknown" or "Purged") ||
             result.HistoryVerified && !result.HistoryMayExist || result.HistoryAvailable && !result.HistoryVerified || result.HistoryVerified != (result.HistoryDigest.Length == 64) ||
             !result.HistoryVerified && result.HistoryDigest.Length != 0 || result.BindingCurrent && (!result.HistoryAvailable || result.State is not ("Trashed" or "Restored")) ||
-            result.State is "Trashed" or "Restored" && !result.HistoryVerified ||
+            result.State is "Trashed" or "Restored" or "Purged" && !result.HistoryVerified ||
             result.State == "Unknown" && (result.HasSourceRetained || result.HasSourceRestored) ||
             result.State != "Unknown" && (!result.HasSourceRetained || !result.HasSourceRestored || result.SourceRetained != (result.State == "Trashed") || result.SourceRestored != (result.State == "Restored"))) throw Invalid();
         if (result.HistoryVerified) try { FileTransferPolicy.Hash(result.HistoryDigest); } catch (ArgumentException) { throw Invalid(); }
@@ -163,7 +163,7 @@ internal static class ContainerRecyclePolicy
         "CONTAINER_RECYCLE_PROTECTED" or "CONTAINER_PROTECTED" or "CONTAINER_UNSAFE_ISOLATION" or "CONTAINER_UNSAFE_MOUNT" or
             "CONTAINER_FILES_SHARED_CORE_MOUNT" or "CONTAINER_UPLOAD_PUBLISH_READ_ONLY" or "CONTAINER_UPLOAD_PUBLISH_MOUNT_ROOT" => StatusCode.PermissionDenied,
         "CONTAINER_RECYCLE_STATE_UNSAFE" or "CONTAINER_RECYCLE_MODULE_UNSAFE" or "CONTAINER_RECYCLE_RECEIPT_INVALID" or "CONTAINER_RECYCLE_PRIVATE_UNSAFE" or
-            "CONTAINER_RECYCLE_PRIVATE_CHANGED" or "CONTAINER_RECYCLE_PARENT_CHANGED" or "CONTAINER_RECYCLE_OWNER_CHANGED" or "CONTAINER_RECYCLE_TARGET_CHANGED" or "CONTAINER_RECYCLE_RESTORE_UNPROVEN" or "CONTAINER_RECYCLE_RESTORE_CLAIMED" or "CONTAINER_RECYCLE_HISTORY_STATE_CONFLICT" or "CONTAINER_RECYCLE_HISTORY_INCOMPLETE" or "CONTAINER_RECYCLE_SESSION_REQUIRED" or "CONTAINER_RECYCLE_SOURCE_UNSUPPORTED" or "CONTAINER_RECYCLE_EXTENDED_METADATA_REQUIRED" or "CONTAINER_RECYCLE_HISTORY_UNSAFE" or "CONTAINER_RECYCLE_HISTORY_CHANGED" or "FILES_BACKUP_TARGET_CHANGED" or "FILES_BACKUP_NOT_HDD" or
+            "CONTAINER_RECYCLE_PRIVATE_CHANGED" or "CONTAINER_RECYCLE_PARENT_CHANGED" or "CONTAINER_RECYCLE_OWNER_CHANGED" or "CONTAINER_RECYCLE_TARGET_CHANGED" or "CONTAINER_RECYCLE_RESTORE_UNPROVEN" or "CONTAINER_RECYCLE_RESTORE_CLAIMED" or "CONTAINER_RECYCLE_PURGE_CLAIMED" or "CONTAINER_RECYCLE_HISTORY_STATE_CONFLICT" or "CONTAINER_RECYCLE_HISTORY_INCOMPLETE" or "CONTAINER_RECYCLE_SESSION_REQUIRED" or "CONTAINER_RECYCLE_SOURCE_UNSUPPORTED" or "CONTAINER_RECYCLE_EXTENDED_METADATA_REQUIRED" or "CONTAINER_RECYCLE_HISTORY_UNSAFE" or "CONTAINER_RECYCLE_HISTORY_CHANGED" or "FILES_BACKUP_TARGET_CHANGED" or "FILES_BACKUP_NOT_HDD" or
             "CONTAINER_FILES_TARGET_MISSING" or "CONTAINER_FILES_INSTANCE_CHANGED" or "CONTAINER_FILES_TARGET_CHANGED" or "CONTAINER_FILES_ROOT_CHANGED" or
             "CONTAINER_NOT_RUNNING" => StatusCode.FailedPrecondition,
         "FILES_BACKUP_CONFIGURATION_INVALID" or "FILES_BACKUP_CONTENT_INVALID" or "FILES_BACKUP_DEVICE_METADATA_UNSAFE" or "FILES_BACKUP_DEVICE_MISMATCH" or

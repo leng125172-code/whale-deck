@@ -63,7 +63,7 @@ public sealed class ContainerRecyclePolicyTests
         r.Context.Capability=ByteString.CopyFromUtf8("not embedded");Assert.Throws<ArgumentException>(()=>ContainerRecyclePolicy.Request(r,restoring:true));
     }
     [Theory]
-    [InlineData("Trashed")][InlineData("Restored")][InlineData("Aborted")][InlineData("Unknown")]
+    [InlineData("Trashed")][InlineData("Restored")][InlineData("Aborted")][InlineData("Unknown")][InlineData("Purged")]
     public void StateFactsRemainDistinctAndUnknownIsNotFalse(string state)
     {
         var r=Request();var node=JsonSerializer.SerializeToNode(ReceiptInput(r,state))!;using var good=JsonDocument.Parse(node.ToJsonString());

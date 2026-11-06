@@ -60,7 +60,7 @@ public static class ContainerRecycleRestoreWire
                     source is not null || value.HasSourceRetained || value.HasSourceRestored))) throw Invalid();
     }
     private static InvalidOperationException Invalid() => new("CONTAINER_RECYCLE_RESTORE_OUTPUT_INVALID");
-    private static void Canonical(JsonElement value, StringBuilder output)
+    internal static void Canonical(JsonElement value, StringBuilder output)
     {
         switch (value.ValueKind)
         {

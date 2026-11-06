@@ -47,13 +47,14 @@ public static class ContainerRecycleValidation
     {
         var location = operation.Plan.Command.Location;
         if (receipt is null || receipt.Id != operation.Id || receipt.ContainerId != location.ContainerId || receipt.InstanceId != location.InstanceId ||
-            receipt.Fingerprint != operation.Plan.Fingerprint || receipt.TargetProof != operation.Plan.TargetProof || receipt.State is not ("Trashed" or "Restored" or "Aborted" or "Unknown") ||
+            receipt.Fingerprint != operation.Plan.Fingerprint || receipt.TargetProof != operation.Plan.TargetProof || receipt.State is not ("Trashed" or "Restored" or "Aborted" or "Unknown" or "Purged") ||
             receipt.HistoryVerified && !receipt.HistoryMayExist || receipt.HistoryAvailable && !receipt.HistoryVerified ||
             receipt.HistoryVerified != (receipt.HistoryDigest is { Length: 64 }) || !receipt.HistoryVerified && receipt.HistoryDigest != "" ||
             receipt.BindingCurrent && (!receipt.HistoryAvailable || receipt.State is not ("Trashed" or "Restored")) ||
-            receipt.State is "Trashed" or "Restored" && !receipt.HistoryVerified ||
+            receipt.State is "Trashed" or "Restored" or "Purged" && !receipt.HistoryVerified ||
             receipt.State == "Trashed" && (receipt.SourceRetained != true || receipt.SourceRestored != false) ||
             receipt.State == "Restored" && (receipt.SourceRetained != false || receipt.SourceRestored != true) ||
+            receipt.State == "Purged" && (receipt.SourceRetained != false || receipt.SourceRestored != false) ||
             receipt.State == "Aborted" && (receipt.SourceRetained != false || receipt.SourceRestored != false) ||
             receipt.State == "Unknown" && (receipt.SourceRetained is not null || receipt.SourceRestored is not null)) throw Invalid();
         if (receipt.HistoryVerified) try { ContainerFileValidation.Hash(receipt.HistoryDigest); } catch (ArgumentException) { throw Invalid(); }

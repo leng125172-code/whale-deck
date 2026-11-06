@@ -85,7 +85,7 @@ public sealed class ContainerAclPolicyTests
     }
     [Fact] public async Task DedicatedCapabilityRequires151AndKeepsOlderCapabilities()
     {
-        var caps=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.Equal(1U,caps.ProtocolMajor);Assert.Equal(57U, caps.ProtocolMinor);
+        var caps=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.Equal(1U,caps.ProtocolMajor);Assert.Equal(58U, caps.ProtocolMinor);
         Assert.Contains("docker.files.acl-intents",caps.Capabilities);Assert.Contains("docker.files.ownership-intents",caps.Capabilities);Assert.Contains("docker.files.recursive-ownership-intents",caps.Capabilities);
     }
     [Fact] public void SignatureNegativeProbeMustRemainSemanticallyValidBeforeBindingCheck()
