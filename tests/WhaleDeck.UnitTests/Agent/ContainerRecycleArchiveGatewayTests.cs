@@ -53,6 +53,7 @@ public sealed class ContainerRecycleArchiveGatewayTests
     {using var h=new Harness{Unknown=true};Assert.Null((await h.Gateway.ApplyContainerRecycleArchiveAsync(Operation(),default)).ArchiveCopied);using var bad=new Harness();var op=Operation();await Assert.ThrowsAsync<ArgumentException>(()=>bad.Gateway.ApplyContainerRecycleArchiveAsync(op with{Id=op.Plan.Command.Purge.Plan.Command.Source.OperationId},default));Assert.Null(bad.Request);}
     [Theory]
     [InlineData(StatusCode.NotFound,"CONTAINER_RECYCLE_ARCHIVE_NOT_FOUND",true)][InlineData(StatusCode.NotFound,"CONTAINER_RECYCLE_NOT_FOUND",false)][InlineData(StatusCode.Unavailable,"CONTAINER_RECYCLE_ARCHIVE_UNAVAILABLE",false)]
+    [InlineData(StatusCode.FailedPrecondition,"CONTAINER_RECYCLE_ARCHIVE_SOURCE_NOT_FOUND",false)][InlineData(StatusCode.NotFound,"CONTAINER_RECYCLE_ARCHIVE_SOURCE_NOT_FOUND",false)]
     public async Task OnlyExactPrivateAbsenceBecomesNull(StatusCode status,string detail,bool absent)
     {using var h=new Harness{Status=status,Detail=detail};if(absent)Assert.Null(await h.Gateway.InspectContainerRecycleArchiveAsync(Operation(),default));else await Assert.ThrowsAsync<RpcException>(()=>h.Gateway.InspectContainerRecycleArchiveAsync(Operation(),default));}
     [Theory]

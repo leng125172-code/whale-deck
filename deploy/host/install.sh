@@ -118,6 +118,12 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-pur
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-purge-fences.py" /usr/local/libexec/whaledeck-container-recycle-purge-fences.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-purges.py" /usr/local/libexec/whaledeck-container-recycle-purges.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-purge-transport.py" /usr/local/libexec/whaledeck-container-recycle-purge-transport.py
+[[ ! -L /var/lib/whaledeck-container-recycle-archives ]] || exit 1
+install -d -o root -g root -m 0700 /var/lib/whaledeck-container-recycle-archives
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-archive-plan.py" /usr/local/libexec/whaledeck-container-recycle-archive-plan.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-archive-fences.py" /usr/local/libexec/whaledeck-container-recycle-archive-fences.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-archive-copies.py" /usr/local/libexec/whaledeck-container-recycle-archive-copies.py
+install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-archive-transport.py" /usr/local/libexec/whaledeck-container-recycle-archive-transport.py
 [[ ! -L /var/lib/whaledeck-container-recursive-permissions ]] || exit 1
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-recursive-permissions
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-permissions.py" /usr/local/libexec/whaledeck-container-recursive-permissions.py

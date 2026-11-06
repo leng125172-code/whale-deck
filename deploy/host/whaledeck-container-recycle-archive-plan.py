@@ -61,7 +61,7 @@ class ContainerRecycleArchivePreflight:
             if stat.S_IMODE(os.fstat(directory).st_mode)!=0o700:self.reject('STATE_UNSAFE')
             with self.existing_lock(directory,request['operationId']+'.lock'):
                 record=engine.read(directory,request['operationId'])
-                if record is None:self.reject('NOT_FOUND')
+                if record is None:self.reject('SOURCE_NOT_FOUND')
                 if record['owner']!=request['owner'] or encode(record['plan'])!=encode(request['plan']):self.reject('SOURCE_CHANGED')
                 yield record
         finally:os.close(directory)

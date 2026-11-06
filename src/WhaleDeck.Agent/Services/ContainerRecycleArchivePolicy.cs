@@ -8,7 +8,8 @@ using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Agent.Services;
 
-// Candidate boundary only; no mapped service, capability or Root runner yet.
+// Execution candidate. Capability/version promotion waits for native probes
+// and standard installation; new service availability is never inferred here.
 internal static class ContainerRecycleArchivePolicy
 {
     public static void Binding(IMessage request,ServerCallContext context)
@@ -71,4 +72,17 @@ internal static class ContainerRecycleArchivePolicy
         catch(Exception e)when(e is ArgumentException or InvalidOperationException or FormatException or OverflowException or JsonException){throw Invalid();}
     }
     private static InvalidOperationException Invalid()=>ContainerRecycleArchiveWire.Invalid();
+    public static RpcException Failure(string? code)
+    {
+        var status=code switch {
+            "CONTAINER_RECYCLE_ARCHIVE_NOT_FOUND"=>StatusCode.NotFound,
+            "CONTAINER_RECYCLE_ARCHIVE_REQUEST_INVALID" or "CONTAINER_RECYCLE_ARCHIVE_PLAN_INVALID" or "CONTAINER_RECYCLE_ARCHIVE_NEW_OPERATION_REQUIRED"=>StatusCode.InvalidArgument,
+            "CONTAINER_RECYCLE_ARCHIVE_SOURCE_CHANGED" or "CONTAINER_RECYCLE_ARCHIVE_PLAN_CHANGED" or "CONTAINER_RECYCLE_ARCHIVE_COPY_CHANGED" or "CONTAINER_RECYCLE_ARCHIVE_PARENT_CHANGED" or "CONTAINER_RECYCLE_ARCHIVE_TARGET_EXISTS" or "CONTAINER_RECYCLE_ARCHIVE_IDEMPOTENCY_CONFLICT"=>StatusCode.Aborted,
+            "CONTAINER_RECYCLE_ARCHIVE_BUSY" or "CONTAINER_RECYCLE_ARCHIVE_SOURCE_BUSY" or "CONTAINER_RECYCLE_ARCHIVE_RECEIPT_LIMIT" or "CONTAINER_RECYCLE_ARCHIVE_DIRECTORY_LIMIT" or "CONTAINER_RECYCLE_ARCHIVE_COPY_CAPACITY"=>StatusCode.ResourceExhausted,
+            "CONTAINER_RECYCLE_ARCHIVE_TIMEOUT"=>StatusCode.DeadlineExceeded,
+            "CONTAINER_RECYCLE_ARCHIVE_STATE_UNSAFE" or "CONTAINER_RECYCLE_ARCHIVE_NOT_RESERVED" or "CONTAINER_RECYCLE_ARCHIVE_FENCE_CHANGED" or "CONTAINER_RECYCLE_ARCHIVE_HISTORY_CHANGED" or "CONTAINER_RECYCLE_ARCHIVE_SOURCE_NOT_FOUND" or "CONTAINER_RECYCLE_ARCHIVE_PURGE_UNCONFIRMED" or "CONTAINER_RECYCLE_ARCHIVE_SESSION_REQUIRED" or "CONTAINER_RECYCLE_ARCHIVE_RECEIPT_INVALID" or "CONTAINER_RECYCLE_ARCHIVE_PRIVATE_EXISTS" or "CONTAINER_RECYCLE_ARCHIVE_MODULE_UNSAFE" or "CONTAINER_RECYCLE_ARCHIVE_ACTION_INVALID" or "CONTAINER_RECYCLE_ARCHIVE_INVOCATION_INVALID"=>StatusCode.FailedPrecondition,
+            _=>StatusCode.Unavailable};
+        if(status==StatusCode.Unavailable){var old=ContainerRecyclePurgePolicy.Failure(code);if(old.StatusCode!=StatusCode.Unavailable)return old;}
+        return new(new(status,status==StatusCode.Unavailable?"CONTAINER_RECYCLE_ARCHIVE_UNAVAILABLE":code!));
+    }
 }

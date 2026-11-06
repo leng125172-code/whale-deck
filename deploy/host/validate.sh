@@ -33,6 +33,15 @@ assert_metadata /etc/whaledeck/agent-capability.key '640:root:whaledeck'
 assert_metadata /etc/whaledeck/resources.json '640:root:whaledeck'
 assert_metadata /etc/whaledeck/agent.env '640:root:whaledeck'
 assert_metadata /usr/local/libexec/whaledeck-privileged '750:root:root'
+assert_metadata /var/lib/whaledeck-container-recycle-archives '700:root:root'
+[[ ! -L /var/lib/whaledeck-container-recycle-archives ]]
+assert_metadata /var/lib/whaledeck-container-recycle-restores/claims '700:root:root'
+[[ ! -L /var/lib/whaledeck-container-recycle-restores/claims ]]
+for archive_module in plan fences copies transport; do
+  archive_path="/usr/local/libexec/whaledeck-container-recycle-archive-$archive_module.py"
+  assert_metadata "$archive_path" '750:root:root'
+  [[ ! -L $archive_path && $(stat -c %h "$archive_path") == 1 ]]
+done
 assert_metadata /usr/local/libexec/whaledeck-platform-maintenance '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-platform-revisions.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-platform-control-recovery.py '750:root:root'
