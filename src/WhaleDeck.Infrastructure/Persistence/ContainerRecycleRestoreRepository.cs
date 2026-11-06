@@ -152,6 +152,7 @@ public sealed partial class ContainerRecycleRestoreRepository(PlatformDbContext 
         if (row.CancelRequestedAtUtc is not null || job.CancelRequestedAtUtc is not null) return ContainerFileUploadStartResult.Canceled;
         if (row.ExecutionExpiresAtUtc <= now) return ContainerFileUploadStartResult.Expired;
         if (await db.ContainerRecyclePurgeIntents.AnyAsync(r=>r.PublishBarrier,cancellationToken) ||
+            await db.ContainerRecycleArchiveIntents.AnyAsync(r=>r.PublishBarrier,cancellationToken) ||
             await db.ContainerRecycleIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursiveAclRestoreIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursiveOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||

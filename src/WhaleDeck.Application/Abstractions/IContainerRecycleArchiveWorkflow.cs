@@ -15,7 +15,7 @@ public interface IContainerRecycleArchiveProtector
 }
 
 /// <summary>
-/// Atomic persistence contract only; no implementation or in-memory repository is registered.
+/// Atomic persistence transitions. The registered implementation uses PostgreSQL/EF; never memory-only exclusion.
 /// Lock the immutable completed purge AND original recycle source, verify both source MACs,
 /// and share exclusion with every file writer and cross-container host-directory alias.
 /// Enqueue/confirm/job/outbox/audit must be transactional. Confirmation, Started and Applying

@@ -111,6 +111,11 @@ public static class DependencyInjection
         services.AddScoped<ContainerRecyclePurgeSourcesService>();
         services.AddScoped<ContainerRecyclePurgeWorkflowService>();
         services.AddScoped<ContainerRecyclePurgeDispatcher>();
+        services.AddSingleton<IContainerRecycleArchiveProtector, FilePlanProtector>();
+        services.AddScoped<IContainerRecycleArchiveRepository, ContainerRecycleArchiveRepository>();
+        services.AddScoped<ContainerRecycleArchiveSourceResolver>();
+        services.AddScoped<ContainerRecycleArchiveWorkflowService>();
+        services.AddScoped<ContainerRecycleArchiveDispatcher>();
         services.AddSingleton<IContainerRecycleRestoreProtector, FilePlanProtector>();
         services.AddScoped<IContainerRecycleRestoreRepository, ContainerRecycleRestoreRepository>();
         services.AddScoped<ContainerRecycleRestoreSourceResolver>();

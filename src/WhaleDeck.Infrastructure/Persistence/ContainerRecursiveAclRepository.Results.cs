@@ -49,6 +49,7 @@ public sealed partial class ContainerRecursiveAclRepository
         var acls = await db.ContainerAclIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursiveAclRestores = await db.ContainerRecursiveAclRestoreIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var purgePeers = await db.ContainerRecyclePurgeIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
+        var archivePeers = await db.ContainerRecycleArchiveIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recycleRestores = await db.ContainerRecycleRestoreIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recycles = await db.ContainerRecycleIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursiveAcls = await db.ContainerRecursiveAclIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null && r.Id != row.Id).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
@@ -60,8 +61,8 @@ public sealed partial class ContainerRecursiveAclRepository
             .Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
         var moves = await db.ContainerMoveIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null)
             .Select(r => new { r.SourcePath, r.TargetPath }).Take(65).ToArrayAsync(cancellationToken);
-        if (recursiveOwnerships.Length + ownerships.Length + acls.Length + recursiveAcls.Length + purgePeers.Length + recycleRestores.Length + recycles.Length + recursiveAclRestores.Length + recursivePermissions.Length + ordinaryPermissions.Length + directories.Length + uploads.Length + copies.Length + moves.Length > 64 ||
-            ownerships.Concat(recursiveOwnerships).Concat(recursivePermissions).Concat(recursiveAcls).Concat(recycleRestores).Concat(purgePeers).Concat(recycles).Concat(recursiveAclRestores).Concat(acls).Concat(ordinaryPermissions).Concat(directories).Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
+        if (archivePeers.Length + recursiveOwnerships.Length + ownerships.Length + acls.Length + recursiveAcls.Length + purgePeers.Length + recycleRestores.Length + recycles.Length + recursiveAclRestores.Length + recursivePermissions.Length + ordinaryPermissions.Length + directories.Length + uploads.Length + copies.Length + moves.Length > 64 ||
+            ownerships.Concat(archivePeers).Concat(recursiveOwnerships).Concat(recursivePermissions).Concat(recursiveAcls).Concat(recycleRestores).Concat(purgePeers).Concat(recycles).Concat(recursiveAclRestores).Concat(acls).Concat(ordinaryPermissions).Concat(directories).Concat(uploads).Any(p => Conflicts(p, row.RelativePath)) ||
             copies.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath)) ||
             moves.Any(r => Conflicts(r.SourcePath, row.RelativePath) || Conflicts(r.TargetPath, row.RelativePath)))
             throw new InvalidOperationException("CONTAINER_RECURSIVE_ACL_TARGET_BUSY");

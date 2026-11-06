@@ -47,6 +47,7 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
         var acls = await db.ContainerAclIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursiveAclRestores = await db.ContainerRecursiveAclRestoreIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var purgePeers = await db.ContainerRecyclePurgeIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
+        var archivePeers = await db.ContainerRecycleArchiveIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recycleRestores = await db.ContainerRecycleRestoreIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recycles = await db.ContainerRecycleIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var recursiveAcls = await db.ContainerRecursiveAclIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
@@ -54,9 +55,9 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
         var recursivePermissions = await db.ContainerRecursivePermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var ownerships = await db.ContainerOwnershipIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
         var permissions = await db.ContainerPermissionIntents.AsNoTracking().Where(r => r.ContainerId == row.ContainerId && r.CompletedAtUtc == null).Select(r => r.RelativePath).Take(65).ToArrayAsync(cancellationToken);
-        if (held.Length + directories.Length + copies.Length + moves.Length + permissions.Length + ownerships.Length + acls.Length + recursiveAcls.Length + purgePeers.Length + recycleRestores.Length + recycles.Length + recursiveAclRestores.Length + recursiveOwnerships.Length + recursivePermissions.Length > 64 || held.Any(item => Conflicts(item.RelativePath, row.RelativePath)) || directories.Any(path => Conflicts(path, row.RelativePath)) ||
+        if (archivePeers.Length + held.Length + directories.Length + copies.Length + moves.Length + permissions.Length + ownerships.Length + acls.Length + recursiveAcls.Length + purgePeers.Length + recycleRestores.Length + recycles.Length + recursiveAclRestores.Length + recursiveOwnerships.Length + recursivePermissions.Length > 64 || held.Any(item => Conflicts(item.RelativePath, row.RelativePath)) || directories.Any(path => Conflicts(path, row.RelativePath)) ||
             copies.Any(item => Conflicts(item.SourcePath, row.RelativePath) || Conflicts(item.TargetPath, row.RelativePath)) ||
-            moves.Any(item => Conflicts(item.SourcePath, row.RelativePath) || Conflicts(item.TargetPath, row.RelativePath)) || permissions.Concat(ownerships).Concat(recursivePermissions).Concat(recursiveOwnerships).Concat(recursiveAcls).Concat(recycleRestores).Concat(purgePeers).Concat(recycles).Concat(recursiveAclRestores).Concat(acls).Any(path => Conflicts(path, row.RelativePath)))
+            moves.Any(item => Conflicts(item.SourcePath, row.RelativePath) || Conflicts(item.TargetPath, row.RelativePath)) || permissions.Concat(archivePeers).Concat(ownerships).Concat(recursivePermissions).Concat(recursiveOwnerships).Concat(recursiveAcls).Concat(recycleRestores).Concat(purgePeers).Concat(recycles).Concat(recursiveAclRestores).Concat(acls).Any(path => Conflicts(path, row.RelativePath)))
             throw new InvalidOperationException("CONTAINER_UPLOAD_TARGET_BUSY");
         var resource = await db.ManagedResources.Where(item => item.ResourceType == "Container" && item.ExternalId == row.ContainerId)
             .Select(item => (Guid?)item.Id).SingleOrDefaultAsync(cancellationToken);
@@ -172,6 +173,7 @@ public sealed class ContainerFileUploadRepository(PlatformDbContext db, IContain
             await db.ContainerOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerAclIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecyclePurgeIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerRecycleArchiveIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecycleRestoreIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecycleIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursiveAclRestoreIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||

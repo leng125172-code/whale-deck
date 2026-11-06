@@ -4,7 +4,7 @@ using WhaleDeck.Domain.Entities;
 
 namespace WhaleDeck.Application.Services;
 
-/// <summary>Internal transitions only; not registered until persistent exclusion and real acceptance exist.</summary>
+/// <summary>Internal archive transitions; HTTP/UI exposure follows separate acceptance.</summary>
 public sealed class ContainerRecycleArchiveWorkflowService(ContainerFileUploadService authorization, IContainerRecycleArchiveRepository repository,
     IContainerRecycleArchiveProtector protector, IContainerRecycleArchiveGateway gateway, TimeProvider clock, IPrivilegedIdentityDirectory liveIdentity, ContainerRecycleArchiveSourceResolver sources)
 {
