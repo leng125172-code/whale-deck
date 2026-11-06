@@ -151,6 +151,7 @@ def run_native(suite, report):
                 assert 'container-recycle-restore-source-locked-persistent-nullable-unknown-fourteen-fences-audited' in phases, 'Independent recycle restore persistence boundaries were not executed'
                 assert 'container-recycle-purge-two-phase-source-locked-fifteen-fences-nullable-audited' in phases, 'Purge persistence boundaries were not executed'
                 assert 'container-recycle-purge-source-catalog-uuid-pagination-active-exclusion-cancel-release' in phases, 'Purge source catalog was not executed'
+                assert 'container-recycle-purge-job-safe-summary-reservation-apply-nullable-frozen-planning-audit-projection' in phases, 'Purge job summary was not executed'
                 assert 'container-acl-restore-source-mac-immutable-audited-new-jobs' in phases, 'ACL restore persistence boundaries were not executed'
                 assert 'container-recursive-acl-persistent-manifest-partial-unknown-immutable-both-fences-audited' in phases, 'Recursive ACL persistence boundaries were not executed'
                 assert 'container-recursive-acl-restore-persistent-manifest-partial-unknown-immutable-both-fences-audited' in phases, 'Recursive ACL restore persistence boundaries were not executed'

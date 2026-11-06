@@ -120,7 +120,7 @@ public sealed partial class ContainerRecyclePurgeRepository
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = job.State, Phase = job.Phase, MessageCode = code });
     }
     private string? JobResult(ContainerRecyclePurgeIntent row, OperationJob job) =>
-        ContainerRecyclePurgeWorkflowValidation.HasValidBinding(row, protector) ? JsonSerializer.Serialize(new { intentId=row.Id,stage=row.ExecutionJobId==job.Id?"execution":"planning",state=row.State,code=row.ResultCode,rootState=row.RootState,purgeApplied=row.PurgeApplied }) : null;
+        ContainerRecyclePurgeWorkflowValidation.HasValidBinding(row, protector) ? ContainerRecyclePurgeJobResults.Snapshot(row, job.Id == row.ExecutionJobId) : null;
     private async Task FinishJob(OperationJob job, ContainerRecyclePurgeIntent row, string state, string phase, string code, CancellationToken cancellationToken)
     {
         job.State = state; job.Phase = phase; job.CompletedAtUtc = Now(); job.ErrorCode = state == "Succeeded" ? null : code;

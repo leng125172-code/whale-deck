@@ -5,9 +5,11 @@ import { apiRequest, apiUrl, createIdempotencyKey } from '@/services/apiClient'
 import { stageSecret, subscribeToJob, type OperationPlan } from '@/services/operations'
 import ContainerRecycleJobResult from '@/components/containers/ContainerRecycleJobResult.vue'
 import ContainerRecycleRestoreJobResult from '@/components/containers/ContainerRecycleRestoreJobResult.vue'
+import ContainerRecyclePurgeJobResult from '@/components/containers/ContainerRecyclePurgeJobResult.vue'
 import ContainerAclJobResult from '@/components/containers/ContainerAclJobResult.vue'
 import ContainerRecursiveAclRestoreJobResult from '@/components/containers/ContainerRecursiveAclRestoreJobResult.vue'
 import { readAclJobResult } from '@/services/containerAclJobResults'
+import { readRecyclePurgeJobResult } from '@/services/containerRecyclePurgeJobResults'
 import type { Job, JobEvent } from '@/services/contracts'
 
 const jobs = ref<Job[]>([])
@@ -34,6 +36,8 @@ const recursiveAclTask = computed(
       'containers.files.recursive-acl-plan',
       'containers.files.recycle-restore',
       'containers.files.recycle-restore-plan',
+      'containers.files.recycle-purge',
+      'containers.files.recycle-purge-plan',
       'containers.files.recycle',
       'containers.files.recycle-plan',
       'containers.files.recursive-acl-restore',
@@ -55,9 +59,20 @@ const canCancel = computed(
       [
         'AwaitingContainerRecursiveAclResolution',
         'AwaitingContainerRecursiveAclReceipt',
+        'AwaitingContainerRecyclePurgeReceipt',
         'AwaitingContainerRecursiveAclRestoreResolution',
         'AwaitingContainerRecursiveAclRestoreReceipt',
       ].includes(selected.value.phase)
+    ) &&
+    !(
+      selected.value.jobType === 'containers.files.recycle-purge' &&
+      (selected.value.phase === 'AwaitingContainerRecyclePurgeReceipt' ||
+        readRecyclePurgeJobResult(
+          selected.value.resultJson,
+          selected.value.id,
+          selected.value.jobType,
+          selected.value.state,
+        )?.state === 'Unknown')
     ) &&
     !(
       aclTask.value &&
@@ -355,6 +370,17 @@ onBeforeUnmount(() => {
               :state="selected.state"
               :result-json="selected.resultJson"
             />
+            <ContainerRecyclePurgeJobResult
+              v-else-if="
+                ['containers.files.recycle-purge', 'containers.files.recycle-purge-plan'].includes(
+                  selected.jobType,
+                )
+              "
+              :job-id="selected.id"
+              :job-type="selected.jobType"
+              :state="selected.state"
+              :result-json="selected.resultJson"
+            />
             <ContainerRecycleRestoreJobResult
               v-else-if="
                 [
@@ -402,11 +428,11 @@ onBeforeUnmount(() => {
         <el-link v-if="recursiveAclNotice" href="/files">前往文件页核对原递归ACL任务</el-link>
         <el-alert
           v-if="recycleNotice"
-          title="回收或恢复请回到容器文件，选择当前对象或原回收来源并生成专属预检。原任务不会通用重试；未知结果请在文件页核对原任务和HDD历史。"
+          title="回收、恢复或留存清理请回到容器文件，选择当前对象或原回收来源并生成专属预检。原任务不会通用重试；未知结果请在文件页核对原任务和HDD历史。"
           type="info"
           :closable="false"
         />
-        <el-link v-if="recycleNotice" href="/files">前往文件页核对原回收或恢复任务</el-link>
+        <el-link v-if="recycleNotice" href="/files">前往文件页核对原回收、恢复或清理任务</el-link>
         <el-alert
           v-if="aclTask"
           title="重新修改 ACL 请回到容器文件，基于当前对象版本生成新预检；未知结果请在文件页面的容器 ACL 恢复入口核对并明确处置。原任务不会自动重复执行。"

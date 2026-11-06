@@ -167,7 +167,8 @@ public sealed partial class ContainerRecyclePurgeRepository(PlatformDbContext db
         await EnsureSource(row, cancellationToken);
         row.State = "Reserving"; row.RootStartedAtUtc = now; row.PublishBarrier = true; row.Version++;
         job.State = "Running"; job.Phase = "ReservingContainerRecyclePurge"; job.StartedAtUtc ??= now; job.Version++;
-        await Event(job, "CONTAINER_RECYCLE_PURGE_APPLYING", cancellationToken); await db.SaveChangesAsync(cancellationToken);
+        job.ResultJson = JobResult(row, job);
+        await Event(job, "CONTAINER_RECYCLE_PURGE_RESERVING", cancellationToken); await db.SaveChangesAsync(cancellationToken);
         claimed.State = row.State; claimed.RootStartedAtUtc = now; claimed.PublishBarrier = true; return ContainerFileUploadStartResult.Started;
     }, cancellationToken);
     public Task<bool> ReservedAsync(ContainerRecyclePurgeIntent claimed,ContainerRecyclePurgeReceiptDto receipt,CancellationToken cancellationToken)=>Transaction(async()=>
@@ -178,7 +179,7 @@ public sealed partial class ContainerRecyclePurgeRepository(PlatformDbContext db
         await EnsureSource(row,cancellationToken);var text=ContainerRecyclePurgeWorkflowValidation.Serialize(receipt);
         if(row.ReservationJson is not null&&row.ReservationJson!=text)throw new InvalidOperationException("CONTAINER_RECYCLE_PURGE_FACT_CHANGED");
         row.ReservationJson=text;row.ReservationHash=protector.FingerprintRecyclePurgeReceipt(new(ContainerRecyclePurgeWorkflowValidation.Reference(row),receipt));row.Version++;
-        var job=await Job(row,true,cancellationToken);job.Phase="ContainerRecyclePurgeReserved";job.Version++;await Event(job,"CONTAINER_RECYCLE_PURGE_RESERVED",cancellationToken);await db.SaveChangesAsync(cancellationToken);
+        var job=await Job(row,true,cancellationToken);job.Phase="ContainerRecyclePurgeReserved";job.ResultJson=JobResult(row,job);job.Version++;await Event(job,"CONTAINER_RECYCLE_PURGE_RESERVED",cancellationToken);await db.SaveChangesAsync(cancellationToken);
         claimed.ReservationJson=row.ReservationJson;claimed.ReservationHash=row.ReservationHash;return true;
     },cancellationToken);
     public Task<ContainerFileUploadStartResult> ApplyingAsync(ContainerRecyclePurgeIntent claimed,DateTimeOffset now,CancellationToken cancellationToken)=>Transaction(async()=>
@@ -187,7 +188,7 @@ public sealed partial class ContainerRecyclePurgeRepository(PlatformDbContext db
         Validate(row);var job=await Job(row,true,cancellationToken);now=Now();
         if(row.CancelRequestedAtUtc is not null||job.CancelRequestedAtUtc is not null)return ContainerFileUploadStartResult.Canceled;
         if(row.ExecutionExpiresAtUtc<=now)return ContainerFileUploadStartResult.Expired;
-        await EnsureSource(row,cancellationToken);row.ApplyStartedAtUtc=now;row.State="Applying";row.Version++;job.Phase="ApplyingContainerRecyclePurge";job.Version++;
+        await EnsureSource(row,cancellationToken);row.ApplyStartedAtUtc=now;row.State="Applying";row.Version++;job.Phase="ApplyingContainerRecyclePurge";job.ResultJson=JobResult(row,job);job.Version++;
         await Event(job,"CONTAINER_RECYCLE_PURGE_APPLYING",cancellationToken);await db.SaveChangesAsync(cancellationToken);claimed.ApplyStartedAtUtc=now;claimed.State=row.State;return ContainerFileUploadStartResult.Started;
     },cancellationToken);
     public Task<bool> RenewAsync(ContainerRecyclePurgeIntent claimed, DateTimeOffset now, CancellationToken cancellationToken) => Transaction(async () =>

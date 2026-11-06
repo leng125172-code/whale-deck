@@ -45,6 +45,7 @@
     "e2e/file-content-search.spec.ts",
     "e2e/host-logs.spec.ts",
     "e2e/recursive-acl-restore-job-results.spec.ts",
-    "e2e/container-recycle-purges.spec.ts"
+    "e2e/container-recycle-purges.spec.ts",
+    "e2e/recycle-purge-job-results.spec.ts"
   ]
 }
