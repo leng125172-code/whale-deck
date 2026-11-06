@@ -71,5 +71,5 @@ def job_summary(value, row, *, execution_stage):
         receiptState=row['root_state'] if execution_stage else None, sourceState=row['source_state'] if execution_stage else None,
         bindingCurrent=row['binding_current'] if execution_stage else None, sourceRetained=row['source_retained'] if execution_stage else None,
         sourceRestored=row['source_restored'] if execution_stage else None, restoredByThisOperation=row['restored_by_this_operation'] if execution_stage else None,
-        historyVerified=row['history_verified'] if execution_stage else False, historyAvailable=row['history_available'] if execution_stage else None, publishBarrier=False)
+        historyVerified=row['history_verified'] if execution_stage else False, historyAvailable=row['history_available'] if execution_stage else None, publishBarrier=row['publish_barrier'] if execution_stage else False)
     typed_equal(value, expected); return expected
