@@ -1,0 +1,37 @@
+# 清理Reserved执行中正常退出与新登录隔离
+
+2026-11-06，产品保持9694af1c，验证候选7ce51c8b。承接[Reserved执行中显式取消及原失败记录](CONTAINER_FILE_RECYCLING_PURGE_INFLIGHT_CANCEL.md)，本批在全新自有资源中通过正常BFF/OIDC退出停止原清理进程的真实整链。只签Reserved切点正常退出及同Subject新登录隔离，不代表撤权、重启、自然租约或全部故障矩阵完成。
+
+## 已验证的准备和门禁
+
+新增父门禁、真实浏览器流程、独立只读核验器及7项针对性检查。131项清理相关Linux root工具全通过、零跳过；14项CI合同、8项范围及Node语法检查通过。构造证据检查和实机证据分别统计，未用测试夹具替代真实身份/SQL/Root/HDD链。
+
+保留已验收的真实切点：Agent传输随机ID与持久执行ID分开，验证固定apply程序、Root UID、systemd Invocation/cgroup，以及本轮容器根、原操作锁、原来源锁和当前attested HDD归档四个内核FD身份。暂停后只能接受Native Reserved、来源Trashed、marker Reserved、完整原留存inode/属性/字节与HDD保持，没有pendingIdentity或unlinkConfirmed；完整计划和最后存储attestation通过后才放行页面。
+
+正常退出必须与显式取消区分：意图及执行Job的cancel_requested_at_utc都为null；对意图和执行两个Job ID查询cancel-requested审计必须为0，页面也不得发送清理cancel POST。SQL最终Canceled、错误码CONTAINER_RECYCLE_PURGE_CANCELED是授权失效后停止的结果，不能由状态名反推用户点击取消。
+
+原pidfd观察在放行前开始。浏览器只对实际导航POST的BFF退出请求写私有标记；父进程必须在观察该标记时确认原pidfd仍未退出，再在20秒内观察同一pidfd退出。按钮点击或“准备退出”的预写标记不够。错过精确切点就失败且不重放；失败收尾只终止已经严格绑定且暂停的原helper，不恢复破坏性Apply，未决资源保留。
+
+正常BFF/OIDC双端退出、原会话读取401之后，同Subject正常新登录的原ID、幂等键和回收来源三个旧引用均应404；当前管理员只能从专用恢复元数据接口读取原终态，不能借新会话继承旧所有者入口。确认原取消终态与来源保持后，才能为QA收尾创建新的专用独立恢复意图并明确确认。独立核验同一inode返回后准确移除自有测试文件、空private和容器，保留全部HDD历史；清理后重新用当前attested只读FD读取归档。
+
+## 真实结果
+
+unit whaledeck-qa-purge-logout-7ce51c8b，Invocation fd28ff8deba042eb849a84e4cd0b6f04，最终active/exited、Result success、ExecMainCode1/ExecMainStatus0。冻结128份验证源码并核对SHA；安装helper逐字节匹配已发布产品，六组件版本仍9694af1c。没有覆盖部署、重新安装或Worker/Agent重启，只暂停这一轮严格绑定的原helper。
+
+全新1,048,583字节普通文件通过真实Authentik/Vue完成来源回收、清理Ready预检和明确确认。父进程先证明Source/SQL/留存/HDD，再放行各阶段。原生暂停状态Reserved，来源Root Trashed、marker Reserved，原inode/字节/属性和当前HDD保持；SQL Applying且预留/Apply入口已持久化、无回执。这里的入口记录不等于已删除。
+
+在精确暂停后，浏览器安全关闭详情面板并从用户菜单正常退出。父进程观察到真实BFF导航POST时原pidfd仍存活，2.874483秒内观察同一原进程退出；BFF接受302/303，确实到达身份源退出流程，两侧会话均清除并返回登录页。原会话清理读取401；同Subject正常重新登录后，原ID、by-key与回收来源均404，随后当前管理员通过恢复元数据接口读到同一原执行的Canceled/Aborted。
+
+意图和执行Job取消时间均null，两个Job ID取消审计为0，页面清理cancel POST为0。意图/执行Job Canceled，purgeApplied=false、sourceFenced=false、ownedFence=false，Native Aborted且来源marker Released，围栏/租约释放、Outbox归零。源文件仍完整留存、HDD仍Trashed；原规划Job完整Ready历史保持。预留与Apply入口事实仍保留，未写成没有进入执行。
+
+这次退出证明完成后，在新登录中只为该测试来源走产品专用独立恢复的Ready与明确确认；父进程先重新核对原终态、来源和HDD，再放行恢复。实际同一原inode回到原路径，Restore Succeeded/Completed、claim/来源Root/HDD和SQL/Job一致。独立进程在容器仍存在时重新打开物理命名空间核验，通过后才准确移除自有测试文件、空private及容器。HDD没有删除；父进程、清理后独立进程和第三次最终独立重读均通过，captureState仅因专用恢复Trashed→Restored，其余metadata、数据inode/字节/属性/存储保持。这不是从已清理归档恢复的验收。
+
+真实Jobs列表/详情16字段对应原SQL快照，显示Canceled/Aborted及本操作未清理事实，仍显示曾记录预留/Apply入口，无通用重试；3真PNG，抽看320宽暂停页面和桌面任务摘要。最后再次正常BFF/OIDC退出，两次退出均有实际回执。真实普通用户5GET/4POST共9拒绝、匿名5GET均401，第一次退出的旧入口401另列，不合并冒充不同门禁。
+
+## 保持、封存与剩余边界
+
+全部旧42回收/24独立恢复/6清理的完整业务行SHA保持，旧Root/HDD、2346保护及11核心healthy保持。最终43回收、25独立恢复、7清理、活动0；SourceRoot/HDD94/97、恢复Root68、目录Root98、PurgeRoot14。上一批三个原失败及其HDD完整/partial历史保持，不补签、不重放、不删除。
+
+私有成功证据deploy/artifacts/container-recycle-purge-inflight-logout-b47af44cf6e3409ea0fa52d2c0ac18f3，128冻结源码/3真PNG，186条文件散列另加EVIDENCE_SHA256.json，摘要520d9b3d3f76f24eacbd15166504dccab27de1cae64da24b7a1e246f5981b467。准备证据container-recycle-purge-logout-candidate-b7bdc687e002438da360ab4cb776404f为6条散列另加manifest，摘要c0076ec4b8508f79590289fda8e8c638deab465605ce746ef6fcd722633ec1c1。所有散列逐项重算；成功原件root目录700/文件600保持，只逐字复制两图到另一个user私有复核目录，SHA相同。没有新实机失败或凭据落入Git/日志/图谱。
+
+源与HDD同device的既有限制保留，不能计独立物理磁盘灾备。维护连续性尚未签收。后续继续执行中实时撤权、重启、自然租约、写后/Unknown/共享写入，再留存策略和归档恢复、维护连续性及完整59项；不重放本门禁。正式整项0/59、阶段0/6、工程量粗估25%–35%，酒馆/Live2D功能0%保持；17项移出不算完成。

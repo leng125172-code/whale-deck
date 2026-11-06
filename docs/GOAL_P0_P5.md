@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-06清理Reserved执行中正常退出及同Subject新登录隔离已实机通过：7ce51c8b冻结128源码，实际BFF退出POST被观察时原pidfd仍活，2.874483秒退出；意图/执行Job取消时间null、双Job取消审计0、页面cancel POST0，Canceled/Aborted/未删除事实对应SQL/Root/HDD/16字段Jobs。两正常双端退出、3旧引用404、普通9/匿名5拒绝、同inode专用QA恢复/准确清理及前后两独立和第三次当前HDD重读通过；186条证据/3真PNG、131 root零跳过/14 CI合同/8范围通过。旧业务/2346保护/11核心及9694af1c保持，总43回收25恢复7清理/活动0，Root-HDD94/97/恢复68/目录98/purge14。仅签该组合，余故障/留存/归档恢复/维护连续性及59项继续。[实机与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_INFLIGHT_LOGOUT.md)。
+
 2026-11-06清理执行中Reserved切点取消已用全新资源实机通过：4d25ccfc修正随机传输ID与执行ID混同，四FD/原pidfd证明后真实页面取消，3.015795秒原helper退出，Canceled/Aborted与未删除事实对应SQL/Root/HDD/16字段Jobs；专用QA恢复同inode后准确清理，前后两独立及第三次当前HDD重读通过。127冻结源码/184条成功证据/3真PNG，124 root零跳过/14 CI合同/8范围通过，三次原失败及准确处置另封存。旧业务/2346保护/11核心及9694af1c保持，总42回收24恢复6清理/活动0，Root-HDD91/95（含失败partial）/恢复65/目录98/purge12。仅签该组合，余故障、留存/归档恢复、维护连续性及59项继续。[实机、原失败与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_INFLIGHT_CANCEL.md)。
 
 2026-11-06清理Ready正常退出/同Subject新登录隔离与自然到期组合已实机通过：a0f3f7eb冻结121源码，169次只读观察，SQL在原期限后0.186477秒Expired；原规划Job完整Ready历史/源文件HDD保持，确认/取消及清理执行入口缺席。随后仅用产品独立恢复返回原inode收尾，准确清理后HDD重新读取及第三次独立核验通过；105 root零跳过/14 CI合同/8范围、165证据/3真图封存。旧业务/11核心保持，总38回收23恢复3清理/活动0，PurgeRoot仍6。只签该组合，执行中故障、留存/归档恢复、维护连续性及59项继续。[实机与边界](qa/CONTAINER_FILE_RECYCLING_PURGE_READY_LOGOUT.md)。
