@@ -115,7 +115,7 @@ class PurgeCutTests(unittest.TestCase):
         # are explicit doubles to exercise post-attest descriptor ownership.
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);folder=root/('wdv-container-publish-'+uuid.uuid4().hex);folder.mkdir();state=root/'state';state.mkdir();source=root/'sources';source.mkdir()
-            ident=str(uuid.uuid4());op=cut.execution(ident);src='a'*32;group='whaledeck-container-recycle-purges-'+uuid.UUID(op).hex+'.service';inv='b'*32
+            ident=str(uuid.uuid4());op=cut.execution(ident);src='a'*32;group='whaledeck-container-recycle-purges-'+uuid.uuid4().hex+'.service';inv='b'*32
             cg=root/'groups';cg.mkdir();(cg/group).mkdir()
             for path in (state/(uuid.UUID(op).hex+'.lock'),source/(src+'.lock')):path.touch(mode=0o600)
             child=subprocess.Popen(['/bin/sleep','20']);diagnostics={};opened=[];real_open=os.pidfd_open;real_path=Path;checked=[]

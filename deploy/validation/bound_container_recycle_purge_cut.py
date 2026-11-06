@@ -128,7 +128,10 @@ def freeze_before_delete(row,folder,container_pid,diagnostics=None):
             while time.monotonic()<deadline:
                 if fd is None and own.exists() and old.exists():
                     locks=(operation_lock(own),operation_lock(old))
-                    for candidate in (CGROUP/('whaledeck-container-recycle-purges-'+operation+'.service'),):
+                    # The Agent transport uses an independent random Driver.Id.
+                    # The exact operation is bound by both kernel lock FDs,
+                    # not by equating the unit suffix with the durable job ID.
+                    for candidate in CGROUP.glob('whaledeck-container-recycle-purges-*.service'):
                         if not candidate.exists() or not GROUP.fullmatch(candidate.name):continue
                         try:current,nonce=unit_identity(candidate.name)
                         except (OSError,subprocess.SubprocessError,AssertionError):continue
