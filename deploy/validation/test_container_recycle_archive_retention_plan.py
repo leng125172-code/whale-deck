@@ -2,12 +2,14 @@
 
 No deletion, installed RPC or production retention-policy acceptance.
 """
+import ast
 import copy
 import fcntl
 import json
 import os
 import unittest
 import uuid
+from pathlib import Path
 from unittest.mock import patch
 import test_container_file_staging as staging
 import test_container_recycle_archive_copies as copies
@@ -148,3 +150,14 @@ class ArchiveRetentionPlanTests(unittest.TestCase):
         # Even a structurally consistent rehashed assertion is not authority.
         bad={**p,'retentionElapsed':True,'retirementEligible':True};bad['fingerprint']=self.engine.digest(bad);self.engine.validate_plan(bad)
         with self.clock(self.due-1),self.assertRaisesRegex(Exception,'PLAN_CHANGED'):self.engine.revalidate(bad,self.session)
+
+    def test_namespace_capture_reads_container_binary_and_empty_stage_without_json_rules(self):
+        from container_recycle_agent_io import file_snapshot
+        from recursive_acl_restore_agent_io import frame
+        source=Path(__file__).with_name('validate_container_recycle_archive_copies.py');node=next(n for n in ast.parse(source.read_bytes()).body if isinstance(n,ast.FunctionDef) and n.name=='retention_namespace_snapshot')
+        namespace=dict(file_snapshot=file_snapshot,frame=frame);exec(compile(ast.Module(body=[node],type_ignores=[]),str(source),'exec'),namespace)
+        capture=namespace['retention_namespace_snapshot'];before=self.state();value=capture(self.f.base.root)
+        self.assertEqual(value[self.f.base.leaf.name]['sha256'],self.f.q['plan']['archiveSha256']);self.assertEqual(value[self.f.private().name]['identity'][:2],self.f.record()['privateIdentity']);self.assertEqual(before,self.state())
+        (self.f.private()/'foreign').write_bytes(b'preserve');before=self.state()
+        with self.assertRaises(AssertionError):capture(self.f.base.root)
+        self.assertEqual(before,self.state())

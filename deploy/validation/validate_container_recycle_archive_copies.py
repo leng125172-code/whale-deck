@@ -12,12 +12,25 @@ from validate_container_recycle_purge_agent import baseline
 from validate_container_recycle_purge_browser import idle,old_rows
 from acl_history_browser_proof import typed_equal
 from container_recycle_agent_io import file_snapshot
-from recursive_acl_restore_agent_io import snapshot
+from recursive_acl_restore_agent_io import snapshot,frame
 from validate_container_recycle_archive_plan import payload_snapshot
 
 NAMES=('whaledeck-files.py','whaledeck-container-files.py','whaledeck-container-terminal.py','whaledeck-container-upload.py','whaledeck-container-publish.py','whaledeck-file-backups.py','whaledeck-container-directories.py','whaledeck-container-permissions.py','whaledeck-container-recycling.py','whaledeck-container-recycle-restores.py','whaledeck-container-recycle-purge-plan.py','whaledeck-container-recycle-purge-fences.py','whaledeck-container-recycle-purges.py','whaledeck-container-recycle-archive-plan.py','whaledeck-container-recycle-archive-fences.py','whaledeck-container-recycle-archive-copies.py')
 NAMES+=('whaledeck-container-recycle-archive-retention.py',)
 
+
+def retention_namespace_snapshot(folder):
+    # Payload files belong to the container user and contain arbitrary binary
+    # bytes. The Root JSON-journal reader is deliberately not used here.
+    assert folder.is_absolute() and folder.resolve(strict=True)==folder
+    paths=sorted(folder.iterdir());assert len(paths)<=4096;values={}
+    for path in paths:
+        assert not path.is_symlink()
+        if path.is_dir():
+            info=path.stat();assert (info.st_uid,info.st_gid,info.st_mode&0o777)==(0,0,0o700) and not list(path.iterdir())
+            values[path.name]=dict(kind='directory',identity=frame(info))
+        else:values[path.name]=dict(kind='file',**file_snapshot(path))
+    return values
 
 
 def main(revision):
@@ -131,7 +144,7 @@ def main(revision):
             retention_check('live')
             retirement=load(bundle/NAMES[16],'archive_retention_candidate').ContainerRecycleArchiveRetentionPreflight(engine)
             def assess_retention(label,binding):
-                def protected():return dict(archive=snapshot(archive_state),lifecycles=unchanged(),namespace=snapshot(f['folder']))
+                def protected():return dict(archive=snapshot(archive_state),lifecycles=unchanged(),namespace=retention_namespace_snapshot(f['folder']))
                 stable=protected();clock_before=time.time_ns()//1000000
                 p=retirement.plan(dict(archive=copy_request,retainDays=30,mode='ArchiveData'),session);typed_equal(retirement.revalidate(p,session),p)
                 clock_after=time.time_ns()//1000000
