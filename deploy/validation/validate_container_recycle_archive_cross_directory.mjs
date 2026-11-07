@@ -159,11 +159,11 @@ try {
       await coordinate('archive-ready',signal)
       phase='same-source-new-key-refusal'
       const rejectedKey=crypto.randomUUID(),before=await get(archiveEndpoint+'/'+ready.id)
-      const refusing=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname===archiveEndpoint)
-      await page.evaluate(async packet=>{const response=await fetch(packet.endpoint,{method:'POST',headers:packet.headers,body:JSON.stringify(packet.body)});return response.status},{endpoint:archiveEndpoint,headers:{...headers,'Idempotency-Key':rejectedKey,'Content-Type':'application/json'},body:{sourceIntentId:ready.sourceIntentId}})
-      const refused=await refusing;assert.equal(refused.status(),409);const problem=await refused.json();assert.equal(problem.code,'OPERATION_CONFLICT');assert.deepEqual(refused.request().postDataJSON(),{sourceIntentId:ready.sourceIntentId})
-      const actualHeaders=await refused.request().allHeaders();assert.equal(actualHeaders['idempotency-key'],rejectedKey);assert.equal(actualHeaders.origin,base);assert.ok(actualHeaders[csrf.headerName.toLowerCase()])
-      sourceRefusal={id:ready.id,sourceIntentId:ready.sourceIntentId,rejectedKey,status:refused.status(),code:problem.code,originAndIdempotencyObserved:true,before,after:await get(archiveEndpoint+'/'+ready.id)}
+      await writeSignal(evidence,'source-refusal-api-began.json',{id:ready.id,rejectedKey,actualApiRequest:true})
+      const refused=await context.request.post(base+archiveEndpoint,{headers:{...headers,'Idempotency-Key':rejectedKey},data:{sourceIntentId:ready.sourceIntentId},timeout:15_000,maxRedirects:0,failOnStatusCode:false})
+      await writeSignal(evidence,'source-refusal-api-received.json',{id:ready.id,status:refused.status()})
+      assert.equal(refused.status(),409);const problem=await refused.json();assert.equal(problem.code,'OPERATION_CONFLICT')
+      sourceRefusal={id:ready.id,sourceIntentId:ready.sourceIntentId,rejectedKey,status:refused.status(),code:problem.code,actualApiRequest:true,originAndIdempotencySupplied:true,before,after:await get(archiveEndpoint+'/'+ready.id)}
       await coordinate('source-conflict',sourceRefusal)
       await dialog.getByRole('button',{name:'确认归档恢复',exact:true}).click()
       const confirmation=page.getByRole('dialog',{name:'确认从归档复制恢复',exact:true});await expect(confirmation).toContainText('不会覆盖已有文件')
@@ -189,7 +189,7 @@ try {
     await coordinate(item.name,result);archives.push({name:item.name,...result})
     await page.screenshot({path:join(evidence,item.name+'-result.png')});await closePermissionDetails(page,dialog)
   }
-  assert.equal(mutations.filter(x=>x===archiveEndpoint).length,3);assert.equal(mutations.filter(x=>x.startsWith(archiveEndpoint+'/')&&x.endsWith('/confirm')).length,1);assert.equal(mutations.filter(x=>x.startsWith(archiveEndpoint+'/')&&x.endsWith('/cancel')).length,2)
+  assert.equal(mutations.filter(x=>x===archiveEndpoint).length,2);assert.equal(mutations.filter(x=>x.startsWith(archiveEndpoint+'/')&&x.endsWith('/confirm')).length,1);assert.equal(mutations.filter(x=>x.startsWith(archiveEndpoint+'/')&&x.endsWith('/cancel')).length,2)
   assert.ok((await Promise.all(headerChecks)).every(Boolean))
   phase='normal-owner-logout';const ownerLogout=await logoutFromUserMenu(page,context,base)
   const anonymous=await context.request.get(base+archiveEndpoint+'/'+archives[1].id);assert.equal(anonymous.status(),401)

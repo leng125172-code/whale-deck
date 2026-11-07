@@ -10,7 +10,7 @@ import test_container_recycle_cross_directory as prior
 class ArchiveCrossDirectoryTests(unittest.TestCase):
     def refusal(self):
         row=dict(id='11111111-2222-3333-4444-555555555555',idempotency_key='11111111-2222-3333-4444-555555555556',source_intent_id='source',version=2,state='Ready',execution_job_id=None,root_started_at_utc=None)
-        dto=dict(id=row['id'],version=2,sourceIntentId='source');event=dict(id=row['id'],sourceIntentId='source',rejectedKey='11111111-2222-3333-4444-555555555557',status=409,code='OPERATION_CONFLICT',originAndIdempotencyObserved=True,before=dto,after=copy.deepcopy(dto));return dict(row=row),event
+        dto=dict(id=row['id'],version=2,sourceIntentId='source');event=dict(id=row['id'],sourceIntentId='source',rejectedKey='11111111-2222-3333-4444-555555555557',status=409,code='OPERATION_CONFLICT',actualApiRequest=True,originAndIdempotencySupplied=True,before=dto,after=copy.deepcopy(dto));return dict(row=row),event
 
     def guard(self):
         return {**dict.fromkeys(proof.TABLES,0),'container_recycle_archive_intents':1,'file_path_locks':0}
@@ -27,7 +27,7 @@ class ArchiveCrossDirectoryTests(unittest.TestCase):
 
     def test_http_and_original_ready_binding_are_not_optional(self):
         before,event=self.refusal()
-        for key,bad in (('status',202),('code','other'),('sourceIntentId','foreign'),('originAndIdempotencyObserved',False),('rejectedKey',before['row']['idempotency_key'])):
+        for key,bad in (('status',202),('code','other'),('sourceIntentId','foreign'),('actualApiRequest',False),('originAndIdempotencySupplied',False),('rejectedKey',before['row']['idempotency_key'])):
             with self.subTest(key=key),self.assertRaises(AssertionError):proof.require_source_refusal({**event,key:bad},before,before,dict(intents=0,jobs=0))
         changed=copy.deepcopy(before);changed['row']['version']+=1
         with self.assertRaises(AssertionError):proof.require_source_refusal(event,before,changed,dict(intents=0,jobs=0))
@@ -79,6 +79,7 @@ class ArchiveCrossDirectoryTests(unittest.TestCase):
     def test_ack_is_held_until_deferrals_and_cleanup_until_independent_live(self):
         s=Path(gate.__file__).read_text();self.assertIn("other['retain_unsettled']=True",s);self.assertIn("(e/'waiting-blocked.json').exists()",s);self.assertIn('finish_waiting(waiting,registered,ack,e)',s);self.assertLess(s.index('independent(repo,e,True)'),s.index('clean_waiting(waiting_verified)'))
         js=Path(gate.__file__).with_suffix('.mjs').read_text();self.assertLess(js.index('registerWaitingDirectory(page'),js.index("name:'确认处置并释放保护'"));self.assertIn('assert.equal(managementWrites,2);assert.equal(acknowledgements,0)',js)
+        self.assertIn('timeout:15_000,maxRedirects:0,failOnStatusCode:false',js);self.assertIn("'source-refusal-api-began.json'",js);self.assertIn("'source-refusal-api-received.json'",js)
         for bad in ('page.route(','storageState(','tracing.start(','process.env.VALIDATION_PASSWORD='):self.assertNotIn(bad,js)
 
     def test_independent_verifier_checks_both_scopes_without_mutation(self):

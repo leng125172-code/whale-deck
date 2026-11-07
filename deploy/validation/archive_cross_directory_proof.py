@@ -37,7 +37,7 @@ def rejected_key(row,key):
 def require_source_refusal(event,before,after,empty):
     row=before['row'];assert row['state']=='Ready' and row['execution_job_id'] is None and row['root_started_at_utc'] is None
     assert event['id']==row['id'] and event['sourceIntentId']==row['source_intent_id'] and event['status']==409 and event['code']=='OPERATION_CONFLICT'
-    assert event['originAndIdempotencyObserved'] is True
+    assert event['actualApiRequest'] is event['originAndIdempotencySupplied'] is True
     assert str(uuid.UUID(event['rejectedKey']))==event['rejectedKey'] and event['rejectedKey']!=row['idempotency_key']
     assert event['before']['id']==event['after']['id']==row['id'] and event['before']['version']==event['after']['version']==row['version']
     typed_equal(event['before'],event['after']);typed_equal(before,after);typed_equal(empty,dict(intents=0,jobs=0))
