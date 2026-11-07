@@ -8,8 +8,8 @@ import hashlib,json,os,re,subprocess,sys,time,uuid
 from pathlib import Path
 from validate_container_file_staging import load
 import validate_container_file_publishing as owned
-from validate_container_recycle_purge_agent import baseline
-from validate_container_recycle_purge_browser import idle,old_rows
+from validate_container_recycle_archive_agent import baseline
+from validate_container_recycle_archive_browser import idle,old_rows
 from acl_history_browser_proof import typed_equal
 from container_recycle_agent_io import file_snapshot
 from recursive_acl_restore_agent_io import snapshot,frame
@@ -17,6 +17,7 @@ from validate_container_recycle_archive_plan import payload_snapshot
 
 NAMES=('whaledeck-files.py','whaledeck-container-files.py','whaledeck-container-terminal.py','whaledeck-container-upload.py','whaledeck-container-publish.py','whaledeck-file-backups.py','whaledeck-container-directories.py','whaledeck-container-permissions.py','whaledeck-container-recycling.py','whaledeck-container-recycle-restores.py','whaledeck-container-recycle-purge-plan.py','whaledeck-container-recycle-purge-fences.py','whaledeck-container-recycle-purges.py','whaledeck-container-recycle-archive-plan.py','whaledeck-container-recycle-archive-fences.py','whaledeck-container-recycle-archive-copies.py')
 NAMES+=('whaledeck-container-recycle-archive-retention.py',)
+NAMES+=('whaledeck-container-recycle-archive-retirement-fences.py',)
 
 
 def retention_namespace_snapshot(folder):
@@ -45,7 +46,7 @@ def main(revision):
     for n in NAMES:
         raw=git('show',sha+':deploy/host/'+n);assert raw==(repo/'deploy/host'/n).read_bytes();(bundle/n).write_bytes(raw);(bundle/n).chmod(0o600);hashes[n]=hashlib.sha256(raw).hexdigest()
     from acl_source_apply_missing_proof import source_closure
-    closure=source_closure(repo,sha,seeds=('validate_container_recycle_archive_copies.py','verify_container_recycle_archive_copies.py','test_container_recycle_archive_copies.py','test_container_recycle_archive_retention.py','test_container_recycle_archive_retention_plan.py'))
+    closure=source_closure(repo,sha,seeds=('validate_container_recycle_archive_copies.py','verify_container_recycle_archive_copies.py','test_container_recycle_archive_copies.py','test_container_recycle_archive_retention.py','test_container_recycle_archive_retention_plan.py','test_container_recycle_archive_retirement_fences.py'))
     validation=e/'validation';validation.mkdir(mode=0o700)
     for name,digest in closure.items():
         raw=git('show',sha+':deploy/validation/'+name);assert hashlib.sha256(raw).hexdigest()==digest and raw==(repo/'deploy/validation'/name).read_bytes();(validation/name).write_bytes(raw)
@@ -153,6 +154,28 @@ def main(revision):
                 typed_equal(p['archiveIdentity'],archive_before['identity']);typed_equal(p['publishedIdentity'],own_copy['publishedIdentity']);typed_equal(stable,protected())
                 save('retention-assessment-'+label+'.json',dict(plan=p,clockBeforeUnixMs=clock_before,clockAfterUnixMs=clock_after,before=stable,after=protected(),installed=False,automaticCleanup=False))
             assess_retention('live',True)
+            retirement_state=e/'retirement-state';retirement_state.mkdir(mode=0o700);(retirement_state/'claims').mkdir(mode=0o700)
+            retirement_fence=load(bundle/NAMES[17],'archive_retirement_fences_candidate').retirement_fences_type(directory)(retirement,retirement_state)
+            retire_plan=retirement_fence.plan(dict(archive=copy_request,retainDays=30,mode='ArchiveData'),session)
+            assert retire_plan['retentionElapsed'] is False and retire_plan['retirementEligible'] is False and retire_plan['bindingCurrent'] is True
+            retire_a=dict(operationId=uuid.uuid4().hex,owner='9'*64,plan=retire_plan);retire_b={**retire_a,'operationId':uuid.uuid4().hex}
+            def unchanged_originals():return dict(archive=snapshot(archive_state),lifecycles=unchanged(),namespace=retention_namespace_snapshot(f['folder']))
+            retirement_before=unchanged_originals();retire_steps=[]
+            def retirement_step(q,action,expected,context=session):
+                receipt=getattr(retirement_fence,action)(q,context);assert receipt['state']==expected and receipt['retirementApplied'] is False
+                typed_equal(unchanged_originals(),retirement_before)
+                retire_steps.append(dict(operationId=q['operationId'],action=action,receipt=receipt,journal=json.loads((retirement_state/(q['operationId']+'.json')).read_bytes()),marker=json.loads((retirement_state/'claims'/(ref['operationId']+'.json')).read_bytes()),roots=snapshot(retirement_state)));return receipt
+            retirement_step(retire_a,'reserve','Reserved')
+            for action in (lambda:retirement_fence.reserve(retire_b,session),lambda:retirement_fence.plan(retire_plan['command'],session)):
+                try:action();raise AssertionError('RETIREMENT_SOURCE_REUSED')
+                except reader.Rejected as error:assert str(error).endswith('SOURCE_BUSY')
+            assert not (retirement_state/(retire_b['operationId']+'.json')).exists()
+            retirement_step(retire_a,'discard','Aborted');retirement_step(retire_b,'reserve','Reserved')
+            marker_before=(retirement_state/'claims'/(ref['operationId']+'.json')).read_bytes()
+            for action in ('reserve','inspect','discard'):
+                retirement_step(retire_a,action,'Aborted',None);assert (retirement_state/'claims'/(ref['operationId']+'.json')).read_bytes()==marker_before
+            retirement_step(retire_b,'reserve','Reserved',None);retirement_step(retire_b,'discard','Aborted')
+            save('retirement-reservations.json',dict(requests=[retire_a,retire_b],steps=retire_steps,before=retirement_before,after=unchanged_originals(),roots=snapshot(retirement_state),sourceBusyRefusals=2,originalArchiveClaimUnchanged=True,schedulingBeforeExpiryOnly=True,retirementApplied=False))
             save('archive-copy.json',dict(request=copy_request,reserved=reserved_copy,receipt=copied,canceledRequest=canceled_request,canceledReceipt=canceled,root=own_copy,actual=actual,original=initial,claim=claim,protectedBefore=stable,protectedAfter=dict(source=snapshot(state),purge=snapshot(purge_state),hdd=payload_snapshot(hdd_folder)),journals=snapshot(archive_state),claims=snapshot(restore_state),actualNewInode=True,archiveCopyPerformed=True,replayDidNotChangeTarget=True,oldLifecyclesPreserved=True))
             with (e/'independent-live.log').open('x') as log:
                 subprocess.run([sys.executable,str(repo/'deploy/validation/verify_container_recycle_archive_copies.py'),e.name,'--live'],check=True,stdout=log,stderr=subprocess.STDOUT,timeout=120)
@@ -163,6 +186,8 @@ def main(revision):
             after_cleanup=engine.inspect(copy_request,session);assert after_cleanup['state']=='Completed' and after_cleanup['archiveCopied'] is True and after_cleanup['bindingCurrent'] is False
             retention_check('absent')
             assess_retention('absent',False)
+            retired_observation=retirement_fence.inspect(retire_b,None);assert retired_observation['state']=='Aborted' and not retired_observation['sourceFenced'] and retired_observation['retirementApplied'] is False
+            save('retirement-after-cleanup.json',dict(receipt=retired_observation,roots=snapshot(retirement_state),originalClaim=source.read_restore_claim(ref),hdd=payload_snapshot(hdd_folder),retirementApplied=False))
             save('copy-cleanup.json',dict(exactNewCopyRemoved=True,exactEmptyStageRemoved=True,oldOriginalInodeNotReused=True,after=after_cleanup,journals=snapshot(archive_state),claims=snapshot(restore_state)))
             save('purged.json',dict(request=reservation,reserved=reserved,receipt=result,source=source_record,marker=marker,journal=own,original=initial,retainedBefore=retained_before,archiveBefore=archive_before,archiveAfter=file_snapshot(hdd_folder/(ref['operationId']+'.data')),metadataBefore=metadata_before,metadataAfter=metadata_after,onlyOwnedRetainedFilePurged=True))
         op=ref['operationId'];private=f['folder']/source.PRIVATE

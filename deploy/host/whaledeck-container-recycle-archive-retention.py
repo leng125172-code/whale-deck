@@ -44,35 +44,43 @@ class ContainerRecycleArchiveRetentionPreflight:
         # Same archive -> purge -> original source -> HDD lock order as Apply.
         # Existing readers never create a missing lock or repair a claim.
         with self.preflight.existing_record(self.copies,q) as copied,self.copies.source_records(q) as (deleted,original):
-            if copied['state']!='Completed':self.reject('COPY_UNCONFIRMED')
-            purge=p['command']['purge'];marker=source.read_purge_fence(ref)
-            if deleted['state']!='Completed' or not deleted['unlinkConfirmed'] or not self.preflight.purges.matches(marker,purge) or marker['state']!='Purged':self.reject('PURGE_UNCONFIRMED')
-            if original['state']!='Purged' or original['actualIdentity'] is not None or not original['historyVerified'] or original['historyDigest']!=p['command']['historyDigest']:self.reject('SOURCE_CHANGED')
-            facts=dict(sourceRecordDigest=digest(b'archive-source-v1\n',original),purgeRecordDigest=digest(b'archive-purge-v1\n',deleted),purgeMarkerDigest=digest(b'archive-marker-v1\n',marker))
-            if any(facts[k]!=p[k] for k in facts):self.reject('SOURCE_CHANGED')
-            claim=source.read_restore_claim(ref)
-            if not self.copies.matches(claim,q):self.reject('FENCE_CHANGED')
-            binding=self.copies.binding(copied,session)
-            with source.history.target(False) as (configuration,directory),self.preflight.existing_lock(directory,'history.lock'):
-                history=source.history.read(directory,ref)
-                if history['captureState']!='Purged' or digest(b'archive-history-v1\n',history)!=p['historyMetadataDigest'] or history['createdAtUnixMs']!=purge['plan']['historyCreatedAtUnixMs']:self.reject('HISTORY_CHANGED')
-                def attest():
-                    session.revalidate();source.history.storage.attest(configuration,directory,read_only=True)
-                    if digest(b'',configuration)!=p['storageHash'] or digest(b'',source.history.storage.configuration())!=p['storageHash'] or [os.fstat(directory).st_dev,os.fstat(directory).st_ino]!=p['storeIdentity']:self.reject('HISTORY_CHANGED')
-                    if source.metadata(os.stat(ref['operationId']+'.data',dir_fd=directory,follow_symlinks=False))!=p['archiveIdentity']:self.reject('HISTORY_CHANGED')
-                attest()
-                created=history['createdAtUnixMs'];due=created+command['retainDays']*self.DAY_MS;now=time.time_ns()//1000000
-                if not 0<=now<=self.MAX_TIME_MS or due>self.MAX_TIME_MS:self.reject('TIME_RANGE')
-                if now<created:self.reject('CLOCK_BEFORE_CAPTURE')
-                elapsed=now>=due
-                # A historical Completed is retained even when the live copy
-                # vanished. Such a source is never eligible for retirement.
-                source.guard(ref['plan']['command'],session,p['targetProof'])
-                if self.copies.binding(copied,session)!=binding:self.reject('COPY_CHANGED')
-                if encode(source.read_restore_claim(ref))!=encode(claim):self.reject('FENCE_CHANGED')
-                attest()
-                result=dict(schemaVersion=1,command=json.loads(encode(command)),**facts,archiveRecordDigest=digest(b'archive-retention-copy-v1\n',copied),claimDigest=digest(b'archive-retention-claim-v1\n',claim),historyMetadataDigest=p['historyMetadataDigest'],historyCreatedAtUnixMs=created,notBeforeUnixMs=due,retentionElapsed=elapsed,bindingCurrent=binding,retirementEligible=elapsed and binding,storageHash=p['storageHash'],storeIdentity=list(p['storeIdentity']),archiveIdentity=list(p['archiveIdentity']),archiveBytes=p['archiveBytes'],archiveSha256=p['archiveSha256'],publishedIdentity=list(copied['publishedIdentity']))
-                result['fingerprint']=self.digest(result);return result
+            return self.plan_locked(command,session,copied,deleted,original)
+
+    def plan_locked(self,command,session,copied,deleted,original):
+        """Internal: caller holds exact archive, purge and source locks."""
+        self.command(command)
+        if session is None:self.reject('SESSION_REQUIRED')
+        q=command['archive'];p=q['plan'];ref=self.copies.ref(q);source=self.source;digest=self.preflight.record_digest
+        source.guard(ref['plan']['command'],session,p['targetProof'])
+        if copied['state']!='Completed':self.reject('COPY_UNCONFIRMED')
+        purge=p['command']['purge'];marker=source.read_purge_fence(ref)
+        if deleted['state']!='Completed' or not deleted['unlinkConfirmed'] or not self.preflight.purges.matches(marker,purge) or marker['state']!='Purged':self.reject('PURGE_UNCONFIRMED')
+        if original['state']!='Purged' or original['actualIdentity'] is not None or not original['historyVerified'] or original['historyDigest']!=p['command']['historyDigest']:self.reject('SOURCE_CHANGED')
+        facts=dict(sourceRecordDigest=digest(b'archive-source-v1\n',original),purgeRecordDigest=digest(b'archive-purge-v1\n',deleted),purgeMarkerDigest=digest(b'archive-marker-v1\n',marker))
+        if any(facts[k]!=p[k] for k in facts):self.reject('SOURCE_CHANGED')
+        claim=source.read_restore_claim(ref)
+        if not self.copies.matches(claim,q):self.reject('FENCE_CHANGED')
+        binding=self.copies.binding(copied,session)
+        with source.history.target(False) as (configuration,directory),self.preflight.existing_lock(directory,'history.lock'):
+            history=source.history.read(directory,ref)
+            if history['captureState']!='Purged' or digest(b'archive-history-v1\n',history)!=p['historyMetadataDigest'] or history['createdAtUnixMs']!=purge['plan']['historyCreatedAtUnixMs']:self.reject('HISTORY_CHANGED')
+            def attest():
+                session.revalidate();source.history.storage.attest(configuration,directory,read_only=True)
+                if digest(b'',configuration)!=p['storageHash'] or digest(b'',source.history.storage.configuration())!=p['storageHash'] or [os.fstat(directory).st_dev,os.fstat(directory).st_ino]!=p['storeIdentity']:self.reject('HISTORY_CHANGED')
+                if source.metadata(os.stat(ref['operationId']+'.data',dir_fd=directory,follow_symlinks=False))!=p['archiveIdentity']:self.reject('HISTORY_CHANGED')
+            attest()
+            created=history['createdAtUnixMs'];due=created+command['retainDays']*self.DAY_MS;now=time.time_ns()//1000000
+            if not 0<=now<=self.MAX_TIME_MS or due>self.MAX_TIME_MS:self.reject('TIME_RANGE')
+            if now<created:self.reject('CLOCK_BEFORE_CAPTURE')
+            elapsed=now>=due
+            # A historical Completed is retained even when the live copy
+            # vanished. Such a source is never eligible for retirement.
+            source.guard(ref['plan']['command'],session,p['targetProof'])
+            if self.copies.binding(copied,session)!=binding:self.reject('COPY_CHANGED')
+            if encode(source.read_restore_claim(ref))!=encode(claim):self.reject('FENCE_CHANGED')
+            attest()
+            result=dict(schemaVersion=1,command=json.loads(encode(command)),**facts,archiveRecordDigest=digest(b'archive-retention-copy-v1\n',copied),claimDigest=digest(b'archive-retention-claim-v1\n',claim),historyMetadataDigest=p['historyMetadataDigest'],historyCreatedAtUnixMs=created,notBeforeUnixMs=due,retentionElapsed=elapsed,bindingCurrent=binding,retirementEligible=elapsed and binding,storageHash=p['storageHash'],storeIdentity=list(p['storeIdentity']),archiveIdentity=list(p['archiveIdentity']),archiveBytes=p['archiveBytes'],archiveSha256=p['archiveSha256'],publishedIdentity=list(copied['publishedIdentity']))
+            result['fingerprint']=self.digest(result);return result
 
     def validate_plan(self,value):
         if type(value) is not dict or set(value)!=self.PLAN or type(value['schemaVersion']) is not int or value['schemaVersion']!=1 or type(value['fingerprint']) is not str or not re.fullmatch('[A-F0-9]{64}',value['fingerprint']) or value['fingerprint']!=self.digest(value):self.reject('PLAN_INVALID')

@@ -1,19 +1,51 @@
 #!/usr/bin/env python3
 """Independent post-cleanup reread; never copies or invokes native recovery."""
-import hashlib,json,os,re,subprocess,sys
+import hashlib,json,os,re,stat,subprocess,sys
 from pathlib import Path
-from validate_container_recycle_purge_agent import baseline
-from validate_container_recycle_purge_browser import old_rows,idle,hdd_observation
+from validate_container_recycle_archive_agent import baseline
+from validate_container_recycle_archive_browser import old_rows,idle,hdd_observation
 from recursive_acl_restore_agent_io import snapshot
 from acl_history_browser_proof import typed_equal
 from container_recycle_agent_io import file_snapshot
 import validate_container_file_publishing as owned
 
 
+def retirement_reservations_proof(e,copied,after_cleanup=False):
+    read=lambda n:json.loads((e/n).read_bytes());value=read('retirement-reservations.json');requests=value['requests'];assert len(requests)==2
+    a,b=requests;q=copied['request'];source=q['plan']['command']['purge']['plan']['command']['source'];source_id=source['operationId']
+    assert all(set(r)=={'operationId','owner','plan'} and re.fullmatch('[a-f0-9]{32}',r['operationId']) and re.fullmatch('[A-F0-9]{64}',r['owner']) for r in requests)
+    assert len({source_id,q['plan']['command']['purge']['operationId'],q['operationId'],copied['canceledRequest']['operationId'],a['operationId'],b['operationId']})==6
+    typed_equal(a['plan'],b['plan']);typed_equal(a['plan'],read('retention-assessment-live.json')['plan'])
+    assert a['plan']['retentionElapsed'] is a['plan']['retirementEligible'] is False and a['plan']['bindingCurrent'] is True
+    typed_equal(value['before'],value['after']);assert value['sourceBusyRefusals']==2 and value['originalArchiveClaimUnchanged'] and value['schedulingBeforeExpiryOnly'] and value['retirementApplied'] is False
+    expected=[(a,'reserve','Reserved',True,True,a,'Reserved'),(a,'discard','Aborted',False,False,a,'Released'),(b,'reserve','Reserved',True,True,b,'Reserved'),(a,'reserve','Aborted',True,False,b,'Reserved'),(a,'inspect','Aborted',True,False,b,'Reserved'),(a,'discard','Aborted',True,False,b,'Reserved'),(b,'reserve','Reserved',True,True,b,'Reserved'),(b,'discard','Aborted',False,False,b,'Released')]
+    assert len(value['steps'])==len(expected)
+    for i,(step,(request,action,state,fenced,owned,marker_request,marker_state)) in enumerate(zip(value['steps'],expected,strict=True)):
+        typed_equal({k:step[k] for k in ('operationId','action')},dict(operationId=request['operationId'],action=action))
+        receipt=dict(operationId=request['operationId'],sourceOperationId=source_id,archiveOperationId=q['operationId'],fingerprint=request['plan']['fingerprint'],state=state,sourceFenced=fenced,ownedFence=owned,retirementApplied=False,notBeforeUnixMs=request['plan']['notBeforeUnixMs']);typed_equal(step['receipt'],receipt)
+        journal=dict(schemaVersion=1,**request,state=state);typed_equal(step['journal'],journal)
+        marker=dict(schemaVersion=1,archive=q,retirementOperationId=marker_request['operationId'],retirementOwner=marker_request['owner'],retirementFingerprint=marker_request['plan']['fingerprint'],state=marker_state);typed_equal(step['marker'],marker)
+        expected_names={a['operationId']+'.json',a['operationId']+'.lock','claims/'+source_id+'.json'}
+        if i>=1:expected_names.add(b['operationId']+'.lock')
+        if i>=2:expected_names.add(b['operationId']+'.json')
+        assert set(step['roots'])==expected_names
+        for name,observed in step['roots'].items():
+            info=observed['identity'];assert stat.S_ISREG(info[2]) and stat.S_IMODE(info[2])==0o600 and info[3:6]==[0,0,1]
+            if name.endswith('.lock'):assert info[6]==0 and observed['sha256']==hashlib.sha256(b'').hexdigest()
+        for name,data in ((request['operationId']+'.json',step['journal']),('claims/'+source_id+'.json',step['marker'])):
+            raw=json.dumps(data,separators=(',',':')).encode();assert step['roots'][name]['sha256']==hashlib.sha256(raw).hexdigest() and step['roots'][name]['identity'][6]==len(raw)
+    typed_equal(value['roots'],value['steps'][-1]['roots']);typed_equal(value['roots'],snapshot(e/'retirement-state'))
+    for request in requests:typed_equal(read('retirement-state/'+request['operationId']+'.json'),dict(schemaVersion=1,**request,state='Aborted'))
+    typed_equal(read('retirement-state/claims/'+source_id+'.json'),value['steps'][-1]['marker'])
+    if after_cleanup:
+        final=read('retirement-after-cleanup.json');typed_equal(final['roots'],value['roots']);typed_equal(final['originalClaim'],copied['claim']);typed_equal(final['receipt'],value['steps'][-1]['receipt']);typed_equal(final['hdd'],copied['protectedAfter']['hdd']);assert final['retirementApplied'] is False
+
+
 def live_main(name):
     assert os.geteuid()==0 and re.fullmatch('container-recycle-archive-copies-[a-f0-9]{32}',name);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     repo=Path(__file__).resolve().parents[2];e=repo/'deploy/artifacts'/name;assert e.resolve(strict=True)==e and e.stat().st_uid==0 and e.stat().st_mode&0o777==0o700
     read=lambda n:json.loads((e/n).read_bytes());source=read('source.json');copied=read('archive-copy.json');fixture=read('fixture-initial.json');q=copied['request'];ref=q['plan']['command']['purge']['plan']['command']['source'];op=ref['operationId']
+    retirement_reservations_proof(e,copied)
     for folder,prefix,key in (('source','deploy/host/','sourceSha256'),('validation','deploy/validation/','validationSourceSha256')):
         for n,digest in source[key].items():
             assert re.fullmatch(r'[A-Za-z0-9_.-]+\.(py|mjs)',n)
@@ -55,6 +87,7 @@ def main(name):
     typed_equal(baseline(source['revision']),after);idle()
     assert verified['actualContainer'] and verified['actualConfiguredHdd'] and verified['archivePreflight'] and verified['ownedFixtureRemoved'] and not any(verified[k] for k in ('installed','signedRpc','businessUi','automaticRetention','sourceRestoredForQaCleanup'))
     copied=read('archive-copy.json');cleanup=read('copy-cleanup.json');q=copied['request'];r=copied['root'];actual=copied['actual'];old=copied['original']
+    retirement_reservations_proof(e,copied,True)
     live=read('live-target-reread.json');assert live['actualLiveNewInodeReread'] and live['containerInstanceCurrent'] and live['rootCompleted'];typed_equal(live['actual'],actual)
     assert copied['actualNewInode'] and copied['archiveCopyPerformed'] and copied['replayDidNotChangeTarget'] and copied['oldLifecyclesPreserved'] and verified['archiveCopyPerformed'] and verified['archiveCopies']
     absent_lock=read('retention-absent.json')['competitorOperationId']+'.lock'
