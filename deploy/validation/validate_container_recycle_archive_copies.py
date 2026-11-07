@@ -18,6 +18,7 @@ from validate_container_recycle_archive_plan import payload_snapshot
 NAMES=('whaledeck-files.py','whaledeck-container-files.py','whaledeck-container-terminal.py','whaledeck-container-upload.py','whaledeck-container-publish.py','whaledeck-file-backups.py','whaledeck-container-directories.py','whaledeck-container-permissions.py','whaledeck-container-recycling.py','whaledeck-container-recycle-restores.py','whaledeck-container-recycle-purge-plan.py','whaledeck-container-recycle-purge-fences.py','whaledeck-container-recycle-purges.py','whaledeck-container-recycle-archive-plan.py','whaledeck-container-recycle-archive-fences.py','whaledeck-container-recycle-archive-copies.py')
 NAMES+=('whaledeck-container-recycle-archive-retention.py',)
 NAMES+=('whaledeck-container-recycle-archive-retirement-fences.py',)
+NAMES+=('whaledeck-container-recycle-retired-history.py',)
 
 
 def retention_namespace_snapshot(folder):
@@ -46,7 +47,7 @@ def main(revision):
     for n in NAMES:
         raw=git('show',sha+':deploy/host/'+n);assert raw==(repo/'deploy/host'/n).read_bytes();(bundle/n).write_bytes(raw);(bundle/n).chmod(0o600);hashes[n]=hashlib.sha256(raw).hexdigest()
     from acl_source_apply_missing_proof import source_closure
-    closure=source_closure(repo,sha,seeds=('validate_container_recycle_archive_copies.py','verify_container_recycle_archive_copies.py','test_container_recycle_archive_copies.py','test_container_recycle_archive_retention.py','test_container_recycle_archive_retention_plan.py','test_container_recycle_archive_retirement_fences.py'))
+    closure=source_closure(repo,sha,seeds=('validate_container_recycle_archive_copies.py','verify_container_recycle_archive_copies.py','test_container_recycle_archive_copies.py','test_container_recycle_archive_retention.py','test_container_recycle_archive_retention_plan.py','test_container_recycle_archive_retirement_fences.py','test_container_recycle_retired_history.py'))
     validation=e/'validation';validation.mkdir(mode=0o700)
     for name,digest in closure.items():
         raw=git('show',sha+':deploy/validation/'+name);assert hashlib.sha256(raw).hexdigest()==digest and raw==(repo/'deploy/validation'/name).read_bytes();(validation/name).write_bytes(raw)
@@ -161,11 +162,19 @@ def main(revision):
             retire_a=dict(operationId=uuid.uuid4().hex,owner='9'*64,plan=retire_plan);retire_b={**retire_a,'operationId':uuid.uuid4().hex}
             def unchanged_originals():return dict(archive=snapshot(archive_state),lifecycles=unchanged(),namespace=retention_namespace_snapshot(f['folder']))
             retirement_before=unchanged_originals();retire_steps=[]
+            history_reader=load(bundle/NAMES[18],'retired_history_candidate').ContainerRecycleRetiredHistory(retirement_fence)
+            def history_disposition(label,operation):
+                before=unchanged_originals();roots=snapshot(retirement_state);observed=history_reader.observe(ref,captured['historyDigest'])
+                typed_equal(observed,dict(operationId=ref['operationId'],historyDigest=captured['historyDigest'],disposition='Available',reason='VerifiedData',dataAvailable=True,dataPresent=True,retirementOperationId=operation))
+                typed_equal(before,unchanged_originals());typed_equal(roots,snapshot(retirement_state))
+                save('history-disposition-'+label+'.json',dict(observation=observed,before=before,after=unchanged_originals(),retirementRoots=roots,retirementRootsAfter=snapshot(retirement_state),readOnly=True))
+            history_disposition('unreserved',None)
             def retirement_step(q,action,expected,context=session):
                 receipt=getattr(retirement_fence,action)(q,context);assert receipt['state']==expected and receipt['retirementApplied'] is False
                 typed_equal(unchanged_originals(),retirement_before)
                 retire_steps.append(dict(operationId=q['operationId'],action=action,receipt=receipt,journal=json.loads((retirement_state/(q['operationId']+'.json')).read_bytes()),marker=json.loads((retirement_state/'claims'/(ref['operationId']+'.json')).read_bytes()),roots=snapshot(retirement_state)));return receipt
             retirement_step(retire_a,'reserve','Reserved')
+            history_disposition('reserved',retire_a['operationId'])
             for action in (lambda:retirement_fence.reserve(retire_b,session),lambda:retirement_fence.plan(retire_plan['command'],session)):
                 try:action();raise AssertionError('RETIREMENT_SOURCE_REUSED')
                 except reader.Rejected as error:assert str(error).endswith('SOURCE_BUSY')
@@ -175,6 +184,7 @@ def main(revision):
             for action in ('reserve','inspect','discard'):
                 retirement_step(retire_a,action,'Aborted',None);assert (retirement_state/'claims'/(ref['operationId']+'.json')).read_bytes()==marker_before
             retirement_step(retire_b,'reserve','Reserved',None);retirement_step(retire_b,'discard','Aborted')
+            history_disposition('released',retire_b['operationId'])
             save('retirement-reservations.json',dict(requests=[retire_a,retire_b],steps=retire_steps,before=retirement_before,after=unchanged_originals(),roots=snapshot(retirement_state),sourceBusyRefusals=2,originalArchiveClaimUnchanged=True,schedulingBeforeExpiryOnly=True,retirementApplied=False))
             save('archive-copy.json',dict(request=copy_request,reserved=reserved_copy,receipt=copied,canceledRequest=canceled_request,canceledReceipt=canceled,root=own_copy,actual=actual,original=initial,claim=claim,protectedBefore=stable,protectedAfter=dict(source=snapshot(state),purge=snapshot(purge_state),hdd=payload_snapshot(hdd_folder)),journals=snapshot(archive_state),claims=snapshot(restore_state),actualNewInode=True,archiveCopyPerformed=True,replayDidNotChangeTarget=True,oldLifecyclesPreserved=True))
             with (e/'independent-live.log').open('x') as log:
@@ -186,6 +196,7 @@ def main(revision):
             after_cleanup=engine.inspect(copy_request,session);assert after_cleanup['state']=='Completed' and after_cleanup['archiveCopied'] is True and after_cleanup['bindingCurrent'] is False
             retention_check('absent')
             assess_retention('absent',False)
+            history_disposition('after-cleanup',retire_b['operationId'])
             retired_observation=retirement_fence.inspect(retire_b,None);assert retired_observation['state']=='Aborted' and not retired_observation['sourceFenced'] and retired_observation['retirementApplied'] is False
             save('retirement-after-cleanup.json',dict(receipt=retired_observation,roots=snapshot(retirement_state),originalClaim=source.read_restore_claim(ref),hdd=payload_snapshot(hdd_folder),retirementApplied=False))
             save('copy-cleanup.json',dict(exactNewCopyRemoved=True,exactEmptyStageRemoved=True,oldOriginalInodeNotReused=True,after=after_cleanup,journals=snapshot(archive_state),claims=snapshot(restore_state)))

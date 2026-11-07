@@ -41,11 +41,26 @@ def retirement_reservations_proof(e,copied,after_cleanup=False):
         final=read('retirement-after-cleanup.json');typed_equal(final['roots'],value['roots']);typed_equal(final['originalClaim'],copied['claim']);typed_equal(final['receipt'],value['steps'][-1]['receipt']);typed_equal(final['hdd'],copied['protectedAfter']['hdd']);assert final['retirementApplied'] is False
 
 
+def history_dispositions_proof(e,copied,after_cleanup=False):
+    read=lambda n:json.loads((e/n).read_bytes());reservations=read('retirement-reservations.json');a,b=reservations['requests'];q=copied['request'];ref=q['plan']['command']['purge']['plan']['command']['source']
+    labels=[('unreserved',None),('reserved',a['operationId']),('released',b['operationId'])]
+    if after_cleanup:labels.append(('after-cleanup',b['operationId']))
+    for label,op in labels:
+        value=read('history-disposition-'+label+'.json');assert value['readOnly'] is True
+        typed_equal(value['observation'],dict(operationId=ref['operationId'],historyDigest=q['plan']['command']['historyDigest'],disposition='Available',reason='VerifiedData',dataAvailable=True,dataPresent=True,retirementOperationId=op))
+        typed_equal(value['before'],value['after']);typed_equal(value['retirementRoots'],value['retirementRootsAfter'])
+        typed_equal(value['after']['lifecycles']['hdd'],copied['protectedAfter']['hdd']);typed_equal(value['after']['lifecycles']['restore'],copied['claims'])
+        if label=='unreserved':assert value['retirementRoots']=={}
+        elif label=='reserved':typed_equal(value['retirementRoots'],reservations['steps'][0]['roots'])
+        else:typed_equal(value['retirementRoots'],reservations['roots'])
+
+
 def live_main(name):
     assert os.geteuid()==0 and re.fullmatch('container-recycle-archive-copies-[a-f0-9]{32}',name);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     repo=Path(__file__).resolve().parents[2];e=repo/'deploy/artifacts'/name;assert e.resolve(strict=True)==e and e.stat().st_uid==0 and e.stat().st_mode&0o777==0o700
     read=lambda n:json.loads((e/n).read_bytes());source=read('source.json');copied=read('archive-copy.json');fixture=read('fixture-initial.json');q=copied['request'];ref=q['plan']['command']['purge']['plan']['command']['source'];op=ref['operationId']
     retirement_reservations_proof(e,copied)
+    history_dispositions_proof(e,copied)
     for folder,prefix,key in (('source','deploy/host/','sourceSha256'),('validation','deploy/validation/','validationSourceSha256')):
         for n,digest in source[key].items():
             assert re.fullmatch(r'[A-Za-z0-9_.-]+\.(py|mjs)',n)
@@ -88,6 +103,7 @@ def main(name):
     assert verified['actualContainer'] and verified['actualConfiguredHdd'] and verified['archivePreflight'] and verified['ownedFixtureRemoved'] and not any(verified[k] for k in ('installed','signedRpc','businessUi','automaticRetention','sourceRestoredForQaCleanup'))
     copied=read('archive-copy.json');cleanup=read('copy-cleanup.json');q=copied['request'];r=copied['root'];actual=copied['actual'];old=copied['original']
     retirement_reservations_proof(e,copied,True)
+    history_dispositions_proof(e,copied,True)
     live=read('live-target-reread.json');assert live['actualLiveNewInodeReread'] and live['containerInstanceCurrent'] and live['rootCompleted'];typed_equal(live['actual'],actual)
     assert copied['actualNewInode'] and copied['archiveCopyPerformed'] and copied['replayDidNotChangeTarget'] and copied['oldLifecyclesPreserved'] and verified['archiveCopyPerformed'] and verified['archiveCopies']
     absent_lock=read('retention-absent.json')['competitorOperationId']+'.lock'

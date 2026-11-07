@@ -57,13 +57,19 @@ def history_type(base_history):
                 yield
             finally:os.close(fd)
 
-        def read(self, directory, request):
+        def read_metadata(self, directory, request):
+            # Metadata observation alone never grants access to backup bytes.
+            # Existing read/verify/restore callers still require verify_data.
             value=self.storage.read_json(directory,request['operationId']+'.json',131072)
             expected=self.expected(request)
-            if set(value)!=set(expected)|{'state','captureState','historyDigest','createdAtUnixMs','differentSourceDevice'} or any(value[k]!=v for k,v in expected.items()):self.reject('HISTORY_CHANGED')
+            if type(value) is not dict or type(value.get('schemaVersion')) is not int or set(value)!=set(expected)|{'state','captureState','historyDigest','createdAtUnixMs','differentSourceDevice'} or any(value[k]!=v for k,v in expected.items()):self.reject('HISTORY_CHANGED')
             if value['state']!='Verified' or value['captureState'] not in ('Pending','Trashed','Restored','Canceled','Purged'):self.reject('HISTORY_INCOMPLETE')
             if type(value['createdAtUnixMs']) is not int or not 0<=value['createdAtUnixMs']<=253402300799999 or type(value['differentSourceDevice']) is not bool or value['historyDigest']!=self.digest(value):self.reject('HISTORY_CHANGED')
-            self.storage.verify_data(directory,request['operationId'],expected)
+            return value
+
+        def read(self, directory, request):
+            value=self.read_metadata(directory,request)
+            self.storage.verify_data(directory,request['operationId'],self.expected(request))
             return value
 
         def capture(self, request, parent, leaf, validate):

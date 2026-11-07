@@ -6,6 +6,7 @@ and active-journal scan serialize retirement reservations, including recovery
 from a lost marker. Reserved may precede expiry; it is never unlink authority.
 """
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -48,12 +49,39 @@ def retirement_fences_type(directory_type):
             if value['operationId'] in (archive['operationId'],purge['operationId'],self.ref(value)['operationId']):self.reject('NEW_OPERATION_REQUIRED')
 
         def validate_record(self,value,operation):
-            if type(value) is not dict or set(value)!=self.RECORD or type(value['schemaVersion']) is not int or value['schemaVersion']!=1:self.reject('RECEIPT_INVALID')
+            if type(value) is not dict or type(value.get('schemaVersion')) is not int:self.reject('RECEIPT_INVALID')
+            if value['schemaVersion']==1:
+                if set(value)!=self.RECORD or value['state'] not in self.STATES:self.reject('RECEIPT_INVALID')
+            elif value['schemaVersion']==2:
+                if set(value)!=self.RECORD|{'completion'} or value['state'] not in ('Completed','Unknown'):self.reject('RECEIPT_INVALID')
+                if value['completion'] is None:
+                    if value['state']!='Unknown':self.reject('RECEIPT_INVALID')
+                else:self.validate_completion(value['completion'],{k:value[k] for k in self.REQUEST})
+            else:self.reject('RECEIPT_INVALID')
             self.request({k:value[k] for k in self.REQUEST})
-            if value['operationId']!=operation or value['state'] not in self.STATES:self.reject('RECEIPT_INVALID')
+            if value['operationId']!=operation:self.reject('RECEIPT_INVALID')
+
+        @staticmethod
+        def completion_digest(value):
+            return hashlib.sha256(b'whaledeck-container-recycle-archive-retirement-completion-v1\n'+encode({k:v for k,v in value.items() if k!='proofDigest'})).hexdigest().upper()
+
+        def validate_completion(self,value,request):
+            # A future executor may persist this certificate only after its
+            # own authorized unlink/fsync. No method here creates one.
+            if type(value) is not dict or set(value)!={'executionPlan','unlinkConfirmed','unlinkedIdentity','completedAtUnixMs','proofDigest'} or value['unlinkConfirmed'] is not True:self.reject('COMPLETION_INVALID')
+            p=value['executionPlan'];self.preflight.validate_plan(p)
+            if p['retirementEligible'] is not True or p['bindingCurrent'] is not True or p['retentionElapsed'] is not True:self.reject('COMPLETION_INVALID')
+            if encode(value['unlinkedIdentity'])!=encode(p['archiveIdentity']):self.reject('COMPLETION_INVALID')
+            stable=lambda x:{k:v for k,v in x.items() if k not in ('fingerprint','retentionElapsed','retirementEligible')}
+            if encode(stable(p))!=encode(stable(request['plan'])):self.reject('COMPLETION_INVALID')
+            if type(value['completedAtUnixMs']) is not int or not p['notBeforeUnixMs']<=value['completedAtUnixMs']<=self.preflight.MAX_TIME_MS or type(value['proofDigest']) is not str or not re.fullmatch('[A-F0-9]{64}',value['proofDigest']) or value['proofDigest']!=self.completion_digest(value):self.reject('COMPLETION_INVALID')
 
         @staticmethod
         def new_record(request,state):return dict(schemaVersion=1,**json.loads(encode(request)),state=state)
+
+        def orphan_record(self,request,marker):
+            if marker['state']=='Retired':return dict(schemaVersion=2,**json.loads(encode(request)),state='Unknown',completion=None)
+            return self.new_record(request,'Aborted' if marker['state']=='Released' else 'Unknown')
 
         @contextlib.contextmanager
         def locked(self,request):
@@ -82,7 +110,7 @@ def retirement_fences_type(directory_type):
             return dict(schemaVersion=1,archive=self.archive(request),retirementOperationId=request['operationId'],retirementOwner=request['owner'],retirementFingerprint=request['plan']['fingerprint'],state=state)
 
         def validate_marker(self,value,source_id):
-            if type(value) is not dict or set(value)!=self.MARKER or type(value['schemaVersion']) is not int or value['schemaVersion']!=1 or value['state'] not in ('Reserved','Unknown','Released'):self.reject('MARKER_INVALID')
+            if type(value) is not dict or set(value)!=self.MARKER or type(value['schemaVersion']) is not int or value['schemaVersion']!=1 or value['state'] not in ('Reserved','Unknown','Released','Retired'):self.reject('MARKER_INVALID')
             self.copies.request(value['archive']);self.f.identity(value['retirementOperationId'])
             if self.copies.ref(value['archive'])['operationId']!=source_id or any(type(value[k]) is not str or not re.fullmatch('[A-F0-9]{64}',value[k]) for k in ('retirementOwner','retirementFingerprint')):self.reject('MARKER_INVALID')
 
@@ -121,7 +149,7 @@ def retirement_fences_type(directory_type):
                 if not re.fullmatch(r'[a-f0-9]{32}\.json',name):self.reject('STATE_UNSAFE')
                 record=self.read(state,name[:-5])
                 if record is None:self.reject('STATE_UNSAFE')
-                if self.ref(record)['operationId']==source_id and record['state'] in ('Preparing','Reserved','Unknown'):result.append(record['operationId'])
+                if self.ref(record)['operationId']==source_id and record['state'] in ('Preparing','Reserved','Unknown','Completed'):result.append(record['operationId'])
             return result
 
         def checkpoint(self,phase):
@@ -131,18 +159,22 @@ def retirement_fences_type(directory_type):
             same=self.matches(marker,record)
             if record['state']=='Aborted':
                 if same and marker['state']=='Reserved':self.write_marker(record,'Released')
-                elif same and marker['state']=='Unknown':self.reject('FENCE_CHANGED')
+                elif same and marker['state'] in ('Unknown','Retired'):self.reject('FENCE_CHANGED')
                 return
+            if record['schemaVersion']==2 and record['state']=='Completed' and same and marker['state']=='Retired':return
             if record['state']=='Preparing' and (marker is None or marker['state']=='Released'):
                 record['state']='Aborted';self.save(state,record);return
             if record['state']=='Reserved' and same and marker['state']=='Reserved':return
-            if record['state']!='Unknown':record['state']='Unknown';self.save(state,record)
+            if record['schemaVersion']==1 and marker is not None and marker['state']=='Retired':
+                record.update(schemaVersion=2,state='Unknown',completion=None);self.save(state,record)
+            elif record['state']!='Unknown':record['state']='Unknown';self.save(state,record)
             # No marker repair, payload replay or overwrite of another owner.
             # The active journal scan retains exclusion when the index is lost.
 
         def public(self,state,record,marker):
             active=self.active(state,self.ref(record)['operationId'])
-            return dict(operationId=record['operationId'],sourceOperationId=self.ref(record)['operationId'],archiveOperationId=self.archive(record)['operationId'],fingerprint=record['plan']['fingerprint'],state=record['state'],sourceFenced=bool(active or marker and marker['state']!='Released'),ownedFence=bool(self.matches(marker,record) and marker['state']!='Released'),retirementApplied=False,notBeforeUnixMs=record['plan']['notBeforeUnixMs'])
+            applied=False if record['schemaVersion']==1 else True if record['state']=='Completed' else None
+            return dict(operationId=record['operationId'],sourceOperationId=self.ref(record)['operationId'],archiveOperationId=self.archive(record)['operationId'],fingerprint=record['plan']['fingerprint'],state=record['state'],sourceFenced=bool(active or marker and marker['state']!='Released'),ownedFence=bool(self.matches(marker,record) and marker['state']!='Released'),retirementApplied=applied,notBeforeUnixMs=record['plan']['notBeforeUnixMs'])
 
         def reserve(self,request,session):
             with self.locked(request) as (state,record),self.records(self.archive(request)) as records:
@@ -150,7 +182,7 @@ def retirement_fences_type(directory_type):
                 if record is not None:
                     self.reconcile(state,record,marker);return self.public(state,record,self.read_marker(source_id))
                 if self.matches(marker,request):
-                    record=self.new_record(request,'Aborted' if marker['state']=='Released' else 'Unknown');self.save(state,record)
+                    record=self.orphan_record(request,marker);self.save(state,record)
                     return self.public(state,record,marker)
                 if marker is not None and marker['state']!='Released' or self.active(state,source_id):self.reject('SOURCE_BUSY')
                 fresh=self.preflight.plan_locked(request['plan']['command'],session,*records)
@@ -167,7 +199,7 @@ def retirement_fences_type(directory_type):
                 if record is None:
                     same=self.matches(marker,request)
                     if not discard and not same:self.reject('NOT_FOUND')
-                    record=self.new_record(request,'Unknown' if same and marker['state']!='Released' else 'Aborted');self.save(state,record)
+                    record=self.orphan_record(request,marker) if same else self.new_record(request,'Aborted');self.save(state,record)
                 self.reconcile(state,record,marker);marker=self.read_marker(source_id)
                 if discard and record['state']=='Reserved':
                     if session is None:self.reject('SESSION_REQUIRED')

@@ -94,7 +94,7 @@ class ContainerRecycleArchiveRetentionPreflight:
         for key,length in (('storeIdentity',2),('archiveIdentity',9),('publishedIdentity',9)):
             if type(value[key]) is not list or len(value[key])!=length or any(type(n) is not int for n in value[key]) or not 0<=value[key][0]<2**64 or not 0<value[key][1]<2**64:self.reject('PLAN_INVALID')
         p=value['command']['archive']['plan']
-        if any(encode(value[k])!=encode(p[k]) for k in ('historyMetadataDigest','storageHash','storeIdentity','archiveIdentity','archiveBytes','archiveSha256')):self.reject('PLAN_INVALID')
+        if any(encode(value[k])!=encode(p[k]) for k in ('sourceRecordDigest','purgeRecordDigest','purgeMarkerDigest','historyMetadataDigest','storageHash','storeIdentity','archiveIdentity','archiveBytes','archiveSha256')):self.reject('PLAN_INVALID')
         # This unkeyed structural check is never authorization; consumers must
         # use revalidate() to compare the current trusted records and clock.
 
