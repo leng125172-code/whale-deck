@@ -4,7 +4,7 @@
 No installation, RPC, permanent business workflow or scheduling.
 Only this newly owned retained file may be purged; copy publishes only the selected new inode; HDD history stays.
 """
-import hashlib,json,os,re,subprocess,sys,uuid
+import hashlib,json,os,re,subprocess,sys,time,uuid
 from pathlib import Path
 from validate_container_file_staging import load
 import validate_container_file_publishing as owned
@@ -16,6 +16,7 @@ from recursive_acl_restore_agent_io import snapshot
 from validate_container_recycle_archive_plan import payload_snapshot
 
 NAMES=('whaledeck-files.py','whaledeck-container-files.py','whaledeck-container-terminal.py','whaledeck-container-upload.py','whaledeck-container-publish.py','whaledeck-file-backups.py','whaledeck-container-directories.py','whaledeck-container-permissions.py','whaledeck-container-recycling.py','whaledeck-container-recycle-restores.py','whaledeck-container-recycle-purge-plan.py','whaledeck-container-recycle-purge-fences.py','whaledeck-container-recycle-purges.py','whaledeck-container-recycle-archive-plan.py','whaledeck-container-recycle-archive-fences.py','whaledeck-container-recycle-archive-copies.py')
+NAMES+=('whaledeck-container-recycle-archive-retention.py',)
 
 
 
@@ -31,7 +32,7 @@ def main(revision):
     for n in NAMES:
         raw=git('show',sha+':deploy/host/'+n);assert raw==(repo/'deploy/host'/n).read_bytes();(bundle/n).write_bytes(raw);(bundle/n).chmod(0o600);hashes[n]=hashlib.sha256(raw).hexdigest()
     from acl_source_apply_missing_proof import source_closure
-    closure=source_closure(repo,sha,seeds=('validate_container_recycle_archive_copies.py','verify_container_recycle_archive_copies.py','test_container_recycle_archive_copies.py','test_container_recycle_archive_retention.py'))
+    closure=source_closure(repo,sha,seeds=('validate_container_recycle_archive_copies.py','verify_container_recycle_archive_copies.py','test_container_recycle_archive_copies.py','test_container_recycle_archive_retention.py','test_container_recycle_archive_retention_plan.py'))
     validation=e/'validation';validation.mkdir(mode=0o700)
     for name,digest in closure.items():
         raw=git('show',sha+':deploy/validation/'+name);assert hashlib.sha256(raw).hexdigest()==digest and raw==(repo/'deploy/validation'/name).read_bytes();(validation/name).write_bytes(raw)
@@ -128,6 +129,17 @@ def main(revision):
                 typed_equal(snapshot(restore_state),prior['claims']);typed_equal(unchanged(),prior['protected']);assert (archive_state/(copy_request['operationId']+'.json')).read_bytes()==prior['root']
                 save('retention-'+label+'.json',dict(competitorOperationId=competitor['operationId'],errors=errors,claim=claim,rootSha256=hashlib.sha256(prior['root']).hexdigest(),emptyLockOnly=True,sourceClaimRetained=True,automaticCleanup=False))
             retention_check('live')
+            retirement=load(bundle/NAMES[16],'archive_retention_candidate').ContainerRecycleArchiveRetentionPreflight(engine)
+            def assess_retention(label,binding):
+                def protected():return dict(archive=snapshot(archive_state),lifecycles=unchanged(),namespace=snapshot(f['folder']))
+                stable=protected();clock_before=time.time_ns()//1000000
+                p=retirement.plan(dict(archive=copy_request,retainDays=30,mode='ArchiveData'),session);typed_equal(retirement.revalidate(p,session),p)
+                clock_after=time.time_ns()//1000000
+                assert p['historyCreatedAtUnixMs']==metadata_after['createdAtUnixMs'] and p['notBeforeUnixMs']==p['historyCreatedAtUnixMs']+30*86400000 and clock_before<=clock_after<p['notBeforeUnixMs']
+                assert p['bindingCurrent'] is binding and p['retentionElapsed'] is False and p['retirementEligible'] is False
+                typed_equal(p['archiveIdentity'],archive_before['identity']);typed_equal(p['publishedIdentity'],own_copy['publishedIdentity']);typed_equal(stable,protected())
+                save('retention-assessment-'+label+'.json',dict(plan=p,clockBeforeUnixMs=clock_before,clockAfterUnixMs=clock_after,before=stable,after=protected(),installed=False,automaticCleanup=False))
+            assess_retention('live',True)
             save('archive-copy.json',dict(request=copy_request,reserved=reserved_copy,receipt=copied,canceledRequest=canceled_request,canceledReceipt=canceled,root=own_copy,actual=actual,original=initial,claim=claim,protectedBefore=stable,protectedAfter=dict(source=snapshot(state),purge=snapshot(purge_state),hdd=payload_snapshot(hdd_folder)),journals=snapshot(archive_state),claims=snapshot(restore_state),actualNewInode=True,archiveCopyPerformed=True,replayDidNotChangeTarget=True,oldLifecyclesPreserved=True))
             with (e/'independent-live.log').open('x') as log:
                 subprocess.run([sys.executable,str(repo/'deploy/validation/verify_container_recycle_archive_copies.py'),e.name,'--live'],check=True,stdout=log,stderr=subprocess.STDOUT,timeout=120)
@@ -137,6 +149,7 @@ def main(revision):
             typed_equal(file_snapshot(leaf),actual);leaf.unlink();assert not list(stage.iterdir()) and [stage.stat().st_dev,stage.stat().st_ino]==own_copy['privateIdentity'];stage.rmdir()
             after_cleanup=engine.inspect(copy_request,session);assert after_cleanup['state']=='Completed' and after_cleanup['archiveCopied'] is True and after_cleanup['bindingCurrent'] is False
             retention_check('absent')
+            assess_retention('absent',False)
             save('copy-cleanup.json',dict(exactNewCopyRemoved=True,exactEmptyStageRemoved=True,oldOriginalInodeNotReused=True,after=after_cleanup,journals=snapshot(archive_state),claims=snapshot(restore_state)))
             save('purged.json',dict(request=reservation,reserved=reserved,receipt=result,source=source_record,marker=marker,journal=own,original=initial,retainedBefore=retained_before,archiveBefore=archive_before,archiveAfter=file_snapshot(hdd_folder/(ref['operationId']+'.data')),metadataBefore=metadata_before,metadataAfter=metadata_after,onlyOwnedRetainedFilePurged=True))
         op=ref['operationId'];private=f['folder']/source.PRIVATE

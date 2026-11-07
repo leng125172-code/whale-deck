@@ -83,6 +83,25 @@ def main(name):
         rejected.append(operation)
     assert len(set(rejected+[op,raw['request']['operationId'],q['operationId'],canceled['operationId']]))==6
     assert set(cleanup['journals'])=={value['operationId']+suffix for value in (q,canceled) for suffix in ('.json','.lock')}|{operation+'.lock' for operation in rejected}
+    def canonical(value):return json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False).encode()
+    def digest(domain,value):return hashlib.sha256(domain+canonical(value)).hexdigest().upper()
+    plans=[]
+    for label,binding in (('live',True),('absent',False)):
+        assessment=read('retention-assessment-'+label+'.json');p=assessment['plan'];typed_equal(assessment['before'],assessment['after'])
+        assert assessment['installed'] is False and assessment['automaticCleanup'] is False
+        typed_equal(p['command'],dict(archive=q,retainDays=30,mode='ArchiveData'))
+        assert p['historyCreatedAtUnixMs']==raw['metadataAfter']['createdAtUnixMs'] and p['notBeforeUnixMs']==p['historyCreatedAtUnixMs']+30*86400000
+        assert p['historyCreatedAtUnixMs']<=assessment['clockBeforeUnixMs']<=assessment['clockAfterUnixMs']<p['notBeforeUnixMs']
+        assert p['retentionElapsed'] is False and p['retirementEligible'] is False and p['bindingCurrent'] is binding
+        typed_equal(p['archiveIdentity'],current['data']['identity']);typed_equal(p['publishedIdentity'],r['publishedIdentity'])
+        assert p['archiveSha256']==q['plan']['archiveSha256'] and p['archiveBytes']==current['data']['sizeBytes']
+        assert p['archiveRecordDigest']==digest(b'archive-retention-copy-v1\n',r) and p['claimDigest']==digest(b'archive-retention-claim-v1\n',claim)
+        for key,domain,folder,identifier in (('sourceRecordDigest',b'archive-source-v1\n','source-state',op),('purgeRecordDigest',b'archive-purge-v1\n','purge-state',raw['request']['operationId']),('purgeMarkerDigest',b'archive-marker-v1\n','source-state',op+'.purge')):
+            assert p[key]==digest(domain,read(folder+'/'+identifier+'.json'))==q['plan'][key]
+        for key in ('historyMetadataDigest','storageHash','storeIdentity'):typed_equal(p[key],q['plan'][key])
+        assert p['fingerprint']==digest(b'whaledeck-container-recycle-archive-retention-plan-v1\n',{k:v for k,v in p.items() if k!='fingerprint'})
+        plans.append(p)
+    typed_equal({k:v for k,v in plans[0].items() if k not in ('bindingCurrent','fingerprint')},{k:v for k,v in plans[1].items() if k not in ('bindingCurrent','fingerprint')})
     fixture=read('fixture-initial.json');assert re.fullmatch('[a-f0-9]{64}',fixture['containerId']) and not Path(fixture['folder']).exists()
     assert subprocess.run(['docker','inspect',fixture['containerId']],capture_output=True,timeout=10).returncode!=0
     assert proof['originalAbsent'] and proof['archiveCopyPerformed'] is False and absent['oldPlanRejected'] and absent['plan']['privateIdentity'] is None
