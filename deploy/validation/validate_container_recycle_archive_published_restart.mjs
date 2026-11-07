@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { chromium, expect } from '../../web/node_modules/@playwright/test/index.mjs'
 import { loginVisible, openPermissionFiles, closePermissionDetails, writeSignal, waitSignal, isJobPageResponse } from './installed_ui_permission_session.mjs'
-import { logoutFromUserMenu } from './installed_ui_logout.mjs'
+import { observedLogout } from './installed_ui_observed_logout.mjs'
 
 let phase = 'startup', browser, page, evidence
 try {
@@ -174,7 +174,7 @@ try {
   }
   assert.equal(mutations.filter(x=>x===archiveEndpoint).length,2);assert.equal(mutations.filter(x=>x.startsWith(archiveEndpoint+'/')&&x.endsWith('/confirm')).length,1);assert.equal(mutations.filter(x=>x.startsWith(archiveEndpoint+'/')&&x.endsWith('/cancel')).length,1)
   assert.ok((await Promise.all(headerChecks)).every(Boolean))
-  phase='normal-owner-logout';const ownerLogout=await logoutFromUserMenu(page,context,base)
+  phase='normal-owner-logout';const ownerLogout=await observedLogout('owner-logout',page,context,base,evidence)
   const anonymous=await context.request.get(base+archiveEndpoint+'/'+archives[1].id);assert.equal(anonymous.status(),401)
   for(const key of ['whaledeck-container-recycle-archive-hints-v1','whaledeck-container-recycle-purge-hints-v1','whaledeck-container-recycle-hints-v1'])await expect.poll(()=>page.evaluate(k=>sessionStorage.getItem(k),key)).toBe(null)
   await context.close();context=await browser.newContext({viewport:{width:320,height:600},colorScheme:'light',reducedMotion:'reduce'});context.setDefaultTimeout(20_000);page=await context.newPage()
@@ -196,7 +196,7 @@ try {
   await row.getByRole('button',{name:'处置历史结果',exact:true}).click();const posted=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname===recoveryPath+'/acknowledge');await recovery.getByRole('button',{name:'确认处置并释放保护',exact:true}).click();assert.equal((await posted).status(),202);await expect(row).toHaveCount(0)
   const final=await get(recoveryPath);assert.equal(final.state,'Acknowledged');assert.equal(final.archiveCopied,null);assert.equal(final.receipt.state,'Unknown');await coordinate('ack',final);await page.screenshot({path:join(evidence,'acknowledged.png')});await recovery.getByRole('button',{name:'关闭',exact:true}).click()
   await showJob('Failed','管理员已明确处置未知归档结果','acknowledged-job.png');assert.equal(managementWrites,1);assert.equal(acknowledgements,1)
-  phase='normal-recovery-logout';const recoveryLogout=await logoutFromUserMenu(page,context,base)
+  phase='normal-recovery-logout';const recoveryLogout=await observedLogout('recovery-logout',page,context,base,evidence)
   await writeSignal(evidence,'browser.json',{revision,kind:fixture.kind,originalOwnerStillAdministrator:true,ownerLogoutPostsBeforeOutcome,containerId:fixture.containerId,subject:profile.subject,recoverySubject,source,completed,archives,keys,archiveKeys,mutations,final,actualUi:true,acknowledgements,managementWrites,originalSessionReadStatus:anonymous.status(),differentAdminOldIdStatus:old.status(),hintsCleared:true,cancelledDecisionPreserved:true,logoutReceipts:[ownerLogout,recoveryLogout],jobProofs})
   await context.close();await browser.close();browser=undefined;console.log(JSON.stringify({actualArchivePublishedRestartBrowser:'passed'}))
 } catch (error) {
