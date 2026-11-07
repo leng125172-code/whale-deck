@@ -154,6 +154,10 @@ def archive_copies_type(fence_type):
                             if output is not None:os.close(output)
                             os.close(private)
                     if not self.binding(record,session):self.reject('COPY_CHANGED')
+                    # Completed proves publication, not authority to retire the
+                    # source claim, HDD history or stage. The container can
+                    # rename entries in its writable parent despite our locks;
+                    # stat-then-rmdir cannot safely target that stage inode.
                     record['state']='Completed';self.save(state,record);self.checkpoint('Completed');return self.public(record,session)
                 except BaseException:
                     with contextlib.suppress(OSError,self.r.Rejected,self.f.Rejected):self.reconcile(state,record)

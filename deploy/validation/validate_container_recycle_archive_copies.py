@@ -31,7 +31,7 @@ def main(revision):
     for n in NAMES:
         raw=git('show',sha+':deploy/host/'+n);assert raw==(repo/'deploy/host'/n).read_bytes();(bundle/n).write_bytes(raw);(bundle/n).chmod(0o600);hashes[n]=hashlib.sha256(raw).hexdigest()
     from acl_source_apply_missing_proof import source_closure
-    closure=source_closure(repo,sha,seeds=('validate_container_recycle_archive_copies.py','verify_container_recycle_archive_copies.py','test_container_recycle_archive_copies.py'))
+    closure=source_closure(repo,sha,seeds=('validate_container_recycle_archive_copies.py','verify_container_recycle_archive_copies.py','test_container_recycle_archive_copies.py','test_container_recycle_archive_retention.py'))
     validation=e/'validation';validation.mkdir(mode=0o700)
     for name,digest in closure.items():
         raw=git('show',sha+':deploy/validation/'+name);assert hashlib.sha256(raw).hexdigest()==digest and raw==(repo/'deploy/validation'/name).read_bytes();(validation/name).write_bytes(raw)
@@ -114,6 +114,20 @@ def main(revision):
                 replay=action(copy_request,session);assert replay['state']=='Completed' and replay['archiveCopied'] is True and replay['bindingCurrent'] is True;typed_equal(file_snapshot(leaf),actual)
             typed_equal(stable,dict(source=snapshot(state),purge=snapshot(purge_state),hdd=payload_snapshot(hdd_folder)))
             claim=source.read_restore_claim(ref);typed_equal(claim,engine.claim(copy_request))
+            def retention_check(label):
+                # A new rejected ID may acquire its own empty .lock. It must
+                # not create a journal or replace/release the completed claim.
+                prior=dict(claims=snapshot(restore_state),root=(archive_state/(copy_request['operationId']+'.json')).read_bytes(),protected=unchanged())
+                competitor={**copy_request,'operationId':uuid.uuid4().hex};errors=[]
+                for action in (lambda:engine.reserve(competitor,session),lambda:engine.plan(archive_command,session)):
+                    try:action();raise AssertionError('COMPLETED_SOURCE_REUSED')
+                    except reader.Rejected as error:
+                        assert str(error).endswith('SOURCE_BUSY');errors.append(str(error))
+                assert not (archive_state/(competitor['operationId']+'.json')).exists()
+                lock=archive_state/(competitor['operationId']+'.lock');info=lock.stat();assert (info.st_uid,info.st_gid,info.st_mode&0o777,info.st_nlink,info.st_size)==(0,0,0o600,1,0)
+                typed_equal(snapshot(restore_state),prior['claims']);typed_equal(unchanged(),prior['protected']);assert (archive_state/(copy_request['operationId']+'.json')).read_bytes()==prior['root']
+                save('retention-'+label+'.json',dict(competitorOperationId=competitor['operationId'],errors=errors,claim=claim,rootSha256=hashlib.sha256(prior['root']).hexdigest(),emptyLockOnly=True,sourceClaimRetained=True,automaticCleanup=False))
+            retention_check('live')
             save('archive-copy.json',dict(request=copy_request,reserved=reserved_copy,receipt=copied,canceledRequest=canceled_request,canceledReceipt=canceled,root=own_copy,actual=actual,original=initial,claim=claim,protectedBefore=stable,protectedAfter=dict(source=snapshot(state),purge=snapshot(purge_state),hdd=payload_snapshot(hdd_folder)),journals=snapshot(archive_state),claims=snapshot(restore_state),actualNewInode=True,archiveCopyPerformed=True,replayDidNotChangeTarget=True,oldLifecyclesPreserved=True))
             with (e/'independent-live.log').open('x') as log:
                 subprocess.run([sys.executable,str(repo/'deploy/validation/verify_container_recycle_archive_copies.py'),e.name,'--live'],check=True,stdout=log,stderr=subprocess.STDOUT,timeout=120)
@@ -122,6 +136,7 @@ def main(revision):
             # rollback or the old purged inode. The Completed journal/claim stay.
             typed_equal(file_snapshot(leaf),actual);leaf.unlink();assert not list(stage.iterdir()) and [stage.stat().st_dev,stage.stat().st_ino]==own_copy['privateIdentity'];stage.rmdir()
             after_cleanup=engine.inspect(copy_request,session);assert after_cleanup['state']=='Completed' and after_cleanup['archiveCopied'] is True and after_cleanup['bindingCurrent'] is False
+            retention_check('absent')
             save('copy-cleanup.json',dict(exactNewCopyRemoved=True,exactEmptyStageRemoved=True,oldOriginalInodeNotReused=True,after=after_cleanup,journals=snapshot(archive_state),claims=snapshot(restore_state)))
             save('purged.json',dict(request=reservation,reserved=reserved,receipt=result,source=source_record,marker=marker,journal=own,original=initial,retainedBefore=retained_before,archiveBefore=archive_before,archiveAfter=file_snapshot(hdd_folder/(ref['operationId']+'.data')),metadataBefore=metadata_before,metadataAfter=metadata_after,onlyOwnedRetainedFilePurged=True))
         op=ref['operationId'];private=f['folder']/source.PRIVATE

@@ -57,7 +57,9 @@ def main(name):
     copied=read('archive-copy.json');cleanup=read('copy-cleanup.json');q=copied['request'];r=copied['root'];actual=copied['actual'];old=copied['original']
     live=read('live-target-reread.json');assert live['actualLiveNewInodeReread'] and live['containerInstanceCurrent'] and live['rootCompleted'];typed_equal(live['actual'],actual)
     assert copied['actualNewInode'] and copied['archiveCopyPerformed'] and copied['replayDidNotChangeTarget'] and copied['oldLifecyclesPreserved'] and verified['archiveCopyPerformed'] and verified['archiveCopies']
-    typed_equal(copied['protectedBefore'],copied['protectedAfter']);typed_equal(copied['journals'],cleanup['journals']);typed_equal(cleanup['journals'],snapshot(e/'archive-state'));typed_equal(copied['claims'],cleanup['claims']);typed_equal(cleanup['claims'],snapshot(e/'restore-state'))
+    absent_lock=read('retention-absent.json')['competitorOperationId']+'.lock'
+    assert re.fullmatch('[a-f0-9]{32}\\.lock',absent_lock) and set(cleanup['journals'])-set(copied['journals'])=={absent_lock}
+    typed_equal(copied['protectedBefore'],copied['protectedAfter']);typed_equal(copied['journals'],{n:v for n,v in cleanup['journals'].items() if n!=absent_lock});typed_equal(cleanup['journals'],snapshot(e/'archive-state'));typed_equal(copied['claims'],cleanup['claims']);typed_equal(cleanup['claims'],snapshot(e/'restore-state'))
     assert r['state']=='Completed' and actual['identity'][:2]!=old['identity'][:2] and actual['identity'][:2]!=current['data']['identity'][:2]
     typed_equal(actual['identity'][2:8],old['identity'][2:8]);typed_equal(r['publishedIdentity'],actual['identity'])
     for key in ('sha256','attributes','sizeBytes'):typed_equal(actual[key],old[key])
@@ -71,7 +73,16 @@ def main(name):
     assert set(cleanup['claims'])=={'claims/'+op+'.json'} and absent['after']['restore']=={}
     canceled=copied['canceledRequest'];assert len({op,raw['request']['operationId'],q['operationId'],canceled['operationId']})==4
     cr=read('archive-state/'+canceled['operationId']+'.json');assert cr['state']=='Aborted';typed_equal({k:cr[k] for k in ('operationId','owner','plan')},canceled)
-    assert set(cleanup['journals'])=={value['operationId']+suffix for value in (q,canceled) for suffix in ('.json','.lock')}
+    rejected=[]
+    for label in ('live','absent'):
+        retained=read('retention-'+label+'.json');operation=retained['competitorOperationId'];assert re.fullmatch('[a-f0-9]{32}',operation)
+        assert retained['errors']==['CONTAINER_RECYCLE_ARCHIVE_SOURCE_BUSY']*2 and retained['emptyLockOnly'] and retained['sourceClaimRetained'] and retained['automaticCleanup'] is False
+        typed_equal(retained['claim'],claim);assert retained['rootSha256']==hashlib.sha256((e/('archive-state/'+q['operationId']+'.json')).read_bytes()).hexdigest()
+        assert not (e/('archive-state/'+operation+'.json')).exists()
+        lock=e/('archive-state/'+operation+'.lock');info=lock.stat();assert (info.st_uid,info.st_gid,info.st_mode&0o777,info.st_nlink,info.st_size)==(0,0,0o600,1,0)
+        rejected.append(operation)
+    assert len(set(rejected+[op,raw['request']['operationId'],q['operationId'],canceled['operationId']]))==6
+    assert set(cleanup['journals'])=={value['operationId']+suffix for value in (q,canceled) for suffix in ('.json','.lock')}|{operation+'.lock' for operation in rejected}
     fixture=read('fixture-initial.json');assert re.fullmatch('[a-f0-9]{64}',fixture['containerId']) and not Path(fixture['folder']).exists()
     assert subprocess.run(['docker','inspect',fixture['containerId']],capture_output=True,timeout=10).returncode!=0
     assert proof['originalAbsent'] and proof['archiveCopyPerformed'] is False and absent['oldPlanRejected'] and absent['plan']['privateIdentity'] is None
