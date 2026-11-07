@@ -2,8 +2,7 @@
 """Read-only independent ACK/physical/HDD proof for one failed-case disposal."""
 import hashlib,json,os,re,subprocess,sys
 from pathlib import Path
-from recover_archive_published_restart_failure import inputs,current,failed_case,CASE,SEAL,SOURCES
-from archive_published_restart_unknown_proof import require_ack
+from recover_archive_published_restart_failure import inputs,current,failed_case,ack_attempt,disposal_ack,CASE,SEAL,ATTEMPT,ATTEMPT_SEAL,SOURCES
 from verify_container_recursive_acl import private_json
 from acl_source_apply_missing_proof import source_closure
 from acl_history_browser_proof import typed_equal
@@ -16,10 +15,10 @@ import container_recycle_archive_agent_io as io
 def verify(name,live=False):
     assert os.geteuid()==0 and re.fullmatch('archive-published-failure-disposal-[a-f0-9]{32}',name) and type(live) is bool
     repo=Path(__file__).resolve().parents[2];e=repo/'deploy/artifacts'/name;read=lambda n:private_json(e/n);s=read('source.json');assert s['original']==CASE and s['originalSeal']==SEAL and s['originalGatePassed'] is False
-    failed_case(repo,CASE);typed_equal(source_closure(repo,s['validationRevision'],seeds=SOURCES),s['validationSourceSha256'])
+    failed_case(repo,CASE);ack_attempt(repo);assert s['ackAttempt']==ATTEMPT and s['ackAttemptSeal']==ATTEMPT_SEAL;typed_equal(source_closure(repo,s['validationRevision'],seeds=SOURCES),s['validationSourceSha256'])
     for n,h in s['validationSourceSha256'].items():assert hashlib.sha256((e/'source'/n).read_bytes()).hexdigest()==h and hashlib.sha256((repo/'deploy/validation'/n).read_bytes()).hexdigest()==h
-    old,f,dto,source,purge,cut=inputs(repo);before=read('unknown-proof.json');ack=read('ack-proof.json');api=read('api-ack.json');assert api['status']==202 and api['actualAdministratorApi'] and api['actualUi'] is api['originalGatePassed'] is False
-    require_ack(before,ack,api['subject']);typed_equal(archive_sql(dto['id']),ack['sql']);typed_equal(old_rows(f['containerId']),read('prior-business.json'))
+    old,f,dto,source,purge,cut=inputs(repo);before=read('unknown-proof.json');ack=read('ack-proof.json');api=read('existing-ack.json');assert api['newAcknowledgementRequests']==0 and api['preAckApiDtoNotCaptured'] and api['actualUi'] is api['originalGatePassed'] is False
+    container=read('container-before.json');assert container['id']==f['containerId'] and container['running'] is False and container['status']=='exited' and container['exitCode']==0 and container['startedAt']==f['instanceId'].split(':',1)[1];disposal_ack(before,ack,api['subject'],True);typed_equal(archive_sql(dto['id']),ack['sql']);typed_equal(old_rows(f['containerId']),read('prior-business.json'))
     root=io.read_operation(ack['request'],ack['receipt'],purge['records'],old/'archive-originals');typed_equal(root,ack['records']);typed_equal(hdd_observation(source['request']['operationId']),ack['hdd'])
     if live:typed_equal(current(repo,True),ack);typed_equal(baseline(s['revision']),read('before.json'))
     else:
