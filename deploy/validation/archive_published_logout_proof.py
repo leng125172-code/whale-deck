@@ -28,7 +28,7 @@ def browser_proof(b,f):
     assert type(b['ownerLogoutPosts']) is int and b['ownerLogoutPosts']==1 and b['originalSessionReadStatus']==401 and b['hintsCleared'] is b['cancelledDecisionPreserved'] is True
     assert len(b['oldReferenceStatuses'])==9 and all(type(n) is int and n==404 for n in b['oldReferenceStatuses'])
     assert b['managementWrites']==b['acknowledgements']==1 and len(b['jobProofs'])==len(b['logoutReceipts'])==2
-    for r in b['logoutReceipts']:assert r['normalUiLogout'] and r['postStatus'] in (302,303) and r['providerNavigationObserved'] and r['bffStatus']==401 and r['identityStatus'] in (401,403) and r['finalLoginPage']
+    for r in b['logoutReceipts']:assert r['normalUiLogout'] and r['postStatus'] in (302,303) and r['providerNavigationObserved'] and r['rpCallbackObserved'] and r['bffStatus']==401 and r['identityStatus'] in (401,403) and r['finalLoginPage']
     suffix='/files/recycle-archives/'+b['archives'][1]['id']
     assert sum(p.endswith(suffix+'/cancel') for p in b['mutations'])==0 and sum(p.endswith(suffix+'/confirm') for p in b['mutations'])==1
     assert b['archives'][1]['state']=='Unknown' and b['archives'][1]['archiveCopied'] is None and b['final']['state']=='Acknowledged' and b['final']['archiveCopied'] is None

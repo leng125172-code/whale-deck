@@ -10,7 +10,7 @@ from test_container_recycle_archive_prepared_restart import sample as row_sample
 
 def sample():
     v,f,p=row_sample();identifier=v['row']['id'];f['recoverySubject']='different-admin'
-    receipt=dict(normalUiLogout=True,postStatus=302,providerNavigationObserved=True,bffStatus=401,identityStatus=403,finalLoginPage=True)
+    receipt=dict(normalUiLogout=True,postStatus=302,providerNavigationObserved=True,rpCallbackObserved=True,bffStatus=401,identityStatus=403,finalLoginPage=True)
     b=dict(actualUi=True,subject=f['subject'],recoverySubject=f['recoverySubject'],ownerLogoutPosts=1,originalSessionReadStatus=401,hintsCleared=True,cancelledDecisionPreserved=True,oldReferenceStatuses=[404]*9,managementWrites=1,acknowledgements=1,jobProofs=[{},{}],logoutReceipts=[receipt,copy.deepcopy(receipt)],archives=[{},dict(id=identifier,state='Unknown',archiveCopied=None)],mutations=['/api/v1/containers/fixture/files/recycle-archives/'+identifier+'/confirm'],final=dict(state='Acknowledged',archiveCopied=None));return v,f,p,b
 
 
@@ -50,7 +50,7 @@ class PublishedLogoutTests(unittest.TestCase):
 
     def test_both_bff_and_provider_logout_receipts_are_exact(self):
         for index in (0,1):
-            for key,bad in (('normalUiLogout',False),('postStatus',200),('providerNavigationObserved',False),('bffStatus',200),('identityStatus',200),('finalLoginPage',False)):
+            for key,bad in (('normalUiLogout',False),('postStatus',200),('providerNavigationObserved',False),('rpCallbackObserved',False),('bffStatus',200),('identityStatus',200),('finalLoginPage',False)):
                 _,f,_,b=sample();b['logoutReceipts'][index][key]=bad
                 with self.subTest(index=index,key=key),self.assertRaises(AssertionError):proof.browser_proof(b,f)
 
