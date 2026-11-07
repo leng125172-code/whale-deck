@@ -11,6 +11,7 @@ from container_recycle_archive_agent_io import STATE
 from validate_container_directory_browser import snapshot as directory_snapshot,ROOT,verify_directory
 from container_recycle_cross_directory_proof import WAITING_PATH,STABLE,waiting_baseline,history_snapshot,same_waiting,require_blocked,require_registration,require_completed,original_file_unchanged,clean_waiting
 from container_recycle_archive_restart_proof import TABLES
+from bound_container_ownership_cut import operation_lock
 
 
 def directory_rows(exclude=None):
@@ -51,19 +52,28 @@ def observe_waiting(original,b,registered,current,e):
         assert time.monotonic()<until,'FOUR_NATURAL_ARCHIVE_DIRECTORY_DEFERRALS_NOT_OBSERVED'
         data=directory_snapshot(row['id']);at=dt.datetime.now(dt.timezone.utc);same_waiting(row,data['row']);deferred=require_blocked(data,b,registered['subject'],at)
         typed_equal(archive_sql(original['sql']['row']['id']),original['sql']);assert original['sql']['row']['state']=='Unknown' and original['sql']['row']['publish_barrier']
-        assert not os.path.lexists(target) and not (ROOT/(op+'.json')).exists() and not (ROOT/(op+'.lock')).exists() and root.read_bytes()==raw
+        assert not os.path.lexists(target) and not (ROOT/(op+'.json')).exists() and root.read_bytes()==raw
+        # Inspect may create the operation's empty serialization lock before
+        # StartedAsync. It is not an execution journal or namespace mutation.
+        lock=ROOT/(op+'.lock');lock_identity=list(operation_lock(lock)) if lock.exists() else None
         typed_equal(current(),original);guard=barriers();require_archive_only_barrier(guard);original_file_unchanged(b);assert {p.name for p in Path(b['source']).iterdir()}=={'original.bin'}
         if deferred and data['row']['version'] not in versions:
-            versions.add(data['row']['version']);samples.append(dict(observedAtUtc=at.isoformat(),sql=data,rootAbsent=True,targetAbsent=True,archiveUnknownProtected=True,originalPhysicalUnchanged=True,unknownRootSha256=hashlib.sha256(raw).hexdigest(),barriers=guard))
+            versions.add(data['row']['version']);samples.append(dict(observedAtUtc=at.isoformat(),sql=data,rootAbsent=True,targetAbsent=True,archiveUnknownProtected=True,originalPhysicalUnchanged=True,unknownRootSha256=hashlib.sha256(raw).hexdigest(),barriers=guard,directoryLockIdentity=lock_identity))
         if len(samples)<4:time.sleep(.5)
     (e/'waiting-blocked.json').write_text(json.dumps(samples));return samples
 
 
 def require_deferrals(samples,b,registered,initial,released,raw):
-    assert len(samples)==4;versions=[];attempts=[];times=[];sha=hashlib.sha256(raw).hexdigest()
+    assert len(samples)==4;versions=[];attempts=[];times=[];sha=hashlib.sha256(raw).hexdigest();seen_lock=None
     for s in samples:
         at=dt.datetime.fromisoformat(s['observedAtUtc']);assert at.utcoffset() is not None and at<released;same_waiting(initial['row'],s['sql']['row']);assert require_blocked(s['sql'],b,registered['subject'],at)
         assert all(s[k] is True for k in ('rootAbsent','targetAbsent','archiveUnknownProtected','originalPhysicalUnchanged')) and s['unknownRootSha256']==sha;require_archive_only_barrier(s['barriers'])
+        lock=s['directoryLockIdentity']
+        if lock is not None:
+            assert type(lock) is list and len(lock)==2 and all(type(n) is int and n>=0 for n in lock) and lock[1]>0
+            if seen_lock is not None:typed_equal(lock,seen_lock)
+            seen_lock=lock
+        else:assert seen_lock is None
         versions.append(s['sql']['row']['version']);attempts.append(dt.datetime.fromisoformat(s['sql']['row']['next_attempt_at_utc']));times.append(at)
     assert len(set(versions))==len(set(attempts))==4 and versions==sorted(versions) and times==sorted(times)
     assert all((z-a).total_seconds()>=5 for a,z in zip(attempts,attempts[1:])) and all((z-a).total_seconds()>=5 for a,z in zip(times,times[1:]))

@@ -17,7 +17,7 @@ class ArchiveCrossDirectoryTests(unittest.TestCase):
 
     def samples(self):
         old=prior.RecycleCrossDirectoryTests();v,r,released,raw=old.samples()
-        for s in v:s['archiveUnknownProtected']=s.pop('recycleUnknownProtected');s['barriers']=self.guard()
+        for i,s in enumerate(v):s['archiveUnknownProtected']=s.pop('recycleUnknownProtected');s['barriers']=self.guard();s['directoryLockIdentity']=None if i==0 else [1,2]
         return v,r,released,raw,old.baseline()
 
     def test_source_rejection_requires_new_key_and_zero_new_intent_or_job(self):
@@ -47,7 +47,7 @@ class ArchiveCrossDirectoryTests(unittest.TestCase):
 
     def test_four_actual_deferrals_require_separate_versions_due_times_and_unchanged_root(self):
         v,r,released,raw,b=self.samples();initial=copy.deepcopy(v[0]['sql']);proof.require_deferrals(v,b,r,initial,released,raw)
-        changes=[lambda x:x[1]['sql']['row'].update(version=2),lambda x:x[1].update(targetAbsent=False),lambda x:x[1].update(archiveUnknownProtected=False),lambda x:x[1].update(unknownRootSha256='changed'),lambda x:x[1]['barriers'].update(container_copy_intents=1)]
+        changes=[lambda x:x[1]['sql']['row'].update(version=2),lambda x:x[1].update(targetAbsent=False),lambda x:x[1].update(archiveUnknownProtected=False),lambda x:x[1].update(unknownRootSha256='changed'),lambda x:x[1]['barriers'].update(container_copy_intents=1),lambda x:x[2].update(directoryLockIdentity=[1,3]),lambda x:x[2].update(directoryLockIdentity=None)]
         for change in changes:
             bad=copy.deepcopy(v);change(bad)
             with self.subTest(change=change),self.assertRaises(AssertionError):proof.require_deferrals(bad,b,r,initial,released,raw)
