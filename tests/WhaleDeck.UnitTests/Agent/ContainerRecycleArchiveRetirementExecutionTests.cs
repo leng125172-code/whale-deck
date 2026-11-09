@@ -85,6 +85,11 @@ public sealed class ContainerRecycleArchiveRetirementExecutionTests
     [InlineData("CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_COPY_CHANGED", StatusCode.Aborted)]
     [InlineData("CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_SOURCE_BUSY", StatusCode.ResourceExhausted)]
     [InlineData("CONTAINER_RECYCLE_ARCHIVE_RETENTION_TIME_RANGE", StatusCode.InvalidArgument)]
+    [InlineData("CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_TIMEOUT", StatusCode.DeadlineExceeded)]
+    [InlineData("CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_ACTION_INVALID", StatusCode.InvalidArgument)]
+    [InlineData("CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_REQUEST_INVALID", StatusCode.InvalidArgument)]
+    [InlineData("CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_MODULE_UNSAFE", StatusCode.FailedPrecondition)]
+    [InlineData("CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_INVOCATION_INVALID", StatusCode.FailedPrecondition)]
     [InlineData("private stderr", StatusCode.Unavailable)]
     public void AncestorAbsenceNeverBecomesRetirementAbsence(string code, StatusCode expected)
         => Assert.Equal(expected, ContainerRecycleArchiveRetirementPolicy.Failure(code).StatusCode);
