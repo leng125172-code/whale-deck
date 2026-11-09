@@ -12,13 +12,15 @@ from validate_container_recycle_archive_agent import baseline
 from validate_container_recycle_archive_browser import idle,old_rows
 from acl_history_browser_proof import typed_equal
 from container_recycle_agent_io import file_snapshot
-from recursive_acl_restore_agent_io import snapshot,frame
+from recursive_acl_restore_agent_io import snapshot,frame,read_at
+from archive_retirement_preexpiry_proof import preexpiry_refusal_proof
 from validate_container_recycle_archive_plan import payload_snapshot
 
 NAMES=('whaledeck-files.py','whaledeck-container-files.py','whaledeck-container-terminal.py','whaledeck-container-upload.py','whaledeck-container-publish.py','whaledeck-file-backups.py','whaledeck-container-directories.py','whaledeck-container-permissions.py','whaledeck-container-recycling.py','whaledeck-container-recycle-restores.py','whaledeck-container-recycle-purge-plan.py','whaledeck-container-recycle-purge-fences.py','whaledeck-container-recycle-purges.py','whaledeck-container-recycle-archive-plan.py','whaledeck-container-recycle-archive-fences.py','whaledeck-container-recycle-archive-copies.py')
 NAMES+=('whaledeck-container-recycle-archive-retention.py',)
 NAMES+=('whaledeck-container-recycle-archive-retirement-fences.py',)
 NAMES+=('whaledeck-container-recycle-retired-history.py',)
+NAMES+=('whaledeck-container-recycle-archive-retirements.py',)
 
 
 def retention_namespace_snapshot(folder):
@@ -35,6 +37,29 @@ def retention_namespace_snapshot(folder):
     return values
 
 
+def retirement_preexpiry_check(executor,request,session,protected):
+    """Natural-clock negative execution gate; never manufactures due authority."""
+    executor.request(request);p=request['plan'];op=request['operationId'];source_id=executor.ref(request)['operationId']
+    assert p['retentionElapsed'] is p['retirementEligible'] is False and p['bindingCurrent'] is True
+    def records():
+        return dict(journal=read_at(None,str(executor.state_path/(op+'.json')))[1],marker=read_at(None,str(executor.claims_path/(source_id+'.json')))[1],protected=protected(),retirementRoots=snapshot(executor.state_path))
+    before=records();clock_before=time.time_ns()//1000000
+    assert p['historyCreatedAtUnixMs']<=clock_before<p['notBeforeUnixMs']
+    start=time.monotonic_ns()
+    try:executor.apply(request,session)
+    except executor.r.Rejected as error:
+        refusal=str(error);assert refusal=='CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_NOT_ELIGIBLE'
+    else:raise AssertionError('PREEXPIRY_EXECUTION_NOT_REJECTED')
+    elapsed=time.monotonic_ns()-start;clock_after=time.time_ns()//1000000;after=records()
+    typed_equal(before,after)
+    value=dict(request=request,clockBeforeUnixMs=clock_before,clockAfterUnixMs=clock_after,elapsedMonotonicNs=elapsed,error=refusal)
+    for key in before:value[key+'Before']=before[key];value[key+'After']=after[key]
+    copied=executor.archive(request)
+    root=read_at(None,str(executor.copies.state_path/(copied['operationId']+'.json')))[1]
+    preexpiry_refusal_proof(value,request,root)
+    return value
+
+
 def main(revision):
     assert os.geteuid()==0 and re.fullmatch('[a-f0-9]{40}',revision);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0';repo=Path(__file__).resolve().parents[2]
     os.environ.update(GIT_CONFIG_COUNT='1',GIT_CONFIG_KEY_0='safe.directory',GIT_CONFIG_VALUE_0=str(repo))
@@ -47,7 +72,7 @@ def main(revision):
     for n in NAMES:
         raw=git('show',sha+':deploy/host/'+n);assert raw==(repo/'deploy/host'/n).read_bytes();(bundle/n).write_bytes(raw);(bundle/n).chmod(0o600);hashes[n]=hashlib.sha256(raw).hexdigest()
     from acl_source_apply_missing_proof import source_closure
-    closure=source_closure(repo,sha,seeds=('validate_container_recycle_archive_copies.py','verify_container_recycle_archive_copies.py','test_container_recycle_archive_copies.py','test_container_recycle_archive_retention.py','test_container_recycle_archive_retention_plan.py','test_container_recycle_archive_retirement_fences.py','test_container_recycle_retired_history.py'))
+    closure=source_closure(repo,sha,seeds=('validate_container_recycle_archive_copies.py','verify_container_recycle_archive_copies.py','test_container_recycle_archive_copies.py','test_container_recycle_archive_retention.py','test_container_recycle_archive_retention_plan.py','test_container_recycle_archive_retirement_fences.py','test_container_recycle_retired_history.py','test_container_recycle_archive_retirements.py','test_container_recycle_archive_preexpiry.py','archive_retirement_preexpiry_proof.py'))
     validation=e/'validation';validation.mkdir(mode=0o700)
     for name,digest in closure.items():
         raw=git('show',sha+':deploy/validation/'+name);assert hashlib.sha256(raw).hexdigest()==digest and raw==(repo/'deploy/validation'/name).read_bytes();(validation/name).write_bytes(raw)
@@ -174,6 +199,8 @@ def main(revision):
                 typed_equal(unchanged_originals(),retirement_before)
                 retire_steps.append(dict(operationId=q['operationId'],action=action,receipt=receipt,journal=json.loads((retirement_state/(q['operationId']+'.json')).read_bytes()),marker=json.loads((retirement_state/'claims'/(ref['operationId']+'.json')).read_bytes()),roots=snapshot(retirement_state)));return receipt
             retirement_step(retire_a,'reserve','Reserved')
+            executor=load(bundle/NAMES[19],'archive_retirements_candidate').archive_retirements_type(type(retirement_fence))(retirement,retirement_state)
+            save('retirement-preexpiry.json',retirement_preexpiry_check(executor,retire_a,session,unchanged_originals))
             history_disposition('reserved',retire_a['operationId'])
             for action in (lambda:retirement_fence.reserve(retire_b,session),lambda:retirement_fence.plan(retire_plan['command'],session)):
                 try:action();raise AssertionError('RETIREMENT_SOURCE_REUSED')

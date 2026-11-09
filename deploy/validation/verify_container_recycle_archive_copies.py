@@ -7,6 +7,7 @@ from validate_container_recycle_archive_browser import old_rows,idle,hdd_observa
 from recursive_acl_restore_agent_io import snapshot
 from acl_history_browser_proof import typed_equal
 from container_recycle_agent_io import file_snapshot
+from archive_retirement_preexpiry_proof import preexpiry_refusal_proof
 import validate_container_file_publishing as owned
 
 
@@ -55,11 +56,19 @@ def history_dispositions_proof(e,copied,after_cleanup=False):
         else:typed_equal(value['retirementRoots'],reservations['roots'])
 
 
+def early_retirement_refusal_proof(e,copied):
+    read=lambda n:json.loads((e/n).read_bytes());value=read('retirement-preexpiry.json');reserved=read('retirement-reservations.json')
+    preexpiry_refusal_proof(value,reserved['requests'][0],copied['root'])
+    typed_equal(value['retirementRootsBefore'],reserved['steps'][0]['roots'])
+    typed_equal(value['protectedBefore'],reserved['before'])
+
+
 def live_main(name):
     assert os.geteuid()==0 and re.fullmatch('container-recycle-archive-copies-[a-f0-9]{32}',name);os.umask(0o077);os.environ['GIT_OPTIONAL_LOCKS']='0'
     repo=Path(__file__).resolve().parents[2];e=repo/'deploy/artifacts'/name;assert e.resolve(strict=True)==e and e.stat().st_uid==0 and e.stat().st_mode&0o777==0o700
     read=lambda n:json.loads((e/n).read_bytes());source=read('source.json');copied=read('archive-copy.json');fixture=read('fixture-initial.json');q=copied['request'];ref=q['plan']['command']['purge']['plan']['command']['source'];op=ref['operationId']
     retirement_reservations_proof(e,copied)
+    early_retirement_refusal_proof(e,copied)
     history_dispositions_proof(e,copied)
     for folder,prefix,key in (('source','deploy/host/','sourceSha256'),('validation','deploy/validation/','validationSourceSha256')):
         for n,digest in source[key].items():
@@ -103,6 +112,7 @@ def main(name):
     assert verified['actualContainer'] and verified['actualConfiguredHdd'] and verified['archivePreflight'] and verified['ownedFixtureRemoved'] and not any(verified[k] for k in ('installed','signedRpc','businessUi','automaticRetention','sourceRestoredForQaCleanup'))
     copied=read('archive-copy.json');cleanup=read('copy-cleanup.json');q=copied['request'];r=copied['root'];actual=copied['actual'];old=copied['original']
     retirement_reservations_proof(e,copied,True)
+    early_retirement_refusal_proof(e,copied)
     history_dispositions_proof(e,copied,True)
     live=read('live-target-reread.json');assert live['actualLiveNewInodeReread'] and live['containerInstanceCurrent'] and live['rootCompleted'];typed_equal(live['actual'],actual)
     assert copied['actualNewInode'] and copied['archiveCopyPerformed'] and copied['replayDidNotChangeTarget'] and copied['oldLifecyclesPreserved'] and verified['archiveCopyPerformed'] and verified['archiveCopies']
