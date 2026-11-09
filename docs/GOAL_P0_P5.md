@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-17 管理员报告下载 `87daf9c5` 接入正式 BFF 路由。读取复核当前权限和会话，绑定原工作空间与运行，返回附件前写入审计。工作空间开发者委派、Runner 和 Vue 继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REPORT_DOWNLOAD.md)。
+
 2026-11-09，P3-17 覆盖率工件解析与报告导出 `d3ba0941` 已使用真实 .NET Cobertura 和 Node LCOV 验证。覆盖率摘要绑定原工件 SHA256，空采集无指标，旧 TRX/JUnit 报告重放字节一致。Runner 自动采集、授权下载与 Vue 继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_COVERAGE.md)。
 
 2026-11-09，P3-17 报告到期 Worker `01ae3b44` 已在真实隔离 PostgreSQL 和完整 Worker 启动入口验证。真实锁超时后同一服务恢复，两轮清理 50 和 1 份，保留摘要及未到期报告。Runner、授权下载、覆盖率和 Vue 继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUN_REPORT_RETENTION_WORKER.md)。
