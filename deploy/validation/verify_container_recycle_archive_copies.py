@@ -4,7 +4,7 @@ import hashlib,json,os,re,stat,subprocess,sys
 from pathlib import Path
 from validate_container_recycle_archive_agent import baseline
 from validate_container_recycle_archive_browser import old_rows,idle,hdd_observation
-from recursive_acl_restore_agent_io import snapshot
+from recursive_acl_restore_agent_io import snapshot,frame
 from acl_history_browser_proof import typed_equal
 from container_recycle_agent_io import file_snapshot
 from archive_retirement_preexpiry_proof import preexpiry_refusal_proof
@@ -56,11 +56,45 @@ def history_dispositions_proof(e,copied,after_cleanup=False):
         else:typed_equal(value['retirementRoots'],reservations['roots'])
 
 
-def early_retirement_refusal_proof(e,copied):
+def retirement_namespace_reread(folder):
+    assert folder.is_absolute() and folder.resolve(strict=True)==folder
+    parent=frame(folder.stat());names=sorted(folder.iterdir());assert len(names)<=4096;result={}
+    for path in names:
+        i=path.lstat();assert not path.is_symlink()
+        if stat.S_ISDIR(i.st_mode):
+            assert (i.st_uid,i.st_gid,stat.S_IMODE(i.st_mode))==(0,0,0o700) and not list(path.iterdir())
+            result[path.name]=dict(kind='directory',identity=frame(i));typed_equal(frame(path.lstat()),frame(i))
+        else:result[path.name]=dict(kind='file',**file_snapshot(path))
+    typed_equal(frame(folder.stat()),parent);assert sorted(p.name for p in folder.iterdir())==[p.name for p in names]
+    return result
+
+
+def retirement_namespace_proof(namespace,fixture,copied):
+    q=copied['request'];ref=q['plan']['command']['purge']['plan']['command']['source'];leaf=ref['plan']['command']['path'].rsplit('/',1)[-1];stage='.whaledeck-container-archive-'+q['operationId']
+    assert set(namespace)=={'original.bin',leaf,stage}
+    typed_equal(namespace['original.bin'],dict(kind='file',**fixture['original']))
+    typed_equal(namespace[leaf],dict(kind='file',**copied['actual']))
+    value=namespace[stage];assert set(value)=={'kind','identity'} and value['kind']=='directory'
+    i=value['identity'];assert type(i) is list and len(i)==9 and all(type(n) is int for n in i)
+    assert stat.S_ISDIR(i[2]) and stat.S_IMODE(i[2])==0o700 and i[3:6]==[0,0,2]
+    typed_equal(i[:2],copied['root']['privateIdentity'])
+
+
+def early_retirement_refusal_proof(e,copied,namespace,current_hdd,after_cleanup=False):
     read=lambda n:json.loads((e/n).read_bytes());value=read('retirement-preexpiry.json');reserved=read('retirement-reservations.json')
     preexpiry_refusal_proof(value,reserved['requests'][0],copied['root'])
     typed_equal(value['retirementRootsBefore'],reserved['steps'][0]['roots'])
     typed_equal(value['protectedBefore'],reserved['before'])
+    # Historical snapshots agreeing with each other is insufficient. Join the
+    # complete trees to independent current reads, not just the selected file.
+    protected=value['protectedBefore'];journals=snapshot(e/'archive-state')
+    if after_cleanup:
+        absent=read('retention-absent.json')['competitorOperationId']+'.lock';assert absent in journals
+        journals={k:v for k,v in journals.items() if k!=absent}
+    typed_equal(protected['archive'],journals);typed_equal(journals,copied['journals'])
+    for name,folder in (('source','source-state'),('purge','purge-state'),('restore','restore-state')):typed_equal(protected['lifecycles'][name],snapshot(e/folder))
+    typed_equal(protected['lifecycles']['hdd'],current_hdd)
+    typed_equal(protected['namespace'],namespace)
 
 
 def live_main(name):
@@ -68,7 +102,6 @@ def live_main(name):
     repo=Path(__file__).resolve().parents[2];e=repo/'deploy/artifacts'/name;assert e.resolve(strict=True)==e and e.stat().st_uid==0 and e.stat().st_mode&0o777==0o700
     read=lambda n:json.loads((e/n).read_bytes());source=read('source.json');copied=read('archive-copy.json');fixture=read('fixture-initial.json');q=copied['request'];ref=q['plan']['command']['purge']['plan']['command']['source'];op=ref['operationId']
     retirement_reservations_proof(e,copied)
-    early_retirement_refusal_proof(e,copied)
     history_dispositions_proof(e,copied)
     for folder,prefix,key in (('source','deploy/host/','sourceSha256'),('validation','deploy/validation/','validationSourceSha256')):
         for n,digest in source[key].items():
@@ -83,9 +116,11 @@ def live_main(name):
     typed_equal(read('archive-state/'+q['operationId']+'.json'),copied['root']);typed_equal(snapshot(e/'source-state'),copied['protectedAfter']['source']);typed_equal(snapshot(e/'purge-state'),copied['protectedAfter']['purge']);typed_equal(snapshot(e/'restore-state'),copied['claims']);typed_equal(read('restore-state/claims/'+op+'.json'),copied['claim'])
     hdd=hdd_observation(op);typed_equal(hdd['data']['identity'],q['plan']['archiveIdentity']);assert hdd['history']['captureState']=='Purged' and hdd['data']['sha256']==actual['sha256']
     before=read('before.json');current=baseline(source['revision']);typed_equal({**before,'recycleHdd':current['recycleHdd']},current);assert all(current['recycleHdd'].get(n)==v for n,v in before['recycleHdd'].items()) and set(current['recycleHdd'])-set(before['recycleHdd'])=={op+'.json',op+'.data'}
+    namespace=retirement_namespace_reread(folder);retirement_namespace_proof(namespace,fixture,copied)
+    early_retirement_refusal_proof(e,copied,namespace,current['recycleHdd'])
     typed_equal(old_rows('0'*64),read('business-before.json'));idle();typed_equal(file_snapshot(folder/'purge-kernel.bin'),actual)
     owned.verify_container(json.loads(owned.common.command(['docker','inspect',fixture['containerId']]))[0],fixture['containerId'],fixture['containerName'],folder)
-    with (e/'live-target-reread.json').open('x') as out:json.dump(dict(actualLiveNewInodeReread=True,containerInstanceCurrent=True,actual=actual,hdd=hdd,stageIdentity=[info.st_dev,info.st_ino],rootCompleted=True,oldBusinessAndProtectionPreserved=True),out)
+    with (e/'live-target-reread.json').open('x') as out:json.dump(dict(actualLiveNewInodeReread=True,containerInstanceCurrent=True,actual=actual,hdd=hdd,stageIdentity=[info.st_dev,info.st_ino],namespace=namespace,rootCompleted=True,oldBusinessAndProtectionPreserved=True),out)
     print(json.dumps(dict(archiveCopiesIndependent='passed',liveTargetNewInodeReread=True,archiveCopyPerformed=True)),flush=True)
 
 
@@ -112,9 +147,10 @@ def main(name):
     assert verified['actualContainer'] and verified['actualConfiguredHdd'] and verified['archivePreflight'] and verified['ownedFixtureRemoved'] and not any(verified[k] for k in ('installed','signedRpc','businessUi','automaticRetention','sourceRestoredForQaCleanup'))
     copied=read('archive-copy.json');cleanup=read('copy-cleanup.json');q=copied['request'];r=copied['root'];actual=copied['actual'];old=copied['original']
     retirement_reservations_proof(e,copied,True)
-    early_retirement_refusal_proof(e,copied)
     history_dispositions_proof(e,copied,True)
     live=read('live-target-reread.json');assert live['actualLiveNewInodeReread'] and live['containerInstanceCurrent'] and live['rootCompleted'];typed_equal(live['actual'],actual)
+    retirement_namespace_proof(live['namespace'],read('fixture-initial.json'),copied)
+    early_retirement_refusal_proof(e,copied,live['namespace'],after['recycleHdd'],after_cleanup=True)
     assert copied['actualNewInode'] and copied['archiveCopyPerformed'] and copied['replayDidNotChangeTarget'] and copied['oldLifecyclesPreserved'] and verified['archiveCopyPerformed'] and verified['archiveCopies']
     absent_lock=read('retention-absent.json')['competitorOperationId']+'.lock'
     assert re.fullmatch('[a-f0-9]{32}\\.lock',absent_lock) and set(cleanup['journals'])-set(copied['journals'])=={absent_lock}

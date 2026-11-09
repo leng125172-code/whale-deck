@@ -3,6 +3,7 @@ import ast
 import copy
 import json
 import os
+import stat
 from pathlib import Path
 import time
 import unittest
@@ -112,15 +113,58 @@ class ArchivePreexpiryTests(unittest.TestCase):
         with patch.object(self.engine,'apply',side_effect=write_then_reject),self.assertRaises(AssertionError):self.capture()
         self.assertEqual(self.f.data.read_bytes(),b'changed unexpectedly')
 
-    def test_live_and_final_file_proof_must_match_reserved_step_and_before_baseline(self):
+    def proof_files(self):
         value=self.capture();e=self.f.engine.state_path.parent
-        (e/'retirement-preexpiry.json').write_text(json.dumps(value))
-        reserved=dict(requests=[self.q],steps=[dict(roots=value['retirementRootsBefore'])],before=value['protectedBefore'])
-        (e/'retirement-reservations.json').write_text(json.dumps(reserved))
+        reserved=dict(requests=[self.q],steps=[dict(roots=copy.deepcopy(value['retirementRootsBefore']))],before=copy.deepcopy(value['protectedBefore']))
+        def save():
+            (e/'retirement-preexpiry.json').write_text(json.dumps(value));(e/'retirement-reservations.json').write_text(json.dumps(reserved))
+        save();original=copy.deepcopy(value['protectedBefore'])
+        current=copy.deepcopy({e/'archive-state':original['archive'],**{e/folder:original['lifecycles'][name] for name,folder in (('source','source-state'),('purge','purge-state'),('restore','restore-state'))}})
         verifier=Path(__file__).with_name('verify_container_recycle_archive_copies.py')
-        node=next(n for n in ast.parse(verifier.read_bytes()).body if isinstance(n,ast.FunctionDef) and n.name=='early_retirement_refusal_proof')
-        scope=dict(json=json,preexpiry_refusal_proof=preexpiry_refusal_proof,typed_equal=typed_equal)
-        exec(compile(ast.Module(body=[node],type_ignores=[]),str(verifier),'exec'),scope)
-        scope['early_retirement_refusal_proof'](e,dict(root=self.copied))
-        reserved['steps'][0]['roots']={};(e/'retirement-reservations.json').write_text(json.dumps(reserved))
-        with self.assertRaises(AssertionError):scope['early_retirement_refusal_proof'](e,dict(root=self.copied))
+        nodes=[n for n in ast.parse(verifier.read_bytes()).body if isinstance(n,ast.FunctionDef) and n.name in ('early_retirement_refusal_proof','retirement_namespace_reread','retirement_namespace_proof')]
+        scope=dict(json=json,stat=stat,frame=frame,file_snapshot=file_snapshot,preexpiry_refusal_proof=preexpiry_refusal_proof,typed_equal=typed_equal,snapshot=lambda path:copy.deepcopy(current[path]))
+        exec(compile(ast.Module(body=nodes,type_ignores=[]),str(verifier),'exec'),scope)
+        def prove(after=False):return scope['early_retirement_refusal_proof'](e,dict(root=self.copied,journals=original['archive']),original['namespace'],original['lifecycles']['hdd'],after_cleanup=after)
+        return value,reserved,save,prove,scope,e,current
+
+    def test_live_and_final_file_proof_must_match_reserved_step_and_before_baseline(self):
+        value,reserved,save,prove,*_=self.proof_files();prove()
+        reserved['steps'][0]['roots']={};save()
+        with self.assertRaises(AssertionError):prove()
+
+    def test_coherently_deleted_source_and_purge_trees_cannot_hide_from_current_read(self):
+        value,reserved,save,prove,*_=self.proof_files();prove()
+        for suffix in ('Before','After'):
+            for name in ('source','purge'):value['protected'+suffix]['lifecycles'][name]={}
+        reserved['before']=copy.deepcopy(value['protectedBefore']);reserved['after']=copy.deepcopy(value['protectedAfter']);save()
+        with self.assertRaises(AssertionError):prove()
+
+    def test_coherently_deleted_namespace_entries_cannot_hide_from_live_reread(self):
+        value,reserved,save,prove,*_=self.proof_files();prove();leaf=self.f.native.base.leaf.name
+        for suffix in ('Before','After'):value['protected'+suffix]['namespace']={leaf:value['protected'+suffix]['namespace'][leaf]}
+        reserved['before']=copy.deepcopy(value['protectedBefore']);reserved['after']=copy.deepcopy(value['protectedAfter']);save()
+        with self.assertRaises(AssertionError):prove()
+
+    def test_final_proof_excludes_only_exact_later_competitor_lock(self):
+        value,reserved,save,prove,scope,e,current=self.proof_files();later='a'*32+'.lock'
+        (e/'retention-absent.json').write_text(json.dumps(dict(competitorOperationId='a'*32)))
+        current[e/'archive-state'][later]=copy.deepcopy(value['retirementRootsBefore'][self.q['operationId']+'.lock'])
+        prove(True)
+        current[e/'source-state']['foreign.json']={}
+        with self.assertRaises(AssertionError):prove(True)
+
+    def test_independent_namespace_reread_is_complete_and_rejects_symlinks(self):
+        *_,scope,e,current=self.proof_files();folder=self.f.native.base.root
+        value=scope['retirement_namespace_reread'](folder);self.assertEqual(value,self.protected()['namespace'])
+        (folder/'foreign-link').symlink_to('/does-not-exist')
+        with self.assertRaises(AssertionError):scope['retirement_namespace_reread'](folder)
+
+    def test_final_namespace_inventory_requires_original_copy_and_stage(self):
+        *_,scope,e,current=self.proof_files();original=e/'original-fixture.bin';original.write_bytes(b'owned original')
+        fixture=dict(original=file_snapshot(original));q=self.engine.archive(self.q);stage='.whaledeck-container-archive-'+q['operationId'];leaf=self.f.native.base.leaf.name
+        copied=dict(request=q,root=self.copied,actual=file_snapshot(self.f.native.base.leaf))
+        namespace={'original.bin':dict(kind='file',**fixture['original']),leaf:dict(kind='file',**copied['actual']),stage:dict(kind='directory',identity=frame(self.f.native.private().stat()))}
+        scope['retirement_namespace_proof'](namespace,fixture,copied)
+        for removed in ('original.bin',stage):
+            bad=copy.deepcopy(namespace);del bad[removed]
+            with self.subTest(removed=removed),self.assertRaises(AssertionError):scope['retirement_namespace_proof'](bad,fixture,copied)

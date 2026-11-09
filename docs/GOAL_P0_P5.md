@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09 HDD退役真实到期前拒绝门禁ec4f184a已取得早拒/收尾事实，但独立审查发现完整范围join缺口，修正后753测试通过、全新实盘待重跑，旧完整范围签收不追认。首批事实：冻结20宿主/130验证源码，全新容器及配置HDD在30天Reserved后Apply2.534138218秒精确NOT_ELIGIBLE，Root/marker/claim/负载及命名空间前后保持；独立纯证明join、live/final/第三次当前重读和准确收尾通过。12新增/748回收root零跳过、8范围/14 CI合同/12宿主合同/4内存编译通过，首轮JSON键序误拒10失败保留。195文件加manifest封存；78/29/65/46业务活动0、2346保护/11核心/两宿主/f318及Root202/恢复95/目录102/purge90/archive48保持，仅HDD189→191本来源两历史。4e91修正和ec4f已推dev，精确CI42541258313采集时仍运行；不签自然到期、HDD正向退役、安装/RPC/真人业务或59项完成，继续独立复核/真实期限与正向证据及永久业务。[真实早拒与证明边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_RETIREMENT_PREEXPIRY.md)。
+
 2026-11-09 HDD退役内部执行候选已实现：显式Reserved后重核到期/副本/原链与精确FD，Removing→Retiring→unlink/目录fsync→Removed证书→Retired→Completed；中间态及失败只Unknown，不重删，丢marker仍阻止竞争，原claim/历史元数据不改。修正副本哈希后的父/叶路径重核；26执行专项含7相位真实临时SIGKILL与6相位丢marker、2路径回归通过，最终736回收root零跳过/8范围/14 CI合同/6内存编译通过。首轮测试误拦日志tmp清理的7失败保留，第二轮独立复核连接失败；年龄/硬件均测试替身，无实际HDD退役、自然到期、安装/RPC/业务页面或生产现场复采。整项0/59、阶段0/6保持；继续独立复核、真实到期HDD证据和永久业务/59项，17项移出不算完成。[退役执行候选与边界](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_RETIREMENT_KERNEL.md)。
 
 2026-11-07 HDD退役终态格式/只读分类候选d5a3c360已分项验收：版本2证书绑定到期executionPlan、精确unlinkedIdentity和原归档链；Retired须终态/marker/原claim/存储与数据缺席完整join，缺失/损坏不推断退役，旧恢复仍强制验证字节。18新专项/708回收root零跳过、8范围/14 CI合同/7编译通过，终态正向仅临时证书/时钟夹具。全新容器/当前HDD在未预留、预留、释放及QA副本移除后4点均Available且只读，live-final/第三次独立与准确收尾通过，192证据/146冻结源码封存；原78/29/65/46业务活动0、Root202/恢复95/目录102/purge90/archive48、2346保护/11核心/21模块/f318保持，仅HDD187至189本来源两历史。前批两CI各12路success，新CI待终态；未写真实终态/未删HDD/未安装RPC或真人整链，继续实际执行与证书提交/中断恢复/自然到期、业务页面和59项，17项移出不算完成。整项0/59、阶段0/6、工程25%–35%、酒馆/Live2D功能0%保持。[终态格式与读取兼容边界](qa/CONTAINER_FILE_RECYCLING_RETIRED_HISTORY.md)。
