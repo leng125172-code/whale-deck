@@ -23,6 +23,15 @@ RUN_UID = 10001
 RUNS = '.runner-runs'
 REQUEST = 'request.json'
 RESULT = 'result.json'
+REPORT = 'test-report.xml'
+REPORT_LIMIT = 16 * 1024 * 1024
+REPORT_SLOT = '/tmp/whaledeck-results'
+REPORT_COMMANDS = {
+    'node': (['/usr/local/bin/node', '--test', '--test-reporter=junit',
+              '--test-reporter-destination=' + REPORT_SLOT + '/tests.xml'], 'JUnit', 'tests.xml'),
+    'dotnet': (['/usr/share/dotnet/dotnet', 'test', '--no-restore', '--results-directory', REPORT_SLOT,
+                '--logger', 'trx;LogFileName=tests.trx'], 'Trx', 'tests.trx'),
+}
 KEY = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*\Z')
 VERSION = re.compile(r'[0-9A-Za-z][0-9A-Za-z.+-]{0,47}\Z')
 RUN_ID = re.compile(r'[a-f0-9]{32}\Z')
@@ -132,6 +141,73 @@ def verify_work(driver, payload, proof):
         driver.quota.verify(work, proof['projectId'], proof['diskMiB'])
 
 
+def report_spec(request):
+    spec = REPORT_COMMANDS.get(request['runtime'])
+    return spec[1:] if spec is not None and request['argv'] == spec[0] else None
+
+
+def report_unavailable(spec):
+    return {'format': spec[0], 'state': 'Unavailable'} if spec else None
+
+
+def seal_report(driver, output, directory, spec):
+    """Copy one bounded regular file after the workload has stopped."""
+    format_name, name = spec
+    result = {'format': format_name}
+    staging = '.report-' + uuid.uuid4().hex
+    try:
+        entry = os.stat(name, dir_fd=output, follow_symlinks=False)
+        if not stat.S_ISREG(entry.st_mode):
+            return dict(result, state='Rejected')
+        with driver.opened(output, name, READ) as source:
+            identity = os.fstat(source)
+            if (identity != entry or identity.st_uid != RUN_UID or identity.st_gid != RUN_UID
+                    or identity.st_nlink != 1 or identity.st_size == 0):
+                return dict(result, state='Rejected')
+            if identity.st_size > REPORT_LIMIT:
+                return dict(result, state='TooLarge')
+            digest = hashlib.sha256()
+            count = 0
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+            with os.fdopen(os.open(staging, flags, 0o600, dir_fd=directory), 'wb') as target:
+                while block := os.read(source, min(65536, identity.st_size + 1 - count)):
+                    count += len(block)
+                    if count > identity.st_size:
+                        return dict(result, state='Rejected')
+                    digest.update(block)
+                    target.write(block)
+                after = os.fstat(source)
+                if (count != identity.st_size or after.st_ctime_ns != identity.st_ctime_ns
+                        or after.st_mtime_ns != identity.st_mtime_ns or after.st_size != identity.st_size):
+                    return dict(result, state='Rejected')
+                target.flush()
+                os.fsync(target.fileno())
+        driver.files.exchange(directory, staging, directory, REPORT, 1)
+        os.fsync(directory)
+        return dict(result, state='Present', size=count, sha256=digest.hexdigest())
+    except FileNotFoundError:
+        return dict(result, state='Missing')
+    except OSError as error:
+        if error.errno in (errno.ELOOP, errno.EXDEV, errno.ENXIO, errno.ENODEV, errno.EISDIR):
+            return dict(result, state='Rejected')
+        return dict(result, state='Unavailable')
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(staging, dir_fd=directory)
+
+
+def valid_report(value, spec, status):
+    if not isinstance(value, dict) or value.get('format') != spec[0]:
+        return False
+    state = value.get('state')
+    if state == 'Present':
+        return (status in ('Succeeded', 'Failed') and set(value) == {'format', 'state', 'size', 'sha256'}
+                and type(value['size']) is int and 0 < value['size'] <= REPORT_LIMIT
+                and isinstance(value['sha256'], str) and re.fullmatch(r'[a-f0-9]{64}', value['sha256']) is not None)
+    return (set(value) == {'format', 'state'} and state in ('Missing', 'Rejected', 'TooLarge', 'Unavailable')
+            and (status in ('Succeeded', 'Failed') or state == 'Unavailable'))
+
+
 def execute(bundle, workspace_id, run_id, deadline):
     state = bundle / '.runner-state'
     state.mkdir(mode=0o700)
@@ -175,33 +251,37 @@ def require_request(driver, directory, binding):
         refuse('REQUEST_CONFLICT')
 
 
-def terminal_result(driver, directory, binding):
+def terminal_result(driver, directory, binding, spec):
     try:
-        result = driver.read_json(directory, RESULT, 512)
+        result = driver.read_json(directory, RESULT, 1024)
     except FileNotFoundError:
         return None
     state, code = result.get('status'), result.get('runtimeExitCode')
-    if (set(result) != set(binding) | {'status', 'runtimeExitCode'}
+    expected = set(binding) | {'status', 'runtimeExitCode'} | ({'testReport'} if spec else set())
+    if (set(result) != expected
             or any(result.get(key) != value for key, value in binding.items())
             or state not in ('Succeeded', 'Failed', 'TimedOut', 'Cancelled', 'Interrupted')
             or (state in ('TimedOut', 'Cancelled', 'Interrupted') and code is not None)
             or (state in ('Succeeded', 'Failed') and (
-                type(code) is not int or not 0 <= code <= 255 or (code == 0) != (state == 'Succeeded')))):
+                type(code) is not int or not 0 <= code <= 255 or (code == 0) != (state == 'Succeeded')))
+            or (spec and not valid_report(result.get('testReport'), spec, state))):
         refuse('RECEIPT_INVALID')
     return result
 
 
-def read_result(driver, directory, binding):
+def read_result(driver, directory, binding, spec):
     with lock_run(directory):
         require_request(driver, directory, binding)
-        result = terminal_result(driver, directory, binding)
+        result = terminal_result(driver, directory, binding, spec)
         if result is None:
             refuse('INTERRUPTED')
         return result
 
 
-def persist_result(driver, rootfs, directory, binding, status, code=None):
+def persist_result(driver, rootfs, directory, binding, status, code=None, *, report=None):
     result = dict(binding, status=status, runtimeExitCode=code)
+    if report is not None:
+        result['testReport'] = report
     staging = '.result-' + uuid.uuid4().hex
     try:
         rootfs.write_metadata(directory, staging, result)
@@ -261,7 +341,7 @@ def observe(driver, isolation, rootfs, request):
         except BlockingIOError:
             refuse('BUSY')
         with open_run(driver, rootfs, payload, binding) as directory:
-            return read_result(driver, directory, binding)
+            return read_result(driver, directory, binding, report_spec(request))
 
 
 def reconcile(driver, isolation, rootfs, control, request, *, stop):
@@ -269,16 +349,23 @@ def reconcile(driver, isolation, rootfs, control, request, *, stop):
     with driver.attested_payload(request['storage']) as (payload, _):
         with open_run(driver, rootfs, payload, binding) as directory, lock_run(directory):
             require_request(driver, directory, binding)
-            result = terminal_result(driver, directory, binding)
+            spec = report_spec(request)
+            result = terminal_result(driver, directory, binding, spec)
             if result is not None:
                 return result
             status = control.settle(driver, directory, stop=stop, refuse=refuse)
             discard_bundle(driver, rootfs, directory)
-            return persist_result(driver, rootfs, directory, binding, status)
+            if spec:
+                for name in os.listdir(directory):
+                    if name == REPORT or re.fullmatch(r'\.report-[a-f0-9]{32}', name):
+                        os.unlink(name, dir_fd=directory)
+                os.fsync(directory)
+            return persist_result(driver, rootfs, directory, binding, status, report=report_unavailable(spec))
 
 
 def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None, control=None):
     image, binding = request_binding(driver, isolation, rootfs, request)
+    spec = report_spec(request)
     run_id = binding['runId']
     enforce_staging_quota()
     namespace = isolation.RunnerMountNamespace()
@@ -295,7 +382,7 @@ def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None, c
         except FileExistsError:
             with driver.opened(runs, run_id, DIRECTORY) as directory:
                 rootfs.private_directory(directory)
-                return read_result(driver, directory, binding)
+                return read_result(driver, directory, binding, spec)
         os.fsync(runs)
         directory = stack.enter_context(driver.opened(runs, run_id, DIRECTORY))
         rootfs.private_directory(directory)
@@ -310,6 +397,7 @@ def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None, c
         source = stack.enter_context(driver.opened(cache, digest, DIRECTORY))
         bundle = workspace_directory(driver, rootfs, directory, 'bundle', proof)
         stack.callback(os.close, bundle)
+        output = None
         try:
             rootfs.materialize(files, source, bundle, image, lambda fd, staged, output:
                 unpacker.unpack(files, rootfs, isolation, fd, staged, output, cgroup_parent=cgroup_parent))
@@ -322,14 +410,28 @@ def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None, c
             verify_work(driver, projected, proof)
             config = isolation.oci_config(files, bundle, projected, request['argv'], RUN_UID, request['cpuMillis'],
                                           request['memoryMiB'], rootfs_policy=rootfs, runtime_image=image)
+            if spec:
+                output = workspace_directory(driver, rootfs, bundle, 'test-output', proof)
+                stack.callback(os.close, output)
+                os.fchown(output, RUN_UID, RUN_UID)
+                config['mounts'].append({
+                    'destination': REPORT_SLOT, 'type': 'bind',
+                    'source': os.path.join(os.readlink(f'/proc/self/fd/{bundle}'), 'test-output'),
+                    'options': ['bind', 'rw', 'nosuid', 'nodev', 'noexec', 'rprivate'],
+                })
             if cgroup_parent:
                 config['linux']['cgroupsPath'] = cgroup_parent + '/workload'
             rootfs.write_metadata(bundle, 'config.json', config)
             status, code = execute(Path(os.readlink(f'/proc/self/fd/{bundle}')), proof['workspaceId'],
                                    run_id, request['deadlineSeconds'])
         with lock_run(directory, wait=True):
+            existing = terminal_result(driver, directory, binding, spec)
+            if existing is not None:
+                return existing
+            report = (seal_report(driver, output, directory, spec) if output is not None and code is not None
+                      else report_unavailable(spec))
             discard_bundle(driver, rootfs, directory)
-            return persist_result(driver, rootfs, directory, binding, status, code)
+            return persist_result(driver, rootfs, directory, binding, status, code, report=report)
 
 
 def load(filename):

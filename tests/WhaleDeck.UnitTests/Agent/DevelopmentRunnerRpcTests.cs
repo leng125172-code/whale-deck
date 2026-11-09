@@ -135,6 +135,31 @@ public sealed class DevelopmentRunnerRpcTests
             Assert.Equal(StatusCode.DataLoss, Assert.Throws<RpcException>(() => DevelopmentRunnerGrpcService.ParseReceipt(request, invalid)).StatusCode);
     }
 
+    [Fact]
+    public void TestArtifactManifestMustMatchExactCommandFormatAndTerminalStatus()
+    {
+        var request = new WorkspaceRunRequest { RunId = Guid.NewGuid().ToString("N"), Storage = new(), Runtime = "node" };
+        request.Argv.Add(["/usr/local/bin/node", "--test", "--test-reporter=junit",
+            "--test-reporter-destination=/tmp/whaledeck-results/tests.xml"]);
+        var digest = new string('a', 64);
+        string Reply(object report, string status = "Succeeded", int? exitCode = 0) => JsonSerializer.Serialize(new
+        {
+            runId = request.RunId, requestSha256 = digest, inputSha256 = DevelopmentRunnerBinding.Digest(DevelopmentRunnerBinding.HostInput(request)),
+            status, runtimeExitCode = exitCode, testReport = report
+        });
+        var present = new { format = "JUnit", state = "Present", size = 27, sha256 = digest };
+        Assert.Equal((uint)27, DevelopmentRunnerGrpcService.ParseReceipt(request, Reply(present)).TestReport.Size);
+        Assert.Equal("Unavailable", DevelopmentRunnerGrpcService.ParseReceipt(request,
+            Reply(new { format = "JUnit", state = "Unavailable" }, "Interrupted", null)).TestReport.State);
+        foreach (var invalid in new[] { Reply(present with { format = "Trx" }),
+            Reply(present with { size = DevelopmentRunnerBinding.MaximumArtifactBytes + 1 }), Reply(present, "Cancelled", null),
+            Reply(new { format = "JUnit", state = "Missing", size = 0 }) })
+            Assert.Equal(StatusCode.DataLoss, Assert.Throws<RpcException>(() => DevelopmentRunnerGrpcService.ParseReceipt(request, invalid)).StatusCode);
+        request.Argv[3] += ".custom";
+        Assert.Equal(StatusCode.DataLoss,
+            Assert.Throws<RpcException>(() => DevelopmentRunnerGrpcService.ParseReceipt(request, Reply(present))).StatusCode);
+    }
+
     private static Metadata Headers(string value) => new() { { "x-whaledeck-capability", value } };
 
     public sealed class Receiver : DevelopmentRunnerService.DevelopmentRunnerServiceBase

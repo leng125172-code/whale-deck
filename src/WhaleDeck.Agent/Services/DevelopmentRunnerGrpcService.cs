@@ -56,10 +56,11 @@ public sealed class DevelopmentRunnerGrpcService(BoundedProcessRunner processes)
     {
         try
         {
-            if (output.Length > 1024) throw new JsonException();
-            using var document = JsonDocument.Parse(output, new JsonDocumentOptions { MaxDepth = 2 });
+            if (output.Length > 2048) throw new JsonException();
+            using var document = JsonDocument.Parse(output, new JsonDocumentOptions { MaxDepth = 3 });
             var root = document.RootElement;
-            if (root.EnumerateObject().Count() != 5) throw new JsonException();
+            var hasReport = root.TryGetProperty("testReport", out var manifest);
+            if (root.EnumerateObject().Count() != (hasReport ? 6 : 5)) throw new JsonException();
             var receipt = new WorkspaceRunReceipt
             {
                 RunId = root.GetProperty("runId").GetString()!,
@@ -69,6 +70,19 @@ public sealed class DevelopmentRunnerGrpcService(BoundedProcessRunner processes)
             };
             var exitCode = root.GetProperty("runtimeExitCode");
             if (exitCode.ValueKind != JsonValueKind.Null) receipt.RuntimeExitCode = exitCode.GetInt32();
+            if (hasReport)
+            {
+                var state = manifest.GetProperty("state").GetString()!;
+                var present = state == "Present";
+                if (manifest.EnumerateObject().Count() != (present ? 4 : 2)) throw new JsonException();
+                receipt.TestReport = new()
+                {
+                    Format = manifest.GetProperty("format").GetString()!,
+                    State = state,
+                    Size = present ? manifest.GetProperty("size").GetUInt32() : 0,
+                    Sha256 = present ? manifest.GetProperty("sha256").GetString()! : ""
+                };
+            }
             return DevelopmentRunnerBinding.Matches(request, receipt) ? receipt : throw new JsonException();
         }
         catch (Exception error) when (error is JsonException or ArgumentException or KeyNotFoundException or InvalidOperationException or FormatException)

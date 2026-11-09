@@ -447,6 +447,14 @@ message WorkspaceRunReceipt {
   string input_sha256 = 3;
   string status = 4;
   optional int32 runtime_exit_code = 5;
+  WorkspaceTestArtifactManifest test_report = 6;
+}
+
+message WorkspaceTestArtifactManifest {
+  string format = 1;
+  string state = 2;
+  uint32 size = 3;
+  string sha256 = 4;
 }
 
 service AgentService {

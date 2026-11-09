@@ -12,8 +12,11 @@ public static partial class DevelopmentRunnerBinding
 {
     public const uint ProtocolMinor = 64;
     public const uint ControlProtocolMinor = 65;
+    public const uint ReportProtocolMinor = 66;
     public const string Capability = "development.run";
     public const string ControlCapability = "development.run.control";
+    public const string ReportCapability = "development.run.test-artifact";
+    public const int MaximumArtifactBytes = 16 * 1024 * 1024;
     public const string Service = "/whaledeck.agent.v1.DevelopmentRunnerService/";
     public const string Start = Service + "Start";
     public const string Observe = Service + "Observe";
@@ -25,6 +28,10 @@ public static partial class DevelopmentRunnerBinding
     public const int ObserveSeconds = 20;
     public const int ControlSeconds = 48;
     private static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+    private static readonly string[] NodeReport =
+        ["/usr/local/bin/node", "--test", "--test-reporter=junit", "--test-reporter-destination=/tmp/whaledeck-results/tests.xml"];
+    private static readonly string[] DotnetReport =
+        ["/usr/share/dotnet/dotnet", "test", "--no-restore", "--results-directory", "/tmp/whaledeck-results", "--logger", "trx;LogFileName=tests.trx"];
 
     public static bool IsSupported(CapabilitiesResponse value, string method = Start) => value.ProtocolMajor == 1 &&
         value.ProtocolMinor >= ProtocolMinor && value.Capabilities.Contains(Capability) &&
@@ -67,9 +74,16 @@ public static partial class DevelopmentRunnerBinding
 
     public static string Digest(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
+    public static string? ReportFormat(WorkspaceRunRequest request)
+    {
+        if (request.Runtime == "node" && request.Argv.SequenceEqual(NodeReport)) return "JUnit";
+        if (request.Runtime == "dotnet" && request.Argv.SequenceEqual(DotnetReport)) return "Trx";
+        return null;
+    }
+
     public static bool Matches(WorkspaceRunRequest request, WorkspaceRunReceipt receipt) =>
         receipt.RunId == request.RunId && receipt.InputSha256 == Digest(HostInput(request)) &&
-        receipt.RequestSha256.Length == 64 && receipt.RequestSha256.All(c => c is >= 'a' and <= 'f' or >= '0' and <= '9') &&
+        IsDigest(receipt.RequestSha256) && MatchesReport(ReportFormat(request), receipt) &&
         (receipt.Status switch
         {
             "Succeeded" => receipt.HasRuntimeExitCode && receipt.RuntimeExitCode == 0,
@@ -77,6 +91,21 @@ public static partial class DevelopmentRunnerBinding
             "TimedOut" or "Cancelled" or "Interrupted" => !receipt.HasRuntimeExitCode,
             _ => false
         });
+
+    private static bool MatchesReport(string? format, WorkspaceRunReceipt receipt)
+    {
+        var report = receipt.TestReport;
+        if (format is null) return report is null;
+        if (report is null || report.Format != format) return false;
+        var completed = receipt.Status is "Succeeded" or "Failed";
+        return report.State == "Present"
+            ? completed && report.Size is > 0 and <= MaximumArtifactBytes && IsDigest(report.Sha256)
+            : report.Size == 0 && report.Sha256.Length == 0 &&
+                (report.State == "Unavailable" || (completed && report.State is "Missing" or "Rejected" or "TooLarge"));
+    }
+
+    private static bool IsDigest(string value) =>
+        value.Length == 64 && value.All(c => c is >= 'a' and <= 'f' or >= '0' and <= '9');
 
     [GeneratedRegex(@"\A[a-z0-9]+(?:-[a-z0-9]+)*\z", RegexOptions.CultureInvariant)]
     private static partial Regex RuntimeKey();

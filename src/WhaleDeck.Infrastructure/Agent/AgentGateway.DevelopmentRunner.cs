@@ -68,7 +68,10 @@ public sealed partial class AgentGateway : IWorkspaceRunnerGateway
         if (!DevelopmentRunnerBinding.IsValid(request)) throw new ArgumentException("WORKSPACE_RUN_BINDING_INVALID");
         var caps = await _agent.GetCapabilitiesAsync(new Empty(), deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
         if (!DevelopmentRunnerBinding.IsSupported(caps, method) ||
-            command.RequireControl && !DevelopmentRunnerBinding.IsSupported(caps, DevelopmentRunnerBinding.Reclaim))
+            command.RequireControl && !DevelopmentRunnerBinding.IsSupported(caps, DevelopmentRunnerBinding.Reclaim) ||
+            DevelopmentRunnerBinding.ReportFormat(request) is not null &&
+            (caps.ProtocolMinor < DevelopmentRunnerBinding.ReportProtocolMinor ||
+                !caps.Capabilities.Contains(DevelopmentRunnerBinding.ReportCapability)))
             throw new RpcException(new Status(StatusCode.Unimplemented, "WORKSPACE_RUN_CAPABILITY_UNAVAILABLE"));
         if (_capabilityKey is not { Length: >= 32 })
             throw new RpcException(new Status(StatusCode.PermissionDenied, "WORKSPACE_RUN_CAPABILITY_UNAVAILABLE"));
@@ -96,6 +99,9 @@ public sealed partial class AgentGateway : IWorkspaceRunnerGateway
         });
         if (!DevelopmentRunnerBinding.Matches(request, receipt))
             throw new RpcException(new Status(StatusCode.DataLoss, "WORKSPACE_RUN_RECEIPT_INVALID"));
-        return new(command.RunId, receipt.RequestSha256, receipt.Status, receipt.HasRuntimeExitCode ? receipt.RuntimeExitCode : null);
+        var manifest = receipt.TestReport;
+        return new(command.RunId, receipt.RequestSha256, receipt.Status, receipt.HasRuntimeExitCode ? receipt.RuntimeExitCode : null,
+            manifest is null ? null : new(System.Enum.Parse<WorkspaceTestFormat>(manifest.Format), manifest.State,
+                (int)manifest.Size, manifest.Sha256));
     }
 }
