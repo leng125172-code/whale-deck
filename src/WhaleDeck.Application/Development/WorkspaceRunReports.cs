@@ -64,12 +64,15 @@ public sealed class WorkspaceRunReports(IWorkspaceReportArtifactReader reader)
                     ? await ReadAsync(artifact, cancellationToken)
                     : new(slot.ArtifactId, slot.Format, WorkspaceArtifactIntegrity.Missing, null));
             }
-            steps.Add(new(step.StepId, step.Key, step.Outcome, step.StartedAtUtc,
-                step.FinishedAtUtc, step.ExitCode, tests.MoveToImmutable()));
+            steps.Add(new(step.StepId, step.Key, step.Outcome,
+                step.StartedAtUtc is { } start ? DatabaseTime(start) : null,
+                step.FinishedAtUtc is { } finish ? DatabaseTime(finish) : null,
+                step.ExitCode, tests.MoveToImmutable()));
         }
 
         return new(1, run.WorkspaceId, run.RunId, run.JobId, run.TraceId, run.ActorSubject,
-            run.StartedAtUtc, run.FinalizedAtUtc, run.RetainUntilUtc, run.Outcome, run.ExitCode,
+            DatabaseTime(run.StartedAtUtc), DatabaseTime(run.FinalizedAtUtc), DatabaseTime(run.RetainUntilUtc),
+            run.Outcome, run.ExitCode,
             run.Source, run.Environment, steps.MoveToImmutable());
     }
 
@@ -167,6 +170,10 @@ public sealed class WorkspaceRunReports(IWorkspaceReportArtifactReader reader)
         return step.ExitCode is null || step.FinishedAtUtc is not null;
     }
 
+    // PostgreSQL stores timestamp values at microsecond precision. Render the
+    // same bytes before and after the scheduler reloads its persisted snapshot.
+    private static DateTimeOffset DatabaseTime(DateTimeOffset value) =>
+        new(value.Ticks - value.Ticks % TimeSpan.TicksPerMicrosecond, TimeSpan.Zero);
     private static bool Utc(DateTimeOffset value) => value.Offset == TimeSpan.Zero && value != default;
     private static bool Hex(string? value, int length) =>
         value?.Length == length && value.All(c => char.IsAsciiDigit(c) || c is >= 'a' and <= 'f');

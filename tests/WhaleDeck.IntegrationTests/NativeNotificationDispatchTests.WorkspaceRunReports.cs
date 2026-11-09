@@ -14,7 +14,8 @@ public sealed partial class NativeNotificationDispatchTests
     private static async Task WorkspaceRunReportBoundaries(DbContextOptions<PlatformDbContext> options)
     {
         await using var db = new PlatformDbContext(options);
-        var now = DateTimeOffset.UtcNow;
+        var systemNow = DateTimeOffset.UtcNow;
+        var now = new DateTimeOffset(systemNow.Ticks - systemNow.Ticks % TimeSpan.TicksPerMicrosecond + 7, TimeSpan.Zero);
         var clock = new WorkspaceReportClock(now);
         var store = new WorkspaceRunReportRepository(db, clock);
         var workspace = Guid.NewGuid();
@@ -51,6 +52,17 @@ public sealed partial class NativeNotificationDispatchTests
             new WorkspaceRunReportRepository(second, clock).SaveAsync(report, default));
         Assert.Contains(WorkspaceReportWriteState.Created, writes);
         Assert.Contains(WorkspaceReportWriteState.AlreadyStored, writes);
+        var persistedJob = await second.OperationJobs.AsNoTracking().SingleAsync(item => item.Id == evidence.JobId);
+        var persistedStart = persistedJob.StartedAtUtc!.Value;
+        var persistedFinish = persistedJob.CompletedAtUtc!.Value;
+        Assert.NotEqual(evidence.FinalizedAtUtc, persistedFinish);
+        var rebuilt = await reports.BuildAsync(evidence with
+        {
+            StartedAtUtc = persistedStart, FinalizedAtUtc = persistedFinish, RetainUntilUtc = persistedFinish.AddDays(14),
+            Steps = [evidence.Steps[0] with { StartedAtUtc = persistedStart, FinishedAtUtc = persistedFinish }]
+        }, [], default);
+        Assert.Equal(WorkspaceReportWriteState.AlreadyStored,
+            await new WorkspaceRunReportRepository(second, clock).SaveAsync(rebuilt, default));
         Assert.Equal(WorkspaceReportWriteState.Conflict, await store.SaveAsync(report with { ExitCode = 2 }, default));
 
         var json = await store.ReadAsync(workspace, report.RunId, WorkspaceReportFormat.Json, default);
