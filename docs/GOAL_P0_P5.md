@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-13/P3-16 Runner 固定摘要 rootfs `ff996ac1` 已通过真实 .NET SDK 和 Node 镜像导入，并在离线 KVM 来宾中以只读根文件系统运行构建与测试。继续固定解包器、Agent 正式启动和清理及物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_ROOTFS.md)。
+
 2026-11-09，P3-13/P3-16 Runner 私有投影及 OCI 策略 `5c579ee6` 通过来宾 ext4/XFS 实际隔离执行、配额绕过拒绝和 cgroup 回读，同策略通过本机 Docker 的固定 .NET/Node 镜像验证。继续可信 rootfs 准备、Agent 正式启动与生命周期。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_ISOLATION.md)。
 
 2026-11-09，P3-13/P3-16 Runner 存储复核 `a75386eb` 接入 Agent 1.63 与 BFF。独立检查已发布配额，真实来宾重挂、未发布拒绝和配额漂移拒绝通过。继续受限 Runner 执行与物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_PREFLIGHT.md)。
