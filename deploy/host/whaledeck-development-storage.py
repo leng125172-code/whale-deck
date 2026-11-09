@@ -2,6 +2,7 @@
 """Host-side workspace directory allocation. The caller must authorize the registered workspace first."""
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -19,15 +20,17 @@ NVME_CLASS = Path('/sys/class/nvme')
 DIR = os.O_RDONLY | os.O_DIRECTORY
 READ = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW
 MARKER = 'allocation.json'
+PAYLOAD = 'data'
 UUID = r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}'
 KEY = r'[a-z0-9]+(?:-[a-z0-9]+)*'
 DIGEST = r'[a-f0-9]{64}'
 
 
 class WorkspaceStorage:
-    def __init__(self, files, *, sandboxed=False):
+    def __init__(self, files, *, sandboxed=False, quota=None):
         self.files = files
         self.sandboxed = sandboxed
+        self.quota = quota
 
     def reject(self, reason):
         raise self.files.Rejected('WORKSPACE_STORAGE_' + reason)
@@ -94,22 +97,36 @@ class WorkspaceStorage:
             self.directory(config_dir)
             config = self.read_json(config_dir, CONFIG.name, 16384)
         if (set(config) != {'schemaVersion', 'roots'} or type(config['schemaVersion']) is not int
-                or config['schemaVersion'] != 1 or not isinstance(config['roots'], dict)
+                or config['schemaVersion'] != (2 if self.quota else 1) or not isinstance(config['roots'], dict)
                 or not 1 <= len(config['roots']) <= 8):
             self.reject('CONFIGURATION_INVALID')
+        ranges = {}
         for key, root in config['roots'].items():
             self.validate_root(key, root)
+            if self.quota:
+                first, last = root['projectIdStart'], root['projectIdEnd']
+                siblings = ranges.setdefault(root['filesystemUuid'], [])
+                if any(first <= end and last >= start for start, end in siblings):
+                    self.reject('QUOTA_RANGES_OVERLAP')
+                siblings.append((first, last))
         if root_id not in config['roots']:
             self.reject('ROOT_NOT_APPROVED')
         return config['roots'][root_id]
 
     def validate_root(self, root_id, root):
+        fields = {'mountPoint', 'filesystemUuid', 'reserveMiB'}
+        if self.quota:
+            fields.update(('projectIdStart', 'projectIdEnd'))
         if (not isinstance(root_id, str) or len(root_id) > 48 or not re.fullmatch(KEY, root_id)
                 or not isinstance(root, dict)
-                or set(root) != {'mountPoint', 'filesystemUuid', 'reserveMiB'}
+                or set(root) != fields
                 or not isinstance(root['filesystemUuid'], str) or not re.fullmatch(UUID, root['filesystemUuid'])
                 or type(root['reserveMiB']) is not int or not 512 <= root['reserveMiB'] <= 1024 * 1024):
             self.reject('CONFIGURATION_INVALID')
+        if self.quota:
+            first, last = root['projectIdStart'], root['projectIdEnd']
+            if type(first) is not int or type(last) is not int or not 1 <= first <= last <= 0x7fffffff or last - first < 31:
+                self.reject('CONFIGURATION_INVALID')
         mount = root['mountPoint']
         if (not isinstance(mount, str) or not mount.startswith('/') or len(mount) > 4096
                 or mount.startswith('//') or os.path.normpath(mount) != mount
@@ -244,19 +261,83 @@ class WorkspaceStorage:
     def canonical(value):
         return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode('ascii')
 
+    def write_new(self, parent, name, proof):
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent)
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(self.canonical(proof))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.fsync(parent)
+
     def stage(self, parent, name, request, config):
         os.mkdir(name, 0o700, dir_fd=parent)
         with self.opened(parent, name, DIR) as child:
             self.directory(child, private=True)
             proof = self.receipt(parent, child, request, config)
-            fd = os.open(MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=child)
-            with os.fdopen(fd, 'wb') as stream:
-                stream.write(self.canonical(proof))
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.fsync(child)
+            self.write_new(child, MARKER, proof)
         os.fsync(parent)
         return proof
+
+    def quota_claim(self, parent, payload, proof, config, *, prepare):
+        first, last = config['projectIdStart'], config['projectIdEnd']
+        count = last - first + 1
+        offset = int.from_bytes(hashlib.sha256(proof['workspaceId'].encode('ascii')).digest()[:8], 'big')
+        candidates = [first + (offset + index) % count for index in range(32)]
+        free = []
+        owned = None
+        payload_inode = os.fstat(payload).st_ino
+        for project in candidates:
+            name = f'.quota-{project}.json'
+            expected = dict(proof, projectId=project, payloadInode=payload_inode)
+            try:
+                claim = self.read_json(parent, name, 4096)
+            except FileNotFoundError:
+                free.append((name, expected))
+                continue
+            if claim.get('workspaceId') == proof['workspaceId']:
+                if self.canonical(claim) != self.canonical(expected) or owned is not None:
+                    self.reject('QUOTA_CLAIM_CONFLICT')
+                owned = name, expected
+        if owned is not None:
+            name, expected = owned
+            if prepare:
+                self.read_json(parent, name, 4096, expected=expected, sync=True)
+                os.fsync(parent)
+            return expected
+        if not prepare:
+            self.reject('QUOTA_PROOF_MISSING')
+        for name, expected in free:
+            try:
+                self.quota.require_unused(payload, expected['projectId'])
+            except self.quota.QuotaError as error:
+                if str(error) == 'QUOTA_ID_IN_USE':
+                    continue
+                raise
+            self.write_new(parent, name, expected)
+            return expected
+        self.reject('QUOTA_PROJECT_IDS_BUSY')
+
+    def quota_proof(self, parent, name, proof, config, *, prepare=False):
+        with self.opened(parent, name, DIR) as child:
+            if self.directory(child, private=True).st_ino != proof['directoryInode']:
+                self.reject('DIRECTORY_CONFLICT')
+            if prepare:
+                try:
+                    os.mkdir(PAYLOAD, 0o700, dir_fd=child)
+                    os.fsync(child)
+                except FileExistsError:
+                    pass
+            try:
+                with self.opened(child, PAYLOAD, DIR) as payload:
+                    self.directory(payload, private=True)
+                    bound = self.quota_claim(parent, payload, proof, config, prepare=prepare)
+                    if prepare:
+                        self.quota.attach(payload, bound['projectId'], proof['diskMiB'])
+                    else:
+                        self.quota.verify(payload, bound['projectId'], proof['diskMiB'])
+                    return bound
+            except FileNotFoundError:
+                self.reject('QUOTA_PROOF_MISSING')
 
     def allocate(self, request):
         if not isinstance(request, dict) or set(request) != {'schemaVersion', 'rootId', 'workspaceId', 'environmentSha256', 'diskMiB'}:
@@ -282,8 +363,10 @@ class WorkspaceStorage:
                 # A prior rename may have happened just before a failed fsync.
                 os.fsync(parent)
                 self.recheck(parent, root_id, config)
-                return current
+                return self.quota_proof(parent, workspace, current, config) if self.quota else current
 
+            if self.quota:
+                self.quota.require_enforcing(parent)
             available = os.fstatvfs(parent)
             if available.f_bavail * available.f_frsize < (request['diskMiB'] + config['reserveMiB']) * 1024**2:
                 self.reject('CAPACITY_REQUIRED')
@@ -293,9 +376,13 @@ class WorkspaceStorage:
             self.recheck(parent, root_id, config)
             if self.read_existing(parent, pending, request, config, pending=True, sync=True) != proof:
                 self.reject('STAGING_UNKNOWN')
+            if self.quota:
+                self.quota_proof(parent, pending, proof, config, prepare=True)
+                self.recheck(parent, root_id, config)
+                self.quota_proof(parent, pending, proof, config)
             self.files.exchange(parent, pending, parent, workspace, 1)  # RENAME_NOREPLACE
             os.fsync(parent)
             self.recheck(parent, root_id, config)
             if self.read_existing(parent, workspace, request, config) != proof:
                 self.reject('PUBLICATION_UNKNOWN')
-            return proof
+            return self.quota_proof(parent, workspace, proof, config) if self.quota else proof

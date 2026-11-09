@@ -38,7 +38,8 @@ case "$action" in
       --property=Restart=no --property=TasksMax=4 --property=MemoryMax=96M --property=CPUQuota=50% \
       --property=LimitCORE=0 --property=LimitNOFILE=64 --property=LimitFSIZE=4096 \
       --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
-      --property=CapabilityBoundingSet= \
+      --property=CapabilityBoundingSet=CAP_SYS_ADMIN \
+      --property=SystemCallArchitectures=native --property="SystemCallFilter=@system-service prctl quotactl_fd" \
       --property=ReadWritePaths=/var/lib/whaledeck-development \
       /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-storage-transport.py
     ;;

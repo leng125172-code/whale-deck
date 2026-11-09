@@ -3,6 +3,8 @@ import importlib.util
 from pathlib import Path
 import stat
 import struct
+import subprocess
+import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -12,6 +14,37 @@ path = Path(__file__).resolve().parents[1] / 'host' / 'whaledeck-development-pro
 spec = importlib.util.spec_from_file_location('workspace_project_quota', path)
 quota = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(quota)
+
+
+class GuardTests(unittest.TestCase):
+    def test_kernel_filter_denies_other_ioctls_quota_commands_and_exec(self):
+        script = """
+import ctypes, errno, fcntl, importlib.util, os, sys
+from pathlib import Path
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, Path(sys.argv[1]) / (name + '.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+quota = load('whaledeck-development-project-quota')
+load('whaledeck-development-quota-guard').install(quota)
+fd = os.open('.', os.O_RDONLY | os.O_DIRECTORY)
+def refused(action):
+    try:
+        action()
+    except OSError as error:
+        assert error.errno == errno.EPERM, error
+    else:
+        raise AssertionError('Forbidden operation was allowed')
+refused(lambda: fcntl.ioctl(fd, 0x5413, bytes(8)))
+refused(lambda: quota.quota_call(fd, 0x80000302, 0, bytearray(64)))
+refused(lambda: os.execv('/bin/true', ['/bin/true']))
+assert os.fstat(fd).st_ino > 0
+os.close(fd)
+"""
+        result = subprocess.run([sys.executable, '-B', '-I', '-c', script, str(path.parent)],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(0, result.returncode, result.stderr)
 
 
 class ProjectQuotaTests(unittest.TestCase):

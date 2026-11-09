@@ -7,7 +7,7 @@ namespace WhaleDeck.Contracts;
 
 public static partial class DevelopmentStorageBinding
 {
-    public const uint MinimumProtocolMinor = 61;
+    public const uint MinimumProtocolMinor = 62;
     public const string Capability = "development.storage.allocate";
     public const string Method = "/whaledeck.agent.v1.DevelopmentStorageService/Allocate";
 
@@ -29,7 +29,8 @@ public static partial class DevelopmentStorageBinding
 
     public static bool Matches(WorkspaceAllocationRequest request, WorkspaceAllocationReceipt receipt) =>
         receipt.WorkspaceId == request.WorkspaceId && receipt.StorageRootId == request.StorageRootId &&
-        receipt.EnvironmentSha256 == request.EnvironmentSha256 && receipt.DiskMib == request.DiskMib;
+        receipt.EnvironmentSha256 == request.EnvironmentSha256 && receipt.DiskMib == request.DiskMib &&
+        receipt.ProjectQuotaVerified;
 
     private static bool IsContext(string value, int maximum) =>
         value.Length <= maximum && !string.IsNullOrWhiteSpace(value) && !value.Any(char.IsControl);

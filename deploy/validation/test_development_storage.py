@@ -25,7 +25,36 @@ def load(name, filename):
 files = load('workspace_test_files', 'whaledeck-files.py')
 storage = load('workspace_test_storage', 'whaledeck-development-storage.py')
 transport = load('workspace_test_transport', 'whaledeck-development-storage-transport.py')
+quota_module = load('workspace_test_quota', 'whaledeck-development-project-quota.py')
 real_fstatvfs = os.fstatvfs
+
+
+class QuotaFixture:
+    QuotaError = quota_module.QuotaError
+
+    def __init__(self):
+        self.projects = {}
+        self.unavailable = False
+        self.interrupt = False
+
+    def require_enforcing(self, _):
+        if self.unavailable:
+            raise self.QuotaError('QUOTA_NOT_ENFORCING')
+
+    def require_unused(self, _, project):
+        if project in self.projects:
+            raise self.QuotaError('QUOTA_ID_IN_USE')
+
+    def attach(self, fd, project, size):
+        expected = (os.fstat(fd).st_ino, size)
+        if self.projects.setdefault(project, expected) != expected:
+            raise self.QuotaError('QUOTA_ID_IN_USE')
+        if self.interrupt:
+            raise self.QuotaError('QUOTA_ATTACH_FAILED')
+
+    def verify(self, fd, project, size):
+        if self.projects.get(project) != (os.fstat(fd).st_ino, size):
+            raise self.QuotaError('QUOTA_BINDING_CHANGED')
 
 
 @unittest.skipUnless(os.geteuid() == 0, 'Run as root in an isolated user namespace or the hosted test VM')
@@ -84,9 +113,16 @@ class DevelopmentStorageTests(unittest.TestCase):
         patch.object(storage.os, 'fstatvfs', return_value=SimpleNamespace(
             f_flag=actual_space.f_flag, f_bavail=1024**3, f_frsize=4096)).start()
 
-    def write_config(self):
-        self.config.write_text(json.dumps({'schemaVersion': 1, 'roots': {self.root_id: self.root_config}}))
+    def write_config(self, *, quota=False, extra=None):
+        roots = {self.root_id: self.root_config} | (extra or {})
+        self.config.write_text(json.dumps({'schemaVersion': 2 if quota else 1, 'roots': roots}))
         self.config.chmod(0o600)
+
+    def enable_quota(self):
+        self.root_config.update(projectIdStart=1400000000, projectIdEnd=1400000031)
+        self.write_config(quota=True)
+        self.quota = QuotaFixture()
+        self.engine = storage.WorkspaceStorage(files, quota=self.quota)
 
     def write_mountinfo(self, mount_id=None, root='/', filesystem='ext4'):
         self.info.write_text(f'{mount_id or self.mount_id} 0 {self.dev} {root} {self.mount} rw - {filesystem} /dev/qa rw\n')
@@ -115,14 +151,14 @@ class DevelopmentStorageTests(unittest.TestCase):
         valid = json.dumps(self.request).encode('ascii')
         for raw in (b'', valid + valid, b'{"rootId":"a","rootId":"b"}', b' ' * 1025, b'\xff'):
             with self.subTest(raw=raw[:30]), self.assertRaisesRegex(files.Rejected, 'REQUEST_INVALID'):
-                transport.allocate(io.BytesIO(raw), files, storage)
+                transport.allocate(io.BytesIO(raw), files, storage, quota_module)
         self.assertEqual([], list(self.root.iterdir()))
 
     @unittest.skipUnless(os.environ.get('WHALEDECK_TEST_PARENT_MNT'), 'Needs isolated mount namespace')
     def test_sandbox_accepts_only_exact_real_bind_on_approved_filesystem(self):
         self.assertNotEqual(os.readlink('/proc/self/ns/mnt'), os.environ['WHALEDECK_TEST_PARENT_MNT'])
         self.root_config['mountPoint'] = '/'
-        self.write_config()
+        self.enable_quota()
         self.base.chmod(0o700)
         other = self.mount / 'other'
         other.mkdir(mode=0o700)
@@ -153,7 +189,7 @@ class DevelopmentStorageTests(unittest.TestCase):
             bind(other, self.base)
             try:
                 with self.assertRaisesRegex(files.Rejected, 'MOUNT_MISMATCH'):
-                    transport.allocate(io.BytesIO(request), files, storage)
+                    transport.allocate(io.BytesIO(request), files, storage, self.quota)
             finally:
                 unmount(self.base)
             self.assertEqual([], list((other / self.root_id).iterdir()))
@@ -161,20 +197,76 @@ class DevelopmentStorageTests(unittest.TestCase):
             try:
                 subprocess.run(['mount', '-o', 'remount,bind,ro', self.base], check=True)
                 with self.assertRaisesRegex(files.Rejected, 'READ_ONLY'):
-                    transport.allocate(io.BytesIO(request), files, storage)
+                    transport.allocate(io.BytesIO(request), files, storage, self.quota)
                 subprocess.run(['mount', '-o', 'remount,bind,rw', self.base], check=True)
                 bind(self.root, self.root)
                 try:
                     with self.assertRaises(OSError) as blocked:
-                        transport.allocate(io.BytesIO(request), files, storage)
+                        transport.allocate(io.BytesIO(request), files, storage, self.quota)
                     self.assertEqual(errno.EXDEV, blocked.exception.errno)
                 finally:
                     unmount(self.root)
-                result = transport.allocate(io.BytesIO(request), files, storage)
-                self.assertEqual(result, transport.allocate(io.BytesIO(request), files, storage))
+                result = transport.allocate(io.BytesIO(request), files, storage, self.quota)
+                self.assertEqual(result, transport.allocate(io.BytesIO(request), files, storage, self.quota))
                 self.assertEqual(result['directoryInode'], self.target.stat().st_ino)
             finally:
                 unmount(self.base)
+
+    def test_sealed_quota_claim_survives_interruption_and_gates_publication(self):
+        self.enable_quota()
+        self.quota.interrupt = True
+        with self.assertRaisesRegex(self.quota.QuotaError, 'QUOTA_ATTACH_FAILED'):
+            self.engine.allocate(self.request)
+        self.assertFalse(self.target.exists())
+        claim_path = next(self.root.glob('.quota-*.json'))
+        claim = json.loads(claim_path.read_bytes())
+        self.assertEqual(self.pending.joinpath('data').stat().st_ino, claim['payloadInode'])
+        self.quota.interrupt = False
+        self.assertEqual(claim, self.engine.allocate(self.request))
+        self.assertEqual(claim, self.engine.allocate(self.request))
+        self.assertEqual([claim_path], list(self.root.glob('.quota-*.json')))
+        self.quota.projects.clear()
+        with self.assertRaisesRegex(self.quota.QuotaError, 'QUOTA_BINDING_CHANGED'):
+            self.engine.allocate(self.request)
+        self.assertTrue(self.target.is_dir())
+
+    def test_colliding_candidate_skips_an_occupied_project(self):
+        self.enable_quota()
+        with patch.object(storage.hashlib, 'sha256', return_value=SimpleNamespace(digest=lambda: b'\x00' * 32)):
+            first = self.engine.allocate(self.request)
+            second_request = dict(self.request, workspaceId='ccdc1348-17ea-49d1-921d-10e5019d3608')
+            self.quota.projects[first['projectId'] + 1] = (9000, 2048)
+            second = self.engine.allocate(second_request)
+            self.assertEqual(first['projectId'] + 2, second['projectId'])
+            self.assertEqual(first, self.engine.allocate(self.request))
+            self.assertEqual(second, self.engine.allocate(second_request))
+            self.assertEqual((9000, 2048), self.quota.projects[first['projectId'] + 1])
+
+    def test_rejects_replaced_payload_and_same_filesystem_range_overlap(self):
+        self.enable_quota()
+        self.write_config(quota=True, extra={'other': dict(self.root_config)})
+        with self.assertRaisesRegex(files.Rejected, 'QUOTA_RANGES_OVERLAP'):
+            self.engine.allocate(self.request)
+        self.assertEqual([], list(self.root.iterdir()))
+        self.write_config(quota=True)
+        self.engine.allocate(self.request)
+        payload = self.target / 'data'
+        payload.rename(self.target / 'parked')
+        payload.mkdir(mode=0o700)
+        with self.assertRaisesRegex(files.Rejected, 'QUOTA_CLAIM_CONFLICT'):
+            self.engine.allocate(self.request)
+
+    def test_v2_refuses_legacy_published_directory_and_disabled_quota(self):
+        legacy = self.engine.allocate(self.request)
+        self.enable_quota()
+        with self.assertRaisesRegex(files.Rejected, 'QUOTA_PROOF_MISSING'):
+            self.engine.allocate(self.request)
+        self.assertEqual(legacy, json.loads((self.target / storage.MARKER).read_bytes()))
+        self.quota.unavailable = True
+        second = dict(self.request, workspaceId='ccdc1348-17ea-49d1-921d-10e5019d3608')
+        with self.assertRaisesRegex(self.quota.QuotaError, 'QUOTA_NOT_ENFORCING'):
+            self.engine.allocate(second)
+        self.assertEqual([self.target], list(self.root.iterdir()))
 
     def test_attestation_rejects_wrong_mount_root_filesystem_and_uuid(self):
         for mount_id, root, filesystem in (('0', '/', 'ext4'), (None, '/bound', 'ext4'), (None, '/', 'tmpfs')):

@@ -397,7 +397,7 @@ message DockerSettingsResponse {
   repeated string editable_keys = 2;
 }
 
-// development.storage.allocate (protocol 1.61).
+// development.storage.allocate (project quota confirmation since protocol 1.62).
 service DevelopmentStorageService {
   rpc Allocate(WorkspaceAllocationRequest) returns (WorkspaceAllocationReceipt);
 }
@@ -416,6 +416,7 @@ message WorkspaceAllocationReceipt {
   string storage_root_id = 2;
   string environment_sha256 = 3;
   uint32 disk_mib = 4;
+  bool project_quota_verified = 5;
 }
 
 service AgentService {

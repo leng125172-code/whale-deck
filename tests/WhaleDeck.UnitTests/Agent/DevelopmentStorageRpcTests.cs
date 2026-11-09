@@ -120,6 +120,10 @@ public sealed class DevelopmentStorageRpcTests : IDisposable
     [Fact]
     public void HostReceiptMustMatchRequestAndContainCompleteProof()
     {
+        Assert.False(DevelopmentStorageBinding.IsSupported(new CapabilitiesResponse
+        {
+            ProtocolMajor = 1, ProtocolMinor = 61, Capabilities = { DevelopmentStorageBinding.Capability }
+        }));
         var request = new WorkspaceAllocationRequest
         {
             WorkspaceId = Guid.NewGuid().ToString("D"), StorageRootId = "nvme-local",
@@ -129,14 +133,18 @@ public sealed class DevelopmentStorageRpcTests : IDisposable
         {
             schemaVersion = 1, workspaceId = request.WorkspaceId, rootId = request.StorageRootId,
             environmentSha256 = request.EnvironmentSha256, diskMiB = request.DiskMib,
-            filesystemUuid = Guid.NewGuid().ToString("D"), rootInode = 2, directoryInode = 3
+            filesystemUuid = Guid.NewGuid().ToString("D"), rootInode = 2, directoryInode = 3, payloadInode = 4, projectId = 105
         };
         var valid = JsonSerializer.Serialize(hostProof);
-        Assert.True(DevelopmentStorageBinding.Matches(request, DevelopmentStorageGrpcService.ParseReceipt(request, valid)));
+        var receipt = DevelopmentStorageGrpcService.ParseReceipt(request, valid);
+        Assert.True(DevelopmentStorageBinding.Matches(request, receipt));
+        receipt.ProjectQuotaVerified = false;
+        Assert.False(DevelopmentStorageBinding.Matches(request, receipt));
         foreach (var invalid in new[]
         {
             JsonSerializer.Serialize(hostProof with { diskMiB = 512 }),
             JsonSerializer.Serialize(hostProof with { directoryInode = 0 }),
+            JsonSerializer.Serialize(hostProof with { projectId = 0 }),
             valid.Insert(1, "\"diskMiB\":256,"),
             valid + "{}"
         })
@@ -161,7 +169,8 @@ public sealed class DevelopmentStorageRpcTests : IDisposable
             return Task.FromResult(new WorkspaceAllocationReceipt
             {
                 WorkspaceId = request.WorkspaceId, StorageRootId = request.StorageRootId,
-                EnvironmentSha256 = request.EnvironmentSha256, DiskMib = Mismatch ? request.DiskMib + 1 : request.DiskMib
+                EnvironmentSha256 = request.EnvironmentSha256, DiskMib = Mismatch ? request.DiskMib + 1 : request.DiskMib,
+                ProjectQuotaVerified = true
             });
         }
     }
