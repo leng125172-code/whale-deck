@@ -1,6 +1,6 @@
 # Whale Deck 开发空间与开发环境
 
-对应完整目标 P3-13–P3-18。当前实现覆盖空间注册、运行时锁定、预算登记、签名存储分配，以及 Node 和 .NET 固定任务的持久运行、查询和取消。报告已具备有界 TRX/JUnit 与 Cobertura/LCOV 解析、双格式导出、持久化、Worker 清理及审计下载，支持指定空间的 Authentik 组委派。Runner 自动采集、页面及物理工作站验收继续实施。[完整目标](GOAL_P0_P5.md) · [运行验证](qa/DEVELOPMENT_WORKSPACE_RUNNER_QUEUE.md) · [报告委派验证](qa/DEVELOPMENT_WORKSPACE_REPORT_GRANTS.md)
+对应完整目标 P3-13–P3-18。当前实现覆盖空间登记、运行时锁定、预算、签名存储分配，以及 Node 和 .NET 固定任务的持久运行、历史分页和取消。报告 Worker 采集 JUnit/TRX、持久化脱敏 JSON/Markdown 后退役原件。Vue 已提供上述工作流的操作与报告查看下载。Cobertura/LCOV 已有解析器，继续自动采集、真实源码、IDE/预览和物理工作站验收。[完整目标](GOAL_P0_P5.md) · [Vue 验证](qa/DEVELOPMENT_WORKSPACE_VUE.md) · [报告委派验证](qa/DEVELOPMENT_WORKSPACE_REPORT_GRANTS.md)
 
 2026-10-21修订：六项开发空间需求完整保留，按[单工作站实用版](SCOPE_SINGLE_WORKSTATION.md)实施。不依赖tenant/node/套餐/VM；保留资源上限、空间所有者和显式开发授权。以下“配额”仅指主机安全预算，不是商业订阅。
 
