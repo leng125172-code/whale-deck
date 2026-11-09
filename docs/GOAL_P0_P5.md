@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-13 工作空间目录分配接入 BFF 与 PostgreSQL。新增计划摘要与开始/完成事务，原计划可在 Agent 丢回执后重试。继续磁盘配额、Runner、Vue 与工作站全链验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_STORAGE_ALLOCATION.md)。
+
 2026-11-09，P3-13 存储分配协议 1.61 与固定宿主传输 `4b44200e` 接入标准安装脚本。Unix Socket 请求签名和隔离命名空间的真实绑定挂载验证通过。业务状态推进、配额、Runner 与工作站签名分配仍待验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_NVME_STORAGE.md)。
 
 2026-11-09，P3-13 NVMe 目录分配内核 `fd8066ab` 通过工作站根设备只读核对与隔离内核测试。覆盖错设备、链接替换、原子禁止覆盖与中断恢复。继续签名 Agent 入口、标准安装、实际存储配额及 Runner。见[本批记录](qa/DEVELOPMENT_WORKSPACE_NVME_STORAGE.md)。
