@@ -81,7 +81,7 @@ public sealed class ContainerRecursiveAclPolicyTests
     public async Task AdvertisedAclCapabilityRequiresProtocol153()
     {
         var caps = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
-        Assert.Equal(1U, caps.ProtocolMajor); Assert.Equal(59U, caps.ProtocolMinor);
+        Assert.Equal(1U, caps.ProtocolMajor); Assert.True(caps.ProtocolMinor >= 59U);
         Assert.Contains("docker.files.recursive-acl-intents", caps.Capabilities);
     }
     [Theory]

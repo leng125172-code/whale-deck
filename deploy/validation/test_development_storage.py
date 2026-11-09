@@ -1,11 +1,13 @@
 import errno
 import fcntl
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
 import select
 import signal
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -22,13 +24,16 @@ def load(name, filename):
 
 files = load('workspace_test_files', 'whaledeck-files.py')
 storage = load('workspace_test_storage', 'whaledeck-development-storage.py')
+transport = load('workspace_test_transport', 'whaledeck-development-storage-transport.py')
+real_fstatvfs = os.fstatvfs
 
 
 @unittest.skipUnless(os.geteuid() == 0, 'Run as root in an isolated user namespace or the hosted test VM')
 class DevelopmentStorageTests(unittest.TestCase):
     def setUp(self):
         self.addCleanup(patch.stopall)
-        directory = tempfile.TemporaryDirectory()
+        mount_test = self._testMethodName == 'test_sandbox_accepts_only_exact_real_bind_on_approved_filesystem'
+        directory = tempfile.TemporaryDirectory(dir='/var/tmp' if mount_test else None)
         self.addCleanup(directory.cleanup)
         self.mount = Path(directory.name)
         self.root_id = 'workspace-nvme'
@@ -105,6 +110,71 @@ class DevelopmentStorageTests(unittest.TestCase):
             with self.subTest(values=values), self.assertRaises(files.Rejected):
                 self.engine.allocate(dict(self.request, **values))
         self.assertEqual([], list(self.root.iterdir()))
+
+    def test_transport_rejects_duplicate_trailing_and_oversized_requests(self):
+        valid = json.dumps(self.request).encode('ascii')
+        for raw in (b'', valid + valid, b'{"rootId":"a","rootId":"b"}', b' ' * 1025, b'\xff'):
+            with self.subTest(raw=raw[:30]), self.assertRaisesRegex(files.Rejected, 'REQUEST_INVALID'):
+                transport.allocate(io.BytesIO(raw), files, storage)
+        self.assertEqual([], list(self.root.iterdir()))
+
+    @unittest.skipUnless(os.environ.get('WHALEDECK_TEST_PARENT_MNT'), 'Needs isolated mount namespace')
+    def test_sandbox_accepts_only_exact_real_bind_on_approved_filesystem(self):
+        self.assertNotEqual(os.readlink('/proc/self/ns/mnt'), os.environ['WHALEDECK_TEST_PARENT_MNT'])
+        self.root_config['mountPoint'] = '/'
+        self.write_config()
+        self.base.chmod(0o700)
+        other = self.mount / 'other'
+        other.mkdir(mode=0o700)
+        (other / self.root_id).mkdir(mode=0o700)
+        request = json.dumps(self.request).encode('ascii')
+
+        def bind(source, target):
+            subprocess.run(['mount', '--bind', source, target], check=True)
+
+        def unmount(target):
+            subprocess.run(['umount', target], check=True)
+
+        directory = storage.WorkspaceStorage.directory
+        host_root = os.stat('/')
+
+        def check_directory(engine, fd, *, private=False):
+            # A one-UID namespace maps the external host's UID 0 to overflow.
+            # All fixture directories still pass the real ownership checks.
+            info = os.fstat(fd)
+            if not private and host_root.st_uid == 65534 and os.path.samestat(info, host_root):
+                return info
+            return directory(engine, fd, private=private)
+
+        with (patch.object(storage, 'MOUNTINFO', Path('/proc/self/mountinfo')),
+              patch.object(storage.WorkspaceStorage, 'directory', check_directory),
+              patch.object(storage.os, 'fstatvfs', real_fstatvfs)):
+            # A different same-device subtree at the exact target must fail.
+            bind(other, self.base)
+            try:
+                with self.assertRaisesRegex(files.Rejected, 'MOUNT_MISMATCH'):
+                    transport.allocate(io.BytesIO(request), files, storage)
+            finally:
+                unmount(self.base)
+            self.assertEqual([], list((other / self.root_id).iterdir()))
+            bind(self.base, self.base)
+            try:
+                subprocess.run(['mount', '-o', 'remount,bind,ro', self.base], check=True)
+                with self.assertRaisesRegex(files.Rejected, 'READ_ONLY'):
+                    transport.allocate(io.BytesIO(request), files, storage)
+                subprocess.run(['mount', '-o', 'remount,bind,rw', self.base], check=True)
+                bind(self.root, self.root)
+                try:
+                    with self.assertRaises(OSError) as blocked:
+                        transport.allocate(io.BytesIO(request), files, storage)
+                    self.assertEqual(errno.EXDEV, blocked.exception.errno)
+                finally:
+                    unmount(self.root)
+                result = transport.allocate(io.BytesIO(request), files, storage)
+                self.assertEqual(result, transport.allocate(io.BytesIO(request), files, storage))
+                self.assertEqual(result['directoryInode'], self.target.stat().st_ino)
+            finally:
+                unmount(self.base)
 
     def test_attestation_rejects_wrong_mount_root_filesystem_and_uuid(self):
         for mount_id, root, filesystem in (('0', '/', 'ext4'), (None, '/bound', 'ext4'), (None, '/', 'tmpfs')):

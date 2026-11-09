@@ -25,8 +25,9 @@ DIGEST = r'[a-f0-9]{64}'
 
 
 class WorkspaceStorage:
-    def __init__(self, files):
+    def __init__(self, files, *, sandboxed=False):
         self.files = files
+        self.sandboxed = sandboxed
 
     def reject(self, reason):
         raise self.files.Rejected('WORKSPACE_STORAGE_' + reason)
@@ -125,7 +126,7 @@ class WorkspaceStorage:
         ids = [line.split()[1] for line in lines if re.fullmatch(r'mnt_id:\s+[0-9]+', line)]
         return ids[0] if len(ids) == 1 else None
 
-    def attest_mount(self, fd, root):
+    def mount_entry(self, fd):
         info = self.directory(fd)
         dev = f'{os.major(info.st_dev)}:{os.minor(info.st_dev)}'
         mount_id = self.mount_id(fd)
@@ -138,13 +139,24 @@ class WorkspaceStorage:
             self.reject('MOUNT_MISMATCH')
         row = found[0]
         mount = re.sub(r'\\([0-7]{3})', lambda match: chr(int(match[1], 8)), row[4])
-        if row[2] != dev or row[3] != '/' or mount != root['mountPoint'] or '-' not in row:
+        if row[2] != dev or '-' not in row:
             self.reject('MOUNT_MISMATCH')
         split = row.index('-')
         if split + 3 >= len(row) or row[split + 1] not in ('ext4', 'xfs'):
             self.reject('FILESYSTEM_UNSUPPORTED')
+        source = re.sub(r'\\([0-7]{3})', lambda match: chr(int(match[1], 8)), row[3])
+        return mount_id, row[1], dev, source, mount
+
+    def require_writable(self, fd):
         if os.fstatvfs(fd).f_flag & os.ST_RDONLY:
             self.reject('READ_ONLY')
+
+    def attest_mount(self, fd, root, *, writable=True):
+        mount_id, _, dev, source, mount = self.mount_entry(fd)
+        if source != '/' or mount != root['mountPoint']:
+            self.reject('MOUNT_MISMATCH')
+        if writable:
+            self.require_writable(fd)
         with self.absolute(UDEV) as udev:
             self.directory(udev)
             with self.opened(udev, 'b' + dev, READ) as descriptor:
@@ -172,9 +184,26 @@ class WorkspaceStorage:
     def namespace(self, root_id, config):
         mount = Path(config['mountPoint'])
         with self.absolute(mount) as mounted, contextlib.ExitStack() as opened:
-            identity = self.attest_mount(mounted, config)
+            scoped_bind = self.sandboxed and mount != BASE
+            identity = self.attest_mount(mounted, config, writable=not scoped_bind)
             parent = mounted
-            for piece in (BASE / root_id).relative_to(mount).parts:
+            relative = (BASE / root_id).relative_to(mount)
+            if self.sandboxed and mount == BASE:
+                self.directory(mounted, private=True)
+            if scoped_bind:
+                # systemd exposes only BASE as writable. Prove that this
+                # overmount is the exact subtree of the approved filesystem.
+                parent = opened.enter_context(self.absolute(BASE))
+                self.directory(parent, private=True)
+                bound_id, parent_id, device, source, target = self.mount_entry(parent)
+                host_device = os.fstat(mounted).st_dev
+                expected_device = f'{os.major(host_device)}:{os.minor(host_device)}'
+                if (bound_id == identity or parent_id != identity or device != expected_device
+                        or source != '/' + BASE.relative_to(mount).as_posix() or target != str(BASE)):
+                    self.reject('MOUNT_MISMATCH')
+                self.require_writable(parent)
+                identity, relative = bound_id, Path(root_id)
+            for piece in relative.parts:
                 parent = opened.enter_context(self.opened(parent, piece, DIR))
                 self.directory(parent)
             self.directory(parent, private=True)

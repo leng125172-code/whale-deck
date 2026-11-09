@@ -16,6 +16,11 @@ public sealed record WorkspaceRegistrationReceipt(WorkspaceDefinition Workspace,
 public sealed record WorkspaceCatalog(WorkspaceRuntimeSpec[] Runtimes, string[] StorageRootIds, WorkspaceBudget Capacity);
 public sealed record WorkspacePage(WorkspaceDefinition[] Items, string? NextAfter);
 
+public interface IWorkspaceStorageGateway
+{
+    Task AllocateAsync(TerminalActor actor, WorkspaceDefinition workspace, CancellationToken token);
+}
+
 public sealed class WorkspaceRegistrationPolicy
 {
     public string[] StorageRootIds { get; init; } = [];

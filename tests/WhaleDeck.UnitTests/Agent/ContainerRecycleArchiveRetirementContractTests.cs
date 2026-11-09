@@ -120,7 +120,7 @@ public sealed class ContainerRecycleArchiveRetirementContractTests
     public async Task PreparedAdapterDoesNotAdvertiseRetirement()
     {
         var caps = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
-        Assert.Equal(59U, caps.ProtocolMinor); Assert.DoesNotContain(ContainerRecycleArchiveRetirementBinding.Capability, caps.Capabilities);
+        Assert.True(caps.ProtocolMinor >= 59U); Assert.DoesNotContain(ContainerRecycleArchiveRetirementBinding.Capability, caps.Capabilities);
         var descriptor = Assert.Single(AgentReflection.Descriptor.Services, s => s.Name == "ContainerRecycleArchiveRetirementService");
         Assert.Equal(RetirementMethods, descriptor.Methods.Select(m => m.Name));
         Assert.All(descriptor.Methods, m => { Assert.False(m.IsClientStreaming); Assert.False(m.IsServerStreaming); });

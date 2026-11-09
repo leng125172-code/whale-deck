@@ -272,6 +272,7 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException("The identity directory does not support management operations."));
         services.AddScoped<ICatalogProvider, XuanyuanCatalogProvider>();
         services.AddSingleton<AgentGateway>();
+        services.AddSingleton<IWorkspaceStorageGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IAgentGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IHostProcessGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IHostTerminalGateway>(provider => provider.GetRequiredService<AgentGateway>());

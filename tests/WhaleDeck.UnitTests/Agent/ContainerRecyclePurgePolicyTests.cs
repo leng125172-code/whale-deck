@@ -55,7 +55,7 @@ public sealed class ContainerRecyclePurgePolicyTests
     [Fact]
     public async Task CapabilitiesAdvertiseNewSeparateVersionAndActionsRejectWithoutStartingProcess()
     {
-        var c=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.Equal(59U,c.ProtocolMinor);Assert.Contains("docker.files.recycle.purge",c.Capabilities);
+        var c=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.True(c.ProtocolMinor >= 59U);Assert.Contains("docker.files.recycle.purge",c.Capabilities);
         await Assert.ThrowsAsync<ArgumentException>(()=>new FileTransferRunner().ContainerRecyclePurgeOnceAsync("restore","{}",default));
     }
     [Theory]

@@ -158,6 +158,14 @@ for module in /usr/local/libexec/whaledeck-container-move-scope.py /usr/local/li
 done
 [[ ! -L /var/lib/whaledeck-container-uploads ]]
 assert_metadata /usr/local/libexec/whaledeck-files.py '750:root:root'
+for development_module in whaledeck-development-storage.py whaledeck-development-storage-transport.py; do
+  development_path="/usr/local/libexec/$development_module"
+  assert_metadata "$development_path" '750:root:root'
+  [[ -f $development_path && ! -L $development_path && $(stat -c %h "$development_path") == 1 ]]
+  cmp -s -- "$development_path" "$(dirname "$0")/$development_module"
+done
+assert_metadata /var/lib/whaledeck-development '700:root:root'
+[[ ! -L /var/lib/whaledeck-development && -d /var/lib/whaledeck-development ]]
 assert_metadata /usr/local/libexec/whaledeck-file-operations.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-backups.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-archives.py '750:root:root'

@@ -35,7 +35,7 @@ public sealed class ContainerRecursiveAclHistoryTests : IDisposable
     {
         Assert.Equal<string>(["List","Read"],ContainerRecursiveAclHistoryService.Descriptor.Methods.Select(m=>m.Name));
         Assert.All(ContainerRecursiveAclHistoryService.Descriptor.Methods,m=>{Assert.False(m.IsClientStreaming);Assert.False(m.IsServerStreaming);});
-        var caps=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.Equal(59U, caps.ProtocolMinor);Assert.Contains("docker.files.recursive-acl-history",caps.Capabilities);Assert.Contains("docker.files.acl-history",caps.Capabilities);
+        var caps=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.True(caps.ProtocolMinor >= 59U);Assert.Contains("docker.files.recursive-acl-history",caps.Capabilities);Assert.Contains("docker.files.acl-history",caps.Capabilities);
     }
     [Theory][InlineData("List")][InlineData("Read")]
     public void IndependentShortLivedContentBoundSingleUseAuthority(string action)

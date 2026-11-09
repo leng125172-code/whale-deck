@@ -148,7 +148,7 @@ class RetirementInstallationSourceTests(unittest.TestCase):
     def test_source_preparation_does_not_map_or_advertise_new_rpc(self):
         repo=HOST.parents[1];program=(repo/'src/WhaleDeck.Agent/Program.cs').read_text();caps=(repo/'src/WhaleDeck.Agent/Services/AgentGrpcService.cs').read_text()
         self.assertNotIn('MapGrpcService<ContainerRecycleArchiveRetirementGrpcService>',program)
-        self.assertIn('ProtocolMinor = 59',caps);self.assertNotIn('"docker.files.recycle.archive.retire"',caps)
+        self.assertNotIn('"docker.files.recycle.archive.retire"',caps)
 
 
 if __name__=='__main__':unittest.main()

@@ -1,5 +1,6 @@
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using WhaleDeck.Contracts;
 using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Agent.Services;
@@ -12,10 +13,11 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = 59,
+            ProtocolMinor = DevelopmentStorageBinding.MinimumProtocolMinor,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
+            DevelopmentStorageBinding.Capability,
             "docker.files.copy-intents",
             "docker.files.recycle",
             "docker.files.recycle.restore",

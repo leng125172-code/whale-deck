@@ -193,6 +193,13 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-restore.py"
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-history-transport.py" /usr/local/libexec/whaledeck-container-history-transport.py
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-uploads
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-files.py" /usr/local/libexec/whaledeck-files.py
+development_base=/var/lib/whaledeck-development
+[[ ! -L "$development_base" ]] || exit 1
+if [[ ! -e "$development_base" ]]; then install -d -o root -g root -m 0700 "$development_base"; fi
+[[ -d "$development_base" && $(stat -c '%a:%U:%G' -- "$development_base") == '700:root:root' ]] || exit 1
+for development_module in whaledeck-development-storage.py whaledeck-development-storage-transport.py; do
+  install -o root -g root -m 0750 "$(dirname "$0")/$development_module" "/usr/local/libexec/$development_module"
+done
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-file-operations.py" /usr/local/libexec/whaledeck-file-operations.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-file-backups.py" /usr/local/libexec/whaledeck-file-backups.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-file-archives.py" /usr/local/libexec/whaledeck-file-archives.py

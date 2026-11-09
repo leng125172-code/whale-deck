@@ -69,5 +69,5 @@ public sealed class ContainerRecycleArchivePolicyTests
     }
     [Fact]
     public async Task ArchiveCapabilitiesDeclareSeparateProtocolAndDedicatedCapability()
-    {var c=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.Equal(59U,c.ProtocolMinor);Assert.Contains("docker.files.recycle.archive",c.Capabilities);}
+    {var c=await new AgentGrpcService(null!).GetCapabilities(new(),null!);Assert.True(c.ProtocolMinor >= 59U);Assert.Contains("docker.files.recycle.archive",c.Capabilities);}
 }

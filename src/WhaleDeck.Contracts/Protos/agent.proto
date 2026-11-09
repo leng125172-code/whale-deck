@@ -397,6 +397,27 @@ message DockerSettingsResponse {
   repeated string editable_keys = 2;
 }
 
+// development.storage.allocate (protocol 1.61).
+service DevelopmentStorageService {
+  rpc Allocate(WorkspaceAllocationRequest) returns (WorkspaceAllocationReceipt);
+}
+
+message WorkspaceAllocationRequest {
+  string workspace_id = 1;
+  string storage_root_id = 2;
+  string environment_sha256 = 3;
+  uint32 disk_mib = 4;
+  string actor_subject = 5;
+  string trace_id = 6;
+}
+
+message WorkspaceAllocationReceipt {
+  string workspace_id = 1;
+  string storage_root_id = 2;
+  string environment_sha256 = 3;
+  uint32 disk_mib = 4;
+}
+
 service AgentService {
   rpc GetCapabilities(google.protobuf.Empty) returns (CapabilitiesResponse);
   rpc GetHealth(google.protobuf.Empty) returns (HealthResponse);
