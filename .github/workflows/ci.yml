@@ -28,6 +28,7 @@ jobs:
       - name: Check shell syntax and side-effect-free preview
         run: |
           bash -n install.sh
+          bash -n deploy/host/publish.sh
           bash -n deploy/host/publish-and-install.sh
           bash -n deploy/host/install.sh
           bash tests/installer-cli.sh
@@ -50,6 +51,7 @@ jobs:
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_project_quota.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_runner_isolation.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_rootfs.py
+          sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_unpack.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_recycle*.py'
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_archive_*proof.py'
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_recursive_*_probe_scope.py'

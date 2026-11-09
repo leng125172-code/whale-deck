@@ -58,9 +58,17 @@ docker run --rm \
 
 python3 "$repo_root/deploy/host/validate-runtime.py" "$artifacts_root"
 
+artifact_dirs=(agent maintenance)
+if [[ -n ${WHALEDECK_RUNNER_UMOCI_FILE:-} ]]; then
+  install -d -m 0700 "$artifacts_root/runner"
+  install -m 0600 "$WHALEDECK_RUNNER_UMOCI_FILE" "$artifacts_root/runner/umoci"
+  python3 -I "$public_source/deploy/host/whaledeck-development-unpack.py" verify-artifact "$artifacts_root/runner/umoci"
+  artifact_dirs+=(runner)
+fi
+
 (
   cd "$artifacts_root"
-  find agent maintenance -type f -print0 \
+  find "${artifact_dirs[@]}" -type f -print0 \
     | sort -z \
     | xargs -0 sha256sum > SHA256SUMS
 )
