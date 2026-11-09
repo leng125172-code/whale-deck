@@ -88,7 +88,7 @@ Webhook 引入时沿用签名/防重放/固定仓库约束；本功能可先手�
 
 | ID | 拟新增 RPC/职责 | 输入边界 |
 | --- | --- | --- |
-| RPC-DEV-001 | BFF 存储计划与确认，Agent 1.61 `development.storage.allocate` | 绑定登记所有者、批准根、空间 ID、环境摘要和磁盘预算；确认只收计划摘要。Runner 和完整空间运行计划继续实施 |
+| RPC-DEV-001 | BFF 存储计划与确认，Agent 1.62 `development.storage.allocate` | 绑定登记所有者、批准根、空间 ID、环境摘要和磁盘预算；确认只收计划摘要，Agent 回执验证配额。Runner 和完整空间运行计划继续实施 |
 | RPC-DEV-002 | ImportWorkspaceSource | 源码来源引用、上传工件 ID、冲突策略；Secret 私有渠道与已批准网络 |
 | RPC-DEV-003 | StartWorkspaceRun / ObserveWorkspaceRun | run/job/步骤版本、受控 argv/cwd（空间内）、预算；不得解释为宿主 shell RPC |
 | RPC-DEV-004 | CancelWorkspaceRun | run/operation 与目标身份绑定；只结束该 run 的进程树/容器 |

@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-13 配额发布门禁 `baa419ea` 接入 Agent 1.62 与固定安装。真实来宾 ext4/XFS 通过分配、重挂回读及 ext4 写后强杀恢复。工作站标准安装、Runner 和 Vue 继续验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_QUOTA_PUBLICATION.md)。
+
 2026-11-09，P3-13 项目配额驱动 `0552bc8a` 通过隔离虚拟 NVMe 上的 ext4 与 XFS 硬限额验收。继续独占项目 ID 凭据、固定 Agent 分配前门禁、Runner 与工作站实机验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_PROJECT_QUOTA.md)。
 
 2026-11-09，P3-13 工作空间目录分配接入 BFF 与 PostgreSQL。新增计划摘要与开始/完成事务，原计划可在 Agent 丢回执后重试。继续磁盘配额、Runner、Vue 与工作站全链验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_STORAGE_ALLOCATION.md)。
