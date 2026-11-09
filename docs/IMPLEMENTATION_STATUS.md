@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-14 `3b8317c4` 实现归档宿主暂存与原子首次发布。离线 KVM 通过中断恢复、冲突保护、真实 ext4 配额、恶意 ZIP 拒绝和导入源码的 Node OCI 运行。继续签名 Agent、上传、Git 和物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_HOST.md)。
+
 2026-11-09，P3-13/P3-16/P3-17 `dde723dc` 的 Vue 空间登记、存储核验、固定任务运行和报告查看下载通过本地生产构建浏览器验收。真实 PostgreSQL/HTTP 验证历史分页和访问边界。继续源码导入、IDE、预览、流水线与工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_VUE.md)。
 
 2026-11-09，P3-17 `ebd4f2fd` 的 Worker 报告持久化、原件退役接管和所有者授权下载已通过隔离 PostgreSQL/HTTP 验收。继续源码来源、覆盖率自动采集、Vue 与物理工作站联调。见[本批验收](qa/DEVELOPMENT_WORKSPACE_REPORT_WORKFLOW.md)。
