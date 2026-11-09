@@ -25,6 +25,7 @@ builder.Services.AddHostedService<HostMetricIngestionWorker>();
 builder.Services.AddHostedService<MonitoringAlertWorker>();
 builder.Services.AddHostedService<NotificationRetentionWorker>();
 builder.Services.AddHostedService<WorkspaceRunReportRetentionWorker>();
+builder.Services.AddHostedService<WorkspaceRunWorker>();
 builder.Services.AddHostedService<NotificationSenderWorker>();
 builder.Services.AddHostedService<NotificationPrivateWorker>();
 builder.Services.AddHostedService<FileUploadWorker>();

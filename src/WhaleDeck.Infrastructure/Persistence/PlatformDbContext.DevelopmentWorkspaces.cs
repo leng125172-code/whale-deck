@@ -6,9 +6,27 @@ namespace WhaleDeck.Infrastructure.Persistence;
 public sealed partial class PlatformDbContext
 {
     public DbSet<DevelopmentWorkspaceRecord> DevelopmentWorkspaces => Set<DevelopmentWorkspaceRecord>();
+    public DbSet<WorkspaceRunIntent> WorkspaceRunIntents => Set<WorkspaceRunIntent>();
 
     private static void ConfigureDevelopmentWorkspaces(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<WorkspaceRunIntent>(entity =>
+        {
+            entity.ToTable("development_workspace_runs", table =>
+                table.HasCheckConstraint("ck_workspace_run_lease",
+                    "(lease IS NULL) = (lease_until_utc IS NULL) AND (finished_at_utc IS NULL OR lease IS NULL)"));
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.Id).ValueGeneratedNever();
+            entity.Property(row => row.Runtime).HasMaxLength(48);
+            entity.Property(row => row.Task).HasMaxLength(24);
+            entity.Property(row => row.LoginBinding).HasMaxLength(64);
+            entity.Property(row => row.SnapshotJson).HasColumnType("jsonb");
+            entity.HasOne<OperationJob>().WithOne().HasForeignKey<WorkspaceRunIntent>(row => row.Id).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<DevelopmentWorkspaceRecord>().WithMany().HasForeignKey(row => row.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(row => row.WorkspaceId).IsUnique().HasFilter("finished_at_utc IS NULL")
+                .HasDatabaseName("uq_workspace_run_pending");
+            entity.HasIndex(row => new { row.AvailableAtUtc, row.Id }).HasFilter("finished_at_utc IS NULL");
+        });
         modelBuilder.Entity<DevelopmentWorkspaceRecord>(entity =>
         {
             entity.ToTable("development_workspaces", table =>

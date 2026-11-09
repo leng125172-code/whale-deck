@@ -252,6 +252,7 @@ public sealed partial class ContainerUploadHttpTests
             }
             return new(new SocketsHttpHandler { UseProxy=false,UseCookies=true,CookieContainer=cookies,AllowAutoRedirect=false }) { BaseAddress=address };
         }
+        public AsyncServiceScope Scope() => _app.Services.CreateAsyncScope();
         public async ValueTask DisposeAsync() { await _app.DisposeAsync(); File.Delete(_key); }
     }
     private sealed class Directory : IIdentityDirectory

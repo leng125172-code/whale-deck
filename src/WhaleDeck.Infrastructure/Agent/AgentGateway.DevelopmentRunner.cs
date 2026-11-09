@@ -27,6 +27,23 @@ public sealed partial class AgentGateway : IWorkspaceRunnerGateway
     private async Task<WorkspaceRunnerReceipt> WorkspaceRunAsync(TerminalActor actor, WorkspaceDefinition workspace,
         WorkspaceRunCommand command, string method, CancellationToken token)
     {
+        try { return await WorkspaceRunCoreAsync(actor, workspace, command, method, token); }
+        catch (RpcException error) when (command.RequireControl)
+        {
+            throw new WorkspaceRunnerException(error.StatusCode switch
+            {
+                StatusCode.NotFound => WorkspaceRunnerFailure.NotFound,
+                StatusCode.Unimplemented => WorkspaceRunnerFailure.Unsupported,
+                StatusCode.DataLoss when error.Status.Detail is "WORKSPACE_RUN_INTERRUPTED" or "WORKSPACE_RUN_CLEANUP_UNCONFIRMED" =>
+                    WorkspaceRunnerFailure.Interrupted,
+                _ => WorkspaceRunnerFailure.Retryable
+            });
+        }
+    }
+
+    private async Task<WorkspaceRunnerReceipt> WorkspaceRunCoreAsync(TerminalActor actor, WorkspaceDefinition workspace,
+        WorkspaceRunCommand command, string method, CancellationToken token)
+    {
         if (workspace.State != WorkspaceStorageAllocation.Allocated || actor.Subject != workspace.OwnerSubject ||
             workspace.Budget.DiskMiB is < 256 or > WorkspaceRegistrationPolicy.MaximumWorkspaceDiskMiB ||
             command.Arguments is not { Length: > 0 and <= 64 } || command.Arguments.Any(arg => arg is null) ||
@@ -50,7 +67,8 @@ public sealed partial class AgentGateway : IWorkspaceRunnerGateway
         request.Argv.AddRange(command.Arguments);
         if (!DevelopmentRunnerBinding.IsValid(request)) throw new ArgumentException("WORKSPACE_RUN_BINDING_INVALID");
         var caps = await _agent.GetCapabilitiesAsync(new Empty(), deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
-        if (!DevelopmentRunnerBinding.IsSupported(caps, method))
+        if (!DevelopmentRunnerBinding.IsSupported(caps, method) ||
+            command.RequireControl && !DevelopmentRunnerBinding.IsSupported(caps, DevelopmentRunnerBinding.Reclaim))
             throw new RpcException(new Status(StatusCode.Unimplemented, "WORKSPACE_RUN_CAPABILITY_UNAVAILABLE"));
         if (_capabilityKey is not { Length: >= 32 })
             throw new RpcException(new Status(StatusCode.PermissionDenied, "WORKSPACE_RUN_CAPABILITY_UNAVAILABLE"));

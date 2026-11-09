@@ -252,6 +252,9 @@ public static class DependencyInjection
         services.AddScoped<IDevelopmentWorkspaceRegistry, DevelopmentWorkspaceRegistry>();
         services.AddScoped<DevelopmentWorkspaces>();
         services.AddScoped<WorkspaceStorageAllocation>();
+        services.AddScoped<WorkspaceRuns>();
+        services.AddScoped<WorkspaceRunDispatcher>();
+        services.AddScoped<IWorkspaceRunStore, WorkspaceRunRepository>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new PrivateNotificationConfiguration("/run/secrets/notifications/registry.json"));
         services.AddSingleton(new NotificationNetworkPolicy());

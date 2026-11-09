@@ -34,6 +34,29 @@ public sealed class DevelopmentWorkspacesController(DevelopmentWorkspaces worksp
     public async Task<WorkspaceRunnerPreflight> PreflightRunner(Guid id, [FromServices] WorkspaceStorageAllocation storage, CancellationToken token) =>
         await storage.PreflightAsync((await identity.ReadAsync(HttpContext)).Actor, id, token);
 
+    [HttpPost("{id:guid}/runs"), Consumes("application/json")]
+    public async Task<ActionResult<WorkspaceRunView>> QueueRun(Guid id, WorkspaceRunInput input,
+        [FromServices] WorkspaceRuns runs, CancellationToken token)
+    {
+        var header = Request.Headers["Idempotency-Key"];
+        if (header.Count != 1 || !Guid.TryParseExact(header[0], "D", out var key) ||
+            key == Guid.Empty || key.ToString("D") != header[0])
+            return BadRequest();
+        var run = await runs.EnqueueAsync((await identity.ReadAsync(HttpContext)).Actor, id, key, input, token);
+        return AcceptedAtAction(nameof(GetRun), new { id, runId = run.RunId }, run);
+    }
+
+    [HttpGet("{id:guid}/runs/{runId:guid}")]
+    public async Task<WorkspaceRunView> GetRun(Guid id, Guid runId, [FromServices] WorkspaceRuns runs, CancellationToken token) =>
+        await runs.GetAsync((await identity.ReadAsync(HttpContext)).Actor, id, runId, token);
+
+    [HttpPost("{id:guid}/runs/{runId:guid}/cancel")]
+    public async Task<ActionResult<WorkspaceRunView>> CancelRun(Guid id, Guid runId, [FromServices] WorkspaceRuns runs, CancellationToken token)
+    {
+        var run = await runs.CancelAsync((await identity.ReadAsync(HttpContext)).Actor, id, runId, token);
+        return AcceptedAtAction(nameof(GetRun), new { id, runId }, run);
+    }
+
     [HttpPost, Consumes("application/json")]
     public async Task<ActionResult<WorkspaceRegistrationReceipt>> Register(WorkspaceRegistrationCommand command, CancellationToken token)
     {
