@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-17 `ebd4f2fd` 的 Worker 报告持久化、原件退役接管和所有者授权下载已通过隔离 PostgreSQL/HTTP 验收。继续源码来源、覆盖率自动采集、Vue 与物理工作站联调。见[本批验收](qa/DEVELOPMENT_WORKSPACE_REPORT_WORKFLOW.md)。
+
 2026-11-09，P3-17 `7f549959`、`6d331c0a` 已验收 Agent 1.67 的真实 JUnit/TRX 工件读取及退役。退役按原请求与内容校验，进程中断后可重试。继续 Worker 脱敏持久化、自动退役、Vue 和物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_ARTIFACT_TRANSFER.md)。
 
 2026-11-09，P3-17 `0babd91c` 的宿主 Runner 实际封存 Node JUnit 与 .NET TRX，原请求绑定的工件清单在 Agent 重启后保持一致。继续工件签名读取、脱敏持久化、原件退役、Vue 与物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_TEST_ARTIFACTS.md)。
