@@ -184,10 +184,11 @@ public sealed partial class ContainerUploadHttpTests
         public RecursiveAclRestoreHttpFixture RecursiveAclRestore { get; }=new();
         public RecycleHttpFixture Recycle { get; }=new();
         public RetirementHttpGate Retirement { get; } = new();
+        public WorkspaceReportHttpFixture WorkspaceReports { get; } = new();
         public AclHttpFixture Acl { get; }=new();
         public AclHistoryHttpFixture AclHistory { get; }=new();
         public RecursiveAclHistoryHttpFixture RecursiveAclHistory { get; }=new();
-        public static async Task<Fixture> Start()
+        public static async Task<Fixture> Start(Action<IServiceCollection>? configure = null)
         {
             var fixture=new Fixture(); await File.WriteAllBytesAsync(fixture._key,RandomNumberGenerator.GetBytes(32));
             if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(fixture._key,UnixFileMode.UserRead|UnixFileMode.UserWrite);
@@ -207,6 +208,9 @@ public sealed partial class ContainerUploadHttpTests
             builder.Services.AddControllersWithViews(options=>options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute())).AddApplicationPart(typeof(ContainerUploadsController).Assembly);
             builder.Services.AddOpenApi(options=>options.AddOperationTransformer(FileUploadOpenApi.TransformAsync));
             builder.Services.AddSingleton<TerminalCookieIdentity>();
+            builder.Services.AddSingleton<ILoginSessionRegistry>(sessions);
+            builder.Services.AddSingleton(new WhaleDeck.Application.Development.WorkspaceRunReportDownloads(
+                fixture.WorkspaceReports, sessions, fixture.WorkspaceReports, fixture.WorkspaceReports, TimeProvider.System));
             var protector=new FilePlanProtector(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["Agent:CapabilityKeyFile"]=fixture._key }).Build());
             var authorization=new FileManagementService(null!,null!,protector,fixture.Directory,TimeProvider.System);
             var uploads=new ContainerFileUploadService(authorization,sessions,fixture.Gateway,fixture.Repository,protector,TimeProvider.System,fixture.History);
@@ -227,6 +231,7 @@ public sealed partial class ContainerUploadHttpTests
             builder.Services.AddSingleton(new ContainerAclHistoryService(authorization,sessions,fixture.AclHistory,fixture.AclHistory));
             builder.Services.AddSingleton(new ContainerRecursiveAclHistoryService(authorization,sessions,fixture.RecursiveAclHistory,fixture.RecursiveAclHistory));
             builder.Services.AddSingleton(new ContainerFileRestoreService(uploads,fixture.Gateway,fixture.History,fixture.History,protector,fixture.Repository,TimeProvider.System));
+            configure?.Invoke(builder.Services);
             fixture._app=builder.Build(); fixture._app.UseExceptionHandler(error=>error.Run(TraceAndErrors.WriteProblemAsync));
             fixture._app.UseAuthentication(); fixture._app.Use(SameOriginWriteProtection.InvokeAsync); fixture._app.UseAuthorization(); fixture._app.UseAntiforgery();
             fixture._app.MapControllers(); fixture._app.MapOpenApi(); fixture._app.MapGet("/test/csrf",(HttpContext context,IAntiforgery antiforgery)=>new Token(antiforgery.GetAndStoreTokens(context).RequestToken!));

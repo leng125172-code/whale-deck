@@ -1,11 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using WhaleDeck.Application.Development;
 using WhaleDeck.Infrastructure.Persistence;
+using WhaleDeck.IntegrationTests.Security;
 
 namespace WhaleDeck.IntegrationTests;
 
@@ -75,6 +77,18 @@ public sealed partial class NativeNotificationDispatchTests
         Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(markdown.Content)), markdown.Sha256);
         Assert.Null(await store.ReadAsync(Guid.NewGuid(), report.RunId, WorkspaceReportFormat.Json, default));
         Assert.Null(await store.ReadAsync(workspace, Guid.NewGuid(), WorkspaceReportFormat.Markdown, default));
+        await ContainerUploadHttpTests.DownloadWorkspaceReportsFromPostgres(options, workspace, report.RunId, json);
+        var downloadAudit = await db.AuditEvents.AsNoTracking().SingleAsync(row =>
+            row.Action == "development.workspace.report-download" && row.TargetId == report.RunId.ToString("D"));
+        Assert.Equal("admin-subject", downloadAudit.ActorSubject);
+        Assert.Equal("Prepared", downloadAudit.Result);
+        using (var detail = JsonDocument.Parse(downloadAudit.DetailJson!))
+        {
+            Assert.Equal(workspace, detail.RootElement.GetProperty("workspaceId").GetGuid());
+            Assert.Equal("Json", detail.RootElement.GetProperty("format").GetString());
+            Assert.Equal(2, detail.RootElement.EnumerateObject().Count());
+        }
+        Console.WriteLine("INBOX_PHASE=workspace-report-download-real-http-postgres-bytes-scope-audit");
 
         var replacement = Encoding.UTF8.GetBytes("unexpected");
         var replacementHash = Convert.ToHexStringLower(SHA256.HashData(replacement));
