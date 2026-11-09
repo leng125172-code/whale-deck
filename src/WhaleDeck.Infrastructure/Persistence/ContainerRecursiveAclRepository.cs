@@ -152,6 +152,7 @@ public sealed partial class ContainerRecursiveAclRepository(PlatformDbContext db
             await db.ContainerRecursivePermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.FilePathLocks.AnyAsync(cancellationToken) || await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecyclePurgeIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerRecycleArchiveRetirementIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecycleArchiveIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecycleRestoreIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecycleIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||

@@ -45,16 +45,16 @@ public sealed partial class NativeNotificationDispatchTests
             var b=new ContainerRecyclePurgeRequestBinding(id,key,actor.Subject,actor.LoginBinding,actor.TraceId,ContainerRecyclePurgeWorkflowValidation.Owner(actor.Subject,actor.LoginBinding),src.IntentId,sourceProof??src.ProofHash,src.Command,now,now.AddMinutes(15));
             return new(){Id=id,SourceIntentId=src.IntentId,SourceProofHash=b.SourceProofHash,IdempotencyKey=key,ActorSubject=actor.Subject,LoginBinding=actor.LoginBinding,TraceId=actor.TraceId,OwnerHash=b.Owner,ContainerId=src.Command.Source.Plan.Command.Location.ContainerId,InstanceId=src.Command.Source.Plan.Command.Location.InstanceId,RelativePath=src.Command.Source.Plan.Command.Location.Path,CommandJson=ContainerRecyclePurgeWorkflowValidation.Serialize(src.Command),RequestHash=protector.FingerprintRecyclePurgeRequest(b),CreatedAtUtc=now,PlanningExpiresAtUtc=b.PlanningExpiresAtUtc,NextAttemptAtUtc=now};
         }
-        ContainerRecyclePurgePlanDto PurgePlan(ContainerRecyclePurgeIntent r)
-        {var c=ContainerRecyclePurgeWorkflowValidation.ReadCommand(r);var p=c.Source.Plan;return new(1,c,p.TargetProof,p.ParentIdentity,p.ParentVersion,p.OwnerUid,p.OwnerGid,new(2049,66),p.SourceIdentity,p.SourceChangedAtUnixNs+100,new('1',64),new('2',64),1,new('3',64),new(2049,67),new(2049,68,33152,0,0,1,p.SourceIdentity.SizeBytes,10),11,p.SourceIdentity.SizeBytes,p.Sha256,new('9',64));}
+        ContainerRecyclePurgePlanDto PurgePlan(ContainerRecyclePurgeIntent r, long capturedAt)
+        {var c=ContainerRecyclePurgeWorkflowValidation.ReadCommand(r);var p=c.Source.Plan;return new(1,c,p.TargetProof,p.ParentIdentity,p.ParentVersion,p.OwnerUid,p.OwnerGid,new(2049,66),p.SourceIdentity,p.SourceChangedAtUnixNs+100,new('1',64),new('2',64),capturedAt,new('3',64),new(2049,67),new(2049,68,33152,0,0,1,p.SourceIdentity.SizeBytes,10),11,p.SourceIdentity.SizeBytes,p.Sha256,new('9',64));}
         ContainerRecyclePurgeReceiptDto PurgeReceipt(ContainerRecyclePurgeIntent r,string state)=>new(r.ExecutionJobId!.Value,ContainerRecyclePurgeWorkflowValidation.ReadCommand(r).Source.OperationId,ContainerRecyclePurgeWorkflowValidation.ReadPlan(r).Fingerprint,state,state!="Aborted",state!="Aborted",state=="Unknown"?null:state=="Completed");
         ContainerRecyclePurgeConfirmation PurgeClaims(ContainerRecyclePurgeIntent r)=>new(r.Id,r.ActorSubject,r.LoginBinding,r.PlanHash!,r.ReadyExpiresAtUtc!.Value);
 
-        async Task<(ContainerRecyclePurgeIntent Purge,ContainerRecycleIntent Original)> Source(string? containerId=null)
+        async Task<(ContainerRecyclePurgeIntent Purge,ContainerRecycleIntent Original)> Source(string? containerId=null, long capturedAt=1)
         {
             var original=await Original(containerId);var row=PurgeRow(original);await purgeRepo.EnqueueAsync(row,default);
             var claimed=(await purgeRepo.ClaimAsync(clock.GetUtcNow(),default))!;Assert.Equal(row.Id,claimed.Id);Assert.True(await purgeRepo.MarkPlanningAsync(claimed,default));
-            await purgeRepo.FinishPlanningAsync(claimed,PurgePlan(row),"CONTAINER_RECYCLE_PURGE_READY",default);row=(await purgeRepo.FindAsync(row.Id,default))!;
+            await purgeRepo.FinishPlanningAsync(claimed,PurgePlan(row,capturedAt),"CONTAINER_RECYCLE_PURGE_READY",default);row=(await purgeRepo.FindAsync(row.Id,default))!;
             await purgeRepo.ConfirmAsync(actor,PurgeClaims(row),row.Version,default);claimed=(await purgeRepo.ClaimAsync(clock.GetUtcNow(),default))!;
             Assert.Equal(ContainerFileUploadStartResult.Started,await purgeRepo.StartedAsync(claimed,clock.GetUtcNow(),default));
             Assert.True(await purgeRepo.ReservedAsync(claimed,PurgeReceipt(claimed,"Reserved"),default));Assert.Equal(ContainerFileUploadStartResult.Started,await purgeRepo.ApplyingAsync(claimed,clock.GetUtcNow(),default));
@@ -220,7 +220,15 @@ public sealed partial class NativeNotificationDispatchTests
             var planningFail=Row(await Source());await repo.EnqueueAsync(planningFail,default);var failClaim=(await repo.ClaimAsync(clock.GetUtcNow(),default))!;
             Assert.True(await repo.MarkPlanningAsync(failClaim,default));await repo.FinishPlanningAsync(failClaim,null,"CONTAINER_RECYCLE_ARCHIVE_SOURCE_CHANGED",default);await JobFacts((await other.FindAsync(planningFail.Id,default))!,false);
             Console.WriteLine("INBOX_PHASE=container-recycle-archive-job-nineteen-safe-fields-frozen-planning-nullable-binding-audit-projection");
-            var migrations=db.Database.GetMigrations().ToArray();Assert.EndsWith("_ContainerRecycleArchiveIntents",migrations[^1],StringComparison.Ordinal);var down=await Assert.ThrowsAsync<PostgresException>(()=>db.GetService<IMigrator>().MigrateAsync(migrations[^2]));Assert.Equal("container_recycle_archive_downgrade_requires_empty_table",down.MessageText);
+            var migrations=db.Database.GetMigrations().ToArray();
+            var archiveMigration=Assert.Single(migrations,name=>name.EndsWith("_ContainerRecycleArchiveIntents",StringComparison.Ordinal));
+            var down=await Assert.ThrowsAsync<PostgresException>(()=>db.GetService<IMigrator>().MigrateAsync(migrations[Array.IndexOf(migrations,archiveMigration)-1]));
+            Assert.Equal("container_recycle_archive_downgrade_requires_empty_table",down.MessageText);
+            await db.Database.MigrateAsync();
+            var retirementSource=await Source(capturedAt:clock.GetUtcNow().AddDays(-30).AddMinutes(2).ToUnixTimeMilliseconds());
+            var retirementCopy=await Pending(await Ready(retirementSource));await ReserveAndApply(retirementCopy);
+            Assert.True(await repo.FinishAsync(retirementCopy,"Succeeded","CONTAINER_RECYCLE_ARCHIVE_COMPLETED",Receipt(retirementCopy,"Completed"),default));
+            await RetirementSchemaBoundaries(second, db, (await repo.FindAsync(retirementCopy.Id,default))!, done, clock.GetUtcNow(), archiveMigration, ClonePeer);
             Assert.False(await db.ContainerRecycleArchiveIntents.AnyAsync(r=>r.CompletedAtUtc==null||r.PublishBarrier||r.LeaseToken!=null));Assert.False(await db.OutboxMessages.AnyAsync(m=>(m.MessageType=="ContainerRecycleArchiveRequested"||m.MessageType=="ContainerRecycleArchiveCancellationRequested")&&m.ProcessedAtUtc==null));
             Assert.Contains(await second.AuditEvents.AsNoTracking().ToArrayAsync(),e=>e.Action=="containers.files.recycle-archive.unknown-acknowledged"&&e.ActorSubject==admin.Subject);
             Console.WriteLine("INBOX_PHASE=container-recycle-archive-two-phase-dual-source-lock-sixteen-fences-nullable-audit-rollback");

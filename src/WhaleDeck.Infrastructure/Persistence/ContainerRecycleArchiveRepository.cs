@@ -157,7 +157,9 @@ public sealed partial class ContainerRecycleArchiveRepository(PlatformDbContext 
             await db.ContainerRecursiveOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecursivePermissionIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.FilePathLocks.AnyAsync(cancellationToken) || await db.ContainerFileUploadOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
-            await db.ContainerRecyclePurgeIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) || await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) || await db.ContainerRecycleArchiveIntents.AnyAsync(r => r.PublishBarrier && r.Id != row.Id, cancellationToken) ||
+            await db.ContainerRecyclePurgeIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) || await db.ContainerDirectoryOperations.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerRecycleArchiveRetirementIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerRecycleArchiveIntents.AnyAsync(r => r.PublishBarrier && r.Id != row.Id, cancellationToken) ||
             await db.ContainerRecursiveAclIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerAclIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||

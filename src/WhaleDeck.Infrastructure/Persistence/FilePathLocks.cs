@@ -22,6 +22,7 @@ internal static class FilePathLocks
             await db.ContainerAclIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerOwnershipIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecyclePurgeIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
+            await db.ContainerRecycleArchiveRetirementIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecycleArchiveIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecycleRestoreIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
             await db.ContainerRecycleIntents.AnyAsync(r => r.PublishBarrier, cancellationToken) ||
@@ -215,6 +216,7 @@ internal static class FilePathLocks
         if (await db.ContainerAclIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecyclePurgeIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecycleArchiveIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
+            await db.ContainerRecycleArchiveRetirementIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecycleRestoreIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecycleIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecursiveAclRestoreIntents.CountAsync(item => item.CompletedAtUtc == null && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
@@ -233,6 +235,7 @@ internal static class FilePathLocks
             await db.ContainerAclIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecyclePurgeIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecycleArchiveIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
+            await db.ContainerRecycleArchiveRetirementIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecycleRestoreIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecycleIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
             await db.ContainerRecursiveAclRestoreIntents.CountAsync(item => item.CompletedAtUtc == null && item.ActorSubject == actor && (!existingTreeId.HasValue || item.Id != existingTreeId.Value), cancellationToken) +
