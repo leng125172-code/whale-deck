@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，归档退役文件页与 Jobs `0cb8878d` 完成分项验证。显式确认、同键恢复、专用取消与 Unknown 处置已接入，Jobs 保留 15 字段安全事实。Release 6,158 单元、822 默认集成、隔离真实 PostgreSQL、Vue 1,469 单测和 5 个 Chromium 夹具场景通过。工作站标准安装、新协议与配置 HDD 自然到期退役仍待。见[本批证据与边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_VUE_JOBS.md)。
+
 2026-11-09，归档退役实时授权、专用 Worker 和 HTTP 入口 `b82717cd` 已分项验证。7 个应用与 4 个真实回环 HTTP 新用例、Release 6,152 单元和 822 默认集成，以及独立真实隔离 PG 回归通过。旧 Agent 能力门禁保持。继续 Vue/Jobs、安全结果投影、工作站标准安装和真实 Authentik/Agent/HDD 正向及自然到期。见[本批证据](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_WORKER_API.md)。
 
 2026-11-09，归档退役事务仓储 `2d258259` 与降级修正 `a3a95aeb` 在真实隔离 PostgreSQL 通过。确认验签、来源链复核、双 Job 与审计原子提交、宿主前空回执取消、租约与 Unknown 处置已验证。继续实时管理员守卫与专用 Worker、API/Vue/Jobs、工作站标准安装及真实 RPC/HDD。见[验收与失败修正](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_REPOSITORY.md)。

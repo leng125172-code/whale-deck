@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，归档退役文件页与 Jobs `0cb8878d` 完成分项验证。原键恢复、显式确认、专用取消和 Unknown 处置已接入。真实隔离 PostgreSQL、Vue 和 Chromium 生产构建夹具通过。继续工作站安装及真实 Authentik、Agent 1.60 和配置 HDD 退役。见[本批验证](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_VUE_JOBS.md)。
+
 2026-11-09，归档退役实时授权、专用 Worker 与 HTTP 入口 `b82717cd` 已分项验证。退出和撤权后只恢复原执行，Apply 响应丢失后按同 ID 观察。实际回环 HTTP 和独立真实 PG 回归通过。Vue/Jobs、工作站标准安装、新 RPC 和实际配置 HDD 退役仍待。见[本批验证](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_WORKER_API.md)。
 
 2026-11-09，归档退役事务仓储 `2d258259` 与降级修正 `a3a95aeb` 已通过真实隔离 PostgreSQL。完成签名确认、三层来源复核、双 Job 与审计事务、原租约接管及 Unknown 保留。实时授权入口、专用 Worker、API/Vue/Jobs 与真实工作站 RPC/HDD 继续。见[本批验证](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_REPOSITORY.md)。
