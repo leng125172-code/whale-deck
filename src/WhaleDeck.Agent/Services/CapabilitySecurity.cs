@@ -18,7 +18,8 @@ public sealed class CapabilityValidator(IConfiguration configuration)
 
     public bool Validate(string? token, string method)
     {
-        if (method is DevelopmentStorageBinding.Method or DevelopmentStorageBinding.AttestationMethod) return false;
+        if (method is DevelopmentStorageBinding.Method or DevelopmentStorageBinding.AttestationMethod ||
+            method.StartsWith(DevelopmentRunnerBinding.Service, StringComparison.Ordinal)) return false;
         if (method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerDirectoryBinding.Service, StringComparison.Ordinal) ||
@@ -84,6 +85,10 @@ public sealed class CapabilityValidator(IConfiguration configuration)
     public bool ValidateDevelopmentStorage(string? token, string method, WorkspaceAllocationRequest request) =>
         (method is DevelopmentStorageBinding.Method or DevelopmentStorageBinding.AttestationMethod) &&
         ValidateContentBound(token, method, DevelopmentStorageBinding.Hash(request), DevelopmentStorageBinding.Payload);
+
+    public bool ValidateDevelopmentRunner(string? token, string method, WorkspaceRunRequest request) =>
+        method is DevelopmentRunnerBinding.Start or DevelopmentRunnerBinding.Observe &&
+        ValidateContentBound(token, method, DevelopmentRunnerBinding.Hash(request), DevelopmentRunnerBinding.Payload);
 
     public bool ValidateContainerWrite(string? token, string method, string? requestHash)
     {
@@ -214,6 +219,13 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
         ServerCallContext context,
         UnaryServerMethod<TRequest, TResponse> continuation)
     {
+        if (context.Method.StartsWith(DevelopmentRunnerBinding.Service, StringComparison.Ordinal))
+        {
+            var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();
+            if (tokens.Length != 1 || request is not WorkspaceRunRequest run || run.CalculateSize() > DevelopmentRunnerBinding.MaximumWireBytes ||
+                !validator.ValidateDevelopmentRunner(tokens[0].Value, context.Method, run)) throw Denied();
+            return continuation(request, context);
+        }
         if (context.Method is DevelopmentStorageBinding.Method or DevelopmentStorageBinding.AttestationMethod)
         {
             var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();

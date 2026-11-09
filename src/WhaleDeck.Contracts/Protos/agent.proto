@@ -421,6 +421,31 @@ message WorkspaceAllocationReceipt {
   bool project_quota_verified = 5;
 }
 
+// Content-bound development runner transport (protocol 1.64).
+service DevelopmentRunnerService {
+  rpc Start(WorkspaceRunRequest) returns (WorkspaceRunReceipt);
+  rpc Observe(WorkspaceRunRequest) returns (WorkspaceRunReceipt);
+}
+
+message WorkspaceRunRequest {
+  WorkspaceAllocationRequest storage = 1;
+  string run_id = 2;
+  string environment_json = 3;
+  string runtime = 4;
+  repeated string argv = 5;
+  uint32 cpu_millis = 6;
+  uint32 memory_mib = 7;
+  uint32 deadline_seconds = 8;
+}
+
+message WorkspaceRunReceipt {
+  string run_id = 1;
+  string request_sha256 = 2;
+  string input_sha256 = 3;
+  string status = 4;
+  optional int32 runtime_exit_code = 5;
+}
+
 service AgentService {
   rpc GetCapabilities(google.protobuf.Empty) returns (CapabilitiesResponse);
   rpc GetHealth(google.protobuf.Empty) returns (HealthResponse);

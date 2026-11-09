@@ -64,6 +64,7 @@ var app = builder.Build();
 app.UseMiddleware<PeerCredentialGuard>();
 app.MapGrpcService<AgentGrpcService>();
 app.MapGrpcService<DevelopmentStorageGrpcService>();
+app.MapGrpcService<DevelopmentRunnerGrpcService>();
 app.MapGrpcService<HostGrpcService>();
 app.MapGrpcService<DockerGrpcService>();
 app.MapGrpcService<OperationGrpcService>();

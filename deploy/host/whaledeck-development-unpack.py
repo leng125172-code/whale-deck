@@ -106,7 +106,8 @@ def configuration(isolation, image, output):
             'terminal': False, 'user': {'uid': 0, 'gid': 0, 'additionalGids': []},
             'args': ['/umoci', 'unpack', '--image', '/image:runner', '/output/' + DESTINATION],
             'cwd': '/', 'noNewPrivileges': True, 'env': ['PATH=/', 'HOME=/', 'LANG=C', 'GOMAXPROCS=2'],
-            'capabilities': {key: CAPABILITIES for key in ('bounding', 'effective', 'permitted')},
+            'capabilities': {**{key: CAPABILITIES for key in ('bounding', 'effective', 'permitted')},
+                             'ambient': [], 'inheritable': []},
             'rlimits': [
                 {'type': 'RLIMIT_CORE', 'soft': 0, 'hard': 0},
                 {'type': 'RLIMIT_NOFILE', 'soft': 1024, 'hard': 1024},
@@ -158,7 +159,7 @@ def runtime(base, extraction):
         raise UnpackError('WORKSPACE_UNPACK_CLEANUP_UNCONFIRMED')
 
 
-def unpack(files, rootfs, isolation, bundle, input_name, output_name):
+def unpack(files, rootfs, isolation, bundle, input_name, output_name, *, cgroup_parent=None):
     """Use the fixed tools with input and output slots in this private bundle."""
     if (input_name, output_name) != (rootfs.INPUT, rootfs.UNPACKED):
         raise UnpackError('WORKSPACE_UNPACK_SLOT_INVALID')
@@ -183,7 +184,10 @@ def unpack(files, rootfs, isolation, bundle, input_name, output_name):
     copy_tool(jail / 'umoci', pinned_digest())
     extraction_fd = files.open_at(bundle, EXTRACTION, rootfs.DIR)
     try:
-        rootfs.write_metadata(extraction_fd, 'config.json', configuration(isolation, base / input_name, output))
+        config = configuration(isolation, base / input_name, output)
+        if cgroup_parent:
+            config['linux']['cgroupsPath'] = cgroup_parent + '/extract'
+        rootfs.write_metadata(extraction_fd, 'config.json', config)
         runtime(base, extraction)
         output_fd = files.open_at(extraction_fd, OUTPUT, rootfs.DIR)
         try:

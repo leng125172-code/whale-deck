@@ -24,6 +24,37 @@ run_transient() {
 }
 
 case "$action" in
+  development-run-start|development-run-observe)
+    [[ ${2:-} =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
+    runner_mode=service-observe
+    runner_properties=(--property=RuntimeMaxSec=15 --property=TasksMax=4 --property=MemoryMax=96M
+      --property=ProtectControlGroups=yes --property=RestrictNamespaces=yes
+      --property=CapabilityBoundingSet=CAP_SYS_ADMIN --property=RestrictAddressFamilies=AF_UNIX
+      --property="SystemCallFilter=@system-service prctl quotactl_fd")
+    if [[ $action == development-run-start ]]; then
+      [[ $# -eq 3 && "$3" =~ ^[1-9][0-9]{2,3}$ ]] && (( $3 >= 291 && $3 <= 3890 )) || exit 2
+      runner_mode=service-start
+      # systemd drops SETUID while applying its root service seccomp setup
+      # unless retained explicitly. runc clears ambient caps in both OCI payloads.
+      runner_properties=(--property="RuntimeMaxSec=$3" --property=TasksMax=192
+        --property=Delegate=yes --property=DelegateSubgroup=launcher --property=ExitType=cgroup
+        --property=RestrictNamespaces=~user --property=AmbientCapabilities=CAP_SETUID
+        --property="CapabilityBoundingSet=CAP_SYS_ADMIN CAP_NET_ADMIN CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_FSETID CAP_MKNOD CAP_SETGID CAP_SETUID CAP_SETPCAP CAP_KILL CAP_SYS_CHROOT")
+    else
+      [[ $# -eq 2 ]] || exit 2
+    fi
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit="whaledeck-development-run-${action##*-}-$2" \
+      --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
+      --property=PrivateNetwork=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=no \
+      --property=ProtectKernelModules=yes --property=ProtectKernelTunables=yes \
+      --property=Restart=no --property=TimeoutStopSec=5 --property=KillMode=control-group \
+      --property=LimitCORE=0 --property=SystemCallArchitectures=native \
+      --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
+      --property=ReadWritePaths=/var/lib/whaledeck-development "${runner_properties[@]}" \
+      /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-runner.py "$runner_mode"
+    ;;
   development-storage-allocate|development-storage-attest)
     [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
     storage_args=()

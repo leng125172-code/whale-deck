@@ -25,6 +25,7 @@ RESULT = 'result.json'
 KEY = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*\Z')
 VERSION = re.compile(r'[0-9A-Za-z][0-9A-Za-z.+-]{0,47}\Z')
 RUN_ID = re.compile(r'[a-f0-9]{32}\Z')
+SERVICE_CGROUP = re.compile(r'0::(/system\.slice/whaledeck-development-run-start-[a-f0-9]{32}\.service)/launcher\n?\Z')
 REQUEST_LIMIT = 32768
 READ = os.O_RDONLY | os.O_NONBLOCK
 DIRECTORY = os.O_RDONLY | os.O_DIRECTORY
@@ -191,7 +192,7 @@ def observe(driver, isolation, rootfs, request):
             refuse('NOT_FOUND')
 
 
-def start(driver, isolation, rootfs, unpacker, request):
+def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None):
     image, binding = request_binding(driver, isolation, rootfs, request)
     run_id = binding['runId']
     enforce_staging_quota()
@@ -223,7 +224,7 @@ def start(driver, isolation, rootfs, unpacker, request):
         stack.callback(os.close, bundle)
         try:
             rootfs.materialize(files, source, bundle, image, lambda fd, staged, output:
-                unpacker.unpack(files, rootfs, isolation, fd, staged, output))
+                unpacker.unpack(files, rootfs, isolation, fd, staged, output, cgroup_parent=cgroup_parent))
         except (OSError, files.Rejected, rootfs.RootfsError, unpacker.UnpackError) as error:
             if str(error) != 'WORKSPACE_UNPACK_CLEANUP_UNCONFIRMED':
                 shutil.rmtree('bundle', dir_fd=directory)
@@ -233,6 +234,8 @@ def start(driver, isolation, rootfs, unpacker, request):
             verify_work(driver, projected, proof)
             config = isolation.oci_config(files, bundle, projected, request['argv'], RUN_UID, request['cpuMillis'],
                                           request['memoryMiB'], rootfs_policy=rootfs, runtime_image=image)
+            if cgroup_parent:
+                config['linux']['cgroupsPath'] = cgroup_parent + '/workload'
             rootfs.write_metadata(bundle, 'config.json', config)
             status, code = execute(Path(os.readlink(f'/proc/self/fd/{bundle}')), proof['workspaceId'],
                                    run_id, request['deadlineSeconds'])
@@ -255,8 +258,20 @@ def load(filename):
     return module
 
 
+def delegated_parent():
+    with open('/proc/self/cgroup', encoding='ascii') as stream:
+        match = SERVICE_CGROUP.fullmatch(stream.read(4097))
+    if not match:
+        refuse('DELEGATION_UNAVAILABLE')
+    parent = match[1]
+    available = (Path('/sys/fs/cgroup' + parent) / 'cgroup.controllers').read_text(encoding='ascii').split()
+    if not {'cpu', 'memory', 'pids'} <= set(available):
+        refuse('DELEGATION_UNAVAILABLE')
+    return parent
+
+
 def main():
-    if os.geteuid() != 0 or sys.argv[1:] not in ([], ['observe']):
+    if os.geteuid() != 0 or sys.argv[1:] not in ([], ['observe'], ['service-start'], ['service-observe']):
         return 2
     try:
         files = load('whaledeck-files.py')
@@ -272,11 +287,15 @@ def main():
         raw = sys.stdin.buffer.read(REQUEST_LIMIT + 1)
         if not 0 < len(raw) <= REQUEST_LIMIT:
             refuse('REQUEST_INVALID')
-        driver = storage.WorkspaceStorage(files, quota=quota)
+        mode = sys.argv[1] if len(sys.argv) == 2 else ''
+        driver = storage.WorkspaceStorage(files, quota=quota, sandboxed=mode.startswith('service-'))
         request = rootfs.decode(raw)
-        result = (observe(driver, isolation, rootfs, request) if len(sys.argv) == 2 else
-                  start(driver, isolation, rootfs, unpacker, request))
-        print(json.dumps(result, separators=(',', ':')))
+        if mode in ('observe', 'service-observe'):
+            result = observe(driver, isolation, rootfs, request)
+        else:
+            parent = delegated_parent() if mode == 'service-start' else None
+            result = start(driver, isolation, rootfs, unpacker, request, cgroup_parent=parent)
+        print(json.dumps(dict(result, inputSha256=hashlib.sha256(raw).hexdigest()), separators=(',', ':')))
         return 0
     except (RunError, files.Rejected, rootfs.RootfsError, unpacker.UnpackError) as error:
         code = str(error)
