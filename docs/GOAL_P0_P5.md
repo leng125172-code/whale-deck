@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，归档退役持久化与共享围栏 `46220a8a` 在隔离 PostgreSQL 通过。14 条约束、17 个双向围栏入口覆盖到期、并发及 Unknown 明确处置，原回执不可改写。Release 6,145 单元和 818 默认集成通过。继续事务仓储、Worker、API/Vue/Jobs、标准工作站安装和真实 RPC/HDD 正向。见[原生验证、失败及边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_PERSISTENCE.md)。
+
 2026-11-09，退役宿主隔离取消与业务来源校验已分项验证。宿主准备 `cd986658` 和修正 `3cee128b` 为取消配置独立限权单元，GitHub 托管 VM 真实 systemd/pidfd 专项通过。业务来源候选 `5aff320e` 在当前管理员登录下验证归档、purge 和回收祖先，并绑定原执行、显式留存策略及副本 inode/ctime。工作站本会话受 NoNewPrivs 限制，待标准安装、原来源自然到期和真实 RPC/HDD 正向，以及永久业务和其余主任务。见[证据与范围](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_INSTALL_SOURCE.md)。
 
 2026-11-09 退役只读采集候选b7aa0804通过：固定Root FD/64KiB JSON/合计2万条与32MiB、已有HDD共享锁/只读attest、2GiB载荷/16MiB namespace/120秒及双pass一致；只允许选中.data缺席，原记录/字节/live副本保持，RPC/授权来源仍未证明。17新采集/848回收root零跳过、14CI合同/8范围/4编译通过；复核提出缓存/合计预算/原始输入来源边界已修正，-B入口导入前/EOF门禁和父进程字节显式标注。8文件证据封存，实际安装目录缺失拒绝无创建/Provider或Agent/HDD操作，原老化来源未到期/未执行且保持；准确b56 CI12项全success，旧图谱pending保留。继续helper标准安装/真RPC-HDD正向、自然到期与永久业务/59项，17项移出不算完成。[可信采集、差异及验证限制](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_ACQUISITION.md)。

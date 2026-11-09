@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，归档退役独立迁移及共享围栏 `46220a8a` 已通过真实隔离 PostgreSQL。到期前拒绝、跨连接锁竞争、Unknown 保留与明确处置、原回执保持和非空降级拒绝均通过。永久业务仓储、Worker/API/Vue/Jobs、工作站配置 HDD 与真实 RPC 正向继续。见[本批验证](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_PERSISTENCE.md)。
+
 2026-11-09，退役宿主取消和业务来源校验候选 `3cee128b` / `5aff320e`。托管 VM 真实 systemd/pidfd 验错 InvocationID 拒绝及正确绑定停止，业务定向 316 项通过。标准工作站安装、新协议能力、原来源自然到期及实际 RPC/HDD 正向仍待。永久业务事务、Worker/API/Vue/Jobs 与 59 项继续。见[本批验证记录](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_INSTALL_SOURCE.md)。
 
 2026-11-09 退役只读采集候选b7aa0804通过：固定Root FD/64KiB JSON/合计2万条与32MiB、已有HDD共享锁/只读attest、2GiB载荷/16MiB namespace/120秒及双pass一致；只允许选中.data缺席，原记录/字节/live副本保持，RPC/授权来源仍未证明。17新采集/848回收root零跳过、14CI合同/8范围/4编译通过；复核提出缓存/合计预算/原始输入来源边界已修正，-B入口导入前/EOF门禁和父进程字节显式标注。8文件证据封存，实际安装目录缺失拒绝无创建/Provider或Agent/HDD操作，原老化来源未到期/未执行且保持；准确b56 CI12项全success，旧图谱pending保留。继续helper标准安装/真RPC-HDD正向、自然到期与永久业务/59项，17项移出不算完成。[可信采集、差异及验证限制](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_ACQUISITION.md)。
