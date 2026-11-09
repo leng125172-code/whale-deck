@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-14 `c52ff359` 加入固定 Git 快照获取器。真实 Git Smart HTTPS 验证公私仓库、分支/标签/提交、ref 移动及额外请求拦截。离线 KVM 验证获取的同一 TAR 在真实 ext4 配额下暂存与发布。继续签名 Agent、凭据服务、Worker、BFF、Vue、工作树更新和物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT.md)。
+
 2026-11-09，P3-14 `2b4604d2` 接入 Vue 文件和目录选择及可重现 TAR 封装。真实 Chrome、HTTP、PostgreSQL 和 Worker 验证同名拒绝和原偏移续传，离线 KVM 对浏览器生成的归档执行真实暂存、发布及目录源码的 Node 运行。继续 Git/ref、工作树变更和物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_FILES.md)。
 
 2026-11-09，P3-14 `3f2ab1d5` 接入 Vue 归档上传、续传、计划确认和取消。生产 Chrome 与真实回环 HTTP、PostgreSQL、Worker 联合验证丢失响应后的续传和单次发布。继续文件/目录、Git/ref、运行来源与物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_VUE.md)。
