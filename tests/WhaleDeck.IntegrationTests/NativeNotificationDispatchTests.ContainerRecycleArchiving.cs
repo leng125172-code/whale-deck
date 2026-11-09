@@ -229,6 +229,7 @@ public sealed partial class NativeNotificationDispatchTests
             var retirementCopy=await Pending(await Ready(retirementSource));await ReserveAndApply(retirementCopy);
             Assert.True(await repo.FinishAsync(retirementCopy,"Succeeded","CONTAINER_RECYCLE_ARCHIVE_COMPLETED",Receipt(retirementCopy,"Completed"),default));
             await RetirementSchemaBoundaries(second, db, (await repo.FindAsync(retirementCopy.Id,default))!, done, clock.GetUtcNow(), archiveMigration, ClonePeer);
+            Assert.Contains("20261109082000_ArchiveRetirementPreStartClosure", await db.Database.GetAppliedMigrationsAsync());
             var retirementRepositorySource=await Source();
             var repositoryCopy=await Pending(await Ready(retirementRepositorySource));await ReserveAndApply(repositoryCopy);
             Assert.True(await repo.FinishAsync(repositoryCopy,"Succeeded","CONTAINER_RECYCLE_ARCHIVE_COMPLETED",Receipt(repositoryCopy,"Completed"),default));
