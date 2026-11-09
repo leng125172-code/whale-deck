@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09 退役探针候选a576ab3f已验证：独立父进程节拍/有界stdin/64命令、单归档范围、审批计划和单次显式Apply，无设置来源/自动清理/重试。35新增/225联合、6137全量Unit零跳过、Release零警告错误/14CI合同/8范围通过；CS8602与xUnit2013编译失败已修正。Root冻结204二进制后真实连接旧Agent，major1/minor59/无新能力在capabilities拒绝、stdout0/未发操作，openat跟踪确认未开签名密钥；只签否定门禁，不签新安装态正向。前后原老化来源未到期/未执行且保持，220文件证据封存；准确292e CI12job全success，旧两条图谱pending补同步成功。继续新CI/独立物理证据/helper安装、自然到期与永久业务/59项，17项移出不算完成。[原生探针与安装态否定证据](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_PROBE.md)。
+
 2026-11-09 退役native CLI候选292e8bec通过：独立19模块白名单/固定Root状态/五动作、原session绑定与历史回执不重放、64KiB正文加LF/深度20/EOF先于dispatch和10/110秒限制，C#补5类固定失败码；未改冻结代码/helper或安装/能力。19新native/814回收root、190退役联合/6102全量Unit均零跳过，Release零警告错误/14CI合同/8范围/2编译通过；独立复核无阻断项。两轮测试夹具断言错误已修正、临时unlink明确clock/namespace/storage double，10文件证据封存；原老化来源仍未到期/未执行、claim/HDD保持。准确d579 CI五项success六browser仍运行，图谱pending保留。继续原生探针/固定helper安装、自然到期及永久业务/59项，17项移出不算完成。[受限CLI、失败与验证边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_NATIVE.md)。
 
 2026-11-09 退役Gateway候选d5798837通过：独立Application DTO/政策/接口，major1+minor60+专属能力先于签名/调用、嵌套字节跨await固定、祖先及外层指纹、独立45秒内容HMAC、严格计划/nullable回执和精确私有缺席。41新增/185联合、6097全量Unit零跳过、Release零警告错误/14CI合同/8范围通过，独立复核无当前通路阻断项；明确Application单独不重算指纹及无当前资源授权。9文件证据封存，原老化来源未到期/未执行、冻结/claim/HDD保持；无业务/DI/Agent映射或能力广告。上批准确CI42558093298的installer等5项success、六browser仍运行，Dependabot单项success误判已即时纠正；旧图谱待同步已补发。继续新CI/native探针安装、自然到期及永久业务/59项，17项移出不算完成。[Gateway候选与验证边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_GATEWAY.md)。
