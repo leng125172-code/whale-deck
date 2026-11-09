@@ -8,12 +8,14 @@ namespace WhaleDeck.Contracts;
 public static class DevelopmentSourceBinding
 {
     public const uint ProtocolMinor = 68;
+    public const uint AbortProtocolMinor = 69;
     public const string Capability = "development.source.archive";
     public const string Service = "/whaledeck.agent.v1.DevelopmentSourceService/";
     public const string Stage = Service + "Stage";
     public const string Inspect = Service + "Inspect";
     public const string Publish = Service + "Publish";
     public const string Discard = Service + "Discard";
+    public const string Abort = Service + "Abort";
     public const string Header = "x-whaledeck-development-source-sha256";
     public const uint MaximumArchiveBytes = 128 * 1024 * 1024;
     public const int ChunkBytes = 64 * 1024;
@@ -34,7 +36,7 @@ public static class DevelopmentSourceBinding
         Guid.TryParseExact(request.ImportId, "N", out var id) && id != Guid.Empty && id.ToString("N") == request.ImportId &&
         request.ArchiveFormat is "zip" or "tar" or "tar.gz" && request.ArchiveBytes is > 0 and <= MaximumArchiveBytes &&
         IsDigest(request.ArchiveSha256) &&
-        (method is Stage or Inspect ? request.PlanSha256.Length == 0 : IsDigest(request.PlanSha256));
+        (method is Stage or Inspect or Abort ? request.PlanSha256.Length == 0 : IsDigest(request.PlanSha256));
 
     public static byte[] HostInput(WorkspaceSourceRequest request)
     {

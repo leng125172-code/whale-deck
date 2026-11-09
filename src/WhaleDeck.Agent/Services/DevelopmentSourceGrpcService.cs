@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Google.Protobuf;
+using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using WhaleDeck.Contracts;
 using WhaleDeck.Contracts.Agent.V1;
@@ -40,8 +41,20 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
     public override Task<WorkspaceSourceReceipt> Discard(WorkspaceSourceRequest request, ServerCallContext context) =>
         ExecuteAsync(request, context.Method, "discard", context.CancellationToken);
 
+    public override async Task<Empty> Abort(WorkspaceSourceRequest request, ServerCallContext context)
+    {
+        var output = await RunAsync(request, context.Method, "abort", null, context.CancellationToken);
+        if (output.Trim() != """{"state":"Aborted"}""")
+            throw Error(StatusCode.DataLoss, "WORKSPACE_SOURCE_RECEIPT_INVALID");
+        return new();
+    }
+
     private static async Task<WorkspaceSourceReceipt> ExecuteAsync(WorkspaceSourceRequest request, string method,
-        string action, CancellationToken token, Func<Stream, CancellationToken, Task>? pump = null)
+        string action, CancellationToken token, Func<Stream, CancellationToken, Task>? pump = null) =>
+        ParseReceipt(request, await RunAsync(request, method, action, pump, token), method);
+
+    private static async Task<string> RunAsync(WorkspaceSourceRequest request, string method,
+        string action, Func<Stream, CancellationToken, Task>? pump, CancellationToken token)
     {
         if (!DevelopmentSourceBinding.IsValid(request, method))
             throw Error(StatusCode.InvalidArgument, "WORKSPACE_SOURCE_REQUEST_INVALID");
@@ -58,7 +71,7 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
                     if (pump is not null) await pump(input, lifetime);
                 }, TimeSpan.FromSeconds(pump is null ? 20 : 110), token);
             token.ThrowIfCancellationRequested();
-            return result.ExitCode == 0 ? ParseReceipt(request, result.StandardOutput, method) : throw Rejected(result.StandardError);
+            return result.ExitCode == 0 ? result.StandardOutput : throw Rejected(result.StandardError);
         }
         catch (OperationCanceledException) { throw Error(StatusCode.DeadlineExceeded, "WORKSPACE_SOURCE_DEADLINE"); }
         catch (Exception error) when (error is IOException or InvalidOperationException or Win32Exception)

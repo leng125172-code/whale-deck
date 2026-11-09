@@ -98,7 +98,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
 
     public bool ValidateDevelopmentSource(string? token, string method, string? hash) =>
         method is DevelopmentSourceBinding.Stage or DevelopmentSourceBinding.Inspect or
-            DevelopmentSourceBinding.Publish or DevelopmentSourceBinding.Discard &&
+            DevelopmentSourceBinding.Publish or DevelopmentSourceBinding.Discard or DevelopmentSourceBinding.Abort &&
         ValidateContentBound(token, method, hash, DevelopmentSourceBinding.Payload);
 
     public bool ValidateContainerWrite(string? token, string method, string? requestHash)

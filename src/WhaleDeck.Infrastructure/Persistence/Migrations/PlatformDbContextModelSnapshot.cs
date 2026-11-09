@@ -9130,6 +9130,145 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceSourceChunk", b =>
+                {
+                    b.Property<Guid>("ImportId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("import_id");
+
+                    b.Property<int>("Offset")
+                        .HasColumnType("integer")
+                        .HasColumnName("offset");
+
+                    b.Property<byte[]>("SealedContent")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("sealed_content");
+
+                    b.HasKey("ImportId", "Offset");
+
+                    b.ToTable("development_workspace_source_chunks", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_source_chunk", "\"offset\" BETWEEN 0 AND 133169152 AND \"offset\" % 1048576 = 0 AND octet_length(sealed_content) BETWEEN 30 AND 1048605");
+                        });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceSourceIntent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("ArchiveBytes")
+                        .HasColumnType("integer")
+                        .HasColumnName("archive_bytes");
+
+                    b.Property<string>("ArchiveSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("archive_sha256");
+
+                    b.Property<DateTimeOffset>("AvailableAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("available_at_utc");
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code");
+
+                    b.Property<string>("ContentSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("content_sha256");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<int?>("FileCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("file_count");
+
+                    b.Property<DateTimeOffset?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at_utc");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("format");
+
+                    b.Property<Guid?>("Lease")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease");
+
+                    b.Property<DateTimeOffset?>("LeaseUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until_utc");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<string>("OwnerSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("owner_subject");
+
+                    b.Property<string>("PlanSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("plan_sha256");
+
+                    b.Property<int>("ReceivedBytes")
+                        .HasColumnType("integer")
+                        .HasColumnName("received_bytes");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("state");
+
+                    b.Property<long?>("TotalBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("total_bytes");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.Property<string>("WorkspaceJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("workspace_json");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_workspace_source_pending")
+                        .HasFilter("finished_at_utc IS NULL");
+
+                    b.HasIndex("AvailableAtUtc", "Id")
+                        .HasFilter("finished_at_utc IS NULL");
+
+                    b.ToTable("development_workspace_source_imports", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_source_archive", "format IN ('zip','tar','tar.gz') AND archive_bytes BETWEEN 1 AND 134217728 AND archive_sha256 ~ '^[a-f0-9]{64}$' AND received_bytes BETWEEN 0 AND archive_bytes");
+
+                            t.HasCheckConstraint("ck_workspace_source_plan", "(plan_sha256 IS NULL AND content_sha256 IS NULL AND file_count IS NULL AND total_bytes IS NULL\n    AND state NOT IN ('Staged','Publishing','Published'))\nOR (plan_sha256 IS NOT NULL AND plan_sha256 ~ '^[a-f0-9]{64}$'\n    AND content_sha256 IS NOT NULL AND content_sha256 ~ '^[a-f0-9]{64}$'\n    AND file_count IS NOT NULL AND file_count BETWEEN 1 AND 9999\n    AND total_bytes IS NOT NULL AND total_bytes BETWEEN 0 AND 1073741824)");
+
+                            t.HasCheckConstraint("ck_workspace_source_state", "state IN ('Uploading','Ready','Staged','Publishing','Canceling','Published','Canceled','Failed')\nAND (state IN ('Published','Canceled','Failed')) = (finished_at_utc IS NOT NULL)\nAND (lease IS NULL) = (lease_until_utc IS NULL)\nAND (finished_at_utc IS NULL OR lease IS NULL)\nAND (state NOT IN ('Ready','Staged','Publishing','Published') OR received_bytes = archive_bytes)");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerAclIntent", b =>
                 {
                     b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
@@ -9706,6 +9845,24 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
                         .WithMany()
                         .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceSourceChunk", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceSourceIntent", null)
+                        .WithMany()
+                        .HasForeignKey("ImportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceSourceIntent", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.DevelopmentWorkspaceRecord", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

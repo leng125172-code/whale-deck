@@ -23,6 +23,7 @@ INTENT = 'intent.json'
 PLAN = 'plan.json'
 RECEIPT = 'receipt.json'
 DISCARD = 'discard.json'
+ABORT = 'abort.json'
 WORK = 'work'
 TREE = 'tree'
 MAX_ARCHIVE = 128 * 1024**2
@@ -342,7 +343,7 @@ class SourceImports:
                 os.fsync(payload)
                 slot = operation.value
                 self.verify_intent(slot, intent, create=True)
-                if self.metadata(slot, DISCARD) is not None:
+                if self.metadata(slot, DISCARD) is not None or self.metadata(slot, ABORT) is not None:
                     refuse('DISCARDED')
                 if (plan := self.verified_plan(slot, intent)) is not None:
                     self.read_archive(source, intent, check)
@@ -465,6 +466,27 @@ class SourceImports:
         self.runner.discard_bundle(self.driver, self.rootfs, slot)
         return receipt
 
+    def abort(self, request):
+        intent = self.request(request, True)
+        with self.locked(request['storage']) as (payload, proof), self.directory(payload, IMPORTS, proof) as imports:
+            with self.directory(imports.value, intent['importId'], proof) as operation:
+                os.fsync(imports.value)
+                os.fsync(payload)
+                slot = operation.value
+                self.verify_intent(slot, intent, create=True)
+                if self.verified_plan(slot, intent) is not None:
+                    refuse('PLAN_CONFLICT')
+                marker = dict(intent, state='Aborted')
+                previous = self.metadata(slot, ABORT)
+                if previous is not None and previous != marker:
+                    refuse('RECEIPT_CHANGED')
+                # An incomplete raw archive may have used the last project
+                # block. Free it under the lock before recording the fence.
+                self.runner.discard_bundle(self.driver, self.rootfs, slot)
+                if previous is None:
+                    self.store(slot, ABORT, marker)
+                return {'state': 'Aborted'}
+
     def verify_tree(self, parent, name, plan, proof):
         try:
             with self.driver.opened(parent, name, DIR) as tree:
@@ -485,7 +507,7 @@ def main():
     mode = sys.argv[1]
     sandboxed = mode.startswith('service-')
     action = mode.removeprefix('service-')
-    if action not in ('stage', 'inspect', 'publish', 'discard'):
+    if action not in ('stage', 'inspect', 'publish', 'discard', 'abort'):
         return 2
     from importlib.util import module_from_spec, spec_from_file_location
     try:
@@ -520,7 +542,12 @@ def main():
         else:
             if sys.stdin.buffer.read(1):
                 refuse('REQUEST_INVALID')
-            result = service.inspect(request) if action == 'inspect' else service.settle(request, discard=action == 'discard')
+            if action == 'inspect':
+                result = service.inspect(request)
+            elif action == 'abort':
+                result = service.abort(request)
+            else:
+                result = service.settle(request, discard=action == 'discard')
         print(json.dumps(result, separators=(',', ':')))
         return 0
     except (SourceError, files.Rejected, runner.RunError, rootfs.RootfsError) as error:

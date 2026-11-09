@@ -255,6 +255,10 @@ public static class DependencyInjection
         services.AddScoped<WorkspaceStorageAllocation>();
         services.AddScoped<WorkspaceRuns>();
         services.AddScoped<WorkspaceRunDispatcher>();
+        services.AddScoped<WorkspaceSources>();
+        services.AddScoped<WorkspaceSourceDispatcher>();
+        services.AddScoped<IWorkspaceSourceStore, WorkspaceSourceRepository>();
+        services.AddSingleton<WorkspaceSourceProtector>();
         services.AddScoped<IWorkspaceRunStore, WorkspaceRunRepository>();
         services.AddScoped<IWorkspaceRunReportWork, WorkspaceRunRepository>();
         services.AddScoped<WorkspaceRunReportPipeline>();
@@ -281,6 +285,7 @@ public static class DependencyInjection
         services.AddSingleton<AgentGateway>();
         services.AddSingleton<IWorkspaceStorageGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IWorkspaceRunnerGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddSingleton<IWorkspaceSourceGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IWorkspaceTestArtifactGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IAgentGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IHostProcessGateway>(provider => provider.GetRequiredService<AgentGateway>());

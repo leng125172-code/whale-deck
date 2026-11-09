@@ -485,6 +485,8 @@ service DevelopmentSourceService {
   rpc Inspect(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
   rpc Publish(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
   rpc Discard(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
+  // Fence and remove an incomplete upload (protocol 1.69).
+  rpc Abort(WorkspaceSourceRequest) returns (google.protobuf.Empty);
 }
 
 message WorkspaceSourceRequest {

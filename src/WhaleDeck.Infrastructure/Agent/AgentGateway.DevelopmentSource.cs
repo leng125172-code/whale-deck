@@ -1,0 +1,141 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using Google.Protobuf;
+using Grpc.Core;
+using WhaleDeck.Application.Development;
+using WhaleDeck.Contracts;
+using WhaleDeck.Contracts.Agent.V1;
+
+namespace WhaleDeck.Infrastructure.Agent;
+
+public sealed partial class AgentGateway : IWorkspaceSourceGateway
+{
+    public async Task<WorkspaceSourceObservation> StageSourceAsync(WorkspaceSourceClaim claim,
+        IAsyncEnumerable<ReadOnlyMemory<byte>> chunks, CancellationToken token)
+    {
+        const string method = DevelopmentSourceBinding.Stage;
+        var request = SourceRequest(claim, method);
+        try
+        {
+            var client = await SourceClientAsync(token);
+            using var call = client.Stage(SourceHeaders(method, request), DateTime.UtcNow.AddSeconds(112), token);
+            await call.RequestStream.WriteAsync(new() { Header = request }, token);
+            await foreach (var chunk in chunks.WithCancellation(token))
+            {
+                for (var offset = 0; offset < chunk.Length; offset += DevelopmentSourceBinding.ChunkBytes)
+                {
+                    var count = Math.Min(DevelopmentSourceBinding.ChunkBytes, chunk.Length - offset);
+                    await call.RequestStream.WriteAsync(new() { Content = ByteString.CopyFrom(chunk.Span.Slice(offset, count)) }, token);
+                }
+            }
+            await call.RequestStream.CompleteAsync();
+            return SourceObservation(request, await call.ResponseAsync, method);
+        }
+        catch (RpcException error) { token.ThrowIfCancellationRequested(); throw SourceFailure(error); }
+    }
+
+    public Task<WorkspaceSourceObservation> InspectSourceAsync(WorkspaceSourceClaim claim, CancellationToken token) =>
+        ObserveSourceAsync(claim, null, DevelopmentSourceBinding.Inspect, token);
+
+    public Task<WorkspaceSourceObservation> PublishSourceAsync(WorkspaceSourceClaim claim, WorkspaceSourcePlan plan, CancellationToken token) =>
+        ObserveSourceAsync(claim, plan, DevelopmentSourceBinding.Publish, token);
+
+    public Task<WorkspaceSourceObservation> DiscardSourceAsync(WorkspaceSourceClaim claim, WorkspaceSourcePlan plan, CancellationToken token) =>
+        ObserveSourceAsync(claim, plan, DevelopmentSourceBinding.Discard, token);
+
+    public async Task AbortSourceAsync(WorkspaceSourceClaim claim, CancellationToken token)
+    {
+        const string method = DevelopmentSourceBinding.Abort;
+        var request = SourceRequest(claim, method);
+        try
+        {
+            var client = await SourceClientAsync(token);
+            await client.AbortAsync(request, SourceHeaders(method, request), DateTime.UtcNow.AddSeconds(22), token);
+        }
+        catch (RpcException error) { token.ThrowIfCancellationRequested(); throw SourceFailure(error); }
+    }
+
+    private async Task<WorkspaceSourceObservation> ObserveSourceAsync(WorkspaceSourceClaim claim, WorkspaceSourcePlan? plan, string method,
+        CancellationToken token)
+    {
+        var request = SourceRequest(claim, method, plan);
+        try
+        {
+            var client = await SourceClientAsync(token);
+            var headers = SourceHeaders(method, request);
+            var deadline = DateTime.UtcNow.AddSeconds(22);
+            using var call = method switch
+            {
+                DevelopmentSourceBinding.Inspect => client.InspectAsync(request, headers, deadline, token),
+                DevelopmentSourceBinding.Publish => client.PublishAsync(request, headers, deadline, token),
+                _ => client.DiscardAsync(request, headers, deadline, token)
+            };
+            var result = SourceObservation(request, await call.ResponseAsync, method);
+            if (plan is not null && result.Plan != plan) throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+            return result;
+        }
+        catch (RpcException error) { token.ThrowIfCancellationRequested(); throw SourceFailure(error); }
+    }
+
+    private async Task<DevelopmentSourceService.DevelopmentSourceServiceClient> SourceClientAsync(CancellationToken token)
+    {
+        var caps = await _agent.GetCapabilitiesAsync(new Google.Protobuf.WellKnownTypes.Empty(),
+            deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
+        if (!DevelopmentSourceBinding.IsSupported(caps) || caps.ProtocolMinor < DevelopmentSourceBinding.AbortProtocolMinor)
+            throw new WorkspaceSourceException(WorkspaceSourceFailure.Unsupported);
+        return new(_channel);
+    }
+
+    private static WorkspaceSourceRequest SourceRequest(WorkspaceSourceClaim claim, string method, WorkspaceSourcePlan? plan = null)
+    {
+        var (import, workspace, actor, _) = claim;
+        if (import.WorkspaceId != workspace.Id || workspace.OwnerSubject != actor.Subject ||
+            workspace.State != WorkspaceStorageAllocation.Allocated || import.Archive.ArchiveBytes <= 0)
+            throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+        var request = new WorkspaceSourceRequest
+        {
+            Storage = new()
+            {
+                WorkspaceId = workspace.Id.ToString("D"), StorageRootId = workspace.StorageRootId,
+                EnvironmentSha256 = workspace.EnvironmentSha256, DiskMib = (uint)workspace.Budget.DiskMiB,
+                ActorSubject = actor.Subject, TraceId = actor.TraceId
+            },
+            ImportId = import.ImportId.ToString("N"), ArchiveFormat = import.Archive.Format,
+            ArchiveBytes = (uint)import.Archive.ArchiveBytes, ArchiveSha256 = import.Archive.ArchiveSha256,
+            PlanSha256 = plan?.PlanSha256 ?? ""
+        };
+        if (!DevelopmentSourceBinding.IsValid(request, method))
+            throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+        return request;
+    }
+
+    private Metadata SourceHeaders(string method, WorkspaceSourceRequest request)
+    {
+        if (_capabilityKey is not { Length: >= 32 }) throw new WorkspaceSourceException(WorkspaceSourceFailure.Unsupported);
+        var hash = DevelopmentSourceBinding.Hash(request);
+        var expires = DateTimeOffset.UtcNow.AddSeconds(45).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        var nonce = Guid.NewGuid().ToString("N");
+        var payload = DevelopmentSourceBinding.Payload(expires, nonce, method, hash);
+        var signature = Convert.ToHexString(HMACSHA256.HashData(_capabilityKey, Encoding.UTF8.GetBytes(payload)));
+        var headers = new Metadata { { "x-whaledeck-capability", $"{expires}.{nonce}.{signature}" } };
+        if (method == DevelopmentSourceBinding.Stage) headers.Add(DevelopmentSourceBinding.Header, hash);
+        return headers;
+    }
+
+    private static WorkspaceSourceObservation SourceObservation(WorkspaceSourceRequest request, WorkspaceSourceReceipt receipt, string method) =>
+        DevelopmentSourceBinding.Matches(request, receipt, method)
+            ? new(receipt.State, new(receipt.PlanSha256, receipt.ContentSha256, (int)receipt.FileCount, (long)receipt.TotalBytes))
+            : throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+
+    private static WorkspaceSourceException SourceFailure(RpcException error) => new(error.StatusCode switch
+    {
+        StatusCode.NotFound => WorkspaceSourceFailure.Missing,
+        StatusCode.InvalidArgument => WorkspaceSourceFailure.Rejected,
+        StatusCode.ResourceExhausted when error.Status.Detail == "WORKSPACE_SOURCE_CAPACITY" => WorkspaceSourceFailure.Rejected,
+        StatusCode.Aborted => WorkspaceSourceFailure.Conflict,
+        StatusCode.DataLoss => WorkspaceSourceFailure.Integrity,
+        StatusCode.Unimplemented or StatusCode.PermissionDenied => WorkspaceSourceFailure.Unsupported,
+        _ => WorkspaceSourceFailure.Retryable
+    });
+}
