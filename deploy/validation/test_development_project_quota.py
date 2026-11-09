@@ -1,0 +1,133 @@
+import errno
+import importlib.util
+from pathlib import Path
+import stat
+import struct
+from types import SimpleNamespace
+import unittest
+from unittest.mock import patch
+
+
+path = Path(__file__).resolve().parents[1] / 'host' / 'whaledeck-development-project-quota.py'
+spec = importlib.util.spec_from_file_location('workspace_project_quota', path)
+quota = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(quota)
+
+
+class ProjectQuotaTests(unittest.TestCase):
+    def setUp(self):
+        self.fd = 11
+        self.project = 1400000061
+        self.disk_mib = 256
+        self.expected = (262144, 65536)
+        self.state = (0,) * 8
+        self.attrs = (0, 0, 0, 0, 0)
+        self.flags = quota.PROJECT_ENFORCING
+        self.writes = []
+        self.cut = False
+        self.contents = []
+        for target, replacements in (
+            (quota, {'quota_call': self.quota_call}),
+            (quota.fcntl, {'ioctl': self.ioctl}),
+            (quota.os, {'fstat': lambda _: SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | 0o700),
+                        'fsync': lambda _: None, 'listdir': lambda _: self.contents}),
+        ):
+            patcher = patch.multiple(target, **replacements)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def quota_call(self, fd, command, project, data):
+        self.assertEqual(self.fd, fd)
+        if command == quota.Q_GETSTATE:
+            self.assertEqual(0, project)
+            self.assertEqual(1, data[0])
+            struct.pack_into('=H', data, 2, self.flags)
+            return
+        self.assertEqual(self.project, project)
+        if command == quota.Q_GETQUOTA:
+            data[:] = quota.QUOTA.pack(*self.state, quota.QIF_ALL)
+            return
+        self.assertEqual(quota.Q_SETQUOTA, command)
+        *values, valid = quota.QUOTA.unpack(data)
+        self.assertEqual(quota.QIF_LIMITS, valid)
+        self.state = tuple(values)
+        self.writes.append('limits')
+
+    def ioctl(self, fd, command, data):
+        self.assertEqual(self.fd, fd)
+        if command == quota.FSGETXATTR:
+            return quota.FILE_ATTR.pack(*self.attrs)
+        self.assertEqual(quota.FSSETXATTR, command)
+        if self.cut:
+            # ext4 may commit the inherit flag before a failed project update.
+            self.attrs = (quota.PROJINHERIT, 0, 0, 0, 0)
+            raise OSError(errno.EIO, 'injected before project change')
+        self.attrs = quota.FILE_ATTR.unpack(data)
+        self.writes.append('attributes')
+
+    def attach(self):
+        quota.attach(self.fd, self.project, self.disk_mib)
+
+    def test_sets_hard_blocks_and_inodes_then_verifies_exact_binding(self):
+        quota.require_unused(self.fd, self.project)
+        self.attach()
+        self.assertEqual(self.expected, (self.state[0], self.state[3]))
+        self.assertEqual((quota.PROJINHERIT, 0, 0, self.project, 0), self.attrs)
+        self.assertEqual(['limits', 'attributes'], self.writes)
+        self.attach()
+        self.assertEqual(['limits', 'attributes'], self.writes)
+
+    def test_replays_stopped_attach_without_overwriting_a_limit(self):
+        self.cut = True
+        with self.assertRaisesRegex(quota.QuotaError, 'QUOTA_ATTACH_FAILED'):
+            self.attach()
+        self.cut = False
+        self.attach()
+        self.assertEqual(['limits', 'attributes'], self.writes)
+
+    def test_rejects_accounting_without_enforcement(self):
+        self.flags = 0x10
+        with self.assertRaisesRegex(quota.QuotaError, 'QUOTA_NOT_ENFORCING'):
+            self.attach()
+        self.assertEqual([], self.writes)
+
+    def test_rejects_invalid_project_or_budget_before_any_kernel_query(self):
+        with patch.object(quota, 'require_enforcing') as require:
+            for value in (0, -1, True, 0x80000000):
+                with self.subTest(project=value), self.assertRaisesRegex(quota.QuotaError, 'QUOTA_REQUEST_INVALID'):
+                    quota.require_unused(self.fd, value)
+            for value in (255, True, 1048577):
+                with self.subTest(disk_mib=value), self.assertRaisesRegex(quota.QuotaError, 'QUOTA_REQUEST_INVALID'):
+                    quota.attach(self.fd, self.project, value)
+            require.assert_not_called()
+
+    def test_rejects_existing_usage_or_different_limits(self):
+        for state in ((0, 0, 4096, 0, 0, 1, 0, 0), (65536, 0, 0, 65536, 0, 0, 0, 0),
+                      (262144, 0, 4096, 65536, 0, 1, 0, 0)):
+            with self.subTest(state=state):
+                self.state = state
+                with self.assertRaisesRegex(quota.QuotaError, 'QUOTA_ID_IN_USE'):
+                    quota.require_unused(self.fd, self.project)
+                with self.assertRaisesRegex(quota.QuotaError, 'QUOTA_ID_IN_USE'):
+                    self.attach()
+        self.assertEqual([], self.writes)
+
+    def test_rejects_prepopulated_directory_foreign_project_or_realtime(self):
+        for attributes, contents in (((0, 0, 0, 0, 0), ['foreign']), ((0, 0, 0, 7, 0), []),
+                                     ((quota.REALTIME_FLAGS, 0, 0, 0, 0), [])):
+            with self.subTest(attributes=attributes):
+                self.attrs, self.contents = attributes, contents
+                with self.assertRaisesRegex(quota.QuotaError, 'QUOTA_DIRECTORY_UNSAFE'):
+                    self.attach()
+        self.assertEqual([], self.writes)
+
+    def test_refuses_to_repair_drift_on_an_already_tagged_directory(self):
+        self.attach()
+        self.state = (0,) * 8
+        with self.assertRaisesRegex(quota.QuotaError, 'QUOTA_BINDING_CHANGED'):
+            self.attach()
+        self.assertEqual(['limits', 'attributes'], self.writes)
+
+
+if __name__ == '__main__':
+    unittest.main()
