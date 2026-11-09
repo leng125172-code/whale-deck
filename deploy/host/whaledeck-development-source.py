@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host-side stage and no-replace publication of development source archives."""
+"""Stage and publish development source with a bound, retained update preimage."""
 
 import contextlib
 import errno
@@ -24,6 +24,8 @@ PLAN = 'plan.json'
 RECEIPT = 'receipt.json'
 DISCARD = 'discard.json'
 ABORT = 'abort.json'
+UPDATE = 'update.json'
+PREVIOUS = 'previous'
 WORK = 'work'
 TREE = 'tree'
 MAX_ARCHIVE = 128 * 1024**2
@@ -72,6 +74,13 @@ def source_path(files, name, directory):
                 or part.endswith(('.pem', '.key', '.p12', '.pfx', '.jks'))):
             refuse('PROTECTED_PATH')
     return name
+
+
+def rows_digest(rows, domain=b'whaledeck-development-source-tree-v1\n'):
+    digest = hashlib.sha256(domain)
+    for path, row in sorted(rows.items()):
+        digest.update(json.dumps([path, *row], ensure_ascii=False, separators=(',', ':')).encode('utf-8') + b'\n')
+    return digest.hexdigest()
 
 
 class SourceTree:
@@ -153,10 +162,89 @@ class SourceTree:
                     os.fsync(fd)
                 finally:
                     os.close(fd)
-        manifest = hashlib.sha256(b'whaledeck-development-source-tree-v1\n')
-        for path, row in sorted(self.rows.items()):
-            manifest.update(json.dumps([path, *row], ensure_ascii=False, separators=(',', ':')).encode('utf-8') + b'\n')
-        return {'contentSha256': manifest.hexdigest(), 'fileCount': self.count, 'totalBytes': self.bytes}
+        return {'contentSha256': rows_digest(self.rows), 'fileCount': self.count, 'totalBytes': self.bytes}
+
+
+def work_manifest(driver, root, owner, check, *, durable=False):
+    rows, versions = {}, {}
+    total = 0
+    normalized = True
+
+    def scan(fd, path, info, depth):
+        nonlocal total, normalized
+        check()
+        if len(versions) >= MAX_ENTRIES or depth > 32:
+            refuse('WORK_SCAN_LIMIT')
+        version = driver.files.version(info)
+        if driver.files.version(os.fstat(fd)) != version:
+            refuse('WORK_CHANGED')
+        versions[path] = (version,)
+        mode = stat.S_IMODE(info.st_mode)
+        if stat.S_ISDIR(info.st_mode):
+            rows[path] = ('Directory',)
+            expected = 0o700
+            with os.scandir(fd) as entries:
+                for entry in entries:
+                    check()
+                    name = '/'.join(filter(None, (path, entry.name)))
+                    try:
+                        driver.files.relative(name)
+                    except (UnicodeError, driver.files.Rejected):
+                        refuse('WORK_UNSUPPORTED')
+                    seen = entry.stat(follow_symlinks=False)
+                    if not (stat.S_ISDIR(seen.st_mode) or stat.S_ISREG(seen.st_mode) and seen.st_nlink == 1):
+                        refuse('WORK_UNSUPPORTED')
+                    flags = DIR if stat.S_ISDIR(seen.st_mode) else os.O_PATH
+                    with driver.opened(fd, entry.name, flags) as child:
+                        if flags == DIR:
+                            scan(child, name, seen, depth + 1)
+                        else:
+                            if driver.files.version(os.fstat(child)) != driver.files.version(seen):
+                                refuse('WORK_CHANGED')
+                            descriptor = os.open(f'/proc/self/fd/{child}', os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+                            with contextlib.closing(Fd(descriptor)):
+                                scan(descriptor, name, seen, depth + 1)
+        else:
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                refuse('WORK_UNSUPPORTED')
+            total += info.st_size
+            if total > MAX_EXPANDED:
+                refuse('WORK_SCAN_LIMIT')
+            digest = hashlib.sha256()
+            remaining = info.st_size
+            while remaining:
+                check()
+                block = os.read(fd, min(BLOCK, remaining))
+                if not block:
+                    refuse('WORK_CHANGED')
+                digest.update(block)
+                remaining -= len(block)
+            if os.read(fd, 1):
+                refuse('WORK_CHANGED')
+            executable = bool(mode & 0o111)
+            rows[path] = ('File', info.st_size, digest.hexdigest(), executable)
+            expected = 0o700 if executable else 0o600
+        if info.st_uid != owner or info.st_gid != owner or mode != expected or os.listxattr(fd):
+            normalized = False
+        if durable:
+            os.fsync(fd)
+        if driver.files.version(os.fstat(fd)) != version:
+            refuse('WORK_CHANGED')
+
+    try:
+        scan(root, '', os.fstat(root), 0)
+        for path, (version,) in versions.items():
+            check()
+            with driver.opened(root, path or '.', os.O_PATH) as fd:
+                if driver.files.version(os.fstat(fd)) != version:
+                    refuse('WORK_CHANGED')
+    except OSError as error:
+        if error.errno in (errno.EXDEV, errno.ELOOP, errno.ENOTDIR, errno.ENOENT):
+            refuse('WORK_CHANGED')
+        raise
+    content = rows_digest(rows)
+    fingerprint = rows_digest(versions, b'whaledeck-development-source-work-v1\n' + content.encode('ascii') + b'\n')
+    return content, fingerprint, normalized, rows
 
 
 class Fd:
@@ -230,18 +318,30 @@ class SourceImports:
     def __init__(self, driver, runner, rootfs, archive):
         self.driver, self.runner, self.rootfs, self.archive = driver, runner, rootfs, archive
 
-    def request(self, request, stage):
+    def request(self, request, stage, publish=False):
         fields = {'storage', 'importId', 'archiveFormat', 'archiveBytes', 'archiveSha256'}
-        if not isinstance(request, dict) or set(request) != (fields if stage else fields | {'planSha256'}):
+        if not isinstance(request, dict):
+            refuse('REQUEST_INVALID')
+        update = 'previousImportId' in request
+        if update:
+            fields.add('previousImportId')
+        accepted = fields if stage else fields | {'planSha256'}
+        if update and publish:
+            accepted |= {'conflictResolution'}
+        if set(request) != accepted:
             refuse('REQUEST_INVALID')
         _, workspace = self.driver.validate_request(request['storage'])
         try:
             self.driver.files.identity(request['importId'])
+            if update:
+                self.driver.files.identity(request['previousImportId'])
         except self.driver.files.Rejected:
             refuse('REQUEST_INVALID')
         if (request['archiveFormat'] not in ('zip', 'tar', 'tar.gz') or type(request['archiveBytes']) is not int
                 or not 0 < request['archiveBytes'] <= MAX_ARCHIVE
                 or not isinstance(request['archiveSha256'], str) or not DIGEST.fullmatch(request['archiveSha256'])
+                or (update and (request['archiveFormat'] != 'tar' or request['previousImportId'] == request['importId']))
+                or (update and publish and request['conflictResolution'] not in ('clean-only', 'retain-and-replace'))
                 or (not stage and (not isinstance(request['planSha256'], str) or not DIGEST.fullmatch(request['planSha256'])))):
             refuse('REQUEST_INVALID')
         return {'workspaceId': workspace, 'storageSha256': hashlib.sha256(self.rootfs.canonical(request['storage'])).hexdigest(),
@@ -285,19 +385,54 @@ class SourceImports:
             refuse('IMPORT_CONFLICT')
 
     def public_plan(self, plan):
-        return {**{key: value for key, value in plan.items() if key != 'treeInode'},
-                'planSha256': hashlib.sha256(self.rootfs.canonical(plan)).hexdigest()}
+        public = {key: value for key, value in plan.items() if key not in ('treeInode', 'updateBase')}
+        if 'updateBase' in plan:
+            public['update'] = {key: value for key, value in plan['updateBase'].items() if key not in ('inode', 'fingerprint')}
+        return dict(public, planSha256=hashlib.sha256(self.rootfs.canonical(plan)).hexdigest())
 
     def verified_plan(self, slot, intent):
         plan = self.metadata(slot, PLAN)
-        if plan is not None and (set(plan) != set(intent) | {'contentSha256', 'fileCount', 'totalBytes', 'treeInode'}
+        fields = set(intent) | {'contentSha256', 'fileCount', 'totalBytes', 'treeInode'}
+        if 'previousImportId' in intent:
+            fields.add('updateBase')
+        if plan is not None and (set(plan) != fields
                 or any(plan[key] != value for key, value in intent.items())
                 or not isinstance(plan['contentSha256'], str) or not DIGEST.fullmatch(plan['contentSha256'])
                 or type(plan['fileCount']) is not int or not 0 < plan['fileCount'] < MAX_ENTRIES
                 or type(plan['totalBytes']) is not int or not 0 <= plan['totalBytes'] <= MAX_EXPANDED
                 or type(plan['treeInode']) is not int or plan['treeInode'] <= 0):
             refuse('PLAN_CHANGED')
+        if plan is not None and 'updateBase' in plan:
+            base = plan['updateBase']
+            counts = ('addedEntries', 'removedEntries', 'changedEntries')
+            if (not isinstance(base, dict) or set(base) != {'inode', 'fingerprint', 'workContentSha256',
+                    'previousContentSha256', 'dirty', *counts} or type(base['inode']) is not int or base['inode'] <= 0
+                    or base['inode'] == plan['treeInode'] or type(base['dirty']) is not bool
+                    or any(not isinstance(base[key], str) or not DIGEST.fullmatch(base[key])
+                           for key in ('fingerprint', 'workContentSha256', 'previousContentSha256'))
+                    or any(type(base[key]) is not int or not 0 <= base[key] < MAX_ENTRIES for key in counts)):
+                refuse('PLAN_CHANGED')
         return plan
+
+    def existing_update(self, payload, imports, proof, intent, check):
+        try:
+            with self.driver.opened(imports, intent['previousImportId'], DIR) as previous:
+                self.rootfs.private_directory(previous)
+                prior_intent = self.metadata(previous, INTENT)
+                if (not isinstance(prior_intent, dict) or prior_intent.get('importId') != intent['previousImportId']
+                        or prior_intent.get('storageSha256') != intent['storageSha256']
+                        or prior_intent.get('workspaceId') != intent['workspaceId']):
+                    refuse('WORK_BASE_CONFLICT')
+                plan = self.verified_plan(previous, prior_intent)
+                if plan is None or self.metadata(previous, RECEIPT) != dict(self.public_plan(plan), state='Published'):
+                    refuse('WORK_BASE_CONFLICT')
+            self.verify_tree(payload, WORK, plan, proof)
+            with self.driver.opened(payload, WORK, DIR) as work:
+                content, fingerprint, normalized, rows = work_manifest(self.driver, work, self.runner.RUN_UID, check)
+        except FileNotFoundError:
+            refuse('WORK_BASE_CONFLICT')
+        return ({'inode': plan['treeInode'], 'fingerprint': fingerprint, 'workContentSha256': content,
+                 'previousContentSha256': plan['contentSha256'], 'dirty': not normalized or content != plan['contentSha256']}, rows)
 
     @staticmethod
     def exists(parent, name):
@@ -336,7 +471,8 @@ class SourceImports:
             if time.monotonic() >= deadline:
                 refuse('DEADLINE')
         with self.locked(request['storage']) as (payload, proof), self.directory(payload, IMPORTS, proof) as imports:
-            if self.exists(payload, WORK) and not self.exists(imports.value, intent['importId']):
+            update = 'previousImportId' in intent
+            if not update and self.exists(payload, WORK) and not self.exists(imports.value, intent['importId']):
                 refuse('WORK_ALREADY_PRESENT')
             with self.directory(imports.value, intent['importId'], proof) as operation:
                 os.fsync(imports.value)
@@ -348,8 +484,9 @@ class SourceImports:
                 if (plan := self.verified_plan(slot, intent)) is not None:
                     self.read_archive(source, intent, check)
                     return self.public_plan(plan)
-                if self.exists(payload, WORK):
+                if not update and self.exists(payload, WORK):
                     refuse('WORK_ALREADY_PRESENT')
+                base, before = self.existing_update(payload, imports.value, proof, intent, check) if update else (None, None)
                 self.runner.discard_bundle(self.driver, self.rootfs, slot)
                 try:
                     with self.directory(slot, 'bundle', proof) as bundle:
@@ -366,6 +503,11 @@ class SourceImports:
                             manifest = tree.finish()
                             self.driver.quota.verify(tree_fd.value, proof['projectId'], proof['diskMiB'])
                             plan = {**intent, **manifest, 'treeInode': os.fstat(tree_fd.value).st_ino}
+                            if base is not None:
+                                base.update(addedEntries=len(tree.rows.keys() - before.keys()),
+                                            removedEntries=len(before.keys() - tree.rows.keys()),
+                                            changedEntries=sum(before[name] != tree.rows[name] for name in before.keys() & tree.rows.keys()))
+                                plan['updateBase'] = base
                         os.unlink('archive', dir_fd=bundle.value)
                         os.fsync(bundle.value)
                     os.fsync(slot)
@@ -377,7 +519,7 @@ class SourceImports:
                 return self.public_plan(plan)
 
     def settle(self, request, *, discard=False):
-        intent = self.request(request, False)
+        intent = self.request(request, False, publish=not discard)
         with self.locked(request['storage']) as (payload, proof):
             with self.driver.opened(payload, IMPORTS, DIR) as imports, self.driver.opened(imports, intent['importId'], DIR) as slot:
                 self.rootfs.private_directory(imports)
@@ -387,9 +529,13 @@ class SourceImports:
                 if plan is None or self.public_plan(plan)['planSha256'] != request['planSha256']:
                     refuse('PLAN_CONFLICT')
                 if discard:
+                    if 'updateBase' in plan and self.work_is_candidate(payload, plan):
+                        refuse('PUBLICATION_UNCONFIRMED')
                     return self.discard(slot, plan, proof)
                 if self.metadata(slot, DISCARD) is not None:
                     refuse('DISCARDED')
+                if 'updateBase' in plan:
+                    return self.publish_update(payload, slot, proof, plan, request['conflictResolution'])
                 receipt = dict(self.public_plan(plan), state='Published')
                 if (previous := self.metadata(slot, RECEIPT)) is not None:
                     if previous != receipt:
@@ -413,6 +559,82 @@ class SourceImports:
                         os.rmdir('bundle', dir_fd=slot)
                 self.store(slot, RECEIPT, receipt)
                 return receipt
+
+    def update_position(self, payload, plan):
+        try:
+            info = os.stat(WORK, dir_fd=payload, follow_symlinks=False)
+        except FileNotFoundError:
+            refuse('WORK_BASE_CONFLICT')
+        if not stat.S_ISDIR(info.st_mode):
+            refuse('WORK_BASE_CONFLICT')
+        if info.st_ino == plan['treeInode']:
+            return 'exchanged'
+        if info.st_ino == plan['updateBase']['inode']:
+            return 'staged'
+        refuse('WORK_BASE_CONFLICT')
+
+    def work_is_candidate(self, payload, plan):
+        try:
+            info = os.stat(WORK, dir_fd=payload, follow_symlinks=False)
+        except FileNotFoundError:
+            return False
+        return stat.S_ISDIR(info.st_mode) and info.st_ino == plan['treeInode']
+
+    def publish_update(self, payload, slot, proof, plan, choice):
+        public = self.public_plan(plan)
+        receipt = dict(public, state='Published')
+        marker = {'planSha256': public['planSha256'], 'conflictResolution': choice}
+        recorded = self.metadata(slot, UPDATE)
+        if recorded is not None and recorded != marker:
+            refuse('UPDATE_CHOICE_CONFLICT')
+        if (previous := self.metadata(slot, RECEIPT)) is not None:
+            if previous != receipt or recorded != marker:
+                refuse('RECEIPT_CHANGED')
+            return previous
+        base = plan['updateBase']
+        old_tree = {'treeInode': base['inode']}
+        position = self.update_position(payload, plan)
+        if position == 'staged':
+            if self.exists(slot, PREVIOUS):
+                refuse('WORK_BASE_CONFLICT')
+            if base['dirty'] and choice == 'clean-only':
+                refuse('WORK_DIRTY')
+            self.verify_tree(payload, WORK, old_tree, proof)
+            with self.driver.opened(slot, 'bundle', DIR) as bundle, self.driver.opened(payload, WORK, DIR) as work:
+                self.rootfs.private_directory(bundle)
+                self.verify_tree(bundle, TREE, plan, proof)
+                deadline = time.monotonic() + 90
+                def check():
+                    if time.monotonic() >= deadline:
+                        refuse('DEADLINE')
+                _, fingerprint, _, _ = work_manifest(self.driver, work, self.runner.RUN_UID, check, durable=True)
+                if fingerprint != base['fingerprint']:
+                    refuse('WORK_CHANGED')
+                if recorded is None:
+                    self.store(slot, UPDATE, marker)
+                self.driver.files.exchange(bundle, TREE, payload, WORK, 2)
+                os.fsync(bundle)
+                os.fsync(payload)
+        elif recorded != marker:
+            refuse('RECEIPT_CHANGED')
+        self.verify_tree(payload, WORK, plan, proof)
+        if not self.exists(slot, PREVIOUS):
+            with self.driver.opened(slot, 'bundle', DIR) as bundle:
+                self.rootfs.private_directory(bundle)
+                self.verify_tree(bundle, TREE, old_tree, proof)
+                self.driver.files.exchange(bundle, TREE, slot, PREVIOUS, 1)
+                os.fsync(bundle)
+                os.fsync(slot)
+        self.verify_tree(slot, PREVIOUS, old_tree, proof)
+        os.fsync(payload)
+        if self.exists(slot, 'bundle'):
+            with self.driver.opened(slot, 'bundle', DIR) as bundle:
+                self.rootfs.private_directory(bundle)
+                os.fsync(bundle)
+            os.rmdir('bundle', dir_fd=slot)
+            os.fsync(slot)
+        self.store(slot, RECEIPT, receipt)
+        return receipt
 
     def inspect(self, request):
         intent = self.request(request, True)
@@ -439,6 +661,14 @@ class SourceImports:
                         if name == DISCARD and self.exists(slot, 'bundle'):
                             return dict(public, state='DiscardUnconfirmed')
                         return recorded
+                if 'updateBase' in plan and self.work_is_candidate(payload, plan):
+                    marker = self.metadata(slot, UPDATE)
+                    if (not isinstance(marker, dict) or set(marker) != {'planSha256', 'conflictResolution'}
+                            or marker['planSha256'] != public['planSha256']
+                            or marker['conflictResolution'] not in ('clean-only', 'retain-and-replace')):
+                        refuse('RECEIPT_CHANGED')
+                    self.verify_tree(payload, WORK, plan, proof)
+                    return dict(public, state='PublishUnconfirmed')
                 if self.exists(slot, 'bundle'):
                     with self.driver.opened(slot, 'bundle', DIR) as bundle:
                         self.rootfs.private_directory(bundle)

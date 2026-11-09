@@ -21,6 +21,7 @@ def load(name):
 source = load('development-source')
 files = load('files')
 archive = load('tree-archive')
+storage = load('development-storage')
 
 
 def zip_bytes(entries, *, compress=zipfile.ZIP_STORED):
@@ -111,6 +112,27 @@ class DevelopmentSourceTests(unittest.TestCase):
             with self.subTest(fmt=fmt), tempfile.TemporaryDirectory() as directory:
                 with self.assertRaises(source.SourceError):
                     self.extract(body, fmt, directory, limit)
+
+    def test_work_manifest_matches_original_and_flags_local_changes(self):
+        original = tar_bytes([('src/main.py', tarfile.REGTYPE, 0o775, b'original')])
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.extract(original, 'tar', directory)
+            path = Path(directory) / 'src/main.py'
+            driver = storage.WorkspaceStorage(files)
+            with driver.absolute(directory) as fd:
+                content, fingerprint, normalized, _ = source.work_manifest(driver, fd, os.geteuid(), lambda: None)
+                self.assertEqual(result['contentSha256'], content)
+                self.assertTrue(normalized)
+                path.chmod(0o750)
+                changed, second, normalized, _ = source.work_manifest(driver, fd, os.geteuid(), lambda: None)
+                self.assertEqual(content, changed)
+                self.assertNotEqual(fingerprint, second)
+                self.assertFalse(normalized)
+                path.write_bytes(b'modified')
+                self.assertNotEqual(content, source.work_manifest(driver, fd, os.geteuid(), lambda: None)[0])
+                (Path(directory) / 'link').symlink_to('/etc/passwd')
+                with self.assertRaisesRegex(source.SourceError, 'WORK_UNSUPPORTED'):
+                    source.work_manifest(driver, fd, os.geteuid(), lambda: None)
 
 
 if __name__ == '__main__':

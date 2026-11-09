@@ -80,7 +80,7 @@ class InputLines:
 
 
 def open_at(root, path, flags, mode=0, cross_mount=False):
-    if mode != 0 or flags & ~(os.O_RDONLY | os.O_DIRECTORY | os.O_NONBLOCK | os.O_NOFOLLOW):
+    if mode != 0 or flags & ~(os.O_RDONLY | os.O_DIRECTORY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_PATH):
         raise Rejected('FILES_OPEN_OPTIONS_INVALID')
     if platform.machine() not in ('x86_64', 'aarch64'):
         raise Rejected('FILES_KERNEL_UNSUPPORTED')
