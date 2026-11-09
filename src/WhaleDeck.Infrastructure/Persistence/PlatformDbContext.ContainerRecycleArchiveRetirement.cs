@@ -65,7 +65,7 @@ public sealed partial class PlatformDbContext
                     ((root_state IS DISTINCT FROM 'Completed' OR apply_started_at_utc IS NOT NULL)
                     AND (state <> 'Succeeded' OR root_state = 'Completed')
                     AND (state <> 'Unknown' OR root_state IS NULL OR root_state = 'Unknown')
-                    AND (execution_job_id IS NULL OR state NOT IN ('Canceled','Failed','Expired') OR root_state = 'Aborted')
+                    AND (execution_job_id IS NULL OR state NOT IN ('Canceled','Failed','Expired') OR (root_started_at_utc IS NOT NULL AND root_state = 'Aborted') OR (root_started_at_utc IS NULL AND root_state IS NULL))
                     AND (state IN ('Succeeded','Unknown','Canceled','Failed','Expired','Acknowledged') OR root_state IS NULL)) IS TRUE
                     """);
                 table.HasCheckConstraint("ck_archive_retirement_lease",

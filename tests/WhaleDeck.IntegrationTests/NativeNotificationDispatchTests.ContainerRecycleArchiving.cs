@@ -229,6 +229,11 @@ public sealed partial class NativeNotificationDispatchTests
             var retirementCopy=await Pending(await Ready(retirementSource));await ReserveAndApply(retirementCopy);
             Assert.True(await repo.FinishAsync(retirementCopy,"Succeeded","CONTAINER_RECYCLE_ARCHIVE_COMPLETED",Receipt(retirementCopy,"Completed"),default));
             await RetirementSchemaBoundaries(second, db, (await repo.FindAsync(retirementCopy.Id,default))!, done, clock.GetUtcNow(), archiveMigration, ClonePeer);
+            var retirementRepositorySource=await Source();
+            var repositoryCopy=await Pending(await Ready(retirementRepositorySource));await ReserveAndApply(repositoryCopy);
+            Assert.True(await repo.FinishAsync(repositoryCopy,"Succeeded","CONTAINER_RECYCLE_ARCHIVE_COMPLETED",Receipt(repositoryCopy,"Completed"),default));
+            var origin=ContainerRecycleArchiveSourceResolver.FromRows(retirementRepositorySource.Purge,retirementRepositorySource.Original,protector,protector,protector);
+            await RetirementRepositoryBoundaries(db, second, (await repo.FindAsync(repositoryCopy.Id,default))!, origin, protector, clock, actor);
             Assert.False(await db.ContainerRecycleArchiveIntents.AnyAsync(r=>r.CompletedAtUtc==null||r.PublishBarrier||r.LeaseToken!=null));Assert.False(await db.OutboxMessages.AnyAsync(m=>(m.MessageType=="ContainerRecycleArchiveRequested"||m.MessageType=="ContainerRecycleArchiveCancellationRequested")&&m.ProcessedAtUtc==null));
             Assert.Contains(await second.AuditEvents.AsNoTracking().ToArrayAsync(),e=>e.Action=="containers.files.recycle-archive.unknown-acknowledged"&&e.ActorSubject==admin.Subject);
             Console.WriteLine("INBOX_PHASE=container-recycle-archive-two-phase-dual-source-lock-sixteen-fences-nullable-audit-rollback");

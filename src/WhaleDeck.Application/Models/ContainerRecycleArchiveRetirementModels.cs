@@ -22,3 +22,6 @@ public sealed record ContainerRecycleArchiveRetirementSourceBinding(Guid Archive
 
 public sealed record ResolvedContainerRecycleArchiveRetirementSource(ContainerRecycleArchiveRetirementSourceBinding Binding, string ProofHash)
 { public override string ToString() => nameof(ResolvedContainerRecycleArchiveRetirementSource); }
+
+public sealed record RetirementConfirmation(Guid Id, string Actor, string LoginBinding, string PlanHash, DateTimeOffset ExpiresAtUtc)
+{ public override string ToString() => nameof(RetirementConfirmation); }
