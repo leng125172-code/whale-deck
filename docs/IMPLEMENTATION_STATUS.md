@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-10，P3-14 `2d4e83f3` 接入 Agent 1.70 签名 Git 获取。离线 KVM 通过动态 UID、宿主凭据隔离、取消清理、防重放、真实公私 Git，以及同一多块 TAR 的签名暂存和显式发布。继续 Worker、BFF、Vue、来源持久化、工作树更新和物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT_RPC.md)。
+
 2026-11-09，P3-14 `c52ff359` 加入固定 Git 快照获取器。真实 Git Smart HTTPS 验证公私仓库、分支/标签/提交、ref 移动及额外请求拦截。离线 KVM 验证获取的同一 TAR 在真实 ext4 配额下暂存与发布。继续签名 Agent、凭据服务、Worker、BFF、Vue、工作树更新和物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT.md)。
 
 2026-11-09，P3-14 `2b4604d2` 接入 Vue 文件和目录选择及可重现 TAR 封装。真实 Chrome、HTTP、PostgreSQL 和 Worker 验证同名拒绝和原偏移续传，离线 KVM 对浏览器生成的归档执行真实暂存、发布及目录源码的 Node 运行。继续 Git/ref、工作树变更和物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_FILES.md)。
