@@ -8,6 +8,7 @@ public sealed record WorkspaceRunInput(string Runtime, string Task);
 public sealed record WorkspaceRunView(Guid RunId, Guid WorkspaceId, string Runtime, string Task, string State, string Phase,
     DateTimeOffset CreatedAtUtc, DateTimeOffset? CompletedAtUtc, bool CancellationRequested, string? ErrorCode, string? HostStatus,
     string? ReportStatus = null);
+public sealed record WorkspaceRunPage(WorkspaceRunView[] Items, Guid? NextAfter);
 public sealed record WorkspaceRunClaim(WorkspaceRunView Run, WorkspaceDefinition Workspace, TerminalActor Actor, Guid Lease,
     WorkspaceRunCommand Command, DateTimeOffset? DispatchedAtUtc);
 
@@ -16,6 +17,7 @@ public interface IWorkspaceRunStore
     Task<WorkspaceRunView> EnqueueAsync(WorkspaceDefinition workspace, TerminalActor actor, Guid key, WorkspaceRunInput input,
         CancellationToken token);
     Task<WorkspaceRunView?> GetAsync(Guid workspaceId, Guid runId, string owner, CancellationToken token);
+    Task<WorkspaceRunPage> ListAsync(Guid workspaceId, string owner, Guid? after, int take, CancellationToken token);
     Task<WorkspaceRunView> CancelAsync(Guid workspaceId, Guid runId, TerminalActor actor, CancellationToken token);
     Task<WorkspaceRunClaim?> ClaimAsync(CancellationToken token);
     Task<bool> EnterDispatchAsync(WorkspaceRunClaim claim, CancellationToken token);
@@ -45,6 +47,13 @@ public sealed class WorkspaceRuns(DevelopmentWorkspaces access, IDevelopmentWork
     {
         _ = await RequireAsync(actor, id, token);
         return await queue.GetAsync(id, runId, actor.Subject, token) ?? throw new KeyNotFoundException("WORKSPACE_RUN_NOT_FOUND");
+    }
+
+    public async Task<WorkspaceRunPage> ListAsync(TerminalActor actor, Guid id, Guid? after, int take, CancellationToken token)
+    {
+        if (after == Guid.Empty || take is < 1 or > 100) throw new ArgumentException("WORKSPACE_RUN_PAGE_INVALID");
+        _ = await RequireAsync(actor, id, token);
+        return await queue.ListAsync(id, actor.Subject, after, take, token);
     }
 
     public async Task<WorkspaceRunView> CancelAsync(TerminalActor actor, Guid id, Guid runId, CancellationToken token)

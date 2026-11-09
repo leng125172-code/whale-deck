@@ -50,6 +50,36 @@ const router = createRouter({
         },
         { path: 'portal', name: 'portal', component: PortalView, meta: { title: '我的门户' } },
         {
+          path: 'development/workspaces',
+          name: 'development-workspaces',
+          component: () => import('@/views/DevelopmentWorkspacesView.vue'),
+          meta: { title: '开发空间' },
+        },
+        {
+          path: 'development/workspaces/new',
+          name: 'development-workspace-new',
+          component: () => import('@/views/DevelopmentWorkspacesView.vue'),
+          meta: { title: '登记开发空间' },
+        },
+        {
+          path: 'development/workspaces/:workspaceId/environment',
+          name: 'development-workspace-environment',
+          component: () => import('@/views/DevelopmentWorkspaceView.vue'),
+          meta: { title: '空间环境' },
+        },
+        {
+          path: 'development/workspaces/:workspaceId/runs/:runId?',
+          name: 'development-workspace-runs',
+          component: () => import('@/views/DevelopmentWorkspaceView.vue'),
+          meta: { title: '空间运行' },
+        },
+        {
+          path: 'development/workspaces/:workspaceId/reports/:runId',
+          name: 'development-workspace-report',
+          component: () => import('@/views/DevelopmentWorkspaceReportView.vue'),
+          meta: { title: '运行报告' },
+        },
+        {
           path: 'files',
           name: 'files',
           component: () => import('@/views/FilesView.vue'),

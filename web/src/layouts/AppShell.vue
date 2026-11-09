@@ -26,6 +26,7 @@ import NotificationDrawer from '@/components/NotificationDrawer.vue'
 import { createNotificationInbox } from '@/services/notificationInbox'
 import { authSession } from '@/services/authSession'
 import { apiRequest } from '@/services/apiClient'
+import { developmentWorkspaces, workspacePath } from '@/services/developmentWorkspaces'
 import type { AlertEvent, GlobalSearchResult, Job } from '@/services/contracts'
 
 const route = useRoute()
@@ -42,9 +43,34 @@ const remoteSearchResults = ref<GlobalSearchResult[]>([])
 const searchLoading = ref(false)
 const inbox = createNotificationInbox()
 
-const activeNavigation = computed(() => route.path)
+const activeNavigation = computed(() =>
+  route.path.startsWith(workspacePath + '/') ? workspacePath : route.path,
+)
 const currentUserName = computed(() => authSession.user.value?.name || '已登录')
 const isAdministrator = computed(() => authSession.user.value?.isAdministrator === true)
+const canDevelop = ref(false)
+watch(
+  () => [authSession.user.value?.subject, authSession.authenticated.value],
+  (_, __, onCleanup) => {
+    canDevelop.value = false
+    if (!authSession.authenticated.value || !authSession.user.value?.subject) return
+    const controller = new AbortController()
+    onCleanup(() => controller.abort())
+    void developmentWorkspaces.catalog(controller.signal).then(
+      (catalog) => {
+        if (
+          !controller.signal.aborted &&
+          Array.isArray(catalog?.runtimes) &&
+          Array.isArray(catalog?.storageRootIds) &&
+          catalog.capacity
+        )
+          canDevelop.value = true
+      },
+      () => undefined,
+    )
+  },
+  { immediate: true },
+)
 
 const navigationGroups = [
   {
@@ -53,6 +79,7 @@ const navigationGroups = [
       { index: '/', label: '工作站概览', icon: Grid, administratorOnly: false },
       { index: '/portal', label: '我的门户', icon: Link, administratorOnly: false },
       { index: '/services', label: '内部服务', icon: Link, administratorOnly: false },
+      { index: workspacePath, label: '开发空间', icon: FolderOpened, administratorOnly: false },
     ],
   },
   {
@@ -129,7 +156,11 @@ const visibleNavigationGroups = computed(() =>
   navigationGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => !item.administratorOnly || isAdministrator.value),
+      items: group.items.filter((item) =>
+        item.index === workspacePath
+          ? canDevelop.value
+          : !item.administratorOnly || isAdministrator.value,
+      ),
     }))
     .filter((group) => group.items.length > 0),
 )

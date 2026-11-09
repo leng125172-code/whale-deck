@@ -74,6 +74,32 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
         return pair is null ? null : View(pair.row, pair.job);
     }
 
+    public async Task<WorkspaceRunPage> ListAsync(Guid workspaceId, string owner, Guid? after, int take, CancellationToken token)
+    {
+        var jobs = db.OperationJobs.AsNoTracking()
+            .Where(job => job.ResourceId == workspaceId && job.ActorSubject == owner && job.JobType == WorkspaceRuns.JobType);
+        if (after is { } id)
+        {
+            var cursor = await (from job in jobs
+                                join row in db.WorkspaceRunIntents on job.Id equals row.Id
+                                where row.WorkspaceId == workspaceId && job.Id == id
+                                select new { job.Id, job.CreatedAtUtc }).SingleOrDefaultAsync(token)
+                ?? throw new KeyNotFoundException("WORKSPACE_RUN_CURSOR_NOT_FOUND");
+            jobs = db.OperationJobs.FromSqlInterpolated($"""
+                SELECT * FROM operation_jobs
+                WHERE resource_id = {workspaceId} AND actor_subject = {owner} AND job_type = {WorkspaceRuns.JobType}
+                  AND (created_at_utc, id) < ({cursor.CreatedAtUtc}, {cursor.Id})
+                """).AsNoTracking();
+        }
+        var items = await (from job in jobs
+                           join row in db.WorkspaceRunIntents.AsNoTracking() on job.Id equals row.Id
+                           where row.WorkspaceId == workspaceId
+                           orderby job.CreatedAtUtc descending, job.Id descending
+                           select new { row, job }).Take(take + 1).ToArrayAsync(token);
+        return new([.. items.Take(take).Select(item => View(item.row, item.job))],
+            items.Length > take ? items[take - 1].job.Id : null);
+    }
+
     public Task<WorkspaceRunView> CancelAsync(Guid workspaceId, Guid runId, TerminalActor actor, CancellationToken token) =>
         ChangeAsync(runId, (row, job) =>
         {

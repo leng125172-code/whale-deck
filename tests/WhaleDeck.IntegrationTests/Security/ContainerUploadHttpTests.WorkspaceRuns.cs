@@ -50,7 +50,7 @@ public sealed partial class ContainerUploadHttpTests
         }
         await using var original = await Fixture.Start(Configure);
         using var developer = await original.Client("developer-subject", false, TimeSpan.FromHours(1));
-        using var admin = await original.Client("admin-subject", true);
+        using var admin = await original.Client("admin-subject", true, TimeSpan.FromHours(1));
         var csrf = await Csrf(developer);
         var adminCsrf = await Csrf(admin);
         var path = $"/api/v1/development/workspaces/{workspace.Id:D}/runs";
@@ -248,6 +248,19 @@ public sealed partial class ContainerUploadHttpTests
         Assert.Equal(1, await inspection.AuditEvents.CountAsync(row => row.JobId == reportRun.RunId &&
             row.Action == "development.workspace.report.retire"));
         Console.WriteLine("INBOX_PHASE=workspace-report-real-postgres-atomic-stage-recovery-redaction-and-owner-download");
+
+        var firstPage = Assert.IsType<WorkspaceRunPage>(await developer.GetFromJsonAsync<WorkspaceRunPage>(path + "?take=2"));
+        Assert.Equal([suspect.RunId, reportRun.RunId], firstPage.Items.Select(item => item.RunId));
+        Assert.Equal(reportRun.RunId, firstPage.NextAfter);
+        var secondPage = Assert.IsType<WorkspaceRunPage>(await developer.GetFromJsonAsync<WorkspaceRunPage>(
+            path + $"?take=2&after={firstPage.NextAfter:D}"));
+        Assert.Equal(2, secondPage.Items.Length);
+        Assert.DoesNotContain(secondPage.Items, row => firstPage.Items.Any(first => row.RunId == first.RunId));
+        using (var unknownCursor = await developer.GetAsync(path + $"?after={Guid.NewGuid():D}"))
+            Assert.Equal(HttpStatusCode.NotFound, unknownCursor.StatusCode);
+        using (var wrongOwner = await admin.GetAsync(path))
+            Assert.Equal(HttpStatusCode.NotFound, wrongOwner.StatusCode);
+        Console.WriteLine("INBOX_PHASE=workspace-run-history-real-http-postgres-owner-keyset");
 
         Task<string?> Stage(Guid id) => inspection.WorkspaceRunIntents.AsNoTracking().Where(row => row.Id == id)
             .Select(row => row.ReportStage).SingleAsync();

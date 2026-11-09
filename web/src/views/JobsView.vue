@@ -62,6 +62,7 @@ const recycleNotice = computed(
 const canCancel = computed(
   () =>
     selected.value &&
+    selected.value.jobType !== 'development.workspace.run' &&
     !terminalStates.has(selected.value.state) &&
     !(
       recursiveAclTask.value &&
@@ -115,6 +116,7 @@ const byteUpload = computed(
 const canRetry = computed(
   () =>
     selected.value &&
+    selected.value.jobType !== 'development.workspace.run' &&
     !byteUpload.value &&
     !aclTask.value &&
     !recursiveAclTask.value &&

@@ -50,6 +50,11 @@ public sealed class DevelopmentWorkspacesController(DevelopmentWorkspaces worksp
     public async Task<WorkspaceRunView> GetRun(Guid id, Guid runId, [FromServices] WorkspaceRuns runs, CancellationToken token) =>
         await runs.GetAsync((await identity.ReadAsync(HttpContext)).Actor, id, runId, token);
 
+    [HttpGet("{id:guid}/runs")]
+    public async Task<WorkspaceRunPage> ListRuns(Guid id, [FromServices] WorkspaceRuns runs,
+        [FromQuery] Guid? after = null, [FromQuery] int take = 30, CancellationToken token = default) =>
+        await runs.ListAsync((await identity.ReadAsync(HttpContext)).Actor, id, after, take, token);
+
     [HttpPost("{id:guid}/runs/{runId:guid}/cancel")]
     public async Task<ActionResult<WorkspaceRunView>> CancelRun(Guid id, Guid runId, [FromServices] WorkspaceRuns runs, CancellationToken token)
     {
