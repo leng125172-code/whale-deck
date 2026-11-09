@@ -8,6 +8,8 @@
 
 以 `/api/v1/development/workspaces/{workspaceId}/source-imports/{importId}` 为基路径。写请求继续通过 Origin 与 CSRF 验证。
 
+所有者也可以 GET `/api/v1/development/workspaces/{workspaceId}/source-imports` 查询当前导入。优先返回进行中的导入，否则返回最近终态，无记录返回 204。Vue 刷新后通过该接口取得导入 ID 和续传偏移。[页面验收](DEVELOPMENT_WORKSPACE_SOURCE_VUE.md)
+
 | 方法和相对路径 | 请求和结果 |
 | --- | --- |
 | `PUT` | JSON `format`、`archiveBytes`、`archiveSha256` 登记导入。同 ID 同参数可重试 |
