@@ -1,15 +1,16 @@
-# Runner 测试工件采集与签名回执
+# Runner 测试工件采集与回执绑定
 
-2026-11-09，宿主代码 `0babd91c`。P3-17 的 Runner 支持两套固定采集命令。Node 测试使用 JUnit reporter，.NET 单测试项目使用 VSTest 的 TRX logger。Agent 协议 1.66 用 `development.run.test-artifact` 协商能力，命令仍签在原运行请求中。
+2026-11-09，宿主代码 `0babd91c`。P3-17 的 Runner 支持两套固定采集命令。Node 测试使用 JUnit reporter，.NET 单测试项目使用 VSTest 的 TRX logger。Agent 协议 1.66 用 `development.run.test-artifact` 协商能力。HMAC 签名覆盖运行请求及固定命令，Unix Socket 返回的回执绑定原请求摘要。
 
 有采集请求时，OCI 为该运行单独挂载可写输出槽，保留工作空间项目配额并启用 `nosuid,nodev,noexec`。进程退出后，宿主只按固定名称打开输出，核对文件类型、工作负载 UID/GID、单链接、大小与稳定性。每件原始文件上限 16 MiB。合法文件复制到 root 私有运行目录，封存后清理原沙箱。原运行回执提供格式、状态、字节数和 SHA-256。缺失、不安全、超限、无法取得及中断等情况有明确状态。观察按原请求重放，回执不含 XML 原文、测试名称或失败详情。
 
 ## 实际验证
 
-- 在断网 KVM 中使用标准宿主发布包、自包含 Agent、真实 Unix Socket、签名能力、sudo、systemd、runc、ext4 项目配额和固定摘要运行时。Node 和 .NET 分别真实执行通过、失败和跳过用例。两个进程都因测试失败返回退出码 1，JUnit 和 TRX 均成功封存，XML 中三个用例的结果与签名回执匹配。来宾中的 .NET 恢复使用固定的离线 NuGet 依赖。
+- 在断网 KVM 中使用标准宿主发布包、自包含 Agent、真实 Unix Socket、签名能力、sudo、systemd、runc、ext4 项目配额和固定摘要运行时。Node 和 .NET 分别真实执行通过、失败和跳过用例。两个进程都因测试失败返回退出码 1，JUnit 和 TRX 均成功封存。分别复核了 XML 用例结果和回执中的大小、摘要。来宾中的 .NET 恢复使用固定的离线 NuGet 依赖。
 - Agent 实际重启后，通过原运行请求读到相同的两个回执。封存文件为 root 所有、`0600`，沙箱和临时文件已清除。
 - 来宾中的实际文件系统拒绝符号链接、硬链接、FIFO、错误所有者和超限输出，诱饵保持原样。来宾 Runner 回归 9 项、Agent 和测试报告解析回归 3218 项、范围基线 8 项通过。标准宿主发布包 SHA-256 清单核对通过。
+- 隔离真实 PostgreSQL 套件重跑通过，覆盖原有持久任务、回执重放和报告保留。该回归沿用 Runner 故障夹具，来宾的真实采集由上面独立验证。
 
 本批验证宿主采集和回执。Worker 的生产任务尚未打开该采集选项。原件目前保留在宿主私有运行目录，后续须接入签名读取、校验后的脱敏持久化及原件退役。多项目或多目标框架的 TRX 聚合、覆盖率自动采集、Vue 和物理工作站端到端仍待实施或验收。
 
-私有证据位于 `deploy/artifacts/development-workspace-test-artifacts-0babd91c/`，清单 SHA-256 为 `8800208c7ae4df8f4f63f348c15d5a1f443ad07529ba305251da03c8250cbb7d`。
+私有证据位于 `deploy/artifacts/development-workspace-test-artifacts-0babd91c/`，清单 SHA-256 为 `0b5a767daae6b98c22ccc1016f6360a00f934637d64af1722580c25438fbc34c`。
