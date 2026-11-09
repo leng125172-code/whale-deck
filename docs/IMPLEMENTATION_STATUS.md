@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-13/P3-16 `5c579ee6` 实现基于已复核 FD 的私有挂载与受限 OCI 策略。来宾 ext4/XFS 通过真实执行和配额绕过拒绝，工作站 Docker 通过同策略的 .NET/Node 验证。继续固定摘要 rootfs、Agent 启动和生命周期。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_ISOLATION.md)。
+
 2026-11-09，P3-13/P3-16 `a75386eb` 增加独立存储复核和 Runner 预检入口。Agent 复核已发布目录与硬限额，拒绝未发布及漂移。继续 Runner 隔离执行与工作站部署。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_PREFLIGHT.md)。
 
 2026-11-09，P3-13 `baa419ea` 将项目 ID 独占凭据和配额回读放入目录发布前，Agent 1.62 才确认配额。隔离 ext4/XFS 分配与重挂通过，继续工作站标准安装和 Runner。见[本批记录](qa/DEVELOPMENT_WORKSPACE_QUOTA_PUBLICATION.md)。
