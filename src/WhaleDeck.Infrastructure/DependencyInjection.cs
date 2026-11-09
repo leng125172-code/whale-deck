@@ -120,6 +120,10 @@ public static class DependencyInjection
         services.AddScoped<ContainerRecycleArchiveDispatcher>();
         services.AddSingleton<IContainerRecycleArchiveRetirementProtector, FilePlanProtector>();
         services.AddScoped<IContainerRecycleArchiveRetirementRepository, ContainerRecycleArchiveRetirementRepository>();
+        services.AddSingleton<IContainerRecycleArchiveRetirementSourceProtector>(provider => provider.GetRequiredService<IContainerRecycleArchiveRetirementProtector>());
+        services.AddScoped<ContainerRecycleArchiveRetirementSourceResolver>();
+        services.AddScoped<ContainerRecycleArchiveRetirementWorkflowService>();
+        services.AddScoped<ContainerRecycleArchiveRetirementDispatcher>();
         services.AddSingleton<IContainerRecycleRestoreProtector, FilePlanProtector>();
         services.AddScoped<IContainerRecycleRestoreRepository, ContainerRecycleRestoreRepository>();
         services.AddScoped<ContainerRecycleRestoreSourceResolver>();
@@ -273,6 +277,7 @@ public static class DependencyInjection
         services.AddSingleton<IContainerRecycleRestoreGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerRecyclePurgeGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerRecycleArchiveGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddSingleton<IContainerRecycleArchiveRetirementGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerOwnershipGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerAclGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IContainerAclHistoryGateway>(provider => provider.GetRequiredService<AgentGateway>());

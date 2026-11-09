@@ -12,7 +12,7 @@ using Rpc = WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Infrastructure.Agent;
 
-// No workflow/DI registration or Agent capability promotion in this candidate.
+// Require the independently installed Agent capability before signing any operation.
 public sealed partial class AgentGateway : IContainerRecycleArchiveRetirementGateway
 {
     public async Task RequireContainerRecycleArchiveRetirementAsync(CancellationToken cancellationToken) => _ = await RetirementClient(cancellationToken);
@@ -21,6 +21,7 @@ public sealed partial class AgentGateway : IContainerRecycleArchiveRetirementGat
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(TimeSpan.FromSeconds(5));
         var caps = await _agent.GetCapabilitiesAsync(new Empty(), cancellationToken: timeout.Token);
         if (!ContainerRecycleArchiveRetirementBinding.IsSupported(caps)) throw new RpcException(new(StatusCode.Unimplemented, "CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_CAPABILITY_UNAVAILABLE"));
+        if (_capabilityKey is not { Length: >= 32 }) throw new RpcException(new(StatusCode.PermissionDenied, "CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_CAPABILITY_UNAVAILABLE"));
         return new(_channel);
     }
     private Metadata RetirementHeaders(string action, IMessage request)

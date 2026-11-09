@@ -183,6 +183,7 @@ public sealed partial class ContainerUploadHttpTests
         public RecursiveAclHttpFixture RecursiveAcl { get; }=new();
         public RecursiveAclRestoreHttpFixture RecursiveAclRestore { get; }=new();
         public RecycleHttpFixture Recycle { get; }=new();
+        public RetirementHttpGate Retirement { get; } = new();
         public AclHttpFixture Acl { get; }=new();
         public AclHistoryHttpFixture AclHistory { get; }=new();
         public RecursiveAclHistoryHttpFixture RecursiveAclHistory { get; }=new();
@@ -216,6 +217,10 @@ public sealed partial class ContainerUploadHttpTests
             fixture.RecursiveAclRestore.Protector=protector;
             fixture.Recycle.Protector=protector;
             builder.Services.AddSingleton(new ContainerRecycleWorkflowService(uploads,fixture.Recycle,protector,fixture.Recycle,TimeProvider.System,fixture.Recycle));
+            var retirementRepository = System.Reflection.DispatchProxy.Create<IContainerRecycleArchiveRetirementRepository, RetirementHttpRepository>();
+            var archiveAuthorization = new ContainerRecycleArchiveWorkflowService(uploads, null!, protector, null!, TimeProvider.System, fixture.Recycle, null!);
+            builder.Services.AddSingleton(new ContainerRecycleArchiveRetirementWorkflowService(retirementRepository, null!, protector, protector,
+                fixture.Retirement, null!, archiveAuthorization, TimeProvider.System));
             builder.Services.AddSingleton(new ContainerRecursiveAclRestoreWorkflowService(uploads,fixture.RecursiveAclRestore,protector,fixture.RecursiveAclRestore,TimeProvider.System,fixture.RecursiveAclRestore));
             builder.Services.AddSingleton(new ContainerRecursiveAclWorkflowService(uploads,fixture.RecursiveAcl,protector,fixture.RecursiveAcl,TimeProvider.System,fixture.RecursiveAcl));
             builder.Services.AddSingleton(new ContainerFileHistoryService(uploads,fixture.History,fixture.History,fixture.History));

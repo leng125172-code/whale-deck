@@ -25,3 +25,12 @@ public sealed record ResolvedContainerRecycleArchiveRetirementSource(ContainerRe
 
 public sealed record RetirementConfirmation(Guid Id, string Actor, string LoginBinding, string PlanHash, DateTimeOffset ExpiresAtUtc)
 { public override string ToString() => nameof(RetirementConfirmation); }
+
+public sealed record ContainerRecycleArchiveRetirementConfirmationDto(string Token, DateTimeOffset ExpiresAtUtc)
+{ public override string ToString() => nameof(ContainerRecycleArchiveRetirementConfirmationDto); }
+
+public sealed record ContainerRecycleArchiveRetirementIntentDto(Guid Id, Guid PlanningJobId, Guid? ExecutionJobId, Guid ArchiveIntentId, int RetainDays,
+    string State, long Version, DateTimeOffset? ReadyExpiresAtUtc, long? NotBeforeUnixMs, long? ArchiveBytes, bool? RetirementEligible,
+    bool ReservationRecorded, bool ApplyStarted, bool PublishBarrier, bool? RetirementApplied, string? RootState, string? ResultCode,
+    ContainerRecycleArchiveRetirementConfirmationDto? Confirmation)
+{ public override string ToString() => nameof(ContainerRecycleArchiveRetirementIntentDto); }

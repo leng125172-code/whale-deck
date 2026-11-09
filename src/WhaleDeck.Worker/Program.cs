@@ -41,6 +41,7 @@ builder.Services.AddHostedService<ContainerRecycleWorker>();
 builder.Services.AddHostedService<ContainerRecycleRestoreWorker>();
 builder.Services.AddHostedService<ContainerRecyclePurgeWorker>();
 builder.Services.AddHostedService<ContainerRecycleArchiveWorker>();
+builder.Services.AddHostedService<ContainerRecycleArchiveRetirementWorker>();
 builder.Services.AddHostedService<ContainerMoveWorker>();
 builder.Services.AddHostedService<FileMutationWorker>();
 builder.Services.AddHostedService<FileArchiveWorker>();
