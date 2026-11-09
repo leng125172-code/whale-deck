@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09 退役语义政策候选3c3bb53c通过：深层Archive/Purge/Source命令/计划、1至3650天捕获期限、全部嵌套事实与新inode设备/属性、上下文job及三代新ID约束；精确20键原生计划和9键nullable回执拒绝重复/未知/有损值。57新政策/112联合、全量Unit6024零跳过、NET10构建/14CI合同/8范围通过，独立只读复核无阻断项。首轮夹具设备不符1失败已修正新夹具不放宽政策；4文件核验摘要封存。原老化来源独立重核未到期/未执行，原冻结代码/claim/HDD保持，无RPC/安装/新能力广告；前批待推文档已补推。本批新CI待终态，继续RPC/native/Gateway、自然到期与永久业务/59项，17项移出不算完成。[请求政策与原生格式](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_POLICY.md)。
+
 2026-11-09 退役能力验证器候选2de34c2d已验证：独立5方法HMAC/60秒/规范nonce和并发单次消费，通用健康后缀前拒绝新前缀；Unary从实际protobuf正文重算hash、核对描述符并拒绝未知字段，三stream拒绝且不耗nonce。29新能力/联合55合同、全量能力677及Unit5967零跳过、NET10构建/14CI合同/8范围通过，独立只读复核无阻断项；首轮测试泛型CS0411修正后通过。5文件核验摘要封存，原老化来源干净环境仍未到期/未执行、原冻结代码/claim/HDD保持，无RPC注册/广告/安装。继续计划政策/Gateway/gRPC-native适配及标准版本/安装、自然到期/永久业务和59项，17项移出不算完成。[能力验证与正文绑定边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_CAPABILITY.md)。
 
 2026-11-09 退役C#合同准备bcfef6c0已验证：独立protobuf消息/原生20键投影、完整内容与上下文哈希及独立HMAC域、major1+minor60+专属能力门禁、回执null/false/true不归一；不扩展原ArchiveCopy类型、不声明/注册RPC或广告能力，运行仍59。26新合同/归档288回归、全量Unit5938零跳过及NET10构建、14CI合同/8范围通过，独立只读复核无阻断项。构建后原老化来源干净环境重核仍未到期/未执行，无原冻结闭包、策略/claim/HDD/实例变更；6文件证据封存。实际验证器/Gateway/适配与安装、自然到期正向及永久业务/其余59项仍待，17项移出不算完成。[退役合同准备与边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_CONTRACTS.md)。
