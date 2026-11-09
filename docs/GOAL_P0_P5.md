@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-17 报告开发者委派 `1931f19d` 接入正式授权与下载路由。当前 Authentik 组和空间授权共同决定读取，授权变更带版本与事务审计。工作空间完整注册、Runner、Vue 和真实工作站验收继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REPORT_GRANTS.md)。
+
 2026-11-09，P3-17 管理员报告下载 `87daf9c5` 接入正式 BFF 路由。读取复核当前权限和会话，绑定原工作空间与运行，返回附件前写入审计。工作空间开发者委派、Runner 和 Vue 继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REPORT_DOWNLOAD.md)。
 
 2026-11-09，P3-17 覆盖率工件解析与报告导出 `d3ba0941` 已使用真实 .NET Cobertura 和 Node LCOV 验证。覆盖率摘要绑定原工件 SHA256，空采集无指标，旧 TRX/JUnit 报告重放字节一致。Runner 自动采集、授权下载与 Vue 继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_COVERAGE.md)。

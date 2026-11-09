@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-17 报告组委派 `1931f19d` 已接入 BFF 与数据库。授权限指定空间报告，读取按当前组与授权复核，撤销保留版本。继续工作空间元数据、Runner、Vue 和真实 Authentik 验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REPORT_GRANTS.md)。
+
 2026-11-09，P3-17 管理员报告下载 `87daf9c5` 已接入正式 BFF，包含实时权限、原空间/运行绑定和附件审计。开发者委派、Runner 与 Vue 继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REPORT_DOWNLOAD.md)。
 
 2026-11-09，P3-17 覆盖率工件解析与报告导出 `d3ba0941` 已验证真实 .NET Cobertura、Node LCOV 和旧报告字节重放。继续 Runner 自动采集、授权下载与 Vue。见[本批记录](qa/DEVELOPMENT_WORKSPACE_COVERAGE.md)。
