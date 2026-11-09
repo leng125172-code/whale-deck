@@ -26,6 +26,12 @@ from verify_container_recycle_archive_copies import retirement_namespace_reread,
 import validate_container_file_publishing as owned
 
 
+def configure_observer_git(repo):
+    # source_closure launches its own Git processes, so a -c on a different
+    # command is insufficient in an independently started root observer.
+    os.environ.update(GIT_OPTIONAL_LOCKS='0',GIT_CONFIG_COUNT='1',GIT_CONFIG_KEY_0='safe.directory',GIT_CONFIG_VALUE_0=str(repo))
+
+
 def source_manifest_proof(source,hosts,validation):
     assert hosts and validation
     typed_equal(source['sourceSha256'],hosts);typed_equal(source['validationSourceSha256'],validation)
@@ -106,6 +112,7 @@ def aging_container_proof(container,request,prepared,now):
 def main(name):
     assert os.geteuid()==0 and re.fullmatch('container-recycle-archive-copies-[a-f0-9]{32}',name);os.environ['GIT_OPTIONAL_LOCKS']='0'
     repo=Path(__file__).resolve().parents[2];e=repo/'deploy/artifacts'/name
+    configure_observer_git(repo)
     info=e.lstat();assert e.resolve(strict=True)==e and stat.S_ISDIR(info.st_mode) and (info.st_uid,info.st_gid,stat.S_IMODE(info.st_mode))==(0,0,0o700)
     read=lambda n:read_at(None,str(e/n))[1]
     source=read('source.json');value=read('aging-handoff.json');copied=read('archive-copy.json');reservations=read('retirement-reservations.json');early=read('retirement-preexpiry.json');fixture=read('fixture-initial.json')

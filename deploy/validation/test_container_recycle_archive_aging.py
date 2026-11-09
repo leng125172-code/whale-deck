@@ -5,6 +5,9 @@ from datetime import datetime,timezone
 import json
 import os
 from pathlib import Path
+import pwd
+import subprocess
+import tempfile
 import time
 import unittest
 import uuid
@@ -13,7 +16,7 @@ from acl_history_browser_proof import typed_equal
 from recursive_acl_restore_agent_io import snapshot,read_at
 from container_recycle_agent_io import file_snapshot
 from validate_container_recycle_archive_plan import payload_snapshot
-from verify_container_recycle_archive_aging import aging_handoff_proof,aging_container_proof,source_manifest_proof,aging_live_records,aging_live_evidence_proof
+from verify_container_recycle_archive_aging import aging_handoff_proof,aging_container_proof,source_manifest_proof,aging_live_records,aging_live_evidence_proof,configure_observer_git,source_closure
 import test_container_recycle_archive_preexpiry as preexpiry
 import test_container_recycle_archive_retirements as native
 import validate_container_file_publishing as owned
@@ -114,6 +117,24 @@ class AgingHandoffTests(unittest.TestCase):
         for bad in (True,self.value['preparedAtUnixMs']+1):
             changed={**live,'liveObservedAtUnixMs':bad}
             with self.subTest(clock=bad),self.assertRaises(AssertionError):aging_live_evidence_proof(changed,assessment,self.value,self.copied,self.current,hdd)
+
+    def test_independent_root_closure_in_fresh_environment_handles_user_owned_repo(self):
+        user=pwd.getpwnam('user');clean=dict(PATH=os.defpath,HOME='/nonexistent',GIT_CONFIG_GLOBAL=os.devnull,GIT_CONFIG_NOSYSTEM='1',GIT_OPTIONAL_LOCKS='0')
+        with tempfile.TemporaryDirectory(prefix='archive-aging-git-') as name:
+            repo=Path(name);os.chown(repo,user.pw_uid,user.pw_gid)
+            run=lambda *args:subprocess.run(['sudo','-n','-u','user','git','-C',str(repo),*args],env=clean,check=True,capture_output=True)
+            run('init','--quiet');folder=repo/'deploy/validation';folder.mkdir(parents=True);(repo/'deploy').chmod(0o755);folder.chmod(0o755)
+            file=folder/'fixture.py';file.write_text('value = 1\n');file.chmod(0o644)
+            run('add','deploy');run('-c','user.name=Owned Fixture','-c','user.email=fixture@example.invalid','commit','--quiet','--no-gpg-sign','-m','fixture')
+            revision=run('rev-parse','HEAD').stdout.decode().strip();original=subprocess.check_output
+            def quiet(*args,**kwargs):return original(*args,stderr=subprocess.PIPE,**kwargs)
+            with patch.dict(os.environ,clean,clear=True),patch.object(subprocess,'check_output',side_effect=quiet):
+                with self.assertRaises(subprocess.CalledProcessError) as error:source_closure(repo,revision,seeds=('fixture.py',))
+                self.assertIn('dubious ownership',error.exception.stderr)
+                configure_observer_git(repo);actual=source_closure(repo,revision,seeds=('fixture.py',))
+                self.assertEqual(set(actual),{'fixture.py'});self.assertEqual(os.environ['GIT_CONFIG_VALUE_0'],str(repo))
+                self.assertEqual(os.environ['GIT_OPTIONAL_LOCKS'],'0')
+            self.assertEqual((repo/'.git/index').stat().st_uid,user.pw_uid)
 
     def test_reservation_helper_refuses_other_policy_before_reserve(self):
         with patch.object(self.engine,'reserve',side_effect=AssertionError('must not reserve')) as reserve,self.assertRaises(AssertionError):handoff(self.engine,{**self.a['plan'],'command':{**self.a['plan']['command'],'retainDays':30}},self.session,self.protected)
