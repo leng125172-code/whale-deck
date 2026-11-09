@@ -14,6 +14,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Prepare unprivileged owner for root Git observer tests
+        run: |
+          # The frozen aging fixture intentionally reproduces a root observer
+          # reading a repository owned by the workstation's unprivileged user.
+          # Hosted runners have "runner" instead; supply only the test identity.
+          if ! getent passwd user >/dev/null; then
+            sudo useradd --system --no-create-home --shell /usr/sbin/nologin user
+          fi
+          test "$(id -u user)" -ne 0
       - name: Check shell syntax and side-effect-free preview
         run: |
           bash -n install.sh

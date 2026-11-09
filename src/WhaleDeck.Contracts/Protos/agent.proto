@@ -1612,3 +1612,12 @@ message ContainerRecycleArchiveRetirementReceipt {
   string fingerprint = 4; string state = 5; bool source_fenced = 6; bool owned_fence = 7;
   optional bool retirement_applied = 8; int64 not_before_unix_ms = 9;
 }
+
+// Source-only adapter preparation; Agent Program deliberately does not map it.
+service ContainerRecycleArchiveRetirementService {
+  rpc Plan(ContainerRecycleArchiveRetirementPlanRequest) returns (ContainerRecycleArchiveRetirementPlan);
+  rpc Reserve(ContainerRecycleArchiveRetirementRequest) returns (ContainerRecycleArchiveRetirementReceipt);
+  rpc Apply(ContainerRecycleArchiveRetirementRequest) returns (ContainerRecycleArchiveRetirementReceipt);
+  rpc Inspect(ContainerRecycleArchiveRetirementRequest) returns (ContainerRecycleArchiveRetirementReceipt);
+  rpc Discard(ContainerRecycleArchiveRetirementRequest) returns (ContainerRecycleArchiveRetirementReceipt);
+}

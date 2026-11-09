@@ -15,6 +15,13 @@ public static class ContainerRecycleArchiveRetirementWire
         catch (ArgumentException) { throw new ArgumentException("CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_SCHEMA_INVALID"); }
     }
 
+    public static object Command(ContainerRecycleArchiveRetirementCommand c)
+    {
+        RequireKnown(c);
+        if (c.Archive?.Plan is null) throw new ArgumentException("CONTAINER_RECYCLE_ARCHIVE_RETIREMENT_PLAN_INVALID");
+        return new { archive = new { operationId = c.Archive.OperationId, owner = c.Archive.Owner, plan = ContainerRecycleArchiveWire.Plan(c.Archive.Plan) }, retainDays = c.RetainDays, mode = c.Mode };
+    }
+
     public static object Plan(ContainerRecycleArchiveRetirementPlan p, bool omitFingerprint = false)
     {
         RequireKnown(p);
@@ -24,7 +31,7 @@ public static class ContainerRecycleArchiveRetirementWire
         var value = new Dictionary<string, object?>
         {
             ["schemaVersion"] = p.SchemaVersion,
-            ["command"] = new { archive = new { operationId = c.Archive.OperationId, owner = c.Archive.Owner, plan = ContainerRecycleArchiveWire.Plan(c.Archive.Plan) }, retainDays = c.RetainDays, mode = c.Mode },
+            ["command"] = Command(c),
             ["archiveRecordDigest"] = p.ArchiveRecordDigest, ["sourceRecordDigest"] = p.SourceRecordDigest,
             ["purgeRecordDigest"] = p.PurgeRecordDigest, ["purgeMarkerDigest"] = p.PurgeMarkerDigest,
             ["claimDigest"] = p.ClaimDigest, ["historyMetadataDigest"] = p.HistoryMetadataDigest,

@@ -11,6 +11,8 @@ namespace WhaleDeck.UnitTests.Agent;
 
 public sealed class ContainerRecycleArchiveRetirementContractTests
 {
+    private static readonly string[] RetirementMethods = ["Plan", "Reserve", "Apply", "Inspect", "Discard"];
+
     internal static ContainerRecycleArchiveRetirementRequest Request()
     {
         var archive = ContainerRecycleArchivePolicyTests.Request(); var ap = archive.Plan;
@@ -115,11 +117,13 @@ public sealed class ContainerRecycleArchiveRetirementContractTests
     }
 
     [Fact]
-    public async Task AdditiveTypesDoNotAdvertiseOrRegisterRetirement()
+    public async Task PreparedAdapterDoesNotAdvertiseRetirement()
     {
         var caps = await new AgentGrpcService(null!).GetCapabilities(new(), null!);
         Assert.Equal(59U, caps.ProtocolMinor); Assert.DoesNotContain(ContainerRecycleArchiveRetirementBinding.Capability, caps.Capabilities);
-        Assert.DoesNotContain(AgentReflection.Descriptor.Services, s => s.Name == "ContainerRecycleArchiveRetirementService");
+        var descriptor = Assert.Single(AgentReflection.Descriptor.Services, s => s.Name == "ContainerRecycleArchiveRetirementService");
+        Assert.Equal(RetirementMethods, descriptor.Methods.Select(m => m.Name));
+        Assert.All(descriptor.Methods, m => { Assert.False(m.IsClientStreaming); Assert.False(m.IsServerStreaming); });
     }
 
     [Fact]
