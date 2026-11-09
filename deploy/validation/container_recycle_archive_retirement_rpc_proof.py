@@ -131,9 +131,9 @@ def completion_proof(value,q,observed_at):
     assert value['proofDigest']==digest(b'whaledeck-container-recycle-archive-retirement-completion-v1\n',{k:v for k,v in value.items() if k!='proofDigest'})
 
 
-def record_proof(q,receipt,root,marker,originals,*,originals_before,original_frames,frames_before,registry,root_frames,observed_at):
-    """Join acquired raw private records, not physical .data removal/namespace."""
-    native_receipt_proof(receipt,q);integer(observed_at,0,MAX_TIME);fields(originals,ORIGINALS);typed_equal(originals,originals_before);fields(original_frames,ROOT_ORIGINALS);typed_equal(original_frames,frames_before)
+def originals_proof(q,originals,original_frames):
+    """Anchor independent source metadata before any live namespace read."""
+    request_proof(q);fields(originals,ORIGINALS);fields(original_frames,ROOT_ORIGINALS)
     for key in ROOT_ORIGINALS:raw_record_proof(original_frames[key],originals[key])
     p=q['plan'];a=p['command']['archive'];ap=a['plan'];purge=ap['command']['purge'];ref=source_ref(p);source_id=ref['operationId']
     for record,shape in ((originals['archive'],archive.RECORD),(originals['purge'],archive.purge.RECORD),(originals['source'],archive.purge.source.ROOT)):
@@ -152,6 +152,14 @@ def record_proof(q,receipt,root,marker,originals,*,originals_before,original_fra
     assert type(prepared) is list and type(published) is list and len(prepared)==len(published)==9
     typed_equal(copied['privateIdentity'][0],ap['parentIdentity'][0]);typed_equal(copied['pendingIdentity'],published[:2]);typed_equal(prepared[:8],published[:8]);integer(prepared[8],0,published[8])
     typed_equal(originals['archive']['publishedIdentity'],p['publishedIdentity']);typed_equal(originals['storeIdentity'],p['storeIdentity']);typed_equal(originals['storageHash'],p['storageHash'])
+    return dict(originalMetadataAnchored=True)
+
+
+def record_proof(q,receipt,root,marker,originals,*,originals_before,original_frames,frames_before,registry,root_frames,observed_at):
+    """Join acquired raw private records, not physical .data removal/namespace."""
+    native_receipt_proof(receipt,q);integer(observed_at,0,MAX_TIME);typed_equal(originals,originals_before);typed_equal(original_frames,frames_before)
+    originals_proof(q,originals,original_frames)
+    p=q['plan'];a=p['command']['archive'];source_id=source_ref(p)['operationId']
     # All registry records must be represented by acquired raw frames. This
     # qualification module intentionally supports only the fixed RPC QA scope.
     assert type(root_frames) is dict and len(root_frames)<=20000
