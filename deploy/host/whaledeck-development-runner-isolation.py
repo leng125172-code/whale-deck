@@ -157,7 +157,7 @@ def seccomp_profile():
     return {'defaultAction': 'SCMP_ACT_ERRNO', 'defaultErrnoRet': errno.EPERM, 'syscalls': rules}
 
 
-def oci_config(files, bundle, projected, argv, uid, cpu_millis, memory_mib):
+def oci_config(files, bundle, projected, argv, uid, cpu_millis, memory_mib, *, rootfs_policy, runtime_image):
     """Build the fixed OCI policy inside the trusted launcher's private namespace."""
     identity = require_private_directory(bundle)
     bundle_path = os.readlink(f'/proc/self/fd/{bundle}')
@@ -188,13 +188,7 @@ def oci_config(files, bundle, projected, argv, uid, cpu_millis, memory_mib):
             raise PermissionError('Runner work directory has the wrong identity')
     finally:
         os.close(work)
-    rootfs = files.open_at(bundle, 'rootfs', DIR)
-    try:
-        info = os.fstat(rootfs)
-        if info.st_uid != 0 or info.st_mode & 0o022:
-            raise PermissionError('Runner rootfs is unsafe')
-    finally:
-        os.close(rootfs)
+    rootfs_policy.require_materialized(files, bundle, runtime_image)
 
     memory = memory_mib * 1024**2
     source = os.path.join(bundle_path, PROJECTION, 'work')

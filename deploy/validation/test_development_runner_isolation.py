@@ -89,10 +89,12 @@ class RunnerIsolationTests(unittest.TestCase):
                 self.assertEqual('unmounted', (view / 'nested' / 'marker').read_text())
                 self.assertEqual('foreign mount', (root / 'original' / 'nested' / 'marker').read_text())
                 with self.assertRaisesRegex(PermissionError, 'wrong identity'):
-                    isolation.oci_config(files, bundle_fd, projected, ['/bin/probe'], 10001, 500, 128)
+                    isolation.oci_config(files, bundle_fd, projected, ['/bin/probe'], 10001, 500, 128,
+                                         rootfs_policy=None, runtime_image='')
                 for argv, uid, cpu in ((['relative'], 10001, 500), (['/bin/probe'], 0, 500), (['/bin/probe'], 10001, 0)):
                     with self.assertRaises(ValueError):
-                        isolation.oci_config(files, bundle_fd, projected, argv, uid, cpu, 128)
+                        isolation.oci_config(files, bundle_fd, projected, argv, uid, cpu, 128,
+                                             rootfs_policy=None, runtime_image='')
             with self.assertRaises(FileExistsError), namespace.project(fd, bundle_fd, info.st_ino):
                 self.fail('Existing projection was overwritten')
         finally:
