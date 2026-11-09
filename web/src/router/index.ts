@@ -68,6 +68,12 @@ const router = createRouter({
           meta: { title: '空间环境' },
         },
         {
+          path: 'development/workspaces/:workspaceId/source',
+          name: 'development-workspace-source',
+          component: () => import('@/views/DevelopmentWorkspaceView.vue'),
+          meta: { title: '源码导入' },
+        },
+        {
           path: 'development/workspaces/:workspaceId/runs/:runId?',
           name: 'development-workspace-runs',
           component: () => import('@/views/DevelopmentWorkspaceView.vue'),

@@ -30,6 +30,7 @@ public interface IWorkspaceSourceStore
 {
     Task<WorkspaceSourceView> BeginAsync(WorkspaceDefinition workspace, Guid importId, TerminalActor actor, WorkspaceSourceInput input, CancellationToken token);
     Task<WorkspaceSourceView?> FindAsync(Guid workspaceId, Guid importId, string subject, CancellationToken token);
+    Task<WorkspaceSourceView?> CurrentAsync(Guid workspaceId, string subject, CancellationToken token);
     Task<WorkspaceSourceView> AppendAsync(Guid workspaceId, Guid importId, TerminalActor actor, int offset, byte[] body, CancellationToken token);
     Task<WorkspaceSourceView> ConfirmAsync(Guid workspaceId, Guid importId, TerminalActor actor, string planSha256, CancellationToken token);
     Task<WorkspaceSourceView> CancelAsync(Guid workspaceId, Guid importId, TerminalActor actor, CancellationToken token);
@@ -72,6 +73,12 @@ public sealed class WorkspaceSources(WorkspaceRuns access, IWorkspaceSourceStore
             ?? throw new KeyNotFoundException("WORKSPACE_SOURCE_NOT_FOUND");
     }
 
+    public async Task<WorkspaceSourceView?> CurrentAsync(TerminalActor actor, Guid workspaceId, CancellationToken token)
+    {
+        _ = await RequireWorkspaceAsync(actor, workspaceId, token);
+        return await store.CurrentAsync(workspaceId, actor.Subject, token);
+    }
+
     public async Task<WorkspaceSourceView> AppendAsync(TerminalActor actor, Guid workspaceId, Guid importId, int offset,
         int length, Stream body, CancellationToken token)
     {
@@ -101,7 +108,13 @@ public sealed class WorkspaceSources(WorkspaceRuns access, IWorkspaceSourceStore
 
     internal async Task<WorkspaceDefinition> RequireAsync(TerminalActor actor, Guid workspaceId, Guid importId, CancellationToken token)
     {
-        if (workspaceId == Guid.Empty || importId == Guid.Empty) throw new ArgumentException("WORKSPACE_SOURCE_SCOPE_INVALID");
+        if (importId == Guid.Empty) throw new ArgumentException("WORKSPACE_SOURCE_SCOPE_INVALID");
+        return await RequireWorkspaceAsync(actor, workspaceId, token);
+    }
+
+    private async Task<WorkspaceDefinition> RequireWorkspaceAsync(TerminalActor actor, Guid workspaceId, CancellationToken token)
+    {
+        if (workspaceId == Guid.Empty) throw new ArgumentException("WORKSPACE_SOURCE_SCOPE_INVALID");
         var workspace = await access.RequireAsync(actor, workspaceId, token);
         return workspace.State == WorkspaceStorageAllocation.Allocated ? workspace
             : throw new InvalidOperationException("WORKSPACE_SOURCE_STORAGE_REQUIRED");

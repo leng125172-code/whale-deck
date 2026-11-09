@@ -52,6 +52,15 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
         return row is null ? null : View(row);
     }
 
+    public async Task<WorkspaceSourceView?> CurrentAsync(Guid workspaceId, string subject, CancellationToken token)
+    {
+        var row = await db.WorkspaceSourceIntents.AsNoTracking()
+            .Where(item => item.WorkspaceId == workspaceId && item.OwnerSubject == subject)
+            .OrderBy(item => item.FinishedAtUtc != null).ThenByDescending(item => item.FinishedAtUtc).ThenBy(item => item.Id)
+            .FirstOrDefaultAsync(token);
+        return row is null ? null : View(row);
+    }
+
     public Task<WorkspaceSourceView> AppendAsync(Guid workspaceId, Guid importId, TerminalActor actor, int offset,
         byte[] body, CancellationToken token) => TransactionAsync(async () =>
     {

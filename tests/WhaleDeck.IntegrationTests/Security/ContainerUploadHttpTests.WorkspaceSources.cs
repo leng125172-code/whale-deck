@@ -65,10 +65,13 @@ public sealed partial class ContainerUploadHttpTests
             var body = archiveBody.ToArray();
             var archive = new WorkspaceSourceInput("zip", body.Length, Convert.ToHexStringLower(SHA256.HashData(body)));
             var id = Guid.NewGuid();
+            var collectionUrl = $"/api/v1/development/workspaces/{workspace.Id:D}/source-imports";
             var first = body[..WorkspaceSources.ChunkBytes];
             var last = body[WorkspaceSources.ChunkBytes..];
 
             using (var response = await anonymous.GetAsync(Url(id))) Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            using (var response = await admin.GetAsync(collectionUrl)) Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            using (var response = await owner.GetAsync(collectionUrl)) Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
             await Expect(HttpMethod.Put, Url(id), JsonContent.Create(archive), HttpStatusCode.BadRequest, owner, null);
             await Expect(HttpMethod.Put, Url(id), JsonContent.Create(archive), HttpStatusCode.NotFound, admin, adminCsrf);
             using (var foreign = Write(owner, HttpMethod.Put, Url(id), csrf, JsonContent.Create(archive)))
@@ -80,10 +83,12 @@ public sealed partial class ContainerUploadHttpTests
             }
             var canceled = Guid.NewGuid();
             await Begin(canceled);
+            Assert.Equal(canceled, (await Current()).ImportId);
             await Chunk(canceled, first, 0, HttpStatusCode.OK, owner, csrf);
             await Expect(HttpMethod.Post, Url(canceled) + "/cancel", null, HttpStatusCode.Accepted, otherLogin, otherCsrf);
             await Tick();
             Assert.Equal(WorkspaceSources.Canceled, (await Read(canceled)).State);
+            Assert.Equal(WorkspaceSources.Canceled, (await Current()).State);
             Assert.Equal(1, host.AbortCount);
             Assert.Empty(await db.WorkspaceSourceChunks.ToArrayAsync());
 
@@ -106,6 +111,7 @@ public sealed partial class ContainerUploadHttpTests
             Assert.Empty(await db.WorkspaceSourceChunks.ToArrayAsync());
 
             await Task.WhenAll(Begin(id), Begin(id));
+            Assert.Equal(id, (await Current()).ImportId);
             await Expect(HttpMethod.Put, Url(Guid.NewGuid()), JsonContent.Create(archive), HttpStatusCode.Conflict, owner, csrf);
             await Expect(HttpMethod.Put, Url(id), JsonContent.Create(archive with { ArchiveSha256 = new string('0', 64) }), HttpStatusCode.Conflict, owner, csrf);
             await Chunk(id, first, 0, HttpStatusCode.Forbidden, otherLogin, otherCsrf);
@@ -152,6 +158,7 @@ public sealed partial class ContainerUploadHttpTests
             clock.Advance(6);
             await Tick();
             Assert.Equal(WorkspaceSources.Published, (await Read(id)).State);
+            Assert.Equal(await Read(id), await Current());
             Assert.Equal(1, host.PublishCount);
             await Confirm(id, staged.Plan.PlanSha256, HttpStatusCode.Accepted, owner, csrf);
 
@@ -160,7 +167,8 @@ public sealed partial class ContainerUploadHttpTests
             Assert.Equal(3, await db.AuditEvents.CountAsync(row => row.Action == "development.workspace.source.begin"));
             Console.WriteLine("INBOX_PHASE=workspace-source-real-http-postgres-encrypted-resume-stage-publish-recovery-revocation-and-cancel");
 
-            string Url(Guid item) => $"/api/v1/development/workspaces/{workspace.Id:D}/source-imports/{item:D}";
+            string Url(Guid item) => $"{collectionUrl}/{item:D}";
+            async Task<WorkspaceSourceView> Current() => (await owner.GetFromJsonAsync<WorkspaceSourceView>(collectionUrl))!;
             async Task<WorkspaceSourceView> Read(Guid item) => (await owner.GetFromJsonAsync<WorkspaceSourceView>(Url(item)))!;
             Task Begin(Guid item) => Expect(HttpMethod.Put, Url(item), JsonContent.Create(archive), HttpStatusCode.Accepted, owner, csrf);
             Task Confirm(Guid item, string digest, HttpStatusCode status, HttpClient client, string header) =>

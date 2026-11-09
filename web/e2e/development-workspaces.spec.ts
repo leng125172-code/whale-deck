@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
+import { crc32 } from 'node:zlib'
 import { expect, test, type Page } from '@playwright/test'
 import { installTerminalFixture } from './fixtures/terminal.mjs'
 
@@ -240,4 +241,214 @@ test('guards the workspace and verifies delegated report downloads on a narrow v
   await page.getByRole('button', { name: '下载 Markdown' }).click()
   await expect(page.getByText(/当前账号没有这项开发空间权限/)).toBeVisible()
   await expect(page.getByText('运行结论')).toHaveCount(0)
+})
+
+const sourcePath = `${workspacePath}/${id}/source`
+const chunkSize = 1024 * 1024
+const sourcePlan = {
+  planSha256: 'c'.repeat(64),
+  contentSha256: 'd'.repeat(64),
+  fileCount: 1,
+  totalBytes: chunkSize + 64,
+}
+
+function sampleZip(fill: number) {
+  const name = Buffer.from('src/sample.bin')
+  const bytes = Buffer.alloc(sourcePlan.totalBytes, fill)
+  const crc = crc32(bytes)
+  const local = Buffer.alloc(30)
+  local.writeUInt32LE(0x04034b50, 0)
+  local.writeUInt16LE(20, 4)
+  local.writeUInt32LE(crc, 14)
+  local.writeUInt32LE(bytes.length, 18)
+  local.writeUInt32LE(bytes.length, 22)
+  local.writeUInt16LE(name.length, 26)
+  const central = Buffer.alloc(46)
+  central.writeUInt32LE(0x02014b50, 0)
+  central.writeUInt16LE(20, 4)
+  central.writeUInt16LE(20, 6)
+  central.writeUInt32LE(crc, 16)
+  central.writeUInt32LE(bytes.length, 20)
+  central.writeUInt32LE(bytes.length, 24)
+  central.writeUInt16LE(name.length, 28)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(1, 8)
+  end.writeUInt16LE(1, 10)
+  end.writeUInt32LE(central.length + name.length, 12)
+  end.writeUInt32LE(local.length + name.length + bytes.length, 16)
+  return Buffer.concat([local, name, bytes, central, name, end])
+}
+
+async function sourceFixture(page: Page) {
+  const base = await fixture(page)
+  base.allocated = true
+  const file = sampleZip(65)
+  const archive = {
+    format: 'zip',
+    archiveBytes: file.length,
+    archiveSha256: createHash('sha256').update(file).digest('hex'),
+  }
+  const state = {
+    allowed: true,
+    wrongWorkspace: false,
+    loseChunkReply: true,
+    losePublishReply: true,
+    id: '',
+    receivedBytes: 0,
+    phase: 'Uploading',
+    beginCalls: 0,
+    publishCalls: 0,
+    cancelCalls: 0,
+    offsets: [] as number[],
+  }
+  const prefix = `${api}/${id}/source-imports`
+  await page.route(
+    (url) => url.pathname === prefix || url.pathname.startsWith(prefix + '/'),
+    async (route) => {
+      const request = route.request()
+      if (!state.allowed) return route.fulfill({ status: 403, json: {} })
+      const suffix = new URL(request.url()).pathname.slice(prefix.length)
+      const receipt = () => ({
+        workspaceId: state.wrongWorkspace ? runId : id,
+        importId: state.id,
+        state: state.phase,
+        archive,
+        receivedBytes: state.receivedBytes,
+        plan: ['Uploading', 'Ready'].includes(state.phase) ? null : sourcePlan,
+        code: state.phase === 'Canceled' ? 'WORKSPACE_SOURCE_CANCELED' : null,
+        expiresAtUtc: new Date(Date.now() + 3600_000).toISOString(),
+      })
+      if (request.method() === 'GET' && suffix === '') {
+        if (!state.id) return route.fulfill({ status: 204 })
+        if (state.phase === 'Ready') state.phase = 'Staged'
+        else if (state.phase === 'Publishing') state.phase = 'Published'
+        else if (state.phase === 'Canceling') state.phase = 'Canceled'
+        return route.fulfill({ json: receipt() })
+      }
+      expect(request.headers()['x-xsrf-token']).toBe('ui-fixture-only')
+      if (request.method() === 'PUT' && /^\/[0-9a-f-]{36}$/.test(suffix)) {
+        expect(request.postDataJSON()).toEqual(archive)
+        state.beginCalls++
+        state.id = suffix.slice(1)
+        return route.fulfill({ status: 202, json: receipt() })
+      }
+      const item = `/${state.id}`
+      if (request.method() === 'PUT' && suffix.startsWith(item + '/chunks/')) {
+        expect(request.headers()['content-type']).toBe('application/octet-stream')
+        const offset = Number(suffix.slice((item + '/chunks/').length))
+        expect(offset).toBe(state.receivedBytes)
+        const body = request.postDataBuffer()
+        expect(body).toEqual(file.subarray(offset, offset + chunkSize))
+        state.offsets.push(offset)
+        state.receivedBytes += body!.length
+        if (state.receivedBytes === file.length) state.phase = 'Ready'
+        if (state.loseChunkReply) {
+          state.loseChunkReply = false
+          return route.abort('failed')
+        }
+        return route.fulfill({ json: receipt() })
+      }
+      if (request.method() === 'POST' && suffix === item + '/publish') {
+        expect(state.phase).toBe('Staged')
+        expect(request.postDataJSON()).toEqual({ planSha256: sourcePlan.planSha256 })
+        state.publishCalls++
+        state.phase = 'Publishing'
+        if (state.losePublishReply) {
+          state.losePublishReply = false
+          return route.abort('failed')
+        }
+        return route.fulfill({ status: 202, json: receipt() })
+      }
+      if (request.method() === 'POST' && suffix === item + '/cancel') {
+        expect(state.phase).toBe('Staged')
+        state.cancelCalls++
+        state.phase = 'Canceling'
+        return route.fulfill({ status: 202, json: receipt() })
+      }
+      return route.fulfill({ status: 404, json: {} })
+    },
+  )
+  const input = { name: 'project.zip', mimeType: 'application/zip', buffer: file }
+  return { state, input }
+}
+
+test('resumes a committed archive chunk after reload and confirms the exact source plan once', async ({
+  page,
+}, info) => {
+  const { state, input } = await sourceFixture(page)
+  await page.addInitScript(() => {
+    Object.defineProperty(window.crypto, 'randomUUID', { value: undefined })
+    Object.defineProperty(window.crypto, 'subtle', { value: undefined })
+  })
+  await page.goto(`${workspacePath}/${id}/environment`)
+  await page.getByRole('link', { name: '源码导入' }).click()
+  await expect(page.getByRole('heading', { name: '导入源码归档' })).toBeVisible()
+  await page.getByLabel('选择归档文件').setInputFiles(input)
+  await page.getByRole('button', { name: '开始上传' }).click()
+  await expect(page.getByText(/未能确认服务器结果/)).toBeVisible()
+  expect(state.offsets).toEqual([0])
+  const originalId = state.id
+  await page.reload()
+  await expect(page.getByText(originalId, { exact: true })).toBeVisible()
+  await expect(page.getByText(/已接收 1,048,576 字节/)).toBeVisible()
+  const file = page.getByLabel('重新选择原归档')
+  await file.setInputFiles({ ...input, buffer: sampleZip(66) })
+  await page.getByRole('button', { name: '继续上传' }).click()
+  await expect(page.getByText(/所选文件与待续传归档/)).toBeVisible()
+  expect(state.offsets).toEqual([0])
+  await file.setInputFiles(input)
+  await page.getByRole('button', { name: '继续上传' }).click()
+  await expect(page.getByText(sourcePlan.planSha256, { exact: true })).toBeVisible()
+  expect(state.id).toBe(originalId)
+  expect(state.beginCalls).toBe(1)
+  expect(state.offsets).toEqual([0, chunkSize])
+  const publish = page.getByRole('button', { name: '确认发布源码' })
+  await expect(publish).toBeDisabled()
+  await page.screenshot({ path: info.outputPath('source-plan-desktop.png') })
+  await page.getByText('我已核对暂存计划，确认发布到该空间', { exact: true }).click()
+  await expect(page.getByRole('checkbox', { name: /我已核对暂存计划/ })).toBeChecked()
+  await publish.click()
+  await expect(page.getByText(/服务器状态待确认/)).toBeVisible()
+  await expect(publish).toBeDisabled()
+  await page.getByRole('button', { name: '刷新导入状态' }).click()
+  await expect(page.getByText('已发布', { exact: true })).toBeVisible()
+  expect(state.publishCalls).toBe(1)
+  await expect(page.getByLabel('选择归档文件')).toHaveCount(0)
+})
+
+test('rejects a wrong-scope receipt, clears revoked state and cancels from narrow dark layout', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 375, height: 820 })
+  const { state, input } = await sourceFixture(page)
+  state.loseChunkReply = false
+  await page.goto(sourcePath)
+  await page.getByLabel('选择归档文件').setInputFiles({ ...input, name: 'project.txt' })
+  await expect(page.getByText('请选择 ZIP、tar 或 tar.gz 归档。')).toBeVisible()
+  expect(state.beginCalls).toBe(0)
+  await page.getByLabel('选择归档文件').setInputFiles(input)
+  await page.getByRole('button', { name: '开始上传' }).click()
+  const refresh = page.getByRole('button', { name: '刷新导入状态' })
+  await expect(page.getByText('待确认发布', { exact: true })).toBeVisible()
+  await page.locator('.theme-switch .el-switch__core').click({ timeout: 5000 })
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
+  await page.screenshot({ path: info.outputPath('source-plan-narrow-dark.png') })
+  state.wrongWorkspace = true
+  await refresh.click()
+  await expect(page.getByText(/导入回执未通过核验/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '确认发布源码' })).toBeDisabled()
+  state.wrongWorkspace = false
+  state.allowed = false
+  await refresh.click()
+  await expect(page.getByText(/当前账号没有这项开发空间权限/)).toBeVisible()
+  await expect(page.getByText(sourcePlan.planSha256, { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '确认发布源码' })).toHaveCount(0)
+  state.allowed = true
+  await refresh.click()
+  await page.getByRole('button', { name: '取消导入' }).click()
+  await expect(page.getByText('已取消', { exact: true })).toBeVisible()
+  expect(state.cancelCalls).toBe(1)
+  expect(state.publishCalls).toBe(0)
 })

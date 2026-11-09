@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElCard } from 'element-plus'
+import WorkspaceSourceImport from '@/components/WorkspaceSourceImport.vue'
 import { ApiError, createIdempotencyKey } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
 import {
@@ -19,6 +20,7 @@ const router = useRouter()
 const id = computed(() => String(route.params.workspaceId ?? ''))
 const runId = computed(() => String(route.params.runId ?? ''))
 const showRuns = computed(() => route.name === 'development-workspace-runs')
+const showSources = computed(() => route.name === 'development-workspace-source')
 const workspace = ref<Workspace | null>(null)
 const owned = computed(
   () => workspace.value && workspace.value.ownerSubject === authSession.user.value?.subject,
@@ -79,7 +81,7 @@ const detailRoute = (name: string, targetRun?: string) => ({
 
 let lifetime: AbortController
 watch(
-  () => [id.value, runId.value, showRuns.value, authSession.user.value?.subject],
+  () => [id.value, runId.value, showRuns.value, authSession.user.value?.subject, showSources.value],
   (_, previous, onCleanup) => {
     const controller = new AbortController()
     lifetime = controller
@@ -280,10 +282,13 @@ function cancel(run: WorkspaceRun) {
     <template v-if="workspace">
       <nav class="workspace-actions" aria-label="开发空间详情">
         <RouterLink :to="detailRoute('development-workspace-environment')">环境与存储</RouterLink>
+        <RouterLink v-if="owned" :to="detailRoute('development-workspace-source')"
+          >源码导入</RouterLink
+        >
         <RouterLink :to="detailRoute('development-workspace-runs')">运行记录</RouterLink>
       </nav>
 
-      <el-card v-if="!showRuns" shadow="never">
+      <el-card v-if="!showRuns && !showSources" shadow="never">
         <template #header><strong>环境与存储</strong></template>
         <dl>
           <dt>空间状态</dt>
@@ -340,6 +345,21 @@ function cancel(run: WorkspaceRun) {
           <el-button :disabled="!!action" @click="plan = null">关闭计划</el-button>
         </el-card>
       </el-card>
+
+      <template v-else-if="showSources">
+        <WorkspaceSourceImport
+          v-if="owned && allocated"
+          :key="workspace.id"
+          :workspace-id="workspace.id"
+        />
+        <el-alert
+          v-else
+          :title="owned ? '分配存储后可导入源码。' : '源码导入仅向空间所有者开放。'"
+          type="info"
+          :closable="false"
+          show-icon
+        />
+      </template>
 
       <template v-else-if="owned">
         <el-card v-if="!runId" shadow="never">
@@ -473,6 +493,11 @@ function cancel(run: WorkspaceRun) {
 }
 .workspace-page a:hover {
   text-decoration: underline;
+}
+.workspace-page nav a[aria-current='page'] {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
 }
 .workspace-page {
   display: grid;
