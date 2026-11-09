@@ -452,3 +452,30 @@ test('rejects a wrong-scope receipt, clears revoked state and cancels from narro
   expect(state.cancelCalls).toBe(1)
   expect(state.publishCalls).toBe(0)
 })
+
+test('rejects duplicate and protected direct files before creating an import', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 375, height: 820 })
+  const { state } = await sourceFixture(page)
+  await page.goto(sourcePath)
+  const input = page.getByLabel('选择源码文件')
+  const entry = (name: string, content: string) => ({
+    name,
+    mimeType: 'text/plain',
+    buffer: Buffer.from(content),
+  })
+  await input.setInputFiles([entry('main.cjs', 'one'), entry('main.cjs', 'two')])
+  const upload = page.getByRole('button', { name: '开始上传' })
+  await upload.click()
+  await expect(page.getByText(/所选内容含同名文件/)).toBeVisible()
+  await input.setInputFiles(entry('.env', 'SYNTHETIC=fixture'))
+  await upload.click()
+  await expect(page.getByText(/所选内容含受保护的路径/)).toBeVisible()
+  await expect(page.getByLabel('选择源码目录')).toBeVisible()
+  await page.locator('.theme-switch .el-switch__core').click()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
+  await page.screenshot({ path: info.outputPath('source-files-narrow-dark.png') })
+  expect(state.beginCalls).toBe(0)
+  expect(state.offsets).toEqual([])
+})

@@ -4,23 +4,33 @@ import { ElCard, ElCheckbox, ElProgress } from 'element-plus'
 import { ApiError, createIdempotencyKey } from '@/services/apiClient'
 import { workspaceError } from '@/services/developmentWorkspaces'
 import {
+  sameSourcePlan,
+  sourceStates,
+  workspaceSources as api,
+  type SourceImport,
+} from '@/services/developmentWorkspaceSources'
+import {
   identifySource,
   sameSourceArchive,
-  sameSourcePlan,
   sourceChunkBytes,
   sourceFormat,
   SourceInputError,
-  sourceStates,
-  workspaceSources as api,
   type SourceArchive,
-  type SourceImport,
-} from '@/services/developmentWorkspaceSources'
+} from '@/services/workspaceSourcePayload'
+import { packWorkspaceSources } from '@/services/workspaceSourceTar'
+
+type Selection =
+  | { kind: 'archive'; file: File; format: SourceArchive['format'] }
+  | { kind: 'files' | 'directory'; files: File[] }
 
 const props = defineProps<{ workspaceId: string }>()
 const lifecycle = new AbortController()
 const current = shallowRef<SourceImport | null>(null)
-const selected = shallowRef<File | null>(null)
+const selected = shallowRef<Selection | null>(null)
 const fileInput = ref<HTMLInputElement>()
+const rawInput = ref<HTMLInputElement>()
+const directoryInput = ref<HTMLInputElement>()
+const directorySupported = 'webkitdirectory' in document.createElement('input')
 const busy = ref<'refresh' | 'upload' | 'publish' | 'cancel' | ''>('')
 const error = ref('')
 const confirmed = ref(false)
@@ -81,9 +91,10 @@ function accept(result: SourceImport | null, signal: AbortSignal) {
   synchronized.value = true
 }
 
-function clearFile() {
+function clearFile(except?: HTMLInputElement) {
   selected.value = null
-  if (fileInput.value) fileInput.value.value = ''
+  for (const input of [fileInput.value, rawInput.value, directoryInput.value])
+    if (input && input !== except) input.value = ''
 }
 
 async function load(signal: AbortSignal) {
@@ -118,14 +129,16 @@ function refresh() {
   void run('refresh', load)
 }
 
-function selectFile(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  selected.value = null
+function selectFile(event: Event, kind: Selection['kind']) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  clearFile(input)
   error.value = ''
+  const file = files[0]
   if (!file) return
   try {
-    sourceFormat(file)
-    selected.value = file
+    selected.value =
+      kind === 'archive' ? { kind, file, format: sourceFormat(file) } : { kind, files }
   } catch (failure) {
     clearFile()
     error.value = failure instanceof SourceInputError ? failure.message : workspaceError(failure)
@@ -133,8 +146,8 @@ function selectFile(event: Event) {
 }
 
 function upload() {
-  const file = selected.value
-  if (!file || !canUpload.value) return
+  const input = selected.value
+  if (!input || !canUpload.value) return
   void run('upload', async (signal) => {
     const controller = new AbortController()
     transfer = controller
@@ -146,12 +159,22 @@ function upload() {
         return
       }
       hashInProgress.value = true
-      const archive = await identifySource(file, uploadSignal)
+      const payload =
+        input.kind === 'archive'
+          ? input.file
+          : packWorkspaceSources(input.files, input.kind === 'directory')
+      const archive = await identifySource(
+        payload,
+        input.kind === 'archive' ? input.format : 'tar',
+        uploadSignal,
+      )
       hashInProgress.value = false
       let result = current.value
       if (result?.state === 'Uploading') {
         if (!sameSourceArchive(result.archive, archive))
-          throw new SourceInputError('所选文件与待续传归档的格式、大小或摘要不一致。')
+          throw new SourceInputError(
+            '所选文件与待续传归档的格式、大小或摘要不一致。请重新选择原内容。',
+          )
       } else {
         if (!pending || !sameSourceArchive(pending.archive, archive))
           pending = { id: createIdempotencyKey(), archive }
@@ -161,7 +184,7 @@ function upload() {
       }
       while (result.state === 'Uploading') {
         const offset = result.receivedBytes
-        const body = file.slice(offset, offset + sourceChunkBytes)
+        const body = payload.slice(offset, offset + sourceChunkBytes)
         synchronized.value = false
         result = await api.chunk(props.workspaceId, result, body, uploadSignal)
         accept(result, uploadSignal)
@@ -204,7 +227,7 @@ function cancel() {
   <el-card class="source-card" shadow="never">
     <template #header><h2>导入源码归档</h2></template>
     <div class="source-content">
-      <p>支持 ZIP、tar、tar.gz，最多 128 MiB。暂存通过后可核对计划并发布首个工作树。</p>
+      <p>可选择文件、目录或 ZIP、tar、tar.gz 归档。上传上限为 128 MiB，暂存后核对计划再发布。</p>
       <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
       <p v-if="!synchronized && !busy && !denied" role="status">
         服务器状态待确认。刷新状态后可继续操作。继续上传时会先核对已接收字节数。
@@ -267,8 +290,42 @@ function cancel() {
           type="file"
           accept=".zip,.tar,.tar.gz,.tgz"
           :disabled="!!busy"
-          @change="selectFile"
+          @change="selectFile($event, 'archive')"
         />
+        <div
+          v-if="!current || current.state !== 'Uploading' || current.archive.format === 'tar'"
+          class="source-file-pickers"
+        >
+          <div class="source-upload">
+            <label for="workspace-source-raw">选择源码文件</label>
+            <input
+              id="workspace-source-raw"
+              ref="rawInput"
+              type="file"
+              multiple
+              :disabled="!!busy"
+              @change="selectFile($event, 'files')"
+            />
+          </div>
+          <div v-if="directorySupported" class="source-upload">
+            <label for="workspace-source-directory">选择源码目录</label>
+            <input
+              id="workspace-source-directory"
+              ref="directoryInput"
+              type="file"
+              webkitdirectory
+              aria-describedby="workspace-source-directory-hint"
+              :disabled="!!busy"
+              @change="selectFile($event, 'directory')"
+            />
+            <small id="workspace-source-directory-hint">
+              保留所选目录内的相对路径。空目录请通过归档导入。
+            </small>
+          </div>
+        </div>
+        <p v-if="selected && selected.kind !== 'archive'" role="status">
+          已选 {{ selected.files.length }} 个文件。文件和目录会封装为 tar 后上传。
+        </p>
       </div>
       <div v-if="current?.state === 'Staged'" class="source-confirm">
         <el-checkbox v-model="confirmed" :disabled="!!busy || !synchronized"
@@ -326,12 +383,20 @@ function cancel() {
 .source-content dl {
   margin: 0;
 }
+.source-file-pickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 12px;
+}
 .source-content dl {
   display: grid;
   grid-template-columns: minmax(4.5rem, max-content) minmax(0, 1fr);
   gap: 8px 12px;
 }
 .source-content dt {
+  color: var(--el-text-color-secondary);
+}
+.source-upload small {
   color: var(--el-text-color-secondary);
 }
 .source-content dd {

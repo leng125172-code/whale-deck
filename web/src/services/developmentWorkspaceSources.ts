@@ -1,12 +1,15 @@
-import { sha256 } from '@noble/hashes/sha2.js'
-import { bytesToHex } from '@noble/hashes/utils.js'
 import { apiRequest } from './apiClient'
+import {
+  isSourceFormat,
+  sameSourceArchive,
+  sourceArchiveLimit,
+  sourceChunkBytes,
+  SourceInputError,
+  type SourceArchive,
+} from './workspaceSourcePayload'
 
-export const sourceChunkBytes = 1024 * 1024
-export const sourceArchiveLimit = 128 * sourceChunkBytes
 const hex = /^[a-f0-9]{64}$/
 const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/
-const formats = ['zip', 'tar', 'tar.gz'] as const
 export const sourceStates = {
   Uploading: '等待上传',
   Ready: '等待暂存',
@@ -17,12 +20,6 @@ export const sourceStates = {
   Canceled: '已取消',
   Failed: '导入失败',
 } as const
-
-export interface SourceArchive {
-  format: (typeof formats)[number]
-  archiveBytes: number
-  archiveSha256: string
-}
 
 export interface SourcePlan {
   planSha256: string
@@ -40,37 +37,6 @@ export interface SourceImport {
   plan: SourcePlan | null
   code: string | null
   expiresAtUtc: string
-}
-
-export class SourceInputError extends Error {}
-
-export function sourceFormat(file: File): SourceArchive['format'] {
-  const name = file.name.toLowerCase()
-  if (file.size === 0 || file.size > sourceArchiveLimit)
-    throw new SourceInputError('请选择大于 0 且不超过 128 MiB 的归档。')
-  if (name.endsWith('.tar.gz') || name.endsWith('.tgz')) return 'tar.gz'
-  if (name.endsWith('.tar')) return 'tar'
-  if (name.endsWith('.zip')) return 'zip'
-  throw new SourceInputError('请选择 ZIP、tar 或 tar.gz 归档。')
-}
-
-export async function identifySource(file: File, signal: AbortSignal): Promise<SourceArchive> {
-  const format = sourceFormat(file)
-  const digest = sha256.create()
-  for (let offset = 0; offset < file.size; offset += sourceChunkBytes) {
-    signal.throwIfAborted()
-    digest.update(new Uint8Array(await file.slice(offset, offset + sourceChunkBytes).arrayBuffer()))
-  }
-  signal.throwIfAborted()
-  return { format, archiveBytes: file.size, archiveSha256: bytesToHex(digest.digest()) }
-}
-
-export function sameSourceArchive(left: SourceArchive, right: SourceArchive) {
-  return (
-    left.format === right.format &&
-    left.archiveBytes === right.archiveBytes &&
-    left.archiveSha256 === right.archiveSha256
-  )
 }
 
 export function sameSourcePlan(left: SourcePlan | null, right: SourcePlan | null) {
@@ -97,10 +63,6 @@ function isDigest(value: unknown): value is string {
   return typeof value === 'string' && hex.test(value)
 }
 
-function isFormat(value: unknown): boolean {
-  return formats.some((format) => format === value)
-}
-
 function malformed(): never {
   throw new SourceInputError('导入回执未通过核验。请刷新服务器状态。')
 }
@@ -115,7 +77,7 @@ function sourceReceipt(value: unknown, workspaceId: string, importId?: string): 
     typeof value.state !== 'string' ||
     !Object.prototype.hasOwnProperty.call(sourceStates, value.state) ||
     !isRecord(value.archive) ||
-    !isFormat(value.archive.format) ||
+    !isSourceFormat(value.archive.format) ||
     !isInt(value.archive.archiveBytes, 1, sourceArchiveLimit) ||
     !isDigest(value.archive.archiveSha256) ||
     !isInt(value.receivedBytes, 0, value.archive.archiveBytes) ||
