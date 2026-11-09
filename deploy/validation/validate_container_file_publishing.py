@@ -39,11 +39,13 @@ def verify_container(value, identifier, name, folder):
 
 
 @contextlib.contextmanager
-def fixture(*, restartable_core=(), removable=False):
+def fixture(*, restartable_core=(), removable=False, natural_expiry=False):
     # Explicit opt-in for the installed Worker restart gate. All older callers
     # keep the exact ID/image/status/StartedAt invariant; no resource recreation.
     assert restartable_core in ((), ('whaledeck-worker',))
-    assert type(removable) is bool
+    assert type(removable) is bool and type(natural_expiry) is bool
+    assert not natural_expiry or not removable and not restartable_core
+    handoff_verified = False
     common.verify_apps_directory(common.APPS, pwd.getpwnam('whaledeck-agent').pw_uid)
     baseline = common.core_snapshot()
     image = json.loads(common.command(['docker', 'image', 'inspect', common.IMAGE]))[0]
@@ -95,14 +97,16 @@ def fixture(*, restartable_core=(), removable=False):
             '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--user', '1000:1000', '--pids-limit', '16',
             '--memory', '32m', '--cpus', '0.25', '--log-driver', 'local', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=2',
             '--label', 'io.whaledeck.validation=' + name, '--mount', 'type=bind,src=' + str(folder) + ',dst=/work',
-            '--entrypoint', '/bin/sleep', common.IMAGE, '600']).decode().strip()
+            '--entrypoint', '/bin/sleep', common.IMAGE, '172800' if natural_expiry else '600']).decode().strip()
         verify_container(json.loads(common.command(['docker', 'inspect', identifier]))[0], identifier, name, folder)
         owned.update(identifier=identifier)
         yield owned
         verify_files()
+        handoff_verified = natural_expiry and owned.get('awaiting_natural_expiry') is True
     finally:
         if retain_unsettled_fixture(owned):
-            print(json.dumps({'ownedPublishContainerRemoved': False, 'unsettledFixtureRetained': True, 'unverifiedFixturePreserved': True}),flush=True)
+            print(json.dumps({'ownedPublishContainerRemoved': False, 'unsettledFixtureRetained': True,
+                'awaitingNaturalExpiry': handoff_verified, 'unverifiedFixturePreserved': not handoff_verified}),flush=True)
         else:
             lookup = subprocess.run(['docker', 'inspect', identifier or name], capture_output=True, timeout=20)
             if lookup.returncode == 0:

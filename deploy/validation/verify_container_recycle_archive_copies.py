@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Independent post-cleanup reread; never copies or invokes native recovery."""
-import hashlib,json,os,re,stat,subprocess,sys
+import hashlib,json,os,re,stat,subprocess,sys,time
 from pathlib import Path
 from validate_container_recycle_archive_agent import baseline
 from validate_container_recycle_archive_browser import old_rows,idle,hdd_observation
@@ -120,7 +120,7 @@ def live_main(name):
     early_retirement_refusal_proof(e,copied,namespace,current['recycleHdd'])
     typed_equal(old_rows('0'*64),read('business-before.json'));idle();typed_equal(file_snapshot(folder/'purge-kernel.bin'),actual)
     owned.verify_container(json.loads(owned.common.command(['docker','inspect',fixture['containerId']]))[0],fixture['containerId'],fixture['containerName'],folder)
-    with (e/'live-target-reread.json').open('x') as out:json.dump(dict(actualLiveNewInodeReread=True,containerInstanceCurrent=True,actual=actual,hdd=hdd,stageIdentity=[info.st_dev,info.st_ino],namespace=namespace,rootCompleted=True,oldBusinessAndProtectionPreserved=True),out)
+    with (e/'live-target-reread.json').open('x') as out:json.dump(dict(actualLiveNewInodeReread=True,containerInstanceCurrent=True,actual=actual,hdd=hdd,stageIdentity=[info.st_dev,info.st_ino],namespace=namespace,liveObservedAtUnixMs=time.time_ns()//1000000,rootCompleted=True,oldBusinessAndProtectionPreserved=True),out)
     print(json.dumps(dict(archiveCopiesIndependent='passed',liveTargetNewInodeReread=True,archiveCopyPerformed=True)),flush=True)
 
 
