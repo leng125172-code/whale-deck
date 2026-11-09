@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-13/P3-16 `8dc16e42` 增加 Agent 1.64 的内容签名 Runner 启动和观察，来宾真实通过受委托 cgroup 运行和回执重放。继续主动取消、孤儿收尾、Worker/BFF 及物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_RPC.md)。
+
 2026-11-09，P3-13/P3-16 `0b4f0ead` 接入宿主 Runner 启动与原回执查询。来宾实际验证镜像和工作目录绑定、Node/.NET、超时清理及中断拒绝重跑。继续签名 Agent RPC、主动取消和恢复。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_LAUNCH.md)。
 
 2026-11-09，P3-13/P3-16 `615fb86d` 完成 Runner 解包隔离和上游 umoci 0.6.0 的固定摘要发布安装入口。真实宿主包完整性、离线来宾安装、沙箱限制、超时清理及两种运行时均验证。继续 Agent 生命周期和物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_UNPACK.md)。
