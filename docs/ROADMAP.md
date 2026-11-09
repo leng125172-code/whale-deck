@@ -1,5 +1,7 @@
 # WhaleDeck 分阶段开发任务
 
+2026-11-09 退役能力验证器候选2de34c2d已验证：独立5方法HMAC/60秒/规范nonce和并发单次消费，通用健康后缀前拒绝新前缀；Unary从实际protobuf正文重算hash、核对描述符并拒绝未知字段，三stream拒绝且不耗nonce。29新能力/联合55合同、全量能力677及Unit5967零跳过、NET10构建/14CI合同/8范围通过，独立只读复核无阻断项；首轮测试泛型CS0411修正后通过。5文件核验摘要封存，原老化来源干净环境仍未到期/未执行、原冻结代码/claim/HDD保持，无RPC注册/广告/安装。继续计划政策/Gateway/gRPC-native适配及标准版本/安装、自然到期/永久业务和59项，17项移出不算完成。[能力验证与正文绑定边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_CAPABILITY.md)。
+
 2026-11-09 退役C#合同准备bcfef6c0已验证：独立protobuf消息/原生20键投影、完整内容与上下文哈希及独立HMAC域、major1+minor60+专属能力门禁、回执null/false/true不归一；不扩展原ArchiveCopy类型、不声明/注册RPC或广告能力，运行仍59。26新合同/归档288回归、全量Unit5938零跳过及NET10构建、14CI合同/8范围通过，独立只读复核无阻断项。构建后原老化来源干净环境重核仍未到期/未执行，无原冻结闭包、策略/claim/HDD/实例变更；6文件证据封存。实际验证器/Gateway/适配与安装、自然到期正向及永久业务/其余59项仍待，17项移出不算完成。[退役合同准备与边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_CONTRACTS.md)。
 
 2026-11-09 显式老化退役验收入口候选412e94aa及独立物理采集器完成准备：默认观察，显式开关与新鲜到期双门禁，唯一Apply、独立before/after/current及精确全局差异；异常保留现场不重试清理。复核目录身份缺口已补采集前后双重dev/inode，9专项/795回收root零跳过、14CI合同/8范围/3编译通过。真实显式开关仍NotDue/未执行，另独立采集197HDD条目、Reserved/Available通过；原来源/策略/claim/备份/业务不变，无新增历史。12审计文件分两包封存；真实正向/删除后分支仍待2026-11-10 10:00:02.252+08:00后单独验收，不把准备等同完成。协议安装/永久业务与全部59项继续，17项移出不算完成。[显式入口与独立采集](qa/CONTAINER_FILE_RECYCLING_ARCHIVE_EXPLICIT_ACCEPTANCE.md)。
