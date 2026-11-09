@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-17 覆盖率工件解析与报告导出 `d3ba0941` 已验证真实 .NET Cobertura、Node LCOV 和旧报告字节重放。继续 Runner 自动采集、授权下载与 Vue。见[本批记录](qa/DEVELOPMENT_WORKSPACE_COVERAGE.md)。
+
 2026-11-09，P3-17 报告到期 Worker `01ae3b44` 已验证真实数据库故障重试、有界清理和正式 Worker 入口。Runner、授权下载、覆盖率与 Vue 继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUN_REPORT_RETENTION_WORKER.md)。
 
 2026-11-09，P3-17 报告持久化 `b3afed7f` 和重放修正 `6e6aa769` 已通过真实隔离 PostgreSQL。仓储绑定原已结算任务，保存双格式与摘要，保护已有报告并支持有界到期清理。仍需接入 Runner、Worker 调度、授权下载与页面。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUN_REPORT_STORAGE.md)。
