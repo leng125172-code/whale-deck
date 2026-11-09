@@ -10,4 +10,12 @@
 
 NVMe 的 14 项用例在工作站用户命名空间和无网络的隔离容器各通过一次。容器另通过 22 项 HDD 备份回归和 26 项文件根升级回归。容器用只读源码，所需的跨 UID 权限及临时空间均限制在容器内。范围校验 8 项、CI 契约 14 项及宿主运行时校验 12 项通过。日志在本地 `deploy/artifacts/development-workspace-nvme-storage-fd8066ab/`，`SHA256SUMS` 的 SHA-256 为 `8af319f6ba722e712e2d144be65e4f1ddf42eb7cc7a43acecad405cd3ce1a232`。
 
-模块当前作为后续 Agent 接入的宿主候选。调用授权、签名请求、标准安装、systemd 下的可写挂载与实际工作站分配仍待验收。现有会话 `NoNewPrivs=1`，工作站配置未写入。
+## 签名 Agent 与固定安装入口
+
+2026-11-09，候选 `4b44200e` 增加 Agent 协议 1.61 的 `development.storage.allocate`。Gateway 只接受处于 Registered 且主体为所有者的工作空间，并协商能力后签发 45 秒一次性 HMAC。签名绑定方法、主体、追踪 ID、空间 UUID、存储根 ID、环境摘要和登记磁盘预算。Agent 校验实际 protobuf 消息，拒绝重复签名头、旧签名格式和已用 nonce。宿主侧重复分配继续通过封存凭据核对。返回给客户端的回执只包含分配请求的业务字段，设备 UUID 和 inode 保留在宿主。
+
+标准安装脚本增加固定 Python 传输和分配模块，校验器核对安装文件与源码字节。固定 sudo 动作在独立短生命周期 systemd 单元内调用传输，只对 `/var/lib/whaledeck-development` 提供写权限。批准挂载为上级文件系统时，驱动要求这条可写绑定挂载同时匹配父挂载 ID、设备、文件系统内部源路径和固定挂载点，逻辑根以下继续拒绝挂载跳转。管理员需在 `/etc/whaledeck/development-storage.json` 中登记根及 UUID，预建权限为 root:root/0700 的逻辑根。安装脚本只在固定父目录缺失时创建该目录。
+
+16 项宿主测试通过。真实私有挂载命名空间复现同设备错目录绑定、只读绑定、子目录过挂载及正确绑定上的分配与回放。设备元数据使用测试夹具。独立 Python 入口拒绝重复 JSON 字段与外部路径参数。6216 项 .NET 单元测试全部通过，包含实际 Unix Socket HTTP/2、Gateway、签名拦截器和测试分配端点的验证，以及真实 Agent 回执解析器测试。10 项退役安装回归、12 项宿主运行时、8 项范围及 5 项前端安装 CI 契约检查通过。本地日志位于 `deploy/artifacts/development-workspace-storage-rpc-4b44200e/`，`SHA256SUMS` 的 SHA-256 为 `35c286fecbcb13aedef37315ab5afa68f537d71d750af171824c184aeae73c50`。
+
+当前会话 `NoNewPrivs=1`。正式工作站上的标准安装、systemd 单元到专用 NVMe 根的真实签名分配仍待验收。后续接入持久化业务计划、数据库状态迁移、磁盘配额和 Runner。

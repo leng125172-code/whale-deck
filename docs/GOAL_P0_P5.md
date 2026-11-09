@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-13 存储分配协议 1.61 与固定宿主传输 `4b44200e` 接入标准安装脚本。Unix Socket 请求签名和隔离命名空间的真实绑定挂载验证通过。业务状态推进、配额、Runner 与工作站签名分配仍待验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_NVME_STORAGE.md)。
+
 2026-11-09，P3-13 NVMe 目录分配内核 `fd8066ab` 通过工作站根设备只读核对与隔离内核测试。覆盖错设备、链接替换、原子禁止覆盖与中断恢复。继续签名 Agent 入口、标准安装、实际存储配额及 Runner。见[本批记录](qa/DEVELOPMENT_WORKSPACE_NVME_STORAGE.md)。
 
 2026-11-09，P3-13 注册与运行时清单锁定 `ce6612e9` 与迁移修正 `6da6caa4` 通过真实 HTTP 与 PostgreSQL。空间状态为 `Registered`，记录所有者、批准存储根引用、版本、摘要和登记预算。Agent 分配、同空间 Runner、Vue 及真实工作站验收继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REGISTRATION.md)。
