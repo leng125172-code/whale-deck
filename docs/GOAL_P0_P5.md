@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-13/P3-16 宿主启动器 `0b4f0ead` 已在离线 KVM 运行实际 Node 和 .NET，覆盖原回执重放、并发、超时、中断与配额耗尽。继续签名 Agent RPC、取消和孤儿核对。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_LAUNCH.md)。
+
 2026-11-09，P3-13/P3-16 解包沙箱 `615fb86d` 使用固定摘要的上游 umoci 0.6.0，标准宿主包已生成并通过完整性校验。离线 KVM 中通过工件安装、沙箱拒绝及超时清理，并重新运行固定 .NET 与 Node。继续 Agent 启动、观察、取消与故障恢复。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_UNPACK.md)。
 
 2026-11-09，P3-13/P3-16 Runner 固定摘要 rootfs `ff996ac1` 已通过真实 .NET SDK 和 Node 镜像导入，并在离线 KVM 来宾中以只读根文件系统运行构建与测试。继续固定解包器、Agent 正式启动和清理及物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_ROOTFS.md)。
