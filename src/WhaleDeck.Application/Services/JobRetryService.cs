@@ -55,6 +55,7 @@ public sealed class JobRetryService(IJobRepository jobs, IAgentGateway agent, Op
         Guid id, CancellationToken cancellationToken)
     {
         var source = await jobs.FindAsync(id, cancellationToken) ?? throw new KeyNotFoundException("Job was not found.");
+        if (ContainerRecycleArchiveRetirementJobResults.IsRetirement(source.JobType)) throw new InvalidOperationException("Archive retirement requires a new signed plan and explicit confirmation.");
         if (source.JobType is "containers.files.recycle-purge-plan" or "containers.files.recycle-purge") throw new InvalidOperationException("Container recycle purge requires a new source-bound plan and explicit confirmation; generic retry cannot repeat deletion.");
         if (source.JobType is "containers.files.recycle-restore-plan" or "containers.files.recycle-restore") throw new InvalidOperationException("Container recycle restoration requires a new source-bound plan and explicit confirmation; generic retry cannot repeat restoration.");
         if (source.JobType is "containers.files.recycle-plan" or "containers.files.recycle") throw new InvalidOperationException("Container recycling requires a new instance/version-bound plan and explicit confirmation; generic retry cannot repeat removal.");

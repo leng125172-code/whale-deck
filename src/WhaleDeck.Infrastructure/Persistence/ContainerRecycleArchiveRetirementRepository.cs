@@ -12,8 +12,8 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository(Platform
     IContainerRecycleArchiveProtector archiveProtector, IContainerRecyclePurgeProtector purgeProtector, IContainerRecycleProtector recycleProtector, TimeProvider clock)
     : IContainerRecycleArchiveRetirementRepository
 {
-    private const string PlanJobType = "containers.files.recycle-archive-retirement-plan";
-    private const string ExecutionJobType = "containers.files.recycle-archive-retirement";
+    private const string PlanJobType = ContainerRecycleArchiveRetirementJobResults.PlanningJob;
+    private const string ExecutionJobType = ContainerRecycleArchiveRetirementJobResults.ExecutionJob;
     private const string Requested = "ContainerRecycleArchiveRetirementRequested";
     private const string CancellationRequested = "ContainerRecycleArchiveRetirementCancellationRequested";
     private const string Prefix = Retirement.Prefix;
@@ -47,7 +47,7 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository(Platform
                 (r.CompletedAtUtc == null || r.RootState == "Unknown" || r.RootState == "Completed"), token))
                 throw Failure("SOURCE_BUSY");
             db.ContainerRecycleArchiveRetirementIntents.Add(row);
-            AddJob(row, row.Id, PlanJobType, "PLAN_ACCEPTED", now);
+            await AddJob(row, row.Id, PlanJobType, "PLAN_ACCEPTED", now, token);
             await db.SaveChangesAsync(token);
             return row;
         }, token);
@@ -82,7 +82,7 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository(Platform
             ReleaseLease(row);
             row.ResultCode = Prefix + "CONFIRMED";
             row.Version++;
-            AddJob(row, id, ExecutionJobType, "CONFIRMED", now);
+            await AddJob(row, id, ExecutionJobType, "CONFIRMED", now, token);
             await db.SaveChangesAsync(token);
             return row;
         }, token);
@@ -154,7 +154,7 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository(Platform
         if (row.State == "Planning") return true;
         row.State = "Planning";
         row.Version++;
-        await AdvanceJob(job, "Running", "Planning", Prefix + "PLANNING", now, token);
+        await AdvanceJob(row, job, "Running", "Planning", Prefix + "PLANNING", now, token);
         await db.SaveChangesAsync(token);
         return true;
     }, token);
@@ -190,7 +190,7 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository(Platform
                 row.ResultCode = Prefix + "READY";
                 row.NextAttemptAtUtc = row.ReadyExpiresAtUtc.Value;
                 ReleaseLease(row);
-                await AdvanceJob(job, "Succeeded", "Ready", row.ResultCode, now, token);
+                await AdvanceJob(row, job, "Succeeded", "Ready", row.ResultCode, now, token);
                 await Processed(job.Id, now, token);
             }
             row.Version++;
@@ -216,7 +216,7 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository(Platform
         row.RootStartedAtUtc = now;
         row.PublishBarrier = true;
         row.Version++;
-        await AdvanceJob(job, "Running", "Reserving", Prefix + "RESERVING", now, token);
+        await AdvanceJob(row, job, "Running", "Reserving", Prefix + "RESERVING", now, token);
         Audit(row, job.Id, row.ActorSubject, row.TraceId, "reserve-started", row.State);
         await db.SaveChangesAsync(token);
         return StartResult.Started;
@@ -240,7 +240,7 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository(Platform
         row.ReservationJson = Retirement.Write(receipt);
         row.ReservationHash = mac;
         row.Version++;
-        await AdvanceJob(job, "Running", "Reserved", Prefix + "RESERVED", now, token);
+        await AdvanceJob(row, job, "Running", "Reserved", Prefix + "RESERVED", now, token);
         await db.SaveChangesAsync(token);
         return true;
     }, token);
@@ -260,7 +260,7 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository(Platform
         row.State = "Applying";
         row.ApplyStartedAtUtc = now;
         row.Version++;
-        await AdvanceJob(job, "Running", "Applying", Prefix + "APPLYING", now, token);
+        await AdvanceJob(row, job, "Running", "Applying", Prefix + "APPLYING", now, token);
         Audit(row, job.Id, row.ActorSubject, row.TraceId, "apply-started", row.State);
         await db.SaveChangesAsync(token);
         return StartResult.Started;

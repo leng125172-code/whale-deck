@@ -109,7 +109,8 @@ public sealed class OperationService(IJobRepository jobs)
         "batch-start" or "batch-stop" or "batch-restart" or "batch-delete";
 
     private static JobDto Map(OperationJob job) => new(job.Id, job.JobType, job.State, job.Phase, job.ProgressPercent, job.ErrorCode,
-        job.CreatedAtUtc, job.CompletedAtUtc, job.JobType is "containers.files.acl" or "containers.files.acl-plan"
+        job.CreatedAtUtc, job.CompletedAtUtc, ContainerRecycleArchiveRetirementJobResults.IsRetirement(job.JobType)
+            ? ContainerRecycleArchiveRetirementJobResults.ForJob(job) : job.JobType is "containers.files.acl" or "containers.files.acl-plan"
             ? ContainerAclJobResults.ForJob(job) : job.JobType is "containers.files.recursive-acl-restore" or "containers.files.recursive-acl-restore-plan"
                 ? ContainerRecursiveAclRestoreJobResults.ForJob(job) : job.JobType is "containers.files.recycle" or "containers.files.recycle-plan" ? ContainerRecycleJobResults.ForJob(job) : job.JobType is "containers.files.recycle-restore" or "containers.files.recycle-restore-plan" ? ContainerRecycleRestoreJobResults.ForJob(job) : job.JobType is "containers.files.recycle-purge" or "containers.files.recycle-purge-plan" ? ContainerRecyclePurgeJobResults.ForJob(job) : job.JobType is "containers.files.recycle-archive" or "containers.files.recycle-archive-plan" ? ContainerRecycleArchiveJobResults.ForJob(job) : job.State == "Succeeded" ? job.ResultJson : null);
 

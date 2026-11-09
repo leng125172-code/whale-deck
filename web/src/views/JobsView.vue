@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { routeLocationKey } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiRequest, apiUrl, createIdempotencyKey } from '@/services/apiClient'
 import { stageSecret, subscribeToJob, type OperationPlan } from '@/services/operations'
@@ -7,6 +8,9 @@ import ContainerRecycleJobResult from '@/components/containers/ContainerRecycleJ
 import ContainerRecycleRestoreJobResult from '@/components/containers/ContainerRecycleRestoreJobResult.vue'
 import ContainerRecyclePurgeJobResult from '@/components/containers/ContainerRecyclePurgeJobResult.vue'
 import ContainerRecycleArchiveJobResult from '@/components/containers/ContainerRecycleArchiveJobResult.vue'
+import ContainerRecycleArchiveRetirementJobResult from '@/components/containers/ContainerRecycleArchiveRetirementJobResult.vue'
+import { retirementJob } from '@/services/containerRecycleArchiveRetirements'
+import { validDirectoryId } from '@/services/containerDirectories'
 import ContainerAclJobResult from '@/components/containers/ContainerAclJobResult.vue'
 import ContainerRecursiveAclRestoreJobResult from '@/components/containers/ContainerRecursiveAclRestoreJobResult.vue'
 import { readAclJobResult } from '@/services/containerAclJobResults'
@@ -14,6 +18,7 @@ import { readRecyclePurgeJobResult } from '@/services/containerRecyclePurgeJobRe
 import { readRecycleArchiveJobResult } from '@/services/containerRecycleArchiveJobResults'
 import type { Job, JobEvent } from '@/services/contracts'
 
+const route = inject(routeLocationKey, null)
 const jobs = ref<Job[]>([])
 const loading = ref(false)
 const selected = ref<Job | null>(null)
@@ -79,6 +84,7 @@ const canCancel = computed(
           selected.value.state,
         )?.state === 'Unknown')
     ) &&
+    !retirementJob(selected.value.jobType) &&
     !(
       selected.value.jobType === 'containers.files.recycle-archive' &&
       (selected.value.phase === 'AwaitingContainerRecycleArchiveReceipt' ||
@@ -112,6 +118,7 @@ const canRetry = computed(
     !byteUpload.value &&
     !aclTask.value &&
     !recursiveAclTask.value &&
+    !retirementJob(selected.value.jobType) &&
     ['Failed', 'Canceled', 'RolledBack'].includes(selected.value.state),
 )
 interface RetryContext {
@@ -166,17 +173,21 @@ async function load() {
   }
 }
 
-async function openJob(job: Job) {
+function openJob(job: Job) {
+  return openJobById(job.id)
+}
+
+async function openJobById(id: string) {
   const version = ++openVersion
   unsubscribe?.()
   events.value = []
   streamNotice.value = ''
   eventsTruncated.value = false
-  const detail = await apiRequest<Job>(`jobs/${job.id}`)
+  const detail = await apiRequest<Job>(`jobs/${id}`)
   if (version !== openVersion) return
   selected.value = detail
   drawerVisible.value = true
-  unsubscribe = subscribeToJob(job.id, {
+  unsubscribe = subscribeToJob(id, {
     progress(event) {
       if (version !== openVersion || !drawerVisible.value) return
       streamNotice.value = ''
@@ -190,7 +201,11 @@ async function openJob(job: Job) {
         selected.value.phase = event.phase
         selected.value.progressPercent = event.progressPercent
       }
-      if (terminalStates.has(event.state)) void load().catch(() => {})
+      if (
+        terminalStates.has(event.state) ||
+        (event.phase === 'Unknown' && selected.value && retirementJob(selected.value.jobType))
+      )
+        void load().catch(() => {})
     },
     error: () => {
       if (version !== openVersion || !drawerVisible.value) return
@@ -302,6 +317,15 @@ function downloadDiagnosticBundle() {
   anchor.remove()
 }
 
+watch(
+  () => route?.query.jobId,
+  (id) => {
+    if (typeof id === 'string' && validDirectoryId(id))
+      void openJobById(id).catch(() => ElMessage.warning('任务暂时无法查询'))
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
   void load()
   timer = window.setInterval(load, 6000)
@@ -395,6 +419,14 @@ onBeforeUnmount(() => {
               :job-type="selected.jobType"
               :state="selected.state"
               :result-json="selected.resultJson"
+            />
+            <ContainerRecycleArchiveRetirementJobResult
+              v-else-if="retirementJob(selected.jobType)"
+              :job-id="selected.id"
+              :job-type="selected.jobType"
+              :state="selected.state"
+              :result-json="selected.resultJson"
+              @changed="load"
             />
             <ContainerRecycleArchiveJobResult
               v-else-if="

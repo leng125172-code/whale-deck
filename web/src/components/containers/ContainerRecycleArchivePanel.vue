@@ -29,7 +29,7 @@ import {
 import type { ContainerRecycleArchiveHint } from '@/services/containerRecycleArchiveHints'
 
 const props = defineProps<{ target: ContainerFileTarget; path: string; disabled: boolean }>()
-const emit = defineEmits<{ locked: [value: boolean]; refresh: [] }>()
+const emit = defineEmits<{ locked: [value: boolean]; refresh: []; archived: [id: string] }>()
 const allowed = computed(() => authSession.user.value?.isAdministrator === true)
 const dialog = ref(false),
   busy = ref(false),
@@ -125,6 +125,7 @@ function accept(value: RecycleArchiveIntent) {
     removeRecycleArchiveHint(original.subject, original.containerId)
     if (value.state === 'Succeeded' && refreshed !== value.id) {
       refreshed = value.id
+      if (value.receipt?.bindingCurrent === true) emit('archived', value.id)
       emit('refresh')
     }
   }

@@ -17,6 +17,20 @@ public sealed partial class NativeNotificationDispatchTests
     {
         var repo = new ContainerRecycleArchiveRetirementRepository(db, protector, protector, protector, protector, clock);
         var other = new ContainerRecycleArchiveRetirementRepository(second, protector, protector, protector, protector, clock);
+        async Task<string> Summary(Guid id, string state)
+        {
+            var job = await second.OperationJobs.AsNoTracking().SingleAsync(j => j.Id == id);
+            var result = ContainerRecycleArchiveRetirementJobResults.ForJob(job);
+            Assert.NotNull(result);
+            var projected = (await new OperationService(new JobRepository(second)).FindAsync(id, default))!;
+            Assert.Equal(result, projected.ResultJson);
+            using var doc = System.Text.Json.JsonDocument.Parse(result);
+            Assert.Equal(15, doc.RootElement.EnumerateObject().Count());
+            Assert.Equal(state, doc.RootElement.GetProperty("state").GetString());
+            Assert.Equal(archive.ContainerId, doc.RootElement.GetProperty("containerId").GetString());
+            Assert.DoesNotContain(archive.RelativePath, result, StringComparison.Ordinal);
+            return result;
+        }
         var source = ContainerRecycleArchiveRetirementSourceResolver.FromVerifiedRows(archive, ancestor, 30, protector, protector);
         var command = source.Binding.Command;
         var a = command.Archive.Plan;
@@ -92,6 +106,7 @@ public sealed partial class NativeNotificationDispatchTests
         await repo.CancelAsync(actor, undued.Id, default);
 
         var ready = await Plan(Request(), plan);
+        var plannedJob = await Summary(ready.Id, "Ready");
         await Assert.ThrowsAsync<InvalidOperationException>(() => repo.ConfirmAsync(actor, Claims(ready) + "0", ready.Version, default));
         await Assert.ThrowsAsync<KeyNotFoundException>(() => repo.ConfirmAsync(actor with { LoginBinding = new('1', 64) }, Claims(ready), ready.Version, default));
         await using (var locked = await second.Database.BeginTransactionAsync())
@@ -103,7 +118,10 @@ public sealed partial class NativeNotificationDispatchTests
         }
         var pending = await repo.ConfirmAsync(actor, Claims(ready), ready.Version, default);
         Assert.Equal(pending.ExecutionJobId, (await other.ConfirmAsync(actor, Claims(ready), ready.Version, default)).ExecutionJobId);
-        await new JobRepository(second).RequestCancellationAsync(pending.ExecutionJobId!.Value, actor.Subject, default);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new JobRepository(second).RequestCancellationAsync(
+            pending.ExecutionJobId!.Value, actor.Subject, default));
+        Assert.False(await repo.CancellationRequestedAsync(pending.Id, default));
+        await repo.CancelAsync(actor, pending.Id, default);
         Assert.True(await repo.CancellationRequestedAsync(pending.Id, default));
         Assert.True(await second.OutboxMessages.AnyAsync(m => m.MessageType == "ContainerRecycleArchiveRetirementCancellationRequested" && m.ProcessedAtUtc == null));
         var canceledClaim = (await repo.ClaimAsync(default))!;
@@ -113,6 +131,8 @@ public sealed partial class NativeNotificationDispatchTests
         Assert.Equal("Canceled", canceled.State);
         Assert.Null(canceled.RootStartedAtUtc);
         Assert.Null(canceled.ReceiptJson);
+        await Summary(pending.ExecutionJobId!.Value, "Canceled");
+        Assert.Equal(plannedJob, await Summary(ready.Id, "Ready"));
 
         var executionReady = await Plan(Request(), plan);
         var execution = await repo.ConfirmAsync(actor, Claims(executionReady), executionReady.Version, default);
@@ -137,6 +157,9 @@ public sealed partial class NativeNotificationDispatchTests
         Assert.True(unresolved.PublishBarrier);
         Assert.Null(unresolved.RetirementApplied);
         Assert.Null(await repo.ClaimAsync(default));
+        await Summary(execution.ExecutionJobId!.Value, "Unknown");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new JobRepository(second).RequestCancellationAsync(
+            execution.ExecutionJobId.Value, actor.Subject, default));
         var reviewer = actor with { Subject = "native-retirement-reviewer", LoginBinding = new('C', 64) };
         await Assert.ThrowsAsync<InvalidOperationException>(() => repo.AcknowledgeAsync(reviewer, unresolved.Id, unresolved.Version + 1, unknown, default));
         await repo.AcknowledgeAsync(reviewer, unresolved.Id, unresolved.Version, unknown with { OwnedFence = false }, default);
@@ -146,6 +169,7 @@ public sealed partial class NativeNotificationDispatchTests
         Assert.Equal(unresolved.ReceiptJson, final.ReceiptJson);
         Assert.Equal(unresolved.ReceiptHash, final.ReceiptHash);
         Assert.False(final.PublishBarrier);
+        await Summary(execution.ExecutionJobId.Value, "Acknowledged");
         Assert.Contains(await second.AuditEvents.AsNoTracking().Where(e => e.JobId == execution.ExecutionJobId).ToArrayAsync(),
             e => e.ActorSubject == reviewer.Subject && e.Action.EndsWith(".unknown-acknowledged", StringComparison.Ordinal));
         Assert.False(await second.OutboxMessages.AnyAsync(m => m.ProcessedAtUtc == null &&

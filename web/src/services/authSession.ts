@@ -1,4 +1,8 @@
 import {
+  clearRetirementHints,
+  reconcileRetirementHints,
+} from './containerRecycleArchiveRetirementHints'
+import {
   clearRecycleArchiveHints,
   reconcileRecycleArchiveHints,
 } from './containerRecycleArchiveHints'
@@ -73,6 +77,7 @@ function expireSession() {
   clearRecycleRestoreHints()
   clearRecyclePurgeHints()
   clearRecycleArchiveHints()
+  clearRetirementHints()
   clearAclHints()
   clearRecursivePermissionHints()
   clearRecursiveOwnershipHints()
@@ -168,6 +173,7 @@ async function loadAuthSession() {
         reconcileRecycleRestoreHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecyclePurgeHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecycleArchiveHints(user.value?.subject, user.value?.isAdministrator === true)
+        reconcileRetirementHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
         reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)
@@ -218,6 +224,7 @@ async function logout() {
   clearRecycleRestoreHints()
   clearRecyclePurgeHints()
   clearRecycleArchiveHints()
+  clearRetirementHints()
   clearAclHints()
   clearRecursivePermissionHints()
   clearRecursiveOwnershipHints()
@@ -257,6 +264,7 @@ async function refresh() {
     reconcileRecycleRestoreHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecyclePurgeHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecycleArchiveHints(user.value?.subject, user.value?.isAdministrator === true)
+    reconcileRetirementHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileAclHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursivePermissionHints(user.value?.subject, user.value?.isAdministrator === true)
     reconcileRecursiveOwnershipHints(user.value?.subject, user.value?.isAdministrator === true)

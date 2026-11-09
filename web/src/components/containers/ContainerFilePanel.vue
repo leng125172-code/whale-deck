@@ -18,6 +18,7 @@ import ContainerRecyclePanel from '@/components/containers/ContainerRecyclePanel
 import ContainerRecycleRestorePanel from '@/components/containers/ContainerRecycleRestorePanel.vue'
 import ContainerRecyclePurgePanel from '@/components/containers/ContainerRecyclePurgePanel.vue'
 import ContainerRecycleArchivePanel from '@/components/containers/ContainerRecycleArchivePanel.vue'
+import ContainerRecycleArchiveRetirementPanel from '@/components/containers/ContainerRecycleArchiveRetirementPanel.vue'
 import { canRecycleContainerEntry } from '@/services/containerRecycles'
 import ContainerOwnershipPanel from '@/components/containers/ContainerOwnershipPanel.vue'
 import ContainerRecursivePermissionPanel from '@/components/containers/ContainerRecursivePermissionPanel.vue'
@@ -86,6 +87,8 @@ const editorLocked = ref(false),
   recycleRestoreLocked = ref(false),
   recyclePurgeLocked = ref(false),
   recycleArchiveLocked = ref(false),
+  retirementLocked = ref(false),
+  recentArchive = ref<{ containerId: string; id: string } | null>(null),
   ownershipLocked = ref(false),
   aclLocked = ref(false),
   recursivePermissionLocked = ref(false),
@@ -254,6 +257,7 @@ async function download(entry: FileEntry) {
 watch(
   [() => props.containerId, () => authSession.user.value?.subject, allowed],
   () => {
+    recentArchive.value = null
     stop(true)
     if (allowed.value) void connect()
   },
@@ -275,6 +279,7 @@ onBeforeUnmount(() => {
           v-if="target"
           :disabled="
             recycleArchiveLocked ||
+            retirementLocked ||
             !!busy ||
             uploadLocked ||
             editorLocked ||
@@ -336,6 +341,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -364,6 +370,7 @@ onBeforeUnmount(() => {
       :disabled="!!busy"
       :restore-disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -392,6 +399,7 @@ onBeforeUnmount(() => {
       :disabled="!!busy"
       :restore-disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -419,6 +427,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -445,6 +454,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         recyclePurgeLocked ||
         recycleLocked ||
         ownershipLocked ||
@@ -471,6 +481,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         recycleRestoreLocked ||
         recycleLocked ||
         ownershipLocked ||
@@ -497,6 +508,7 @@ onBeforeUnmount(() => {
       :target="target"
       :path="path"
       :disabled="
+        retirementLocked ||
         recyclePurgeLocked ||
         recycleRestoreLocked ||
         recycleLocked ||
@@ -517,6 +529,35 @@ onBeforeUnmount(() => {
       "
       @refresh="load(path)"
       @locked="recycleArchiveLocked = $event"
+      @archived="recentArchive = { containerId: target.containerId, id: $event }"
+    />
+    <ContainerRecycleArchiveRetirementPanel
+      v-if="target"
+      :container-id="target.containerId"
+      :suggested-archive-id="
+        recentArchive?.containerId === target.containerId ? recentArchive.id : undefined
+      "
+      :disabled="
+        recycleArchiveLocked ||
+        recyclePurgeLocked ||
+        recycleRestoreLocked ||
+        recycleLocked ||
+        ownershipLocked ||
+        aclLocked ||
+        !!busy ||
+        editorLocked ||
+        historyLocked ||
+        uploadLocked ||
+        directoryLocked ||
+        copyLocked ||
+        moveLocked ||
+        permissionLocked ||
+        recursivePermissionLocked ||
+        recursiveOwnershipLocked ||
+        recursiveAclLocked ||
+        recursiveAclRestoreLocked
+      "
+      @locked="retirementLocked = $event"
     />
     <ContainerRecyclePanel
       v-if="target"
@@ -525,6 +566,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         recyclePurgeLocked ||
         recycleRestoreLocked ||
         ownershipLocked ||
@@ -552,6 +594,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         aclLocked ||
         !!busy ||
         editorLocked ||
@@ -576,6 +619,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -603,6 +647,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -630,6 +675,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -657,6 +703,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -683,6 +730,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -710,6 +758,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -736,6 +785,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -763,6 +813,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         editorLocked ||
         historyLocked ||
@@ -791,6 +842,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         uploadLocked ||
         historyLocked ||
@@ -819,6 +871,7 @@ onBeforeUnmount(() => {
       :path="path"
       :disabled="
         recycleArchiveLocked ||
+        retirementLocked ||
         !!busy ||
         uploadLocked ||
         editorLocked ||
@@ -877,6 +930,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -906,6 +960,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -935,6 +990,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -964,6 +1020,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1009,6 +1066,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1038,6 +1096,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1067,6 +1126,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1097,6 +1157,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1130,6 +1191,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1159,6 +1221,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||
@@ -1186,6 +1249,7 @@ onBeforeUnmount(() => {
             link
             :disabled="
               recycleArchiveLocked ||
+              retirementLocked ||
               !!busy ||
               uploadLocked ||
               editorLocked ||

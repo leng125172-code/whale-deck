@@ -48,6 +48,7 @@
     "e2e/container-recycle-purges.spec.ts",
     "e2e/recycle-purge-job-results.spec.ts",
     "e2e/container-recycle-archives.spec.ts",
-    "e2e/recycle-archive-job-results.spec.ts"
+    "e2e/recycle-archive-job-results.spec.ts",
+    "e2e/container-recycle-archive-retirement.spec.ts"
   ]
 }

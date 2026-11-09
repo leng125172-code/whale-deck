@@ -62,7 +62,7 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository
         row.CompletedAtUtc = row.PublishBarrier ? null : now;
         ReleaseLease(row);
         row.Version++;
-        await AdvanceJob(job, state is "Succeeded" or "Canceled" ? state : state == "Unknown" ? "Running" : "Failed", state, row.ResultCode, now, token);
+        await AdvanceJob(row, job, state is "Succeeded" or "Canceled" ? state : state == "Unknown" ? "Running" : "Failed", state, row.ResultCode, now, token);
         if (!row.PublishBarrier) await Processed(job.Id, now, token);
         Audit(row, job.Id, row.ActorSubject, row.TraceId, "execution-result", state);
         await db.SaveChangesAsync(token);
@@ -93,7 +93,7 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository
         row.State = "Acknowledged";
         row.ResultCode = Prefix + "UNKNOWN_ACKNOWLEDGED";
         row.Version++;
-        await AdvanceJob(job, "Failed", row.State, row.ResultCode, now, token);
+        await AdvanceJob(row, job, "Failed", row.State, row.ResultCode, now, token);
         await Processed(job.Id, now, token);
         Audit(row, job.Id, actor.Subject, actor.TraceId, "unknown-acknowledged", observation.State);
         await db.SaveChangesAsync(token);
@@ -114,7 +114,7 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository
         row.ResultCode = code;
         row.CompletedAtUtc = now;
         ReleaseLease(row);
-        if (job.State != "Succeeded") await AdvanceJob(job, state == "Canceled" ? state : "Failed", state, code, now, token);
+        if (job.State != "Succeeded") await AdvanceJob(row, job, state == "Canceled" ? state : "Failed", state, code, now, token);
         await Processed(job.Id, now, token);
     }
 
@@ -188,20 +188,21 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository
         return job;
     }
 
-    private void AddJob(ContainerRecycleArchiveRetirementIntent row, Guid id, string type, string code, DateTimeOffset now)
+    private async Task AddJob(ContainerRecycleArchiveRetirementIntent row, Guid id, string type, string code, DateTimeOffset now, CancellationToken token)
     {
         var job = new OperationJob
         {
             Id = id, JobType = type, ActorSubject = row.ActorSubject, IdempotencyKey = id.ToString("D"), CreatedAtUtc = now,
             RequestJson = Metadata(row)
         };
+        job.ResultJson = await JobResult(row, job, token);
         db.OperationJobs.Add(job);
         Message(id, Requested);
         db.OperationJobEvents.Add(new() { JobId = id, Sequence = 1, State = job.State, Phase = job.Phase, MessageCode = Prefix + code });
         Audit(row, id, row.ActorSubject, row.TraceId, code == "CONFIRMED" ? "confirmed" : "plan-accepted", "Accepted");
     }
 
-    private async Task AdvanceJob(OperationJob job, string state, string phase, string code, DateTimeOffset now, CancellationToken token)
+    private async Task AdvanceJob(ContainerRecycleArchiveRetirementIntent row, OperationJob job, string state, string phase, string code, DateTimeOffset now, CancellationToken token)
     {
         job.State = state;
         job.Phase = phase;
@@ -210,8 +211,16 @@ public sealed partial class ContainerRecycleArchiveRetirementRepository
         job.ProgressPercent = state == "Succeeded" ? (short)100 : null;
         job.ErrorCode = state is "Succeeded" or "Running" ? null : code;
         job.Version++;
+        job.ResultJson = await JobResult(row, job, token);
         var sequence = (await db.OperationJobEvents.Where(e => e.JobId == job.Id).MaxAsync(e => (long?)e.Sequence, token) ?? 0) + 1;
         db.OperationJobEvents.Add(new() { JobId = job.Id, Sequence = sequence, State = state, Phase = phase, MessageCode = code });
+    }
+
+    private async Task<string?> JobResult(ContainerRecycleArchiveRetirementIntent row, OperationJob job, CancellationToken token)
+    {
+        var archive = await db.ContainerRecycleArchiveIntents.AsNoTracking().SingleOrDefaultAsync(a => a.Id == row.ArchiveIntentId, token);
+        return archive is not null && ContainerRecycleArchiveWorkflowValidation.HasValidBinding(archive, archiveProtector)
+            ? ContainerRecycleArchiveRetirementJobResults.Snapshot(row, archive.ContainerId, job) : null;
     }
 
     private void Message(Guid id, string type) => db.OutboxMessages.Add(new() { MessageType = type, PayloadJson = JsonSerializer.Serialize(new { jobId = id }) });
