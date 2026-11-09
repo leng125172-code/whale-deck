@@ -1,6 +1,6 @@
 # Whale Deck 开发空间与开发环境
 
-日期：2026-10-13。对应 [完整目标](GOAL_P0_P5.md) 的 P3-13–P3-18，按任务直接实施。P3-13 已接入注册、运行时锁定及预算登记。P3-17 已实现有界 TRX/JUnit 与 Cobertura/LCOV 解析、运行与工件关联、双格式导出、持久化、Worker 清理及报告审计下载。报告读取支持指定空间的 Authentik 组委派。Agent 分配、Runner 自动采集和页面待实现。见[注册记录](qa/DEVELOPMENT_WORKSPACE_REGISTRATION.md)和[报告委派验证](qa/DEVELOPMENT_WORKSPACE_REPORT_GRANTS.md)。
+对应完整目标 P3-13–P3-18。当前实现覆盖空间注册、运行时锁定、预算登记、签名存储分配，以及 Node 和 .NET 固定任务的持久运行、查询和取消。报告已具备有界 TRX/JUnit 与 Cobertura/LCOV 解析、双格式导出、持久化、Worker 清理及审计下载，支持指定空间的 Authentik 组委派。Runner 自动采集、页面及物理工作站验收继续实施。[完整目标](GOAL_P0_P5.md) · [运行验证](qa/DEVELOPMENT_WORKSPACE_RUNNER_QUEUE.md) · [报告委派验证](qa/DEVELOPMENT_WORKSPACE_REPORT_GRANTS.md)
 
 2026-10-21修订：六项开发空间需求完整保留，按[单工作站实用版](SCOPE_SINGLE_WORKSTATION.md)实施。不依赖tenant/node/套餐/VM；保留资源上限、空间所有者和显式开发授权。以下“配额”仅指主机安全预算，不是商业订阅。
 
@@ -65,7 +65,7 @@
 
 ## 5. 后端用例与接口
 
-建议 REST 前缀 `/api/v1/development/workspaces`，资源/会话/报告 ID 均为 UUID。Controller 只映射 HTTP；授权、计划、配额、编排和报告归 Application。耗时写操作 `202 + jobId`，执行 run 与 operation job 分开关联；配置版本使用并发校验。
+REST 前缀为 `/api/v1/development/workspaces`，资源、会话和报告 ID 均使用 UUID。Controller 映射 HTTP，Application 处理授权、计划、配额、编排和报告。当前固定任务用同一个 UUID 关联运行意图、OperationJob 和 Agent 回执。入队返回 `202`、`runId` 和状态查询地址。配置版本使用并发校验。
 
 | ID | 用例 | 输出/失败要求 |
 | --- | --- | --- |
@@ -84,14 +84,14 @@ Webhook 引入时沿用签名/防重放/固定仓库约束；本功能可先手�
 
 ## 6. Agent/Worker 契约
 
-专用能力命名 `development.*`，gRPC 保持 `whaledeck.agent.v1` 并按次版本协商新增方法。这里只是设计，实际协议版本在源码实施后更新。
+专用能力命名 `development.*`，gRPC 保持 `whaledeck.agent.v1` 并按次版本协商新增方法。
 
 | ID | 拟新增 RPC/职责 | 输入边界 |
 | --- | --- | --- |
 | RPC-DEV-001 | BFF 存储计划、确认与 Runner 预检，Agent 1.62 `development.storage.allocate` 和 1.63 `development.storage.attest` | 绑定登记所有者、批准根、空间 ID、环境摘要和预算。预检复核已发布目录与硬配额，返回锁定环境与预算。执行时重新核对 |
 | RPC-DEV-002 | ImportWorkspaceSource | 源码来源引用、上传工件 ID、冲突策略；Secret 私有渠道与已批准网络 |
-| RPC-DEV-003 | StartWorkspaceRun / ObserveWorkspaceRun | run/job/步骤版本、受控 argv/cwd（空间内）、预算；不得解释为宿主 shell RPC |
-| RPC-DEV-004 | CancelWorkspaceRun | run/operation 与目标身份绑定；只结束该 run 的进程树/容器 |
+| RPC-DEV-003 | Agent 1.64 `development.run` 的 Start / Observe | 绑定空间、运行 ID、环境摘要、受控 argv 和预算。Worker 使用快照中的固定命令，要求 Agent 同时支持签名运行控制 |
+| RPC-DEV-004 | Agent 1.65 `development.run.control` 的 Cancel / Reclaim | 绑定原运行请求和目标 cgroup 身份，只结束或回收对应运行 |
 | RPC-DEV-005 | OpenWorkspaceSession / CloseWorkspaceSession | 类型 IDE/terminal/debug/preview、主体/空间/目标、一次性 capability 和过期 |
 | RPC-DEV-006 | CollectWorkspaceDiagnostics | run 与工件类别白名单、输出预算；不得抓取任意宿主文件或完整环境 |
 | RPC-DEV-007 | ManageWorkspaceLifecycle | 登记空间/计划、start/stop/rebuild/snapshot/delete 枚举及数据保留策略 |

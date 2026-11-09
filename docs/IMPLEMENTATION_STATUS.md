@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-13/P3-16 `74e39886` 已接入固定 Node/.NET 任务的 BFF、持久运行意图和 Worker 恢复。真实 PostgreSQL 和回环 HTTP 通过，覆盖权限复核、单次派发及接管。继续运行工件自动采集、Vue 与实际工作站端到端。见[本批验收](qa/DEVELOPMENT_WORKSPACE_RUNNER_QUEUE.md)。
+
 2026-11-09，P3-13/P3-16 `b29fcee2` 增加 Agent 1.65 的签名取消和中断回收。离线来宾实际终止指定 cgroup，另一空间保持运行，取消和中断回执重放通过。继续 Worker/BFF 编排及工作站实机验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_CONTROL.md)。
 
 2026-11-09，P3-13/P3-16 `8dc16e42` 增加 Agent 1.64 的内容签名 Runner 启动和观察，来宾真实通过受委托 cgroup 运行和回执重放。继续主动取消、孤儿收尾、Worker/BFF 及物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_RPC.md)。
