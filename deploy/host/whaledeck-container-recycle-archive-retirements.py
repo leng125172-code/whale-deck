@@ -61,7 +61,8 @@ def archive_retirements_type(fence_type):
                         try:
                             leaf=ref['plan']['command']['path'].rsplit('/',1)[-1]
                             live=self.f.open_at(parent,leaf,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
-                            def guard(removed=False,terminal=False):
+                            marker_state='Reserved'
+                            def guard(removed=False):
                                 source.guard(ref['plan']['command'],session,ap['targetProof']);self.now(fresh)
                                 history.storage.attest(configuration,directory)
                                 if self.copies.preflight.record_digest(b'',configuration)!=fresh['storageHash'] or self.copies.preflight.record_digest(b'',history.storage.configuration())!=fresh['storageHash'] or [os.fstat(directory).st_dev,os.fstat(directory).st_ino]!=fresh['storeIdentity']:self.reject('HISTORY_CHANGED')
@@ -73,8 +74,7 @@ def archive_retirements_type(fence_type):
                                 claim=source.read_restore_claim(ref)
                                 if not self.copies.matches(claim,archive) or self.copies.preflight.record_digest(b'archive-retention-claim-v1\n',claim)!=fresh['claimDigest']:self.reject('FENCE_CHANGED')
                                 current_marker=self.read_marker(ref['operationId'])
-                                expected='Retired' if terminal else 'Retiring' if record['schemaVersion']==2 else 'Reserved'
-                                if not self.matches(current_marker,request) or current_marker['state']!=expected or self.active(state,ref['operationId'])!=[request['operationId']]:self.reject('FENCE_CHANGED')
+                                if not self.matches(current_marker,request) or current_marker['state']!=marker_state or self.active(state,ref['operationId'])!=[request['operationId']]:self.reject('FENCE_CHANGED')
                                 self.copies.check_file(live,archive,session,copied['publishedIdentity'])
                                 with source.parent(ref['plan'],session) as current:
                                     if not os.path.samestat(os.fstat(current),os.fstat(parent)) or source.metadata(os.stat(leaf,dir_fd=current,follow_symlinks=False))!=copied['publishedIdentity']:self.reject('COPY_CHANGED')
@@ -85,7 +85,8 @@ def archive_retirements_type(fence_type):
                                 elif actual!=identity or source.metadata(os.stat(name,dir_fd=directory,follow_symlinks=False))!=identity or not stat.S_ISREG(actual[2]) or (stat.S_IMODE(actual[2]),*actual[3:6])!=(0o600,0,0,1):self.reject('HISTORY_CHANGED')
                             guard();self.checksum(fd,fresh,session);guard()
                             record.update(schemaVersion=2,state='Removing',completion=None);self.save(state,record);self.checkpoint('Removing')
-                            self.write_marker(request,'Retiring');self.checkpoint('RetiringFenced')
+                            guard()
+                            self.write_marker(request,'Retiring');marker_state='Retiring';self.checkpoint('RetiringFenced')
                             guard();self.checksum(fd,fresh,session);guard()
                             # The directory is root-private; all cooperating
                             # writers hold history.lock. This is not a generic
@@ -97,8 +98,8 @@ def archive_retirements_type(fence_type):
                             proof['proofDigest']=self.completion_digest(proof)
                             record.update(state='Removed',completion=proof);self.save(state,record);self.checkpoint('Removed')
                             guard(True)
-                            self.write_marker(request,'Retired');self.checkpoint('RetiredFenced')
-                            guard(True,True)
+                            self.write_marker(request,'Retired');marker_state='Retired';self.checkpoint('RetiredFenced')
+                            guard(True)
                             # No success is reconstructed from Removed/Retired
                             # on restart, even when bytes are already absent.
                             record['state']='Completed';self.save(state,record);self.checkpoint('Completed')

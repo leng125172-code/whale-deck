@@ -257,20 +257,30 @@ class ArchiveRetirementTests(unittest.TestCase):
         self.assertTrue(self.data.exists());self.assertEqual(os.getxattr(self.data,'user.foreign'),b'preserve')
 
     def test_foreign_marker_after_removing_is_never_poisoned_or_overwritten(self):
-        self.reserve();raw=None
-        def cut(phase):
-            nonlocal raw
-            if phase=='RetiringFenced':
-                self.f.marker().write_text(json.dumps(self.engine.marker(self.f.new(),'Reserved')));raw=self.f.marker().read_bytes()
-        with self.clock(),patch.object(self.engine,'checkpoint',side_effect=cut),self.assertRaisesRegex(Exception,'FENCE_CHANGED'):self.apply()
-        self.assertTrue(self.data.exists());self.assertEqual(self.f.marker().read_bytes(),raw);self.assertEqual(self.f.record()['state'],'Unknown')
+        for at in ('Removing','RetiringFenced'):
+            with self.subTest(at=at):
+                f=ArchiveRetirementTests();f.setUp();raw=None
+                try:
+                    f.reserve()
+                    def cut(phase):
+                        nonlocal raw
+                        if phase==at:
+                            f.f.marker().write_text(json.dumps(f.engine.marker(f.f.new(),'Reserved')));raw=f.f.marker().read_bytes()
+                    with f.clock(),patch.object(f.engine,'checkpoint',side_effect=cut),self.assertRaisesRegex(Exception,'FENCE_CHANGED'):f.apply()
+                    self.assertTrue(f.data.exists());self.assertEqual(f.f.marker().read_bytes(),raw);self.assertEqual(f.f.record()['state'],'Unknown')
+                finally:f.doCleanups()
 
     def test_lost_marker_after_removing_is_never_recreated_by_failure_cleanup(self):
-        self.reserve()
-        def cut(phase):
-            if phase=='RetiringFenced':self.f.marker().unlink()
-        with self.clock(),patch.object(self.engine,'checkpoint',side_effect=cut),self.assertRaisesRegex(Exception,'FENCE_CHANGED'):self.apply()
-        self.assertTrue(self.data.exists());self.assertFalse(self.f.marker().exists());self.assertEqual(self.f.record()['state'],'Unknown')
+        for at in ('Removing','RetiringFenced'):
+            with self.subTest(at=at):
+                f=ArchiveRetirementTests();f.setUp()
+                try:
+                    f.reserve()
+                    def cut(phase):
+                        if phase==at:f.f.marker().unlink()
+                    with f.clock(),patch.object(f.engine,'checkpoint',side_effect=cut),self.assertRaisesRegex(Exception,'FENCE_CHANGED'):f.apply()
+                    self.assertTrue(f.data.exists());self.assertFalse(f.f.marker().exists());self.assertEqual(f.f.record()['state'],'Unknown')
+                finally:f.doCleanups()
 
     def test_new_versioned_phase_shapes_are_strict(self):
         self.reserve()
