@@ -155,6 +155,20 @@ public sealed class PermissionSnapshotTests
     }
 
     [Fact]
+    public async Task PrivilegedGroupIdentityNeverUsesDisplayNamesAsIdentifiers()
+    {
+        const string payload = """
+            {"results":[{"uuid":"11111111-2222-3333-4444-555555555555","is_active":true,"groups_obj":[
+                {"name":"admin-id"},{"name":"3c2cd059-605c-4e78-b490-43199dc8ec47"},{"pk":"other-group"}
+            ]}]}
+            """;
+        var directory = Directory(new StubClientFactory(HttpStatusCode.OK, payload), NewCache(), "test-token");
+        var current = await directory.ResolveForPrivilegedActionAsync(Subject, "User", default);
+        Assert.False(current.IsAdministrator);
+        Assert.Equal("other-group", Assert.Single(current.Groups));
+    }
+
+    [Fact]
     public async Task PrivilegedActionCanRestoreAuthorityAfterAnAuthoritativeNegativeSnapshot()
     {
         var cache = NewCache();

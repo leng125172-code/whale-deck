@@ -221,7 +221,8 @@ public sealed class AuthentikIdentityDirectory(
                 throw new UnauthorizedAccessException("The Authentik account is disabled.");
             if (!user.TryGetProperty("groups_obj", out var groups)) return new GroupResolution([], true);
             return new GroupResolution(groups.EnumerateArray()
-                .Select(group => group.TryGetProperty("pk", out var pk) ? pk.GetString() : group.GetProperty("name").GetString())
+                .Select(group => group.TryGetProperty("pk", out var pk) ? pk.GetString()
+                    : !privileged && group.TryGetProperty("name", out var displayName) ? displayName.GetString() : null)
                 .Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!).ToArray(), true);
         }
         catch (HttpRequestException) when (!allowClaimFallback)

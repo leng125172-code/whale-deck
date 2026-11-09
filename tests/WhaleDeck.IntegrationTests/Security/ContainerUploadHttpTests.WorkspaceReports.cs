@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,15 +14,20 @@ namespace WhaleDeck.IntegrationTests.Security;
 public sealed partial class ContainerUploadHttpTests
 {
     internal static async Task DownloadWorkspaceReportsFromPostgres(
-        DbContextOptions<PlatformDbContext> options, Guid workspace, Guid run, WorkspaceReportDownload stored)
+        DbContextOptions<PlatformDbContext> options, Guid workspace, Guid run, WorkspaceReportDownload stored,
+        bool exerciseGrants = false)
     {
+        var directory = new WorkspaceReportHttpFixture();
         await using var fixture = await Fixture.Start(services =>
         {
             services.AddSingleton(TimeProvider.System);
             services.AddScoped(_ => new PlatformDbContext(options));
             services.AddScoped<IWorkspaceRunReportStore, WorkspaceRunReportRepository>();
             services.AddScoped<IWorkspaceRunReportReadAudit, WorkspaceRunReportReadAudit>();
-            services.AddSingleton<IPrivilegedIdentityDirectory>(new WorkspaceReportHttpFixture());
+            services.AddSingleton<IPrivilegedIdentityDirectory>(directory);
+            services.AddScoped<IWorkspaceReportAccess, WorkspaceReportAccessRepository>();
+            services.AddScoped<WorkspaceReportAuthorization>();
+            services.AddScoped<WorkspaceReportGrantManagement>();
             services.AddScoped<WorkspaceRunReportDownloads>();
         });
         using var client = await fixture.Client("admin-subject", true);
@@ -31,6 +37,39 @@ public sealed partial class ContainerUploadHttpTests
         Assert.Equal(stored.Sha256, Assert.Single(response.Headers.GetValues("X-Content-SHA256")));
         using var other = await client.GetAsync($"/api/v1/development/workspaces/{Guid.NewGuid():D}/runs/{run:D}/report/json");
         Assert.Equal(HttpStatusCode.NotFound, other.StatusCode);
+        if (!exerciseGrants) return;
+
+        using var developer = await fixture.Client("developer-subject", false);
+        var download = $"/api/v1/development/workspaces/{workspace:D}/runs/{run:D}/report/json";
+        var access = $"/api/v1/development/workspaces/{workspace:D}/report-access/{directory.Group:D}";
+        var csrf = await Csrf(client);
+        using (var before = await developer.GetAsync(download))
+            Assert.Equal(HttpStatusCode.Forbidden, before.StatusCode);
+        using (var put = Write(client, HttpMethod.Put, access, csrf, JsonContent.Create(new { enabled = true, expectedVersion = 0 })))
+        using (var granted = await client.SendAsync(put))
+            Assert.Equal(1, (await granted.Content.ReadFromJsonAsync<WorkspaceReportGrant>())!.Version);
+        using (var allowed = await developer.GetAsync(download))
+        {
+            Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+            Assert.Equal(stored.Content, await allowed.Content.ReadAsByteArrayAsync());
+        }
+        using (var foreignScope = await developer.GetAsync($"/api/v1/development/workspaces/{Guid.NewGuid():D}/runs/{run:D}/report/json"))
+            Assert.Equal(HttpStatusCode.Forbidden, foreignScope.StatusCode);
+        directory.LiveMembership = false;
+        using (var removed = await developer.GetAsync(download))
+            Assert.Equal(HttpStatusCode.Forbidden, removed.StatusCode);
+        directory.LiveMembership = true;
+        using (var put = Write(client, HttpMethod.Put, access, csrf, JsonContent.Create(new { enabled = false, expectedVersion = 1 })))
+        using (var revoked = await client.SendAsync(put))
+            Assert.Equal(new WorkspaceReportGrant(directory.Group, false, 2),
+                await revoked.Content.ReadFromJsonAsync<WorkspaceReportGrant>());
+        using (var denied = await developer.GetAsync(download))
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        using (var put = Write(client, HttpMethod.Put, access, csrf, JsonContent.Create(new { enabled = true, expectedVersion = 0 })))
+        using (var stale = await client.SendAsync(put))
+            Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        using var manager = await developer.GetAsync(access);
+        Assert.Equal(HttpStatusCode.Forbidden, manager.StatusCode);
     }
 
     [Theory]
@@ -116,12 +155,30 @@ public sealed partial class ContainerUploadHttpTests
         Assert.Equal(0, report.Audits);
     }
 
-    private sealed class WorkspaceReportHttpFixture : IWorkspaceRunReportStore, IWorkspaceRunReportReadAudit, IPrivilegedIdentityDirectory
+    [Fact]
+    public async Task WorkspaceReportsRecheckDelegationAfterReadingBytes()
+    {
+        await using var fixture = await Fixture.Start();
+        using var client = await fixture.Client("developer-subject", false);
+        var report = fixture.WorkspaceReports;
+        report.GrantEnabled = true;
+        report.AfterRead = () => { report.GrantEnabled = false; return Task.CompletedTask; };
+        using var response = await client.GetAsync(report.Url("json"));
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(1, report.Reads);
+        Assert.Equal(0, report.Audits);
+        Assert.False(response.Headers.Contains("X-Content-SHA256"));
+    }
+
+    private sealed class WorkspaceReportHttpFixture : IWorkspaceRunReportStore, IWorkspaceRunReportReadAudit, IPrivilegedIdentityDirectory, IWorkspaceReportAccess
     {
         public byte[] Content { get; } = "qa-private-report"u8.ToArray();
         public string Hash => Convert.ToHexStringLower(SHA256.HashData(Content));
         public Guid Workspace { get; } = Guid.NewGuid();
         public Guid Run { get; } = Guid.NewGuid();
+        public Guid Group { get; } = Guid.NewGuid();
+        public bool LiveMembership { get; set; } = true;
+        public bool GrantEnabled { get; set; }
         public bool Expired { get; set; }
         public bool Admin { get; set; } = true;
         public bool FailAudit { get; set; }
@@ -143,7 +200,7 @@ public sealed partial class ContainerUploadHttpTests
         public Task RecordAsync(TerminalActor actor, Guid workspaceId, Guid runId, WorkspaceReportFormat format, CancellationToken cancellationToken)
         {
             if (FailAudit) throw new IOException("private audit failure");
-            Assert.Equal("admin-subject", actor.Subject);
+            Assert.True(actor.Subject is "admin-subject" or "developer-subject");
             Assert.Equal(Workspace, workspaceId);
             Assert.Equal(Run, runId);
             Audits++;
@@ -151,7 +208,15 @@ public sealed partial class ContainerUploadHttpTests
         }
 
         public Task<CurrentUserDto> ResolveForPrivilegedActionAsync(string subject, string? name, CancellationToken cancellationToken) =>
-            Task.FromResult(new CurrentUserDto(subject, name, [], Admin, DateTimeOffset.UtcNow.AddHours(1)));
+            Task.FromResult(new CurrentUserDto(subject, name,
+                LiveMembership && subject == "developer-subject" ? [Group.ToString("D")] : [],
+                Admin && subject == "admin-subject", DateTimeOffset.UtcNow.AddHours(1)));
+
+        public Task<bool> AllowsAsync(Guid workspaceId, Guid[] groupIds, CancellationToken token) =>
+            Task.FromResult(GrantEnabled && workspaceId == Workspace && groupIds.Contains(Group));
+        public Task<WorkspaceReportGrant> GetAsync(Guid workspaceId, Guid groupId, CancellationToken token) => throw new NotSupportedException();
+        public Task<WorkspaceReportGrant> SetAsync(TerminalActor actor, Guid workspaceId, Guid groupId, bool enabled,
+            long expectedVersion, CancellationToken token) => throw new NotSupportedException();
 
         public Task<WorkspaceReportWriteState> SaveAsync(WorkspaceRunReport report, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<int> ExpireAsync(int limit, CancellationToken cancellationToken) => throw new NotSupportedException();

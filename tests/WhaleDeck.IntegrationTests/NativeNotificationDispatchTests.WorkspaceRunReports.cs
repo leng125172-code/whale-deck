@@ -120,6 +120,26 @@ public sealed partial class NativeNotificationDispatchTests
         Assert.Equal(PostgresErrorCodes.CheckViolation, downgrade.SqlState);
         Assert.Equal("workspace_report_history_present", downgrade.MessageText);
         Assert.Equal(2, await db.WorkspaceRunReports.CountAsync());
+        // The preceding downgrade can remove the empty, later grants table before
+        // the report-history guard rejects the next migration.
+        await db.GetService<IMigrator>().MigrateAsync();
+        clock.UtcNow = now;
+        var delegatedRun = Evidence(now);
+        await AddJob(delegatedRun, "Failed");
+        var delegatedReport = await reports.BuildAsync(delegatedRun, [], default);
+        Assert.Equal(WorkspaceReportWriteState.Created, await store.SaveAsync(delegatedReport, default));
+        var stored = await store.ReadAsync(workspace, delegatedRun.RunId, WorkspaceReportFormat.Json, default);
+        Assert.NotNull(stored);
+        await ContainerUploadHttpTests.DownloadWorkspaceReportsFromPostgres(options, workspace, delegatedRun.RunId, stored, exerciseGrants: true);
+        var grant = await db.WorkspaceReportGrants.AsNoTracking().SingleAsync(row => row.WorkspaceId == workspace);
+        Assert.False(grant.Enabled);
+        Assert.Equal(2, grant.Version);
+        Assert.Equal(2, await db.AuditEvents.CountAsync(row => row.Action == "development.workspace.report-grant" &&
+            row.TargetId == workspace.ToString("D")));
+        var grantDowngrade = await Assert.ThrowsAsync<PostgresException>(() =>
+            db.GetService<IMigrator>().MigrateAsync("20261109092020_WorkspaceRunReports"));
+        Assert.Equal("workspace_report_grant_history_present", grantDowngrade.MessageText);
+        Console.WriteLine("INBOX_PHASE=workspace-report-developer-live-group-grant-revoke-version-audit");
         Assert.False(db.Database.HasPendingModelChanges());
         Console.WriteLine("INBOX_PHASE=workspace-report-postgres-scope-two-formats-idempotency-expiry-downgrade");
 

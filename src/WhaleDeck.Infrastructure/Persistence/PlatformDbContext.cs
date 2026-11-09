@@ -129,6 +129,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
         ConfigureContainerRecycleArchiving(modelBuilder);
         ConfigureContainerRecycleArchiveRetirement(modelBuilder);
         ConfigureWorkspaceRunReports(modelBuilder);
+        ConfigureWorkspaceReportGrants(modelBuilder);
         ConfigureContainerMoves(modelBuilder);
         ConfigureContainerFileHistory(modelBuilder);
         ConfigureFileArchives(modelBuilder);

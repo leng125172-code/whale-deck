@@ -8854,6 +8854,32 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceReportGrantRecord", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("WorkspaceId", "GroupId");
+
+                    b.ToTable("workspace_report_grants", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_report_grant", "workspace_id <> '00000000-0000-0000-0000-000000000000'::uuid AND group_id <> '00000000-0000-0000-0000-000000000000'::uuid AND version > 0");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRunReportRecord", b =>
                 {
                     b.Property<Guid>("RunId")

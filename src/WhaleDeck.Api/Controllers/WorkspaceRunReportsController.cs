@@ -6,7 +6,7 @@ using WhaleDeck.Application.Development;
 
 namespace WhaleDeck.Api.Controllers;
 
-[ApiController, Authorize(Policy = "Administrator")]
+[ApiController, Authorize]
 [Route("api/v1/development/workspaces/{workspaceId:guid}/runs/{runId:guid}/report")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class WorkspaceRunReportsController(WorkspaceRunReportDownloads downloads, TerminalCookieIdentity identity) : ControllerBase

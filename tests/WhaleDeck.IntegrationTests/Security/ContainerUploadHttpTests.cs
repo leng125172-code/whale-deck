@@ -210,7 +210,8 @@ public sealed partial class ContainerUploadHttpTests
             builder.Services.AddSingleton<TerminalCookieIdentity>();
             builder.Services.AddSingleton<ILoginSessionRegistry>(sessions);
             builder.Services.AddSingleton(new WhaleDeck.Application.Development.WorkspaceRunReportDownloads(
-                fixture.WorkspaceReports, sessions, fixture.WorkspaceReports, fixture.WorkspaceReports, TimeProvider.System));
+                new(fixture.WorkspaceReports, sessions, fixture.WorkspaceReports, TimeProvider.System),
+                fixture.WorkspaceReports, fixture.WorkspaceReports, TimeProvider.System));
             var protector=new FilePlanProtector(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["Agent:CapabilityKeyFile"]=fixture._key }).Build());
             var authorization=new FileManagementService(null!,null!,protector,fixture.Directory,TimeProvider.System);
             var uploads=new ContainerFileUploadService(authorization,sessions,fixture.Gateway,fixture.Repository,protector,TimeProvider.System,fixture.History);
