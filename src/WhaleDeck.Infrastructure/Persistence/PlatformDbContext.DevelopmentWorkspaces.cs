@@ -14,7 +14,7 @@ public sealed partial class PlatformDbContext
             entity.ToTable("development_workspaces", table =>
             {
                 table.HasCheckConstraint("ck_development_workspace_shape",
-                    "state = 'Registered' AND version = 1 AND cpu_millis >= 100 AND memory_mib >= 128 AND disk_mib >= 256");
+                    "state = 'Registered' AND version = 1 AND cpu_millis >= 100 AND memory_mi_b >= 128 AND disk_mi_b >= 256");
                 table.HasCheckConstraint("ck_development_workspace_manifest",
                     "octet_length(environment_json) BETWEEN 1 AND 4096 AND environment_sha256 = encode(sha256(convert_to(environment_json,'UTF8')),'hex') AND request_sha256 ~ '^[a-f0-9]{64}$'");
             });
