@@ -428,6 +428,9 @@ service DevelopmentRunnerService {
   // development.run.control (protocol 1.65).
   rpc Cancel(WorkspaceRunRequest) returns (WorkspaceRunReceipt);
   rpc Reclaim(WorkspaceRunRequest) returns (WorkspaceRunReceipt);
+  // development.run.test-artifact.transfer (protocol 1.67).
+  rpc ReadTestArtifact(WorkspaceTestArtifactRequest) returns (stream WorkspaceTestArtifactChunk);
+  rpc RetireTestArtifact(WorkspaceTestArtifactRequest) returns (WorkspaceTestArtifactRetirement);
 }
 
 message WorkspaceRunRequest {
@@ -455,6 +458,25 @@ message WorkspaceTestArtifactManifest {
   string state = 2;
   uint32 size = 3;
   string sha256 = 4;
+}
+
+message WorkspaceTestArtifactRequest {
+  WorkspaceRunRequest run = 1;
+  string request_sha256 = 2;
+  string artifact_sha256 = 3;
+  uint32 size = 4;
+}
+
+message WorkspaceTestArtifactChunk {
+  bytes content = 1;
+}
+
+message WorkspaceTestArtifactRetirement {
+  string run_id = 1;
+  string request_sha256 = 2;
+  string artifact_sha256 = 3;
+  uint32 size = 4;
+  string input_sha256 = 5;
 }
 
 service AgentService {

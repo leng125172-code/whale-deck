@@ -13,15 +13,20 @@ public static partial class DevelopmentRunnerBinding
     public const uint ProtocolMinor = 64;
     public const uint ControlProtocolMinor = 65;
     public const uint ReportProtocolMinor = 66;
+    public const uint ArtifactTransferProtocolMinor = 67;
     public const string Capability = "development.run";
     public const string ControlCapability = "development.run.control";
     public const string ReportCapability = "development.run.test-artifact";
+    public const string ArtifactTransferCapability = "development.run.test-artifact.transfer";
     public const int MaximumArtifactBytes = 16 * 1024 * 1024;
     public const string Service = "/whaledeck.agent.v1.DevelopmentRunnerService/";
     public const string Start = Service + "Start";
     public const string Observe = Service + "Observe";
     public const string Cancel = Service + "Cancel";
     public const string Reclaim = Service + "Reclaim";
+    public const string ReadTestArtifact = Service + "ReadTestArtifact";
+    public const string RetireTestArtifact = Service + "RetireTestArtifact";
+    public const int ArtifactChunkBytes = 64 * 1024;
     public const int MaximumHostInputBytes = 32768;
     public const int MaximumWireBytes = MaximumHostInputBytes + 2048;
     public const int PreparationSeconds = 300;
@@ -39,6 +44,7 @@ public static partial class DevelopmentRunnerBinding
             value.ProtocolMinor >= ControlProtocolMinor && value.Capabilities.Contains(ControlCapability)));
 
     public static string Hash(WorkspaceRunRequest request) => Convert.ToHexString(SHA256.HashData(request.ToByteArray()));
+    public static string Hash(WorkspaceTestArtifactRequest request) => Convert.ToHexString(SHA256.HashData(request.ToByteArray()));
 
     public static string Payload(string expires, string nonce, string method, string hash) =>
         $"whaledeck-development-run-capability-v1\n{expires}.{nonce}.{method}.{hash}";
@@ -71,6 +77,24 @@ public static partial class DevelopmentRunnerBinding
         environment = request.EnvironmentJson, runtime = request.Runtime, argv = request.Argv,
         cpuMillis = request.CpuMillis, memoryMiB = request.MemoryMib, deadlineSeconds = request.DeadlineSeconds
     }, Json);
+
+    public static string HostInput(WorkspaceTestArtifactRequest request)
+    {
+        using var run = JsonDocument.Parse(HostInput(request.Run));
+        return JsonSerializer.Serialize(new { run = run.RootElement, requestSha256 = request.RequestSha256,
+            artifactSha256 = request.ArtifactSha256, size = request.Size }, Json);
+    }
+
+    public static bool IsValid(WorkspaceTestArtifactRequest request) =>
+        request.Run is not null && IsValid(request.Run) && ReportFormat(request.Run) is not null &&
+        IsDigest(request.RequestSha256) && IsDigest(request.ArtifactSha256) &&
+        request.Size is > 0 and <= MaximumArtifactBytes &&
+        Encoding.UTF8.GetByteCount(HostInput(request)) <= MaximumHostInputBytes + 512;
+
+    public static bool Matches(WorkspaceTestArtifactRequest request, WorkspaceTestArtifactRetirement receipt) =>
+        receipt.RunId == request.Run.RunId && receipt.RequestSha256 == request.RequestSha256 &&
+        receipt.ArtifactSha256 == request.ArtifactSha256 && receipt.Size == request.Size &&
+        receipt.InputSha256 == Digest(HostInput(request));
 
     public static string Digest(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 

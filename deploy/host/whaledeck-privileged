@@ -24,7 +24,7 @@ run_transient() {
 }
 
 case "$action" in
-  development-run-start|development-run-observe|development-run-cancel|development-run-reclaim)
+  development-run-start|development-run-observe|development-run-cancel|development-run-reclaim|development-run-readtest|development-run-retiretest)
     [[ ${2:-} =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
     runner_mode=service-${action##*-}
     runner_properties=(--property=RuntimeMaxSec=15 --property=TasksMax=4 --property=MemoryMax=96M
@@ -42,7 +42,7 @@ case "$action" in
         --property="CapabilityBoundingSet=CAP_SYS_ADMIN CAP_NET_ADMIN CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_FSETID CAP_MKNOD CAP_SETGID CAP_SETUID CAP_SETPCAP CAP_KILL CAP_SYS_CHROOT")
     else
       [[ $# -eq 2 ]] || exit 2
-      if [[ $action != development-run-observe ]]; then
+      if [[ $action == development-run-cancel || $action == development-run-reclaim ]]; then
         runner_properties=(--property=RuntimeMaxSec=40 --property=TasksMax=4 --property=MemoryMax=96M
           --property=RestrictNamespaces=yes --property=RestrictAddressFamilies=AF_UNIX
           --property="CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_OVERRIDE CAP_FOWNER"

@@ -24,6 +24,7 @@ RUNS = '.runner-runs'
 REQUEST = 'request.json'
 RESULT = 'result.json'
 REPORT = 'test-report.xml'
+REPORT_RETIRED = 'test-report-retired.json'
 REPORT_LIMIT = 16 * 1024 * 1024
 REPORT_SLOT = '/tmp/whaledeck-results'
 REPORT_COMMANDS = {
@@ -344,6 +345,71 @@ def observe(driver, isolation, rootfs, request):
             return read_result(driver, directory, binding, report_spec(request))
 
 
+def artifact(driver, isolation, rootfs, request, *, retire):
+    if set(request) != {'run', 'requestSha256', 'artifactSha256', 'size'} or not isinstance(request['run'], dict):
+        refuse('REQUEST_INVALID')
+    run = request['run']
+    _, binding = request_binding(driver, isolation, rootfs, run)
+    spec = report_spec(run)
+    if (not spec or type(request['size']) is not int or not 0 < request['size'] <= REPORT_LIMIT
+            or not isinstance(request['artifactSha256'], str) or not re.fullmatch(r'[a-f0-9]{64}', request['artifactSha256'])):
+        refuse('REQUEST_INVALID')
+    if binding['requestSha256'] != request['requestSha256']:
+        refuse('REQUEST_CONFLICT')
+    manifest = {'format': spec[0], 'state': 'Present', 'size': request['size'], 'sha256': request['artifactSha256']}
+    with driver.attested_payload(run['storage']) as (payload, _):
+        with open_run(driver, rootfs, payload, binding) as directory, lock_run(directory):
+            require_request(driver, directory, binding)
+            result = terminal_result(driver, directory, binding, spec)
+            if result is None:
+                refuse('INTERRUPTED')
+            if result['testReport'] != manifest:
+                refuse('REPORT_CONFLICT')
+            proof = dict(binding, testReport=manifest)
+            try:
+                retired = driver.read_json(directory, REPORT_RETIRED, 1024)
+            except FileNotFoundError:
+                retired = None
+            if retired is not None and retired != proof:
+                refuse('REPORT_CHANGED')
+            if retired and not retire:
+                refuse('REPORT_RETIRED')
+            try:
+                visible = os.stat(REPORT, dir_fd=directory, follow_symlinks=False)
+                if not stat.S_ISREG(visible.st_mode):
+                    refuse('REPORT_CHANGED')
+                with driver.opened(directory, REPORT, READ) as descriptor:
+                    entry = os.fstat(descriptor)
+                    if not os.path.samestat(visible, entry):
+                        refuse('REPORT_CHANGED')
+                    raw = driver.read_file(descriptor, manifest['size'], private=True)
+                    if len(raw) != manifest['size'] or hashlib.sha256(raw).hexdigest() != manifest['sha256']:
+                        refuse('REPORT_CHANGED')
+                    if not retire:
+                        return raw
+                    if not retired:
+                        staging = '.retired-' + uuid.uuid4().hex
+                        try:
+                            rootfs.write_metadata(directory, staging, proof)
+                            driver.files.exchange(directory, staging, directory, REPORT_RETIRED, 1)
+                            os.fsync(directory)
+                        finally:
+                            with contextlib.suppress(FileNotFoundError):
+                                os.unlink(staging, dir_fd=directory)
+                    if not os.path.samestat(entry, os.stat(REPORT, dir_fd=directory, follow_symlinks=False)):
+                        refuse('REPORT_CHANGED')
+                    os.unlink(REPORT, dir_fd=directory)
+            except FileNotFoundError:
+                if not retired:
+                    refuse('REPORT_CHANGED')
+            except OSError as error:
+                if error.errno in (errno.ELOOP, errno.EXDEV):
+                    refuse('REPORT_CHANGED')
+                raise
+            os.fsync(directory)
+            return proof
+
+
 def reconcile(driver, isolation, rootfs, control, request, *, stop):
     _, binding = request_binding(driver, isolation, rootfs, request)
     with driver.attested_payload(request['storage']) as (payload, _):
@@ -460,7 +526,8 @@ def delegated_parent():
 
 def main():
     if os.geteuid() != 0 or sys.argv[1:] not in (
-            [], ['observe'], ['service-start'], ['service-observe'], ['service-cancel'], ['service-reclaim']):
+            [], ['observe'], ['service-start'], ['service-observe'], ['service-cancel'], ['service-reclaim'],
+            ['service-readtest'], ['service-retiretest']):
         return 2
     try:
         files = load('whaledeck-files.py')
@@ -474,13 +541,19 @@ def main():
         print('WORKSPACE_RUN_HELPER_UNAVAILABLE', file=sys.stderr)
         return 2
     try:
-        raw = sys.stdin.buffer.read(REQUEST_LIMIT + 1)
-        if not 0 < len(raw) <= REQUEST_LIMIT:
-            refuse('REQUEST_INVALID')
         mode = sys.argv[1] if len(sys.argv) == 2 else ''
+        limit = REQUEST_LIMIT + (512 if mode in ('service-readtest', 'service-retiretest') else 0)
+        raw = sys.stdin.buffer.read(limit + 1)
+        if not 0 < len(raw) <= limit:
+            refuse('REQUEST_INVALID')
         driver = storage.WorkspaceStorage(files, quota=quota, sandboxed=mode.startswith('service-'))
         request = rootfs.decode(raw)
-        if mode in ('observe', 'service-observe'):
+        if mode in ('service-readtest', 'service-retiretest'):
+            result = artifact(driver, isolation, rootfs, request, retire=mode == 'service-retiretest')
+            if mode == 'service-readtest':
+                sys.stdout.buffer.write(result)
+                return 0
+        elif mode in ('observe', 'service-observe'):
             result = observe(driver, isolation, rootfs, request)
         elif mode in ('service-cancel', 'service-reclaim'):
             result = reconcile(driver, isolation, rootfs, control, request, stop=mode == 'service-cancel')

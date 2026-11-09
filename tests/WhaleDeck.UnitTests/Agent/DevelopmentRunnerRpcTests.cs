@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Google.Protobuf;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Builder;
@@ -115,6 +116,45 @@ public sealed class DevelopmentRunnerRpcTests
             receiver.ChangeInputHash = true;
             var invalid = await Assert.ThrowsAsync<RpcException>(() => gateway.ObserveAsync(Actor, workspace, command, timeout.Token));
             Assert.Equal(StatusCode.DataLoss, invalid.StatusCode);
+
+            var artifactCommand = command with { Arguments = ["/usr/local/bin/node", "--test", "--test-reporter=junit",
+                "--test-reporter-destination=/tmp/whaledeck-results/tests.xml"] };
+            var artifactRun = request.Clone();
+            artifactRun.Argv.Clear();
+            artifactRun.Argv.Add(artifactCommand.Arguments);
+            var report = new WorkspaceRunnerArtifact(WorkspaceTestFormat.JUnit, "Present", Receiver.Artifact.Length,
+                Convert.ToHexStringLower(SHA256.HashData(Receiver.Artifact)));
+            var binding = new WorkspaceRunnerReceipt(command.RunId, new string('a', 64), "Succeeded", 0, report);
+            var artifact = new WorkspaceTestArtifactRequest
+            {
+                Run = artifactRun, RequestSha256 = binding.RequestSha256, ArtifactSha256 = report.Sha256, Size = (uint)report.Size
+            };
+            var artifactNonce = Guid.NewGuid().ToString("N");
+            var artifactPayload = DevelopmentRunnerBinding.Payload(expiry, artifactNonce, DevelopmentRunnerBinding.ReadTestArtifact,
+                DevelopmentRunnerBinding.Hash(artifact));
+            var artifactHeaders = Headers($"{expiry}.{artifactNonce}.{Convert.ToHexString(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(artifactPayload)))}");
+            var swapped = await Assert.ThrowsAsync<RpcException>(async () =>
+                await client.RetireTestArtifactAsync(artifact, artifactHeaders, cancellationToken: timeout.Token));
+            Assert.Equal(StatusCode.PermissionDenied, swapped.StatusCode);
+            var modified = artifact.Clone();
+            modified.Size++;
+            foreach (var (body, headers) in new[] { (modified, artifactHeaders), (artifact, new Metadata()) })
+            {
+                using var deniedStream = client.ReadTestArtifact(body, headers, cancellationToken: timeout.Token);
+                Assert.Equal(StatusCode.PermissionDenied,
+                    (await Assert.ThrowsAsync<RpcException>(() => deniedStream.ResponseStream.MoveNext(timeout.Token))).StatusCode);
+            }
+            using (var allowed = client.ReadTestArtifact(artifact, artifactHeaders, cancellationToken: timeout.Token))
+                Assert.True(await allowed.ResponseStream.MoveNext(timeout.Token));
+            using (var replayed = client.ReadTestArtifact(artifact, artifactHeaders, cancellationToken: timeout.Token))
+                Assert.Equal(StatusCode.PermissionDenied,
+                    (await Assert.ThrowsAsync<RpcException>(() => replayed.ResponseStream.MoveNext(timeout.Token))).StatusCode);
+            Assert.Equal(Receiver.Artifact, await gateway.ReadTestArtifactAsync(Actor, workspace, artifactCommand, binding, timeout.Token));
+            await gateway.RetireTestArtifactAsync(Actor, workspace, artifactCommand, binding, timeout.Token);
+            receiver.ChangeArtifact = true;
+            var corrupted = await Assert.ThrowsAsync<WorkspaceRunnerException>(() =>
+                gateway.ReadTestArtifactAsync(Actor, workspace, artifactCommand, binding, timeout.Token));
+            Assert.Equal(WorkspaceRunnerFailure.Integrity, corrupted.Failure);
         }
         finally { directory.Delete(recursive: true); }
     }
@@ -164,15 +204,30 @@ public sealed class DevelopmentRunnerRpcTests
 
     public sealed class Receiver : DevelopmentRunnerService.DevelopmentRunnerServiceBase
     {
+        internal static byte[] Artifact { get; } = Enumerable.Repeat((byte)42, DevelopmentRunnerBinding.ArtifactChunkBytes + 1).ToArray();
         public WorkspaceRunRequest? LastRequest { get; private set; }
         public string LastToken { get; private set; } = "";
         public int Calls { get; private set; }
         public bool ChangeInputHash { get; set; }
+        public bool ChangeArtifact { get; set; }
 
         public override Task<WorkspaceRunReceipt> Start(WorkspaceRunRequest request, ServerCallContext context) => Reply(request, context);
         public override Task<WorkspaceRunReceipt> Observe(WorkspaceRunRequest request, ServerCallContext context) => Reply(request, context);
         public override Task<WorkspaceRunReceipt> Cancel(WorkspaceRunRequest request, ServerCallContext context) => Reply(request, context);
         public override Task<WorkspaceRunReceipt> Reclaim(WorkspaceRunRequest request, ServerCallContext context) => Reply(request, context);
+
+        public override async Task ReadTestArtifact(WorkspaceTestArtifactRequest request,
+            IServerStreamWriter<WorkspaceTestArtifactChunk> responseStream, ServerCallContext context)
+        {
+            await responseStream.WriteAsync(new WorkspaceTestArtifactChunk
+                { Content = ByteString.CopyFrom(Artifact, 0, DevelopmentRunnerBinding.ArtifactChunkBytes) });
+            await responseStream.WriteAsync(new WorkspaceTestArtifactChunk { Content = ByteString.CopyFrom([ChangeArtifact ? (byte)0 : Artifact[^1]]) });
+        }
+
+        public override Task<WorkspaceTestArtifactRetirement> RetireTestArtifact(WorkspaceTestArtifactRequest request, ServerCallContext context) =>
+            Task.FromResult(new WorkspaceTestArtifactRetirement { RunId = request.Run.RunId, RequestSha256 = request.RequestSha256,
+                ArtifactSha256 = request.ArtifactSha256, Size = request.Size,
+                InputSha256 = DevelopmentRunnerBinding.Digest(DevelopmentRunnerBinding.HostInput(request)) });
 
         private Task<WorkspaceRunReceipt> Reply(WorkspaceRunRequest request, ServerCallContext context)
         {

@@ -91,6 +91,10 @@ public sealed class CapabilityValidator(IConfiguration configuration)
             DevelopmentRunnerBinding.Cancel or DevelopmentRunnerBinding.Reclaim &&
         ValidateContentBound(token, method, DevelopmentRunnerBinding.Hash(request), DevelopmentRunnerBinding.Payload);
 
+    public bool ValidateDevelopmentArtifact(string? token, string method, WorkspaceTestArtifactRequest request) =>
+        method is DevelopmentRunnerBinding.ReadTestArtifact or DevelopmentRunnerBinding.RetireTestArtifact &&
+        ValidateContentBound(token, method, DevelopmentRunnerBinding.Hash(request), DevelopmentRunnerBinding.Payload);
+
     public bool ValidateContainerWrite(string? token, string method, string? requestHash)
     {
         return method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) &&
@@ -222,6 +226,11 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     {
         if (context.Method.StartsWith(DevelopmentRunnerBinding.Service, StringComparison.Ordinal))
         {
+            if (context.Method == DevelopmentRunnerBinding.RetireTestArtifact)
+            {
+                AuthorizeArtifact(context, request);
+                return continuation(request, context);
+            }
             var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();
             if (tokens.Length != 1 || request is not WorkspaceRunRequest run || run.CalculateSize() > DevelopmentRunnerBinding.MaximumWireBytes ||
                 !validator.ValidateDevelopmentRunner(tokens[0].Value, context.Method, run)) throw Denied();
@@ -255,9 +264,23 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
         ServerCallContext context,
         ServerStreamingServerMethod<TRequest, TResponse> continuation)
     {
+        if (context.Method.StartsWith(DevelopmentRunnerBinding.Service, StringComparison.Ordinal))
+        {
+            if (context.Method != DevelopmentRunnerBinding.ReadTestArtifact) throw Denied();
+            AuthorizeArtifact(context, request);
+            return continuation(request, responseStream, context);
+        }
         if (IsRetirement(context)) throw Denied();
         Authorize(context);
         return continuation(request, responseStream, context);
+    }
+
+    private void AuthorizeArtifact<TRequest>(ServerCallContext context, TRequest request)
+    {
+        var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();
+        if (tokens.Length != 1 || request is not WorkspaceTestArtifactRequest artifact ||
+            artifact.CalculateSize() > DevelopmentRunnerBinding.MaximumWireBytes ||
+            !validator.ValidateDevelopmentArtifact(tokens[0].Value, context.Method, artifact)) throw Denied();
     }
 
     public override Task<TResponse> ClientStreamingServerHandler<TRequest, TResponse>(IAsyncStreamReader<TRequest> requestStream,

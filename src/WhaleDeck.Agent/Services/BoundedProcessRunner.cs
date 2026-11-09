@@ -21,16 +21,7 @@ public sealed class BoundedProcessRunner
         bool clearEnvironment = false,
         IReadOnlySet<int>? acceptedExitCodes = null)
     {
-        var start = new ProcessStartInfo(executable)
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = standardInput is not null,
-            CreateNoWindow = true,
-            WorkingDirectory = workingDirectory ?? string.Empty
-        };
-        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        var start = CreateStart(executable, arguments, standardInput is not null, workingDirectory);
         if (clearEnvironment) start.Environment.Clear();
         if (environment is not null)
         {
@@ -62,6 +53,50 @@ public sealed class BoundedProcessRunner
         var result = new ProcessResult(process.ExitCode, await outputTask, await errorTask);
         if (result.ExitCode != 0 && acceptedExitCodes?.Contains(result.ExitCode) != true) throw new InvalidOperationException($"{errorCode}: approved command failed with exit code {result.ExitCode}.");
         return result;
+    }
+
+    internal static async Task<(byte[] Content, string Error, int ExitCode)> RunBinaryAsync(string executable,
+        IReadOnlyCollection<string> arguments, string standardInput, int size, TimeSpan timeout, CancellationToken token)
+    {
+        using var process = Process.Start(CreateStart(executable, arguments, true, null)) ?? throw new InvalidOperationException();
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
+        lifetime.CancelAfter(timeout);
+        try
+        {
+            var errors = ReadBoundedAsync(process.StandardError, lifetime.Token);
+            await process.StandardInput.WriteAsync(standardInput.AsMemory(), lifetime.Token);
+            process.StandardInput.Close();
+            var content = new byte[size];
+            var output = process.StandardOutput.BaseStream;
+            var count = await output.ReadAtLeastAsync(content, size, false, lifetime.Token);
+            if (count == size && await output.ReadAsync(new byte[1], lifetime.Token) != 0)
+                throw new InvalidDataException();
+            await process.WaitForExitAsync(lifetime.Token);
+            var error = await errors;
+            if (process.ExitCode == 0 && count != size) throw new InvalidDataException();
+            return (process.ExitCode == 0 ? content : [], error, process.ExitCode);
+        }
+        finally
+        {
+            if (!process.HasExited)
+                try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+        }
+    }
+
+    private static ProcessStartInfo CreateStart(string executable, IReadOnlyCollection<string> arguments,
+        bool standardInput, string? workingDirectory)
+    {
+        var start = new ProcessStartInfo(executable)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = standardInput,
+            CreateNoWindow = true,
+            WorkingDirectory = workingDirectory ?? string.Empty
+        };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        return start;
     }
 
     private static async Task<string> ReadBoundedAsync(StreamReader reader, CancellationToken cancellationToken)
