@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，归档退役事务仓储 `2d258259` 与降级修正 `a3a95aeb` 已通过真实隔离 PostgreSQL。完成签名确认、三层来源复核、双 Job 与审计事务、原租约接管及 Unknown 保留。实时授权入口、专用 Worker、API/Vue/Jobs 与真实工作站 RPC/HDD 继续。见[本批验证](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_REPOSITORY.md)。
+
 2026-11-09，归档退役独立迁移及共享围栏 `46220a8a` 已通过真实隔离 PostgreSQL。到期前拒绝、跨连接锁竞争、Unknown 保留与明确处置、原回执保持和非空降级拒绝均通过。永久业务仓储、Worker/API/Vue/Jobs、工作站配置 HDD 与真实 RPC 正向继续。见[本批验证](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_PERSISTENCE.md)。
 
 2026-11-09，退役宿主取消和业务来源校验候选 `3cee128b` / `5aff320e`。托管 VM 真实 systemd/pidfd 验错 InvocationID 拒绝及正确绑定停止，业务定向 316 项通过。标准工作站安装、新协议能力、原来源自然到期及实际 RPC/HDD 正向仍待。永久业务事务、Worker/API/Vue/Jobs 与 59 项继续。见[本批验证记录](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_INSTALL_SOURCE.md)。
