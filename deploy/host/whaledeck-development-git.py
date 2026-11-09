@@ -29,6 +29,7 @@ GIT = '/usr/bin/git'
 PRLIMIT = '/usr/bin/prlimit'
 REGISTRY = Path('/etc/whaledeck/development-git.json')
 SCRATCH = Path('/tmp')
+MANAGED_SCRATCH = Path('/run/whaledeck-git-scratch')
 MAX_ARCHIVE = 128 * 1024**2
 MAX_SCRATCH = 512 * 1024**2
 MAX_ENTRIES = 10000
@@ -83,6 +84,20 @@ def read_registry(path):
         data = stream.read(MAX_REGISTRY + 1)
         if len(data) != info.st_size or os.fstat(stream.fileno()).st_ctime_ns != info.st_ctime_ns:
             refuse('REGISTRY_UNSAFE')
+    return metadata(data)
+
+
+def loaded_credential(name, limit):
+    directory = os.environ.get('CREDENTIALS_DIRECTORY', '')
+    if not directory.startswith('/run/credentials/'):
+        refuse('CREDENTIAL_UNAVAILABLE')
+    try:
+        with (Path(directory) / name).open('rb') as stream:
+            data = stream.read(limit + 1)
+    except OSError:
+        refuse('CREDENTIAL_UNAVAILABLE')
+    if not 0 < len(data) <= limit:
+        refuse('CREDENTIAL_UNAVAILABLE')
     return metadata(data)
 
 
@@ -432,12 +447,18 @@ def export_tree(home, repo, commit, sink):
     return len(files), total
 
 
-def prepare(home, registry, request):
-    if not isinstance(request, dict) or set(request) != {'repositoryId', 'ref', 'credential'} or not identifier(request['repositoryId']):
+def prepare(home, registry, request, managed=False):
+    credential_field = 'credentialRef' if managed else 'credential'
+    if not isinstance(request, dict) or set(request) != {'repositoryId', 'ref', credential_field} or not identifier(request['repositoryId']):
         refuse('REQUEST_INVALID')
     repo_id, ref = request['repositoryId'], request['ref']
     path, host, port, networks, credential = repository(registry, repo_id)
-    auth = authorization(credential, request['credential'])
+    supplied = request[credential_field]
+    if managed:
+        if supplied != credential:
+            refuse('CREDENTIAL_SCOPE')
+        supplied = loaded_credential('git-source', 2048) if credential is not None else None
+    auth = authorization(credential, supplied)
     pin = pinned_address(host, port, networks)
     with source_relay(path, host, port, pin, auth) as settings:
         expected = requested_oid(home, RELAY_URL, ref, settings)
@@ -469,20 +490,23 @@ def prepare(home, registry, request):
 
 
 def main():
-    if os.geteuid() == 0 or sys.argv[1:]:
+    if os.geteuid() == 0 or sys.argv[1:] not in ([], ['--managed']):
         return 2
+    managed = bool(sys.argv[1:])
+    scratch = MANAGED_SCRATCH if managed else SCRATCH
     os.umask(0o077)
     signal.signal(signal.SIGALRM, lambda *_: refuse('DEADLINE'))
     signal.setitimer(signal.ITIMER_REAL, 95)
     try:
-        capacity = os.statvfs(SCRATCH)
+        capacity = os.statvfs(scratch)
         if not 0 < capacity.f_blocks * capacity.f_frsize <= MAX_SCRATCH:
             refuse('SCRATCH_UNSAFE')
         raw = sys.stdin.buffer.read(4097)
         if not 0 < len(raw) <= 4096:
             refuse('REQUEST_INVALID')
-        with tempfile.TemporaryDirectory(dir=SCRATCH, prefix='wd-source-git-') as folder:
-            output, proof = prepare(Path(folder), read_registry(REGISTRY), metadata(raw))
+        registry = loaded_credential('git-registry', MAX_REGISTRY) if managed else read_registry(REGISTRY)
+        with tempfile.TemporaryDirectory(dir=scratch, prefix='wd-source-git-') as folder:
+            output, proof = prepare(Path(folder), registry, metadata(raw), managed)
             sys.stdout.buffer.write(json.dumps(proof, separators=(',', ':')).encode('ascii') + b'\n')
             with output.open('rb') as archive:
                 while block := archive.read(65536):

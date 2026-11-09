@@ -24,6 +24,49 @@ run_transient() {
 }
 
 case "$action" in
+  development-git-acquire)
+    [[ $# -eq 2 ]] || exit 2
+    registry=/etc/whaledeck/development-git.json
+    [[ -f "$registry" && ! -L "$registry" && $(stat -c '%u:%g:%a:%h' -- "$registry") == 0:0:600:1 ]] ||
+      { echo WORKSPACE_GIT_REGISTRY_UNSAFE >&2; exit 2; }
+    registry_bytes=$(stat -c %s -- "$registry")
+    (( registry_bytes > 0 && registry_bytes <= 65536 )) ||
+      { echo WORKSPACE_GIT_REGISTRY_UNSAFE >&2; exit 2; }
+    credentials=(--property="LoadCredential=git-registry:$registry")
+    if [[ "$2" != '-' ]]; then
+      [[ ${#2} -le 48 && "$2" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || exit 2
+      private_directory=/etc/whaledeck/development-git-credentials
+      credential="$private_directory/$2.json"
+      [[ -d "$private_directory" && ! -L "$private_directory" &&
+        $(stat -c '%u:%g:%a' -- "$private_directory") == 0:0:700 &&
+        -f "$credential" && ! -L "$credential" && $(stat -c '%u:%g:%a:%h' -- "$credential") == 0:0:600:1 ]] ||
+        { echo WORKSPACE_GIT_CREDENTIAL_UNAVAILABLE >&2; exit 2; }
+      credential_bytes=$(stat -c %s -- "$credential")
+      (( credential_bytes > 0 && credential_bytes <= 2048 )) ||
+        { echo WORKSPACE_GIT_CREDENTIAL_UNAVAILABLE >&2; exit 2; }
+      credentials+=(--property="LoadCredential=git-source:$credential")
+    fi
+    # The fixed unit name bounds acquisition concurrency even after an Agent crash.
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit=whaledeck-development-git-acquire \
+      --property=DynamicUser=yes --property=NoNewPrivileges=yes --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateDevices=yes \
+      --property=ProtectProc=invisible --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes \
+      --property=ProtectControlGroups=yes --property=RestrictNamespaces=yes --property=RestrictSUIDSGID=yes \
+      --property='TemporaryFileSystem=/run/whaledeck-git-scratch:size=512M,mode=1777,nosuid,nodev,noexec' \
+      --property='InaccessiblePaths=/etc/whaledeck -/data -/run/whaledeck -/run/docker.sock -/var/lib/whaledeck-development -/var/tmp' \
+      --property='RestrictAddressFamilies=AF_INET AF_INET6' --property=CapabilityBoundingSet= \
+      --property=RuntimeMaxSec=100 --property=TimeoutStopSec=3 --property=KillMode=control-group \
+      --property=TasksMax=24 --property=MemoryMax=768M --property=CPUQuota=100% \
+      --property=LimitCORE=0 --property=LimitNOFILE=128 --property=LimitFSIZE=134217728 \
+      --property=SystemCallArchitectures=native --property=LockPersonality=yes \
+      --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
+      "${credentials[@]}" /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-git.py --managed
+    ;;
+  development-git-stop)
+    [[ $# -eq 1 ]] || exit 2
+    exec /usr/bin/systemctl stop whaledeck-development-git-acquire.service
+    ;;
   development-source-stage|development-source-inspect|development-source-publish|development-source-discard|development-source-abort)
     [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
     exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \

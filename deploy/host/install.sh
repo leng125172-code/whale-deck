@@ -208,6 +208,17 @@ for development_module in whaledeck-development-storage.py whaledeck-development
   install -o root -g root -m 0750 "$(dirname "$0")/$development_module" "/usr/local/libexec/$development_module"
 done
 install -o root -g root -m 0755 "$(dirname "$0")/whaledeck-development-git.py" /usr/local/libexec/whaledeck-development-git.py
+development_git_registry=/etc/whaledeck/development-git.json
+development_git_credentials=/etc/whaledeck/development-git-credentials
+[[ ! -L $development_git_registry && ! -L $development_git_credentials ]] || exit 1
+install -d -o root -g root -m 0700 "$development_git_credentials"
+if [[ ! -e $development_git_registry ]]; then
+  (umask 077; set -o noclobber; printf '%s\n' '{"schemaVersion":1,"repositories":{}}' > "$development_git_registry")
+fi
+[[ -f $development_git_registry && $(stat -c '%u:%h' -- "$development_git_registry") == 0:1 &&
+   $(stat -c %a -- "$development_git_registry") =~ ^(400|440|444|600|640|644)$ ]] || exit 1
+chown root:root "$development_git_registry"
+chmod 0600 "$development_git_registry"
 if [[ $install_runner == yes ]]; then
   python3 -I "$development_unpacker" install-artifact "$runner_artifact"
 fi

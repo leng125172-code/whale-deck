@@ -31,7 +31,8 @@ builder.Services.AddGrpc(options =>
 {
     options.Interceptors.Add<CapabilityInterceptor>();
     options.Interceptors.Add<AgentErrorInterceptor>();
-}).AddServiceOptions<DevelopmentSourceGrpcService>(options => options.MaxReceiveMessageSize = DevelopmentSourceBinding.ChunkBytes + 16);
+}).AddServiceOptions<DevelopmentSourceGrpcService>(options => options.MaxReceiveMessageSize = DevelopmentSourceBinding.ChunkBytes + 16)
+    .AddServiceOptions<DevelopmentGitGrpcService>(options => options.MaxReceiveMessageSize = DevelopmentGitBinding.MaximumHeaderBytes);
 builder.Services.AddSingleton<CapabilityValidator>();
 builder.Services.AddSingleton<PeerCredentialPolicy>();
 builder.Services.AddSingleton<DockerEngine>();
@@ -67,6 +68,7 @@ app.MapGrpcService<AgentGrpcService>();
 app.MapGrpcService<DevelopmentStorageGrpcService>();
 app.MapGrpcService<DevelopmentRunnerGrpcService>();
 app.MapGrpcService<DevelopmentSourceGrpcService>();
+app.MapGrpcService<DevelopmentGitGrpcService>();
 app.MapGrpcService<HostGrpcService>();
 app.MapGrpcService<DockerGrpcService>();
 app.MapGrpcService<OperationGrpcService>();

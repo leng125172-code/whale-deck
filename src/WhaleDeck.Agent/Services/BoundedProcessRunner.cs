@@ -131,6 +131,31 @@ public sealed class BoundedProcessRunner
         }
     }
 
+    internal static async Task<(int ExitCode, string Error, T? Output)> RunWithOutputAsync<T>(
+        string executable, IReadOnlyCollection<string> arguments, ReadOnlyMemory<byte> standardInput,
+        Func<Stream, CancellationToken, Task<T?>> readOutput, TimeSpan timeout, CancellationToken token) where T : class
+    {
+        using var process = Process.Start(CreateStart(executable, arguments, true, null)) ?? throw new InvalidOperationException();
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
+        lifetime.CancelAfter(timeout);
+        var errors = ReadBoundedAsync(process.StandardError, lifetime.Token);
+        try
+        {
+            await process.StandardInput.BaseStream.WriteAsync(standardInput, lifetime.Token);
+            process.StandardInput.Close();
+            var output = await readOutput(process.StandardOutput.BaseStream, lifetime.Token);
+            await process.WaitForExitAsync(lifetime.Token);
+            return (process.ExitCode, await errors, output);
+        }
+        finally
+        {
+            lifetime.Cancel();
+            if (!process.HasExited)
+                try { process.Kill(); } catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+            try { await errors; } catch (Exception error) when (error is OperationCanceledException or IOException) { }
+        }
+    }
+
     private static ProcessStartInfo CreateStart(string executable, IReadOnlyCollection<string> arguments,
         bool standardInput, string? workingDirectory)
     {

@@ -169,6 +169,11 @@ development_git=/usr/local/libexec/whaledeck-development-git.py
 assert_metadata "$development_git" '755:root:root'
 [[ -f $development_git && ! -L $development_git && $(stat -c %h "$development_git") == 1 ]]
 cmp -s -- "$development_git" "$(dirname "$0")/whaledeck-development-git.py"
+assert_metadata /etc/whaledeck/development-git.json '600:root:root'
+[[ -f /etc/whaledeck/development-git.json && ! -L /etc/whaledeck/development-git.json &&
+   $(stat -c %h /etc/whaledeck/development-git.json) == 1 ]]
+assert_metadata /etc/whaledeck/development-git-credentials '700:root:root'
+[[ -d /etc/whaledeck/development-git-credentials && ! -L /etc/whaledeck/development-git-credentials ]]
 [[ ! -L /var/lib/whaledeck-development && -d /var/lib/whaledeck-development ]]
 assert_metadata /usr/local/libexec/whaledeck-file-operations.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-backups.py '750:root:root'

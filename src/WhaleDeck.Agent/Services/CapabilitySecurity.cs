@@ -20,6 +20,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
     {
         if (method is DevelopmentStorageBinding.Method or DevelopmentStorageBinding.AttestationMethod ||
             method.StartsWith(DevelopmentRunnerBinding.Service, StringComparison.Ordinal) ||
+            method.StartsWith(DevelopmentGitBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(DevelopmentSourceBinding.Service, StringComparison.Ordinal)) return false;
         if (method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal) ||
@@ -100,6 +101,10 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         method is DevelopmentSourceBinding.Stage or DevelopmentSourceBinding.Inspect or
             DevelopmentSourceBinding.Publish or DevelopmentSourceBinding.Discard or DevelopmentSourceBinding.Abort &&
         ValidateContentBound(token, method, hash, DevelopmentSourceBinding.Payload);
+
+    public bool ValidateDevelopmentGit(string? token, string method, WorkspaceGitRequest request) =>
+        method == DevelopmentGitBinding.Acquire && DevelopmentGitBinding.IsValid(request) &&
+        ValidateContentBound(token, method, DevelopmentGitBinding.Hash(request), DevelopmentGitBinding.Payload);
 
     public bool ValidateContainerWrite(string? token, string method, string? requestHash)
     {
@@ -279,6 +284,13 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
         ServerCallContext context,
         ServerStreamingServerMethod<TRequest, TResponse> continuation)
     {
+        if (context.Method.StartsWith(DevelopmentGitBinding.Service, StringComparison.Ordinal))
+        {
+            var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();
+            if (tokens.Length != 1 || request is not WorkspaceGitRequest git ||
+                !validator.ValidateDevelopmentGit(tokens[0].Value, context.Method, git)) throw Denied();
+            return continuation(request, responseStream, context);
+        }
         if (context.Method.StartsWith(DevelopmentRunnerBinding.Service, StringComparison.Ordinal))
         {
             if (context.Method != DevelopmentRunnerBinding.ReadTestArtifact) throw Denied();

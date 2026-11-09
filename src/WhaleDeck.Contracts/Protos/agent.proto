@@ -519,6 +519,39 @@ message WorkspaceSourceReceipt {
   string state = 11;
 }
 
+// development.source.git (protocol 1.70).
+service DevelopmentGitService {
+  rpc Acquire(WorkspaceGitRequest) returns (stream WorkspaceGitFrame);
+}
+
+message WorkspaceGitRequest {
+  WorkspaceAllocationRequest storage = 1;
+  string import_id = 2;
+  string repository_id = 3;
+  string ref = 4;
+  string credential_ref = 5;
+}
+
+message WorkspaceGitSnapshot {
+  string workspace_id = 1;
+  string import_id = 2;
+  string repository_id = 3;
+  string requested_ref = 4;
+  string resolved_object = 5;
+  string commit = 6;
+  uint32 archive_bytes = 7;
+  string archive_sha256 = 8;
+  uint32 file_count = 9;
+  uint64 total_bytes = 10;
+}
+
+message WorkspaceGitFrame {
+  oneof payload {
+    WorkspaceGitSnapshot snapshot = 1;
+    bytes content = 2;
+  }
+}
+
 service AgentService {
   rpc GetCapabilities(google.protobuf.Empty) returns (CapabilitiesResponse);
   rpc GetHealth(google.protobuf.Empty) returns (HealthResponse);
