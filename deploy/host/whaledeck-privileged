@@ -321,6 +321,33 @@ case "$action" in
     [[ -z "$recycle_purge_after" ]] || exit 2
     exit 0
     ;;
+  container-file-recycle-archive-retirements)
+    [[ $# -eq 3 && ( "$2" == plan || "$2" == reserve || "$2" == apply || "$2" == inspect || "$2" == discard ) && "$3" =~ ^[a-f0-9]{32}$ && "$3" != 00000000000000000000000000000000 ]] || exit 2
+    # No payload writes for planning/observation/cancel. Only Apply may unlink
+    # within the already existing, installer-approved recycle HDD namespace.
+    retirement_write_paths=
+    if [[ "$2" != plan ]]; then retirement_write_paths=/var/lib/whaledeck-container-recycle-archive-retirements; fi
+    if [[ "$2" == apply ]]; then retirement_write_paths+=' /data/DockerData/whaledeck/file-backups/container-recycling-v1'; fi
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit="whaledeck-container-recycle-archive-retirements-$3" \
+      --property=Slice=system.slice --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
+      --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=no \
+      --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
+      --property=RestrictNamespaces=yes --property=RestrictAddressFamilies=AF_UNIX \
+      --property=RuntimeMaxSec=130 --property=TimeoutStopSec=5 --property=KillMode=control-group \
+      --property=Restart=no --property=TasksMax=8 --property=MemoryMax=192M --property=CPUQuota=50% \
+      --property=LimitCORE=0 --property=LimitNOFILE=128 --property=LimitFSIZE=131072 \
+      --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
+      --property="CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE" \
+      --property="ReadOnlyPaths=/var/lib/whaledeck-container-recycling /var/lib/whaledeck-container-recycle-restores/claims /var/lib/whaledeck-container-recycle-purges /var/lib/whaledeck-container-recycle-archives /data/WhaleDeck/apps" \
+      --property="ReadWritePaths=$retirement_write_paths" \
+      /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-container-recycle-archive-retirement-transport.py "$2"
+    ;;
+  container-file-recycle-archive-retirements-stop)
+    [[ $# -eq 3 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 && "$3" =~ ^[a-f0-9]{32}$ && "$3" != 00000000000000000000000000000000 ]] || exit 2
+    exec /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-container-recycle-archive-retirement-stop.py "$2" "$3"
+    ;;
   container-file-recycle-archives)
     [[ $# -eq 3 && ( "$2" == plan || "$2" == reserve || "$2" == apply || "$2" == inspect || "$2" == discard ) && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2
     exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \

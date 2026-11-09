@@ -42,6 +42,21 @@ for archive_module in plan fences copies transport; do
   assert_metadata "$archive_path" '750:root:root'
   [[ ! -L $archive_path && $(stat -c %h "$archive_path") == 1 ]]
 done
+for retirement_state in /var/lib/whaledeck-container-recycle-archive-retirements /var/lib/whaledeck-container-recycle-archive-retirements/claims; do
+  assert_metadata "$retirement_state" '700:root:root'
+  [[ ! -L $retirement_state && $(realpath -e -- "$retirement_state") == "$retirement_state" ]]
+  for retirement_original in /var/lib/whaledeck-container-recycling /var/lib/whaledeck-container-recycle-restores /var/lib/whaledeck-container-recycle-restores/claims /var/lib/whaledeck-container-recycle-purges /var/lib/whaledeck-container-recycle-archives; do
+    [[ ! $retirement_state -ef $retirement_original ]]
+  done
+done
+[[ ! /var/lib/whaledeck-container-recycle-archive-retirements -ef /var/lib/whaledeck-container-recycle-archive-retirements/claims ]]
+for retirement_module in whaledeck-container-recycle-archive-retention.py whaledeck-container-recycle-archive-retirement-fences.py whaledeck-container-recycle-archive-retirements.py whaledeck-container-recycle-archive-retirement-transport.py whaledeck-container-recycle-retired-history.py whaledeck-container-recycle-archive-retirement-stop.py; do
+  retirement_path="/usr/local/libexec/$retirement_module"
+  assert_metadata "$retirement_path" '750:root:root'
+  [[ ! -L $retirement_path && $(stat -c %h "$retirement_path") == 1 ]]
+  [[ $(sha256sum "$retirement_path" | cut -d ' ' -f1) == $(sha256sum "$(dirname "$0")/$retirement_module" | cut -d ' ' -f1) ]]
+done
+# End independent retirement validation.
 assert_metadata /usr/local/libexec/whaledeck-platform-maintenance '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-platform-revisions.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-platform-control-recovery.py '750:root:root'

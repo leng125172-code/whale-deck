@@ -124,6 +124,24 @@ install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-arc
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-archive-fences.py" /usr/local/libexec/whaledeck-container-recycle-archive-fences.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-archive-copies.py" /usr/local/libexec/whaledeck-container-recycle-archive-copies.py
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recycle-archive-transport.py" /usr/local/libexec/whaledeck-container-recycle-archive-transport.py
+# Provision only the independent retirement registry. Never create/remove HDD
+# history or alter original journals/claims as part of enabling the code files.
+for retirement_state in /var/lib/whaledeck-container-recycle-archive-retirements /var/lib/whaledeck-container-recycle-archive-retirements/claims; do
+  [[ ! -L $retirement_state ]] || exit 1
+  if [[ -e $retirement_state ]]; then
+    [[ -d $retirement_state && $(realpath -e -- "$retirement_state") == "$retirement_state" && $(stat -c '%a:%u:%g' "$retirement_state") == '700:0:0' ]] || exit 1
+    for retirement_original in /var/lib/whaledeck-container-recycling /var/lib/whaledeck-container-recycle-restores /var/lib/whaledeck-container-recycle-restores/claims /var/lib/whaledeck-container-recycle-purges /var/lib/whaledeck-container-recycle-archives; do
+      [[ ! $retirement_state -ef $retirement_original ]] || exit 1
+    done
+  fi
+  install -d -o root -g root -m 0700 "$retirement_state"
+done
+[[ ! /var/lib/whaledeck-container-recycle-archive-retirements -ef /var/lib/whaledeck-container-recycle-archive-retirements/claims ]] || exit 1
+for retirement_module in whaledeck-container-recycle-archive-retention.py whaledeck-container-recycle-archive-retirement-fences.py whaledeck-container-recycle-archive-retirements.py whaledeck-container-recycle-archive-retirement-transport.py whaledeck-container-recycle-retired-history.py whaledeck-container-recycle-archive-retirement-stop.py; do
+  [[ ! -L /usr/local/libexec/$retirement_module ]] || exit 1
+  install -o root -g root -m 0750 "$(dirname "$0")/$retirement_module" "/usr/local/libexec/$retirement_module"
+done
+# End independent retirement provisioning.
 [[ ! -L /var/lib/whaledeck-container-recursive-permissions ]] || exit 1
 install -d -o root -g root -m 0700 /var/lib/whaledeck-container-recursive-permissions
 install -o root -g root -m 0750 "$(dirname "$0")/whaledeck-container-recursive-permissions.py" /usr/local/libexec/whaledeck-container-recursive-permissions.py
