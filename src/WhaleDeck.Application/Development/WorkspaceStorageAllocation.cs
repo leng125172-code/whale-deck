@@ -6,6 +6,8 @@ using WhaleDeck.Application.Models;
 namespace WhaleDeck.Application.Development;
 
 public sealed record WorkspaceStoragePlan(Guid WorkspaceId, string StorageRootId, string EnvironmentSha256, int DiskMiB, string PlanSha256);
+public sealed record WorkspaceRunnerPreflight(Guid WorkspaceId, long WorkspaceVersion, string EnvironmentSha256,
+    WorkspaceBudget Budget, WorkspaceEnvironment Environment);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record WorkspaceStorageApplyCommand(string PlanSha256);
@@ -19,13 +21,19 @@ public sealed class WorkspaceStorageAllocation(DevelopmentWorkspaces workspaces,
 
     public async Task<WorkspaceStoragePlan> PlanAsync(TerminalActor actor, Guid id, CancellationToken token)
     {
-        await workspaces.RequireCreatorAsync(actor, token);
-        var workspace = await registry.FindAsync(id, actor.Subject, token) ?? throw new KeyNotFoundException("WORKSPACE_NOT_FOUND");
-        if (!policy.StorageRootIds.Contains(workspace.StorageRootId, StringComparer.Ordinal) ||
-            workspace.Budget.DiskMiB is < 256 or > WorkspaceRegistrationPolicy.MaximumWorkspaceDiskMiB ||
-            workspace.State is not (Registered or Allocating or Allocated))
+        var workspace = await RequireOwnedWorkspaceAsync(actor, id, token);
+        if (workspace.State is not (Registered or Allocating or Allocated))
             throw new InvalidOperationException("WORKSPACE_STORAGE_PLAN_UNAVAILABLE");
         return BuildPlan(workspace);
+    }
+
+    public async Task<WorkspaceRunnerPreflight> PreflightAsync(TerminalActor actor, Guid id, CancellationToken token)
+    {
+        var workspace = await RequireOwnedWorkspaceAsync(actor, id, token);
+        if (workspace.State != Allocated) throw new InvalidOperationException("WORKSPACE_STORAGE_NOT_ALLOCATED");
+        await gateway.AttestAsync(actor, workspace, token);
+        await workspaces.RequireCreatorAsync(actor, token);
+        return new(workspace.Id, workspace.Version, workspace.EnvironmentSha256, workspace.Budget, workspace.Environment);
     }
 
     public async Task<WorkspaceDefinition> ApplyAsync(TerminalActor actor, Guid id, WorkspaceStorageApplyCommand command, CancellationToken token)
@@ -42,6 +50,16 @@ public sealed class WorkspaceStorageAllocation(DevelopmentWorkspaces workspaces,
         await workspaces.RequireCreatorAsync(actor, token);
         await gateway.AllocateAsync(actor, workspace, token);
         return await registry.CompleteStorageAllocationAsync(actor, plan, clock.GetUtcNow(), token);
+    }
+
+    private async Task<WorkspaceDefinition> RequireOwnedWorkspaceAsync(TerminalActor actor, Guid id, CancellationToken token)
+    {
+        await workspaces.RequireCreatorAsync(actor, token);
+        var workspace = await registry.FindAsync(id, actor.Subject, token) ?? throw new KeyNotFoundException("WORKSPACE_NOT_FOUND");
+        if (!policy.StorageRootIds.Contains(workspace.StorageRootId, StringComparer.Ordinal) ||
+            workspace.Budget.DiskMiB is < 256 or > WorkspaceRegistrationPolicy.MaximumWorkspaceDiskMiB)
+            throw new InvalidOperationException("WORKSPACE_STORAGE_PLAN_UNAVAILABLE");
+        return workspace;
     }
 
     public static WorkspaceStoragePlan BuildPlan(WorkspaceDefinition workspace)

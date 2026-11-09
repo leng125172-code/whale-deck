@@ -268,6 +268,45 @@ class DevelopmentStorageTests(unittest.TestCase):
             self.engine.allocate(second)
         self.assertEqual([self.target], list(self.root.iterdir()))
 
+    def test_attest_pins_published_payload_and_holds_shared_lock_without_mutation(self):
+        self.enable_quota()
+        expected = self.engine.allocate(self.request)
+        original = sorted((item.name, item.stat().st_mtime_ns) for item in self.root.iterdir())
+        with patch.object(self.quota, 'attach', side_effect=AssertionError('attestation wrote quota')):
+            with self.engine.attested_payload(self.request) as (fd, proof):
+                self.assertEqual(expected, proof)
+                self.assertEqual(os.fstat(fd).st_ino, expected['payloadInode'])
+                with self.engine.attested_payload(self.request) as (_, shared):
+                    self.assertEqual(expected, shared)
+                with self.assertRaisesRegex(files.Rejected, 'BUSY'):
+                    self.engine.allocate(self.request)
+        with self.assertRaises(OSError) as closed:
+            os.fstat(fd)
+        self.assertEqual(errno.EBADF, closed.exception.errno)
+        self.assertEqual(original, sorted((item.name, item.stat().st_mtime_ns) for item in self.root.iterdir()))
+
+    def test_attest_never_publishes_pending_or_repairs_drift(self):
+        self.enable_quota()
+        self.quota.interrupt = True
+        with self.assertRaisesRegex(self.quota.QuotaError, 'QUOTA_ATTACH_FAILED'):
+            self.engine.allocate(self.request)
+        with self.assertRaisesRegex(files.Rejected, 'NOT_PUBLISHED'), self.engine.attested_payload(self.request):
+            self.fail('Unpublished workspace passed attestation')
+        self.assertFalse(self.target.exists())
+        self.quota.interrupt = False
+        self.engine.allocate(self.request)
+        self.quota.projects.clear()
+        with self.assertRaisesRegex(self.quota.QuotaError, 'QUOTA_BINDING_CHANGED'), self.engine.attested_payload(self.request):
+            self.fail('Changed quota passed attestation')
+        self.assertEqual({}, self.quota.projects)
+
+    def test_attest_refuses_legacy_publication_without_adding_payload(self):
+        self.engine.allocate(self.request)
+        self.enable_quota()
+        with self.assertRaisesRegex(files.Rejected, 'QUOTA_PROOF_MISSING'), self.engine.attested_payload(self.request):
+            self.fail('Legacy workspace passed attestation')
+        self.assertEqual([storage.MARKER], [item.name for item in self.target.iterdir()])
+
     def test_attestation_rejects_wrong_mount_root_filesystem_and_uuid(self):
         for mount_id, root, filesystem in (('0', '/', 'ext4'), (None, '/bound', 'ext4'), (None, '/', 'tmpfs')):
             with self.subTest(root=root, filesystem=filesystem):

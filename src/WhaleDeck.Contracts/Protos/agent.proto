@@ -400,6 +400,8 @@ message DockerSettingsResponse {
 // development.storage.allocate (project quota confirmation since protocol 1.62).
 service DevelopmentStorageService {
   rpc Allocate(WorkspaceAllocationRequest) returns (WorkspaceAllocationReceipt);
+  // development.storage.attest (protocol 1.63). Only published storage.
+  rpc Attest(WorkspaceAllocationRequest) returns (WorkspaceAllocationReceipt);
 }
 
 message WorkspaceAllocationRequest {

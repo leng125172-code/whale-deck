@@ -21,7 +21,7 @@ def load(filename):
     return module
 
 
-def allocate(source, files, storage, quota):
+def allocate(source, files, storage, quota, *, attest=False):
     raw = source.read(1025)
     if not 0 < len(raw) <= 1024:
         raise files.Rejected('WORKSPACE_STORAGE_REQUEST_INVALID')
@@ -29,23 +29,28 @@ def allocate(source, files, storage, quota):
         request = json.loads(raw.decode('utf-8'), object_pairs_hook=files.unique_object)
     except (ValueError, RecursionError, files.Rejected):
         raise files.Rejected('WORKSPACE_STORAGE_REQUEST_INVALID') from None
-    return storage.WorkspaceStorage(files, sandboxed=True, quota=quota).allocate(request)
+    driver = storage.WorkspaceStorage(files, sandboxed=True, quota=quota)
+    if attest:
+        with driver.attested_payload(request) as (_, proof):
+            return proof
+    return driver.allocate(request)
 
 
 def main():
     try:
-        if os.geteuid() != 0 or len(sys.argv) != 1:
+        if os.geteuid() != 0 or sys.argv[1:] not in ([], ['attest']):
             raise PermissionError()
+        attest = sys.argv[1:] == ['attest']
         files = load('whaledeck-files.py')
         storage = load('whaledeck-development-storage.py')
         quota = load('whaledeck-development-project-quota.py')
         guard = load('whaledeck-development-quota-guard.py')
-        guard.install(quota)
+        guard.install(quota, read_only=attest)
     except (OSError, ImportError):
         print('WORKSPACE_STORAGE_HELPER_UNAVAILABLE', file=sys.stderr)
         return 2
     try:
-        print(json.dumps(allocate(sys.stdin.buffer, files, storage, quota), separators=(',', ':')))
+        print(json.dumps(allocate(sys.stdin.buffer, files, storage, quota, attest=attest), separators=(',', ':')))
         return 0
     except files.Rejected as error:
         code = str(error)

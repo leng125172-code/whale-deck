@@ -24,11 +24,14 @@ run_transient() {
 }
 
 case "$action" in
-  development-storage-allocate)
+  development-storage-allocate|development-storage-attest)
     [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
-    # The driver attests this exact writable mount and never executes user code.
+    storage_args=()
+    if [[ "$action" == development-storage-attest ]]; then storage_args+=(attest); fi
+    # GETQUOTA uses a writable mount reference in Linux. The attest transport
+    # denies the write quota commands and opens only the sealed published path.
     exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
-      --unit="whaledeck-development-storage-$2" \
+      --unit="whaledeck-development-storage-${action##*-}-$2" \
       --property=User=root --property=Group=root --property=UMask=0077 \
       --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
       --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=no \
@@ -41,7 +44,7 @@ case "$action" in
       --property=CapabilityBoundingSet=CAP_SYS_ADMIN \
       --property=SystemCallArchitectures=native --property="SystemCallFilter=@system-service prctl quotactl_fd" \
       --property=ReadWritePaths=/var/lib/whaledeck-development \
-      /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-storage-transport.py
+      /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-storage-transport.py "${storage_args[@]}"
     ;;
   file-transport)
     [[ $# -eq 3 && "$2" =~ ^(roots|list|directories|search|content-search|stat|download|upload|stage|publish|discard|status|operation-plan|operation-apply|operation-status|operation-discard|archive-list|archive-plan|archive-apply|archive-status|archive-discard|tree-copy-plan|tree-copy-apply|tree-copy-status|tree-copy-discard|tree-move-plan|tree-move-apply|tree-move-status|tree-move-discard|tree-pack-plan|tree-pack-apply|tree-pack-status|tree-pack-discard|tree-pack-download|tree-unpack-plan|tree-unpack-apply|tree-unpack-status|tree-unpack-discard|tree-trash-plan|tree-trash-apply|tree-trash-status|tree-trash-discard|tree-restore-plan|tree-restore-apply|tree-restore-status|tree-restore-discard|tree-overwrite-restore-plan|tree-overwrite-restore-apply|tree-overwrite-restore-status|tree-overwrite-restore-discard|tree-purge-plan|tree-purge-apply|tree-purge-status|tree-purge-discard)$ && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2

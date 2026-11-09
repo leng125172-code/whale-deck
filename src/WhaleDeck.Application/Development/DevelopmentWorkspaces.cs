@@ -19,6 +19,7 @@ public sealed record WorkspacePage(WorkspaceDefinition[] Items, string? NextAfte
 public interface IWorkspaceStorageGateway
 {
     Task AllocateAsync(TerminalActor actor, WorkspaceDefinition workspace, CancellationToken token);
+    Task AttestAsync(TerminalActor actor, WorkspaceDefinition workspace, CancellationToken token);
 }
 
 public sealed class WorkspaceRegistrationPolicy

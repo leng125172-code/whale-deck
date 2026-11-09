@@ -30,6 +30,10 @@ public sealed class DevelopmentWorkspacesController(DevelopmentWorkspaces worksp
         [FromServices] WorkspaceStorageAllocation storage, CancellationToken token) =>
         await storage.ApplyAsync((await identity.ReadAsync(HttpContext)).Actor, id, command, token);
 
+    [HttpPost("{id:guid}/runner-preflight")]
+    public async Task<WorkspaceRunnerPreflight> PreflightRunner(Guid id, [FromServices] WorkspaceStorageAllocation storage, CancellationToken token) =>
+        await storage.PreflightAsync((await identity.ReadAsync(HttpContext)).Actor, id, token);
+
     [HttpPost, Consumes("application/json")]
     public async Task<ActionResult<WorkspaceRegistrationReceipt>> Register(WorkspaceRegistrationCommand command, CancellationToken token)
     {

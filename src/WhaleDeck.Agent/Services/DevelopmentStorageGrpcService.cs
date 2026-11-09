@@ -10,7 +10,13 @@ public sealed class DevelopmentStorageGrpcService(BoundedProcessRunner processes
 {
     private static readonly HashSet<int> HelperExitCodes = [1, 2];
 
-    public override async Task<WorkspaceAllocationReceipt> Allocate(WorkspaceAllocationRequest request, ServerCallContext context)
+    public override Task<WorkspaceAllocationReceipt> Allocate(WorkspaceAllocationRequest request, ServerCallContext context) =>
+        RunAsync(request, attest: false, context.CancellationToken);
+
+    public override Task<WorkspaceAllocationReceipt> Attest(WorkspaceAllocationRequest request, ServerCallContext context) =>
+        RunAsync(request, attest: true, context.CancellationToken);
+
+    private async Task<WorkspaceAllocationReceipt> RunAsync(WorkspaceAllocationRequest request, bool attest, CancellationToken token)
     {
         if (!DevelopmentStorageBinding.IsValid(request))
             throw Error(StatusCode.InvalidArgument, "WORKSPACE_STORAGE_REQUEST_INVALID");
@@ -20,15 +26,16 @@ public sealed class DevelopmentStorageGrpcService(BoundedProcessRunner processes
             schemaVersion = 1, rootId = request.StorageRootId, workspaceId = request.WorkspaceId,
             environmentSha256 = request.EnvironmentSha256, diskMiB = request.DiskMib
         });
-        context.CancellationToken.ThrowIfCancellationRequested();
+        token.ThrowIfCancellationRequested();
         ProcessResult result;
         try
         {
             // Allocation can publish before the RPC returns. Its sealed receipt
             // makes a fresh signed retry safe after client disconnect.
             result = await processes.RunAsync("/usr/bin/sudo",
-                ["-n", "/usr/local/libexec/whaledeck-privileged", "development-storage-allocate", Guid.NewGuid().ToString("N")],
-                input, TimeSpan.FromSeconds(25), "WORKSPACE_STORAGE_HELPER_UNAVAILABLE", CancellationToken.None,
+                ["-n", "/usr/local/libexec/whaledeck-privileged",
+                    attest ? "development-storage-attest" : "development-storage-allocate", Guid.NewGuid().ToString("N")],
+                input, TimeSpan.FromSeconds(25), "WORKSPACE_STORAGE_HELPER_UNAVAILABLE", attest ? token : CancellationToken.None,
                 acceptedExitCodes: HelperExitCodes);
         }
         catch (OperationCanceledException) { throw Error(StatusCode.DeadlineExceeded, "WORKSPACE_STORAGE_TIMEOUT"); }
@@ -83,7 +90,7 @@ public sealed class DevelopmentStorageGrpcService(BoundedProcessRunner processes
                     "WORKSPACE_STORAGE_METADATA_UNSAFE" or "WORKSPACE_STORAGE_METADATA_INVALID" or
                     "WORKSPACE_STORAGE_CONFIGURATION_INVALID" or "WORKSPACE_STORAGE_STAGING_UNKNOWN" or
                     "WORKSPACE_STORAGE_PUBLICATION_UNKNOWN" or "WORKSPACE_STORAGE_STATE_UNSAFE" or
-                    "WORKSPACE_STORAGE_QUOTA_RANGES_OVERLAP" or "WORKSPACE_STORAGE_QUOTA_PROOF_MISSING" or
+                    "WORKSPACE_STORAGE_QUOTA_RANGES_OVERLAP" or "WORKSPACE_STORAGE_QUOTA_PROOF_MISSING" or "WORKSPACE_STORAGE_NOT_PUBLISHED" or
                     "WORKSPACE_STORAGE_QUOTA_UNAVAILABLE" or "WORKSPACE_STORAGE_QUOTA_UNSUPPORTED" or
                     "WORKSPACE_STORAGE_QUOTA_NOT_ENFORCING" or "WORKSPACE_STORAGE_QUOTA_ATTRIBUTES_UNAVAILABLE" or
                     "WORKSPACE_STORAGE_QUOTA_BINDING_CHANGED" or "WORKSPACE_STORAGE_QUOTA_DIRECTORY_UNSAFE" or

@@ -82,11 +82,11 @@ public sealed class DevelopmentStorageRpcTests : IDisposable
         });
         var client = new DevelopmentStorageService.DevelopmentStorageServiceClient(channel);
         var expiry = DateTimeOffset.UtcNow.AddSeconds(30).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
-        string Sign(string? hash)
+        string Sign(string? hash, string method = DevelopmentStorageBinding.Method)
         {
             var nonce = Guid.NewGuid().ToString("N");
-            var payload = hash is null ? $"{expiry}.{nonce}.{DevelopmentStorageBinding.Method}" :
-                $"whaledeck-development-storage-capability-v1\n{expiry}.{nonce}.{DevelopmentStorageBinding.Method}.{hash}";
+            var payload = hash is null ? $"{expiry}.{nonce}.{method}" :
+                $"whaledeck-development-storage-capability-v1\n{expiry}.{nonce}.{method}.{hash}";
             return $"{expiry}.{nonce}.{Convert.ToHexString(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(payload)))}";
         }
         var fresh = Sign(DevelopmentStorageBinding.Hash(request));
@@ -109,9 +109,30 @@ public sealed class DevelopmentStorageRpcTests : IDisposable
         await client.AllocateAsync(request, Headers(fresh), cancellationToken: TestContextToken);
         Assert.Equal(2, receiver.Calls);
         await Assert.ThrowsAsync<ArgumentException>(() => gateway.AllocateAsync(actor with { Subject = "other" }, workspace, TestContextToken));
+        await Assert.ThrowsAsync<ArgumentException>(() => gateway.AttestAsync(actor, workspace, TestContextToken));
+        var allocated = workspace with { State = WorkspaceStorageAllocation.Allocated, Version = 3 };
+        var hash = DevelopmentStorageBinding.Hash(request);
+        var allocationToken = Sign(hash);
+        var attestationToken = Sign(hash, DevelopmentStorageBinding.AttestationMethod);
+        var allocationOnAttest = await Assert.ThrowsAsync<RpcException>(async () =>
+            await client.AttestAsync(request, Headers(allocationToken), cancellationToken: TestContextToken));
+        var attestOnAllocation = await Assert.ThrowsAsync<RpcException>(async () =>
+            await client.AllocateAsync(request, Headers(attestationToken), cancellationToken: TestContextToken));
+        Assert.Equal(StatusCode.PermissionDenied, allocationOnAttest.StatusCode);
+        Assert.Equal(StatusCode.PermissionDenied, attestOnAllocation.StatusCode);
+        Assert.Equal(0, receiver.Attestations);
+        await client.AttestAsync(request, Headers(attestationToken), cancellationToken: TestContextToken);
+        var replayedAttestation = await Assert.ThrowsAsync<RpcException>(async () =>
+            await client.AttestAsync(request, Headers(attestationToken), cancellationToken: TestContextToken));
+        Assert.Equal(StatusCode.PermissionDenied, replayedAttestation.StatusCode);
+        await gateway.AttestAsync(actor, allocated, TestContextToken);
+        Assert.Equal(2, receiver.Attestations);
+        Assert.Equal(2, receiver.Calls);
         receiver.Mismatch = true;
         var invalidReceipt = await Assert.ThrowsAsync<RpcException>(() => gateway.AllocateAsync(actor, workspace, TestContextToken));
         Assert.Equal(StatusCode.DataLoss, invalidReceipt.StatusCode);
+        var invalidAttestation = await Assert.ThrowsAsync<RpcException>(() => gateway.AttestAsync(actor, allocated, TestContextToken));
+        Assert.Equal(StatusCode.DataLoss, invalidAttestation.StatusCode);
         await server.StopAsync(TestContextToken);
     }
 
@@ -123,6 +144,10 @@ public sealed class DevelopmentStorageRpcTests : IDisposable
         Assert.False(DevelopmentStorageBinding.IsSupported(new CapabilitiesResponse
         {
             ProtocolMajor = 1, ProtocolMinor = 61, Capabilities = { DevelopmentStorageBinding.Capability }
+        }));
+        Assert.False(DevelopmentStorageBinding.SupportsAttestation(new CapabilitiesResponse
+        {
+            ProtocolMajor = 1, ProtocolMinor = 62, Capabilities = { DevelopmentStorageBinding.AttestationCapability }
         }));
         var request = new WorkspaceAllocationRequest
         {
@@ -159,11 +184,23 @@ public sealed class DevelopmentStorageRpcTests : IDisposable
         public WorkspaceAllocationRequest? LastRequest { get; private set; }
         public string? LastToken { get; private set; }
         public int Calls { get; private set; }
+        public int Attestations { get; private set; }
         public bool Mismatch { get; set; }
 
         public override Task<WorkspaceAllocationReceipt> Allocate(WorkspaceAllocationRequest request, ServerCallContext context)
         {
             Calls++;
+            return Respond(request, context);
+        }
+
+        public override Task<WorkspaceAllocationReceipt> Attest(WorkspaceAllocationRequest request, ServerCallContext context)
+        {
+            Attestations++;
+            return Respond(request, context);
+        }
+
+        private Task<WorkspaceAllocationReceipt> Respond(WorkspaceAllocationRequest request, ServerCallContext context)
+        {
             LastRequest = request;
             LastToken = context.RequestHeaders.GetValue("x-whaledeck-capability");
             return Task.FromResult(new WorkspaceAllocationReceipt

@@ -8,11 +8,17 @@ namespace WhaleDeck.Contracts;
 public static partial class DevelopmentStorageBinding
 {
     public const uint MinimumProtocolMinor = 62;
+    public const uint MinimumAttestationProtocolMinor = 63;
     public const string Capability = "development.storage.allocate";
+    public const string AttestationCapability = "development.storage.attest";
     public const string Method = "/whaledeck.agent.v1.DevelopmentStorageService/Allocate";
+    public const string AttestationMethod = "/whaledeck.agent.v1.DevelopmentStorageService/Attest";
 
     public static bool IsSupported(CapabilitiesResponse value) => value.ProtocolMajor == 1 &&
         value.ProtocolMinor >= MinimumProtocolMinor && value.Capabilities.Contains(Capability);
+
+    public static bool SupportsAttestation(CapabilitiesResponse value) => value.ProtocolMajor == 1 &&
+        value.ProtocolMinor >= MinimumAttestationProtocolMinor && value.Capabilities.Contains(AttestationCapability);
 
     public static string Hash(WorkspaceAllocationRequest request) => Convert.ToHexString(SHA256.HashData(request.ToByteArray()));
 

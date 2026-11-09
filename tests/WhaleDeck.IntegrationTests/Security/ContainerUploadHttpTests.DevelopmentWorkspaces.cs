@@ -112,6 +112,9 @@ public sealed partial class ContainerUploadHttpTests
 
         var storagePlanPath = $"{path}/{owned.Id:D}/storage-plan";
         var applyPath = $"{path}/{owned.Id:D}/storage-allocation";
+        var preflightPath = $"{path}/{owned.Id:D}/runner-preflight";
+        using (var premature = await Preflight(developer, developerToken))
+            Assert.Equal(HttpStatusCode.Conflict, premature.StatusCode);
         var plan = (await developer.GetFromJsonAsync<WorkspaceStoragePlan>(storagePlanPath))!;
         Assert.Equal(owned.Id, plan.WorkspaceId);
         Assert.Equal(owned.EnvironmentSha256, plan.EnvironmentSha256);
@@ -140,6 +143,8 @@ public sealed partial class ContainerUploadHttpTests
         Assert.Equal(WorkspaceStorageAllocation.Allocating, allocating.State);
         Assert.Equal(2, allocating.Version);
         Assert.Equal(1, storage.Calls);
+        using (var uncertain = await Preflight(developer, developerToken))
+            Assert.Equal(HttpStatusCode.Conflict, uncertain.StatusCode);
         directory.LiveMembership = false;
         using (var revokedRetry = await Allocate(developer, developerToken, apply))
             Assert.Equal(HttpStatusCode.Forbidden, revokedRetry.StatusCode);
@@ -169,6 +174,31 @@ public sealed partial class ContainerUploadHttpTests
             Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
         Assert.Equal(calls, storage.Calls);
         Assert.Equal(plan, await developer.GetFromJsonAsync<WorkspaceStoragePlan>(storagePlanPath));
+        using (var foreignPreflight = await Preflight(admin, adminToken))
+            Assert.Equal(HttpStatusCode.NotFound, foreignPreflight.StatusCode);
+        using (var csrf = await Preflight(developer, null))
+            Assert.Equal(HttpStatusCode.BadRequest, csrf.StatusCode);
+        directory.LiveMembership = false;
+        using (var revokedPreflight = await Preflight(developer, developerToken))
+            Assert.Equal(HttpStatusCode.Forbidden, revokedPreflight.StatusCode);
+        directory.LiveMembership = true;
+        Assert.Equal(0, storage.Attestations);
+        storage.QuotaDrift = true;
+        using (var drifted = await Preflight(developer, developerToken))
+            Assert.Equal(HttpStatusCode.Conflict, drifted.StatusCode);
+        storage.QuotaDrift = false;
+        using (var response = await Preflight(developer, developerToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var ready = (await response.Content.ReadFromJsonAsync<WorkspaceRunnerPreflight>())!;
+            Assert.Equal(owned.Id, ready.WorkspaceId);
+            Assert.Equal(3, ready.WorkspaceVersion);
+            Assert.Equal(owned.EnvironmentSha256, ready.EnvironmentSha256);
+            Assert.Equal(owned.Environment.Runtimes, ready.Environment.Runtimes);
+            Assert.Equal(owned.Budget, ready.Budget);
+        }
+        Assert.Equal(2, storage.Attestations);
+        Assert.Equal(calls, storage.Calls);
         await using var verification = new PlatformDbContext(options);
         var stored = await verification.DevelopmentWorkspaces.AsNoTracking().SingleAsync(row => row.Id == owned.Id);
         Assert.Equal(plan.PlanSha256, stored.StoragePlanSha256);
@@ -181,6 +211,7 @@ public sealed partial class ContainerUploadHttpTests
         Assert.Equal(["development.workspace.storage.begin", "development.workspace.storage.complete"], audit.Select(row => row.Action));
         Assert.All(audit, row => Assert.Equal("developer-subject", row.ActorSubject));
         Console.WriteLine("INBOX_PHASE=development-workspace-allocation-real-http-postgres-lost-reply-concurrency");
+        Console.WriteLine("INBOX_PHASE=development-workspace-runner-preflight-real-http-postgres-owner-pins-quota-drift");
 
         async Task<HttpResponseMessage> Register(HttpClient client, string? token, WorkspaceRegistrationCommand body, Guid requestKey)
         {
@@ -193,6 +224,12 @@ public sealed partial class ContainerUploadHttpTests
             using var request = Write(client, HttpMethod.Post, applyPath, token, JsonContent.Create(body));
             return await client.SendAsync(request);
         }
+
+        async Task<HttpResponseMessage> Preflight(HttpClient client, string? token)
+        {
+            using var request = Write(client, HttpMethod.Post, preflightPath, token);
+            return await client.SendAsync(request);
+        }
     }
 
     private sealed class WorkspaceStorageFaultFixture(DbContextOptions<PlatformDbContext> options) : IWorkspaceStorageGateway
@@ -200,6 +237,18 @@ public sealed partial class ContainerUploadHttpTests
         private int _calls;
         private WorkspaceStoragePlan? _published;
         public int Calls => Volatile.Read(ref _calls);
+        public int Attestations { get; private set; }
+        public bool QuotaDrift { get; set; }
+
+        public Task AttestAsync(TerminalActor actor, WorkspaceDefinition workspace, CancellationToken token)
+        {
+            Attestations++;
+            Assert.Equal(WorkspaceStorageAllocation.Allocated, workspace.State);
+            Assert.Equal(actor.Subject, workspace.OwnerSubject);
+            Assert.Equal(_published, WorkspaceStorageAllocation.BuildPlan(workspace));
+            if (QuotaDrift) throw new RpcException(new Status(StatusCode.FailedPrecondition, "WORKSPACE_STORAGE_QUOTA_BINDING_CHANGED"));
+            return Task.CompletedTask;
+        }
 
         public async Task AllocateAsync(TerminalActor actor, WorkspaceDefinition workspace, CancellationToken token)
         {

@@ -317,7 +317,8 @@ class WorkspaceStorage:
             return expected
         self.reject('QUOTA_PROJECT_IDS_BUSY')
 
-    def quota_proof(self, parent, name, proof, config, *, prepare=False):
+    @contextlib.contextmanager
+    def quota_payload(self, parent, name, proof, config, *, prepare=False):
         with self.opened(parent, name, DIR) as child:
             if self.directory(child, private=True).st_ino != proof['directoryInode']:
                 self.reject('DIRECTORY_CONFLICT')
@@ -328,18 +329,25 @@ class WorkspaceStorage:
                 except FileExistsError:
                     pass
             try:
-                with self.opened(child, PAYLOAD, DIR) as payload:
-                    self.directory(payload, private=True)
-                    bound = self.quota_claim(parent, payload, proof, config, prepare=prepare)
-                    if prepare:
-                        self.quota.attach(payload, bound['projectId'], proof['diskMiB'])
-                    else:
-                        self.quota.verify(payload, bound['projectId'], proof['diskMiB'])
-                    return bound
+                payload = self.files.open_at(child, PAYLOAD, DIR)
             except FileNotFoundError:
                 self.reject('QUOTA_PROOF_MISSING')
+            try:
+                self.directory(payload, private=True)
+                bound = self.quota_claim(parent, payload, proof, config, prepare=prepare)
+                if prepare:
+                    self.quota.attach(payload, bound['projectId'], proof['diskMiB'])
+                else:
+                    self.quota.verify(payload, bound['projectId'], proof['diskMiB'])
+                yield payload, bound
+            finally:
+                os.close(payload)
 
-    def allocate(self, request):
+    def quota_proof(self, parent, name, proof, config, *, prepare=False):
+        with self.quota_payload(parent, name, proof, config, prepare=prepare) as (_, bound):
+            return bound
+
+    def validate_request(self, request):
         if not isinstance(request, dict) or set(request) != {'schemaVersion', 'rootId', 'workspaceId', 'environmentSha256', 'diskMiB'}:
             self.reject('REQUEST_INVALID')
         root_id, workspace = request['rootId'], request['workspaceId']
@@ -350,14 +358,43 @@ class WorkspaceStorage:
                 or not isinstance(request['environmentSha256'], str) or not re.fullmatch(DIGEST, request['environmentSha256'])
                 or type(request['diskMiB']) is not int or not 256 <= request['diskMiB'] <= 1024 * 1024):
             self.reject('REQUEST_INVALID')
+        return root_id, workspace
+
+    @contextlib.contextmanager
+    def locked_root(self, root_id, *, exclusive):
         config = self.configuration(root_id)
-        pending = '.pending-' + workspace
         with self.namespace(root_id, config) as parent:
             try:
-                fcntl.flock(parent, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
+                fcntl.flock(parent, lock | fcntl.LOCK_NB)
             except BlockingIOError:
                 self.reject('BUSY')
             self.recheck(parent, root_id, config)
+            yield parent, config
+
+    @contextlib.contextmanager
+    def attested_payload(self, request):
+        """Pin a published payload and hold the shared root lock while it is used."""
+        if not self.quota:
+            self.reject('QUOTA_UNAVAILABLE')
+        root_id, workspace = self.validate_request(request)
+        with self.locked_root(root_id, exclusive=False) as (parent, config):
+            proof = self.read_existing(parent, workspace, request, config)
+            if proof is None:
+                self.reject('NOT_PUBLISHED')
+            with self.quota_payload(parent, workspace, proof, config) as (payload, bound):
+                self.recheck(parent, root_id, config)
+                if self.read_existing(parent, workspace, request, config) != proof:
+                    self.reject('DIRECTORY_CONFLICT')
+                with self.quota_payload(parent, workspace, proof, config) as (current, current_bound):
+                    if current_bound != bound or not os.path.samestat(os.fstat(current), os.fstat(payload)):
+                        self.reject('QUOTA_BINDING_CHANGED')
+                yield payload, bound
+
+    def allocate(self, request):
+        root_id, workspace = self.validate_request(request)
+        pending = '.pending-' + workspace
+        with self.locked_root(root_id, exclusive=True) as (parent, config):
             current = self.read_existing(parent, workspace, request, config, sync=True)
             if current is not None:
                 # A prior rename may have happened just before a failed fsync.

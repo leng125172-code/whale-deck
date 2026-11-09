@@ -19,7 +19,7 @@ spec.loader.exec_module(quota)
 class GuardTests(unittest.TestCase):
     def test_kernel_filter_denies_other_ioctls_quota_commands_and_exec(self):
         script = """
-import ctypes, errno, fcntl, importlib.util, os, sys
+import errno, fcntl, importlib.util, os, sys
 from pathlib import Path
 def load(name):
     spec = importlib.util.spec_from_file_location(name, Path(sys.argv[1]) / (name + '.py'))
@@ -27,7 +27,8 @@ def load(name):
     spec.loader.exec_module(module)
     return module
 quota = load('whaledeck-development-project-quota')
-load('whaledeck-development-quota-guard').install(quota)
+read_only = sys.argv[2] == 'attest'
+load('whaledeck-development-quota-guard').install(quota, read_only=read_only)
 fd = os.open('.', os.O_RDONLY | os.O_DIRECTORY)
 def refused(action):
     try:
@@ -39,12 +40,17 @@ def refused(action):
 refused(lambda: fcntl.ioctl(fd, 0x5413, bytes(8)))
 refused(lambda: quota.quota_call(fd, 0x80000302, 0, bytearray(64)))
 refused(lambda: os.execv('/bin/true', ['/bin/true']))
+if read_only:
+    refused(lambda: fcntl.ioctl(0x7fffffff, quota.FSSETXATTR, bytes(28)))
+    refused(lambda: quota.quota_call(-1, quota.Q_SETQUOTA, 1, bytearray(72)))
 assert os.fstat(fd).st_ino > 0
 os.close(fd)
 """
-        result = subprocess.run([sys.executable, '-B', '-I', '-c', script, str(path.parent)],
-                                capture_output=True, text=True, timeout=10)
-        self.assertEqual(0, result.returncode, result.stderr)
+        for mode in ('allocate', 'attest'):
+            with self.subTest(mode=mode):
+                result = subprocess.run([sys.executable, '-B', '-I', '-c', script, str(path.parent), mode],
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(0, result.returncode, result.stderr)
 
 
 class ProjectQuotaTests(unittest.TestCase):

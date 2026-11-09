@@ -15,7 +15,7 @@ class Program(ctypes.Structure):
     _fields_ = [('length', ctypes.c_ushort), ('filters', ctypes.POINTER(Filter))]
 
 
-def install(quota):
+def install(quota, *, read_only=False):
     # Native syscall numbers and AUDIT_ARCH values from Linux UAPI.
     architectures = {
         'x86_64': (0xc000003e, 16, (59, 101, 179, 304, 310, 311, 312, 321, 322, 323)),
@@ -33,9 +33,11 @@ def install(quota):
     # userfaultfd and io_uring even if the outer service allows them.
     for number in (*blocked, 425, 426, 427, 438):
         rules.extend(((equal, 0, 1, number), (ret, 0, 0, deny)))
-    for number, commands in (
-            (ioctl, (quota.FSGETXATTR, quota.FSSETXATTR)),
-            (quota.QUOTACTL_FD, (quota.Q_GETSTATE, quota.Q_GETQUOTA, quota.Q_SETQUOTA))):
+    ioctls = (quota.FSGETXATTR,) if read_only else (quota.FSGETXATTR, quota.FSSETXATTR)
+    quota_commands = (quota.Q_GETSTATE, quota.Q_GETQUOTA)
+    if not read_only:
+        quota_commands += (quota.Q_SETQUOTA,)
+    for number, commands in ((ioctl, ioctls), (quota.QUOTACTL_FD, quota_commands)):
         rules.extend(((equal, 0, len(commands) + 3, number), (load_word, 0, 0, 24)))
         rules.extend((equal, len(commands) - index, 0, command) for index, command in enumerate(commands))
         rules.extend(((ret, 0, 0, deny), (ret, 0, 0, allow)))
