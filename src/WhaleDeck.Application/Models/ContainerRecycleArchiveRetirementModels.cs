@@ -14,3 +14,11 @@ public sealed record ContainerRecycleArchiveRetirementOperationDto(Guid Id, stri
 { public override string ToString() => nameof(ContainerRecycleArchiveRetirementOperationDto); }
 public sealed record ContainerRecycleArchiveRetirementReceiptDto(Guid Id, Guid SourceOperationId, Guid ArchiveOperationId, string Fingerprint,
     string State, bool SourceFenced, bool OwnedFence, bool? RetirementApplied, long NotBeforeUnixMs);
+
+public sealed record ContainerRecycleArchiveRetirementSourceBinding(Guid ArchiveIntentId, string RequestHash, string PlanHash, string ExecutionHash,
+    string ReservationHash, string ReceiptHash, string ArchiveSourceProofHash, ContainerRecycleArchiveRetirementCommandDto Command,
+    FileObjectIdentityDto PublishedIdentity, long PublishedChangedAtUnixNs)
+{ public override string ToString() => nameof(ContainerRecycleArchiveRetirementSourceBinding); }
+
+public sealed record ResolvedContainerRecycleArchiveRetirementSource(ContainerRecycleArchiveRetirementSourceBinding Binding, string ProofHash)
+{ public override string ToString() => nameof(ResolvedContainerRecycleArchiveRetirementSource); }
