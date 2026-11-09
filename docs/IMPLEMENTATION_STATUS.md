@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-13/P3-16 `615fb86d` 完成 Runner 解包隔离和上游 umoci 0.6.0 的固定摘要发布安装入口。真实宿主包完整性、离线来宾安装、沙箱限制、超时清理及两种运行时均验证。继续 Agent 生命周期和物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_UNPACK.md)。
+
 2026-11-09，P3-13/P3-16 `ff996ac1` 从离线 OCI 内容按原始摘要复核平台、配置和各层，在解包后原子发布 Runner rootfs。离线 KVM 实际运行固定摘要的 .NET SDK 和 Node。继续正式解包隔离、Agent 生命周期与物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_ROOTFS.md)。
 
 2026-11-09，P3-13/P3-16 `5c579ee6` 实现基于已复核 FD 的私有挂载与受限 OCI 策略。来宾 ext4/XFS 通过真实执行和配额绕过拒绝，工作站 Docker 通过同策略的 .NET/Node 验证。继续固定摘要 rootfs、Agent 启动和生命周期。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_ISOLATION.md)。

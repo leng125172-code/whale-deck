@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-13/P3-16 解包沙箱 `615fb86d` 使用固定摘要的上游 umoci 0.6.0，标准宿主包已生成并通过完整性校验。离线 KVM 中通过工件安装、沙箱拒绝及超时清理，并重新运行固定 .NET 与 Node。继续 Agent 启动、观察、取消与故障恢复。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_UNPACK.md)。
+
 2026-11-09，P3-13/P3-16 Runner 固定摘要 rootfs `ff996ac1` 已通过真实 .NET SDK 和 Node 镜像导入，并在离线 KVM 来宾中以只读根文件系统运行构建与测试。继续固定解包器、Agent 正式启动和清理及物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_ROOTFS.md)。
 
 2026-11-09，P3-13/P3-16 Runner 私有投影及 OCI 策略 `5c579ee6` 通过来宾 ext4/XFS 实际隔离执行、配额绕过拒绝和 cgroup 回读，同策略通过本机 Docker 的固定 .NET/Node 镜像验证。继续可信 rootfs 准备、Agent 正式启动与生命周期。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_ISOLATION.md)。
