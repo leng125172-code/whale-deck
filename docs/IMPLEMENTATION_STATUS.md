@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-10，P3-14 `5e167692` 接入 Vue Git 获取、固定提交与来源历史。生产 Chrome 联合真实 HTTP、PostgreSQL 与 Worker 验证丢失响应后的恢复、取消、篡改拒绝、显式确认和窄屏历史分页。继续工作树更新、冲突处理与物理部署。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT_VUE.md)。
+
 2026-11-10，P3-14 `965818bc` 接入 Git 仓库主体授权、BFF 与 Worker。真实 PostgreSQL、HTTP 和 Unix Socket gRPC 验证固定标签对象后的租约接管、加密分块、取消和显式确认。继续 Vue、来源历史、工作树更新与冲突及物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT_WORKFLOW.md)。
 
 2026-11-10，P3-14 `2d4e83f3` 接入 Agent 1.70 签名 Git 获取。离线 KVM 通过动态 UID、宿主凭据隔离、取消清理、防重放、真实公私 Git，以及同一多块 TAR 的签名暂存和显式发布。继续 Worker、BFF、Vue、来源持久化、工作树更新和物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT_RPC.md)。
