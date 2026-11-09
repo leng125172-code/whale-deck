@@ -169,7 +169,13 @@ def archive_copies_type(fence_type):
             try:
                 with self.source.parent(ref['plan'],session) as parent:
                     fd=self.f.open_at(parent,ref['plan']['command']['path'].rsplit('/',1)[-1],os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
-                    try:self.check_file(fd,record,session,record['publishedIdentity'])
+                    try:
+                        self.check_file(fd,record,session,record['publishedIdentity'])
+                        # Hashing a pinned FD does not prove it is still at the
+                        # selected path. Re-resolve after the potentially long read.
+                        with self.source.parent(ref['plan'],session) as current:
+                            if not os.path.samestat(os.fstat(current),os.fstat(parent)):self.reject('COPY_CHANGED')
+                            if self.source.metadata(os.stat(ref['plan']['command']['path'].rsplit('/',1)[-1],dir_fd=current,follow_symlinks=False))!=record['publishedIdentity']:self.reject('COPY_CHANGED')
                     finally:os.close(fd)
                 return True
             except (OSError,self.r.Rejected,self.f.Rejected):return False

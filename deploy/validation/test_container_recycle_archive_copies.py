@@ -151,6 +151,26 @@ class ArchiveCopyTests(unittest.TestCase):
         self.reserve();self.engine.apply(self.q,self.session);moved=self.base.leaf.with_suffix('.moved');self.base.leaf.rename(moved)
         r=self.engine.inspect(self.q,self.session);self.assertTrue(r['archiveCopied']);self.assertFalse(r['bindingCurrent']);self.assertEqual(r['state'],'Completed');self.assertFalse(self.base.leaf.exists());self.assertEqual(moved.read_bytes(),self.base.content)
 
+    def test_binding_rechecks_leaf_path_after_full_fd_hash(self):
+        self.reserve();self.engine.apply(self.q,self.session);check=self.engine.check_file
+        def move_after_read(*args,**kwargs):
+            result=check(*args,**kwargs);self.base.leaf.rename(self.base.leaf.with_suffix('.held'));return result
+        with patch.object(self.engine,'check_file',side_effect=move_after_read):self.assertFalse(self.engine.binding(self.record(),self.session))
+        self.assertFalse(self.base.leaf.exists());self.assertEqual(self.base.leaf.with_suffix('.held').read_bytes(),self.base.content);self.assertEqual(self.record()['state'],'Completed')
+
+    def test_binding_re_resolves_parent_after_hash_not_only_the_held_fd(self):
+        self.reserve();self.engine.apply(self.q,self.session)
+        # Narrow binding fixture: real nested directory/FDs, injected original
+        # claim only. No altered plan is submitted to reserve/apply.
+        parent=self.base.root/'nested';parent.mkdir(mode=0o777)
+        leaf=self.base.leaf.rename(parent/self.base.leaf.name);record=copy.deepcopy(self.record())
+        ref=self.engine.ref(record);ref['plan']['command']['path']='nested/'+leaf.name;ref['plan']['parentIdentity']=[parent.stat().st_dev,parent.stat().st_ino]
+        record['publishedIdentity']=self.source.metadata(leaf.stat());check=self.engine.check_file
+        def move_parent_after_read(*args,**kwargs):
+            result=check(*args,**kwargs);parent.rename(parent.with_name('held-parent'));parent.mkdir(mode=0o777);return result
+        with patch.object(self.source,'read_restore_claim',return_value=self.engine.claim(record)),patch.object(self.engine,'check_file',side_effect=move_parent_after_read):self.assertFalse(self.engine.binding(record,self.session))
+        self.assertEqual((parent.with_name('held-parent')/leaf.name).read_bytes(),self.base.content);self.assertEqual(list(parent.iterdir()),[])
+
     def test_inspect_without_session_never_claims_current_binding(self):
         self.reserve();self.engine.apply(self.q,self.session);before=snapshot(self.base.root);r=self.engine.inspect(self.q);self.assertTrue(r['archiveCopied']);self.assertIsNone(r['bindingCurrent']);self.assertEqual(before,snapshot(self.base.root))
 

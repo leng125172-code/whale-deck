@@ -96,7 +96,7 @@ class ContainerRecycleRetiredHistory:
             snapshot=self.reservation_snapshot(ref);marker=snapshot['marker'];records=snapshot['records'];source_id=ref['operationId'];name=source_id+'.data'
             data=self.data_frame(directory,name);partial=self.data_frame(directory,source_id+'.partial');chain=None;terminal=None
             versioned=[r for r in records if r['schemaVersion']==2]
-            active=[r for r in records if r['state'] in ('Preparing','Reserved','Unknown')]
+            active=[r for r in records if r['state'] in ('Preparing','Reserved','Removing','Removed','Unknown')]
             disposition='Unavailable';reason='RetirementUncertain';retirement_id=None if marker is None else marker['retirementOperationId']
             if versioned or marker is not None and marker['state']=='Retired':
                 eligible=[r for r in versioned if r['state']=='Completed' and r['completion'] is not None]
