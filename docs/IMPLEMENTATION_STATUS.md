@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-17 有界 TRX/JUnit 证据解析器 `b779c283` 通过实际 .NET 与 Node 产物验证。结构化摘要保留计数与失败序号，不携带原始测试内容。开发空间 Runner、来源绑定、报告持久化、授权下载与页面仍待。见[本批验证](qa/DEVELOPMENT_WORKSPACE_TEST_REPORTS.md)。
+
 2026-11-09，归档退役文件页与 Jobs `0cb8878d` 完成分项验证。原键恢复、显式确认、专用取消和 Unknown 处置已接入。真实隔离 PostgreSQL、Vue 和 Chromium 生产构建夹具通过。继续工作站安装及真实 Authentik、Agent 1.60 和配置 HDD 退役。见[本批验证](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_VUE_JOBS.md)。
 
 2026-11-09，归档退役实时授权、专用 Worker 与 HTTP 入口 `b82717cd` 已分项验证。退出和撤权后只恢复原执行，Apply 响应丢失后按同 ID 观察。实际回环 HTTP 和独立真实 PG 回归通过。Vue/Jobs、工作站标准安装、新 RPC 和实际配置 HDD 退役仍待。见[本批验证](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_WORKER_API.md)。
