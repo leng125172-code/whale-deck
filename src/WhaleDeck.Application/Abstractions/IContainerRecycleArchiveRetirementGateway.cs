@@ -1,0 +1,13 @@
+using WhaleDeck.Application.Models;
+
+namespace WhaleDeck.Application.Abstractions;
+
+public interface IContainerRecycleArchiveRetirementGateway
+{
+    Task RequireContainerRecycleArchiveRetirementAsync(CancellationToken cancellationToken);
+    Task<ContainerRecycleArchiveRetirementPlanDto> PlanContainerRecycleArchiveRetirementAsync(TerminalActor actor, ContainerRecycleArchiveRetirementCommandDto command, CancellationToken cancellationToken);
+    Task<ContainerRecycleArchiveRetirementReceiptDto> ReserveContainerRecycleArchiveRetirementAsync(ContainerRecycleArchiveRetirementOperationDto operation, CancellationToken cancellationToken);
+    Task<ContainerRecycleArchiveRetirementReceiptDto> ApplyContainerRecycleArchiveRetirementAsync(ContainerRecycleArchiveRetirementOperationDto operation, CancellationToken cancellationToken);
+    Task<ContainerRecycleArchiveRetirementReceiptDto?> InspectContainerRecycleArchiveRetirementAsync(ContainerRecycleArchiveRetirementOperationDto operation, CancellationToken cancellationToken);
+    Task<ContainerRecycleArchiveRetirementReceiptDto> DiscardContainerRecycleArchiveRetirementAsync(ContainerRecycleArchiveRetirementOperationDto operation, CancellationToken cancellationToken);
+}
