@@ -138,8 +138,12 @@ for retirement_state in /var/lib/whaledeck-container-recycle-archive-retirements
 done
 [[ ! /var/lib/whaledeck-container-recycle-archive-retirements -ef /var/lib/whaledeck-container-recycle-archive-retirements/claims ]] || exit 1
 for retirement_module in whaledeck-container-recycle-archive-retention.py whaledeck-container-recycle-archive-retirement-fences.py whaledeck-container-recycle-archive-retirements.py whaledeck-container-recycle-archive-retirement-transport.py whaledeck-container-recycle-retired-history.py whaledeck-container-recycle-archive-retirement-stop.py; do
-  [[ ! -L /usr/local/libexec/$retirement_module ]] || exit 1
-  install -o root -g root -m 0750 "$(dirname "$0")/$retirement_module" "/usr/local/libexec/$retirement_module"
+  retirement_path="/usr/local/libexec/$retirement_module"
+  [[ ! -L $retirement_path ]] || exit 1
+  if [[ -e $retirement_path ]]; then
+    [[ -f $retirement_path && $(stat -c '%a:%u:%g:%h' "$retirement_path") == '750:0:0:1' ]] || exit 1
+  fi
+  install -T -o root -g root -m 0750 "$(dirname "$0")/$retirement_module" "$retirement_path"
 done
 # End independent retirement provisioning.
 [[ ! -L /var/lib/whaledeck-container-recursive-permissions ]] || exit 1

@@ -53,7 +53,7 @@ done
 for retirement_module in whaledeck-container-recycle-archive-retention.py whaledeck-container-recycle-archive-retirement-fences.py whaledeck-container-recycle-archive-retirements.py whaledeck-container-recycle-archive-retirement-transport.py whaledeck-container-recycle-retired-history.py whaledeck-container-recycle-archive-retirement-stop.py; do
   retirement_path="/usr/local/libexec/$retirement_module"
   assert_metadata "$retirement_path" '750:root:root'
-  [[ ! -L $retirement_path && $(stat -c %h "$retirement_path") == 1 ]]
+  [[ -f $retirement_path && ! -L $retirement_path && $(stat -c %h "$retirement_path") == 1 ]]
   [[ $(sha256sum "$retirement_path" | cut -d ' ' -f1) == $(sha256sum "$(dirname "$0")/$retirement_module" | cut -d ' ' -f1) ]]
 done
 # End independent retirement validation.

@@ -1,4 +1,4 @@
-"""Execute copied helper with systemd/systemctl doubles. Never start host units.
+"""Execute copied helper with a systemd-run double. Never start host units.
 
 Argument/stop contracts are not evidence of effective kernel sandboxing or an
 installed RPC. Source installer/validator snippets run only in private temp dirs.
@@ -21,25 +21,16 @@ MODULES=('whaledeck-container-recycle-archive-retention.py','whaledeck-container
 @unittest.skipUnless(os.name=='posix' and os.geteuid()==0,'isolated Linux root required')
 class RetirementHelperContractTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory(prefix='retirement-helper-contract-');self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name);self.calls=self.root/'calls.jsonl';self.changed=self.root/'stopped'
+        self.temp=tempfile.TemporaryDirectory(prefix='retirement-helper-contract-');self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name);self.calls=self.root/'calls.jsonl'
         run=self.root/'systemd-run';run.write_text('''#!/usr/bin/python3
 import json,os,sys
 value=dict(command='run',args=sys.argv[1:]);open(os.environ['QA_CALLS'],'a').write(json.dumps(value)+'\\n');print(json.dumps(dict(stdinBytes=len(sys.stdin.buffer.read()),args=sys.argv[1:])))
 ''');run.chmod(0o700)
-        ctl=self.root/'systemctl';ctl.write_text('''#!/usr/bin/python3
-import json,os,sys
-from pathlib import Path
-args=sys.argv[1:];open(os.environ['QA_CALLS'],'a').write(json.dumps(dict(command='ctl',args=args))+'\\n');changed=Path(os.environ['QA_CHANGED'])
-if args[0]=='show': print(os.environ.get('QA_AFTER','') if changed.exists() else os.environ.get('QA_CURRENT',''))
-elif args[0]=='stop': changed.write_text('stopped');raise SystemExit(int(os.environ.get('QA_STOP_ERROR','0')))
-else: raise SystemExit(99)
-''');ctl.chmod(0o700)
-        stop=self.root/'stop.py';stop.write_text("import json,os,sys;open(os.environ['QA_CALLS'],'a').write(json.dumps(dict(command='pidfd-stop',args=sys.argv[1:]))+'\\n')")
-        source=(HOST/'whaledeck-privileged').read_text().replace('/usr/bin/systemd-run',shlex.quote(str(run))).replace('/usr/bin/systemctl',shlex.quote(str(ctl))).replace('/usr/local/libexec/whaledeck-container-recycle-archive-retirement-stop.py',shlex.quote(str(stop)))
+        source=(HOST/'whaledeck-privileged').read_text().replace('/usr/bin/systemd-run',shlex.quote(str(run)))
         self.helper=self.root/'helper';self.helper.write_text(source)
 
-    def execute(self,args,**options):
-        env=dict(PATH=os.defpath,QA_CALLS=str(self.calls),QA_CHANGED=str(self.changed),**options)
+    def execute(self,args):
+        env=dict(PATH=os.defpath,QA_CALLS=str(self.calls))
         result=subprocess.run(['/bin/bash',str(self.helper),*args],input=b'private-owned-packet\n',capture_output=True,env=env,timeout=5)
         calls=[json.loads(line) for line in self.calls.read_text().splitlines()] if self.calls.exists() else []
         return result,calls
@@ -68,9 +59,18 @@ else: raise SystemExit(99)
             with self.subTest(args=args):
                 result,calls=self.execute(args);self.assertEqual(result.returncode,2);self.assertEqual(calls,[])
 
-    def test_stop_delegates_only_fixed_driver_and_invocation_to_pidfd_helper(self):
+    def test_stop_delegates_to_read_only_unit_with_local_ptrace_capability(self):
         result,calls=self.execute([ACTION+'-stop','a'*32,'b'*32])
-        self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(calls,[dict(command='pidfd-stop',args=['a'*32,'b'*32])])
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(len(calls),1)
+        args=calls[0]['args']
+        self.assertEqual(args[-6:],['/usr/bin/python3','-B','-I','/usr/local/libexec/whaledeck-container-recycle-archive-retirement-stop.py','a'*32,'b'*32])
+        self.assertIn('--unit=whaledeck-container-recycle-archive-retirements-stop-'+'a'*32,args)
+        self.assertIn('--wait',args)
+        self.assertNotIn('--pipe',args)
+        self.assertFalse(any(a.startswith('--property=ReadWritePaths=') for a in args))
+        for value in ('ProtectSystem=strict','NoNewPrivileges=yes','CapabilityBoundingSet=CAP_SYS_PTRACE','RuntimeMaxSec=8','TimeoutStopSec=1','StandardInput=null','StandardOutput=null','StandardError=null'):
+            self.assertIn('--property='+value,args)
 
 
 @unittest.skipUnless(os.name=='posix' and os.geteuid()==0,'isolated Linux root required')
@@ -119,6 +119,19 @@ class RetirementInstallFilesystemTests(unittest.TestCase):
         self.state.mkdir(mode=0o700);(self.state/'claims').symlink_to(self.originals[0].parent,target_is_directory=True)
         self.assertNotEqual(self.run_fragment().returncode,0);self.preserved();(self.state/'claims').unlink()
         self.assertEqual(self.run_fragment().returncode,0);os.link(self.lib/MODULES[0],self.root/'extra-link')
+        self.assertNotEqual(self.run_fragment(True).returncode,0)
+        self.assertNotEqual(self.run_fragment().returncode,0)
+        self.assertTrue(os.path.samefile(self.lib/MODULES[0],self.root/'extra-link'));self.preserved()
+
+    def test_directory_or_fifo_cannot_be_installed_or_validated_as_module(self):
+        self.assertEqual(self.run_fragment().returncode,0)
+        target=self.lib/MODULES[0];target.unlink()
+        target.mkdir(mode=0o750)
+        self.assertNotEqual(self.run_fragment().returncode,0)
+        self.assertNotEqual(self.run_fragment(True).returncode,0)
+        self.assertEqual(list(target.iterdir()),[])
+        target.rmdir();os.mkfifo(target,0o750)
+        self.assertNotEqual(self.run_fragment().returncode,0)
         self.assertNotEqual(self.run_fragment(True).returncode,0);self.preserved()
 
 
@@ -128,7 +141,7 @@ class RetirementInstallationSourceTests(unittest.TestCase):
         block=install.split('# Provision only the independent retirement registry.',1)[1].split('done\n',3)[0]
         self.assertIn("'700:0:0'",block);self.assertIn(' -ef $retirement_original',block);self.assertNotIn('rm ',block)
         for name in MODULES:self.assertIn(name,install);self.assertIn(name,validate)
-        self.assertIn('install -o root -g root -m 0750 "$(dirname "$0")/$retirement_module"',install)
+        self.assertIn('install -T -o root -g root -m 0750 "$(dirname "$0")/$retirement_module"',install)
         self.assertIn('$(stat -c %h "$retirement_path") == 1',validate);self.assertIn('sha256sum "$retirement_path"',validate)
         for path in (STATE,STATE+'/claims'):self.assertIn(path,install);self.assertIn(path,validate)
 

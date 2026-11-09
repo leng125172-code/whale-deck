@@ -346,7 +346,19 @@ case "$action" in
     ;;
   container-file-recycle-archive-retirements-stop)
     [[ $# -eq 3 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 && "$3" =~ ^[a-f0-9]{32}$ && "$3" != 00000000000000000000000000000000 ]] || exit 2
-    exec /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-container-recycle-archive-retirement-stop.py "$2" "$3"
+    # The Agent's bounding set excludes CAP_SYS_PTRACE. Keep the capability
+    # needed to read the pinned driver's initial environment in this unit.
+    exec /usr/bin/systemd-run --quiet --wait --collect --service-type=exec \
+      --unit="whaledeck-container-recycle-archive-retirements-stop-$2" \
+      --property=Slice=system.slice --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateDevices=yes \
+      --property=NoNewPrivileges=yes --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes \
+      --property=ProtectControlGroups=yes --property=RestrictNamespaces=yes --property=RestrictAddressFamilies=AF_UNIX \
+      --property=RuntimeMaxSec=8 --property=TimeoutStopSec=1 --property=KillMode=control-group --property=Restart=no \
+      --property=TasksMax=4 --property=MemoryMax=64M --property=LimitCORE=0 --property=LimitNOFILE=32 \
+      --property=StandardInput=null --property=StandardOutput=null --property=StandardError=null \
+      --property=CapabilityBoundingSet=CAP_SYS_PTRACE \
+      /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-container-recycle-archive-retirement-stop.py "$2" "$3"
     ;;
   container-file-recycle-archives)
     [[ $# -eq 3 && ( "$2" == plan || "$2" == reserve || "$2" == apply || "$2" == inspect || "$2" == discard ) && "$3" =~ ^[a-f0-9]{32}$ ]] || exit 2

@@ -23,6 +23,8 @@ jobs:
             sudo useradd --system --no-create-home --shell /usr/sbin/nologin user
           fi
           test "$(id -u user)" -ne 0
+      - name: Check retirement stop with hosted systemd and a real pidfd
+        run: sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT python3 -B deploy/ci/check-retirement-stop-systemd.py
       - name: Check shell syntax and side-effect-free preview
         run: |
           bash -n install.sh
