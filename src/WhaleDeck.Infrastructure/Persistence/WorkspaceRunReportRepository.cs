@@ -1,15 +1,30 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using WhaleDeck.Application.Development;
+using WhaleDeck.Domain.Entities;
 
 namespace WhaleDeck.Infrastructure.Persistence;
 
-public sealed class WorkspaceRunReportRepository(PlatformDbContext db, TimeProvider clock) : IWorkspaceRunReportStore
+public sealed class WorkspaceRunReportRepository(PlatformDbContext db, TimeProvider clock) : IWorkspaceRunReportStore, IWorkspaceCollectedReportStore
 {
     private const int MaxExportBytes = 512 * 1024;
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    public async Task<WorkspaceReportWriteState> SaveAsync(WorkspaceRunReport report, CancellationToken cancellationToken)
+    public Task<WorkspaceReportWriteState> SaveAsync(WorkspaceRunReport report, CancellationToken cancellationToken) =>
+        SaveCoreAsync(report, null, cancellationToken);
+
+    public async Task<WorkspaceReportWriteState> SaveCollectedAsync(WorkspaceRunReportClaim claim, WorkspaceRunReport report, CancellationToken token)
+    {
+        var result = await SaveCoreAsync(report, claim, token);
+        if (result == WorkspaceReportWriteState.Conflict)
+            throw new InvalidDataException("WORKSPACE_REPORT_COLLECTION_CONFLICT");
+        return result;
+    }
+
+    private async Task<WorkspaceReportWriteState> SaveCoreAsync(WorkspaceRunReport report, WorkspaceRunReportClaim? claim,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var retention = report.RetainUntilUtc - report.FinalizedAtUtc;
@@ -20,9 +35,9 @@ public sealed class WorkspaceRunReportRepository(PlatformDbContext db, TimeProvi
         if (report.RetainUntilUtc <= clock.GetUtcNow())
             return WorkspaceReportWriteState.Expired;
 
-        var binding = new WorkspaceRunJobBinding(report.RunId, report.TraceId, report.Source.Fingerprint,
-            report.Environment.Digest, report.Environment.Version, retention.Days);
-        var request = binding.ToJobRequestJson();
+        if (claim is null && (report.RunId == report.JobId || report.Source.Fingerprint is null))
+            throw new ArgumentException("WORKSPACE_REPORT_STORAGE_EVIDENCE_INVALID");
+        if (claim is not null) ValidateCollected(claim, report, retention.Days);
         var phase = report.Outcome.ToString();
         var state = report.Outcome switch
         {
@@ -40,16 +55,19 @@ public sealed class WorkspaceRunReportRepository(PlatformDbContext db, TimeProvi
         return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-            var source = await db.Database.SqlQuery<Guid>($"""
+            var source = claim is null
+                ? await db.Database.SqlQuery<Guid>($"""
                 SELECT id AS "Value" FROM operation_jobs
                 WHERE id = {report.JobId} AND job_type = {WorkspaceRunJobBinding.JobType}
                   AND resource_id = {report.WorkspaceId} AND actor_subject = {report.ActorSubject}
                   AND state = {state} AND phase = {phase}
                   AND COALESCE(started_at_utc, created_at_utc) = {report.StartedAtUtc}
                   AND completed_at_utc = {report.FinalizedAtUtc}
-                  AND (request_json -> 'workspaceRun') = (CAST({request} AS jsonb) -> 'workspaceRun')
+                  AND (request_json -> 'workspaceRun') = (CAST({new WorkspaceRunJobBinding(report.RunId, report.TraceId,
+                      report.Source.Fingerprint!, report.Environment.Digest, report.Environment.Version, retention.Days).ToJobRequestJson()} AS jsonb) -> 'workspaceRun')
                 FOR SHARE
-                """).ToListAsync(cancellationToken);
+                """).ToListAsync(cancellationToken)
+                : await LockCollectedSourceAsync(claim, report, cancellationToken);
             if (source.Count == 0) return WorkspaceReportWriteState.SourceUnavailable;
 
             if (report.RetainUntilUtc <= clock.GetUtcNow()) return WorkspaceReportWriteState.Expired;
@@ -74,9 +92,71 @@ public sealed class WorkspaceRunReportRepository(PlatformDbContext db, TimeProvi
                     ? WorkspaceReportWriteState.Conflict
                     : existing.ExpiredAtUtc is null ? WorkspaceReportWriteState.AlreadyStored : WorkspaceReportWriteState.Expired;
             }
+            if (claim is not null && result is WorkspaceReportWriteState.Created or WorkspaceReportWriteState.AlreadyStored)
+            {
+                var stage = RetirementStage(claim, report);
+                var available = clock.GetUtcNow();
+                var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE development_workspace_runs
+                    SET report_stage = {stage}, available_at_utc = {available}, lease = NULL, lease_until_utc = NULL
+                    WHERE id = {report.RunId} AND lease = {claim.Execution.Lease} AND report_stage = 'Collect'
+                    """, cancellationToken);
+                if (updated != 1) throw new InvalidDataException("WORKSPACE_REPORT_STAGE_CONFLICT");
+                db.AuditEvents.Add(new AuditEvent
+                {
+                    ActorSubject = report.ActorSubject, Action = "development.workspace.report.collect", TargetType = "workspace",
+                    TargetId = report.WorkspaceId.ToString("D"), Result = stage, JobId = report.JobId, TraceId = report.TraceId,
+                    OccurredAtUtc = available
+                });
+                await db.SaveChangesAsync(cancellationToken);
+            }
             await transaction.CommitAsync(cancellationToken);
             return result;
         });
+    }
+
+    private Task<List<Guid>> LockCollectedSourceAsync(WorkspaceRunReportClaim claim, WorkspaceRunReport report, CancellationToken token)
+    {
+        var now = clock.GetUtcNow();
+        var receipt = claim.Receipt is null ? null : JsonSerializer.Serialize(claim.Receipt, Json);
+        return db.Database.SqlQuery<Guid>($"""
+            SELECT job.id AS "Value"
+            FROM development_workspace_runs run
+            JOIN operation_jobs job ON job.id = run.id
+            WHERE run.id = {report.RunId} AND run.workspace_id = {report.WorkspaceId}
+              AND run.report_stage = 'Collect' AND run.lease = {claim.Execution.Lease} AND run.lease_until_utc > {now}
+              AND run.finished_at_utc = {report.FinalizedAtUtc}
+              AND run.snapshot_json -> 'workspace' ->> 'environmentSha256' = {report.Environment.Digest}
+              AND (run.snapshot_json -> 'workspace' ->> 'version')::bigint = {report.Environment.Version}
+              AND (run.snapshot_json -> 'command' ->> 'reportRetentionDays')::integer = {claim.Execution.Command.ReportRetentionDays}
+              AND job.job_type = {WorkspaceRunJobBinding.JobType} AND job.resource_id = run.workspace_id
+              AND job.actor_subject = {report.ActorSubject}
+              AND job.state = {claim.Execution.Run.State} AND job.phase = {claim.Execution.Run.Phase}
+              AND COALESCE(job.started_at_utc, job.created_at_utc) = {report.StartedAtUtc}
+              AND job.completed_at_utc = {report.FinalizedAtUtc}
+              AND job.result_json IS NOT DISTINCT FROM CAST({receipt} AS jsonb)
+            FOR UPDATE OF run
+            """).ToListAsync(token);
+    }
+
+    private static void ValidateCollected(WorkspaceRunReportClaim claim, WorkspaceRunReport report, int retentionDays)
+    {
+        var execution = claim.Execution;
+        if (claim.Stage != "Collect" || report.RunId != report.JobId ||
+            report.RunId != execution.Run.RunId || report.WorkspaceId != execution.Run.WorkspaceId ||
+            report.TraceId != execution.Actor.TraceId || report.ActorSubject != execution.Actor.Subject ||
+            report.Outcome != WorkspaceRunReportPipeline.Outcome(execution.Run) || report.ExitCode != claim.Receipt?.RuntimeExitCode ||
+            report.Source != new WorkspaceReportSource(null, null, null, null) ||
+            retentionDays != execution.Command.ReportRetentionDays)
+            throw new ArgumentException("WORKSPACE_REPORT_STORAGE_EVIDENCE_INVALID");
+    }
+
+    private static string RetirementStage(WorkspaceRunReportClaim claim, WorkspaceRunReport report)
+    {
+        if (claim.Receipt?.TestReport is not { State: "Present" } manifest) return "Complete";
+        var test = report.Steps.Single().Tests.SingleOrDefault();
+        return test is { Integrity: WorkspaceArtifactIntegrity.Matched, Collection: WorkspaceArtifactCollectionState.Present } &&
+            test.Format == manifest.Format && test.Result?.ArtifactSha256 == manifest.Sha256 ? "Retire" : "Attention";
     }
 
     public async Task<WorkspaceReportDownload?> ReadAsync(

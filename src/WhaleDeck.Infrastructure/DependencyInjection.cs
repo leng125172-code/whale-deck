@@ -241,6 +241,7 @@ public static class DependencyInjection
         services.AddScoped<NotificationPrivateDispatcher>();
         services.AddScoped<INotificationDispatchRepository, NotificationDispatchStore>();
         services.AddScoped<IWorkspaceRunReportStore, WorkspaceRunReportRepository>();
+        services.AddScoped<IWorkspaceCollectedReportStore, WorkspaceRunReportRepository>();
         services.AddScoped<IWorkspaceRunReportReadAudit, WorkspaceRunReportReadAudit>();
         services.AddScoped<WorkspaceRunReportDownloads>();
         services.AddScoped<IWorkspaceReportAccess, WorkspaceReportAccessRepository>();
@@ -255,6 +256,8 @@ public static class DependencyInjection
         services.AddScoped<WorkspaceRuns>();
         services.AddScoped<WorkspaceRunDispatcher>();
         services.AddScoped<IWorkspaceRunStore, WorkspaceRunRepository>();
+        services.AddScoped<IWorkspaceRunReportWork, WorkspaceRunRepository>();
+        services.AddScoped<WorkspaceRunReportPipeline>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new PrivateNotificationConfiguration("/run/secrets/notifications/registry.json"));
         services.AddSingleton(new NotificationNetworkPolicy());

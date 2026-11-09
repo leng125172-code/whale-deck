@@ -1,8 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 using WhaleDeck.Application.Abstractions;
 using WhaleDeck.Application.Development;
 using WhaleDeck.Application.Models;
@@ -28,6 +32,7 @@ public sealed partial class ContainerUploadHttpTests
             services.AddSingleton(policy);
             services.AddSingleton<IPrivilegedIdentityDirectory>(directory);
             services.AddSingleton<IWorkspaceRunnerGateway>(runner);
+            services.AddSingleton<IWorkspaceTestArtifactGateway>(runner);
             services.AddScoped(_ => new PlatformDbContext(options));
             services.AddScoped<IDevelopmentWorkspaceRegistry, DevelopmentWorkspaceRegistry>();
             services.AddScoped<IWorkspaceReportAccess, WorkspaceReportAccessRepository>();
@@ -35,10 +40,16 @@ public sealed partial class ContainerUploadHttpTests
             services.AddScoped<DevelopmentWorkspaces>();
             services.AddScoped<WorkspaceRuns>();
             services.AddScoped<IWorkspaceRunStore, WorkspaceRunRepository>();
+            services.AddScoped<IWorkspaceRunReportWork, WorkspaceRunRepository>();
+            services.AddScoped<IWorkspaceRunReportStore, WorkspaceRunReportRepository>();
+            services.AddScoped<IWorkspaceCollectedReportStore, WorkspaceRunReportRepository>();
+            services.AddScoped<IWorkspaceRunReportReadAudit, WorkspaceRunReportReadAudit>();
+            services.AddScoped<WorkspaceRunReportDownloads>();
+            services.AddScoped<WorkspaceRunReportPipeline>();
             services.AddScoped<WorkspaceRunDispatcher>();
         }
         await using var original = await Fixture.Start(Configure);
-        using var developer = await original.Client("developer-subject", false);
+        using var developer = await original.Client("developer-subject", false, TimeSpan.FromHours(1));
         using var admin = await original.Client("admin-subject", true);
         var csrf = await Csrf(developer);
         var adminCsrf = await Csrf(admin);
@@ -149,6 +160,114 @@ public sealed partial class ContainerUploadHttpTests
         Assert.False(await inspection.WorkspaceRunIntents.AnyAsync(row => row.FinishedAtUtc == null));
         Console.WriteLine("INBOX_PHASE=workspace-run-real-http-postgres-single-dispatch-restart-reclaim-and-revocation");
 
+        for (var i = 0; i < 6; i++) await TickReport(restarted.CreateAsyncScope());
+        Assert.Equal(6, await inspection.WorkspaceRunIntents.CountAsync(row => row.ReportStage == "Complete"));
+        Assert.Equal(0, runner.ArtifactReads);
+        var skippedReport = await developer.GetFromJsonAsync<JsonElement>($"{path}/{queued.RunId:D}/report/json");
+        Assert.Equal("Canceled", skippedReport.GetProperty("outcome").GetString());
+        Assert.Equal("Skipped", skippedReport.GetProperty("steps")[0].GetProperty("outcome").GetString());
+        var unknownReport = await developer.GetFromJsonAsync<JsonElement>($"{path}/{missing.RunId:D}/report/json");
+        Assert.Equal("Unknown", unknownReport.GetProperty("outcome").GetString());
+
+        runner.ObserveFinished = true;
+        var reportRun = await NewRun();
+        await Tick(restarted.CreateAsyncScope());
+        clock.Advance(5);
+        await Tick(restarted.CreateAsyncScope());
+        Assert.Equal("Pending", (await Read(reportRun.RunId)).ReportStatus);
+        await inspection.Database.ExecuteSqlRawAsync("""
+            CREATE FUNCTION qa_workspace_report_reject() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN RAISE EXCEPTION 'qa_report_write_failure'; END $$;
+            CREATE TRIGGER qa_workspace_report_reject BEFORE INSERT ON workspace_run_reports
+                FOR EACH ROW EXECUTE FUNCTION qa_workspace_report_reject()
+            """);
+        try
+        {
+            var failed = await Assert.ThrowsAsync<PostgresException>(() => TickReport(restarted.CreateAsyncScope()));
+            Assert.Equal("qa_report_write_failure", failed.MessageText);
+            Assert.Equal("Collect", await Stage(reportRun.RunId));
+            Assert.False(await inspection.WorkspaceRunReports.AnyAsync(row => row.RunId == reportRun.RunId));
+            Assert.Equal(0, runner.RetireCalls);
+        }
+        finally
+        {
+            await inspection.Database.ExecuteSqlRawAsync("""
+                DROP TRIGGER qa_workspace_report_reject ON workspace_run_reports;
+                DROP FUNCTION qa_workspace_report_reject()
+                """);
+        }
+        clock.Advance(41);
+        await Task.WhenAll(TickReport(restarted.CreateAsyncScope()), TickReport(restarted.CreateAsyncScope()));
+        Assert.Equal("Retire", await Stage(reportRun.RunId));
+        Assert.Equal("Available", (await Read(reportRun.RunId)).ReportStatus);
+        Assert.Equal(2, runner.ArtifactReads);
+        runner.RetireProbe = async id =>
+        {
+            await using var connection = new PlatformDbContext(options);
+            Assert.True(await connection.WorkspaceRunReports.AnyAsync(row => row.RunId == id && row.JsonContent != null && row.MarkdownContent != null));
+        };
+        runner.LoseRetirementReply = true;
+        await RunReportWorkerUntil(async () => runner.RetireCalls == 1 && !await inspection.WorkspaceRunIntents
+            .AnyAsync(row => row.Id == reportRun.RunId && row.Lease != null));
+        Assert.Equal("Retire", await Stage(reportRun.RunId));
+        clock.Advance(16);
+        await RunReportWorkerUntil(async () => await Stage(reportRun.RunId) == "Complete");
+        Assert.Equal(2, runner.RetireCalls);
+        Assert.Equal(1, runner.RetireEffects);
+
+        using var jsonResponse = await developer.GetAsync($"{path}/{reportRun.RunId:D}/report/json");
+        jsonResponse.EnsureSuccessStatusCode();
+        var data = await jsonResponse.Content.ReadAsByteArrayAsync();
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(data)), jsonResponse.Headers.GetValues("X-Content-SHA256").Single());
+        var export = JsonSerializer.Deserialize<JsonElement>(data);
+        Assert.Equal(reportRun.RunId, export.GetProperty("runId").GetGuid());
+        Assert.Equal(JsonValueKind.Null, export.GetProperty("source").GetProperty("fingerprint").ValueKind);
+        var reportTest = export.GetProperty("steps")[0].GetProperty("tests")[0];
+        Assert.Equal("Matched", reportTest.GetProperty("integrity").GetString());
+        Assert.Equal(1, reportTest.GetProperty("result").GetProperty("counts").GetProperty("failed").GetInt32());
+        Assert.DoesNotContain("synthetic-private-test-data", Encoding.UTF8.GetString(data), StringComparison.Ordinal);
+        Assert.DoesNotContain("synthetic-private-test-data",
+            await developer.GetStringAsync($"{path}/{reportRun.RunId:D}/report/markdown"), StringComparison.Ordinal);
+        directory.LiveMembership = false;
+        using (var revoked = await developer.GetAsync($"{path}/{reportRun.RunId:D}/report/json"))
+            Assert.Equal(HttpStatusCode.Forbidden, revoked.StatusCode);
+        directory.LiveMembership = true;
+
+        runner.CorruptArtifact = true;
+        var suspect = await NewRun();
+        await Tick(restarted.CreateAsyncScope());
+        clock.Advance(5);
+        await Tick(restarted.CreateAsyncScope());
+        await TickReport(restarted.CreateAsyncScope());
+        Assert.Equal("Attention", await Stage(suspect.RunId));
+        Assert.Equal("ArtifactAttention", (await Read(suspect.RunId)).ReportStatus);
+        await TickReport(restarted.CreateAsyncScope());
+        Assert.Equal(2, runner.RetireCalls);
+        Assert.Equal(1, await inspection.AuditEvents.CountAsync(row => row.JobId == reportRun.RunId &&
+            row.Action == "development.workspace.report.collect"));
+        Assert.Equal(1, await inspection.AuditEvents.CountAsync(row => row.JobId == reportRun.RunId &&
+            row.Action == "development.workspace.report.retire"));
+        Console.WriteLine("INBOX_PHASE=workspace-report-real-postgres-atomic-stage-recovery-redaction-and-owner-download");
+
+        Task<string?> Stage(Guid id) => inspection.WorkspaceRunIntents.AsNoTracking().Where(row => row.Id == id)
+            .Select(row => row.ReportStage).SingleAsync();
+
+        async Task RunReportWorkerUntil(Func<Task<bool>> condition)
+        {
+            using var hosted = new WorkspaceRunReportWorker(restarted.GetRequiredService<IServiceScopeFactory>(),
+                NullLogger<WorkspaceRunReportWorker>.Instance);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+            await hosted.StartAsync(timeout.Token);
+            while (!await condition()) await Task.Delay(50, timeout.Token);
+            await hosted.StopAsync(timeout.Token);
+        }
+
+        static async Task TickReport(AsyncServiceScope scope)
+        {
+            await using var lifetime = scope;
+            await scope.ServiceProvider.GetRequiredService<WorkspaceRunReportPipeline>().TickAsync(CancellationToken.None);
+        }
+
         async Task<WorkspaceRunView> NewRun()
         {
             using var response = await Enqueue(developer, csrf, input, Guid.NewGuid());
@@ -190,25 +309,44 @@ public sealed partial class ContainerUploadHttpTests
         public void Advance(int seconds) => _now = _now.AddSeconds(seconds);
     }
 
-    private sealed class WorkspaceRunAgentFixture : IWorkspaceRunnerGateway
+    private sealed class WorkspaceRunAgentFixture : IWorkspaceRunnerGateway, IWorkspaceTestArtifactGateway
     {
+        private const string Report = """
+            <testsuite tests="2" failures="1" errors="0" skipped="0">
+              <testcase name="pass"/>
+              <testcase name="fail"><failure>synthetic-private-test-data</failure></testcase>
+            </testsuite>
+            """;
         private int _starts;
         public int Starts => _starts;
         public int Reclaims { get; private set; }
         public int Cancels { get; private set; }
         public bool InterruptOnObserve { get; set; }
+        public bool ObserveFinished { get; set; }
+        public bool CorruptArtifact { get; set; }
+        public bool LoseRetirementReply { get; set; }
+        public int ArtifactReads { get; private set; }
+        public int RetireCalls { get; private set; }
+        public int RetireEffects { get; private set; }
+        public Func<Guid, Task>? RetireProbe { get; set; }
+        private readonly byte[] _artifact = Encoding.UTF8.GetBytes(Report);
 
         public Task<WorkspaceRunnerReceipt> StartAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command, CancellationToken token)
         {
             Assert.True(command.RequireControl);
-            Assert.Equal(["/usr/local/bin/node", "--test"], command.Arguments);
+            Assert.Equal(14, command.ReportRetentionDays);
+            Assert.Equal(["/usr/local/bin/node", "--test", "--test-reporter=junit",
+                "--test-reporter-destination=/tmp/whaledeck-results/tests.xml"], command.Arguments);
             Assert.Equal(workspace.OwnerSubject, actor.Subject);
             Interlocked.Increment(ref _starts);
             throw new WorkspaceRunnerException(WorkspaceRunnerFailure.Retryable);
         }
 
         public Task<WorkspaceRunnerReceipt> ObserveAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command, CancellationToken token) =>
-            throw new WorkspaceRunnerException(InterruptOnObserve ? WorkspaceRunnerFailure.Interrupted : WorkspaceRunnerFailure.NotFound);
+            ObserveFinished
+                ? Task.FromResult(new WorkspaceRunnerReceipt(command.RunId, new string('c', 64), "Failed", 1,
+                    new(WorkspaceTestFormat.JUnit, "Present", _artifact.Length, Convert.ToHexStringLower(SHA256.HashData(_artifact)))))
+                : throw new WorkspaceRunnerException(InterruptOnObserve ? WorkspaceRunnerFailure.Interrupted : WorkspaceRunnerFailure.NotFound);
 
         public Task<WorkspaceRunnerReceipt> ReclaimAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command, CancellationToken token)
         {
@@ -220,6 +358,24 @@ public sealed partial class ContainerUploadHttpTests
         {
             Cancels++;
             return Task.FromResult(new WorkspaceRunnerReceipt(command.RunId, new string('b', 64), "Cancelled", null));
+        }
+
+        public Task<byte[]> ReadTestArtifactAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command,
+            WorkspaceRunnerReceipt receipt, CancellationToken token)
+        {
+            ArtifactReads++;
+            return Task.FromResult(CorruptArtifact ? new byte[] { 0x41 } : _artifact);
+        }
+
+        public async Task RetireTestArtifactAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command,
+            WorkspaceRunnerReceipt receipt, CancellationToken token)
+        {
+            if (RetireProbe is not null) await RetireProbe(command.RunId);
+            RetireCalls++;
+            if (RetireEffects == 0) RetireEffects++;
+            if (!LoseRetirementReply) return;
+            LoseRetirementReply = false;
+            throw new WorkspaceRunnerException(WorkspaceRunnerFailure.Retryable);
         }
     }
 }

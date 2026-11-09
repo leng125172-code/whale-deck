@@ -14,7 +14,7 @@ public sealed partial class PlatformDbContext
             entity.ToTable("workspace_run_reports", table =>
             {
                 table.HasCheckConstraint("ck_workspace_report_identity",
-                    "run_id <> '00000000-0000-0000-0000-000000000000'::uuid AND workspace_id <> '00000000-0000-0000-0000-000000000000'::uuid AND job_id <> '00000000-0000-0000-0000-000000000000'::uuid AND run_id <> job_id AND schema_version > 0");
+                    "run_id <> '00000000-0000-0000-0000-000000000000'::uuid AND workspace_id <> '00000000-0000-0000-0000-000000000000'::uuid AND job_id <> '00000000-0000-0000-0000-000000000000'::uuid AND schema_version > 0");
                 table.HasCheckConstraint("ck_workspace_report_lifetime",
                     "retain_until_utc > finalized_at_utc AND retain_until_utc <= finalized_at_utc + INTERVAL '8760 hours'");
                 table.HasCheckConstraint("ck_workspace_report_content", """

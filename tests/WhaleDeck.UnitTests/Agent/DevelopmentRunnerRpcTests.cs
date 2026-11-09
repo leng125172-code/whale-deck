@@ -45,10 +45,10 @@ public sealed class DevelopmentRunnerRpcTests
             builder.WebHost.ConfigureKestrel(options => options.ListenUnixSocket(socket, listen => listen.Protocols = HttpProtocols.Http2));
             builder.Services.AddGrpc(options => options.Interceptors.Add<CapabilityInterceptor>());
             builder.Services.AddSingleton<CapabilityValidator>();
-            builder.Services.AddSingleton(new AgentGrpcService(null!));
+            builder.Services.AddSingleton<RunnerCapabilities>();
             builder.Services.AddSingleton<Receiver>();
             await using var server = builder.Build();
-            server.MapGrpcService<AgentGrpcService>();
+            server.MapGrpcService<RunnerCapabilities>();
             server.MapGrpcService<Receiver>();
             await server.StartAsync(timeout.Token);
             using var gateway = new AgentGateway(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -155,6 +155,15 @@ public sealed class DevelopmentRunnerRpcTests
             var corrupted = await Assert.ThrowsAsync<WorkspaceRunnerException>(() =>
                 gateway.ReadTestArtifactAsync(Actor, workspace, artifactCommand, binding, timeout.Token));
             Assert.Equal(WorkspaceRunnerFailure.Integrity, corrupted.Failure);
+
+            receiver.ChangeInputHash = false;
+            var reporting = artifactCommand with { RequireControl = true, ReportRetentionDays = 14 };
+            server.Services.GetRequiredService<RunnerCapabilities>().TransferEnabled = false;
+            var unsupported = await Assert.ThrowsAsync<WorkspaceRunnerException>(() =>
+                gateway.StartAsync(Actor, workspace, reporting, timeout.Token));
+            Assert.Equal(WorkspaceRunnerFailure.Unsupported, unsupported.Failure);
+            Assert.Equal(report, (await gateway.ObserveAsync(Actor, workspace, reporting, timeout.Token)).TestReport);
+            Assert.Equal(report, (await gateway.CancelAsync(Actor, workspace, reporting, timeout.Token)).TestReport);
         }
         finally { directory.Delete(recursive: true); }
     }
@@ -202,6 +211,24 @@ public sealed class DevelopmentRunnerRpcTests
 
     private static Metadata Headers(string value) => new() { { "x-whaledeck-capability", value } };
 
+    public sealed class RunnerCapabilities : AgentService.AgentServiceBase
+    {
+        public bool TransferEnabled { get; set; } = true;
+
+        public override Task<CapabilitiesResponse> GetCapabilities(Google.Protobuf.WellKnownTypes.Empty request, ServerCallContext context)
+        {
+            var result = new CapabilitiesResponse
+            {
+                ProtocolMajor = 1, ProtocolMinor = TransferEnabled ? DevelopmentRunnerBinding.ArtifactTransferProtocolMinor :
+                    DevelopmentRunnerBinding.ReportProtocolMinor
+            };
+            result.Capabilities.Add([DevelopmentRunnerBinding.Capability, DevelopmentRunnerBinding.ControlCapability,
+                DevelopmentRunnerBinding.ReportCapability]);
+            if (TransferEnabled) result.Capabilities.Add(DevelopmentRunnerBinding.ArtifactTransferCapability);
+            return Task.FromResult(result);
+        }
+    }
+
     public sealed class Receiver : DevelopmentRunnerService.DevelopmentRunnerServiceBase
     {
         internal static byte[] Artifact { get; } = Enumerable.Repeat((byte)42, DevelopmentRunnerBinding.ArtifactChunkBytes + 1).ToArray();
@@ -237,7 +264,12 @@ public sealed class DevelopmentRunnerRpcTests
             return Task.FromResult(new WorkspaceRunReceipt
             {
                 RunId = request.RunId, Status = "Succeeded", RuntimeExitCode = 0, RequestSha256 = new string('a', 64),
-                InputSha256 = ChangeInputHash ? new string('0', 64) : DevelopmentRunnerBinding.Digest(DevelopmentRunnerBinding.HostInput(request))
+                InputSha256 = ChangeInputHash ? new string('0', 64) : DevelopmentRunnerBinding.Digest(DevelopmentRunnerBinding.HostInput(request)),
+                TestReport = DevelopmentRunnerBinding.ReportFormat(request) is { } format ? new()
+                {
+                    Format = format, State = "Present", Size = (uint)Artifact.Length,
+                    Sha256 = Convert.ToHexStringLower(SHA256.HashData(Artifact))
+                } : null
             });
         }
     }

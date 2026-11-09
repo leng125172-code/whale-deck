@@ -60,6 +60,7 @@ public static class WorkspaceRunReportExport
                     .Append(Code(test.ArtifactId.ToString("D"))).Append("\n\n");
                 Field(output, "格式", test.Format.ToString());
                 Field(output, "工件核对", test.Integrity.ToString());
+                if (test.Collection is { } collection) Field(output, "采集状态", collection.ToString());
                 if (test.Result is not { } result) continue;
                 Field(output, "解析状态", result.State.ToString());
                 Field(output, "工件 SHA256", result.ArtifactSha256);

@@ -7,7 +7,8 @@ using WhaleDeck.Domain.Entities;
 
 namespace WhaleDeck.Infrastructure.Persistence;
 
-public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider clock) : IWorkspaceRunStore
+public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider clock, WorkspaceRegistrationPolicy policy)
+    : IWorkspaceRunStore, IWorkspaceRunReportWork
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private const string PendingIndex = "uq_workspace_run_pending";
@@ -30,7 +31,8 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
         var row = new WorkspaceRunIntent
         {
             Id = job.Id, WorkspaceId = workspace.Id, Runtime = input.Runtime, Task = input.Task,
-            SnapshotJson = JsonSerializer.Serialize(new Snapshot(workspace, WorkspaceRuns.BindCommand(job.Id, workspace, input)), Json),
+            SnapshotJson = JsonSerializer.Serialize(new Snapshot(workspace,
+                WorkspaceRuns.BindCommand(job.Id, workspace, input, policy.ReportRetentionDays)), Json),
             LoginBinding = actor.LoginBinding, AvailableAtUtc = now
         };
         db.OperationJobs.Add(job);
@@ -87,6 +89,7 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
                 job.CompletedAtUtc = row.FinishedAtUtc = now;
                 row.Lease = null;
                 row.LeaseUntilUtc = null;
+                QueueReport(row, SnapshotOf(row).Command, now);
             }
             else row.AvailableAtUtc = now;
             Event(job, "WORKSPACE_RUN_CANCEL_REQUESTED", now);
@@ -94,15 +97,21 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
             return View(row, job);
         }, token);
 
-    public Task<WorkspaceRunClaim?> ClaimAsync(CancellationToken token) =>
-        db.Database.CreateExecutionStrategy().ExecuteAsync<WorkspaceRunClaim?>(async () =>
+    public async Task<WorkspaceRunClaim?> ClaimAsync(CancellationToken token) =>
+        (await ClaimCoreAsync(report: false, token))?.Execution;
+
+    public Task<WorkspaceRunReportClaim?> ClaimReportAsync(CancellationToken token) => ClaimCoreAsync(report: true, token);
+
+    private Task<WorkspaceRunReportClaim?> ClaimCoreAsync(bool report, CancellationToken token) =>
+        db.Database.CreateExecutionStrategy().ExecuteAsync<WorkspaceRunReportClaim?>(async () =>
         {
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(token);
             var now = clock.GetUtcNow();
             var rows = await db.WorkspaceRunIntents.FromSqlInterpolated($"""
                 SELECT * FROM development_workspace_runs
-                 WHERE finished_at_utc IS NULL AND available_at_utc <= {now}
+                 WHERE (CASE WHEN {report} THEN report_stage IN ('Collect', 'Retire') ELSE finished_at_utc IS NULL END)
+                   AND available_at_utc <= {now}
                    AND (lease_until_utc IS NULL OR lease_until_utc <= {now})
                  ORDER BY available_at_utc, id
                  LIMIT 1 FOR UPDATE SKIP LOCKED
@@ -113,18 +122,18 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
             var lease = Guid.NewGuid();
             row.Lease = lease;
             row.LeaseUntilUtc = now.AddSeconds(40);
-            var snapshot = JsonSerializer.Deserialize<Snapshot>(row.SnapshotJson, Json)
-                ?? throw new InvalidDataException("WORKSPACE_RUN_SNAPSHOT_INVALID");
+            var snapshot = SnapshotOf(row);
             var (workspace, command) = snapshot;
             if (workspace.Id != row.WorkspaceId || workspace.OwnerSubject != job.ActorSubject || job.ResourceId != row.WorkspaceId ||
                 command.RunId != job.Id || command.Runtime != row.Runtime || !command.RequireControl ||
                 command.CpuMillis != workspace.Budget.CpuMillis || command.MemoryMiB != workspace.Budget.MemoryMiB ||
-                command.DeadlineSeconds is < 1 or > 3600)
+                command.DeadlineSeconds is < 1 or > 3600 || command.ReportRetentionDays is < 1 or > 365 ||
+                (report && command.ReportRetentionDays is null))
                 throw new InvalidDataException("WORKSPACE_RUN_SNAPSHOT_INVALID");
             await db.SaveChangesAsync(token);
             await transaction.CommitAsync(token);
-            return new(View(row, job), workspace, new(job.ActorSubject, null, [], row.LoginBinding, job.Id.ToString("N"), null),
-                lease, command, job.StartedAtUtc);
+            return new(new(View(row, job), workspace, new(job.ActorSubject, null, [], row.LoginBinding, job.Id.ToString("N"), null),
+                lease, command, job.StartedAtUtc), row.ReportStage ?? "", report ? Receipt(job) : null);
         });
 
     public Task<bool> EnterDispatchAsync(WorkspaceRunClaim claim, CancellationToken token) =>
@@ -163,10 +172,44 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
         job.Version++;
         row.Lease = null;
         row.LeaseUntilUtc = null;
+        QueueReport(row, claim.Command, now);
         Event(job, errorCode ?? "WORKSPACE_RUN_SETTLED", now);
         Audit(claim.Actor, row, "development.workspace.run.settle", state, now);
         return true;
     }, token);
+
+    public Task ReleaseReportAsync(WorkspaceRunReportClaim claim, string? terminalStage, CancellationToken token) =>
+        ChangeAsync(claim.Execution.Run.RunId, (row, _) =>
+        {
+            var now = clock.GetUtcNow();
+            if (row.ReportStage != claim.Stage || row.Lease != claim.Execution.Lease ||
+                row.LeaseUntilUtc is not { } deadline || deadline <= now) return false;
+            if (terminalStage is not null)
+            {
+                if ((claim.Stage, terminalStage) is not (("Retire", "Complete") or ("Retire", "Attention") or ("Collect", "Attention")))
+                    throw new ArgumentException("WORKSPACE_REPORT_STAGE_INVALID");
+                row.ReportStage = terminalStage;
+                Audit(claim.Execution.Actor, row, claim.Stage == "Retire" ? "development.workspace.report.retire" :
+                    "development.workspace.report.collect", terminalStage, now);
+            }
+            else row.AvailableAtUtc = now.AddSeconds(15);
+            row.Lease = null;
+            row.LeaseUntilUtc = null;
+            return true;
+        }, token);
+
+    private static void QueueReport(WorkspaceRunIntent row, WorkspaceRunCommand command, DateTimeOffset now)
+    {
+        if (command.ReportRetentionDays is null) return;
+        row.ReportStage = "Collect";
+        row.AvailableAtUtc = now;
+    }
+
+    private static Snapshot SnapshotOf(WorkspaceRunIntent row) => JsonSerializer.Deserialize<Snapshot>(row.SnapshotJson, Json)
+        ?? throw new InvalidDataException("WORKSPACE_RUN_SNAPSHOT_INVALID");
+
+    private static WorkspaceRunnerReceipt? Receipt(OperationJob job) =>
+        job.ResultJson is null ? null : JsonSerializer.Deserialize<WorkspaceRunnerReceipt>(job.ResultJson, Json);
 
     private Task<T> ChangeAsync<T>(Guid id, Func<WorkspaceRunIntent, OperationJob, T> change, CancellationToken token) =>
         db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
@@ -199,9 +242,17 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
             Result = result, JobId = row.Id, TraceId = actor.TraceId, SourceIp = actor.SourceIp, OccurredAtUtc = now
         });
 
-    private static WorkspaceRunView View(WorkspaceRunIntent row, OperationJob job) => new(row.Id, row.WorkspaceId,
+    private WorkspaceRunView View(WorkspaceRunIntent row, OperationJob job) => new(row.Id, row.WorkspaceId,
         row.Runtime, row.Task, job.State, job.Phase, job.CreatedAtUtc, job.CompletedAtUtc, job.CancelRequestedAtUtc is not null,
-        job.ErrorCode, job.ResultJson is null ? null : JsonSerializer.Deserialize<WorkspaceRunnerReceipt>(job.ResultJson, Json)?.Status);
+        job.ErrorCode, Receipt(job)?.Status, row.ReportStage switch
+        {
+            not null when job.CompletedAtUtc is { } completed && SnapshotOf(row).Command.ReportRetentionDays is { } days &&
+                completed.AddDays(days) <= clock.GetUtcNow() => "Expired",
+            "Collect" => "Pending",
+            "Retire" or "Complete" => "Available",
+            "Attention" => "ArtifactAttention",
+            _ => null
+        });
 
     private static KeyNotFoundException NotFound() => new("WORKSPACE_RUN_NOT_FOUND");
 }

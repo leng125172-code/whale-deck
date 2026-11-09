@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 
 namespace WhaleDeck.Application.Development;
 
@@ -6,11 +7,12 @@ public enum WorkspaceRunOutcome { Succeeded, Failed, Canceled, TimedOut, Interru
 public enum WorkspaceArtifactIntegrity { Missing, Unverified, Mismatch, Matched }
 
 public sealed record WorkspaceReportSource(
-    string Fingerprint, string? GitCommit, bool? Dirty, bool? ChangedDuringRun);
+    string? Fingerprint, string? GitCommit, bool? Dirty, bool? ChangedDuringRun);
 public sealed record WorkspaceReportTool(string Name, string Version);
 public sealed record WorkspaceReportEnvironment(
     string Digest, long Version, ImmutableArray<WorkspaceReportTool> Tools);
-public sealed record WorkspaceReportTestSlot(Guid ArtifactId, WorkspaceTestFormat Format);
+public sealed record WorkspaceReportTestSlot(Guid ArtifactId, WorkspaceTestFormat Format, WorkspaceArtifactCollectionState? Collection = null);
+public enum WorkspaceArtifactCollectionState { Present, Missing, Rejected, TooLarge, Unavailable, IntegrityFailure }
 public sealed record WorkspaceReportStepEvidence(
     Guid StepId, string Key, WorkspaceRunOutcome Outcome, DateTimeOffset? StartedAtUtc,
     DateTimeOffset? FinishedAtUtc, int? ExitCode, ImmutableArray<WorkspaceReportTestSlot> Tests);
@@ -30,7 +32,11 @@ public interface IWorkspaceReportArtifactReader
 }
 
 public sealed record WorkspaceReportTest(
-    Guid ArtifactId, WorkspaceTestFormat Format, WorkspaceArtifactIntegrity Integrity, WorkspaceTestReport? Result);
+    Guid ArtifactId, WorkspaceTestFormat Format, WorkspaceArtifactIntegrity Integrity, WorkspaceTestReport? Result)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkspaceArtifactCollectionState? Collection { get; init; }
+}
 public sealed record WorkspaceReportStep(
     Guid StepId, string Key, WorkspaceRunOutcome Outcome, DateTimeOffset? StartedAtUtc,
     DateTimeOffset? FinishedAtUtc, int? ExitCode, ImmutableArray<WorkspaceReportTest> Tests)
@@ -60,9 +66,11 @@ public sealed class WorkspaceRunReports(IWorkspaceReportArtifactReader reader)
             foreach (var slot in step.Tests)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                tests.Add(registered.TryGetValue(slot.ArtifactId, out var artifact)
+                var result = registered.TryGetValue(slot.ArtifactId, out var artifact)
                     ? await ReadAsync(artifact, cancellationToken)
-                    : new(slot.ArtifactId, slot.Format, WorkspaceArtifactIntegrity.Missing, null));
+                    : new(slot.ArtifactId, slot.Format, slot.Collection == WorkspaceArtifactCollectionState.IntegrityFailure
+                        ? WorkspaceArtifactIntegrity.Mismatch : WorkspaceArtifactIntegrity.Missing, null);
+                tests.Add(result with { Collection = slot.Collection });
             }
             steps.Add(new(step.StepId, step.Key, step.Outcome,
                 step.StartedAtUtc is { } start ? DatabaseTime(start) : null,
@@ -107,12 +115,12 @@ public sealed class WorkspaceRunReports(IWorkspaceReportArtifactReader reader)
         WorkspaceRunReportEvidence run, ImmutableArray<WorkspaceRegisteredTestArtifact> artifacts)
     {
         if (run.WorkspaceId == Guid.Empty || run.RunId == Guid.Empty || run.JobId == Guid.Empty ||
-            run.RunId == run.JobId || !Hex(run.TraceId, 32) || run.TraceId.All(c => c == '0') || !Subject(run.ActorSubject) ||
+            !Hex(run.TraceId, 32) || run.TraceId.All(c => c == '0') || !Subject(run.ActorSubject) ||
             !Utc(run.StartedAtUtc) || !Utc(run.FinalizedAtUtc) || !Utc(run.RetainUntilUtc) ||
             run.FinalizedAtUtc < run.StartedAtUtc || run.RetainUntilUtc <= run.FinalizedAtUtc ||
             !Enum.IsDefined(run.Outcome) || run.Outcome == WorkspaceRunOutcome.Skipped ||
             (run.Outcome == WorkspaceRunOutcome.Succeeded && run.ExitCode is not (null or 0)) ||
-            run.Source is null || !Hex(run.Source.Fingerprint, 64) ||
+            run.Source is null || (run.Source.Fingerprint is null ? run.RunId != run.JobId : !Hex(run.Source.Fingerprint, 64)) ||
             (run.Source.GitCommit is { } commit && !Hex(commit, 40) && !Hex(commit, 64)) ||
             run.Environment is null || !Hex(run.Environment.Digest, 64) || run.Environment.Version < 1 ||
             run.Environment.Tools.IsDefault || run.Environment.Tools.Length > 16 ||
@@ -138,6 +146,7 @@ public sealed class WorkspaceRunReports(IWorkspaceReportArtifactReader reader)
             foreach (var slot in step.Tests)
             {
                 if (slot is null || slot.ArtifactId == Guid.Empty || !Enum.IsDefined(slot.Format) ||
+                    (slot.Collection is { } collection && !Enum.IsDefined(collection)) ||
                     slots.Count == 8 || !slots.TryAdd(slot.ArtifactId, (step.StepId, slot.Format, step.StartedAtUtc.HasValue)))
                     throw Invalid();
             }

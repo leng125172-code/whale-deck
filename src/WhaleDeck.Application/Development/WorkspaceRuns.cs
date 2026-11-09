@@ -6,7 +6,8 @@ namespace WhaleDeck.Application.Development;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record WorkspaceRunInput(string Runtime, string Task);
 public sealed record WorkspaceRunView(Guid RunId, Guid WorkspaceId, string Runtime, string Task, string State, string Phase,
-    DateTimeOffset CreatedAtUtc, DateTimeOffset? CompletedAtUtc, bool CancellationRequested, string? ErrorCode, string? HostStatus);
+    DateTimeOffset CreatedAtUtc, DateTimeOffset? CompletedAtUtc, bool CancellationRequested, string? ErrorCode, string? HostStatus,
+    string? ReportStatus = null);
 public sealed record WorkspaceRunClaim(WorkspaceRunView Run, WorkspaceDefinition Workspace, TerminalActor Actor, Guid Lease,
     WorkspaceRunCommand Command, DateTimeOffset? DispatchedAtUtc);
 
@@ -61,15 +62,17 @@ public sealed class WorkspaceRuns(DevelopmentWorkspaces access, IDevelopmentWork
         return workspace;
     }
 
-    public static WorkspaceRunCommand BindCommand(Guid runId, WorkspaceDefinition workspace, WorkspaceRunInput input) =>
+    public static WorkspaceRunCommand BindCommand(Guid runId, WorkspaceDefinition workspace, WorkspaceRunInput input, int retentionDays) =>
         new(runId, input.Runtime, Arguments(input), workspace.Budget.CpuMillis, workspace.Budget.MemoryMiB,
-            DeadlineSeconds, RequireControl: true);
+            DeadlineSeconds, RequireControl: true, ReportRetentionDays: retentionDays);
 
     private static string[] Arguments(WorkspaceRunInput input) => (input.Runtime, input.Task) switch
     {
-        ("node", "test") => ["/usr/local/bin/node", "--test"],
+        ("node", "test") => ["/usr/local/bin/node", "--test", "--test-reporter=junit",
+            "--test-reporter-destination=/tmp/whaledeck-results/tests.xml"],
         ("dotnet", "build") => ["/usr/share/dotnet/dotnet", "build", "--no-restore"],
-        ("dotnet", "test") => ["/usr/share/dotnet/dotnet", "test", "--no-restore"],
+        ("dotnet", "test") => ["/usr/share/dotnet/dotnet", "test", "--no-restore", "--results-directory",
+            "/tmp/whaledeck-results", "--logger", "trx;LogFileName=tests.trx"],
         _ => throw new ArgumentException("WORKSPACE_RUN_TASK_INVALID")
     };
 }

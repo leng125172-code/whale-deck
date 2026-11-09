@@ -238,13 +238,13 @@ public sealed partial class ContainerUploadHttpTests
             fixture._app.MapControllers(); fixture._app.MapOpenApi(); fixture._app.MapGet("/test/csrf",(HttpContext context,IAntiforgery antiforgery)=>new Token(antiforgery.GetAndStoreTokens(context).RequestToken!));
             await fixture._app.StartAsync(); return fixture;
         }
-        public async Task<HttpClient> Client(string subject,bool admin)
+        public async Task<HttpClient> Client(string subject,bool admin, TimeSpan? ticketLifetime = null)
         {
             var address=new Uri(Assert.Single(_app.Urls)); var cookies=new CookieContainer();
             if (subject!="anonymous")
             {
                 List<Claim> claims=[new("sub",subject),new(ClaimTypes.NameIdentifier,subject)]; if (admin) claims.Add(new("groups","administrators"));
-                var ticket=new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims,"Cookies")),new() { ExpiresUtc=DateTimeOffset.UtcNow.AddMinutes(10) },"Cookies");
+                var ticket=new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims,"Cookies")),new() { ExpiresUtc=DateTimeOffset.UtcNow.Add(ticketLifetime ?? TimeSpan.FromMinutes(10)) },"Cookies");
                 var key=await Store.StoreAsync(ticket); if (admin) AdminKey=key;
                 var format=_app.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get("Cookies").TicketDataFormat;
                 var reference=new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity([new Claim("Microsoft.AspNetCore.Authentication.Cookies-SessionId",key)],"Cookies")),new(),"Cookies");

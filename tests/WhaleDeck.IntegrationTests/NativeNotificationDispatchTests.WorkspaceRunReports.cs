@@ -157,7 +157,7 @@ public sealed partial class NativeNotificationDispatchTests
                 ActorSubject = run.ActorSubject, IdempotencyKey = run.RunId.ToString("D"),
                 CreatedAtUtc = run.StartedAtUtc, StartedAtUtc = run.StartedAtUtc,
                 CompletedAtUtc = state == "Failed" ? run.FinalizedAtUtc : null, State = state, Phase = state,
-                RequestJson = new WorkspaceRunJobBinding(run.RunId, run.TraceId, run.Source.Fingerprint,
+                RequestJson = new WorkspaceRunJobBinding(run.RunId, run.TraceId, run.Source.Fingerprint!,
                     run.Environment.Digest, run.Environment.Version, 14).ToJobRequestJson()
             });
             await db.SaveChangesAsync();

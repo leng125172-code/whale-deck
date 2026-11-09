@@ -15,7 +15,8 @@ public interface IWorkspaceReportAccess
 }
 
 public sealed class WorkspaceReportAuthorization(
-    IPrivilegedIdentityDirectory identity, ILoginSessionRegistry sessions, IWorkspaceReportAccess access, TimeProvider clock)
+    IPrivilegedIdentityDirectory identity, ILoginSessionRegistry sessions, IWorkspaceReportAccess access, TimeProvider clock,
+    IDevelopmentWorkspaceRegistry? registry = null, WorkspaceRegistrationPolicy? policy = null)
 {
     public async Task<CurrentUserDto> ResolveAsync(TerminalActor actor, CancellationToken token)
     {
@@ -36,7 +37,10 @@ public sealed class WorkspaceReportAuthorization(
         foreach (var group in current.Groups)
             if (Guid.TryParseExact(group, "D", out var id) && id != Guid.Empty)
                 ids.Add(id);
-        if (ids.Count == 0 || !await access.AllowsAsync(workspaceId, ids.ToArray(), token))
+        var owner = registry is not null && policy is not null && ids.Overlaps(policy.CreateGroupIds) &&
+            await registry.FindAsync(workspaceId, actor.Subject, token) is { } workspace &&
+            policy.StorageRootIds.Contains(workspace.StorageRootId, StringComparer.Ordinal);
+        if (!owner && (ids.Count == 0 || !await access.AllowsAsync(workspaceId, ids.ToArray(), token)))
             throw new UnauthorizedAccessException("WORKSPACE_REPORT_READER_REQUIRED");
         await RequireLoginAsync(actor, token);
     }

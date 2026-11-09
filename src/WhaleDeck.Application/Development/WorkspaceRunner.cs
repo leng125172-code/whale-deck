@@ -3,7 +3,7 @@ using WhaleDeck.Application.Models;
 namespace WhaleDeck.Application.Development;
 
 public sealed record WorkspaceRunCommand(Guid RunId, string Runtime, string[] Arguments, int CpuMillis, int MemoryMiB, int DeadlineSeconds,
-    bool RequireControl = false);
+    bool RequireControl = false, int? ReportRetentionDays = null);
 public sealed record WorkspaceRunnerArtifact(WorkspaceTestFormat Format, string State, int Size, string Sha256);
 public sealed record WorkspaceRunnerReceipt(Guid RunId, string RequestSha256, string Status, int? RuntimeExitCode,
     WorkspaceRunnerArtifact? TestReport = null);

@@ -50,7 +50,10 @@ public sealed partial class AgentGateway : IWorkspaceRunnerGateway, IWorkspaceTe
             command.RequireControl && !DevelopmentRunnerBinding.IsSupported(caps, DevelopmentRunnerBinding.Reclaim) ||
             DevelopmentRunnerBinding.ReportFormat(request) is not null &&
             (caps.ProtocolMinor < DevelopmentRunnerBinding.ReportProtocolMinor ||
-                !caps.Capabilities.Contains(DevelopmentRunnerBinding.ReportCapability)))
+                !caps.Capabilities.Contains(DevelopmentRunnerBinding.ReportCapability) ||
+                method == DevelopmentRunnerBinding.Start && command.ReportRetentionDays is not null &&
+                (caps.ProtocolMinor < DevelopmentRunnerBinding.ArtifactTransferProtocolMinor ||
+                    !caps.Capabilities.Contains(DevelopmentRunnerBinding.ArtifactTransferCapability))))
             throw new RpcException(new Status(StatusCode.Unimplemented, "WORKSPACE_RUN_CAPABILITY_UNAVAILABLE"));
         var headers = SignWorkspaceRun(method, DevelopmentRunnerBinding.Hash(request));
         var client = new DevelopmentRunnerService.DevelopmentRunnerServiceClient(_channel);

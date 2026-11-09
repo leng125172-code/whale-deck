@@ -51,7 +51,9 @@ public sealed class WorkspaceRunDispatcher(IWorkspaceRunStore queue, WorkspaceRu
         }
         catch (WorkspaceRunnerException error) when (claim.DispatchedAtUtc is null && error.Failure == WorkspaceRunnerFailure.Unsupported)
         {
-            await queue.FinishAsync(claim, "Failed", "AgentUnavailable", "WORKSPACE_RUN_AGENT_CONTROL_REQUIRED", null, token);
+            var code = claim.Command.ReportRetentionDays is not null && claim.Run.Task == "test"
+                ? "WORKSPACE_RUN_AGENT_REPORT_TRANSFER_REQUIRED" : "WORKSPACE_RUN_AGENT_CONTROL_REQUIRED";
+            await queue.FinishAsync(claim, "Failed", "AgentUnavailable", code, null, token);
         }
         catch (Exception error) when (!token.IsCancellationRequested && error is WorkspaceRunnerException or OperationCanceledException)
         {

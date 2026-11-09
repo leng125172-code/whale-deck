@@ -54,6 +54,6 @@ public sealed partial class NativeNotificationDispatchTests
         Console.WriteLine("INBOX_PHASE=development-workspace-registration-real-http-postgres-pins-idempotency-quota-owner");
         await ContainerUploadHttpTests.RunWorkspaceJobsInPostgres(options);
         var runDowngrade = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync("20261109105105_DevelopmentWorkspaceStorageAllocation"));
-        Assert.Equal("development_workspace_run_history_present", runDowngrade.MessageText);
+        Assert.Equal("workspace_report_workflow_history_present", runDowngrade.MessageText);
     }
 }

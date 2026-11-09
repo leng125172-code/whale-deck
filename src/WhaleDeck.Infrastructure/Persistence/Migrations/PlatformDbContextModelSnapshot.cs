@@ -9013,11 +9013,21 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("login_binding");
 
+                    b.Property<string>("ReportStage")
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("report_stage");
+
                     b.Property<string>("Runtime")
                         .IsRequired()
                         .HasMaxLength(48)
                         .HasColumnType("character varying(48)")
                         .HasColumnName("runtime");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("snapshot_json");
 
                     b.Property<string>("Task")
                         .IsRequired()
@@ -9029,11 +9039,6 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("workspace_id");
 
-                    b.Property<string>("SnapshotJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("snapshot_json");
-
                     b.HasKey("Id");
 
                     b.HasIndex("WorkspaceId")
@@ -9044,9 +9049,14 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.HasIndex("AvailableAtUtc", "Id")
                         .HasFilter("finished_at_utc IS NULL");
 
+                    b.HasIndex("ReportStage", "AvailableAtUtc", "Id")
+                        .HasFilter("report_stage IN ('Collect', 'Retire')");
+
                     b.ToTable("development_workspace_runs", null, t =>
                         {
-                            t.HasCheckConstraint("ck_workspace_run_lease", "(lease IS NULL) = (lease_until_utc IS NULL) AND (finished_at_utc IS NULL OR lease IS NULL)");
+                            t.HasCheckConstraint("ck_workspace_run_lease", "(lease IS NULL) = (lease_until_utc IS NULL) AND (finished_at_utc IS NULL OR lease IS NULL OR report_stage IN ('Collect', 'Retire')) IS TRUE");
+
+                            t.HasCheckConstraint("ck_workspace_run_report_stage", "report_stage IS NULL OR (finished_at_utc IS NOT NULL AND report_stage IN ('Collect', 'Retire', 'Complete', 'Attention'))");
                         });
                 });
 
@@ -9114,7 +9124,7 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_workspace_report_digests", "json_sha256 ~ '^[a-f0-9]{64}$' AND markdown_sha256 ~ '^[a-f0-9]{64}$'");
 
-                            t.HasCheckConstraint("ck_workspace_report_identity", "run_id <> '00000000-0000-0000-0000-000000000000'::uuid AND workspace_id <> '00000000-0000-0000-0000-000000000000'::uuid AND job_id <> '00000000-0000-0000-0000-000000000000'::uuid AND run_id <> job_id AND schema_version > 0");
+                            t.HasCheckConstraint("ck_workspace_report_identity", "run_id <> '00000000-0000-0000-0000-000000000000'::uuid AND workspace_id <> '00000000-0000-0000-0000-000000000000'::uuid AND job_id <> '00000000-0000-0000-0000-000000000000'::uuid AND schema_version > 0");
 
                             t.HasCheckConstraint("ck_workspace_report_lifetime", "retain_until_utc > finalized_at_utc AND retain_until_utc <= finalized_at_utc + INTERVAL '8760 hours'");
                         });

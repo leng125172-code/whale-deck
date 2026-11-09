@@ -12,4 +12,5 @@ public sealed class WorkspaceRunIntent
     public DateTimeOffset? FinishedAtUtc { get; set; }
     public Guid? Lease { get; set; }
     public DateTimeOffset? LeaseUntilUtc { get; set; }
+    public string? ReportStage { get; set; }
 }

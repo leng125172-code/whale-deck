@@ -13,19 +13,26 @@ public sealed partial class PlatformDbContext
         modelBuilder.Entity<WorkspaceRunIntent>(entity =>
         {
             entity.ToTable("development_workspace_runs", table =>
+            {
                 table.HasCheckConstraint("ck_workspace_run_lease",
-                    "(lease IS NULL) = (lease_until_utc IS NULL) AND (finished_at_utc IS NULL OR lease IS NULL)"));
+                    "(lease IS NULL) = (lease_until_utc IS NULL) AND (finished_at_utc IS NULL OR lease IS NULL OR report_stage IN ('Collect', 'Retire')) IS TRUE");
+                table.HasCheckConstraint("ck_workspace_run_report_stage",
+                    "report_stage IS NULL OR (finished_at_utc IS NOT NULL AND report_stage IN ('Collect', 'Retire', 'Complete', 'Attention'))");
+            });
             entity.HasKey(row => row.Id);
             entity.Property(row => row.Id).ValueGeneratedNever();
             entity.Property(row => row.Runtime).HasMaxLength(48);
             entity.Property(row => row.Task).HasMaxLength(24);
             entity.Property(row => row.LoginBinding).HasMaxLength(64);
             entity.Property(row => row.SnapshotJson).HasColumnType("jsonb");
+            entity.Property(row => row.ReportStage).HasMaxLength(12);
             entity.HasOne<OperationJob>().WithOne().HasForeignKey<WorkspaceRunIntent>(row => row.Id).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<DevelopmentWorkspaceRecord>().WithMany().HasForeignKey(row => row.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(row => row.WorkspaceId).IsUnique().HasFilter("finished_at_utc IS NULL")
                 .HasDatabaseName("uq_workspace_run_pending");
             entity.HasIndex(row => new { row.AvailableAtUtc, row.Id }).HasFilter("finished_at_utc IS NULL");
+            entity.HasIndex(row => new { row.ReportStage, row.AvailableAtUtc, row.Id })
+                .HasFilter("report_stage IN ('Collect', 'Retire')");
         });
         modelBuilder.Entity<DevelopmentWorkspaceRecord>(entity =>
         {
