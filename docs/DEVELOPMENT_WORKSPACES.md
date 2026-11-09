@@ -36,7 +36,7 @@
 
 ### 3.2 Git 与其他导入
 
-当前宿主支持 ZIP、tar 和 tar.gz 的项目配额内暂存、无覆盖首次发布及按计划重放。签名 Agent、上传接入、Git 和编辑后的运行指纹继续实施。见[宿主验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_HOST.md)。
+当前宿主支持 ZIP、tar 和 tar.gz 的项目配额内暂存、无覆盖首次发布及按计划重放。Agent 1.68 已接入签名传输与状态查询。BFF 持久化、上传和续传、Git 和编辑后的运行指纹继续实施。见[Agent 验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_RPC.md)。
 
 - Git 支持公开/私有仓库、分支/ref 选择、浅克隆、手动拉取及差异；凭据来自 Secret 引用，不出现在 URL、命令日志或报告。
 - Git 请求的 URL/重定向/子模块/协议/下载网络受控，拒绝本地文件协议、越界路径及未批准内部地址；项目脚本不能借导入阶段在宿主执行。
