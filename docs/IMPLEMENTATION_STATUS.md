@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-14 `2b4604d2` 接入 Vue 文件和目录选择及可重现 TAR 封装。真实 Chrome、HTTP、PostgreSQL 和 Worker 验证同名拒绝和原偏移续传，离线 KVM 对浏览器生成的归档执行真实暂存、发布及目录源码的 Node 运行。继续 Git/ref、工作树变更和物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_FILES.md)。
+
 2026-11-09，P3-14 `3f2ab1d5` 接入 Vue 归档上传、续传、计划确认和取消。生产 Chrome 与真实回环 HTTP、PostgreSQL、Worker 联合验证丢失响应后的续传和单次发布。继续文件/目录、Git/ref、运行来源与物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_VUE.md)。
 
 2026-11-09，P3-14 `4cd75eef` 接入 BFF 分块续传、PostgreSQL 密文暂存和 Worker 持久导入。真实回环 HTTP/数据库验证重传、权限与接管。离线 KVM 验证生产 Gateway 和 Agent 1.69 的半截归档清理及取消标记。继续 Vue、Git/ref、运行来源与物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_WORKFLOW.md)。
