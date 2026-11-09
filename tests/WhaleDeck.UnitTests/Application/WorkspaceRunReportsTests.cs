@@ -133,6 +133,29 @@ public sealed class WorkspaceRunReportsTests
     }
 
     [Fact]
+    public async Task ExportsCoverageOnlyWhenTheRegisteredBytesMatch()
+    {
+        const string lcov = "SF:private/target\nDA:1,1\nLF:1\nLH:1\nend_of_record\n";
+        var run = Run();
+        var step = run.Steps[0];
+        run = run with { Steps = [step with { Tests = [step.Tests[0] with { Format = WorkspaceTestFormat.Lcov }] }] };
+        var artifact = Reference(run, lcov) with { Format = WorkspaceTestFormat.Lcov };
+        var reports = new WorkspaceRunReports(new Reader(_ => Bytes(lcov)));
+        var report = await reports.BuildAsync(run, [artifact], default);
+        var markdown = WorkspaceRunReportExport.ToMarkdown(report);
+        Assert.Contains("行覆盖 ` 1/1 `", markdown, StringComparison.Ordinal);
+        Assert.Contains("分支覆盖 未知", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("private/target", markdown, StringComparison.Ordinal);
+        using var json = JsonDocument.Parse(WorkspaceRunReportExport.ToJson(report));
+        var result = json.RootElement.GetProperty("steps")[0].GetProperty("tests")[0].GetProperty("result");
+        Assert.Equal(1, result.GetProperty("coverage").GetProperty("lines").GetProperty("total").GetInt32());
+
+        var mismatched = await reports.BuildAsync(run, [artifact with { Sha256 = new('a', 64) }], default);
+        Assert.Equal(WorkspaceArtifactIntegrity.Mismatch, mismatched.Steps[0].Tests[0].Integrity);
+        Assert.DoesNotContain("行覆盖", WorkspaceRunReportExport.ToMarkdown(mismatched), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RejectsInvalidTimeAndAvoidsOpeningAfterCancellation()
     {
         var run = Run();

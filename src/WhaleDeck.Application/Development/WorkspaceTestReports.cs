@@ -1,12 +1,13 @@
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text.Json.Serialization;
 using System.Xml;
 using System.Xml.Linq;
 
 namespace WhaleDeck.Application.Development;
 
-public enum WorkspaceTestFormat { Trx, JUnit }
-public enum WorkspaceTestReportState { Parsed, Missing, Unsupported, Unreadable, TooLarge, TooComplex, Invalid, NoCases, Inconsistent }
+public enum WorkspaceTestFormat { Trx, JUnit, Cobertura, Lcov }
+public enum WorkspaceTestReportState { Parsed, Missing, Unsupported, Unreadable, TooLarge, TooComplex, Invalid, NoCases, Inconsistent, NoCoverage }
 public enum WorkspaceTestOutcome { Passed, Failed, Error, Skipped, Other }
 public sealed record WorkspaceTestCounts(int Passed, int Failed, int Errors, int Skipped, int Other)
 {
@@ -15,7 +16,11 @@ public sealed record WorkspaceTestCounts(int Passed, int Failed, int Errors, int
 public sealed record WorkspaceTestIssue(int CaseOrdinal, WorkspaceTestOutcome Outcome);
 public sealed record WorkspaceTestReport(
     WorkspaceTestFormat Format, WorkspaceTestReportState State, string? ArtifactSha256,
-    WorkspaceTestCounts? Counts = null, IReadOnlyList<WorkspaceTestIssue>? Issues = null, bool IssuesTruncated = false);
+    WorkspaceTestCounts? Counts = null, IReadOnlyList<WorkspaceTestIssue>? Issues = null, bool IssuesTruncated = false)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkspaceCoverageCounts? Coverage { get; init; }
+}
 
 /// <summary>Reads one run-owned test artifact. Only structural facts are returned, including for failed runs.</summary>
 public static class WorkspaceTestReports
@@ -30,7 +35,7 @@ public static class WorkspaceTestReports
         Stream? artifact, WorkspaceTestFormat format, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (format is not (WorkspaceTestFormat.Trx or WorkspaceTestFormat.JUnit))
+        if (!Enum.IsDefined(format))
             return new(format, WorkspaceTestReportState.Unsupported, null);
         if (artifact is null)
             return new(format, WorkspaceTestReportState.Missing, null);
@@ -56,6 +61,9 @@ public static class WorkspaceTestReports
         }
 
         var digest = Convert.ToHexStringLower(SHA256.HashData(content.GetBuffer().AsSpan(0, (int)content.Length)));
+        content.Position = 0;
+        if (format == WorkspaceTestFormat.Lcov)
+            return WorkspaceCoverageReports.ReadLcov(content, digest, cancellationToken);
         var settings = new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Prohibit,
@@ -83,6 +91,8 @@ public static class WorkspaceTestReports
             content.Position = 0;
             using var reader = XmlReader.Create(content, settings);
             var root = XDocument.Load(reader).Root!;
+            if (format == WorkspaceTestFormat.Cobertura)
+                return WorkspaceCoverageReports.ReadCobertura(root, digest, cancellationToken);
             var observations = new Observations(cancellationToken);
             var consistent = format == WorkspaceTestFormat.Trx
                 ? ReadTrx(root, observations)

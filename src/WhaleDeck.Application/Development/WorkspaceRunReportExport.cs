@@ -55,12 +55,19 @@ public static class WorkspaceRunReportExport
 
             foreach (var test in step.Tests)
             {
-                output.Append("\n#### 测试工件 ").Append(Code(test.ArtifactId.ToString("D"))).Append("\n\n");
+                var coverageArtifact = test.Format is WorkspaceTestFormat.Cobertura or WorkspaceTestFormat.Lcov;
+                output.Append(coverageArtifact ? "\n#### 覆盖率工件 " : "\n#### 测试工件 ")
+                    .Append(Code(test.ArtifactId.ToString("D"))).Append("\n\n");
                 Field(output, "格式", test.Format.ToString());
                 Field(output, "工件核对", test.Integrity.ToString());
                 if (test.Result is not { } result) continue;
                 Field(output, "解析状态", result.State.ToString());
                 Field(output, "工件 SHA256", result.ArtifactSha256);
+                if (result.Coverage is { } coverage)
+                {
+                    Field(output, "行覆盖", Ratio(coverage.Lines));
+                    Field(output, "分支覆盖", Ratio(coverage.Branches));
+                }
                 if (result.Counts is not { } counts) continue;
                 Field(output, "观测用例", Number(counts.Total));
                 Field(output, "通过", Number(counts.Passed));
@@ -79,6 +86,8 @@ public static class WorkspaceRunReportExport
 
     private static string? Time(DateTimeOffset? value) => value?.ToString("O", CultureInfo.InvariantCulture);
     private static string? Number(long? value) => value?.ToString(CultureInfo.InvariantCulture);
+    private static string? Ratio(WorkspaceCoverageMetric? metric) => metric is not null
+        ? Number(metric.Covered) + "/" + Number(metric.Total) : null;
     private static string? Fact(bool? value) => value is true ? "是" : value is false ? "否" : null;
 
     private static void Field(StringBuilder output, string label, string? value) =>
