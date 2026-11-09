@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-13/P3-16 `b29fcee2` 增加 Agent 1.65 的签名取消和中断回收。离线来宾实际终止指定 cgroup，另一空间保持运行，取消和中断回执重放通过。继续 Worker/BFF 编排及工作站实机验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_CONTROL.md)。
+
 2026-11-09，P3-13/P3-16 `8dc16e42` 增加 Agent 1.64 的内容签名 Runner 启动和观察，来宾真实通过受委托 cgroup 运行和回执重放。继续主动取消、孤儿收尾、Worker/BFF 及物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_RPC.md)。
 
 2026-11-09，P3-13/P3-16 `0b4f0ead` 接入宿主 Runner 启动与原回执查询。来宾实际验证镜像和工作目录绑定、Node/.NET、超时清理及中断拒绝重跑。继续签名 Agent RPC、主动取消和恢复。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_LAUNCH.md)。
