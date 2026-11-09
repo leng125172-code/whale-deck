@@ -300,6 +300,12 @@ const states: Record<string, string> = {
 </template>
 
 <style scoped>
+.workspace-page a {
+  color: var(--el-color-primary);
+}
+.workspace-page a:hover {
+  text-decoration: underline;
+}
 .workspace-page {
   display: grid;
   gap: 16px;

@@ -198,6 +198,12 @@ const label = (value: string) => states[value] ?? value
 </template>
 
 <style scoped>
+.workspace-report a {
+  color: var(--el-color-primary);
+}
+.workspace-report a:hover {
+  text-decoration: underline;
+}
 .workspace-report {
   display: grid;
   gap: 16px;
