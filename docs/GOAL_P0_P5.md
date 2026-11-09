@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-17 运行与测试工件绑定及报告导出 `b3cb81a7` 已分项验证。实际 .NET 与 Node 进程的退出码、测试计数和 SHA256 进入同一份 Markdown/JSON 报告。摘要不符时隐去测试计数。继续 Runner、工件与报告持久化、授权下载、覆盖率和 Vue。见[验证记录](qa/DEVELOPMENT_WORKSPACE_RUN_REPORT_EXPORT.md)。
+
 2026-11-09，P3-17 测试证据解析 `b779c283` 已接入 Application。实际 .NET TRX 与 Node JUnit 验证了通过、失败、跳过及嵌套套件计数。报告摘要只保留校验和、状态、计数与失败序号。运行绑定、工件存储、授权下载和工作站端到端验收仍待。见[验证记录](qa/DEVELOPMENT_WORKSPACE_TEST_REPORTS.md)。
 
 2026-11-09，归档退役文件页与 Jobs `0cb8878d` 完成分项验证。显式确认、同键恢复、专用取消与 Unknown 处置已接入，Jobs 保留 15 字段安全事实。Release 6,158 单元、822 默认集成、隔离真实 PostgreSQL、Vue 1,469 单测和 5 个 Chromium 夹具场景通过。工作站标准安装、新协议与配置 HDD 自然到期退役仍待。见[本批证据与边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_VUE_JOBS.md)。

@@ -1,6 +1,6 @@
 # Whale Deck 开发空间与开发环境
 
-日期：2026-10-13。对应 [完整目标](GOAL_P0_P5.md) 的 P3-13–P3-18，按任务直接实施。P3-17 已分项验证有界 TRX/JUnit 解析。开发空间、运行绑定、报告持久化与授权页面待实现。见[测试证据验证](qa/DEVELOPMENT_WORKSPACE_TEST_REPORTS.md)。
+日期：2026-10-13。对应 [完整目标](GOAL_P0_P5.md) 的 P3-13–P3-18，按任务直接实施。P3-17 已分项验证有界 TRX/JUnit 解析、应用层运行与工件关联、Markdown 和 JSON 导出。开发空间、Runner 接入、报告持久化与授权页面待实现。见[报告验证](qa/DEVELOPMENT_WORKSPACE_RUN_REPORT_EXPORT.md)。
 
 2026-10-21修订：六项开发空间需求完整保留，按[单工作站实用版](SCOPE_SINGLE_WORKSTATION.md)实施。不依赖tenant/node/套餐/VM；保留资源上限、空间所有者和显式开发授权。以下“配额”仅指主机安全预算，不是商业订阅。
 
