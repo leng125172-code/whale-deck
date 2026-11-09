@@ -165,6 +165,10 @@ for development_module in whaledeck-development-storage.py whaledeck-development
   cmp -s -- "$development_path" "$(dirname "$0")/$development_module"
 done
 assert_metadata /var/lib/whaledeck-development '700:root:root'
+development_git=/usr/local/libexec/whaledeck-development-git.py
+assert_metadata "$development_git" '755:root:root'
+[[ -f $development_git && ! -L $development_git && $(stat -c %h "$development_git") == 1 ]]
+cmp -s -- "$development_git" "$(dirname "$0")/whaledeck-development-git.py"
 [[ ! -L /var/lib/whaledeck-development && -d /var/lib/whaledeck-development ]]
 assert_metadata /usr/local/libexec/whaledeck-file-operations.py '750:root:root'
 assert_metadata /usr/local/libexec/whaledeck-file-backups.py '750:root:root'

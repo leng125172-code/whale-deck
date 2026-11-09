@@ -207,6 +207,7 @@ if [[ ! -e "$development_base" ]]; then install -d -o root -g root -m 0700 "$dev
 for development_module in whaledeck-development-storage.py whaledeck-development-storage-transport.py whaledeck-development-project-quota.py whaledeck-development-quota-guard.py whaledeck-development-runner-isolation.py whaledeck-development-rootfs.py whaledeck-development-unpack.py whaledeck-development-runner.py whaledeck-development-runner-control.py whaledeck-development-source.py; do
   install -o root -g root -m 0750 "$(dirname "$0")/$development_module" "/usr/local/libexec/$development_module"
 done
+install -o root -g root -m 0755 "$(dirname "$0")/whaledeck-development-git.py" /usr/local/libexec/whaledeck-development-git.py
 if [[ $install_runner == yes ]]; then
   python3 -I "$development_unpacker" install-artifact "$runner_artifact"
 fi
