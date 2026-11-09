@@ -52,7 +52,7 @@ class ReadinessTests(unittest.TestCase):
         value=self.observe();value['clockAfterUnixMs']=value['currentPlan']['notBeforeUnixMs']
         with self.assertRaises(AssertionError):readiness_proof(value)
 
-    def test_gate_contains_no_native_execution_cleanup_or_directory_creation(self):
+    def test_gate_contains_no_native_execution_cleanup_or_recursive_directory_creation(self):
         path=Path(__file__).with_name('validate_container_recycle_archive_readiness.py');tree=ast.parse(path.read_bytes())
         forbidden={'apply','reserve','discard','inspect','reconcile','recover','unlink','rmdir','remove','rmtree','makedirs'}
         names={n.func.attr for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute)}
