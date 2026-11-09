@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-13 NVMe 目录分配内核 `fd8066ab` 通过实际宿主设备只读和隔离内核测试。签名 Agent 接入、标准安装、可写挂载与实际存储配额仍待。见[本批记录](qa/DEVELOPMENT_WORKSPACE_NVME_STORAGE.md)。
+
 2026-11-09，P3-13 空间注册与运行时锁定 `ce6612e9` 已接入 BFF 和 PostgreSQL。继续 Agent 存储与工作负载分配、Runner、Vue 和实际工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REGISTRATION.md)。
 
 2026-11-09，P3-17 报告组委派 `1931f19d` 已接入 BFF 与数据库。授权限指定空间报告，读取按当前组与授权复核，撤销保留版本。继续工作空间元数据、Runner、Vue 和真实 Authentik 验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REPORT_GRANTS.md)。
