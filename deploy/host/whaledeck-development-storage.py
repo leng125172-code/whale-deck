@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+"""Host-side workspace directory allocation. The caller must authorize the registered workspace first."""
+import contextlib
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import stat
+
+CONFIG = Path('/etc/whaledeck/development-storage.json')
+BASE = Path('/var/lib/whaledeck-development')
+MOUNTINFO = Path('/proc/self/mountinfo')
+FDINFO = Path('/proc/self/fdinfo')
+UDEV = Path('/run/udev/data')
+SYS_DEV = Path('/sys/dev/block')
+SYS_DEVICES = Path('/sys/devices')
+NVME_CLASS = Path('/sys/class/nvme')
+DIR = os.O_RDONLY | os.O_DIRECTORY
+READ = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW
+MARKER = 'allocation.json'
+UUID = r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}'
+KEY = r'[a-z0-9]+(?:-[a-z0-9]+)*'
+DIGEST = r'[a-f0-9]{64}'
+
+
+class WorkspaceStorage:
+    def __init__(self, files):
+        self.files = files
+
+    def reject(self, reason):
+        raise self.files.Rejected('WORKSPACE_STORAGE_' + reason)
+
+    @contextlib.contextmanager
+    def opened(self, parent, name, flags, *, cross_mount=False):
+        fd = self.files.open_at(parent, name, flags, cross_mount=cross_mount)
+        try:
+            yield fd
+        finally:
+            os.close(fd)
+
+    @contextlib.contextmanager
+    def absolute(self, path):
+        with self.slash() as slash:
+            with self.opened(slash, str(path).lstrip('/') or '.', DIR, cross_mount=True) as fd:
+                yield fd
+
+    @staticmethod
+    @contextlib.contextmanager
+    def slash():
+        fd = os.open('/', DIR | os.O_CLOEXEC)
+        try:
+            yield fd
+        finally:
+            os.close(fd)
+
+    def directory(self, fd, *, private=False):
+        info = os.fstat(fd)
+        if info.st_uid != 0 or not stat.S_ISDIR(info.st_mode) or (
+                stat.S_IMODE(info.st_mode) != 0o700 if private else info.st_mode & 0o022):
+            self.reject('DIRECTORY_UNSAFE')
+        return info
+
+    def read_file(self, fd, maximum, *, private=False):
+        info = os.fstat(fd)
+        mode = stat.S_IMODE(info.st_mode)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1
+                or (mode not in (0o400, 0o600) if private else mode & 0o7022)
+                or not 0 < info.st_size <= maximum):
+            self.reject('METADATA_UNSAFE')
+        with os.fdopen(os.dup(fd), 'rb') as stream:
+            raw = stream.read(maximum + 1)
+        if len(raw) != info.st_size:
+            self.reject('METADATA_UNSAFE')
+        return raw
+
+    def read_json(self, parent, name, maximum, *, expected=None, sync=False):
+        with self.opened(parent, name, READ) as fd:
+            try:
+                value = json.loads(self.read_file(fd, maximum, private=True), object_pairs_hook=self.files.unique_object)
+            except (ValueError, UnicodeError):
+                self.reject('METADATA_INVALID')
+            if not isinstance(value, dict):
+                self.reject('METADATA_INVALID')
+            if expected is not None and self.canonical(value) != self.canonical(expected):
+                self.reject('DIRECTORY_CONFLICT')
+            if sync:
+                os.fsync(fd)
+            return value
+
+    def configuration(self, root_id):
+        with self.absolute(CONFIG.parent) as config_dir:
+            self.directory(config_dir)
+            config = self.read_json(config_dir, CONFIG.name, 16384)
+        if (set(config) != {'schemaVersion', 'roots'} or type(config['schemaVersion']) is not int
+                or config['schemaVersion'] != 1 or not isinstance(config['roots'], dict)
+                or not 1 <= len(config['roots']) <= 8):
+            self.reject('CONFIGURATION_INVALID')
+        for key, root in config['roots'].items():
+            self.validate_root(key, root)
+        if root_id not in config['roots']:
+            self.reject('ROOT_NOT_APPROVED')
+        return config['roots'][root_id]
+
+    def validate_root(self, root_id, root):
+        if (not isinstance(root_id, str) or len(root_id) > 48 or not re.fullmatch(KEY, root_id)
+                or not isinstance(root, dict)
+                or set(root) != {'mountPoint', 'filesystemUuid', 'reserveMiB'}
+                or not isinstance(root['filesystemUuid'], str) or not re.fullmatch(UUID, root['filesystemUuid'])
+                or type(root['reserveMiB']) is not int or not 512 <= root['reserveMiB'] <= 1024 * 1024):
+            self.reject('CONFIGURATION_INVALID')
+        mount = root['mountPoint']
+        if (not isinstance(mount, str) or not mount.startswith('/') or len(mount) > 4096
+                or mount.startswith('//') or os.path.normpath(mount) != mount
+                or any(ord(c) < 32 for c in mount) or not (BASE / root_id).is_relative_to(Path(mount))):
+            self.reject('CONFIGURATION_INVALID')
+
+    @staticmethod
+    def mount_id(fd):
+        with (FDINFO / str(fd)).open(encoding='ascii') as stream:
+            content = stream.read(4097)
+        if len(content) > 4096:
+            return None
+        lines = content.splitlines()
+        ids = [line.split()[1] for line in lines if re.fullmatch(r'mnt_id:\s+[0-9]+', line)]
+        return ids[0] if len(ids) == 1 else None
+
+    def attest_mount(self, fd, root):
+        info = self.directory(fd)
+        dev = f'{os.major(info.st_dev)}:{os.minor(info.st_dev)}'
+        mount_id = self.mount_id(fd)
+        with MOUNTINFO.open(encoding='utf-8') as stream:
+            entries = stream.read(1024 * 1024 + 1)
+        if len(entries) > 1024 * 1024 or mount_id is None:
+            self.reject('MOUNT_MISMATCH')
+        found = [entry.split() for entry in entries.splitlines() if entry.startswith(mount_id + ' ')]
+        if len(found) != 1 or len(found[0]) < 10:
+            self.reject('MOUNT_MISMATCH')
+        row = found[0]
+        mount = re.sub(r'\\([0-7]{3})', lambda match: chr(int(match[1], 8)), row[4])
+        if row[2] != dev or row[3] != '/' or mount != root['mountPoint'] or '-' not in row:
+            self.reject('MOUNT_MISMATCH')
+        split = row.index('-')
+        if split + 3 >= len(row) or row[split + 1] not in ('ext4', 'xfs'):
+            self.reject('FILESYSTEM_UNSUPPORTED')
+        if os.fstatvfs(fd).f_flag & os.ST_RDONLY:
+            self.reject('READ_ONLY')
+        with self.absolute(UDEV) as udev:
+            self.directory(udev)
+            with self.opened(udev, 'b' + dev, READ) as descriptor:
+                records = self.read_file(descriptor, 65536).decode('utf-8').splitlines()
+        uuids = [value for value in records if value.startswith('E:ID_FS_UUID=')]
+        if uuids != ['E:ID_FS_UUID=' + root['filesystemUuid']] or 'E:ID_FS_USAGE=filesystem' not in records:
+            self.reject('DEVICE_MISMATCH')
+        self.require_nvme(dev)
+        return mount_id
+
+    def require_nvme(self, dev):
+        device = (SYS_DEV / dev).resolve(strict=True)
+        if not device.is_relative_to(SYS_DEVICES) or not re.fullmatch(r'nvme[0-9]+n[0-9]+(?:p[0-9]+)?', device.name):
+            self.reject('NVME_REQUIRED')
+        namespace = device.parent if (device / 'partition').is_file() else device
+        controller = namespace.parent
+        if (not re.fullmatch(r'nvme[0-9]+n[0-9]+', namespace.name)
+                or not re.fullmatch(r'nvme[0-9]+', controller.name)
+                or (controller / 'subsystem').resolve(strict=True) != NVME_CLASS
+                or (controller / 'transport').read_bytes() != b'pcie\n'
+                or (namespace / 'queue' / 'rotational').read_bytes() != b'0\n'):
+            self.reject('NVME_REQUIRED')
+
+    @contextlib.contextmanager
+    def namespace(self, root_id, config):
+        mount = Path(config['mountPoint'])
+        with self.absolute(mount) as mounted, contextlib.ExitStack() as opened:
+            identity = self.attest_mount(mounted, config)
+            parent = mounted
+            for piece in (BASE / root_id).relative_to(mount).parts:
+                parent = opened.enter_context(self.opened(parent, piece, DIR))
+                self.directory(parent)
+            self.directory(parent, private=True)
+            if self.mount_id(parent) != identity:
+                self.reject('MOUNT_MISMATCH')
+            yield parent
+
+    def recheck(self, parent, root_id, config):
+        if self.configuration(root_id) != config:
+            self.reject('CONFIGURATION_CHANGED')
+        with self.namespace(root_id, config) as live:
+            if not os.path.samestat(os.fstat(live), os.fstat(parent)) or self.mount_id(live) != self.mount_id(parent):
+                self.reject('ROOT_CHANGED')
+
+    def receipt(self, parent, child, request, config):
+        return dict(request, filesystemUuid=config['filesystemUuid'], rootInode=os.fstat(parent).st_ino,
+                    directoryInode=os.fstat(child).st_ino)
+
+    def read_existing(self, parent, name, request, config, *, pending=False, sync=False):
+        try:
+            fd = self.files.open_at(parent, name, DIR)
+        except FileNotFoundError:
+            return None
+        try:
+            self.directory(fd, private=True)
+            expected = self.receipt(parent, fd, request, config)
+            try:
+                self.read_json(fd, MARKER, 4096, expected=expected, sync=sync)
+            except FileNotFoundError:
+                self.reject('STAGING_UNKNOWN' if pending else 'DIRECTORY_CONFLICT')
+            if sync:
+                os.fsync(fd)
+            return expected
+        finally:
+            os.close(fd)
+
+    @staticmethod
+    def canonical(value):
+        return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode('ascii')
+
+    def stage(self, parent, name, request, config):
+        os.mkdir(name, 0o700, dir_fd=parent)
+        with self.opened(parent, name, DIR) as child:
+            self.directory(child, private=True)
+            proof = self.receipt(parent, child, request, config)
+            fd = os.open(MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=child)
+            with os.fdopen(fd, 'wb') as stream:
+                stream.write(self.canonical(proof))
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.fsync(child)
+        os.fsync(parent)
+        return proof
+
+    def allocate(self, request):
+        if not isinstance(request, dict) or set(request) != {'schemaVersion', 'rootId', 'workspaceId', 'environmentSha256', 'diskMiB'}:
+            self.reject('REQUEST_INVALID')
+        root_id, workspace = request['rootId'], request['workspaceId']
+        if (type(request['schemaVersion']) is not int or request['schemaVersion'] != 1
+                or not isinstance(root_id, str) or len(root_id) > 48 or not re.fullmatch(KEY, root_id)
+                or not isinstance(workspace, str) or not re.fullmatch(UUID, workspace)
+                or workspace == '00000000-0000-0000-0000-000000000000'
+                or not isinstance(request['environmentSha256'], str) or not re.fullmatch(DIGEST, request['environmentSha256'])
+                or type(request['diskMiB']) is not int or not 256 <= request['diskMiB'] <= 1024 * 1024):
+            self.reject('REQUEST_INVALID')
+        config = self.configuration(root_id)
+        pending = '.pending-' + workspace
+        with self.namespace(root_id, config) as parent:
+            try:
+                fcntl.flock(parent, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                self.reject('BUSY')
+            self.recheck(parent, root_id, config)
+            current = self.read_existing(parent, workspace, request, config, sync=True)
+            if current is not None:
+                # A prior rename may have happened just before a failed fsync.
+                os.fsync(parent)
+                self.recheck(parent, root_id, config)
+                return current
+
+            available = os.fstatvfs(parent)
+            if available.f_bavail * available.f_frsize < (request['diskMiB'] + config['reserveMiB']) * 1024**2:
+                self.reject('CAPACITY_REQUIRED')
+            proof = self.read_existing(parent, pending, request, config, pending=True)
+            if proof is None:
+                proof = self.stage(parent, pending, request, config)
+            self.recheck(parent, root_id, config)
+            if self.read_existing(parent, pending, request, config, pending=True, sync=True) != proof:
+                self.reject('STAGING_UNKNOWN')
+            self.files.exchange(parent, pending, parent, workspace, 1)  # RENAME_NOREPLACE
+            os.fsync(parent)
+            self.recheck(parent, root_id, config)
+            if self.read_existing(parent, workspace, request, config) != proof:
+                self.reject('PUBLICATION_UNKNOWN')
+            return proof
