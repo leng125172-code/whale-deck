@@ -93,7 +93,7 @@ Webhook 引入时沿用签名/防重放/固定仓库约束；本功能可先手�
 | RPC-DEV-003 | Agent 1.64 `development.run` 的 Start / Observe | 绑定空间、运行 ID、环境摘要、受控 argv 和预算。Worker 使用快照中的固定命令，要求 Agent 同时支持签名运行控制 |
 | RPC-DEV-004 | Agent 1.65 `development.run.control` 的 Cancel / Reclaim | 绑定原运行请求和目标 cgroup 身份，只结束或回收对应运行 |
 | RPC-DEV-005 | OpenWorkspaceSession / CloseWorkspaceSession | 类型 IDE/terminal/debug/preview、主体/空间/目标、一次性 capability 和过期 |
-| RPC-DEV-006 | 1.66 `development.run.test-artifact` 支持宿主采集与回执清单 | 签名请求绑定原运行，仅从固定输出槽封存 JUnit/TRX。工件签名读取、脱敏持久化和原件退役待接入 |
+| RPC-DEV-006 | 1.66 支持宿主采集与回执清单，1.67 增加 `development.run.test-artifact.transfer` | 从固定输出槽封存 JUnit/TRX，读取及退役绑定原运行、摘要和字节数。Worker 脱敏持久化与自动退役待接入 |
 | RPC-DEV-007 | ManageWorkspaceLifecycle | 登记空间/计划、start/stop/rebuild/snapshot/delete 枚举及数据保留策略 |
 
 Agent 只管理登记工作负载与只读白名单路径。空间容器没有宿主 Agent/Docker Socket；run 的代码执行由空间内 runner/debug adapter 执行。Worker 协调任务、会话过期/孤儿回收、指标/工件持久化、报告生成与保留清理。跨重启凭原 run/operation 恢复观察，不重复启动测试；不可恢复的交互会话明确终态为中断，保留可用报告。
