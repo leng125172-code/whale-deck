@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09 退役RPC/native适配候选a93a35a9已验证：五方法声明及未映射处理器、语义/绑定先于进程、独立固定helper/stop、Ready前零正文、64KiB请求/输出及独立深度20、120秒期限和精确缺席错误；仍1.59且不广告/部署。32新增/144联合、6056全量Unit零跳过、Release零警告错误、795回收root/18老化专项/14CI合同/8范围通过，独立只读复核无本范围阻断项。首轮CA1861已修正；旧安装helper拒绝新transport exit2/零Ready，原老化来源重核未到期/未执行、冻结代码/claim/HDD保持。准确3c3 CI installer因缺user账号失败，补CI专用非特权账号，新CI待终态；13文件证据封存。继续Gateway/当前资源授权、native CLI/探针/标准安装、自然到期及永久业务/59项，17项移出不算完成。[适配候选、CI失败与边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_TRANSPORT.md)。
+
 2026-11-09 退役语义政策候选3c3bb53c通过：深层Archive/Purge/Source命令/计划、1至3650天捕获期限、全部嵌套事实与新inode设备/属性、上下文job及三代新ID约束；精确20键原生计划和9键nullable回执拒绝重复/未知/有损值。57新政策/112联合、全量Unit6024零跳过、NET10构建/14CI合同/8范围通过，独立只读复核无阻断项。首轮夹具设备不符1失败已修正新夹具不放宽政策；4文件核验摘要封存。原老化来源独立重核未到期/未执行，原冻结代码/claim/HDD保持，无RPC/安装/新能力广告；前批待推文档已补推。本批新CI待终态，继续RPC/native/Gateway、自然到期与永久业务/59项，17项移出不算完成。[请求政策与原生格式](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_POLICY.md)。
 
 2026-11-09 退役能力验证器候选2de34c2d已验证：独立5方法HMAC/60秒/规范nonce和并发单次消费，通用健康后缀前拒绝新前缀；Unary从实际protobuf正文重算hash、核对描述符并拒绝未知字段，三stream拒绝且不耗nonce。29新能力/联合55合同、全量能力677及Unit5967零跳过、NET10构建/14CI合同/8范围通过，独立只读复核无阻断项；首轮测试泛型CS0411修正后通过。5文件核验摘要封存，原老化来源干净环境仍未到期/未执行、原冻结代码/claim/HDD保持，无RPC注册/广告/安装。继续计划政策/Gateway/gRPC-native适配及标准版本/安装、自然到期/永久业务和59项，17项移出不算完成。[能力验证与正文绑定边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_CAPABILITY.md)。
