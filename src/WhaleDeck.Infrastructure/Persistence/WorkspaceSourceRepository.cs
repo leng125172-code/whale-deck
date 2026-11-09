@@ -74,6 +74,20 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
         return row is null ? null : View(row);
     }
 
+    public async Task<WorkspaceSourceHistoryPage> HistoryAsync(Guid workspaceId, string subject, Guid? before, int take, CancellationToken token)
+    {
+        var terminal = db.WorkspaceSourceIntents.AsNoTracking().Where(row =>
+            row.WorkspaceId == workspaceId && row.OwnerSubject == subject && row.FinishedAtUtc != null);
+        if (before is { } id)
+        {
+            var cursor = await terminal.Where(row => row.Id == id).Select(row => row.FinishedAtUtc).SingleOrDefaultAsync(token)
+                ?? throw new KeyNotFoundException("WORKSPACE_SOURCE_HISTORY_CURSOR_NOT_FOUND");
+            terminal = terminal.Where(row => row.FinishedAtUtc < cursor || row.FinishedAtUtc == cursor && row.Id.CompareTo(id) < 0);
+        }
+        var rows = await terminal.OrderByDescending(row => row.FinishedAtUtc).ThenByDescending(row => row.Id).Take(take + 1).ToArrayAsync(token);
+        return new(rows.Take(take).Select(View).ToArray(), rows.Length > take ? rows[take - 1].Id : null);
+    }
+
     public Task<WorkspaceSourceView> AppendAsync(Guid workspaceId, Guid importId, TerminalActor actor, int offset,
         byte[] body, CancellationToken token) => TransactionAsync(async () =>
     {
@@ -348,7 +362,7 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
         new(row.Format, row.ArchiveBytes, row.ArchiveSha256), row.ReceivedBytes,
         row.PlanSha256 is null ? null : new(row.PlanSha256, row.ContentSha256!, row.FileCount!.Value, row.TotalBytes!.Value),
         row.Code, row.ExpiresAtUtc,
-        row.GitRepositoryId is null ? null : new(row.GitRepositoryId, row.GitRef!, GitProof(row)));
+        row.GitRepositoryId is null ? null : new(row.GitRepositoryId, row.GitRef!, GitProof(row)), row.FinishedAtUtc);
 
     private static WorkspaceGitProof? GitProof(WorkspaceSourceIntent row) =>
         row.GitResolvedObject is null ? null : new(row.GitResolvedObject, row.GitCommit!,

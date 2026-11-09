@@ -20,6 +20,10 @@ public sealed class WorkspaceSourcesController(WorkspaceSources sources, Termina
     public async Task<string[]> GitRepositories(Guid workspaceId, CancellationToken token) =>
         await sources.GitRepositoriesAsync((await identity.ReadAsync(HttpContext)).Actor, workspaceId, token);
 
+    [HttpGet("history")]
+    public async Task<WorkspaceSourceHistoryPage> History(Guid workspaceId, Guid? before, CancellationToken token, int take = 10) =>
+        await sources.HistoryAsync((await identity.ReadAsync(HttpContext)).Actor, workspaceId, before, take, token);
+
     [HttpPut("{importId:guid}"), Consumes("application/json"), RequestSizeLimit(4096)]
     public async Task<ActionResult<WorkspaceSourceView>> Begin(Guid workspaceId, Guid importId, WorkspaceSourceInput input, CancellationToken token)
     {

@@ -187,6 +187,20 @@ public sealed partial class ContainerUploadHttpTests
             Assert.Equal(1, host.PublishCount);
             Assert.Equal(1, await db.AuditEvents.CountAsync(row =>
                 row.Action == "development.workspace.source.git-pin" && row.TargetId == id.ToString("D")));
+            var history = collection + "/history";
+            var recent = Assert.IsType<WorkspaceSourceHistoryPage>(
+                await owner.GetFromJsonAsync<WorkspaceSourceHistoryPage>(history + "?take=2"));
+            Assert.Equal(id, recent.Items[0].ImportId);
+            Assert.Equal(2, recent.Items.Length);
+            Assert.Equal(recent.Items[1].ImportId, recent.NextBefore);
+            var older = Assert.IsType<WorkspaceSourceHistoryPage>(
+                await owner.GetFromJsonAsync<WorkspaceSourceHistoryPage>(history + $"?take=2&before={recent.NextBefore:D}"));
+            Assert.Null(older.NextBefore);
+            var entries = recent.Items.Concat(older.Items).ToArray();
+            Assert.Equal(new[] { canceled, inflight, failed, id }.Order(), entries.Select(item => item.ImportId).Order());
+            Assert.All(entries, entry => Assert.NotNull(entry.FinishedAtUtc));
+            using (var wrongCursor = await owner.GetAsync(history + $"?before={Guid.NewGuid():D}"))
+                Assert.Equal(HttpStatusCode.NotFound, wrongCursor.StatusCode);
             Console.WriteLine("INBOX_PHASE=workspace-git-real-http-uds-grpc-postgres-pinned-lease-recovery-encrypted-and-confirmed");
 
             string Url(Guid item) => $"{collection}/{item:D}";

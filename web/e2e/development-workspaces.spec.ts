@@ -309,6 +309,8 @@ async function sourceFixture(page: Page) {
       const request = route.request()
       if (!state.allowed) return route.fulfill({ status: 403, json: {} })
       const suffix = new URL(request.url()).pathname.slice(prefix.length)
+      if (request.method() === 'GET' && suffix === '/git-repositories')
+        return route.fulfill({ json: [] })
       const receipt = () => ({
         workspaceId: state.wrongWorkspace ? runId : id,
         importId: state.id,
@@ -383,7 +385,7 @@ test('resumes a committed archive chunk after reload and confirms the exact sour
   })
   await page.goto(`${workspacePath}/${id}/environment`)
   await page.getByRole('link', { name: '源码导入' }).click()
-  await expect(page.getByRole('heading', { name: '导入源码归档' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '导入源码', exact: true })).toBeVisible()
   await page.getByLabel('选择归档文件').setInputFiles(input)
   await page.getByRole('button', { name: '开始上传' }).click()
   await expect(page.getByText(/未能确认服务器结果/)).toBeVisible()

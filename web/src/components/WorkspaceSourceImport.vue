@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
-import { ElCard, ElCheckbox, ElProgress } from 'element-plus'
+import { ElCard, ElCheckbox, ElInput, ElOption, ElProgress, ElSelect } from 'element-plus'
 import { ApiError, createIdempotencyKey } from '@/services/apiClient'
 import { workspaceError } from '@/services/developmentWorkspaces'
 import {
   sameSourcePlan,
+  sameSourceOrigin,
   sourceStates,
+  validGitRef,
   workspaceSources as api,
   type SourceImport,
+  type GitSourceInput,
 } from '@/services/developmentWorkspaceSources'
 import {
   identifySource,
@@ -31,14 +34,20 @@ const fileInput = ref<HTMLInputElement>()
 const rawInput = ref<HTMLInputElement>()
 const directoryInput = ref<HTMLInputElement>()
 const directorySupported = 'webkitdirectory' in document.createElement('input')
-const busy = ref<'refresh' | 'upload' | 'publish' | 'cancel' | ''>('')
+const busy = ref<'refresh' | 'upload' | 'git' | 'publish' | 'cancel' | 'history' | ''>('')
 const error = ref('')
 const confirmed = ref(false)
 const synchronized = ref(false)
 const denied = ref(false)
 const hashInProgress = ref(false)
+const repositories = shallowRef<string[]>([])
+const repository = ref('')
+const gitRef = ref('HEAD')
+const history = shallowRef<SourceImport[] | null>(null)
+const before = ref<string | null>(null)
 let transfer: AbortController | undefined
 let pending: { id: string; archive: SourceArchive } | undefined
+let pendingGit: (GitSourceInput & { id: string }) | undefined
 let timer: number | undefined
 
 const canUpload = computed(
@@ -50,10 +59,13 @@ const canCancel = computed(
   () =>
     synchronized.value &&
     !!current.value &&
-    ['Uploading', 'Ready', 'Staged'].includes(current.value.state),
+    ['Uploading', 'Acquiring', 'Ready', 'Staged'].includes(current.value.state),
+)
+const canStartGit = computed(
+  () => !denied.value && (!current.value || ['Canceled', 'Failed'].includes(current.value.state)),
 )
 const percentage = computed(() =>
-  current.value
+  current.value?.archive.archiveBytes
     ? Math.floor((100 * current.value.receivedBytes) / current.value.archive.archiveBytes)
     : 0,
 )
@@ -67,9 +79,9 @@ onMounted(() => {
       !denied.value &&
       !busy.value &&
       current.value &&
-      ['Ready', 'Publishing', 'Canceling'].includes(current.value.state)
+      ['Acquiring', 'Ready', 'Publishing', 'Canceling'].includes(current.value.state)
     )
-      refresh()
+      void run('refresh', load)
   }, 2500)
 })
 onUnmounted(() => {
@@ -80,6 +92,12 @@ onUnmounted(() => {
 function accept(result: SourceImport | null, signal: AbortSignal) {
   signal.throwIfAborted()
   if (
+    current.value &&
+    result?.importId === current.value.importId &&
+    !sameSourceOrigin(current.value, result)
+  )
+    throw new SourceInputError('导入来源或已固定的快照与服务器回执不一致。')
+  if (
     current.value?.importId !== result?.importId ||
     !sameSourcePlan(current.value?.plan ?? null, result?.plan ?? null) ||
     result?.state !== 'Staged'
@@ -87,6 +105,7 @@ function accept(result: SourceImport | null, signal: AbortSignal) {
     confirmed.value = false
   current.value = result
   if (result && pending?.id === result.importId) pending = undefined
+  if (result && pendingGit?.id === result.importId) pendingGit = undefined
   denied.value = false
   synchronized.value = true
 }
@@ -117,6 +136,11 @@ async function run(action: typeof busy.value, work: (signal: AbortSignal) => Pro
       confirmed.value = false
       synchronized.value = false
       pending = undefined
+      pendingGit = undefined
+      repositories.value = []
+      repository.value = ''
+      history.value = null
+      before.value = null
       clearFile()
     }
     error.value = failure instanceof SourceInputError ? failure.message : workspaceError(failure)
@@ -126,7 +150,51 @@ async function run(action: typeof busy.value, work: (signal: AbortSignal) => Pro
 }
 
 function refresh() {
-  void run('refresh', load)
+  void run('refresh', async (signal) => {
+    await load(signal)
+    repositories.value = []
+    const list = await api.gitRepositories(props.workspaceId, signal).catch((failure): string[] => {
+      if (failure instanceof ApiError && failure.status === 404) return []
+      throw failure
+    })
+    signal.throwIfAborted()
+    repositories.value = list
+    if (!list.includes(repository.value)) repository.value = list[0] ?? ''
+  })
+}
+
+function startGit() {
+  if (
+    !canStartGit.value ||
+    !repositories.value.includes(repository.value) ||
+    !validGitRef(gitRef.value)
+  )
+    return
+  const input = { repositoryId: repository.value, ref: gitRef.value }
+  void run('git', async (signal) => {
+    await load(signal)
+    if (!canStartGit.value) return
+    if (pendingGit?.repositoryId !== input.repositoryId || pendingGit.ref !== input.ref)
+      pendingGit = { ...input, id: createIdempotencyKey() }
+    synchronized.value = false
+    accept(await api.beginGit(props.workspaceId, pendingGit.id, input, signal), signal)
+    history.value = null
+    clearFile()
+  })
+}
+
+function loadHistory(more = false) {
+  void run('history', async (signal) => {
+    const page = await api.history(props.workspaceId, more ? before.value : null, signal)
+    signal.throwIfAborted()
+    if (
+      more &&
+      page.items.some((item) => history.value?.some((seen) => seen.importId === item.importId))
+    )
+      throw new SourceInputError('导入历史返回了重复记录。请刷新历史。')
+    history.value = more ? [...(history.value ?? []), ...page.items] : page.items
+    before.value = page.nextBefore
+  })
 }
 
 function selectFile(event: Event, kind: Selection['kind']) {
@@ -208,6 +276,7 @@ function publish() {
     confirmed.value = false
     synchronized.value = false
     accept(await api.publish(props.workspaceId, result, digest, signal), signal)
+    history.value = null
   })
 }
 
@@ -218,6 +287,7 @@ function cancel() {
     confirmed.value = false
     synchronized.value = false
     accept(await api.cancel(props.workspaceId, result, signal), signal)
+    history.value = null
     clearFile()
   })
 }
@@ -225,9 +295,9 @@ function cancel() {
 
 <template>
   <el-card class="source-card" shadow="never">
-    <template #header><h2>导入源码归档</h2></template>
+    <template #header><h2>导入源码</h2></template>
     <div class="source-content">
-      <p>可选择文件、目录或 ZIP、tar、tar.gz 归档。上传上限为 128 MiB，暂存后核对计划再发布。</p>
+      <p>可从授权的 Git 仓库获取源码，或选择文件、目录与归档。暂存后核对计划再发布。</p>
       <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
       <p v-if="!synchronized && !busy && !denied" role="status">
         服务器状态待确认。刷新状态后可继续操作。继续上传时会先核对已接收字节数。
@@ -244,13 +314,35 @@ function cancel() {
           <dd>
             <code>{{ current.importId }}</code>
           </dd>
-          <dt>归档</dt>
-          <dd>{{ current.archive.format }} · {{ byteLabel(current.archive.archiveBytes) }}</dd>
-          <dt>归档摘要</dt>
-          <dd>
-            <code>{{ current.archive.archiveSha256 }}</code>
-          </dd>
-          <template v-if="['Uploading', 'Ready', 'Staged'].includes(current.state)">
+          <template v-if="current.git">
+            <dt>Git 仓库</dt>
+            <dd>{{ current.git.repositoryId }}</dd>
+            <dt>请求 ref</dt>
+            <dd>
+              <code>{{ current.git.ref }}</code>
+            </dd>
+            <template v-if="current.git.snapshot">
+              <dt>固定提交</dt>
+              <dd>
+                <code>{{ current.git.snapshot.commit }}</code>
+              </dd>
+              <template v-if="current.git.snapshot.resolvedObject !== current.git.snapshot.commit">
+                <dt>标签对象</dt>
+                <dd>
+                  <code>{{ current.git.snapshot.resolvedObject }}</code>
+                </dd>
+              </template>
+            </template>
+          </template>
+          <template v-if="current.archive.archiveBytes">
+            <dt>归档</dt>
+            <dd>{{ current.archive.format }} · {{ byteLabel(current.archive.archiveBytes) }}</dd>
+            <dt>归档摘要</dt>
+            <dd>
+              <code>{{ current.archive.archiveSha256 }}</code>
+            </dd>
+          </template>
+          <template v-if="['Uploading', 'Acquiring', 'Ready', 'Staged'].includes(current.state)">
             <dt>确认截止</dt>
             <dd>
               <time :datetime="current.expiresAtUtc">{{
@@ -271,15 +363,58 @@ function cancel() {
             </dd>
           </template>
         </dl>
-        <template v-if="current.state === 'Uploading' || busy === 'upload'">
+        <p v-if="current.state === 'Acquiring' && !current.git?.snapshot" role="status">
+          正在解析 ref 并校验 Git 快照。
+        </p>
+        <template
+          v-if="
+            current.state === 'Uploading' ||
+            busy === 'upload' ||
+            (current.state === 'Acquiring' && current.archive.archiveBytes)
+          "
+        >
           <p id="workspace-source-progress">
             已接收 {{ byteLabel(current.receivedBytes) }} /
             {{ byteLabel(current.archive.archiveBytes) }}
           </p>
-          <el-progress :percentage="percentage" :aria-label="`上传进度 ${percentage}%`" />
+          <el-progress
+            :percentage="percentage"
+            :aria-label="`${current.git ? '获取' : '上传'}进度 ${percentage}%`"
+          />
         </template>
         <p v-if="current.state === 'Published'">源码已发布到该空间，可前往运行记录执行开发任务。</p>
       </template>
+      <form v-if="canStartGit && repositories.length" class="source-git" @submit.prevent="startGit">
+        <div class="source-upload">
+          <label for="workspace-git-repository">Git 仓库</label>
+          <el-select id="workspace-git-repository" v-model="repository" :disabled="!!busy">
+            <el-option v-for="name in repositories" :key="name" :label="name" :value="name" />
+          </el-select>
+        </div>
+        <div class="source-upload">
+          <label for="workspace-git-ref">Git ref</label>
+          <el-input
+            id="workspace-git-ref"
+            v-model.trim="gitRef"
+            maxlength="255"
+            :disabled="!!busy"
+            aria-describedby="workspace-git-hint"
+          />
+          <small id="workspace-git-hint"
+            >例如 HEAD、refs/heads/main、refs/tags/v1 或完整提交 ID。</small
+          >
+        </div>
+        <div class="source-actions">
+          <el-button
+            native-type="submit"
+            type="primary"
+            :loading="busy === 'git'"
+            :disabled="!!busy || !synchronized || !validGitRef(gitRef)"
+          >
+            获取 Git 源码
+          </el-button>
+        </div>
+      </form>
       <div v-if="canUpload" class="source-upload">
         <label for="workspace-source-file">{{
           current?.state === 'Uploading' ? '重新选择原归档' : '选择归档文件'
@@ -363,7 +498,40 @@ function cancel() {
         <el-button :disabled="!!busy" :loading="busy === 'refresh'" @click="refresh"
           >刷新导入状态</el-button
         >
+        <el-button
+          v-if="!denied"
+          :disabled="!!busy"
+          :loading="busy === 'history'"
+          @click="loadHistory()"
+        >
+          {{ history ? '刷新导入历史' : '查看导入历史' }}
+        </el-button>
       </div>
+      <section v-if="history" class="source-history" aria-labelledby="workspace-source-history">
+        <h3 id="workspace-source-history">导入历史</h3>
+        <p v-if="!history.length">暂无已结束的导入。</p>
+        <ul v-else>
+          <li v-for="entry in history" :key="entry.importId">
+            <el-tag effect="plain">{{ sourceStates[entry.state] }}</el-tag>
+            <span v-if="entry.git"
+              >{{ entry.git.repositoryId }} · <code>{{ entry.git.ref }}</code></span
+            >
+            <span v-else
+              >{{ entry.archive.format }} · {{ byteLabel(entry.archive.archiveBytes) }}</span
+            >
+            <code v-if="entry.git?.snapshot">{{ entry.git.snapshot.commit }}</code>
+            <small
+              ><code>{{ entry.importId }}</code></small
+            >
+            <time v-if="entry.finishedAtUtc" :datetime="entry.finishedAtUtc">{{
+              new Date(entry.finishedAtUtc).toLocaleString()
+            }}</time>
+          </li>
+        </ul>
+        <el-button v-if="before" :disabled="!!busy" @click="loadHistory(true)"
+          >加载更多历史</el-button
+        >
+      </section>
     </div>
   </el-card>
 </template>
@@ -428,5 +596,38 @@ function cancel() {
 .source-confirm :deep(.el-checkbox) {
   height: auto;
   white-space: normal;
+}
+.source-git,
+.source-history {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-block: 12px;
+  border-block-start: 1px solid var(--el-border-color-light);
+}
+.source-git :deep(.el-select),
+.source-git :deep(.el-input) {
+  width: 100%;
+  max-width: 28rem;
+}
+.source-history h3,
+.source-history ul {
+  margin: 0;
+}
+.source-history ul {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+.source-history li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  overflow-wrap: anywhere;
+}
+.source-history small {
+  color: var(--el-text-color-secondary);
 }
 </style>

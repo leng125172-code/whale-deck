@@ -15,10 +15,12 @@ public sealed record WorkspaceSourceConfirmation(string PlanSha256);
 public sealed record WorkspaceSourcePlan(string PlanSha256, string ContentSha256, int FileCount, long TotalBytes);
 public sealed record WorkspaceSourceView(Guid WorkspaceId, Guid ImportId, string State, WorkspaceSourceInput Archive,
     int ReceivedBytes, WorkspaceSourcePlan? Plan, string? Code, DateTimeOffset ExpiresAtUtc,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WorkspaceGitSource? Git = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WorkspaceGitSource? Git = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? FinishedAtUtc = null);
 public sealed record WorkspaceSourceClaim(WorkspaceSourceView Import, WorkspaceDefinition Workspace, TerminalActor Actor, Guid Lease,
     string? GitCredentialRef = null);
 public sealed record WorkspaceSourceObservation(string State, WorkspaceSourcePlan Plan);
+public sealed record WorkspaceSourceHistoryPage(WorkspaceSourceView[] Items, Guid? NextBefore);
 
 public enum WorkspaceSourceFailure { Missing, Rejected, Conflict, Retryable, Integrity, Unsupported }
 public sealed class WorkspaceSourceException(WorkspaceSourceFailure failure) : Exception("WORKSPACE_SOURCE_AGENT_" + failure)
@@ -44,6 +46,7 @@ public interface IWorkspaceSourceStore
         WorkspaceGitInput input, string? credentialRef, CancellationToken token);
     Task<WorkspaceSourceView?> FindAsync(Guid workspaceId, Guid importId, string subject, CancellationToken token);
     Task<WorkspaceSourceView?> CurrentAsync(Guid workspaceId, string subject, CancellationToken token);
+    Task<WorkspaceSourceHistoryPage> HistoryAsync(Guid workspaceId, string subject, Guid? before, int take, CancellationToken token);
     Task<WorkspaceSourceView> AppendAsync(Guid workspaceId, Guid importId, TerminalActor actor, int offset, byte[] body, CancellationToken token);
     Task<WorkspaceSourceView> ConfirmAsync(Guid workspaceId, Guid importId, TerminalActor actor, string planSha256, CancellationToken token);
     Task<WorkspaceSourceView> CancelAsync(Guid workspaceId, Guid importId, TerminalActor actor, CancellationToken token);
@@ -117,6 +120,14 @@ public sealed partial class WorkspaceSources(WorkspaceRuns access, IWorkspaceSou
     {
         _ = await RequireWorkspaceAsync(actor, workspaceId, token);
         return await store.CurrentAsync(workspaceId, actor.Subject, token);
+    }
+
+    public async Task<WorkspaceSourceHistoryPage> HistoryAsync(TerminalActor actor, Guid workspaceId, Guid? before, int take,
+        CancellationToken token)
+    {
+        _ = await RequireWorkspaceAsync(actor, workspaceId, token);
+        if (before == Guid.Empty || take is < 1 or > 50) throw new ArgumentException("WORKSPACE_SOURCE_HISTORY_INVALID");
+        return await store.HistoryAsync(workspaceId, actor.Subject, before, take, token);
     }
 
     public async Task<WorkspaceSourceView> AppendAsync(TerminalActor actor, Guid workspaceId, Guid importId, int offset,
