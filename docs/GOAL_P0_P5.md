@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09 退役只读采集候选b7aa0804通过：固定Root FD/64KiB JSON/合计2万条与32MiB、已有HDD共享锁/只读attest、2GiB载荷/16MiB namespace/120秒及双pass一致；只允许选中.data缺席，原记录/字节/live副本保持，RPC/授权来源仍未证明。17新采集/848回收root零跳过、14CI合同/8范围/4编译通过；复核提出缓存/合计预算/原始输入来源边界已修正，-B入口导入前/EOF门禁和父进程字节显式标注。8文件证据封存，实际安装目录缺失拒绝无创建/Provider或Agent/HDD操作，原老化来源未到期/未执行且保持；准确b56 CI12项全success，旧图谱pending保留。继续helper标准安装/真RPC-HDD正向、自然到期与永久业务/59项，17项移出不算完成。[可信采集、差异及验证限制](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_ACQUISITION.md)。
+
 2026-11-09 退役独立RPC/Root字节关联候选b56ba510通过：20/22键投影、64位精度、nullable布尔/上下文和祖先绑定、完整registry原始帧/marker/原记录及v2证书关联，始终不将元数据视为物理删除或授权。17新增/831回收root零跳过、14CI合同/8范围/2编译通过，独立复核无具体错误接受；首轮header函数/相同摘要反例错误已纠正。6文件证据封存，旧1.59原件摘要后重核通过且未新增Agent调用，当前老化来源未到期/未执行且保持。准确a576 CI12项全success，图谱pending保留；继续可信物理采集/标准安装、新RPC正向、自然到期及永久业务/59项，17项移出不算完成。[独立关联与实际边界](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_RPC_PROOF.md)。
 
 2026-11-09 退役探针候选a576ab3f已验证：独立父进程节拍/有界stdin/64命令、单归档范围、审批计划和单次显式Apply，无设置来源/自动清理/重试。35新增/225联合、6137全量Unit零跳过、Release零警告错误/14CI合同/8范围通过；CS8602与xUnit2013编译失败已修正。Root冻结204二进制后真实连接旧Agent，major1/minor59/无新能力在capabilities拒绝、stdout0/未发操作，openat跟踪确认未开签名密钥；只签否定门禁，不签新安装态正向。前后原老化来源未到期/未执行且保持，220文件证据封存；准确292e CI12job全success，旧两条图谱pending补同步成功。继续新CI/独立物理证据/helper安装、自然到期与永久业务/59项，17项移出不算完成。[原生探针与安装态否定证据](qa/CONTAINER_FILE_RECYCLING_RETIREMENT_PROBE.md)。
