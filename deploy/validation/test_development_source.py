@@ -1,0 +1,117 @@
+import gzip
+import importlib.util
+import io
+import os
+from pathlib import Path
+import stat
+import tarfile
+import tempfile
+import unittest
+import zipfile
+
+
+def load(name):
+    path = Path(__file__).resolve().parents[1] / 'host' / ('whaledeck-' + name + '.py')
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+source = load('development-source')
+files = load('files')
+archive = load('tree-archive')
+
+
+def zip_bytes(entries, *, compress=zipfile.ZIP_STORED):
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, 'w', compress) as writer:
+        for name, mode, body in entries:
+            entry = zipfile.ZipInfo(name)
+            entry.create_system = 3
+            entry.external_attr = mode << 16
+            entry.compress_type = compress
+            writer.writestr(entry, body)
+    return data.getvalue()
+
+
+def tar_bytes(entries):
+    data = io.BytesIO()
+    with tarfile.open(fileobj=data, mode='w', format=tarfile.PAX_FORMAT) as writer:
+        for name, kind, mode, body in entries:
+            entry = tarfile.TarInfo(name)
+            entry.type, entry.mode, entry.size = kind, mode, len(body)
+            if kind == tarfile.SYMTYPE or kind == tarfile.LNKTYPE:
+                entry.linkname = 'elsewhere'
+            writer.addfile(entry, io.BytesIO(body) if kind == tarfile.REGTYPE else None)
+    return data.getvalue()
+
+
+class DevelopmentSourceTests(unittest.TestCase):
+    def extract(self, body, fmt, output, maximum=source.MAX_EXPANDED):
+        root = os.open(output, source.DIR)
+        try:
+            tree = source.SourceTree(files, root, os.geteuid(), len(body), maximum, lambda: None)
+            with tempfile.NamedTemporaryFile() as staged:
+                staged.write(body)
+                staged.flush()
+                if fmt == 'zip':
+                    source.extract_zip(staged.fileno(), len(body), tree)
+                else:
+                    source.extract_tar(archive, staged.fileno(), fmt, tree, maximum)
+                return tree.finish()
+        finally:
+            os.close(root)
+
+    def test_normalizes_zip_tar_and_gzip_to_same_content_identity(self):
+        body = b'print("example")\n'
+        variants = {
+            'zip': zip_bytes([('src/main.py', stat.S_IFREG | 0o7777, body), ('empty/', stat.S_IFDIR, b'')]),
+            'tar': tar_bytes([('./src/main.py', tarfile.REGTYPE, 0o775, body), ('empty', tarfile.DIRTYPE, 0o755, b'')]),
+        }
+        variants['tar.gz'] = gzip.compress(variants['tar'])
+        hashes = set()
+        for fmt, content in variants.items():
+            with self.subTest(format=fmt), tempfile.TemporaryDirectory() as directory:
+                result = self.extract(content, fmt, directory)
+                hashes.add(result['contentSha256'])
+                self.assertEqual((1, len(body)), (result['fileCount'], result['totalBytes']))
+                self.assertEqual(body, (Path(directory) / 'src/main.py').read_bytes())
+                self.assertEqual(0o700, (Path(directory) / 'src/main.py').stat().st_mode & 0o7777)
+                self.assertEqual(0o700, (Path(directory) / 'empty').stat().st_mode & 0o7777)
+        self.assertEqual(1, len(hashes))
+
+    def test_paths_special_members_and_credential_signatures_are_rejected(self):
+        for name in ('../escape', '/outside', 'C:/Windows', 'directory\\file', '.git/config', 'src/.env', 'src/id_ed25519'):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                body = zip_bytes([(name, stat.S_IFREG | 0o600, b'hello')])
+                with self.assertRaises(source.SourceError):
+                    self.extract(body, 'zip', directory)
+        cases = [
+            ('zip', zip_bytes([('linked', stat.S_IFLNK | 0o777, b'outside')])),
+            ('tar', tar_bytes([('linked', tarfile.LNKTYPE, 0o777, b'')])),
+            ('tar', tar_bytes([('special', tarfile.FIFOTYPE, 0o600, b'')])),
+            ('zip', zip_bytes([('.env.example', stat.S_IFREG | 0o600,
+                b'x' * (source.BLOCK - 8) + b'-----BEGIN OPENSSH PRIVATE KEY-----')])),
+        ]
+        for fmt, body in cases:
+            with self.subTest(fmt=fmt), tempfile.TemporaryDirectory() as directory:
+                with self.assertRaises((source.SourceError, files.Rejected)):
+                    self.extract(body, fmt, directory)
+
+    def test_entry_size_expansion_limit_and_trailing_zip_bytes(self):
+        sparse = b'0' * (1024 * 1024)
+        cases = [
+            ('zip', zip_bytes([('packed', stat.S_IFREG | 0o600, sparse)], compress=zipfile.ZIP_DEFLATED), source.MAX_EXPANDED),
+            ('tar.gz', gzip.compress(tar_bytes([('packed', tarfile.REGTYPE, 0o600, sparse)])), source.MAX_EXPANDED),
+            ('zip', zip_bytes([('large', stat.S_IFREG | 0o600, b'abc')]), 2),
+            ('zip', zip_bytes([('large', stat.S_IFREG | 0o600, b'abc')]) + b'trailing', source.MAX_EXPANDED),
+        ]
+        for fmt, body, limit in cases:
+            with self.subTest(fmt=fmt), tempfile.TemporaryDirectory() as directory:
+                with self.assertRaises(source.SourceError):
+                    self.extract(body, fmt, directory, limit)
+
+
+if __name__ == '__main__':
+    unittest.main()
