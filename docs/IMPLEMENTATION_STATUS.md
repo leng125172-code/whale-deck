@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-13 空间注册与运行时锁定 `ce6612e9` 已接入 BFF 和 PostgreSQL。继续 Agent 存储与工作负载分配、Runner、Vue 和实际工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REGISTRATION.md)。
+
 2026-11-09，P3-17 报告组委派 `1931f19d` 已接入 BFF 与数据库。授权限指定空间报告，读取按当前组与授权复核，撤销保留版本。继续工作空间元数据、Runner、Vue 和真实 Authentik 验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REPORT_GRANTS.md)。
 
 2026-11-09，P3-17 管理员报告下载 `87daf9c5` 已接入正式 BFF，包含实时权限、原空间/运行绑定和附件审计。开发者委派、Runner 与 Vue 继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_REPORT_DOWNLOAD.md)。

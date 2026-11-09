@@ -1,6 +1,6 @@
 # Whale Deck 开发空间与开发环境
 
-日期：2026-10-13。对应 [完整目标](GOAL_P0_P5.md) 的 P3-13–P3-18，按任务直接实施。P3-17 已实现有界 TRX/JUnit 与 Cobertura/LCOV 解析、运行与工件关联、双格式导出、持久化、Worker 清理及报告审计下载。报告读取支持指定空间的 Authentik 组委派。开发空间、Runner 自动采集和页面待实现。见[报告委派验证](qa/DEVELOPMENT_WORKSPACE_REPORT_GRANTS.md)。
+日期：2026-10-13。对应 [完整目标](GOAL_P0_P5.md) 的 P3-13–P3-18，按任务直接实施。P3-13 已接入注册、运行时锁定及预算登记。P3-17 已实现有界 TRX/JUnit 与 Cobertura/LCOV 解析、运行与工件关联、双格式导出、持久化、Worker 清理及报告审计下载。报告读取支持指定空间的 Authentik 组委派。Agent 分配、Runner 自动采集和页面待实现。见[注册记录](qa/DEVELOPMENT_WORKSPACE_REGISTRATION.md)和[报告委派验证](qa/DEVELOPMENT_WORKSPACE_REPORT_GRANTS.md)。
 
 2026-10-21修订：六项开发空间需求完整保留，按[单工作站实用版](SCOPE_SINGLE_WORKSTATION.md)实施。不依赖tenant/node/套餐/VM；保留资源上限、空间所有者和显式开发授权。以下“配额”仅指主机安全预算，不是商业订阅。
 
