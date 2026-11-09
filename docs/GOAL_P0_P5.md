@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-17 报告持久化 `b3afed7f` 与重放修正 `6e6aa769` 已在真实隔离 PostgreSQL 验证。覆盖原任务和范围校验、并发幂等、双格式摘要、到期清理与非空降级保护。Runner、授权下载、覆盖率及 Vue 继续实施。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUN_REPORT_STORAGE.md)。
+
 2026-11-09，P3-17 运行与测试工件绑定及报告导出 `b3cb81a7` 已分项验证。实际 .NET 与 Node 进程的退出码、测试计数和 SHA256 进入同一份 Markdown/JSON 报告。摘要不符时隐去测试计数。继续 Runner、工件与报告持久化、授权下载、覆盖率和 Vue。见[验证记录](qa/DEVELOPMENT_WORKSPACE_RUN_REPORT_EXPORT.md)。
 
 2026-11-09，P3-17 测试证据解析 `b779c283` 已接入 Application。实际 .NET TRX 与 Node JUnit 验证了通过、失败、跳过及嵌套套件计数。报告摘要只保留校验和、状态、计数与失败序号。运行绑定、工件存储、授权下载和工作站端到端验收仍待。见[验证记录](qa/DEVELOPMENT_WORKSPACE_TEST_REPORTS.md)。

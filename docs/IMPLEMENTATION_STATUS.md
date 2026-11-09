@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-17 报告持久化 `b3afed7f` 和重放修正 `6e6aa769` 已通过真实隔离 PostgreSQL。仓储绑定原已结算任务，保存双格式与摘要，保护已有报告并支持有界到期清理。仍需接入 Runner、Worker 调度、授权下载与页面。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUN_REPORT_STORAGE.md)。
+
 2026-11-09，P3-17 运行事实与测试工件绑定、Markdown 和 JSON 导出 `b3cb81a7` 已用真实 .NET 和 Node 进程分项验证。已核对退出、用例、摘要和错误摘要下的隔离。继续接入 Runner、持久化、授权和 Vue。见[本批验证](qa/DEVELOPMENT_WORKSPACE_RUN_REPORT_EXPORT.md)。
 
 2026-11-09，P3-17 有界 TRX/JUnit 证据解析器 `b779c283` 通过实际 .NET 与 Node 产物验证。结构化摘要保留计数与失败序号，不携带原始测试内容。开发空间 Runner、来源绑定、报告持久化、授权下载与页面仍待。见[本批验证](qa/DEVELOPMENT_WORKSPACE_TEST_REPORTS.md)。
