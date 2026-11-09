@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 using WhaleDeck.Application.Abstractions;
+using WhaleDeck.Application.Development;
 using WhaleDeck.Application.Services;
 using WhaleDeck.Infrastructure.Agent;
 using WhaleDeck.Infrastructure.Catalog;
@@ -239,6 +240,7 @@ public static class DependencyInjection
         services.AddScoped<NotificationPrivateWorkflow>();
         services.AddScoped<NotificationPrivateDispatcher>();
         services.AddScoped<INotificationDispatchRepository, NotificationDispatchStore>();
+        services.AddScoped<IWorkspaceRunReportStore, WorkspaceRunReportRepository>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new PrivateNotificationConfiguration("/run/secrets/notifications/registry.json"));
         services.AddSingleton(new NotificationNetworkPolicy());

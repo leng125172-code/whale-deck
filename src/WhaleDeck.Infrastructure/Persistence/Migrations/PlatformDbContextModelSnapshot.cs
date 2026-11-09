@@ -8854,6 +8854,76 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRunReportRecord", b =>
+                {
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<DateTimeOffset?>("ExpiredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expired_at_utc");
+
+                    b.Property<DateTimeOffset>("FinalizedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finalized_at_utc");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("job_id");
+
+                    b.Property<byte[]>("JsonContent")
+                        .HasColumnType("bytea")
+                        .HasColumnName("json_content");
+
+                    b.Property<string>("JsonSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("json_sha256");
+
+                    b.Property<byte[]>("MarkdownContent")
+                        .HasColumnType("bytea")
+                        .HasColumnName("markdown_content");
+
+                    b.Property<string>("MarkdownSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("markdown_sha256");
+
+                    b.Property<DateTimeOffset>("RetainUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("retain_until_utc");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("schema_version");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("RunId");
+
+                    b.HasIndex("JobId")
+                        .IsUnique();
+
+                    b.HasIndex("RetainUntilUtc", "RunId")
+                        .HasFilter("expired_at_utc IS NULL");
+
+                    b.ToTable("workspace_run_reports", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_report_content", "((expired_at_utc IS NULL AND json_content IS NOT NULL AND markdown_content IS NOT NULL\n  AND octet_length(json_content) BETWEEN 1 AND 524288 AND octet_length(markdown_content) BETWEEN 1 AND 524288\n  AND json_sha256 = encode(sha256(json_content),'hex') AND markdown_sha256 = encode(sha256(markdown_content),'hex'))\nOR (expired_at_utc >= retain_until_utc AND json_content IS NULL AND markdown_content IS NULL)) IS TRUE");
+
+                            t.HasCheckConstraint("ck_workspace_report_digests", "json_sha256 ~ '^[a-f0-9]{64}$' AND markdown_sha256 ~ '^[a-f0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_workspace_report_identity", "run_id <> '00000000-0000-0000-0000-000000000000'::uuid AND workspace_id <> '00000000-0000-0000-0000-000000000000'::uuid AND job_id <> '00000000-0000-0000-0000-000000000000'::uuid AND run_id <> job_id AND schema_version > 0");
+
+                            t.HasCheckConstraint("ck_workspace_report_lifetime", "retain_until_utc > finalized_at_utc AND retain_until_utc <= finalized_at_utc + INTERVAL '8760 hours'");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.ContainerAclIntent", b =>
                 {
                     b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
@@ -9407,6 +9477,15 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ChannelId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRunReportRecord", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618
