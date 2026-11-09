@@ -55,7 +55,8 @@ public sealed class WorkspaceReportAccessRepository(PlatformDbContext db, TimePr
 
     private async Task RequireKnownAsync(Guid workspaceId, CancellationToken token)
     {
-        if (!await db.WorkspaceRunReports.AnyAsync(row => row.WorkspaceId == workspaceId, token))
+        if (!await db.DevelopmentWorkspaces.AnyAsync(row => row.Id == workspaceId, token) &&
+            !await db.WorkspaceRunReports.AnyAsync(row => row.WorkspaceId == workspaceId, token))
             throw new KeyNotFoundException("WORKSPACE_REPORT_SCOPE_NOT_FOUND");
     }
 }

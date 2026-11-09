@@ -246,6 +246,11 @@ public static class DependencyInjection
         services.AddScoped<IWorkspaceReportAccess, WorkspaceReportAccessRepository>();
         services.AddScoped<WorkspaceReportAuthorization>();
         services.AddScoped<WorkspaceReportGrantManagement>();
+        var workspacePolicy = configuration.GetSection("DevelopmentWorkspaces").Get<WorkspaceRegistrationPolicy>() ?? new();
+        DevelopmentWorkspaces.ValidatePolicy(workspacePolicy);
+        services.AddSingleton(workspacePolicy);
+        services.AddScoped<IDevelopmentWorkspaceRegistry, DevelopmentWorkspaceRegistry>();
+        services.AddScoped<DevelopmentWorkspaces>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new PrivateNotificationConfiguration("/run/secrets/notifications/registry.json"));
         services.AddSingleton(new NotificationNetworkPolicy());

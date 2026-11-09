@@ -4813,6 +4813,96 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.ToTable("container_update_runs", (string)null);
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.DevelopmentWorkspaceRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("CpuMillis")
+                        .HasColumnType("integer")
+                        .HasColumnName("cpu_millis");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int>("DiskMiB")
+                        .HasColumnType("integer")
+                        .HasColumnName("disk_mi_b");
+
+                    b.Property<string>("EnvironmentJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("environment_json");
+
+                    b.Property<string>("EnvironmentSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("environment_sha256");
+
+                    b.Property<int>("MemoryMiB")
+                        .HasColumnType("integer")
+                        .HasColumnName("memory_mi_b");
+
+                    b.Property<string>("OwnerSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("owner_subject");
+
+                    b.Property<Guid>("RegistrationKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("registration_key");
+
+                    b.Property<string>("RequestSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_sha256");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)")
+                        .HasColumnName("slug")
+                        .UseCollation("C");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("state");
+
+                    b.Property<string>("StorageRootId")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)")
+                        .HasColumnName("storage_root_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerSubject", "RegistrationKey")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerSubject", "Slug");
+
+                    b.ToTable("development_workspaces", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_development_workspace_manifest", "octet_length(environment_json) BETWEEN 1 AND 4096 AND environment_sha256 = encode(sha256(convert_to(environment_json,'UTF8')),'hex') AND request_sha256 ~ '^[a-f0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_development_workspace_shape", "state = 'Registered' AND version = 1 AND cpu_millis >= 100 AND memory_mib >= 128 AND disk_mib >= 256");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.DockerEventRecord", b =>
                 {
                     b.Property<Guid>("Id")
