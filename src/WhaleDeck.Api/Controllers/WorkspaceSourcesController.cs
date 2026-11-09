@@ -16,10 +16,21 @@ public sealed class WorkspaceSourcesController(WorkspaceSources sources, Termina
         return result is null ? NoContent() : result;
     }
 
+    [HttpGet("git-repositories")]
+    public async Task<string[]> GitRepositories(Guid workspaceId, CancellationToken token) =>
+        await sources.GitRepositoriesAsync((await identity.ReadAsync(HttpContext)).Actor, workspaceId, token);
+
     [HttpPut("{importId:guid}"), Consumes("application/json"), RequestSizeLimit(4096)]
     public async Task<ActionResult<WorkspaceSourceView>> Begin(Guid workspaceId, Guid importId, WorkspaceSourceInput input, CancellationToken token)
     {
         var result = await sources.BeginAsync((await identity.ReadAsync(HttpContext)).Actor, workspaceId, importId, input, token);
+        return AcceptedAtAction(nameof(Get), new { workspaceId, importId }, result);
+    }
+
+    [HttpPut("{importId:guid}/git"), Consumes("application/json"), RequestSizeLimit(4096)]
+    public async Task<ActionResult<WorkspaceSourceView>> BeginGit(Guid workspaceId, Guid importId, WorkspaceGitInput input, CancellationToken token)
+    {
+        var result = await sources.BeginGitAsync((await identity.ReadAsync(HttpContext)).Actor, workspaceId, importId, input, token);
         return AcceptedAtAction(nameof(Get), new { workspaceId, importId }, result);
     }
 

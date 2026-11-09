@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using WhaleDeck.Application.Abstractions;
 using WhaleDeck.Application.Development;
+using WhaleDeck.Infrastructure.Agent;
 using WhaleDeck.Infrastructure.Persistence;
 
 namespace WhaleDeck.IntegrationTests.Security;
@@ -197,6 +198,10 @@ public sealed partial class ContainerUploadHttpTests
 
     private sealed class WorkspaceSourceAgentFixture : IWorkspaceSourceGateway
     {
+        public AgentGateway? GitGateway { get; init; }
+        public Task AcquireGitAsync(WorkspaceSourceClaim claim, Func<WorkspaceGitProof, CancellationToken, Task> bind,
+            Func<int, byte[], CancellationToken, Task> append, CancellationToken token) =>
+            (GitGateway ?? throw new NotSupportedException()).AcquireGitAsync(claim, bind, append, token);
         private readonly ConcurrentDictionary<Guid, WorkspaceSourceObservation> _items = new();
         public byte[] LastArchive { get; private set; } = [];
         public int StageCount { get; private set; }
@@ -213,7 +218,8 @@ public sealed partial class ContainerUploadHttpTests
             await foreach (var chunk in chunks.WithCancellation(token)) await copy.WriteAsync(chunk, token);
             LastArchive = copy.ToArray();
             Assert.Equal(claim.Import.Archive.ArchiveSha256, Convert.ToHexStringLower(SHA256.HashData(LastArchive)));
-            var receipt = new WorkspaceSourceObservation("Staged", new(new string('1', 64), new string('2', 64), 1, 1));
+            var receipt = new WorkspaceSourceObservation("Staged", new(new string('1', 64), new string('2', 64),
+                claim.Import.Git?.Snapshot?.FileCount ?? 1, claim.Import.Git?.Snapshot?.TotalBytes ?? 1));
             Assert.True(_items.TryAdd(claim.Import.ImportId, receipt));
             return receipt;
         }

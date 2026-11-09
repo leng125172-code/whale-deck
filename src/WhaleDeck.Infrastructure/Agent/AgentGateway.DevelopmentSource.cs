@@ -89,18 +89,13 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
 
     private static WorkspaceSourceRequest SourceRequest(WorkspaceSourceClaim claim, string method, WorkspaceSourcePlan? plan = null)
     {
-        var (import, workspace, actor, _) = claim;
+        var (import, workspace, actor, _, _) = claim;
         if (import.WorkspaceId != workspace.Id || workspace.OwnerSubject != actor.Subject ||
             workspace.State != WorkspaceStorageAllocation.Allocated || import.Archive.ArchiveBytes <= 0)
             throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
         var request = new WorkspaceSourceRequest
         {
-            Storage = new()
-            {
-                WorkspaceId = workspace.Id.ToString("D"), StorageRootId = workspace.StorageRootId,
-                EnvironmentSha256 = workspace.EnvironmentSha256, DiskMib = (uint)workspace.Budget.DiskMiB,
-                ActorSubject = actor.Subject, TraceId = actor.TraceId
-            },
+            Storage = SourceStorage(claim),
             ImportId = import.ImportId.ToString("N"), ArchiveFormat = import.Archive.Format,
             ArchiveBytes = (uint)import.Archive.ArchiveBytes, ArchiveSha256 = import.Archive.ArchiveSha256,
             PlanSha256 = plan?.PlanSha256 ?? ""
@@ -112,16 +107,28 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
 
     private Metadata SourceHeaders(string method, WorkspaceSourceRequest request)
     {
-        if (_capabilityKey is not { Length: >= 32 }) throw new WorkspaceSourceException(WorkspaceSourceFailure.Unsupported);
         var hash = DevelopmentSourceBinding.Hash(request);
-        var expires = DateTimeOffset.UtcNow.AddSeconds(45).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
-        var nonce = Guid.NewGuid().ToString("N");
-        var payload = DevelopmentSourceBinding.Payload(expires, nonce, method, hash);
-        var signature = Convert.ToHexString(HMACSHA256.HashData(_capabilityKey, Encoding.UTF8.GetBytes(payload)));
-        var headers = new Metadata { { "x-whaledeck-capability", $"{expires}.{nonce}.{signature}" } };
+        var headers = SourceHeaders(method, hash, DevelopmentSourceBinding.Payload);
         if (method == DevelopmentSourceBinding.Stage) headers.Add(DevelopmentSourceBinding.Header, hash);
         return headers;
     }
+
+    private Metadata SourceHeaders(string method, string hash, Func<string, string, string, string, string> bind)
+    {
+        if (_capabilityKey is not { Length: >= 32 }) throw new WorkspaceSourceException(WorkspaceSourceFailure.Unsupported);
+        var expires = DateTimeOffset.UtcNow.AddSeconds(45).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        var nonce = Guid.NewGuid().ToString("N");
+        var payload = bind(expires, nonce, method, hash);
+        var signature = Convert.ToHexString(HMACSHA256.HashData(_capabilityKey, Encoding.UTF8.GetBytes(payload)));
+        return new Metadata { { "x-whaledeck-capability", $"{expires}.{nonce}.{signature}" } };
+    }
+
+    private static WorkspaceAllocationRequest SourceStorage(WorkspaceSourceClaim claim) => new()
+    {
+        WorkspaceId = claim.Workspace.Id.ToString("D"), StorageRootId = claim.Workspace.StorageRootId,
+        EnvironmentSha256 = claim.Workspace.EnvironmentSha256, DiskMib = (uint)claim.Workspace.Budget.DiskMiB,
+        ActorSubject = claim.Actor.Subject, TraceId = claim.Actor.TraceId
+    };
 
     private static WorkspaceSourceObservation SourceObservation(WorkspaceSourceRequest request, WorkspaceSourceReceipt receipt, string method) =>
         DevelopmentSourceBinding.Matches(request, receipt, method)

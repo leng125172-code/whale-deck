@@ -59,5 +59,9 @@ public sealed partial class NativeNotificationDispatchTests
         await ContainerUploadHttpTests.ImportWorkspaceSourcesInPostgres(options);
         var sourceDowngrade = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync("20261109140111_WorkspaceReportWorkflow"));
         Assert.Equal("workspace_source_import_history_present", sourceDowngrade.MessageText);
+        await db.Database.MigrateAsync();
+        await ContainerUploadHttpTests.ImportWorkspaceGitInPostgres(options);
+        var gitDowngrade = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync("20261109150125_DevelopmentWorkspaceSourceImports"));
+        Assert.Equal("workspace_source_git_history_present", gitDowngrade.MessageText);
     }
 }

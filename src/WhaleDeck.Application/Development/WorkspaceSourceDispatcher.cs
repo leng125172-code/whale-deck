@@ -13,6 +13,9 @@ public sealed class WorkspaceSourceDispatcher(IWorkspaceSourceStore store, Works
         {
             switch (claim.Import.State)
             {
+                case WorkspaceSources.Acquiring:
+                    await AcquireAsync(claim, work);
+                    break;
                 case WorkspaceSources.Ready:
                     await StageAsync(claim, work);
                     break;
@@ -25,6 +28,21 @@ public sealed class WorkspaceSourceDispatcher(IWorkspaceSourceStore store, Works
                 default:
                     throw new InvalidDataException("WORKSPACE_SOURCE_CLAIM_INVALID");
             }
+        }
+        catch (UnauthorizedAccessException) when (claim.Import.State == WorkspaceSources.Acquiring)
+        {
+            await store.AdvanceAsync(claim, WorkspaceSources.Canceling, null, "WORKSPACE_SOURCE_AUTHORIZATION_ENDED", token);
+        }
+        catch (WorkspaceSourceException error) when (claim.Import.State == WorkspaceSources.Acquiring &&
+            error.Failure is WorkspaceSourceFailure.Rejected or WorkspaceSourceFailure.Conflict or WorkspaceSourceFailure.Integrity)
+        {
+            var code = error.Failure switch
+            {
+                WorkspaceSourceFailure.Conflict => "WORKSPACE_SOURCE_GIT_SNAPSHOT_CHANGED",
+                WorkspaceSourceFailure.Integrity => "WORKSPACE_SOURCE_GIT_INTEGRITY",
+                _ => "WORKSPACE_SOURCE_GIT_REJECTED"
+            };
+            await store.AdvanceAsync(claim, WorkspaceSources.Failed, null, code, token);
         }
         catch (WorkspaceSourceException error) when (claim.Import.State != WorkspaceSources.Canceling &&
             error.Failure is WorkspaceSourceFailure.Rejected or WorkspaceSourceFailure.Conflict)
@@ -39,6 +57,60 @@ public sealed class WorkspaceSourceDispatcher(IWorkspaceSourceStore store, Works
         catch (OperationCanceledException) when (!token.IsCancellationRequested)
         {
             await store.DeferAsync(claim, "WORKSPACE_SOURCE_TIMEOUT", token);
+        }
+    }
+
+    private async Task AcquireAsync(WorkspaceSourceClaim claim, CancellationToken token)
+    {
+        if (!await AuthorizedAsync(claim, token))
+        {
+            await store.AdvanceAsync(claim, WorkspaceSources.Canceling, null, "WORKSPACE_SOURCE_AUTHORIZATION_ENDED", token);
+            return;
+        }
+        using var acquisition = CancellationTokenSource.CreateLinkedTokenSource(token);
+        using var database = new SemaphoreSlim(1);
+        var watch = WatchAsync();
+        try
+        {
+            await gateway.AcquireGitAsync(claim,
+                (proof, lifetime) => WithDatabaseAsync(async () =>
+                {
+                    if (!await AuthorizedAsync(claim, lifetime))
+                        throw new UnauthorizedAccessException("WORKSPACE_SOURCE_AUTHORIZATION_ENDED");
+                    await store.BindGitAsync(claim, proof, lifetime);
+                }, lifetime),
+                (offset, bytes, lifetime) => WithDatabaseAsync(() => store.AppendGitAsync(claim, offset, bytes, lifetime), lifetime),
+                acquisition.Token);
+        }
+        finally
+        {
+            await acquisition.CancelAsync();
+            try { await watch; }
+            catch (OperationCanceledException) when (acquisition.IsCancellationRequested) { }
+        }
+        if (await AuthorizedAsync(claim, token)) await store.CompleteGitAsync(claim, token);
+        else await store.AdvanceAsync(claim, WorkspaceSources.Canceling, null, "WORKSPACE_SOURCE_AUTHORIZATION_ENDED", token);
+
+        async Task WatchAsync()
+        {
+            using var poll = new PeriodicTimer(TimeSpan.FromSeconds(2));
+            try
+            {
+                while (await poll.WaitForNextTickAsync(acquisition.Token))
+                    await WithDatabaseAsync(async () =>
+                    {
+                        if (!await store.IsCurrentAsync(claim, acquisition.Token)) await acquisition.CancelAsync();
+                    }, acquisition.Token);
+            }
+            finally { await acquisition.CancelAsync(); }
+        }
+
+        // The lease check shares the scoped DbContext with archive writes.
+        async Task WithDatabaseAsync(Func<Task> action, CancellationToken lifetime)
+        {
+            await database.WaitAsync(lifetime);
+            try { await action(); }
+            finally { database.Release(); }
         }
     }
 
@@ -61,6 +133,8 @@ public sealed class WorkspaceSourceDispatcher(IWorkspaceSourceStore store, Works
             observed = await gateway.StageSourceAsync(claim, store.ReadChunksAsync(claim, token), token);
         }
         if (observed.State != WorkspaceSources.Staged) throw Integrity();
+        if (claim.Import.Git?.Snapshot is { } git &&
+            (observed.Plan.FileCount != git.FileCount || observed.Plan.TotalBytes != git.TotalBytes)) throw Integrity();
         await store.AdvanceAsync(claim, WorkspaceSources.Staged, observed.Plan, null, token);
     }
 
@@ -118,7 +192,8 @@ public sealed class WorkspaceSourceDispatcher(IWorkspaceSourceStore store, Works
         try
         {
             var live = await access.RequireAsync(claim.Actor, claim.Workspace.Id, claim.Import.ImportId, token);
-            return live.Version == claim.Workspace.Version && live.StorageRootId == claim.Workspace.StorageRootId &&
+            return (claim.Import.Git is null || access.RequireGitGrant(claim.Actor, claim.Import.Git.RepositoryId).CredentialRef == claim.GitCredentialRef) &&
+                live.Version == claim.Workspace.Version && live.StorageRootId == claim.Workspace.StorageRootId &&
                 live.EnvironmentSha256 == claim.Workspace.EnvironmentSha256 && live.Budget == claim.Workspace.Budget;
         }
         catch (Exception error) when (error is UnauthorizedAccessException or KeyNotFoundException ||

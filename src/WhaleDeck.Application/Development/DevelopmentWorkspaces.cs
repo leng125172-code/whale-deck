@@ -28,6 +28,7 @@ public sealed class WorkspaceRegistrationPolicy
     public string[] StorageRootIds { get; init; } = [];
     public Guid[] CreateGroupIds { get; init; } = [];
     public Dictionary<string, WorkspaceRuntimePin> Runtimes { get; init; } = new(StringComparer.Ordinal);
+    public Dictionary<string, WorkspaceGitRepositoryGrant> GitRepositories { get; init; } = new(StringComparer.Ordinal);
     public WorkspaceBudget Capacity { get; init; } = new(8000, 16384, 102400);
     public int ReportRetentionDays { get; init; } = 14;
 }
@@ -104,7 +105,12 @@ public sealed partial class DevelopmentWorkspaces(
         if (!policy.StorageRootIds.All(ValidKey) || policy.CreateGroupIds.Contains(Guid.Empty) || policy.ReportRetentionDays is < 1 or > 365 ||
             policy.Capacity is not { CpuMillis: >= 100, MemoryMiB: >= 128, DiskMiB: >= 256 } ||
             policy.Runtimes.Any(row => !ValidKey(row.Key) || row.Value is null || !VersionPattern().IsMatch(row.Value.Version ?? "") ||
-                !ImagePattern().IsMatch(row.Value.Image ?? "")))
+                !ImagePattern().IsMatch(row.Value.Image ?? "")) ||
+            policy.GitRepositories.Count > 128 ||
+            policy.GitRepositories.Any(row => !ValidKey(row.Key) || row.Value is null ||
+                row.Value.CredentialRef is { } reference && !ValidKey(reference) ||
+                row.Value.Subjects is not { Length: >= 1 and <= 256 } ||
+                row.Value.Subjects.Any(subject => string.IsNullOrWhiteSpace(subject) || subject.Length > 256 || subject.Any(char.IsControl))))
             throw new InvalidOperationException("WORKSPACE_REGISTRATION_POLICY_INVALID");
     }
 

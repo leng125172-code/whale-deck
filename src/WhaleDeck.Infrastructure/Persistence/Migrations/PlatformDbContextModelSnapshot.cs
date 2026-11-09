@@ -9201,6 +9201,39 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(8)")
                         .HasColumnName("format");
 
+                    b.Property<string>("GitCommit")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("git_commit");
+
+                    b.Property<string>("GitCredentialRef")
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)")
+                        .HasColumnName("git_credential_ref");
+
+                    b.Property<int?>("GitFileCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("git_file_count");
+
+                    b.Property<string>("GitRef")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("git_ref");
+
+                    b.Property<string>("GitRepositoryId")
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)")
+                        .HasColumnName("git_repository_id");
+
+                    b.Property<string>("GitResolvedObject")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("git_resolved_object");
+
+                    b.Property<long?>("GitTotalBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("git_total_bytes");
+
                     b.Property<Guid?>("Lease")
                         .HasColumnType("uuid")
                         .HasColumnName("lease");
@@ -9261,11 +9294,13 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                     b.ToTable("development_workspace_source_imports", null, t =>
                         {
-                            t.HasCheckConstraint("ck_workspace_source_archive", "format IN ('zip','tar','tar.gz') AND archive_bytes BETWEEN 1 AND 134217728 AND archive_sha256 ~ '^[a-f0-9]{64}$' AND received_bytes BETWEEN 0 AND archive_bytes");
+                            t.HasCheckConstraint("ck_workspace_source_archive", "received_bytes BETWEEN 0 AND archive_bytes AND (\n    (format IN ('zip','tar','tar.gz') AND archive_bytes BETWEEN 1 AND 134217728 AND archive_sha256 ~ '^[a-f0-9]{64}$')\n    OR (git_repository_id IS NOT NULL AND format = 'tar' AND archive_bytes = 0 AND archive_sha256 = ''\n        AND state IN ('Acquiring','Canceled','Failed'))\n)");
+
+                            t.HasCheckConstraint("ck_workspace_source_git", "(git_repository_id IS NULL AND git_ref IS NULL AND git_credential_ref IS NULL AND git_resolved_object IS NULL\n    AND git_commit IS NULL AND git_file_count IS NULL AND git_total_bytes IS NULL AND state <> 'Acquiring')\nOR (git_repository_id IS NOT NULL AND git_repository_id ~ '^[a-z0-9]+(-[a-z0-9]+)*$'\n    AND git_ref IS NOT NULL AND char_length(git_ref) BETWEEN 1 AND 255\n    AND (git_credential_ref IS NULL OR git_credential_ref ~ '^[a-z0-9]+(-[a-z0-9]+)*$')\n    AND state <> 'Uploading' AND format = 'tar' AND (\n        (archive_bytes = 0 AND git_resolved_object IS NULL AND git_commit IS NULL\n            AND git_file_count IS NULL AND git_total_bytes IS NULL)\n        OR (archive_bytes > 0 AND git_resolved_object IS NOT NULL AND git_commit IS NOT NULL\n            AND git_resolved_object ~ '^[a-f0-9]{40}([a-f0-9]{24})?$' AND git_resolved_object ~ '[1-9a-f]'\n            AND git_commit ~ '^[a-f0-9]{40}([a-f0-9]{24})?$' AND git_commit ~ '[1-9a-f]'\n            AND length(git_resolved_object) = length(git_commit)\n            AND git_file_count IS NOT NULL AND git_file_count BETWEEN 1 AND 9999\n            AND git_total_bytes IS NOT NULL AND git_total_bytes BETWEEN 0 AND archive_bytes)\n    ))");
 
                             t.HasCheckConstraint("ck_workspace_source_plan", "(plan_sha256 IS NULL AND content_sha256 IS NULL AND file_count IS NULL AND total_bytes IS NULL\n    AND state NOT IN ('Staged','Publishing','Published'))\nOR (plan_sha256 IS NOT NULL AND plan_sha256 ~ '^[a-f0-9]{64}$'\n    AND content_sha256 IS NOT NULL AND content_sha256 ~ '^[a-f0-9]{64}$'\n    AND file_count IS NOT NULL AND file_count BETWEEN 1 AND 9999\n    AND total_bytes IS NOT NULL AND total_bytes BETWEEN 0 AND 1073741824)");
 
-                            t.HasCheckConstraint("ck_workspace_source_state", "state IN ('Uploading','Ready','Staged','Publishing','Canceling','Published','Canceled','Failed')\nAND (state IN ('Published','Canceled','Failed')) = (finished_at_utc IS NOT NULL)\nAND (lease IS NULL) = (lease_until_utc IS NULL)\nAND (finished_at_utc IS NULL OR lease IS NULL)\nAND (state NOT IN ('Ready','Staged','Publishing','Published') OR received_bytes = archive_bytes)");
+                            t.HasCheckConstraint("ck_workspace_source_state", "state IN ('Uploading','Acquiring','Ready','Staged','Publishing','Canceling','Published','Canceled','Failed')\nAND (state IN ('Published','Canceled','Failed')) = (finished_at_utc IS NOT NULL)\nAND (lease IS NULL) = (lease_until_utc IS NULL)\nAND (finished_at_utc IS NULL OR lease IS NULL)\nAND (state NOT IN ('Ready','Staged','Publishing','Published') OR received_bytes = archive_bytes)");
                         });
                 });
 
