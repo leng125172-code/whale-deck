@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-17 `0babd91c` 接入宿主 Runner 固定输出槽和协议 1.66 工件清单。标准发布包在断网 KVM 实际生成并封存 Node JUnit 与 .NET TRX，验证失败用例、摘要、Agent 重启回读及不安全工件拒绝。继续签名读取、脱敏持久化、退役与页面。见[本批验收](qa/DEVELOPMENT_WORKSPACE_TEST_ARTIFACTS.md)。
+
 2026-11-09，P3-13/P3-16 `74e39886` 接入 BFF、PostgreSQL 和 Worker 的持久运行链。真实数据库及回环 HTTP 验证并发幂等、提交派发后单次执行上限、Worker 接管、取消和撤权。Agent 与身份故障由夹具注入，真实宿主控制证据见上一批。继续 Runner 工件、Vue 和工作站端到端。见[本批验收](qa/DEVELOPMENT_WORKSPACE_RUNNER_QUEUE.md)。
 
 2026-11-09，P3-13/P3-16 Agent 1.65 `b29fcee2` 接入签名取消和中断回收，来宾验证不同空间的并发任务隔离、原终态重放和中断 bundle 清理。继续 Worker/BFF 编排和物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_CONTROL.md)。

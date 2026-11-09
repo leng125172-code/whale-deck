@@ -59,6 +59,49 @@ class RunnerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.binding(self.request | {'argv': ['relative-command']})
 
+    @unittest.skipUnless(os.geteuid() == 0, 'Requires a privileged test fixture for workload ownership')
+    def test_report_slot_refuses_indirection_and_seals_only_bounded_workload_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            output, run = base / 'output', base / 'run'
+            output.mkdir()
+            run.mkdir()
+            sentinel = base / 'sentinel'
+            sentinel.write_bytes(b'untouched')
+            os.chown(sentinel, runner.RUN_UID, runner.RUN_UID)
+            entry = output / 'tests.xml'
+            with self.driver.absolute(output) as slot, self.driver.absolute(run) as destination:
+                def capture():
+                    return runner.seal_report(self.driver, slot, destination, ('JUnit', entry.name))
+
+                self.assertEqual('Missing', capture()['state'])
+                entry.symlink_to(sentinel)
+                self.assertEqual('Rejected', capture()['state'])
+                entry.unlink()
+                os.link(sentinel, entry)
+                self.assertEqual('Rejected', capture()['state'])
+                entry.unlink()
+                os.mkfifo(entry)
+                self.assertEqual('Rejected', capture()['state'])
+                entry.unlink()
+                entry.touch()
+                os.chown(entry, runner.RUN_UID, runner.RUN_UID)
+                with entry.open('wb') as stream:
+                    stream.truncate(runner.REPORT_LIMIT + 1)
+                self.assertEqual('TooLarge', capture()['state'])
+                self.assertEqual([], list(run.iterdir()))
+
+                raw = b'<testsuite><testcase name="local"/></testsuite>'
+                entry.write_bytes(raw)
+                self.assertEqual({'format': 'JUnit', 'state': 'Present', 'size': len(raw),
+                    'sha256': hashlib.sha256(raw).hexdigest()}, capture())
+                sealed = run / runner.REPORT
+                self.assertEqual([sealed], list(run.iterdir()))
+                self.assertEqual(raw, sealed.read_bytes())
+                self.assertEqual(0, sealed.stat().st_uid)
+                self.assertEqual(0o600, sealed.stat().st_mode & 0o777)
+                self.assertEqual(b'untouched', sentinel.read_bytes())
+
     @unittest.skipUnless(os.geteuid() == 0, 'Needs root or a private user namespace')
     def test_staging_cannot_regain_the_quota_override_after_exec(self):
         pid = os.fork()
