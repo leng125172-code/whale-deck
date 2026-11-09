@@ -1588,3 +1588,27 @@ service ContainerRecycleArchiveService {
   rpc Inspect(ContainerRecycleArchiveRequest) returns (ContainerRecycleArchiveReceipt);
   rpc Discard(ContainerRecycleArchiveRequest) returns (ContainerRecycleArchiveReceipt);
 }
+
+// Additive contract preparation only. No service/capability is registered by
+// declaring these types. Retirement is separate from ArchiveCopy authority.
+message ContainerRecycleArchiveRetirementSource { string operation_id = 1; string owner = 2; ContainerRecycleArchivePlan plan = 3; }
+message ContainerRecycleArchiveRetirementCommand { ContainerRecycleArchiveRetirementSource archive = 1; uint32 retain_days = 2; string mode = 3; }
+message ContainerRecycleArchiveRetirementPlan {
+  uint32 schema_version = 1; ContainerRecycleArchiveRetirementCommand command = 2;
+  string archive_record_digest = 3; string source_record_digest = 4; string purge_record_digest = 5;
+  string purge_marker_digest = 6; string claim_digest = 7; string history_metadata_digest = 8;
+  int64 history_created_at_unix_ms = 9; int64 not_before_unix_ms = 10;
+  bool retention_elapsed = 11; bool binding_current = 12; bool retirement_eligible = 13;
+  string storage_hash = 14; FileDirectoryIdentity store_identity = 15;
+  FileObjectIdentity archive_identity = 16; int64 archive_changed_at_unix_ns = 17;
+  int64 archive_bytes = 18; string archive_sha256 = 19;
+  FileObjectIdentity published_identity = 20; int64 published_changed_at_unix_ns = 21;
+  string fingerprint = 22;
+}
+message ContainerRecycleArchiveRetirementPlanRequest { ContainerRecycleArchiveRetirementCommand command = 1; RequestContext context = 2; }
+message ContainerRecycleArchiveRetirementRequest { string operation_id = 1; string owner = 2; ContainerRecycleArchiveRetirementPlan plan = 3; RequestContext context = 4; }
+message ContainerRecycleArchiveRetirementReceipt {
+  string operation_id = 1; string source_operation_id = 2; string archive_operation_id = 3;
+  string fingerprint = 4; string state = 5; bool source_fenced = 6; bool owned_fence = 7;
+  optional bool retirement_applied = 8; int64 not_before_unix_ms = 9;
+}
