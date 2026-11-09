@@ -25,6 +25,7 @@ REQUEST = 'request.json'
 RESULT = 'result.json'
 REPORT = 'test-report.xml'
 REPORT_RETIRED = 'test-report-retired.json'
+REPORT_RETIRE_STAGING = '.test-report-retirement-staging'
 REPORT_LIMIT = 16 * 1024 * 1024
 REPORT_SLOT = '/tmp/whaledeck-results'
 REPORT_COMMANDS = {
@@ -383,20 +384,23 @@ def artifact(driver, isolation, rootfs, request, *, retire):
                     if not os.path.samestat(visible, entry):
                         refuse('REPORT_CHANGED')
                     raw = driver.read_file(descriptor, manifest['size'], private=True)
-                    if len(raw) != manifest['size'] or hashlib.sha256(raw).hexdigest() != manifest['sha256']:
+                    if (len(raw) != manifest['size'] or hashlib.sha256(raw).hexdigest() != manifest['sha256']
+                            or not same_report_file(entry, os.fstat(descriptor))):
                         refuse('REPORT_CHANGED')
                     if not retire:
                         return raw
                     if not retired:
-                        staging = '.retired-' + uuid.uuid4().hex
+                        # Recover a process cut during staging without accumulating orphan files.
+                        with contextlib.suppress(FileNotFoundError):
+                            os.unlink(REPORT_RETIRE_STAGING, dir_fd=directory)
                         try:
-                            rootfs.write_metadata(directory, staging, proof)
-                            driver.files.exchange(directory, staging, directory, REPORT_RETIRED, 1)
+                            rootfs.write_metadata(directory, REPORT_RETIRE_STAGING, proof)
+                            driver.files.exchange(directory, REPORT_RETIRE_STAGING, directory, REPORT_RETIRED, 1)
                             os.fsync(directory)
                         finally:
                             with contextlib.suppress(FileNotFoundError):
-                                os.unlink(staging, dir_fd=directory)
-                    if not os.path.samestat(entry, os.stat(REPORT, dir_fd=directory, follow_symlinks=False)):
+                                os.unlink(REPORT_RETIRE_STAGING, dir_fd=directory)
+                    if not same_report_file(entry, os.stat(REPORT, dir_fd=directory, follow_symlinks=False)):
                         refuse('REPORT_CHANGED')
                     os.unlink(REPORT, dir_fd=directory)
             except FileNotFoundError:
@@ -408,6 +412,11 @@ def artifact(driver, isolation, rootfs, request, *, retire):
                 raise
             os.fsync(directory)
             return proof
+
+
+def same_report_file(before, after):
+    return (os.path.samestat(before, after) and before.st_size == after.st_size
+            and before.st_mtime_ns == after.st_mtime_ns and before.st_ctime_ns == after.st_ctime_ns)
 
 
 def reconcile(driver, isolation, rootfs, control, request, *, stop):
