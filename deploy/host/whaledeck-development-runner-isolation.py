@@ -17,6 +17,7 @@ OPEN_TREE = 428
 MOVE_MOUNT = 429
 MOUNT_SETATTR = 442
 MOUNT_ATTR_NOSUID_NODEV = 0x06
+MNT_DETACH = 0x02
 PROJECTION = 'workspace'
 DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 LIBC = ctypes.CDLL(None, use_errno=True)
@@ -74,15 +75,19 @@ class RunnerMountNamespace:
             self._attach(source, destination)
         finally:
             os.close(destination)
-        projected = os.open(PROJECTION, DIR, dir_fd=bundle)
         try:
-            required = os.ST_NOSUID | os.ST_NODEV
-            if (not os.path.samestat(info, require_private_directory(projected)) or
-                    os.fstatvfs(projected).f_flag & required != required):
-                raise PermissionError('Runner projected mount is invalid')
-            yield projected
+            projected = os.open(PROJECTION, DIR, dir_fd=bundle)
+            try:
+                required = os.ST_NOSUID | os.ST_NODEV
+                if (not os.path.samestat(info, require_private_directory(projected)) or
+                        os.fstatvfs(projected).f_flag & required != required):
+                    raise PermissionError('Runner projected mount is invalid')
+                yield projected
+            finally:
+                os.close(projected)
         finally:
-            os.close(projected)
+            target = os.fsencode(f'/proc/self/fd/{bundle}/{PROJECTION}')
+            checked(LIBC.umount2(ctypes.c_char_p(target), ctypes.c_int(MNT_DETACH)))
 
     @staticmethod
     def _attach(source, destination):
@@ -157,12 +162,7 @@ def seccomp_profile():
     return {'defaultAction': 'SCMP_ACT_ERRNO', 'defaultErrnoRet': errno.EPERM, 'syscalls': rules}
 
 
-def oci_config(files, bundle, projected, argv, uid, cpu_millis, memory_mib, *, rootfs_policy, runtime_image):
-    """Build the fixed OCI policy inside the trusted launcher's private namespace."""
-    identity = require_private_directory(bundle)
-    bundle_path = os.readlink(f'/proc/self/fd/{bundle}')
-    if (not os.path.isabs(bundle_path) or not os.path.samestat(identity, os.stat(bundle_path, follow_symlinks=False))):
-        raise PermissionError('Runner bundle identity changed')
+def validate_process(argv, uid, cpu_millis, memory_mib):
     if (not isinstance(argv, list) or not 1 <= len(argv) <= 64
             or any(not isinstance(arg, str) or '\0' in arg or len(arg.encode('utf-8')) > 4096 for arg in argv)
             or not os.path.isabs(argv[0]) or argv[0].startswith('//') or os.path.normpath(argv[0]) != argv[0]
@@ -173,6 +173,14 @@ def oci_config(files, bundle, projected, argv, uid, cpu_millis, memory_mib, *, r
             type(memory_mib) is not int or not 128 <= memory_mib <= 1024 * 1024):
         raise ValueError('Runner identity or budget is invalid')
 
+
+def oci_config(files, bundle, projected, argv, uid, cpu_millis, memory_mib, *, rootfs_policy, runtime_image):
+    """Build the fixed OCI policy inside the trusted launcher's private namespace."""
+    identity = require_private_directory(bundle)
+    bundle_path = os.readlink(f'/proc/self/fd/{bundle}')
+    if (not os.path.isabs(bundle_path) or not os.path.samestat(identity, os.stat(bundle_path, follow_symlinks=False))):
+        raise PermissionError('Runner bundle identity changed')
+    validate_process(argv, uid, cpu_millis, memory_mib)
     visible = files.open_at(bundle, PROJECTION, DIR, cross_mount=True)
     try:
         mount_flags = os.ST_NOSUID | os.ST_NODEV

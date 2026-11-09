@@ -204,7 +204,7 @@ development_base=/var/lib/whaledeck-development
 [[ ! -L "$development_base" ]] || exit 1
 if [[ ! -e "$development_base" ]]; then install -d -o root -g root -m 0700 "$development_base"; fi
 [[ -d "$development_base" && $(stat -c '%a:%U:%G' -- "$development_base") == '700:root:root' ]] || exit 1
-for development_module in whaledeck-development-storage.py whaledeck-development-storage-transport.py whaledeck-development-project-quota.py whaledeck-development-quota-guard.py whaledeck-development-runner-isolation.py whaledeck-development-rootfs.py whaledeck-development-unpack.py; do
+for development_module in whaledeck-development-storage.py whaledeck-development-storage-transport.py whaledeck-development-project-quota.py whaledeck-development-quota-guard.py whaledeck-development-runner-isolation.py whaledeck-development-rootfs.py whaledeck-development-unpack.py whaledeck-development-runner.py; do
   install -o root -g root -m 0750 "$(dirname "$0")/$development_module" "/usr/local/libexec/$development_module"
 done
 if [[ $install_runner == yes ]]; then

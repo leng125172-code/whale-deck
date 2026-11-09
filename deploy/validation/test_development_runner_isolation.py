@@ -95,6 +95,7 @@ class RunnerIsolationTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         isolation.oci_config(files, bundle_fd, projected, argv, uid, cpu, 128,
                                              rootfs_policy=None, runtime_image='')
+            self.assertEqual([], list(view.iterdir()))
             with self.assertRaises(FileExistsError), namespace.project(fd, bundle_fd, info.st_ino):
                 self.fail('Existing projection was overwritten')
         finally:
