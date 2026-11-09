@@ -13,13 +13,14 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = DevelopmentRunnerBinding.ProtocolMinor,
+            ProtocolMinor = DevelopmentRunnerBinding.ControlProtocolMinor,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
             DevelopmentStorageBinding.Capability,
             DevelopmentStorageBinding.AttestationCapability,
             DevelopmentRunnerBinding.Capability,
+            DevelopmentRunnerBinding.ControlCapability,
             "docker.files.copy-intents",
             "docker.files.recycle",
             "docker.files.recycle.restore",

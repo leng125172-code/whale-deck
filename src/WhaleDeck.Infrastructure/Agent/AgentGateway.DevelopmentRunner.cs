@@ -13,13 +13,19 @@ namespace WhaleDeck.Infrastructure.Agent;
 public sealed partial class AgentGateway : IWorkspaceRunnerGateway
 {
     public Task<WorkspaceRunnerReceipt> StartAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command,
-        CancellationToken token) => WorkspaceRunAsync(actor, workspace, command, observe: false, token);
+        CancellationToken token) => WorkspaceRunAsync(actor, workspace, command, DevelopmentRunnerBinding.Start, token);
 
     public Task<WorkspaceRunnerReceipt> ObserveAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command,
-        CancellationToken token) => WorkspaceRunAsync(actor, workspace, command, observe: true, token);
+        CancellationToken token) => WorkspaceRunAsync(actor, workspace, command, DevelopmentRunnerBinding.Observe, token);
+
+    public Task<WorkspaceRunnerReceipt> CancelAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command,
+        CancellationToken token) => WorkspaceRunAsync(actor, workspace, command, DevelopmentRunnerBinding.Cancel, token);
+
+    public Task<WorkspaceRunnerReceipt> ReclaimAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command,
+        CancellationToken token) => WorkspaceRunAsync(actor, workspace, command, DevelopmentRunnerBinding.Reclaim, token);
 
     private async Task<WorkspaceRunnerReceipt> WorkspaceRunAsync(TerminalActor actor, WorkspaceDefinition workspace,
-        WorkspaceRunCommand command, bool observe, CancellationToken token)
+        WorkspaceRunCommand command, string method, CancellationToken token)
     {
         if (workspace.State != WorkspaceStorageAllocation.Allocated || actor.Subject != workspace.OwnerSubject ||
             workspace.Budget.DiskMiB is < 256 or > WorkspaceRegistrationPolicy.MaximumWorkspaceDiskMiB ||
@@ -44,22 +50,32 @@ public sealed partial class AgentGateway : IWorkspaceRunnerGateway
         request.Argv.AddRange(command.Arguments);
         if (!DevelopmentRunnerBinding.IsValid(request)) throw new ArgumentException("WORKSPACE_RUN_BINDING_INVALID");
         var caps = await _agent.GetCapabilitiesAsync(new Empty(), deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
-        if (!DevelopmentRunnerBinding.IsSupported(caps))
+        if (!DevelopmentRunnerBinding.IsSupported(caps, method))
             throw new RpcException(new Status(StatusCode.Unimplemented, "WORKSPACE_RUN_CAPABILITY_UNAVAILABLE"));
         if (_capabilityKey is not { Length: >= 32 })
             throw new RpcException(new Status(StatusCode.PermissionDenied, "WORKSPACE_RUN_CAPABILITY_UNAVAILABLE"));
 
-        var method = observe ? DevelopmentRunnerBinding.Observe : DevelopmentRunnerBinding.Start;
         var expires = DateTimeOffset.UtcNow.AddSeconds(45).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         var nonce = Guid.NewGuid().ToString("N");
         var payload = DevelopmentRunnerBinding.Payload(expires, nonce, method, DevelopmentRunnerBinding.Hash(request));
         var signature = HMACSHA256.HashData(_capabilityKey, Encoding.UTF8.GetBytes(payload));
         var headers = new Metadata { { "x-whaledeck-capability", $"{expires}.{nonce}.{Convert.ToHexString(signature)}" } };
         var client = new DevelopmentRunnerService.DevelopmentRunnerServiceClient(_channel);
-        var deadline = DateTime.UtcNow.AddSeconds(5 + (observe ? DevelopmentRunnerBinding.ObserveSeconds :
-            DevelopmentRunnerBinding.PreparationSeconds + command.DeadlineSeconds));
-        var receipt = observe ? await client.ObserveAsync(request, headers, deadline, token) :
-            await client.StartAsync(request, headers, deadline, token);
+        var seconds = method switch
+        {
+            DevelopmentRunnerBinding.Start => DevelopmentRunnerBinding.PreparationSeconds + command.DeadlineSeconds,
+            DevelopmentRunnerBinding.Observe => DevelopmentRunnerBinding.ObserveSeconds,
+            _ => DevelopmentRunnerBinding.ControlSeconds
+        };
+        var deadline = DateTime.UtcNow.AddSeconds(5 + seconds);
+        var receipt = await (method switch
+        {
+            DevelopmentRunnerBinding.Start => client.StartAsync(request, headers, deadline, token),
+            DevelopmentRunnerBinding.Observe => client.ObserveAsync(request, headers, deadline, token),
+            DevelopmentRunnerBinding.Cancel => client.CancelAsync(request, headers, deadline, token),
+            DevelopmentRunnerBinding.Reclaim => client.ReclaimAsync(request, headers, deadline, token),
+            _ => throw new ArgumentOutOfRangeException(nameof(method))
+        });
         if (!DevelopmentRunnerBinding.Matches(request, receipt))
             throw new RpcException(new Status(StatusCode.DataLoss, "WORKSPACE_RUN_RECEIPT_INVALID"));
         return new(command.RunId, receipt.RequestSha256, receipt.Status, receipt.HasRuntimeExitCode ? receipt.RuntimeExitCode : null);

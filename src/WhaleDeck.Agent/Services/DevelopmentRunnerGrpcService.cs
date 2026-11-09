@@ -12,23 +12,31 @@ public sealed class DevelopmentRunnerGrpcService(BoundedProcessRunner processes)
     private static readonly HashSet<int> HelperExitCodes = [1, 2];
 
     public override Task<WorkspaceRunReceipt> Start(WorkspaceRunRequest request, ServerCallContext context) =>
-        ExecuteAsync(request, observe: false, context.CancellationToken);
+        ExecuteAsync(request, "start", context.CancellationToken);
 
     public override Task<WorkspaceRunReceipt> Observe(WorkspaceRunRequest request, ServerCallContext context) =>
-        ExecuteAsync(request, observe: true, context.CancellationToken);
+        ExecuteAsync(request, "observe", context.CancellationToken);
 
-    private async Task<WorkspaceRunReceipt> ExecuteAsync(WorkspaceRunRequest request, bool observe, CancellationToken token)
+    public override Task<WorkspaceRunReceipt> Cancel(WorkspaceRunRequest request, ServerCallContext context) =>
+        ExecuteAsync(request, "cancel", context.CancellationToken);
+
+    public override Task<WorkspaceRunReceipt> Reclaim(WorkspaceRunRequest request, ServerCallContext context) =>
+        ExecuteAsync(request, "reclaim", context.CancellationToken);
+
+    private async Task<WorkspaceRunReceipt> ExecuteAsync(WorkspaceRunRequest request, string action, CancellationToken token)
     {
         if (!DevelopmentRunnerBinding.IsValid(request))
             throw Error(StatusCode.InvalidArgument, "WORKSPACE_RUN_REQUEST_INVALID");
         token.ThrowIfCancellationRequested();
-        var seconds = observe ? DevelopmentRunnerBinding.ObserveSeconds :
-            DevelopmentRunnerBinding.PreparationSeconds + request.DeadlineSeconds;
-        var nonce = Guid.NewGuid().ToString("N");
-        string[] arguments = observe
-            ? ["-n", "/usr/local/libexec/whaledeck-privileged", "development-run-observe", nonce]
-            : ["-n", "/usr/local/libexec/whaledeck-privileged", "development-run-start", nonce,
-                (seconds - 10).ToString(CultureInfo.InvariantCulture)];
+        var seconds = action switch
+        {
+            "start" => DevelopmentRunnerBinding.PreparationSeconds + (int)request.DeadlineSeconds,
+            "observe" => DevelopmentRunnerBinding.ObserveSeconds,
+            _ => DevelopmentRunnerBinding.ControlSeconds
+        };
+        var arguments = new List<string>
+            { "-n", "/usr/local/libexec/whaledeck-privileged", "development-run-" + action, Guid.NewGuid().ToString("N") };
+        if (action == "start") arguments.Add((seconds - 10).ToString(CultureInfo.InvariantCulture));
         ProcessResult result;
         try
         {
@@ -36,7 +44,7 @@ public sealed class DevelopmentRunnerGrpcService(BoundedProcessRunner processes)
             // instead of retrying under a different run identifier.
             result = await processes.RunAsync("/usr/bin/sudo", arguments,
                 DevelopmentRunnerBinding.HostInput(request), TimeSpan.FromSeconds(seconds),
-                "WORKSPACE_RUN_HELPER_UNAVAILABLE", observe ? token : CancellationToken.None, acceptedExitCodes: HelperExitCodes);
+                "WORKSPACE_RUN_HELPER_UNAVAILABLE", action == "observe" ? token : CancellationToken.None, acceptedExitCodes: HelperExitCodes);
         }
         catch (OperationCanceledException) { throw Error(StatusCode.DeadlineExceeded, "WORKSPACE_RUN_HELPER_TIMEOUT"); }
         catch (Exception error) when (error is IOException or InvalidOperationException or Win32Exception)
@@ -81,7 +89,9 @@ public sealed class DevelopmentRunnerGrpcService(BoundedProcessRunner processes)
                     "WORKSPACE_RUN_WORK_IDENTITY_CHANGED" or "WORKSPACE_STORAGE_NOT_PUBLISHED" or
                     "WORKSPACE_ROOTFS_IMAGE_NOT_FOUND" or "WORKSPACE_UNPACK_FAILED" => StatusCode.FailedPrecondition,
                 "WORKSPACE_RUN_INTERRUPTED" or "WORKSPACE_RUN_CLEANUP_UNCONFIRMED" or
-                    "WORKSPACE_UNPACK_CLEANUP_UNCONFIRMED" or "WORKSPACE_RUN_RECEIPT_INVALID" => StatusCode.DataLoss,
+                    "WORKSPACE_UNPACK_CLEANUP_UNCONFIRMED" or "WORKSPACE_RUN_RECEIPT_INVALID" or
+                    "WORKSPACE_RUN_EXECUTION_PROOF_MISSING" or "WORKSPACE_RUN_EXECUTION_PROOF_INVALID" or
+                    "WORKSPACE_RUN_EXECUTION_PROOF_CHANGED" => StatusCode.DataLoss,
                 _ => StatusCode.OK
             };
             if (status != StatusCode.OK) return Error(status, line);

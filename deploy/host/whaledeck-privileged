@@ -24,9 +24,9 @@ run_transient() {
 }
 
 case "$action" in
-  development-run-start|development-run-observe)
+  development-run-start|development-run-observe|development-run-cancel|development-run-reclaim)
     [[ ${2:-} =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
-    runner_mode=service-observe
+    runner_mode=service-${action##*-}
     runner_properties=(--property=RuntimeMaxSec=15 --property=TasksMax=4 --property=MemoryMax=96M
       --property=ProtectControlGroups=yes --property=RestrictNamespaces=yes
       --property=CapabilityBoundingSet=CAP_SYS_ADMIN --property=RestrictAddressFamilies=AF_UNIX
@@ -42,6 +42,15 @@ case "$action" in
         --property="CapabilityBoundingSet=CAP_SYS_ADMIN CAP_NET_ADMIN CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_FSETID CAP_MKNOD CAP_SETGID CAP_SETUID CAP_SETPCAP CAP_KILL CAP_SYS_CHROOT")
     else
       [[ $# -eq 2 ]] || exit 2
+      if [[ $action != development-run-observe ]]; then
+        runner_properties=(--property=RuntimeMaxSec=40 --property=TasksMax=4 --property=MemoryMax=96M
+          --property=RestrictNamespaces=yes --property=RestrictAddressFamilies=AF_UNIX
+          --property="CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_OVERRIDE CAP_FOWNER"
+          --property="SystemCallFilter=@system-service prctl quotactl_fd")
+        if [[ $action == development-run-reclaim ]]; then
+          runner_properties+=(--property=ProtectControlGroups=yes)
+        fi
+      fi
     fi
     exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
       --unit="whaledeck-development-run-${action##*-}-$2" \

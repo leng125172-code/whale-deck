@@ -23,6 +23,7 @@ rootfs = load('whaledeck-development-rootfs.py')
 isolation = load('whaledeck-development-runner-isolation.py')
 storage = load('whaledeck-development-storage.py')
 files = load('whaledeck-files.py')
+control = load('whaledeck-development-runner-control.py')
 
 
 class RunnerTests(unittest.TestCase):
@@ -93,6 +94,50 @@ for line in Path('/proc/self/status').read_text().splitlines():
             with tempfile.TemporaryDirectory() as folder, patch.object(runner.subprocess, 'run', side_effect=[first, second]):
                 with self.assertRaisesRegex(runner.RunError, 'CLEANUP_UNCONFIRMED'):
                     runner.execute(Path(folder), self.request['storage']['workspaceId'], self.request['runId'], 30)
+
+    @unittest.skipUnless(os.geteuid() == 0, 'Needs root or a private user namespace')
+    def test_reclaim_preserves_a_legacy_bundle_without_cgroup_proof(self):
+        with tempfile.TemporaryDirectory() as folder:
+            bundle = Path(folder) / 'bundle'
+            bundle.mkdir()
+            fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                with self.assertRaisesRegex(runner.RunError, 'EXECUTION_PROOF_MISSING'):
+                    control.settle(self.driver, fd, stop=False, refuse=runner.refuse)
+                self.assertTrue(bundle.is_dir())
+            finally:
+                os.close(fd)
+
+    @unittest.skipUnless(os.geteuid() == 0, 'Needs root or a private user namespace')
+    def test_recreated_scope_path_never_receives_a_kill(self):
+        with tempfile.TemporaryDirectory() as folder:
+            group = Path(folder) / 'system.slice' / f'whaledeck-development-run-start-{"1" * 32}.service'
+            group.mkdir(parents=True)
+            kill = group / 'cgroup.kill'
+            kill.write_bytes(b'0')
+            fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                rootfs.write_metadata(fd, control.EXECUTION, {'bootId': control.boot_identity(),
+                    'path': '/' + str(group.relative_to(folder)), 'device': group.stat().st_dev, 'inode': group.stat().st_ino + 1})
+                cancel = Path(folder) / control.CANCEL
+                cancel.write_bytes(b'0')
+                cancel.chmod(0o600)
+                with patch.object(control, 'CGROUP_ROOT', Path(folder)), self.assertRaisesRegex(runner.RunError, 'EXECUTION_PROOF_CHANGED'):
+                    control.settle(self.driver, fd, stop=True, refuse=runner.refuse)
+                self.assertEqual(b'0', kill.read_bytes())
+                self.assertEqual(b'0', cancel.read_bytes())
+            finally:
+                os.close(fd)
+
+    def test_pinned_scope_is_not_empty_until_events_or_original_path_prove_it(self):
+        with tempfile.TemporaryDirectory() as folder:
+            group = Path(folder) / 'scope'
+            group.mkdir()
+            with self.driver.absolute(Path(folder)) as root, self.driver.opened(root, 'scope', os.O_RDONLY | os.O_DIRECTORY) as fd:
+                identity = os.fstat(fd)
+                self.assertFalse(control.scope_empty(self.driver, root, fd, 'scope', identity, runner.refuse))
+                group.rmdir()
+                self.assertTrue(control.scope_empty(self.driver, root, fd, 'scope', identity, runner.refuse))
 
 
 if __name__ == '__main__':

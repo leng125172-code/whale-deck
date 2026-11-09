@@ -97,6 +97,7 @@ public sealed class DevelopmentRunnerRpcTests
             {
                 (request, Headers(firstToken)), (request, Sign(DevelopmentRunnerBinding.Start, legacy: true)),
                 (request, Sign(DevelopmentRunnerBinding.Observe)), (changed, Sign(DevelopmentRunnerBinding.Start)),
+                (request, Sign(DevelopmentRunnerBinding.Cancel)), (request, Sign(DevelopmentRunnerBinding.Reclaim)),
                 (request, new Metadata())
             })
             {
@@ -105,6 +106,12 @@ public sealed class DevelopmentRunnerRpcTests
                 Assert.Equal(StatusCode.PermissionDenied, denied.StatusCode);
             }
             Assert.Equal(2, receiver.Calls);
+            var forbidden = await Assert.ThrowsAsync<RpcException>(async () =>
+                await client.CancelAsync(request, Sign(DevelopmentRunnerBinding.Reclaim), cancellationToken: timeout.Token));
+            Assert.Equal(StatusCode.PermissionDenied, forbidden.StatusCode);
+            Assert.Equal(started, await gateway.CancelAsync(Actor, workspace, command, timeout.Token));
+            Assert.Equal(started, await gateway.ReclaimAsync(Actor, workspace, command, timeout.Token));
+            Assert.Equal(4, receiver.Calls);
             receiver.ChangeInputHash = true;
             var invalid = await Assert.ThrowsAsync<RpcException>(() => gateway.ObserveAsync(Actor, workspace, command, timeout.Token));
             Assert.Equal(StatusCode.DataLoss, invalid.StatusCode);
@@ -121,7 +128,8 @@ public sealed class DevelopmentRunnerRpcTests
             runId = request.RunId, requestSha256 = new string('a', 64), inputSha256 = input, status, runtimeExitCode = code
         });
         var digest = DevelopmentRunnerBinding.Digest(DevelopmentRunnerBinding.HostInput(request));
-        Assert.False(DevelopmentRunnerGrpcService.ParseReceipt(request, Reply("TimedOut", null, digest)).HasRuntimeExitCode);
+        foreach (var status in new[] { "TimedOut", "Cancelled", "Interrupted" })
+            Assert.False(DevelopmentRunnerGrpcService.ParseReceipt(request, Reply(status, null, digest)).HasRuntimeExitCode);
         Assert.Equal(9, DevelopmentRunnerGrpcService.ParseReceipt(request, Reply("Failed", 9, digest)).RuntimeExitCode);
         foreach (var invalid in new[] { Reply("Succeeded", 9, digest), Reply("TimedOut", 0, digest), Reply("Succeeded", 0, new string('0', 64)) })
             Assert.Equal(StatusCode.DataLoss, Assert.Throws<RpcException>(() => DevelopmentRunnerGrpcService.ParseReceipt(request, invalid)).StatusCode);
@@ -138,6 +146,8 @@ public sealed class DevelopmentRunnerRpcTests
 
         public override Task<WorkspaceRunReceipt> Start(WorkspaceRunRequest request, ServerCallContext context) => Reply(request, context);
         public override Task<WorkspaceRunReceipt> Observe(WorkspaceRunRequest request, ServerCallContext context) => Reply(request, context);
+        public override Task<WorkspaceRunReceipt> Cancel(WorkspaceRunRequest request, ServerCallContext context) => Reply(request, context);
+        public override Task<WorkspaceRunReceipt> Reclaim(WorkspaceRunRequest request, ServerCallContext context) => Reply(request, context);
 
         private Task<WorkspaceRunReceipt> Reply(WorkspaceRunRequest request, ServerCallContext context)
         {

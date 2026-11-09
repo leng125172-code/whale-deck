@@ -87,7 +87,8 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         ValidateContentBound(token, method, DevelopmentStorageBinding.Hash(request), DevelopmentStorageBinding.Payload);
 
     public bool ValidateDevelopmentRunner(string? token, string method, WorkspaceRunRequest request) =>
-        method is DevelopmentRunnerBinding.Start or DevelopmentRunnerBinding.Observe &&
+        method is DevelopmentRunnerBinding.Start or DevelopmentRunnerBinding.Observe or
+            DevelopmentRunnerBinding.Cancel or DevelopmentRunnerBinding.Reclaim &&
         ValidateContentBound(token, method, DevelopmentRunnerBinding.Hash(request), DevelopmentRunnerBinding.Payload);
 
     public bool ValidateContainerWrite(string? token, string method, string? requestHash)

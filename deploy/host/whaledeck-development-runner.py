@@ -15,6 +15,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import uuid
 
 IMAGE_ROOT = Path('/var/lib/whaledeck-development-images')
 RUNC = '/usr/bin/runc'
@@ -153,26 +154,103 @@ def execute(bundle, workspace_id, run_id, deadline):
     return status, code
 
 
-def read_result(driver, directory, binding):
+@contextlib.contextmanager
+def lock_run(directory, *, wait=False):
+    try:
+        fcntl.flock(directory, fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
+    except BlockingIOError:
+        refuse('BUSY')
+    try:
+        yield
+    finally:
+        fcntl.flock(directory, fcntl.LOCK_UN)
+
+
+def require_request(driver, directory, binding):
     try:
         recorded = driver.read_json(directory, REQUEST, 512)
     except FileNotFoundError:
         refuse('INTERRUPTED')
     if recorded != binding:
         refuse('REQUEST_CONFLICT')
+
+
+def terminal_result(driver, directory, binding):
     try:
         result = driver.read_json(directory, RESULT, 512)
     except FileNotFoundError:
-        refuse('INTERRUPTED')
+        return None
     state, code = result.get('status'), result.get('runtimeExitCode')
     if (set(result) != set(binding) | {'status', 'runtimeExitCode'}
             or any(result.get(key) != value for key, value in binding.items())
-            or state not in ('Succeeded', 'Failed', 'TimedOut')
-            or (state == 'TimedOut' and code is not None)
-            or (state != 'TimedOut' and (
+            or state not in ('Succeeded', 'Failed', 'TimedOut', 'Cancelled', 'Interrupted')
+            or (state in ('TimedOut', 'Cancelled', 'Interrupted') and code is not None)
+            or (state in ('Succeeded', 'Failed') and (
                 type(code) is not int or not 0 <= code <= 255 or (code == 0) != (state == 'Succeeded')))):
         refuse('RECEIPT_INVALID')
     return result
+
+
+def read_result(driver, directory, binding):
+    with lock_run(directory):
+        require_request(driver, directory, binding)
+        result = terminal_result(driver, directory, binding)
+        if result is None:
+            refuse('INTERRUPTED')
+        return result
+
+
+def persist_result(driver, rootfs, directory, binding, status, code=None):
+    result = dict(binding, status=status, runtimeExitCode=code)
+    staging = '.result-' + uuid.uuid4().hex
+    try:
+        rootfs.write_metadata(directory, staging, result)
+        driver.files.exchange(directory, staging, directory, RESULT, 1)
+        os.fsync(directory)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(staging, dir_fd=directory)
+    return result
+
+
+@contextlib.contextmanager
+def open_run(driver, rootfs, payload, binding):
+    with contextlib.ExitStack() as stack:
+        try:
+            runs = stack.enter_context(driver.opened(payload, RUNS, DIRECTORY))
+            rootfs.private_directory(runs)
+            directory = stack.enter_context(driver.opened(runs, binding['runId'], DIRECTORY))
+            rootfs.private_directory(directory)
+        except FileNotFoundError:
+            refuse('NOT_FOUND')
+        yield directory
+
+
+def discard_bundle(driver, rootfs, directory):
+    try:
+        with driver.opened(directory, 'bundle', DIRECTORY) as bundle:
+            info = rootfs.private_directory(bundle)
+            path = os.readlink(f'/proc/self/fd/{bundle}')
+            if not os.path.isabs(path) or not os.path.samestat(info, os.stat(path, follow_symlinks=False)):
+                refuse('CLEANUP_UNCONFIRMED')
+    except FileNotFoundError:
+        # Confirm a missing slot, rather than a directory disappearing during
+        # verification. Other errors such as symlinks/mounts fail closed.
+        try:
+            os.stat('bundle', dir_fd=directory, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        refuse('CLEANUP_UNCONFIRMED')
+    with open('/proc/self/mountinfo', encoding='utf-8') as stream:
+        mounts = stream.read(1024 * 1024 + 1)
+    if len(mounts) > 1024 * 1024:
+        refuse('CLEANUP_UNCONFIRMED')
+    for line in mounts.splitlines():
+        mount = re.sub(r'\\([0-7]{3})', lambda value: chr(int(value[1], 8)), line.split()[4])
+        if mount == path or mount.startswith(path + '/'):
+            refuse('CLEANUP_UNCONFIRMED')
+    shutil.rmtree('bundle', dir_fd=directory)
+    os.fsync(directory)
 
 
 def observe(driver, isolation, rootfs, request):
@@ -182,17 +260,24 @@ def observe(driver, isolation, rootfs, request):
             fcntl.flock(payload, fcntl.LOCK_SH | fcntl.LOCK_NB)
         except BlockingIOError:
             refuse('BUSY')
-        try:
-            with driver.opened(payload, RUNS, DIRECTORY) as runs:
-                rootfs.private_directory(runs)
-                with driver.opened(runs, binding['runId'], DIRECTORY) as directory:
-                    rootfs.private_directory(directory)
-                    return read_result(driver, directory, binding)
-        except FileNotFoundError:
-            refuse('NOT_FOUND')
+        with open_run(driver, rootfs, payload, binding) as directory:
+            return read_result(driver, directory, binding)
 
 
-def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None):
+def reconcile(driver, isolation, rootfs, control, request, *, stop):
+    _, binding = request_binding(driver, isolation, rootfs, request)
+    with driver.attested_payload(request['storage']) as (payload, _):
+        with open_run(driver, rootfs, payload, binding) as directory, lock_run(directory):
+            require_request(driver, directory, binding)
+            result = terminal_result(driver, directory, binding)
+            if result is not None:
+                return result
+            status = control.settle(driver, directory, stop=stop, refuse=refuse)
+            discard_bundle(driver, rootfs, directory)
+            return persist_result(driver, rootfs, directory, binding, status)
+
+
+def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None, control=None):
     image, binding = request_binding(driver, isolation, rootfs, request)
     run_id = binding['runId']
     enforce_staging_quota()
@@ -214,7 +299,10 @@ def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None):
         os.fsync(runs)
         directory = stack.enter_context(driver.opened(runs, run_id, DIRECTORY))
         rootfs.private_directory(directory)
-        rootfs.write_metadata(directory, REQUEST, binding)
+        with lock_run(directory):
+            if cgroup_parent:
+                control.record(driver, rootfs, directory, cgroup_parent)
+            rootfs.write_metadata(directory, REQUEST, binding)
         verify_work(driver, payload, proof)
         digest = rootfs.reference_digest(image)[7:]
         cache = stack.enter_context(driver.absolute(IMAGE_ROOT))
@@ -239,11 +327,9 @@ def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None):
             rootfs.write_metadata(bundle, 'config.json', config)
             status, code = execute(Path(os.readlink(f'/proc/self/fd/{bundle}')), proof['workspaceId'],
                                    run_id, request['deadlineSeconds'])
-        shutil.rmtree('bundle', dir_fd=directory)
-        os.fsync(directory)
-        result = dict(binding, status=status, runtimeExitCode=code)
-        rootfs.write_metadata(directory, RESULT, result)
-        return result
+        with lock_run(directory, wait=True):
+            discard_bundle(driver, rootfs, directory)
+            return persist_result(driver, rootfs, directory, binding, status, code)
 
 
 def load(filename):
@@ -271,7 +357,8 @@ def delegated_parent():
 
 
 def main():
-    if os.geteuid() != 0 or sys.argv[1:] not in ([], ['observe'], ['service-start'], ['service-observe']):
+    if os.geteuid() != 0 or sys.argv[1:] not in (
+            [], ['observe'], ['service-start'], ['service-observe'], ['service-cancel'], ['service-reclaim']):
         return 2
     try:
         files = load('whaledeck-files.py')
@@ -280,6 +367,7 @@ def main():
         isolation = load('whaledeck-development-runner-isolation.py')
         rootfs = load('whaledeck-development-rootfs.py')
         unpacker = load('whaledeck-development-unpack.py')
+        control = load('whaledeck-development-runner-control.py')
     except (ImportError, OSError):
         print('WORKSPACE_RUN_HELPER_UNAVAILABLE', file=sys.stderr)
         return 2
@@ -292,9 +380,11 @@ def main():
         request = rootfs.decode(raw)
         if mode in ('observe', 'service-observe'):
             result = observe(driver, isolation, rootfs, request)
+        elif mode in ('service-cancel', 'service-reclaim'):
+            result = reconcile(driver, isolation, rootfs, control, request, stop=mode == 'service-cancel')
         else:
             parent = delegated_parent() if mode == 'service-start' else None
-            result = start(driver, isolation, rootfs, unpacker, request, cgroup_parent=parent)
+            result = start(driver, isolation, rootfs, unpacker, request, cgroup_parent=parent, control=control)
         print(json.dumps(dict(result, inputSha256=hashlib.sha256(raw).hexdigest()), separators=(',', ':')))
         return 0
     except (RunError, files.Rejected, rootfs.RootfsError, unpacker.UnpackError) as error:

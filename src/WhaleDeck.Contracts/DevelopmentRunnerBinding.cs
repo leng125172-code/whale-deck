@@ -11,18 +11,25 @@ namespace WhaleDeck.Contracts;
 public static partial class DevelopmentRunnerBinding
 {
     public const uint ProtocolMinor = 64;
+    public const uint ControlProtocolMinor = 65;
     public const string Capability = "development.run";
+    public const string ControlCapability = "development.run.control";
     public const string Service = "/whaledeck.agent.v1.DevelopmentRunnerService/";
     public const string Start = Service + "Start";
     public const string Observe = Service + "Observe";
+    public const string Cancel = Service + "Cancel";
+    public const string Reclaim = Service + "Reclaim";
     public const int MaximumHostInputBytes = 32768;
     public const int MaximumWireBytes = MaximumHostInputBytes + 2048;
     public const int PreparationSeconds = 300;
     public const int ObserveSeconds = 20;
+    public const int ControlSeconds = 48;
     private static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    public static bool IsSupported(CapabilitiesResponse value) => value.ProtocolMajor == 1 &&
-        value.ProtocolMinor >= ProtocolMinor && value.Capabilities.Contains(Capability);
+    public static bool IsSupported(CapabilitiesResponse value, string method = Start) => value.ProtocolMajor == 1 &&
+        value.ProtocolMinor >= ProtocolMinor && value.Capabilities.Contains(Capability) &&
+        (method is Start or Observe || (method is Cancel or Reclaim &&
+            value.ProtocolMinor >= ControlProtocolMinor && value.Capabilities.Contains(ControlCapability)));
 
     public static string Hash(WorkspaceRunRequest request) => Convert.ToHexString(SHA256.HashData(request.ToByteArray()));
 
@@ -67,7 +74,7 @@ public static partial class DevelopmentRunnerBinding
         {
             "Succeeded" => receipt.HasRuntimeExitCode && receipt.RuntimeExitCode == 0,
             "Failed" => receipt.HasRuntimeExitCode && receipt.RuntimeExitCode is >= 1 and <= 255,
-            "TimedOut" => !receipt.HasRuntimeExitCode,
+            "TimedOut" or "Cancelled" or "Interrupted" => !receipt.HasRuntimeExitCode,
             _ => false
         });
 

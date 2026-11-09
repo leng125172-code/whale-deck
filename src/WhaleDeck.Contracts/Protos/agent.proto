@@ -425,6 +425,9 @@ message WorkspaceAllocationReceipt {
 service DevelopmentRunnerService {
   rpc Start(WorkspaceRunRequest) returns (WorkspaceRunReceipt);
   rpc Observe(WorkspaceRunRequest) returns (WorkspaceRunReceipt);
+  // development.run.control (protocol 1.65).
+  rpc Cancel(WorkspaceRunRequest) returns (WorkspaceRunReceipt);
+  rpc Reclaim(WorkspaceRunRequest) returns (WorkspaceRunReceipt);
 }
 
 message WorkspaceRunRequest {

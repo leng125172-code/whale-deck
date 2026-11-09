@@ -11,4 +11,8 @@ public interface IWorkspaceRunnerGateway
         CancellationToken token);
     Task<WorkspaceRunnerReceipt> ObserveAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command,
         CancellationToken token);
+    Task<WorkspaceRunnerReceipt> CancelAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command,
+        CancellationToken token);
+    Task<WorkspaceRunnerReceipt> ReclaimAsync(TerminalActor actor, WorkspaceDefinition workspace, WorkspaceRunCommand command,
+        CancellationToken token);
 }
