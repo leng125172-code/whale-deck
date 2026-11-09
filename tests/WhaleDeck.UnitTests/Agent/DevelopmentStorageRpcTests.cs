@@ -56,8 +56,8 @@ public sealed class DevelopmentStorageRpcTests : IDisposable
             ["Agent:CapabilityKeyFile"] = keyFile, ["Agent:SocketPath"] = socket
         }).Build());
         var actor = new TerminalActor("workspace-owner", null, [], new string('a', 64), "trace", null);
-        var workspace = new WorkspaceDefinition(Guid.NewGuid(), "example", actor.Subject, "nvme-local", "Registered",
-            1, new(200, 256, 512), new(1, []), new string('a', 64), DateTimeOffset.UtcNow);
+        var workspace = new WorkspaceDefinition(Guid.NewGuid(), "example", actor.Subject, "nvme-local", WorkspaceStorageAllocation.Allocating,
+            2, new(200, 256, 512), new(1, []), new string('a', 64), DateTimeOffset.UtcNow);
         await gateway.AllocateAsync(actor, workspace, TestContextToken);
         var receiver = server.Services.GetRequiredService<StorageReceiver>();
         var request = Assert.IsType<WorkspaceAllocationRequest>(receiver.LastRequest);

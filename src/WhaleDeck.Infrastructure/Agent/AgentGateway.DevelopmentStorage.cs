@@ -14,8 +14,8 @@ public sealed partial class AgentGateway : IWorkspaceStorageGateway
 {
     public async Task AllocateAsync(TerminalActor actor, WorkspaceDefinition workspace, CancellationToken token)
     {
-        if (workspace.State != "Registered" || actor.Subject != workspace.OwnerSubject ||
-            workspace.Budget.DiskMiB is < 256 or > 1048576)
+        if (workspace.State != WorkspaceStorageAllocation.Allocating || actor.Subject != workspace.OwnerSubject ||
+            workspace.Budget.DiskMiB is < 256 or > WorkspaceRegistrationPolicy.MaximumWorkspaceDiskMiB)
             throw new ArgumentException("WORKSPACE_STORAGE_BINDING_INVALID");
         var request = new WorkspaceAllocationRequest
         {

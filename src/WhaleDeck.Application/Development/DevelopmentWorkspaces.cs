@@ -23,6 +23,7 @@ public interface IWorkspaceStorageGateway
 
 public sealed class WorkspaceRegistrationPolicy
 {
+    public const int MaximumWorkspaceDiskMiB = 1024 * 1024;
     public string[] StorageRootIds { get; init; } = [];
     public Guid[] CreateGroupIds { get; init; } = [];
     public Dictionary<string, WorkspaceRuntimePin> Runtimes { get; init; } = new(StringComparer.Ordinal);
@@ -36,6 +37,10 @@ public interface IDevelopmentWorkspaceRegistry
         WorkspaceBudget capacity, CancellationToken token);
     Task<WorkspaceDefinition?> FindAsync(Guid id, string? owner, CancellationToken token);
     Task<WorkspacePage> ListAsync(string? owner, string? after, int take, CancellationToken token);
+    Task<WorkspaceDefinition> BeginStorageAllocationAsync(TerminalActor actor, WorkspaceStoragePlan plan,
+        DateTimeOffset now, CancellationToken token);
+    Task<WorkspaceDefinition> CompleteStorageAllocationAsync(TerminalActor actor, WorkspaceStoragePlan plan,
+        DateTimeOffset now, CancellationToken token);
 }
 
 public sealed partial class DevelopmentWorkspaces(
@@ -57,7 +62,7 @@ public sealed partial class DevelopmentWorkspaces(
         if (key == Guid.Empty || !ValidKey(command.Slug) || !ValidKey(command.StorageRootId) ||
             command.Runtimes is not { Length: > 0 and <= 4 } || !command.Runtimes.All(ValidKey) ||
             command.Runtimes.Distinct(StringComparer.Ordinal).Count() != command.Runtimes.Length ||
-            command.Budget is not { CpuMillis: >= 100, MemoryMiB: >= 128, DiskMiB: >= 256 })
+            command.Budget is not { CpuMillis: >= 100, MemoryMiB: >= 128, DiskMiB: >= 256 and <= WorkspaceRegistrationPolicy.MaximumWorkspaceDiskMiB })
             throw new ArgumentException("WORKSPACE_REGISTRATION_INVALID");
 
         var canonical = command with { Runtimes = [.. command.Runtimes.Order(StringComparer.Ordinal)] };
@@ -74,7 +79,7 @@ public sealed partial class DevelopmentWorkspaces(
         var now = clock.GetUtcNow();
         var createdAt = new DateTimeOffset(now.Ticks - now.Ticks % TimeSpan.TicksPerMicrosecond, TimeSpan.Zero);
         var workspace = new WorkspaceDefinition(Guid.NewGuid(), command.Slug, actor.Subject, command.StorageRootId,
-            "Registered", 1, command.Budget, environment, Digest(environment), createdAt);
+            WorkspaceStorageAllocation.Registered, 1, command.Budget, environment, Digest(environment), createdAt);
         return await registry.RegisterAsync(actor, key, requestHash, workspace, policy.Capacity, token);
     }
 
@@ -110,7 +115,7 @@ public sealed partial class DevelopmentWorkspaces(
             ?? throw new InvalidDataException("WORKSPACE_ENVIRONMENT_INTEGRITY");
     }
 
-    private async Task RequireCreatorAsync(TerminalActor actor, CancellationToken token)
+    internal async Task RequireCreatorAsync(TerminalActor actor, CancellationToken token)
     {
         var current = await authorization.ResolveAsync(actor, token);
         if (!current.IsAdministrator && !current.Groups.Any(group => Guid.TryParseExact(group, "D", out var id) &&

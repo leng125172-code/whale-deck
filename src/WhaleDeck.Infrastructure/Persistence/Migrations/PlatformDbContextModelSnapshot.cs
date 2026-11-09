@@ -4875,6 +4875,19 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(24)")
                         .HasColumnName("state");
 
+                    b.Property<DateTimeOffset?>("StorageAllocatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("storage_allocated_at_utc");
+
+                    b.Property<DateTimeOffset?>("StorageAllocationStartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("storage_allocation_started_at_utc");
+
+                    b.Property<string>("StoragePlanSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("storage_plan_sha256");
+
                     b.Property<string>("StorageRootId")
                         .IsRequired()
                         .HasMaxLength(48)
@@ -4899,7 +4912,9 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_development_workspace_manifest", "octet_length(environment_json) BETWEEN 1 AND 4096 AND environment_sha256 = encode(sha256(convert_to(environment_json,'UTF8')),'hex') AND request_sha256 ~ '^[a-f0-9]{64}$'");
 
-                            t.HasCheckConstraint("ck_development_workspace_shape", "state = 'Registered' AND version = 1 AND cpu_millis >= 100 AND memory_mi_b >= 128 AND disk_mi_b >= 256");
+                            t.HasCheckConstraint("ck_development_workspace_shape", "cpu_millis >= 100 AND memory_mi_b >= 128 AND disk_mi_b >= 256");
+
+                            t.HasCheckConstraint("ck_development_workspace_storage_state", "(CASE state\n    WHEN 'Registered' THEN version = 1 AND storage_plan_sha256 IS NULL\n        AND storage_allocation_started_at_utc IS NULL AND storage_allocated_at_utc IS NULL\n    WHEN 'StorageAllocating' THEN version = 2 AND storage_plan_sha256 ~ '^[a-f0-9]{64}$'\n        AND storage_allocation_started_at_utc >= created_at_utc AND storage_allocated_at_utc IS NULL\n    WHEN 'StorageAllocated' THEN version = 3 AND storage_plan_sha256 ~ '^[a-f0-9]{64}$'\n        AND storage_allocation_started_at_utc >= created_at_utc\n        AND storage_allocated_at_utc >= storage_allocation_started_at_utc\n    ELSE FALSE END) IS TRUE");
                         });
                 });
 

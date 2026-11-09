@@ -21,6 +21,15 @@ public sealed class DevelopmentWorkspacesController(DevelopmentWorkspaces worksp
     public async Task<WorkspaceDefinition> Get(Guid id, CancellationToken token) =>
         await workspaces.GetAsync((await identity.ReadAsync(HttpContext)).Actor, id, token);
 
+    [HttpGet("{id:guid}/storage-plan")]
+    public async Task<WorkspaceStoragePlan> PlanStorage(Guid id, [FromServices] WorkspaceStorageAllocation storage, CancellationToken token) =>
+        await storage.PlanAsync((await identity.ReadAsync(HttpContext)).Actor, id, token);
+
+    [HttpPost("{id:guid}/storage-allocation"), Consumes("application/json")]
+    public async Task<WorkspaceDefinition> AllocateStorage(Guid id, WorkspaceStorageApplyCommand command,
+        [FromServices] WorkspaceStorageAllocation storage, CancellationToken token) =>
+        await storage.ApplyAsync((await identity.ReadAsync(HttpContext)).Actor, id, command, token);
+
     [HttpPost, Consumes("application/json")]
     public async Task<ActionResult<WorkspaceRegistrationReceipt>> Register(WorkspaceRegistrationCommand command, CancellationToken token)
     {

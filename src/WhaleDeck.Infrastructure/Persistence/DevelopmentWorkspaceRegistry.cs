@@ -68,6 +68,60 @@ public sealed class DevelopmentWorkspaceRegistry(PlatformDbContext db) : IDevelo
         return new([.. rows.Take(take).Select(Map)], rows.Length > take ? rows[take - 1].Slug : null);
     }
 
+    public Task<WorkspaceDefinition> BeginStorageAllocationAsync(TerminalActor actor, WorkspaceStoragePlan plan,
+        DateTimeOffset now, CancellationToken token) =>
+        TransitionStorageAsync(actor, plan, WorkspaceStorageAllocation.Allocating, now, token);
+
+    public Task<WorkspaceDefinition> CompleteStorageAllocationAsync(TerminalActor actor, WorkspaceStoragePlan plan,
+        DateTimeOffset now, CancellationToken token) =>
+        TransitionStorageAsync(actor, plan, WorkspaceStorageAllocation.Allocated, now, token);
+
+    private Task<WorkspaceDefinition> TransitionStorageAsync(TerminalActor actor, WorkspaceStoragePlan plan,
+        string target, DateTimeOffset now, CancellationToken token) =>
+        db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(token);
+            await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout='3s'", token);
+            var locked = await db.DevelopmentWorkspaces.FromSqlInterpolated($"""
+                SELECT * FROM development_workspaces WHERE id = {plan.WorkspaceId}
+                    AND owner_subject = {actor.Subject} FOR UPDATE
+                """).ToListAsync(token);
+            var row = locked.SingleOrDefault() ?? throw new KeyNotFoundException("WORKSPACE_NOT_FOUND");
+            var workspace = Map(row);
+            if (WorkspaceStorageAllocation.BuildPlan(workspace) != plan ||
+                (row.State != WorkspaceStorageAllocation.Registered && row.StoragePlanSha256 != plan.PlanSha256))
+                throw new InvalidOperationException("WORKSPACE_STORAGE_PLAN_CHANGED");
+
+            if (row.State == target || row.State == WorkspaceStorageAllocation.Allocated)
+                return workspace;
+            var beginning = target == WorkspaceStorageAllocation.Allocating;
+            var expected = beginning ? WorkspaceStorageAllocation.Registered : WorkspaceStorageAllocation.Allocating;
+            if (row.State != expected) throw new InvalidOperationException("WORKSPACE_STORAGE_STATE_CHANGED");
+
+            var earliest = row.StorageAllocationStartedAtUtc ?? row.CreatedAtUtc;
+            var at = now < earliest ? earliest : now;
+            if (beginning)
+            {
+                row.StoragePlanSha256 = plan.PlanSha256;
+                row.StorageAllocationStartedAtUtc = at;
+            }
+            else
+            {
+                row.StorageAllocatedAtUtc = at;
+            }
+            row.State = target;
+            row.Version++;
+            db.AuditEvents.Add(new()
+            {
+                ActorSubject = actor.Subject, Action = beginning ? "development.workspace.storage.begin" : "development.workspace.storage.complete",
+                TargetType = "workspace", TargetId = row.Id.ToString("D"), TraceId = actor.TraceId, SourceIp = actor.SourceIp, OccurredAtUtc = at
+            });
+            await db.SaveChangesAsync(token);
+            await transaction.CommitAsync(token);
+            return Map(row);
+        });
+
     private IQueryable<DevelopmentWorkspaceRecord> Scope(string? owner, string? after = null)
     {
         var query = (after is null ? db.DevelopmentWorkspaces :
