@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-09，P3-13/P3-16 `a75386eb` 增加独立存储复核和 Runner 预检入口。Agent 复核已发布目录与硬限额，拒绝未发布及漂移。继续 Runner 隔离执行与工作站部署。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_PREFLIGHT.md)。
+
 2026-11-09，P3-13 `baa419ea` 将项目 ID 独占凭据和配额回读放入目录发布前，Agent 1.62 才确认配额。隔离 ext4/XFS 分配与重挂通过，继续工作站标准安装和 Runner。见[本批记录](qa/DEVELOPMENT_WORKSPACE_QUOTA_PUBLICATION.md)。
 
 2026-11-09，P3-13 项目配额驱动 `0552bc8a` 通过 ext4/XFS 的超额拒绝、同盘对照及重挂回读。继续接入独占项目 ID、目录发布前门禁和工作站实机验证。见[本批记录](qa/DEVELOPMENT_WORKSPACE_PROJECT_QUOTA.md)。

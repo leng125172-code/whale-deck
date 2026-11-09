@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-09，P3-13/P3-16 Runner 存储复核 `a75386eb` 接入 Agent 1.63 与 BFF。独立检查已发布配额，真实来宾重挂、未发布拒绝和配额漂移拒绝通过。继续受限 Runner 执行与物理工作站验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_RUNNER_PREFLIGHT.md)。
+
 2026-11-09，P3-13 配额发布门禁 `baa419ea` 接入 Agent 1.62 与固定安装。真实来宾 ext4/XFS 通过分配、重挂回读及 ext4 写后强杀恢复。工作站标准安装、Runner 和 Vue 继续验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_QUOTA_PUBLICATION.md)。
 
 2026-11-09，P3-13 项目配额驱动 `0552bc8a` 通过隔离虚拟 NVMe 上的 ext4 与 XFS 硬限额验收。继续独占项目 ID 凭据、固定 Agent 分配前门禁、Runner 与工作站实机验收。见[本批记录](qa/DEVELOPMENT_WORKSPACE_PROJECT_QUOTA.md)。
