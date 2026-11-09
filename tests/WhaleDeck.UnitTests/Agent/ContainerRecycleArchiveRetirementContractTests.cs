@@ -11,7 +11,7 @@ namespace WhaleDeck.UnitTests.Agent;
 
 public sealed class ContainerRecycleArchiveRetirementContractTests
 {
-    private static ContainerRecycleArchiveRetirementRequest Request()
+    internal static ContainerRecycleArchiveRetirementRequest Request()
     {
         var archive = ContainerRecycleArchivePolicyTests.Request(); var ap = archive.Plan;
         var published = ap.DeletedIdentity.Clone(); published.Inode += 1000;

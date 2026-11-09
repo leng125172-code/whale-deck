@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using Google.Protobuf;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using WhaleDeck.Contracts;
@@ -28,6 +29,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
             method.StartsWith(ContainerRecycleRestoreBinding.Service,StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecyclePurgeBinding.Service,StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecycleArchiveBinding.Service,StringComparison.Ordinal) ||
+            method.StartsWith(ContainerRecycleArchiveRetirementBinding.Service,StringComparison.Ordinal) ||
             method.StartsWith(ContainerOwnershipBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerAclHistoryBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerRecursiveAclHistoryBinding.Service, StringComparison.Ordinal) ||
@@ -119,6 +121,12 @@ public sealed class CapabilityValidator(IConfiguration configuration)
             ContainerRecycleArchiveBinding.Service+"Inspect" or ContainerRecycleArchiveBinding.Service+"Discard" &&
         ValidateContentBound(token,method,requestHash,ContainerRecycleArchiveBinding.Payload);
 
+    public bool ValidateContainerRecycleArchiveRetirement(string? token, string method, string? requestHash) =>
+        method is ContainerRecycleArchiveRetirementBinding.Service + "Plan" or ContainerRecycleArchiveRetirementBinding.Service + "Reserve" or
+            ContainerRecycleArchiveRetirementBinding.Service + "Apply" or ContainerRecycleArchiveRetirementBinding.Service + "Inspect" or
+            ContainerRecycleArchiveRetirementBinding.Service + "Discard" &&
+        ValidateContentBound(token, method, requestHash, ContainerRecycleArchiveRetirementBinding.Payload);
+
     public bool ValidateContainerRecyclePurge(string? token,string method,string? requestHash) =>
         method is ContainerRecyclePurgeBinding.Service+"Plan" or ContainerRecyclePurgeBinding.Service+"Reserve" or ContainerRecyclePurgeBinding.Service+"Apply" or
             ContainerRecyclePurgeBinding.Service+"Inspect" or ContainerRecyclePurgeBinding.Service+"Discard" &&
@@ -200,6 +208,17 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
         ServerCallContext context,
         UnaryServerMethod<TRequest, TResponse> continuation)
     {
+        if (IsRetirement(context))
+        {
+            var plan = context.Method == ContainerRecycleArchiveRetirementBinding.Service + "Plan";
+            if (plan ? request is not WhaleDeck.Contracts.Agent.V1.ContainerRecycleArchiveRetirementPlanRequest :
+                request is not WhaleDeck.Contracts.Agent.V1.ContainerRecycleArchiveRetirementRequest) throw Denied();
+            var message = (IMessage)(object)request!;
+            try { ContainerRecycleArchiveRetirementWire.RequireKnown(message); }
+            catch (ArgumentException) { throw Denied(); }
+            if (!string.Equals(context.RequestHeaders.GetValue(ContainerRecycleArchiveRetirementBinding.Header),
+                ContainerRecycleArchiveRetirementBinding.Hash(message), StringComparison.Ordinal)) throw Denied();
+        }
         Authorize(context);
         return continuation(request, context);
     }
@@ -210,6 +229,7 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
         ServerCallContext context,
         ServerStreamingServerMethod<TRequest, TResponse> continuation)
     {
+        if (IsRetirement(context)) throw Denied();
         Authorize(context);
         return continuation(request, responseStream, context);
     }
@@ -217,6 +237,7 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     public override Task<TResponse> ClientStreamingServerHandler<TRequest, TResponse>(IAsyncStreamReader<TRequest> requestStream,
         ServerCallContext context, ClientStreamingServerMethod<TRequest, TResponse> continuation)
     {
+        if (IsRetirement(context)) throw Denied();
         Authorize(context);
         return continuation(requestStream, context);
     }
@@ -224,14 +245,20 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     public override Task DuplexStreamingServerHandler<TRequest, TResponse>(IAsyncStreamReader<TRequest> requestStream,
         IServerStreamWriter<TResponse> responseStream, ServerCallContext context, DuplexStreamingServerMethod<TRequest, TResponse> continuation)
     {
+        if (IsRetirement(context)) throw Denied();
         Authorize(context);
         return continuation(requestStream, responseStream, context);
     }
 
+    private static bool IsRetirement(ServerCallContext context) => context.Method.StartsWith(ContainerRecycleArchiveRetirementBinding.Service, StringComparison.Ordinal);
+    private static RpcException Denied() => new(new Status(StatusCode.PermissionDenied, "Agent capability is missing or invalid."));
+
     private void Authorize(ServerCallContext context)
     {
         var token = context.RequestHeaders.GetValue("x-whaledeck-capability");
-        var valid = context.Method.StartsWith(ContainerRecycleArchiveBinding.Service,StringComparison.Ordinal)
+        var valid = IsRetirement(context)
+            ? validator.ValidateContainerRecycleArchiveRetirement(token, context.Method, context.RequestHeaders.GetValue(ContainerRecycleArchiveRetirementBinding.Header))
+            : context.Method.StartsWith(ContainerRecycleArchiveBinding.Service,StringComparison.Ordinal)
             ? validator.ValidateContainerRecycleArchive(token,context.Method,context.RequestHeaders.GetValue(ContainerRecycleArchiveBinding.Header))
             : context.Method.StartsWith(ContainerRecyclePurgeBinding.Service,StringComparison.Ordinal)
             ? validator.ValidateContainerRecyclePurge(token,context.Method,context.RequestHeaders.GetValue(ContainerRecyclePurgeBinding.Header))
