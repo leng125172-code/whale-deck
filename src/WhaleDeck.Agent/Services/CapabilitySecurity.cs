@@ -19,7 +19,8 @@ public sealed class CapabilityValidator(IConfiguration configuration)
     public bool Validate(string? token, string method)
     {
         if (method is DevelopmentStorageBinding.Method or DevelopmentStorageBinding.AttestationMethod ||
-            method.StartsWith(DevelopmentRunnerBinding.Service, StringComparison.Ordinal)) return false;
+            method.StartsWith(DevelopmentRunnerBinding.Service, StringComparison.Ordinal) ||
+            method.StartsWith(DevelopmentSourceBinding.Service, StringComparison.Ordinal)) return false;
         if (method.StartsWith(ContainerFileWriteBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerHistoryBinding.Service, StringComparison.Ordinal) ||
             method.StartsWith(ContainerDirectoryBinding.Service, StringComparison.Ordinal) ||
@@ -94,6 +95,11 @@ public sealed class CapabilityValidator(IConfiguration configuration)
     public bool ValidateDevelopmentArtifact(string? token, string method, WorkspaceTestArtifactRequest request) =>
         method is DevelopmentRunnerBinding.ReadTestArtifact or DevelopmentRunnerBinding.RetireTestArtifact &&
         ValidateContentBound(token, method, DevelopmentRunnerBinding.Hash(request), DevelopmentRunnerBinding.Payload);
+
+    public bool ValidateDevelopmentSource(string? token, string method, string? hash) =>
+        method is DevelopmentSourceBinding.Stage or DevelopmentSourceBinding.Inspect or
+            DevelopmentSourceBinding.Publish or DevelopmentSourceBinding.Discard &&
+        ValidateContentBound(token, method, hash, DevelopmentSourceBinding.Payload);
 
     public bool ValidateContainerWrite(string? token, string method, string? requestHash)
     {
@@ -224,6 +230,15 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
         ServerCallContext context,
         UnaryServerMethod<TRequest, TResponse> continuation)
     {
+        if (context.Method.StartsWith(DevelopmentSourceBinding.Service, StringComparison.Ordinal))
+        {
+            var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();
+            if (context.Method == DevelopmentSourceBinding.Stage || tokens.Length != 1 ||
+                request is not WorkspaceSourceRequest source || source.CalculateSize() > DevelopmentSourceBinding.MaximumHeaderBytes ||
+                !validator.ValidateDevelopmentSource(tokens[0].Value, context.Method, DevelopmentSourceBinding.Hash(source)))
+                throw Denied();
+            return continuation(request, context);
+        }
         if (context.Method.StartsWith(DevelopmentRunnerBinding.Service, StringComparison.Ordinal))
         {
             if (context.Method == DevelopmentRunnerBinding.RetireTestArtifact)
@@ -286,6 +301,15 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     public override Task<TResponse> ClientStreamingServerHandler<TRequest, TResponse>(IAsyncStreamReader<TRequest> requestStream,
         ServerCallContext context, ClientStreamingServerMethod<TRequest, TResponse> continuation)
     {
+        if (context.Method == DevelopmentSourceBinding.Stage)
+        {
+            var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();
+            var hashes = context.RequestHeaders.GetAll(DevelopmentSourceBinding.Header).ToArray();
+            if (tokens.Length != 1 || hashes.Length != 1 ||
+                !validator.ValidateDevelopmentSource(tokens[0].Value, context.Method, hashes[0].Value))
+                throw Denied();
+            return continuation(requestStream, context);
+        }
         if (IsRetirement(context)) throw Denied();
         Authorize(context);
         return continuation(requestStream, context);

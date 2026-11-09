@@ -83,6 +83,54 @@ public sealed class BoundedProcessRunner
         }
     }
 
+    internal static async Task<ProcessResult> RunWithInputAsync(string executable, IReadOnlyCollection<string> arguments,
+        Func<Stream, CancellationToken, Task> pump, TimeSpan timeout, CancellationToken token)
+    {
+        using var process = Process.Start(CreateStart(executable, arguments, true, null)) ?? throw new InvalidOperationException();
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
+        lifetime.CancelAfter(timeout);
+        using var input = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        var output = ReadBoundedAsync(process.StandardOutput, lifetime.Token);
+        var errors = ReadBoundedAsync(process.StandardError, lifetime.Token);
+        var exited = process.WaitForExitAsync(lifetime.Token);
+        var writing = WriteInputAsync();
+        try
+        {
+            if (await Task.WhenAny(writing, exited) == exited)
+            {
+                await exited;
+                // A busy helper can reject before the client sends its next frame.
+                if (process.ExitCode != 0) input.Cancel();
+            }
+            try { await writing; }
+            catch (Exception error) when (error is IOException or OperationCanceledException)
+            {
+                await exited;
+                if (process.ExitCode == 0) throw;
+            }
+            await exited;
+            return new ProcessResult(process.ExitCode, await output, await errors);
+        }
+        finally
+        {
+            input.Cancel();
+            lifetime.Cancel();
+            if (!process.HasExited)
+                // The root transient unit owns its own deadline. Close stdin
+                // and keep the original RPC error if sudo disallows signals.
+                try { process.Kill(); } catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+            // Observe all tasks on malformed or cancelled streams.
+            try { await Task.WhenAll(writing, exited, output, errors); } catch (Exception) { }
+        }
+
+        async Task WriteInputAsync()
+        {
+            var stream = process.StandardInput.BaseStream;
+            try { await pump(stream, input.Token); }
+            finally { await stream.DisposeAsync(); }
+        }
+    }
+
     private static ProcessStartInfo CreateStart(string executable, IReadOnlyCollection<string> arguments,
         bool standardInput, string? workingDirectory)
     {

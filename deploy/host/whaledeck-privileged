@@ -24,6 +24,24 @@ run_transient() {
 }
 
 case "$action" in
+  development-source-stage|development-source-inspect|development-source-publish|development-source-discard)
+    [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit="whaledeck-development-source-${action##*-}-$2" \
+      --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
+      --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=no \
+      --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
+      --property=RestrictNamespaces=yes --property=PrivateNetwork=yes --property=RestrictAddressFamilies=AF_UNIX \
+      --property=RuntimeMaxSec=105 --property=TimeoutStopSec=5 --property=KillMode=control-group \
+      --property=Restart=no --property=TasksMax=4 --property=MemoryMax=128M --property=CPUQuota=100% \
+      --property=LimitCORE=0 --property=LimitNOFILE=128 --property=LimitFSIZE=1073741824 \
+      --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
+      --property="CapabilityBoundingSet=CAP_SYS_ADMIN CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER" \
+      --property=SystemCallArchitectures=native --property="SystemCallFilter=@system-service prctl capget capset quotactl_fd" \
+      --property=ReadWritePaths=/var/lib/whaledeck-development \
+      /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-source.py "service-${action##*-}"
+    ;;
   development-run-start|development-run-observe|development-run-cancel|development-run-reclaim|development-run-readtest|development-run-retiretest)
     [[ ${2:-} =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
     runner_mode=service-${action##*-}

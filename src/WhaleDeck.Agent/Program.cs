@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Serilog;
 using Serilog.Formatting.Json;
 using WhaleDeck.Agent.Services;
+using WhaleDeck.Contracts;
 
 if (WhaleDeck.Contracts.BuildIdentity.TryPrint(args, typeof(Program).Assembly)) return;
 
@@ -30,7 +31,7 @@ builder.Services.AddGrpc(options =>
 {
     options.Interceptors.Add<CapabilityInterceptor>();
     options.Interceptors.Add<AgentErrorInterceptor>();
-});
+}).AddServiceOptions<DevelopmentSourceGrpcService>(options => options.MaxReceiveMessageSize = DevelopmentSourceBinding.ChunkBytes + 16);
 builder.Services.AddSingleton<CapabilityValidator>();
 builder.Services.AddSingleton<PeerCredentialPolicy>();
 builder.Services.AddSingleton<DockerEngine>();
@@ -65,6 +66,7 @@ app.UseMiddleware<PeerCredentialGuard>();
 app.MapGrpcService<AgentGrpcService>();
 app.MapGrpcService<DevelopmentStorageGrpcService>();
 app.MapGrpcService<DevelopmentRunnerGrpcService>();
+app.MapGrpcService<DevelopmentSourceGrpcService>();
 app.MapGrpcService<HostGrpcService>();
 app.MapGrpcService<DockerGrpcService>();
 app.MapGrpcService<OperationGrpcService>();

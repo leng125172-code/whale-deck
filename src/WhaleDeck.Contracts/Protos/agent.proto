@@ -479,6 +479,44 @@ message WorkspaceTestArtifactRetirement {
   string input_sha256 = 5;
 }
 
+// development.source.archive (protocol 1.68).
+service DevelopmentSourceService {
+  rpc Stage(stream WorkspaceSourceFrame) returns (WorkspaceSourceReceipt);
+  rpc Inspect(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
+  rpc Publish(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
+  rpc Discard(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
+}
+
+message WorkspaceSourceRequest {
+  WorkspaceAllocationRequest storage = 1;
+  string import_id = 2;
+  string archive_format = 3;
+  uint32 archive_bytes = 4;
+  string archive_sha256 = 5;
+  string plan_sha256 = 6;
+}
+
+message WorkspaceSourceFrame {
+  oneof payload {
+    WorkspaceSourceRequest header = 1;
+    bytes content = 2;
+  }
+}
+
+message WorkspaceSourceReceipt {
+  string workspace_id = 1;
+  string storage_sha256 = 2;
+  string import_id = 3;
+  string archive_format = 4;
+  uint32 archive_bytes = 5;
+  string archive_sha256 = 6;
+  string plan_sha256 = 7;
+  string content_sha256 = 8;
+  uint32 file_count = 9;
+  uint64 total_bytes = 10;
+  string state = 11;
+}
+
 service AgentService {
   rpc GetCapabilities(google.protobuf.Empty) returns (CapabilitiesResponse);
   rpc GetHealth(google.protobuf.Empty) returns (HealthResponse);

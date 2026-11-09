@@ -216,7 +216,10 @@ def extract_tar(archive_module, descriptor, fmt, tree, maximum):
 
     reader = SourceTar(tree.files, None, max_bytes=maximum, max_archive_bytes=MAX_ARCHIVE,
                        max_entries=MAX_ENTRIES, max_depth=32)
-    result = reader.inspect(descriptor, fmt, check=tree.check, write_file=tree.file)
+    try:
+        result = reader.inspect(descriptor, fmt, check=tree.check, write_file=tree.file)
+    except tree.files.Rejected:
+        refuse('TAR_INVALID')
     for row in result['entries']:
         if row['kind'] == 'Directory':
             tree.directory(row['path'])
@@ -410,6 +413,40 @@ class SourceImports:
                 self.store(slot, RECEIPT, receipt)
                 return receipt
 
+    def inspect(self, request):
+        intent = self.request(request, True)
+        with self.locked(request['storage']) as (payload, proof):
+            with contextlib.ExitStack() as directories:
+                try:
+                    imports = directories.enter_context(self.driver.opened(payload, IMPORTS, DIR))
+                    self.rootfs.private_directory(imports)
+                    slot = directories.enter_context(self.driver.opened(imports, intent['importId'], DIR))
+                    self.rootfs.private_directory(slot)
+                except FileNotFoundError:
+                    refuse('NOT_FOUND')
+                if self.metadata(slot, INTENT) is None:
+                    refuse('NOT_FOUND')
+                self.verify_intent(slot, intent)
+                plan = self.verified_plan(slot, intent)
+                if plan is None:
+                    refuse('NOT_FOUND')
+                public = self.public_plan(plan)
+                for name, state in ((RECEIPT, 'Published'), (DISCARD, 'Discarded')):
+                    if (recorded := self.metadata(slot, name)) is not None:
+                        if recorded != dict(public, state=state):
+                            refuse('RECEIPT_CHANGED')
+                        if name == DISCARD and self.exists(slot, 'bundle'):
+                            return dict(public, state='DiscardUnconfirmed')
+                        return recorded
+                if self.exists(slot, 'bundle'):
+                    with self.driver.opened(slot, 'bundle', DIR) as bundle:
+                        self.rootfs.private_directory(bundle)
+                        if self.exists(bundle, TREE):
+                            self.verify_tree(bundle, TREE, plan, proof)
+                            return dict(public, state='Staged')
+                self.verify_tree(payload, WORK, plan, proof)
+                return dict(public, state='PublishUnconfirmed')
+
     def discard(self, slot, plan, proof):
         if self.metadata(slot, RECEIPT) is not None:
             refuse('ALREADY_PUBLISHED')
@@ -443,7 +480,12 @@ class SourceImports:
 
 
 def main():
-    if os.geteuid() != 0 or sys.argv[1:] not in (['stage'], ['publish'], ['discard']):
+    if os.geteuid() != 0 or len(sys.argv) != 2:
+        return 2
+    mode = sys.argv[1]
+    sandboxed = mode.startswith('service-')
+    action = mode.removeprefix('service-')
+    if action not in ('stage', 'inspect', 'publish', 'discard'):
         return 2
     from importlib.util import module_from_spec, spec_from_file_location
     try:
@@ -459,6 +501,8 @@ def main():
         quota = runner.load('whaledeck-development-project-quota.py')
         rootfs = runner.load('whaledeck-development-rootfs.py')
         archive = runner.load('whaledeck-tree-archive.py')
+        if sandboxed:
+            runner.load('whaledeck-development-quota-guard.py').install(quota, read_only=True)
     except (OSError, ImportError, SourceError):
         print('WORKSPACE_SOURCE_HELPER_UNAVAILABLE', file=sys.stderr)
         return 2
@@ -469,14 +513,14 @@ def main():
         if not header.endswith(b'\n') or len(header) > 4096:
             refuse('REQUEST_INVALID')
         request = rootfs.decode(header)
-        service = SourceImports(storage.WorkspaceStorage(files, quota=quota), runner, rootfs, archive)
-        if sys.argv[1] == 'stage':
+        service = SourceImports(storage.WorkspaceStorage(files, sandboxed=sandboxed, quota=quota), runner, rootfs, archive)
+        if action == 'stage':
             runner.enforce_staging_quota()
             result = service.stage(request, sys.stdin.buffer)
         else:
             if sys.stdin.buffer.read(1):
                 refuse('REQUEST_INVALID')
-            result = service.settle(request, discard=sys.argv[1] == 'discard')
+            result = service.inspect(request) if action == 'inspect' else service.settle(request, discard=action == 'discard')
         print(json.dumps(result, separators=(',', ':')))
         return 0
     except (SourceError, files.Rejected, runner.RunError, rootfs.RootfsError) as error:
