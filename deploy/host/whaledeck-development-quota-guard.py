@@ -33,7 +33,7 @@ def restrict_path_writes():
         os.close(fd)
 
 
-def install(quota, *, read_only=False):
+def install(quota, *, read_only=False, archive_flags=False):
     # Native syscall numbers and AUDIT_ARCH values from Linux UAPI.
     architectures = {
         'x86_64': (0xc000003e, 16, (59, 101, 179, 304, 310, 311, 312, 321, 322, 323)),
@@ -52,6 +52,10 @@ def install(quota, *, read_only=False):
     for number in (*blocked, 425, 426, 427, 438):
         rules.extend(((equal, 0, 1, number), (ret, 0, 0, deny)))
     ioctls = (quota.FSGETXATTR,) if read_only else (quota.FSGETXATTR, quota.FSSETXATTR)
+    if archive_flags:
+        if not read_only:
+            raise ValueError('Archive flags require read-only quota access')
+        ioctls += (0x80086601,)  # FS_IOC_GETFLAGS, never SETFLAGS.
     quota_commands = (quota.Q_GETSTATE, quota.Q_GETQUOTA)
     if not read_only:
         quota_commands += (quota.Q_SETQUOTA,)

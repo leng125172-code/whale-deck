@@ -117,6 +117,22 @@ class OperationTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError): self.tasks.observe(self.base)
         self.assertEqual([], list(self.journal.iterdir()))
 
+    def test_dispatch_is_durable_once_and_binds_the_full_immutable_request(self):
+        self.assertTrue(self.tasks.admit_dispatch(self.base))
+        self.assertFalse(self.tasks.admit_dispatch(self.base))
+        with self.tasks.entry(self.base) as directory:
+            self.tasks.require_dispatch(directory, self.base)
+        fence = self.directory() / 'dispatch.json'
+        value = json.loads(fence.read_bytes()); value['schemaVersion'] = True
+        fence.write_bytes(self.engine.canonical(value))
+        with self.assertRaises(fixture.files.Rejected): self.tasks.admit_dispatch(self.base)
+
+    def test_empty_cancel_after_dispatch_is_not_an_initialization_prefix(self):
+        self.tasks.admit_dispatch(self.base)
+        (self.directory() / 'cancel').write_bytes(b'')
+        with self.assertRaisesRegex(fixture.files.Rejected, 'JOURNAL_UNSAFE'): self.tasks.cancel(self.base)
+        self.assertEqual(b'', (self.directory() / 'cancel').read_bytes())
+
     def test_actual_sigkill_during_first_cancel_initialization_is_recoverable(self):
         ready_r, ready_w = os.pipe(); original_write = os.write
         child = os.fork()

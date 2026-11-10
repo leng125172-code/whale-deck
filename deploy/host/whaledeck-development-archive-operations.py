@@ -126,7 +126,8 @@ class ArchiveOperations:
                 # execution or result may exist, even as a pending write.
                 if not initialize:
                     self.refuse('JOURNAL_UNSAFE')
-                for name in ('execution.json', '.execution.json.pending', 'result.json', '.result.json.pending'):
+                for name in ('dispatch.json', '.dispatch.json.pending', 'execution.json', '.execution.json.pending',
+                             'result.json', '.result.json.pending'):
                     try:
                         os.stat(name, dir_fd=directory, follow_symlinks=False)
                     except FileNotFoundError:
@@ -197,6 +198,24 @@ class ArchiveOperations:
     def observe(self, value):
         with self.entry(value) as directory:
             return self.state(directory, value)
+
+    def admit_dispatch(self, value):
+        # Commit before calling the manager. A lost launch receipt is unknown,
+        # never permission to submit another execution under this task ID.
+        with self.entry(value, create=True) as directory:
+            if self.completed(directory, value) is not None or self.proof(directory) is not None or self.cancelled(directory):
+                return False
+            fence = dict(schemaVersion=1, requestSha256=self.receipt(value, 'Pending')['requestSha256'])
+            try:
+                self.d.read_json(directory, 'dispatch.json', 1024, expected=fence, sync=True)
+                return False
+            except FileNotFoundError:
+                self.engine.durable_json(directory, 'dispatch.json', fence)
+                return True
+
+    def require_dispatch(self, directory, value):
+        self.d.read_json(directory, 'dispatch.json', 1024, expected=dict(schemaVersion=1,
+            requestSha256=self.receipt(value, 'Pending')['requestSha256']))
 
     def cancel(self, value):
         # A durable pre-start tombstone rejects a signed request arriving late.

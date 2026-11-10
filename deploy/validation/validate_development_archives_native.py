@@ -213,6 +213,10 @@ def main():
             else: raise AssertionError('EXTENDED_METADATA_SILENTLY_LOST')
         finally: os.removexattr(source, 'user.qa-native-fixture')
         before = physical(driver, quota, request, payload); save(evidence / 'before.json', before)
+        helper_path = Path(__file__).with_name('validate_development_archive_helper_native.py')
+        spec = importlib.util.spec_from_file_location('native_archive_helper', helper_path)
+        helper_probe = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper_probe)
+        helper_proof = helper_probe.exercise(sources, evidence, runtime_home, configuration_path, base, layout_path, archive_target, request)
         engine = archives.DevelopmentArchives(driver, tree.FileTreeManifest, codec.TreeArchive, archives.HddArchiveStorage(driver))
         print(json.dumps(dict(phase='capturing-and-rehashing', kernelQuotaDenied=True, kernelCapacityDenied=True)), flush=True)
         captures = []
@@ -286,7 +290,7 @@ def main():
             changedImageAndUuidRefused=True, crossPhysicalKindRefused=True, extendedMetadataRefused=True,
             archiveRemountPreservesVerification=True,
             independentHddVerificationWithoutSource=True, sourceInodesBytesAndQuotaUnchanged=True,
-            productionConfigurationUnchanged=True, productionWorkspaceMutations=0,
+            productionConfigurationUnchanged=True, productionWorkspaceMutations=0, sandboxedArchiveHelper=helper_proof,
             scope='Internal archive candidate only; no RPC/UI, retirement, deletion or quota release')
     except BaseException as error:
         save(evidence / 'failure.json', dict(type=type(error).__name__,
