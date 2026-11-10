@@ -52,6 +52,12 @@ export interface SourceDiffPage {
   }[]
 }
 
+export interface SourceTextDiff {
+  path: string
+  status: 'text' | 'binary' | 'protected' | 'tooLarge' | 'nonFile'
+  patch: string | null
+}
+
 interface SourceUpdatePlan {
   previousContentSha256: string
   workContentSha256: string
@@ -362,6 +368,43 @@ function validDiffEntry(entry: unknown) {
 }
 
 export const workspaceSources = {
+  async textDiff(item: SourceImport, path: string, signal: AbortSignal): Promise<SourceTextDiff> {
+    if (item.state !== 'Staged' || !item.previousImportId || !item.plan?.update) return malformed()
+    const result = await apiRequest<unknown>(
+      target(item.workspaceId, item.importId) + '/diff/text',
+      {
+        method: 'POST',
+        body: JSON.stringify({ planSha256: item.plan.planSha256, path }),
+        signal,
+      },
+    )
+    if (
+      !isRecord(result) ||
+      result.workspaceId !== item.workspaceId ||
+      result.importId !== item.importId ||
+      result.previousImportId !== item.previousImportId ||
+      result.planSha256 !== item.plan.planSha256 ||
+      result.path !== path
+    )
+      return malformed()
+    if (result.status === 'text') {
+      if (
+        typeof result.patch !== 'string' ||
+        new TextEncoder().encode(result.patch).length > 48 * 1024 ||
+        (result.patch !== '' &&
+          (!result.patch.startsWith('--- current\n+++ candidate\n@@ ') ||
+            !result.patch.endsWith('\n') ||
+            /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(result.patch.replace(/\r?\n|\t/g, ''))))
+      )
+        return malformed()
+    } else if (
+      result.patch !== null ||
+      typeof result.status !== 'string' ||
+      !['binary', 'protected', 'tooLarge', 'nonFile'].includes(result.status)
+    )
+      return malformed()
+    return result as unknown as SourceTextDiff
+  },
   async diff(item: SourceImport, offset: number, signal: AbortSignal): Promise<SourceDiffPage> {
     const update = item.plan?.update
     if (item.state !== 'Staged' || !item.previousImportId || !item.plan || !update)

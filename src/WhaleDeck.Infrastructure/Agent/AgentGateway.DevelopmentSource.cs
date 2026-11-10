@@ -12,6 +12,36 @@ namespace WhaleDeck.Infrastructure.Agent;
 
 public sealed partial class AgentGateway : IWorkspaceSourceGateway, IWorkspaceSourceDownloadGateway, IWorkspaceSourceDiffGateway
 {
+    public async Task<WorkspaceSourceTextDiffView> ReadTextDiffAsync(WorkspaceDefinition workspace, WorkspaceSourceView import,
+        TerminalActor actor, string path, CancellationToken token)
+    {
+        const string method = DevelopmentSourceBinding.ReadTextDiff;
+        var request = new WorkspaceSourceTextDiffRequest { Source = SourceRequest(import, workspace, actor, method, import.Plan), Path = path };
+        if (!DevelopmentSourceDiffBinding.IsValid(request))
+            throw new WorkspaceSourceException(WorkspaceSourceFailure.Rejected);
+        if (import.PreviousImportId is not { } previous)
+            throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+        try
+        {
+            var client = await SourceClientAsync(true, token, textDiff: true);
+            var headers = SourceHeaders(method, DevelopmentSourceDiffBinding.Hash(request), DevelopmentSourceBinding.Payload);
+            var reply = await client.ReadTextDiffAsync(request, headers, DateTime.UtcNow.AddSeconds(112), token).ResponseAsync;
+            if (!DevelopmentSourceDiffBinding.Matches(request, reply))
+                throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+            var status = reply.Status switch
+            {
+                WorkspaceSourceTextDiffStatus.Text => "text",
+                WorkspaceSourceTextDiffStatus.Binary => "binary",
+                WorkspaceSourceTextDiffStatus.Protected => "protected",
+                WorkspaceSourceTextDiffStatus.TooLarge => "tooLarge",
+                WorkspaceSourceTextDiffStatus.NonFile => "nonFile",
+                _ => throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity)
+            };
+            return new(workspace.Id, import.ImportId, previous, reply.PlanSha256, path, status, reply.HasPatch ? reply.Patch : null);
+        }
+        catch (RpcException error) { token.ThrowIfCancellationRequested(); throw SourceFailure(error); }
+    }
+
     public async Task<WorkspaceSourceDiffPageView> ReadDiffAsync(WorkspaceDefinition workspace, WorkspaceSourceView import,
         TerminalActor actor, int offset, int limit, CancellationToken token)
     {
@@ -164,14 +194,15 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway, IWorkspaceSo
     }
 
     private async Task<DevelopmentSourceService.DevelopmentSourceServiceClient> SourceClientAsync(bool update, CancellationToken token,
-        bool previous = false, bool diff = false)
+        bool previous = false, bool diff = false, bool textDiff = false)
     {
         var caps = await _agent.GetCapabilitiesAsync(new Google.Protobuf.WellKnownTypes.Empty(),
             deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
         if (!DevelopmentSourceBinding.IsSupported(caps) || caps.ProtocolMinor < DevelopmentSourceBinding.AbortProtocolMinor ||
             update && !DevelopmentSourceBinding.SupportsUpdate(caps) ||
             previous && !DevelopmentSourceBinding.SupportsPrevious(caps) ||
-            diff && !DevelopmentSourceBinding.SupportsDiff(caps))
+            diff && !DevelopmentSourceBinding.SupportsDiff(caps) ||
+            textDiff && !DevelopmentSourceBinding.SupportsTextDiff(caps))
             throw new WorkspaceSourceException(WorkspaceSourceFailure.Unsupported);
         return new(_channel);
     }

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WhaleDeck.Api.Security;
 using WhaleDeck.Application.Development;
+using WhaleDeck.Application.Models;
 
 namespace WhaleDeck.Api.Controllers;
 
@@ -10,14 +11,23 @@ namespace WhaleDeck.Api.Controllers;
 public sealed class WorkspaceSourceDiffsController(WorkspaceSourceDiffs diffs, TerminalCookieIdentity identity) : ControllerBase
 {
     [HttpGet("{importId:guid}/diff")]
-    public async Task<ActionResult<WorkspaceSourceDiffPageView>> Read(Guid workspaceId, Guid importId,
-        [FromQuery] string planSha256, CancellationToken token, [FromQuery] int offset = 0, [FromQuery] int limit = 50)
+    public Task<ActionResult<WorkspaceSourceDiffPageView>> Read(Guid workspaceId, Guid importId,
+        [FromQuery] string planSha256, CancellationToken token, [FromQuery] int offset = 0, [FromQuery] int limit = 50) =>
+        ReadAsync((login, refresh) => diffs.ReadAsync(login.Actor, workspaceId, importId, planSha256, offset, limit, refresh, token));
+
+    [HttpPost("{importId:guid}/diff/text"), RequestSizeLimit(12 * 1024)]
+    public Task<ActionResult<WorkspaceSourceTextDiffView>> ReadText(Guid workspaceId, Guid importId,
+        [FromBody] TextDiffQuery query, CancellationToken token) =>
+        ReadAsync((login, refresh) => diffs.ReadTextAsync(login.Actor, workspaceId, importId, query.PlanSha256, query.Path, refresh, token));
+
+    public sealed record TextDiffQuery(string PlanSha256, string Path);
+
+    private async Task<ActionResult<T>> ReadAsync<T>(Func<TerminalLogin, Func<Task<TerminalActor>>, Task<T>> read)
     {
         var login = await identity.ReadAsync(HttpContext);
         try
         {
-            return await diffs.ReadAsync(login.Actor, workspaceId, importId, planSha256, offset, limit,
-                async () => (await identity.ReadAsync(HttpContext, login.Key)).Actor, token);
+            return await read(login, async () => (await identity.ReadAsync(HttpContext, login.Key)).Actor);
         }
         catch (WorkspaceSourceException error)
         {

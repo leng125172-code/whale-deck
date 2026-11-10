@@ -22,6 +22,7 @@ import {
   type SourceConflictResolution,
   type SourceDiffNode,
   type SourceDiffPage,
+  type SourceTextDiff,
   type SourceImport,
   type GitSourceInput,
 } from '@/services/developmentWorkspaceSources'
@@ -48,7 +49,9 @@ const fileInput = ref<HTMLInputElement>()
 const rawInput = ref<HTMLInputElement>()
 const directoryInput = ref<HTMLInputElement>()
 const directorySupported = 'webkitdirectory' in document.createElement('input')
-const busy = ref<'refresh' | 'upload' | 'git' | 'publish' | 'cancel' | 'history' | 'diff' | ''>('')
+const busy = ref<
+  'refresh' | 'upload' | 'git' | 'publish' | 'cancel' | 'history' | 'diff' | 'textDiff' | ''
+>('')
 const error = ref('')
 const confirmed = ref(false)
 const resolution = ref<SourceConflictResolution>()
@@ -61,6 +64,7 @@ const gitRef = ref('HEAD')
 const history = shallowRef<SourceImport[] | null>(null)
 const before = ref<string | null>(null)
 const diff = shallowRef<SourceDiffPage | null>(null)
+const textDiff = shallowRef<SourceTextDiff | null>(null)
 const diffOffsets = shallowRef<number[]>([])
 let transfer: AbortController | undefined
 let pending: { id: string; archive: SourceArchive } | undefined
@@ -103,6 +107,13 @@ const conflictErrors: Record<string, string> = {
   WORKSPACE_SOURCE_DIFF_UNAVAILABLE: '差异查询暂不可用。',
 }
 const changeLabels = { added: '新增', removed: '删除', changed: '修改' }
+const textDiffLabels = {
+  text: '文件正文无变化。',
+  binary: '此文件无法按 UTF-8 文本比较。',
+  protected: '此文件命中凭据检测，正文已隐藏。',
+  tooLarge: '文件或差异超出逐行预览上限。',
+  nonFile: '此项变化包含目录，没有可比较的文件正文。',
+}
 const publishedDownload = computed(() => previousSourceDownloadUrl(published.value))
 const percentage = computed(() =>
   current.value?.archive.archiveBytes
@@ -282,6 +293,16 @@ function loadHistory(more = false) {
 function clearDiff() {
   diff.value = null
   diffOffsets.value = []
+  textDiff.value = null
+}
+
+function invalidateChangedDiff(failure: unknown) {
+  if (failure instanceof ApiError && failure.status === 409) {
+    clearDiff()
+    confirmed.value = false
+    resolution.value = undefined
+    synchronized.value = false
+  }
 }
 
 function loadDiff(direction: 'first' | 'next' | 'previous') {
@@ -297,6 +318,7 @@ function loadDiff(direction: 'first' | 'next' | 'previous') {
         : offsets[offsets.length - 1]
   if (offset == null) return
   void run('diff', async (signal) => {
+    textDiff.value = null
     try {
       const result = await api.diff(item, offset, signal)
       signal.throwIfAborted()
@@ -309,11 +331,28 @@ function loadDiff(direction: 'first' | 'next' | 'previous') {
             : offsets.slice(0, -1)
     } catch (failure) {
       clearDiff()
-      if (failure instanceof ApiError && failure.status === 409) {
-        confirmed.value = false
-        resolution.value = undefined
-        synchronized.value = false
-      }
+      invalidateChangedDiff(failure)
+      throw failure
+    }
+  })
+}
+
+function loadTextDiff(path: string) {
+  const item = current.value
+  if (
+    !synchronized.value ||
+    item?.state !== 'Staged' ||
+    !diff.value?.entries.some((entry) => entry.path === path)
+  )
+    return
+  void run('textDiff', async (signal) => {
+    textDiff.value = null
+    try {
+      const result = await api.textDiff(item, path, signal)
+      signal.throwIfAborted()
+      textDiff.value = result
+    } catch (failure) {
+      invalidateChangedDiff(failure)
       throw failure
     }
   })
@@ -654,8 +693,24 @@ function cancel() {
                     >当前 {{ diffNodeLabel(entry.before) }} → 候选
                     {{ diffNodeLabel(entry.after) }}</small
                   >
+                  <div class="source-text-actions">
+                    <el-button
+                      size="small"
+                      :disabled="!!busy || !synchronized"
+                      @click="loadTextDiff(entry.path)"
+                    >
+                      查看逐行差异
+                    </el-button>
+                  </div>
+                  <div v-if="textDiff?.path === entry.path" class="source-text-diff">
+                    <pre v-if="textDiff.patch" tabindex="0" aria-label="逐行差异正文">{{
+                      textDiff.patch
+                    }}</pre>
+                    <p v-else role="status">{{ textDiffLabels[textDiff.status] }}</p>
+                  </div>
                 </li>
               </ul>
+              <p v-if="busy === 'textDiff'" role="status">正在读取逐行差异。</p>
             </template>
           </section>
           <p id="workspace-update-strategy">请选择工作树更新策略</p>
@@ -858,6 +913,22 @@ function cancel() {
 .source-diff small {
   grid-column: 2;
   color: var(--el-text-color-secondary);
+}
+.source-text-actions,
+.source-text-diff {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.source-text-diff pre {
+  max-block-size: 22rem;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--el-border-radius-base);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .source-git :deep(.el-select),
 .source-git :deep(.el-input) {

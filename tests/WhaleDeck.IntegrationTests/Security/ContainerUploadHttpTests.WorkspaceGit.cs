@@ -243,10 +243,40 @@ public sealed partial class ContainerUploadHttpTests
             updateHost.InvalidDiff = true;
             await Expect(HttpMethod.Get, diffUrl, null, HttpStatusCode.BadGateway, owner, null);
             updateHost.InvalidDiff = false;
+            var textUrl = Url(staleUpdate) + "/diff/text";
+            JsonContent TextQuery(string path = "src/源码.cjs") =>
+                JsonContent.Create(new { planSha256 = updatePlan.PlanSha256, path });
+            await Expect(HttpMethod.Post, textUrl, TextQuery(), HttpStatusCode.BadRequest, owner, null);
+            await Expect(HttpMethod.Post, textUrl, TextQuery("../outside"), HttpStatusCode.BadRequest, owner, csrf);
+            using (var text = await owner.SendAsync(Write(owner, HttpMethod.Post, textUrl, csrf, TextQuery())))
+            {
+                Assert.Equal(HttpStatusCode.OK, text.StatusCode);
+                Assert.True(text.Headers.CacheControl?.NoStore);
+                var value = await text.Content.ReadFromJsonAsync<WorkspaceSourceTextDiffView>();
+                Assert.Equal("src/源码.cjs", value!.Path);
+                Assert.Equal("text", value.Status);
+                Assert.Contains("+新", value.Patch);
+            }
+            using (var protectedReply = await owner.SendAsync(Write(owner, HttpMethod.Post, textUrl, csrf, TextQuery("src/末尾.cjs"))))
+            {
+                Assert.Equal(HttpStatusCode.OK, protectedReply.StatusCode);
+                var value = await protectedReply.Content.ReadFromJsonAsync<WorkspaceSourceTextDiffView>();
+                Assert.Equal("protected", value!.Status);
+                Assert.Null(value.Patch);
+            }
+            updateHost.InvalidDiff = true;
+            await Expect(HttpMethod.Post, textUrl, TextQuery(), HttpStatusCode.BadGateway, owner, csrf);
+            updateHost.InvalidDiff = false;
+            updateHost.AfterDiff = () => identities.LiveMembership = false;
+            await Expect(HttpMethod.Post, textUrl, TextQuery(), HttpStatusCode.Forbidden, owner, csrf);
+            updateHost.AfterDiff = null;
+            identities.LiveMembership = true;
             await ConfirmUpdate(staleUpdate, updatePlan.PlanSha256, null, HttpStatusCode.BadRequest);
             await ConfirmUpdate(staleUpdate, updatePlan.PlanSha256, WorkspaceSources.CleanOnly, HttpStatusCode.Conflict);
             await ConfirmUpdate(staleUpdate, updatePlan.PlanSha256, WorkspaceSources.RetainAndReplace, HttpStatusCode.Accepted);
             await Expect(HttpMethod.Get, diffUrl, null, HttpStatusCode.Conflict, owner, null);
+            await Expect(HttpMethod.Post, textUrl, TextQuery(), HttpStatusCode.Conflict, owner, csrf);
+            Console.WriteLine("INBOX_PHASE=workspace-source-text-diff-real-http-uds-postgres-csrf-patch-redaction-and-revocation");
             Console.WriteLine("INBOX_PHASE=workspace-source-diff-real-http-uds-postgres-paging-scope-and-live-revocation");
             updateHost.RejectLateWrite = true;
             await Tick();
@@ -373,9 +403,9 @@ public sealed partial class ContainerUploadHttpTests
         public override Task<CapabilitiesResponse> GetCapabilities(Empty request, ServerCallContext context) => Task.FromResult(
             new CapabilitiesResponse
             {
-                ProtocolMajor = 1, ProtocolMinor = DevelopmentSourceBinding.DiffProtocolMinor,
+                ProtocolMajor = 1, ProtocolMinor = DevelopmentSourceBinding.TextDiffProtocolMinor,
                 Capabilities = { DevelopmentGitBinding.Capability, DevelopmentSourceBinding.Capability, DevelopmentSourceBinding.UpdateCapability,
-                    DevelopmentSourceBinding.PreviousCapability, DevelopmentSourceBinding.DiffCapability }
+                    DevelopmentSourceBinding.PreviousCapability, DevelopmentSourceBinding.DiffCapability, DevelopmentSourceBinding.TextDiffCapability }
             });
     }
 
@@ -391,6 +421,25 @@ public sealed partial class ContainerUploadHttpTests
         public Task? ExportFooterGate { get; set; }
         public Action? AfterDiff { get; set; }
         public bool InvalidDiff { get; set; }
+
+        public override Task<WorkspaceSourceTextDiff> ReadTextDiff(WorkspaceSourceTextDiffRequest request, ServerCallContext context)
+        {
+            Assert.True(DevelopmentSourceDiffBinding.IsValid(request));
+            Authorize(DevelopmentSourceDiffBinding.Hash(request), context);
+            var receipt = Find(request.Source);
+            Assert.Equal("Staged", receipt.State);
+            Assert.Equal(receipt.PlanSha256, request.Source.PlanSha256);
+            var response = new WorkspaceSourceTextDiff
+            {
+                WorkspaceId = receipt.WorkspaceId, ImportId = receipt.ImportId, PreviousImportId = receipt.PreviousImportId,
+                PlanSha256 = receipt.PlanSha256, Path = InvalidDiff ? "src/wrong.cjs" : request.Path,
+                Status = request.Path == "src/源码.cjs" ? WorkspaceSourceTextDiffStatus.Text : WorkspaceSourceTextDiffStatus.Protected
+            };
+            if (response.Status == WorkspaceSourceTextDiffStatus.Text)
+                response.Patch = "--- current\n+++ candidate\n@@ -1 +1 @@\n-旧\n+新\n";
+            AfterDiff?.Invoke();
+            return Task.FromResult(response);
+        }
 
         public override Task<WorkspaceSourceDiffPage> ReadDiff(WorkspaceSourceDiffRequest request, ServerCallContext context)
         {
