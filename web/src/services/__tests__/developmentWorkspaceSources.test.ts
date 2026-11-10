@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiRequest } from '../apiClient'
-import { sameSourceOrigin, validGitRef, workspaceSources } from '../developmentWorkspaceSources'
+import {
+  sameSourceOrigin,
+  sameSourcePlan,
+  validGitRef,
+  workspaceSources,
+} from '../developmentWorkspaceSources'
 
 vi.mock('../apiClient', () => ({ apiRequest: vi.fn<typeof apiRequest>() }))
 
@@ -29,6 +34,27 @@ const initial = {
   git: { ...input, snapshot: null },
 }
 const pinned = { ...initial, archive, git: { ...input, snapshot } }
+const previousImportId = '79df40e9-38d0-4eaa-9b19-bc5e033ad226'
+const update = {
+  ...pinned,
+  previousImportId,
+  state: 'Staged',
+  receivedBytes: archive.archiveBytes,
+  plan: {
+    planSha256: 'a'.repeat(64),
+    contentSha256: 'b'.repeat(64),
+    fileCount: 1,
+    totalBytes: 5,
+    update: {
+      previousContentSha256: 'c'.repeat(64),
+      workContentSha256: 'd'.repeat(64),
+      dirty: true,
+      addedEntries: 1,
+      removedEntries: 2,
+      changedEntries: 3,
+    },
+  },
+}
 
 beforeEach(() => {
   request.mockReset()
@@ -84,5 +110,52 @@ describe('workspace Git import receipts', () => {
         validGitRef,
       ),
     ).toBe(false)
+  })
+
+  it('binds Git updates to a published baseline and the selected conflict strategy', async () => {
+    const requested = { ...input, previousImportId }
+    request.mockResolvedValueOnce(update).mockResolvedValueOnce({
+      ...update,
+      state: 'Publishing',
+      conflictResolution: 'retain-and-replace',
+    })
+    const staged = await workspaceSources.beginGit(workspace, id, requested, signal)
+    expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body))).toEqual(requested)
+    await workspaceSources.publish(
+      workspace,
+      staged,
+      update.plan.planSha256,
+      signal,
+      'retain-and-replace',
+    )
+    expect(JSON.parse(String(request.mock.calls[1]?.[1]?.body))).toEqual({
+      planSha256: update.plan.planSha256,
+      conflictResolution: 'retain-and-replace',
+    })
+    request.mockResolvedValueOnce(update)
+    await expect(workspaceSources.published(workspace, signal)).rejects.toThrow(
+      '导入回执未通过核验',
+    )
+    request.mockResolvedValueOnce({ ...update, previousImportId: workspace })
+    await expect(workspaceSources.beginGit(workspace, id, requested, signal)).rejects.toThrow(
+      '导入回执未通过核验',
+    )
+  })
+
+  it('rejects a missing or changed update plan and a receipt that confirms another strategy', async () => {
+    request.mockResolvedValueOnce(update)
+    const staged = await workspaceSources.current(workspace, signal)
+    const changed = { ...update.plan, update: { ...update.plan.update, changedEntries: 8 } }
+    expect(sameSourcePlan(staged!.plan, changed)).toBe(false)
+    request.mockResolvedValueOnce({ ...update, plan: { ...update.plan, update: undefined } })
+    await expect(workspaceSources.current(workspace, signal)).rejects.toThrow('导入回执未通过核验')
+    request.mockResolvedValueOnce({
+      ...update,
+      state: 'Publishing',
+      conflictResolution: 'retain-and-replace',
+    })
+    await expect(
+      workspaceSources.publish(workspace, staged!, update.plan.planSha256, signal, 'clean-only'),
+    ).rejects.toThrow('导入回执未通过核验')
   })
 })

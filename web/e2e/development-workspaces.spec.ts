@@ -321,6 +321,10 @@ async function sourceFixture(page: Page) {
         code: state.phase === 'Canceled' ? 'WORKSPACE_SOURCE_CANCELED' : null,
         expiresAtUtc: new Date(Date.now() + 3600_000).toISOString(),
       })
+      if (request.method() === 'GET' && suffix === '/published')
+        return state.phase === 'Published'
+          ? route.fulfill({ json: receipt() })
+          : route.fulfill({ status: 204 })
       if (request.method() === 'GET' && suffix === '') {
         if (!state.id) return route.fulfill({ status: 204 })
         if (state.phase === 'Ready') state.phase = 'Staged'

@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
-import { ElCard, ElCheckbox, ElInput, ElOption, ElProgress, ElSelect } from 'element-plus'
+import {
+  ElCard,
+  ElCheckbox,
+  ElInput,
+  ElOption,
+  ElProgress,
+  ElRadio,
+  ElRadioGroup,
+  ElSelect,
+} from 'element-plus'
 import { ApiError, createIdempotencyKey } from '@/services/apiClient'
 import { workspaceError } from '@/services/developmentWorkspaces'
 import {
@@ -9,6 +18,7 @@ import {
   sourceStates,
   validGitRef,
   workspaceSources as api,
+  type SourceConflictResolution,
   type SourceImport,
   type GitSourceInput,
 } from '@/services/developmentWorkspaceSources'
@@ -29,6 +39,7 @@ type Selection =
 const props = defineProps<{ workspaceId: string }>()
 const lifecycle = new AbortController()
 const current = shallowRef<SourceImport | null>(null)
+const published = shallowRef<SourceImport | null>(null)
 const selected = shallowRef<Selection | null>(null)
 const fileInput = ref<HTMLInputElement>()
 const rawInput = ref<HTMLInputElement>()
@@ -37,6 +48,7 @@ const directorySupported = 'webkitdirectory' in document.createElement('input')
 const busy = ref<'refresh' | 'upload' | 'git' | 'publish' | 'cancel' | 'history' | ''>('')
 const error = ref('')
 const confirmed = ref(false)
+const resolution = ref<SourceConflictResolution>()
 const synchronized = ref(false)
 const denied = ref(false)
 const hashInProgress = ref(false)
@@ -53,6 +65,7 @@ let timer: number | undefined
 const canUpload = computed(
   () =>
     !denied.value &&
+    !published.value &&
     (!current.value || ['Uploading', 'Canceled', 'Failed'].includes(current.value.state)),
 )
 const canCancel = computed(
@@ -62,8 +75,25 @@ const canCancel = computed(
     ['Uploading', 'Acquiring', 'Ready', 'Staged'].includes(current.value.state),
 )
 const canStartGit = computed(
-  () => !denied.value && (!current.value || ['Canceled', 'Failed'].includes(current.value.state)),
+  () =>
+    !denied.value &&
+    (!current.value || ['Published', 'Canceled', 'Failed'].includes(current.value.state)),
 )
+const canConfirm = computed(
+  () =>
+    synchronized.value &&
+    current.value?.state === 'Staged' &&
+    (!current.value.previousImportId || !!resolution.value),
+)
+const conflictLabels: Record<SourceConflictResolution, string> = {
+  'clean-only': '仅在工作树干净时发布',
+  'retain-and-replace': '保留旧树并替换',
+}
+const conflictErrors: Record<string, string> = {
+  WORKSPACE_SOURCE_WORK_BASE_CONFLICT: '已发布的基线发生变化。请刷新后重新核对更新。',
+  WORKSPACE_SOURCE_WORK_CHANGED: '工作树在暂存后发生变化。请重新获取源码并核对新计划。',
+  WORKSPACE_SOURCE_WORK_DIRTY: '工作树含未发布修改。请保留旧树后替换，或清理后重新获取源码。',
+}
 const percentage = computed(() =>
   current.value?.archive.archiveBytes
     ? Math.floor((100 * current.value.receivedBytes) / current.value.archive.archiveBytes)
@@ -89,21 +119,39 @@ onUnmounted(() => {
   if (timer !== undefined) window.clearInterval(timer)
 })
 
-function accept(result: SourceImport | null, signal: AbortSignal) {
+function accept(
+  result: SourceImport | null,
+  signal: AbortSignal,
+  head: SourceImport | null = published.value,
+) {
   signal.throwIfAborted()
   if (
-    current.value &&
-    result?.importId === current.value.importId &&
-    !sameSourceOrigin(current.value, result)
+    result?.state === 'Staged' &&
+    result.previousImportId &&
+    (head?.importId !== result.previousImportId ||
+      head.plan?.contentSha256 !== result.plan?.update?.previousContentSha256)
   )
-    throw new SourceInputError('导入来源或已固定的快照与服务器回执不一致。')
+    throw new SourceInputError(conflictErrors.WORKSPACE_SOURCE_WORK_BASE_CONFLICT)
+  const previous = current.value
+  if (previous && result?.importId === previous.importId) {
+    if (!sameSourceOrigin(previous, result))
+      throw new SourceInputError('导入来源或已固定的快照与服务器回执不一致。')
+    if (
+      (previous.plan && !sameSourcePlan(previous.plan, result.plan)) ||
+      (previous.conflictResolution && previous.conflictResolution !== result.conflictResolution)
+    )
+      throw new SourceInputError('导入计划或已确认策略与服务器回执不一致。')
+  }
   if (
     current.value?.importId !== result?.importId ||
     !sameSourcePlan(current.value?.plan ?? null, result?.plan ?? null) ||
     result?.state !== 'Staged'
-  )
+  ) {
     confirmed.value = false
+    resolution.value = undefined
+  }
   current.value = result
+  if (result?.state === 'Published') published.value = result
   if (result && pending?.id === result.importId) pending = undefined
   if (result && pendingGit?.id === result.importId) pendingGit = undefined
   denied.value = false
@@ -118,7 +166,12 @@ function clearFile(except?: HTMLInputElement) {
 
 async function load(signal: AbortSignal) {
   synchronized.value = false
-  accept(await api.current(props.workspaceId, signal), signal)
+  const latest = await api.current(props.workspaceId, signal)
+  const head = await api.published(props.workspaceId, signal)
+  if (latest?.state === 'Published' && !head)
+    throw new SourceInputError(conflictErrors.WORKSPACE_SOURCE_WORK_BASE_CONFLICT)
+  accept(latest, signal, head)
+  published.value = head
 }
 
 async function run(action: typeof busy.value, work: (signal: AbortSignal) => Promise<void>) {
@@ -133,7 +186,9 @@ async function run(action: typeof busy.value, work: (signal: AbortSignal) => Pro
     if (failure instanceof ApiError && [401, 403, 404].includes(failure.status)) {
       denied.value = true
       current.value = null
+      published.value = null
       confirmed.value = false
+      resolution.value = undefined
       synchronized.value = false
       pending = undefined
       pendingGit = undefined
@@ -143,7 +198,11 @@ async function run(action: typeof busy.value, work: (signal: AbortSignal) => Pro
       before.value = null
       clearFile()
     }
-    error.value = failure instanceof SourceInputError ? failure.message : workspaceError(failure)
+    error.value =
+      failure instanceof SourceInputError
+        ? failure.message
+        : (failure instanceof ApiError && conflictErrors[failure.problem.code ?? '']) ||
+          workspaceError(failure)
   } finally {
     if (!signal.aborted) busy.value = ''
   }
@@ -170,11 +229,21 @@ function startGit() {
     !validGitRef(gitRef.value)
   )
     return
-  const input = { repositoryId: repository.value, ref: gitRef.value }
+  const input: GitSourceInput = {
+    repositoryId: repository.value,
+    ref: gitRef.value,
+    previousImportId: published.value?.importId,
+  }
   void run('git', async (signal) => {
     await load(signal)
     if (!canStartGit.value) return
-    if (pendingGit?.repositoryId !== input.repositoryId || pendingGit.ref !== input.ref)
+    if (input.previousImportId !== published.value?.importId)
+      throw new SourceInputError(conflictErrors.WORKSPACE_SOURCE_WORK_BASE_CONFLICT)
+    if (
+      pendingGit?.repositoryId !== input.repositoryId ||
+      pendingGit.ref !== input.ref ||
+      pendingGit.previousImportId !== input.previousImportId
+    )
       pendingGit = { ...input, id: createIdempotencyKey() }
     synchronized.value = false
     accept(await api.beginGit(props.workspaceId, pendingGit.id, input, signal), signal)
@@ -271,11 +340,12 @@ function upload() {
 function publish() {
   const result = current.value
   const digest = result?.plan?.planSha256
-  if (!confirmed.value || !synchronized.value || result?.state !== 'Staged' || !digest) return
+  if (!confirmed.value || !canConfirm.value || !result || !digest) return
+  const choice = resolution.value
   void run('publish', async (signal) => {
     confirmed.value = false
     synchronized.value = false
-    accept(await api.publish(props.workspaceId, result, digest, signal), signal)
+    accept(await api.publish(props.workspaceId, result, digest, signal, choice), signal)
     history.value = null
   })
 }
@@ -305,12 +375,10 @@ function cancel() {
       <template v-if="current">
         <div class="source-actions" role="status">
           <el-tag effect="plain">{{ sourceStates[current.state] }}</el-tag>
-          <span v-if="current.code"
-            ><code>{{ current.code }}</code></span
-          >
+          <span v-if="current.code">{{ conflictErrors[current.code] ?? current.code }}</span>
         </div>
         <dl>
-          <dt>导入 ID</dt>
+          <dt>{{ current.importId === published?.importId ? '当前发布基线' : '导入 ID' }}</dt>
           <dd>
             <code>{{ current.importId }}</code>
           </dd>
@@ -362,6 +430,20 @@ function cancel() {
               <code>{{ current.plan.planSha256 }}</code>
             </dd>
           </template>
+          <template v-if="current.plan?.update">
+            <dt>工作树状态</dt>
+            <dd>{{ current.plan.update.dirty ? '有本地修改' : '与上次发布一致' }}</dd>
+            <dt>更新差异</dt>
+            <dd>
+              新增 {{ current.plan.update.addedEntries }} · 删除
+              {{ current.plan.update.removedEntries }} · 修改
+              {{ current.plan.update.changedEntries }}
+            </dd>
+          </template>
+          <template v-if="current.conflictResolution">
+            <dt>已确认策略</dt>
+            <dd>{{ conflictLabels[current.conflictResolution] }}</dd>
+          </template>
         </dl>
         <p v-if="current.state === 'Acquiring' && !current.git?.snapshot" role="status">
           正在解析 ref 并校验 Git 快照。
@@ -384,6 +466,15 @@ function cancel() {
         </template>
         <p v-if="current.state === 'Published'">源码已发布到该空间，可前往运行记录执行开发任务。</p>
       </template>
+      <dl v-if="published && current?.importId !== published.importId">
+        <dt>当前发布基线</dt>
+        <dd>
+          <code>{{ published.importId }}</code>
+          <template v-if="published.git?.snapshot">
+            · {{ published.git.repositoryId }} · <code>{{ published.git.snapshot.commit }}</code>
+          </template>
+        </dd>
+      </dl>
       <form v-if="canStartGit && repositories.length" class="source-git" @submit.prevent="startGit">
         <div class="source-upload">
           <label for="workspace-git-repository">Git 仓库</label>
@@ -411,7 +502,7 @@ function cancel() {
             :loading="busy === 'git'"
             :disabled="!!busy || !synchronized || !validGitRef(gitRef)"
           >
-            获取 Git 源码
+            {{ published ? '获取 Git 更新' : '获取 Git 源码' }}
           </el-button>
         </div>
       </form>
@@ -463,7 +554,24 @@ function cancel() {
         </p>
       </div>
       <div v-if="current?.state === 'Staged'" class="source-confirm">
-        <el-checkbox v-model="confirmed" :disabled="!!busy || !synchronized"
+        <template v-if="current.plan?.update">
+          <p id="workspace-update-strategy">请选择工作树更新策略</p>
+          <el-radio-group
+            v-model="resolution"
+            aria-labelledby="workspace-update-strategy"
+            :disabled="!!busy || !synchronized"
+            @change="confirmed = false"
+          >
+            <el-radio value="clean-only" :disabled="current.plan.update.dirty">
+              {{ conflictLabels['clean-only'] }}
+            </el-radio>
+            <el-radio value="retain-and-replace">
+              {{ conflictLabels['retain-and-replace'] }}
+            </el-radio>
+          </el-radio-group>
+          <p>保留后替换会留存当前工作树，新工作树使用已暂存的 Git 快照。</p>
+        </template>
+        <el-checkbox v-model="confirmed" :disabled="!!busy || !canConfirm"
           >我已核对暂存计划，确认发布到该空间</el-checkbox
         >
       </div>
@@ -487,7 +595,7 @@ function cancel() {
         <el-button
           v-if="current?.state === 'Staged'"
           type="primary"
-          :disabled="!!busy || !synchronized || !confirmed"
+          :disabled="!!busy || !canConfirm || !confirmed"
           :loading="busy === 'publish'"
           @click="publish"
           >确认发布源码</el-button
@@ -596,6 +704,16 @@ function cancel() {
 .source-confirm :deep(.el-checkbox) {
   height: auto;
   white-space: normal;
+}
+.source-confirm {
+  display: grid;
+  gap: 8px;
+}
+.source-confirm :deep(.el-radio-group) {
+  gap: 8px 16px;
+}
+.source-confirm :deep(.el-radio) {
+  margin: 0;
 }
 .source-git,
 .source-history {

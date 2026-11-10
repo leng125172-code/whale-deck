@@ -30,7 +30,19 @@ export interface SourcePlan {
   contentSha256: string
   fileCount: number
   totalBytes: number
+  update?: SourceUpdatePlan
 }
+
+interface SourceUpdatePlan {
+  previousContentSha256: string
+  workContentSha256: string
+  dirty: boolean
+  addedEntries: number
+  removedEntries: number
+  changedEntries: number
+}
+
+export type SourceConflictResolution = 'clean-only' | 'retain-and-replace'
 
 export interface SourceImport {
   workspaceId: string
@@ -43,14 +55,17 @@ export interface SourceImport {
   expiresAtUtc: string
   finishedAtUtc?: string
   git?: GitSource
+  previousImportId?: string
+  conflictResolution?: SourceConflictResolution
 }
 
 export interface GitSourceInput {
   repositoryId: string
   ref: string
+  previousImportId?: string
 }
 
-interface GitSource extends GitSourceInput {
+interface GitSource extends Omit<GitSourceInput, 'previousImportId'> {
   snapshot: {
     resolvedObject: string
     commit: string
@@ -93,6 +108,7 @@ export function validGitRef(value: unknown): value is string {
 }
 
 export function sameSourceOrigin(previous: SourceImport, next: SourceImport) {
+  if (previous.previousImportId !== next.previousImportId) return false
   if (!previous.git || !next.git)
     return !previous.git && !next.git && sameSourceArchive(previous.archive, next.archive)
   if (previous.git.repositoryId !== next.git.repositoryId || previous.git.ref !== next.git.ref)
@@ -118,7 +134,22 @@ export function sameSourcePlan(left: SourcePlan | null, right: SourcePlan | null
       left.planSha256 === right.planSha256 &&
       left.contentSha256 === right.contentSha256 &&
       left.fileCount === right.fileCount &&
-      left.totalBytes === right.totalBytes)
+      left.totalBytes === right.totalBytes &&
+      sameUpdatePlan(left.update, right.update))
+  )
+}
+
+function sameUpdatePlan(left?: SourceUpdatePlan, right?: SourceUpdatePlan) {
+  return (
+    left === right ||
+    (!!left &&
+      !!right &&
+      left.previousContentSha256 === right.previousContentSha256 &&
+      left.workContentSha256 === right.workContentSha256 &&
+      left.dirty === right.dirty &&
+      left.addedEntries === right.addedEntries &&
+      left.removedEntries === right.removedEntries &&
+      left.changedEntries === right.changedEntries)
   )
 }
 
@@ -132,6 +163,18 @@ function isInt(value: unknown, min: number, max: number): value is number {
 
 function isDigest(value: unknown): value is string {
   return typeof value === 'string' && value.length === 64 && hex.test(value)
+}
+
+function validUpdatePlan(value: unknown) {
+  return (
+    isRecord(value) &&
+    isDigest(value.previousContentSha256) &&
+    isDigest(value.workContentSha256) &&
+    typeof value.dirty === 'boolean' &&
+    isInt(value.addedEntries, 0, 9999) &&
+    isInt(value.removedEntries, 0, 9999) &&
+    isInt(value.changedEntries, 0, 9999)
+  )
 }
 
 function malformed(): never {
@@ -195,8 +238,21 @@ function sourceReceipt(value: unknown, workspaceId: string, importId?: string): 
     return malformed()
 
   const archiveBytes = value.archive.archiveBytes
+  const updating = value.previousImportId !== undefined
+  const choice = value.conflictResolution
   if (
     !validGitSource(value.git, value.archive as unknown as SourceArchive, value.state) ||
+    (updating &&
+      (!value.git ||
+        typeof value.previousImportId !== 'string' ||
+        !uuid.test(value.previousImportId) ||
+        value.previousImportId === '00000000-0000-0000-0000-000000000000' ||
+        value.previousImportId === value.importId)) ||
+    (choice !== undefined &&
+      (!updating ||
+        !['Publishing', 'Published', 'Failed'].includes(value.state) ||
+        (choice !== 'clean-only' && choice !== 'retain-and-replace'))) ||
+    (updating && ['Publishing', 'Published'].includes(value.state) && choice === undefined) ||
     (value.finishedAtUtc !== undefined &&
       (!terminal.includes(value.state) ||
         typeof value.finishedAtUtc !== 'string' ||
@@ -212,14 +268,17 @@ function sourceReceipt(value: unknown, workspaceId: string, importId?: string): 
     return malformed()
 
   if (value.plan === null) {
-    if (['Staged', 'Publishing', 'Published'].includes(value.state)) return malformed()
+    if (choice !== undefined || ['Staged', 'Publishing', 'Published'].includes(value.state))
+      return malformed()
   } else if (
     !isRecord(value.plan) ||
     ['Uploading', 'Acquiring', 'Ready'].includes(value.state) ||
     !isDigest(value.plan.planSha256) ||
     !isDigest(value.plan.contentSha256) ||
     !isInt(value.plan.fileCount, 1, 9999) ||
-    !isInt(value.plan.totalBytes, 0, Math.min(1024 * sourceChunkBytes, 256 * archiveBytes))
+    !isInt(value.plan.totalBytes, 0, Math.min(1024 * sourceChunkBytes, 256 * archiveBytes)) ||
+    (updating ? !validUpdatePlan(value.plan.update) : value.plan.update !== undefined) ||
+    (choice === 'clean-only' && isRecord(value.plan.update) && value.plan.update.dirty)
   )
     return malformed()
 
@@ -240,6 +299,12 @@ export const workspaceSources = {
   async current(id: string, signal: AbortSignal): Promise<SourceImport | null> {
     const result = await apiRequest<unknown>(scope(id), { signal })
     return result === undefined ? null : sourceReceipt(result, id)
+  },
+  async published(id: string, signal: AbortSignal): Promise<SourceImport | null> {
+    const result = await apiRequest<unknown>(scope(id) + '/published', { signal })
+    if (result === undefined) return null
+    const item = sourceReceipt(result, id)
+    return item.state === 'Published' ? item : malformed()
   },
   async gitRepositories(id: string, signal: AbortSignal): Promise<string[]> {
     const result = await apiRequest<unknown>(scope(id) + '/git-repositories', { signal })
@@ -273,7 +338,11 @@ export const workspaceSources = {
       { method: 'PUT', body: JSON.stringify(git), signal },
       '/git',
     )
-    if (result.git?.repositoryId !== git.repositoryId || result.git.ref !== git.ref)
+    if (
+      result.git?.repositoryId !== git.repositoryId ||
+      result.git.ref !== git.ref ||
+      result.previousImportId !== git.previousImportId
+    )
       return malformed()
     return result
   },
@@ -304,16 +373,23 @@ export const workspaceSources = {
       return malformed()
     return result
   },
-  async publish(id: string, current: SourceImport, planSha256: string, signal: AbortSignal) {
+  async publish(
+    id: string,
+    current: SourceImport,
+    planSha256: string,
+    signal: AbortSignal,
+    conflictResolution?: SourceConflictResolution,
+  ) {
     const result = await request(
       id,
       current.importId,
-      { method: 'POST', body: JSON.stringify({ planSha256 }), signal },
+      { method: 'POST', body: JSON.stringify({ planSha256, conflictResolution }), signal },
       '/publish',
     )
     if (
       !sameSourceOrigin(current, result) ||
       result.plan?.planSha256 !== planSha256 ||
+      result.conflictResolution !== conflictResolution ||
       !sameSourcePlan(current.plan, result.plan) ||
       !['Publishing', 'Published'].includes(result.state)
     )
