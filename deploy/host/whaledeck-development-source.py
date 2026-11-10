@@ -2,6 +2,7 @@
 """Stage and publish development source with a bound, retained update preimage."""
 
 import contextlib
+import difflib
 import errno
 import fcntl
 import hashlib
@@ -36,6 +37,9 @@ MAX_EXPANSION = 256
 BLOCK = 64 * 1024
 DIFF_PAGE_LIMIT = 50
 DIFF_PAGE_BYTES = 48 * 1024
+TEXT_DIFF_FILE_BYTES = 32 * 1024
+TEXT_DIFF_LINE_LIMIT = 1024
+TEXT_DIFF_REQUEST_BYTES = 10 * 1024
 DIGEST = re.compile(r'[a-f0-9]{64}\Z')
 TOKEN = re.compile(
     rb'-----BEGIN [A-Z0-9 ]{0,32}PRIVATE KEY-----|'
@@ -125,6 +129,46 @@ def diff_page(files, before, after, offset, limit):
     end = offset + len(entries)
     return dict(offset=offset, nextOffset=end if end < visible else None, visibleEntries=visible,
                 redactedEntries=redacted, entries=entries), counts
+
+
+def text_diff(before, after):
+    if TOKEN.search(before) or TOKEN.search(after):
+        return {'status': 'protected'}
+    sides = []
+    for raw in (before, after):
+        try:
+            value = raw.decode('utf-8', errors='strict')
+        except UnicodeDecodeError:
+            return {'status': 'binary'}
+        if any(character not in '\n\t' and unicodedata.category(character) in ('Cc', 'Cf', 'Zl', 'Zp')
+               for character in value.replace('\r\n', '\n')):
+            return {'status': 'binary'}
+        lines = value.splitlines(keepends=True)
+        if len(lines) > TEXT_DIFF_LINE_LIMIT:
+            return {'status': 'tooLarge'}
+        sides.append(lines)
+    patch = ''.join(line if line.endswith('\n') else line + '\n\\ No newline at end of file\n'
+                    for line in difflib.unified_diff(*sides, fromfile='current', tofile='candidate'))
+    result = {'status': 'text', 'patch': patch}
+    if len(json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode('utf-8')) > DIFF_PAGE_BYTES:
+        return {'status': 'tooLarge'}
+    return result
+
+
+def read_diff_file(driver, root, path, row, changed):
+    if row is None:
+        return b''
+    with driver.opened(root, path, os.O_PATH) as node:
+        info = os.fstat(node)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != row[1]:
+            refuse(changed)
+        descriptor = os.open(f'/proc/self/fd/{node}', os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+        with os.fdopen(descriptor, 'rb') as stream:
+            data = stream.read(row[1] + 1)
+            if (len(data) != row[1] or hashlib.sha256(data).hexdigest() != row[2]
+                    or driver.files.version(os.fstat(descriptor)) != driver.files.version(info)):
+                refuse(changed)
+            return data
 
 
 class SourceTree:
@@ -852,7 +896,37 @@ class SourceImports:
         offset, limit = request['offset'], request['limit']
         if type(offset) is not int or not 0 <= offset < 2 * MAX_ENTRIES or type(limit) is not int or not 1 <= limit <= DIFF_PAGE_LIMIT:
             refuse('DIFF_CURSOR_INVALID')
-        intent = self.request({key: value for key, value in request.items() if key not in ('offset', 'limit')}, False)
+        with self.diff_trees(request, ('offset', 'limit')) as (scope, base, _, _, before, after):
+            page, counts = diff_page(self.driver.files, before, after, offset, limit)
+            if any(base[key] != value for key, value in counts.items()):
+                refuse('PLAN_CHANGED')
+            return dict(page, **scope)
+
+    def read_update_text_diff(self, request):
+        if not isinstance(request, dict) or not isinstance(path := request.get('path'), str):
+            refuse('REQUEST_INVALID')
+        try:
+            if source_path(self.driver.files, path, False) != path or TOKEN.search(path.encode('utf-8')):
+                refuse('PROTECTED_PATH')
+        except SourceError:
+            refuse('NOT_FOUND')
+        with self.diff_trees(request, ('path',)) as (scope, _, work, tree, before, after):
+            old, new = before.get(path), after.get(path)
+            if old == new:
+                refuse('NOT_FOUND')
+            rows = [row for row in (old, new) if row is not None]
+            if any(row[0] != 'File' for row in rows):
+                result = {'status': 'nonFile'}
+            elif any(row[1] > TEXT_DIFF_FILE_BYTES for row in rows):
+                result = {'status': 'tooLarge'}
+            else:
+                result = text_diff(read_diff_file(self.driver, work, path, old, 'WORK_CHANGED'),
+                                   read_diff_file(self.driver, tree, path, new, 'STAGE_CHANGED'))
+            return dict(result, path=path, **scope)
+
+    @contextlib.contextmanager
+    def diff_trees(self, request, extras):
+        intent = self.request({key: value for key, value in request.items() if key not in extras}, False)
         if 'previousImportId' not in intent:
             refuse('REQUEST_INVALID')
         with self.locked(request['storage']) as (payload, proof), contextlib.ExitStack() as directories:
@@ -880,11 +954,9 @@ class SourceImports:
                 content, _, normalized, after = work_manifest(self.driver, tree, self.runner.RUN_UID, lambda: None)
                 if not normalized or content != plan['contentSha256']:
                     refuse('STAGE_CHANGED')
-                page, counts = diff_page(self.driver.files, before, after, offset, limit)
-                if any(base[key] != value for key, value in counts.items()):
-                    refuse('PLAN_CHANGED')
-                return dict(page, workspaceId=intent['workspaceId'], importId=intent['importId'],
-                            previousImportId=intent['previousImportId'], planSha256=request['planSha256'])
+                scope = dict(workspaceId=intent['workspaceId'], importId=intent['importId'],
+                             previousImportId=intent['previousImportId'], planSha256=request['planSha256'])
+                yield scope, base, work, tree, before, after
             except FileNotFoundError:
                 refuse('NOT_FOUND')
 
@@ -908,7 +980,7 @@ def main():
     mode = sys.argv[1]
     sandboxed = mode.startswith('service-')
     action = mode.removeprefix('service-')
-    if action not in ('stage', 'inspect', 'publish', 'discard', 'abort', 'export', 'diff'):
+    if action not in ('stage', 'inspect', 'publish', 'discard', 'abort', 'export', 'diff', 'textdiff'):
         return 2
     from importlib.util import module_from_spec, spec_from_file_location
     try:
@@ -927,7 +999,7 @@ def main():
         if sandboxed:
             guard = runner.load('whaledeck-development-quota-guard.py')
             guard.install(quota, read_only=True)
-            if action in ('export', 'diff'):
+            if action in ('export', 'diff', 'textdiff'):
                 guard.restrict_path_writes()
     except (OSError, ImportError, SourceError):
         print('WORKSPACE_SOURCE_HELPER_UNAVAILABLE', file=sys.stderr)
@@ -935,8 +1007,9 @@ def main():
     try:
         signal.signal(signal.SIGALRM, lambda *_: refuse('DEADLINE'))
         signal.setitimer(signal.ITIMER_REAL, 100)
-        header = sys.stdin.buffer.readline(4097)
-        if not header.endswith(b'\n') or len(header) > 4096:
+        maximum_header = TEXT_DIFF_REQUEST_BYTES if action == 'textdiff' else 4096
+        header = sys.stdin.buffer.readline(maximum_header + 1)
+        if not header.endswith(b'\n') or len(header) > maximum_header:
             refuse('REQUEST_INVALID')
         request = rootfs.decode(header)
         service = SourceImports(storage.WorkspaceStorage(files, sandboxed=sandboxed, quota=quota), runner, rootfs, archive)
@@ -951,13 +1024,15 @@ def main():
                 return 0
             elif action == 'diff':
                 result = service.read_update_diff(request)
+            elif action == 'textdiff':
+                result = service.read_update_text_diff(request)
             elif action == 'inspect':
                 result = service.inspect(request)
             elif action == 'abort':
                 result = service.abort(request)
             else:
                 result = service.settle(request, discard=action == 'discard')
-        if action == 'diff':
+        if action in ('diff', 'textdiff'):
             sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode('utf-8') + b'\n')
         else:
             print(json.dumps(result, separators=(',', ':')))

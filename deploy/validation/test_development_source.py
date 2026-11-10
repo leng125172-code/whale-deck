@@ -49,6 +49,26 @@ def tar_bytes(entries):
 
 
 class DevelopmentSourceTests(unittest.TestCase):
+    def test_text_diff_preserves_unicode_crlf_and_missing_final_newline(self):
+        result = source.text_diff('原值\r\n共同'.encode(), '新值\r\n共同\r\n'.encode())
+        self.assertEqual('text', result['status'])
+        self.assertEqual('--- current\n+++ candidate\n@@ -1,2 +1,2 @@\n'
+                         '-原值\r\n-共同\n\\ No newline at end of file\n+新值\r\n+共同\r\n',
+                         result['patch'])
+        self.assertEqual({'status': 'text', 'patch': ''}, source.text_diff(b'same\n', b'same\n'))
+
+    def test_text_diff_refuses_binary_credentials_and_oversized_output(self):
+        for before, after, status in [
+            (b'abc\x00def', b'normal', 'binary'),
+            (b'\xff', b'normal', 'binary'),
+            ('control\u202e'.encode(), b'normal', 'binary'),
+            (b'normal', b'-----BEGIN OPENSSH PRIVATE KEY-----', 'protected'),
+            (b'a\n' * (source.TEXT_DIFF_LINE_LIMIT + 1), b'normal', 'tooLarge'),
+            (b'"' * source.TEXT_DIFF_FILE_BYTES, b'x' * source.TEXT_DIFF_FILE_BYTES, 'tooLarge'),
+        ]:
+            with self.subTest(status=status):
+                self.assertEqual({'status': status}, source.text_diff(before, after))
+
     def test_diff_pages_compare_files_and_directories_without_exposing_private_paths(self):
         directory = ('Directory',)
         old = ('File', 12, 'a' * 64, False)
