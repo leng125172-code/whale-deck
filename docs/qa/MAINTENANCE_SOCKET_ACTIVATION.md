@@ -1,4 +1,4 @@
-# 维护入口 socket 接管候选与真实隔离验证
+# 维护入口 socket 接管、真实隔离验证与首次部署
 
 2026-11-10。本批修复安装态归档验收时取得的维护服务重启监听空档；只登记已实际发生的结果，不增加完整主任务计数。
 
@@ -25,10 +25,20 @@
 
 前置失败全部保留：夹具函数名遮蔽模块、执行路径权限、宿主 /run noexec、降权后的工作目录不可读，修正后进入真实 HTTP；随后过快第六次启动触发 start-limit-hit。最终测试拉开重启间隔，未减弱默认限流。各自唯一 maintenance-socket-native-* 目录记录失败与收尾，不能冒认通过。
 
-## 部署和验收边界
+## CI 与首次标准部署
 
-前一 QA 提交 4af208c60feff1390e7d1d88ce0e56794ad3c6ff 的准确 CI 42823961806 已 12/12 success。本批 socket 候选仍需自身准确 CI；新增 CI 独立运行同一真实 systemd/netns 门禁。
+前一 QA 提交 4af208c60feff1390e7d1d88ce0e56794ad3c6ff 的准确 CI 42823961806 已 12/12 success。最终修正提交 c1374ef292ffcf1ea8ba05c29fb87573027941b1 的准确 CI [42828184656](https://github.com/leng125172-code/whale-deck/actions/runs/42828184656) 已 13/13 success；新增独立门禁实际取得 2830 HTTP、6 进程、12 类 FD 场景、零连接错误及资源收尾。下载的 CI 证据已校验，不用其他提交的成功代替。
 
-da1d902f56d140128e0b05287c398d4530cd0c42 已推送；其 CI 42827404148 的新门禁在创建证据目录时失败：干净检出没有 deploy/artifacts 父目录。尚未运行 Kestrel，不能追认为通过。已改为显式创建父目录，并补 CI 成功/失败证据归档下载；原失败 job 129868207829 日志保留于 maintenance-socket-ci-fix-20261110-da1d902f/ci-failed-job.log。以同样没有 artifacts 父目录的全新私有副本实际重跑，12 类 FD 场景、6 进程、2771 HTTP 观察零错误通过；随后最终脚本再实测 2776 次零错误，生产保持与精确收尾均通过。最终证据 maintenance-socket-native-8df6360658d8460fbfe6c64150de7c38，干净副本证据已经移出临时目录并保留，副本已删除。修正提交仍须自身完整 CI，未部署。
+da1d902f56d140128e0b05287c398d4530cd0c42 已推送；其 CI 42827404148 的新门禁在创建证据目录时失败：干净检出没有 deploy/artifacts 父目录。尚未运行 Kestrel，不能追认为通过。已改为显式创建父目录，并补 CI 成功/失败证据归档下载；原失败 job 129868207829 日志保留于 maintenance-socket-ci-fix-20261110-da1d902f/ci-failed-job.log。以同样没有 artifacts 父目录的全新私有副本实际重跑，12 类 FD 场景、6 进程、2771 HTTP 观察零错误通过；随后最终脚本再实测 2776 次零错误，生产保持与精确收尾均通过。最终证据 maintenance-socket-native-8df6360658d8460fbfe6c64150de7c38，干净副本证据已经移出临时目录并保留，副本已删除。当时修正提交尚待自身完整 CI 与部署；后续结果见下段。
 
-当前实机仍为 88f2df86。本批尚未生产切换、未证明正式升级连续性，也未执行真实身份/BFF/UI 回归，不签 P0-05 完整验收。持久归档意图、授权确认、Worker/BFF/Vue、HDD 捕获校验和空间退役/预算释放闭环仍待；59 项与 ST/PET/供应商/Live2D 全部门槛继续，不恢复 17 项移出范围。
+上述修正随后完成准确 CI 和首次标准 dev 发布。2026-11-10，正式干净检出经固定维护 update 入口部署 c1374ef2，发布单元 Result=success、ExecMainStatus=0。六组件同源、23 宿主模块字节匹配、11 核心 healthy，8 个数据库依赖身份及 18219 条发布前记录保持；正式 host validate 的网卡入口、桥隔离、双端口及固定运行时检查通过。发布单元成功日志取证后精确退役，审计保留。
+
+首次旧进程自持监听到 PID 1 socket 的受控切换共观察 3316 次 HTTP：3282 次 200、33 次真实维护 HTML 503、1 次 8081 根入口 ECONNREFUSED errno111（2026-11-10T14:15:23.384860Z）。激活后两个 listener inode 始终相同且 PID 1 持有。原始拒连保留，不能将首次迁移签为无断档；仍须随后一次真实新来源版本的标准发布，证明已活动 socket 不重启且 HTTP 无拒连。
+
+安装态真实 Authentik 身份、Chrome、Vue/BFF 启停及退出回归通过，目标空间 Active epoch11→13；可信 root QA 客户端另外验证安装态 Agent Plan、签名拒绝、幂等和预取消。临时账号删除，4 个新增任务日志保留而执行 cgroup 为零；18214 条原不可变记录、其他 4 空间、18 原报告、源码、inode 与硬配额保持。新增 4 条审计、6 条任务事件、2 条任务及 2 条生命周期记录；最终活动任务和文件锁均为零，HDD 未产生 Capture。NVMe 120GB/HDD 300GB 完整预留强制限制、原配置、user NOPASSWD 及用户原未提交改动保持。真实身份仅证明启停流程；root Plan 不等于产品持久归档授权。
+
+封存证据：deploy/artifacts/maintenance-socket-release-c1374ef2-20261110/，99 文件，SHA256-MANIFEST.json 摘要 44986acd8be8d30af6391d8a5f72cf4157ea7687586724571d60bb74d90b8b63；10 份前序封存清单重新逐文件核验通过。独立验收见 batch-acceptance.json、final-state.json、installed-socket.json、installed-plan/accepted.json；首次迁移拒连见 deployment-errors.json。检查旧证据时曾误用文本清单名，改按原 JSON 清单格式验证，未修改旧清单或原件，调整记录保留。
+
+## 未完成边界
+
+尚未证明活动 socket 的正式升级连续性，不签 P0-05 完整验收。持久归档意图、授权确认、Worker/BFF/Vue、HDD 捕获校验和空间退役/预算释放闭环仍待；完整主任务仍 0/59，ST/PET/供应商/Live2D 全部门槛继续，不恢复 17 项移出范围。
