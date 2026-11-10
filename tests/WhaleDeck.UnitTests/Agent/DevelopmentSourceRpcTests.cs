@@ -32,15 +32,48 @@ public sealed class DevelopmentSourceRpcTests
     }
 
     [Fact]
+    public void TextDiffRequiresTheRequestedPathAndAllowsPatchOnlyForText()
+    {
+        var source = UpdateRequest();
+        source.PlanSha256 = new string('a', 64);
+        var request = new WorkspaceSourceTextDiffRequest { Source = source, Path = "src/源码.cjs" };
+        Assert.True(DevelopmentSourceDiffBinding.IsValid(request));
+        var alternate = request.Clone();
+        alternate.Path = "src/other.cjs";
+        Assert.NotEqual(DevelopmentSourceDiffBinding.Hash(request), DevelopmentSourceDiffBinding.Hash(alternate));
+        alternate.Path = "../other.cjs";
+        Assert.False(DevelopmentSourceDiffBinding.IsValid(alternate));
+        using var input = JsonDocument.Parse(DevelopmentSourceDiffBinding.HostInput(request));
+        Assert.Equal(request.Path, input.RootElement.GetProperty("path").GetString());
+        const string patch = "--- current\n+++ candidate\n@@ -1 +1 @@\n-旧\r\n+新\n";
+        var fields = new Dictionary<string, object>
+        {
+            ["workspaceId"] = source.Storage.WorkspaceId, ["importId"] = source.ImportId,
+            ["previousImportId"] = source.PreviousImportId, ["planSha256"] = source.PlanSha256,
+            ["path"] = request.Path, ["status"] = "text", ["patch"] = patch
+        };
+        WorkspaceSourceTextDiff Parse() => DevelopmentSourceGrpcService.ParseTextDiff(request, JsonSerializer.Serialize(fields));
+        Assert.Equal(patch, Parse().Patch);
+        fields["patch"] = "";
+        Assert.True(Parse().HasPatch);
+        fields["status"] = "protected";
+        Assert.Equal(StatusCode.DataLoss, Assert.Throws<RpcException>(() => Parse()).StatusCode);
+        fields.Remove("patch");
+        Assert.Equal(WorkspaceSourceTextDiffStatus.Protected, Parse().Status);
+        fields["path"] = "src/other.cjs";
+        Assert.Equal(StatusCode.DataLoss, Assert.Throws<RpcException>(() => Parse()).StatusCode);
+    }
+
+    [Fact]
     public void DiffBindsPaginationAndRejectsUnrelatedOrInvalidReceipts()
     {
         var source = UpdateRequest();
         source.PlanSha256 = new string('a', 64);
         var request = new WorkspaceSourceDiffRequest { Source = source, Offset = 0, Limit = 1 };
         Assert.True(DevelopmentSourceDiffBinding.IsValid(request));
-        Assert.False(DevelopmentSourceDiffBinding.IsValid(new() { Source = source, Limit = 51 }));
+        Assert.False(DevelopmentSourceDiffBinding.IsValid(new WorkspaceSourceDiffRequest { Source = source, Limit = 51 }));
         Assert.NotEqual(DevelopmentSourceDiffBinding.Hash(request),
-            DevelopmentSourceDiffBinding.Hash(new() { Source = source, Offset = 1, Limit = 1 }));
+            DevelopmentSourceDiffBinding.Hash(new WorkspaceSourceDiffRequest { Source = source, Offset = 1, Limit = 1 }));
         using var input = JsonDocument.Parse(DevelopmentSourceDiffBinding.HostInput(request));
         Assert.Equal(1U, input.RootElement.GetProperty("limit").GetUInt32());
         Assert.Equal(source.PreviousImportId, input.RootElement.GetProperty("previousImportId").GetString());

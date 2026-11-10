@@ -12,10 +12,12 @@ public static class DevelopmentSourceBinding
     public const uint UpdateProtocolMinor = 71;
     public const uint PreviousProtocolMinor = 72;
     public const uint DiffProtocolMinor = 73;
+    public const uint TextDiffProtocolMinor = 74;
     public const string Capability = "development.source.archive";
     public const string UpdateCapability = "development.source.update";
     public const string PreviousCapability = "development.source.previous";
     public const string DiffCapability = "development.source.diff";
+    public const string TextDiffCapability = "development.source.text-diff";
     public const string Service = "/whaledeck.agent.v1.DevelopmentSourceService/";
     public const string Stage = Service + "Stage";
     public const string Inspect = Service + "Inspect";
@@ -29,6 +31,7 @@ public static class DevelopmentSourceBinding
     public const string AbortUpdate = Service + "AbortUpdate";
     public const string ExportPrevious = Service + "ExportPrevious";
     public const string ReadDiff = Service + "ReadDiff";
+    public const string ReadTextDiff = Service + "ReadTextDiff";
     public const string Header = "x-whaledeck-development-source-sha256";
     public const uint MaximumArchiveBytes = 128 * 1024 * 1024;
     public const int ChunkBytes = 64 * 1024;
@@ -55,7 +58,10 @@ public static class DevelopmentSourceBinding
     public static bool SupportsDiff(CapabilitiesResponse response) => SupportsUpdate(response) &&
         response.ProtocolMinor >= DiffProtocolMinor && response.Capabilities.Contains(DiffCapability);
 
-    public static bool IsUpdate(string method) => method is StageUpdate or InspectUpdate or PublishUpdate or DiscardUpdate or AbortUpdate or ExportPrevious or ReadDiff;
+    public static bool SupportsTextDiff(CapabilitiesResponse response) => SupportsDiff(response) &&
+        response.ProtocolMinor >= TextDiffProtocolMinor && response.Capabilities.Contains(TextDiffCapability);
+
+    public static bool IsUpdate(string method) => method is StageUpdate or InspectUpdate or PublishUpdate or DiscardUpdate or AbortUpdate or ExportPrevious or ReadDiff or ReadTextDiff;
 
     public static bool IsMethod(string method) => method is Stage or Inspect or Publish or Discard or Abort || IsUpdate(method);
 
@@ -67,7 +73,7 @@ public static class DevelopmentSourceBinding
         IsImportId(request.ImportId) &&
         request.ArchiveFormat is "zip" or "tar" or "tar.gz" && request.ArchiveBytes is > 0 and <= MaximumArchiveBytes &&
         IsDigest(request.ArchiveSha256) &&
-        (method is Publish or Discard or PublishUpdate or DiscardUpdate or ExportPrevious or ReadDiff
+        (method is Publish or Discard or PublishUpdate or DiscardUpdate or ExportPrevious or ReadDiff or ReadTextDiff
             ? IsDigest(request.PlanSha256) : request.PlanSha256.Length == 0) &&
         (IsUpdate(method) ? request.ArchiveFormat == "tar" && IsImportId(request.PreviousImportId) && request.PreviousImportId != request.ImportId
             : request.PreviousImportId.Length == 0) &&

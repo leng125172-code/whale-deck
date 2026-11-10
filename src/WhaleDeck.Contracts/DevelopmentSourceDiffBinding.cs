@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Google.Protobuf;
 using WhaleDeck.Contracts.Agent.V1;
@@ -12,8 +13,15 @@ public static class DevelopmentSourceDiffBinding
     public const uint MaximumEntries = 20000;
     public const uint MaximumPageSize = 50;
     public const int MaximumHostPageBytes = 49 * 1024;
+    public const int MaximumHostTextReplyBytes = 58 * 1024;
+    public const int MaximumPatchBytes = 48 * 1024;
+    private const int MaximumTextRequestBytes = 10 * 1024;
+    private static readonly JsonSerializerOptions HostTextJson = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public static string Hash(WorkspaceSourceDiffRequest request) =>
+        Convert.ToHexString(SHA256.HashData(request.ToByteArray()));
+
+    public static string Hash(WorkspaceSourceTextDiffRequest request) =>
         Convert.ToHexString(SHA256.HashData(request.ToByteArray()));
 
     public static bool IsValid(WorkspaceSourceDiffRequest request) => request.Source is not null &&
@@ -28,6 +36,38 @@ public static class DevelopmentSourceDiffBinding
         fields.Add("limit", request.Limit);
         return JsonSerializer.SerializeToUtf8Bytes(fields);
     }
+
+    public static bool IsValid(WorkspaceSourceTextDiffRequest request) => request.Source is not null &&
+        request.Source.CalculateSize() <= DevelopmentSourceBinding.MaximumHeaderBytes &&
+        DevelopmentSourceBinding.IsValid(request.Source, DevelopmentSourceBinding.ReadTextDiff) &&
+        ValidPath(request.Path) && HostInput(request).Length < MaximumTextRequestBytes;
+
+    public static byte[] HostInput(WorkspaceSourceTextDiffRequest request)
+    {
+        var fields = DevelopmentSourceBinding.HostFields(request.Source);
+        fields.Add("path", request.Path);
+        return JsonSerializer.SerializeToUtf8Bytes(fields, HostTextJson);
+    }
+
+    public static bool Matches(WorkspaceSourceTextDiffRequest request, WorkspaceSourceTextDiff reply) =>
+        reply.WorkspaceId == request.Source.Storage.WorkspaceId && reply.ImportId == request.Source.ImportId &&
+        reply.PreviousImportId == request.Source.PreviousImportId && reply.PlanSha256 == request.Source.PlanSha256 &&
+        reply.Path == request.Path &&
+        (reply.Status switch
+        {
+            WorkspaceSourceTextDiffStatus.Text => reply.HasPatch && ValidPatch(reply.Patch),
+            WorkspaceSourceTextDiffStatus.Binary or WorkspaceSourceTextDiffStatus.Protected or
+                WorkspaceSourceTextDiffStatus.TooLarge or WorkspaceSourceTextDiffStatus.NonFile => !reply.HasPatch,
+            _ => false
+        });
+
+    private static bool ValidPatch(string patch) => patch.Length == 0 ||
+        Encoding.UTF8.GetByteCount(patch) <= MaximumPatchBytes &&
+        patch.StartsWith("--- current\n+++ candidate\n@@ ", StringComparison.Ordinal) &&
+        patch.EndsWith('\n') &&
+        patch.Replace("\r\n", "\n", StringComparison.Ordinal).EnumerateRunes().All(rune =>
+            rune.Value is '\n' or '\t' || Rune.GetUnicodeCategory(rune) is not
+                (UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator));
 
     public static bool Matches(WorkspaceSourceDiffRequest request, WorkspaceSourceDiffPage page)
     {

@@ -497,6 +497,32 @@ service DevelopmentSourceService {
   rpc ExportPrevious(WorkspaceSourceRequest) returns (stream WorkspaceSourceExportFrame);
   // development.source.diff (protocol 1.73).
   rpc ReadDiff(WorkspaceSourceDiffRequest) returns (WorkspaceSourceDiffPage);
+  // development.source.text-diff (protocol 1.74).
+  rpc ReadTextDiff(WorkspaceSourceTextDiffRequest) returns (WorkspaceSourceTextDiff);
+}
+
+message WorkspaceSourceTextDiffRequest {
+  WorkspaceSourceRequest source = 1;
+  string path = 2;
+}
+
+enum WorkspaceSourceTextDiffStatus {
+  WORKSPACE_SOURCE_TEXT_DIFF_STATUS_UNSPECIFIED = 0;
+  WORKSPACE_SOURCE_TEXT_DIFF_STATUS_TEXT = 1;
+  WORKSPACE_SOURCE_TEXT_DIFF_STATUS_BINARY = 2;
+  WORKSPACE_SOURCE_TEXT_DIFF_STATUS_PROTECTED = 3;
+  WORKSPACE_SOURCE_TEXT_DIFF_STATUS_TOO_LARGE = 4;
+  WORKSPACE_SOURCE_TEXT_DIFF_STATUS_NON_FILE = 5;
+}
+
+message WorkspaceSourceTextDiff {
+  string workspace_id = 1;
+  string import_id = 2;
+  string previous_import_id = 3;
+  string plan_sha256 = 4;
+  string path = 5;
+  WorkspaceSourceTextDiffStatus status = 6;
+  optional string patch = 7;
 }
 
 message WorkspaceSourceDiffRequest {
