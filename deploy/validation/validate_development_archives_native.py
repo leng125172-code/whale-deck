@@ -85,8 +85,8 @@ def physical(driver, quota, request, payload):
 
 def main():
     assert os.geteuid() == 0 and __debug__, 'Requires explicit root invocation with assertions enabled'
-    assert sys.argv[1:] in ([], ['--retirement-execution']), 'NATIVE_ARCHIVE_OPTION_INVALID'
-    execute_retirement = sys.argv[1:] == ['--retirement-execution']
+    assert sys.argv[1:] in ([], ['--retirement-execution'], ['--retirement-helper']), 'NATIVE_ARCHIVE_OPTION_INVALID'
+    execute_retirement = bool(sys.argv[1:])
     os.umask(0o077)
     repo = Path(__file__).resolve().parents[2]
     sources = repo / 'deploy/host'
@@ -310,6 +310,11 @@ def main():
                     sources / 'whaledeck-development-retirement-execution.py'),
                     (execution_path.name, execution_path)):
                 assert (evidence / filename).read_bytes() == original_path.read_bytes()
+        helper_retirement_proof = None
+        if sys.argv[1:] == ['--retirement-helper']:
+            import validate_development_retirement_helper_native as retirement_helper
+            helper_retirement_proof = retirement_helper.exercise(sys.modules[__name__], driver, engine, request,
+                evidence, payload, runtime_home, configuration_path, base, layout_path)
         save(evidence / 'captures.json', captures)
         for name in ('files', 'development-storage', 'development-project-quota', 'development-lifecycle',
                      'file-tree', 'tree-archive', 'development-archives', 'development-retirement'):
@@ -331,6 +336,8 @@ def main():
         if execution_proof is not None:
             accepted.update(nativeRetirementExecution=execution_proof,
                 scope='Internal helper and new disposable allocation retirement only; no product UI/RPC retirement or application budget release')
+        if helper_retirement_proof is not None:
+            accepted['nativeRetirementHelper'] = helper_retirement_proof
     except BaseException as error:
         save(evidence / 'failure.json', dict(type=type(error).__name__,
             reason=str(error) if isinstance(error, RuntimeError) else 'Native proof assertion or dependency failed'))

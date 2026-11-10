@@ -208,7 +208,12 @@ archive_operations=/var/lib/whaledeck-development-archive-operations
 [[ ! -L $archive_operations ]] || exit 1
 if [[ ! -e $archive_operations ]]; then install -d -o root -g root -m 0700 "$archive_operations"; fi
 [[ -d $archive_operations && $(stat -c '%a:%U:%G' -- "$archive_operations") == '700:root:root' ]] || exit 1
-for development_module in whaledeck-development-storage.py whaledeck-development-lifecycle.py whaledeck-development-archives.py whaledeck-development-archive-operations.py whaledeck-development-archive-control.py whaledeck-development-archive-guard.py whaledeck-development-archive-transport.py whaledeck-development-storage-transport.py whaledeck-development-project-quota.py whaledeck-development-quota-guard.py whaledeck-development-runner-isolation.py whaledeck-development-rootfs.py whaledeck-development-unpack.py whaledeck-development-runner.py whaledeck-development-runner-control.py whaledeck-development-source.py whaledeck-development-provision.py whaledeck-development-images.py; do
+retirement_operations=/var/lib/whaledeck-development-retirement-operations
+[[ ! -L $retirement_operations ]] || exit 1
+if [[ ! -e $retirement_operations ]]; then install -d -o root -g root -m 0700 "$retirement_operations"; fi
+[[ -d $retirement_operations && $(stat -c '%a:%U:%G' -- "$retirement_operations") == '700:root:root' ]] || exit 1
+[[ ! $retirement_operations -ef $archive_operations && ! $retirement_operations -ef $development_base ]] || exit 1
+for development_module in whaledeck-development-storage.py whaledeck-development-lifecycle.py whaledeck-development-archives.py whaledeck-development-archive-operations.py whaledeck-development-archive-control.py whaledeck-development-archive-guard.py whaledeck-development-archive-transport.py whaledeck-development-retirement.py whaledeck-development-retirement-execution.py whaledeck-development-retirement-operations.py whaledeck-development-retirement-transport.py whaledeck-development-storage-transport.py whaledeck-development-project-quota.py whaledeck-development-quota-guard.py whaledeck-development-runner-isolation.py whaledeck-development-rootfs.py whaledeck-development-unpack.py whaledeck-development-runner.py whaledeck-development-runner-control.py whaledeck-development-source.py whaledeck-development-provision.py whaledeck-development-images.py; do
   install -o root -g root -m 0750 "$(dirname "$0")/$development_module" "/usr/local/libexec/$development_module"
 done
 install -o root -g root -m 0755 "$(dirname "$0")/whaledeck-development-git.py" /usr/local/libexec/whaledeck-development-git.py

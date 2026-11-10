@@ -35,8 +35,11 @@ def digest(driver, value):
 
 
 class HddArchiveStorage:
-    def __init__(self, driver):
+    def __init__(self, driver, *, read_only=False):
+        if type(read_only) is not bool:
+            raise ValueError('Archive access policy must be explicit')
         self.d = driver
+        self.read_only = read_only
 
     def reject(self, code):
         self.d.reject('ARCHIVE_' + code)
@@ -80,7 +83,11 @@ class HddArchiveStorage:
         mount_id, _, dev, source, mount = d.mount_entry(target)
         if source != '/' or mount != configuration['mountPoint']:
             self.reject('MOUNT_MISMATCH')
-        d.require_writable(target)
+        if self.read_only:
+            if not os.fstatvfs(target).f_flag & os.ST_RDONLY:
+                self.reject('READ_ONLY_REQUIRED')
+        else:
+            d.require_writable(target)
         records = d.device_records(dev)
         if ([v for v in records if v.startswith('E:ID_FS_UUID=')] !=
                 ['E:ID_FS_UUID=' + configuration['filesystemUuid']] or 'E:ID_FS_USAGE=filesystem' not in records):

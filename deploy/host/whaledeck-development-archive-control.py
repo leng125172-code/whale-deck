@@ -19,11 +19,16 @@ DIR = os.O_RDONLY | os.O_DIRECTORY
 
 
 class Execution:
-    def __init__(self, driver):
+    def __init__(self, driver, *, kind='archive'):
+        if kind not in ('archive', 'retirement'):
+            raise ValueError('Unsupported fixed task kind')
         self.d = driver
+        self.kind = kind
+        self.unit = UNIT if kind == 'archive' else re.compile(
+            r'/system\.slice/whaledeck-development-retirement-run-[a-f0-9]{32}\.service\Z')
 
     def refuse(self, code):
-        self.d.reject('ARCHIVE_TASK_' + code)
+        self.d.reject(self.kind.upper() + '_TASK_' + code)
 
     def boot(self):
         value = BOOT.read_text(encoding='ascii').strip()
@@ -33,7 +38,7 @@ class Execution:
 
     def identity(self):
         value = SELF.read_text(encoding='ascii')
-        if not value.startswith('0::') or not UNIT.fullmatch(value[3:].rstrip('\n')):
+        if not value.startswith('0::') or not self.unit.fullmatch(value[3:].rstrip('\n')):
             self.refuse('EXECUTION_INVALID')
         path = value[3:].rstrip('\n')
         with self.d.absolute(CGROUP) as root:
@@ -44,7 +49,7 @@ class Execution:
     def validate(self, proof):
         if (not isinstance(proof, dict) or set(proof) != {'bootId', 'path', 'device', 'inode'}
                 or not isinstance(proof['bootId'], str) or not UUID.fullmatch(proof['bootId'])
-                or not isinstance(proof['path'], str) or not UNIT.fullmatch(proof['path'])
+                or not isinstance(proof['path'], str) or not self.unit.fullmatch(proof['path'])
                 or any(type(proof[k]) is not int or proof[k] <= 0 for k in ('device', 'inode'))):
             self.refuse('EXECUTION_INVALID')
 

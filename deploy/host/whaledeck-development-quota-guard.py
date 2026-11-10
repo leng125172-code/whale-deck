@@ -33,7 +33,9 @@ def restrict_path_writes():
         os.close(fd)
 
 
-def install(quota, *, read_only=False, archive_flags=False):
+def install(quota, *, read_only=False, archive_flags=False, release_only=False):
+    if release_only and read_only:
+        raise ValueError('Quota release and read-only access are exclusive')
     # Native syscall numbers and AUDIT_ARCH values from Linux UAPI.
     architectures = {
         'x86_64': (0xc000003e, 16, (59, 101, 179, 304, 310, 311, 312, 321, 322, 323)),
@@ -51,9 +53,9 @@ def install(quota, *, read_only=False, archive_flags=False):
     # userfaultfd and io_uring even if the outer service allows them.
     for number in (*blocked, 425, 426, 427, 438):
         rules.extend(((equal, 0, 1, number), (ret, 0, 0, deny)))
-    ioctls = (quota.FSGETXATTR,) if read_only else (quota.FSGETXATTR, quota.FSSETXATTR)
+    ioctls = (quota.FSGETXATTR,) if read_only or release_only else (quota.FSGETXATTR, quota.FSSETXATTR)
     if archive_flags:
-        if not read_only:
+        if not read_only and not release_only:
             raise ValueError('Archive flags require read-only quota access')
         ioctls += (0x80086601,)  # FS_IOC_GETFLAGS, never SETFLAGS.
     quota_commands = (quota.Q_GETSTATE, quota.Q_GETQUOTA)

@@ -59,7 +59,7 @@ def worker_request(tasks, task):
     tasks.validate(value)
     if value['taskId'].replace('-', '') != task:
         tasks.refuse('REQUEST_INVALID')
-    with tasks.entry(value) as directory:
+    with tasks.entry(value, wait=True) as directory:
         tasks.require_dispatch(directory, value)
     return value
 

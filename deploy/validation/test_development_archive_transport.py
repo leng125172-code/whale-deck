@@ -62,17 +62,32 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(1, manager.call_count)
 
     def test_cancel_confinement_keeps_the_task_lock_until_the_tombstone_is_committed(self):
-        outcomes = []
+        outcomes, errors = [], []
+        contended = threading.Event()
+        original_flock = task_tests.operations.fcntl.flock
+        main = threading.get_ident()
+        def flock(fd, flags):
+            try: return original_flock(fd, flags)
+            except BlockingIOError:
+                if threading.get_ident() != main: contended.set()
+                raise
         def concurrent_run():
-            try: self.tasks.run(self.base)
-            except fixture.files.Rejected as error: outcomes.append(str(error))
+            try: outcomes.append(self.tasks.run(self.base)['status'])
+            except Exception as error: errors.append(type(error).__name__)
+        thread = threading.Thread(target=concurrent_run)
         def install_guard(_directories):
-            thread = threading.Thread(target=concurrent_run); thread.start(); thread.join(2)
-            self.assertFalse(thread.is_alive())
+            thread.start(); self.assertTrue(contended.wait(1))
+            self.assertTrue(thread.is_alive())
+            self.assertEqual(0, self.execution.identity_calls)
         path_guard = SimpleNamespace(install=install_guard)
         quota_guard = SimpleNamespace(install=lambda *_args, **_kwargs: None)
-        result = transport.cancel(self.tasks, self.base, path_guard, quota_guard, None, task_tests.operations, task_tests.control)
-        self.assertEqual(['WORKSPACE_STORAGE_ARCHIVE_TASK_BUSY'], outcomes)
+        try:
+            with patch.object(task_tests.operations.fcntl, 'flock', side_effect=flock):
+                result = transport.cancel(self.tasks, self.base, path_guard, quota_guard, None, task_tests.operations, task_tests.control)
+        finally:
+            if thread.ident is not None: thread.join(3)
+        self.assertFalse(thread.is_alive()); self.assertEqual([], errors)
+        self.assertEqual(['Stopped'], outcomes)
         self.assertEqual('Stopped', result['status'])
         self.assertEqual(0, self.execution.identity_calls)
         self.assertEqual('Stopped', self.tasks.run(self.base)['status'])

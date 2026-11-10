@@ -53,7 +53,8 @@ jobs:
           sudo python3 -B -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_archives.py
           sudo python3 -B -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_retirement.py
           sudo python3 -B -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_retirement_execution.py
-          python3 -W error -m py_compile deploy/validation/validate_development_retirement_native.py deploy/validation/validate_development_archives_native.py deploy/validation/validate_development_retirement_execution_native.py
+          sudo python3 -B -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_retirement_operations.py
+          python3 -W error -m py_compile deploy/validation/validate_development_retirement_native.py deploy/validation/validate_development_archives_native.py deploy/validation/validate_development_retirement_execution_native.py deploy/validation/validate_development_retirement_helper_native.py
           sudo python3 -B -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_archive_operations.py
           sudo python3 -B -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_archive_transport.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_disk_images.py

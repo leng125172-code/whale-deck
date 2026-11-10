@@ -24,6 +24,50 @@ run_transient() {
 }
 
 case "$action" in
+  development-retirement-run)
+    [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
+    retirement_task=${2:0:8}-${2:8:4}-${2:12:4}-${2:16:4}-${2:20:12}
+    exec /usr/bin/systemd-run --quiet --no-block --collect --service-type=exec \
+      --unit="whaledeck-development-retirement-run-$2" \
+      --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
+      --property=PrivateDevices=yes --property=PrivateNetwork=yes --property=NoNewPrivileges=yes \
+      --property=RestrictSUIDSGID=no --property=RestrictNamespaces=yes --property=ProtectControlGroups=yes \
+      --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes \
+      --property=RestrictAddressFamilies=AF_UNIX --property=Restart=no --property=KillMode=control-group \
+      --property=RuntimeMaxSec=7200 --property=TimeoutStopSec=5 --property=TasksMax=4 \
+      --property=MemoryMax=512M --property=CPUQuota=100% --property=LimitCORE=0 \
+      --property=LimitNOFILE=128 --property=LimitFSIZE=33554432 --property=SystemCallArchitectures=native \
+      --property='CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_OVERRIDE' \
+      --property='SystemCallFilter=@system-service prctl quotactl_fd landlock_create_ruleset landlock_add_rule landlock_restrict_self' \
+      --property='SystemCallFilter=~@chown chmod fchmod fchmodat fchmodat2 utime utimes futimesat utimensat file_setattr setxattr lsetxattr fsetxattr setxattrat removexattr lremovexattr fremovexattr removexattrat' \
+      --property=ReadWritePaths=/var/lib/whaledeck-development \
+      --property=ReadWritePaths=/var/lib/whaledeck-development-retirement-operations \
+      --property=ReadOnlyPaths=/data/DevSpace \
+      --property="LoadCredential=retirement-task:/var/lib/whaledeck-development-retirement-operations/$retirement_task/request.json" \
+      /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-retirement-transport.py run "$2"
+    ;;
+  development-retirement-start|development-retirement-observe|development-retirement-cancel)
+    [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
+    retirement_control_group=yes
+    if [[ $action == development-retirement-cancel ]]; then retirement_control_group=no; fi
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit="whaledeck-development-retirement-control-${action##*-}-$2" \
+      --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
+      --property=PrivateDevices=yes --property=PrivateNetwork=yes --property=NoNewPrivileges=yes \
+      --property=RestrictSUIDSGID=no --property=RestrictNamespaces=yes \
+      --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes \
+      --property="ProtectControlGroups=$retirement_control_group" --property=RestrictAddressFamilies=AF_UNIX \
+      --property=RuntimeMaxSec=20 --property=TimeoutStopSec=3 --property=KillMode=control-group \
+      --property=Restart=no --property=TasksMax=8 --property=MemoryMax=96M --property=CPUQuota=50% \
+      --property=LimitCORE=0 --property=LimitNOFILE=64 --property=LimitFSIZE=8192 \
+      --property=CapabilityBoundingSet= --property=SystemCallArchitectures=native \
+      --property='SystemCallFilter=@system-service prctl quotactl_fd landlock_create_ruleset landlock_add_rule landlock_restrict_self' \
+      --property='SystemCallFilter=~@chown chmod fchmod fchmodat fchmodat2 utime utimes futimesat utimensat file_setattr setxattr lsetxattr fsetxattr setxattrat removexattr lremovexattr fremovexattr removexattrat' \
+      --property=ReadWritePaths=/var/lib/whaledeck-development-retirement-operations \
+      /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-retirement-transport.py "${action##*-}"
+    ;;
   development-archive-run)
     [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
     archive_task=${2:0:8}-${2:8:4}-${2:12:4}-${2:16:4}-${2:20:12}

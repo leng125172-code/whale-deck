@@ -30,6 +30,24 @@ class ArchiveOperations:
     def refuse(self, code):
         self.d.reject('ARCHIVE_TASK_' + code)
 
+    def base(self):
+        return BASE
+
+    def persist(self, directory, name, value):
+        self.engine.durable_json(directory, name, value)
+
+    def io_failure(self, code):
+        return 'WORKSPACE_ARCHIVE_' + code
+
+    def perform(self, value):
+        command = dict(storage=value['storage'], expectedEpoch=value['expectedEpoch'],
+            operationId=value['archiveId'], planSha256=value['planSha256'])
+        if value['phase'] == 'plan':
+            return self.engine.plan(value['storage'], value['expectedEpoch'])
+        if value['phase'] == 'capture':
+            return self.engine.capture(command)
+        return self.engine.verify(command, value['receiptSha256'])
+
     def validate(self, value):
         if (not isinstance(value, dict)
                 or set(value) != {'schemaVersion', 'taskId', 'archiveId', 'phase', 'storage', 'expectedEpoch', 'planSha256', 'receiptSha256'}
@@ -46,21 +64,29 @@ class ArchiveOperations:
                 self.refuse('REQUEST_INVALID')
         self.d.validate_request(value['storage'])
 
+    def journal_lock(self, directory, *, wait=False):
+        deadline = time.monotonic() + RESULT_LOCK_WAIT_SECONDS if wait else None
+        while True:
+            try:
+                fcntl.flock(directory, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return
+            except BlockingIOError:
+                if deadline is None or time.monotonic() >= deadline:
+                    self.refuse('BUSY')
+                time.sleep(0.01)
+
     @contextlib.contextmanager
-    def entry(self, value, *, create=False, pinned=None):
+    def entry(self, value, *, create=False, pinned=None, wait=False):
         self.validate(value)
         d = self.d
-        with d.absolute(BASE) as root:
+        with d.absolute(self.base()) as root:
             d.directory(root, private=True)
             if pinned is not None and not os.path.samestat(os.fstat(root), os.fstat(pinned[0])):
                 self.refuse('JOURNAL_CHANGED')
             if create:
-                try:
-                    # Serialize only bounded directory admission, never the
-                    # contents scan, codec or cgroup stop/observation.
-                    fcntl.flock(root, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    self.refuse('BUSY')
+                # Only the dispatched worker may wait here; user controls
+                # retain nonblocking admission and never hold storage locks.
+                self.journal_lock(root, wait=wait)
                 try:
                     count, found = 0, False
                     with os.scandir(root) as rows:
@@ -82,25 +108,16 @@ class ArchiveOperations:
                 original = d.directory(directory, private=True)
                 if pinned is not None and not os.path.samestat(original, os.fstat(pinned[1])):
                     self.refuse('JOURNAL_CHANGED')
-                # Only the original execution's pinned result commit may
-                # wait briefly. Observe/Cancel/admission retain nonblocking
-                # behavior; no source or HDD lock is held at this boundary.
-                deadline = time.monotonic() + RESULT_LOCK_WAIT_SECONDS if pinned is not None else None
-                while True:
-                    try:
-                        fcntl.flock(directory, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        break
-                    except BlockingIOError:
-                        if deadline is None or time.monotonic() >= deadline:
-                            self.refuse('BUSY')
-                        time.sleep(0.01)
+                # Dispatched worker admission and its pinned result commit
+                # wait briefly for observers. Observe/Cancel remain immediate.
+                self.journal_lock(directory, wait=wait or pinned is not None)
                 if create:
-                    self.engine.durable_json(directory, 'request.json', value)
+                    self.persist(directory, 'request.json', value)
                     self.cancelled(directory, initialize=True)
                 else:
                     d.read_json(directory, 'request.json', 4096, expected=value)
                 yield directory
-                with d.absolute(BASE) as current:
+                with d.absolute(self.base()) as current:
                     d.directory(current, private=True)
                     if not os.path.samestat(os.fstat(root), os.fstat(current)):
                         self.refuse('JOURNAL_CHANGED')
@@ -220,7 +237,7 @@ class ArchiveOperations:
                 self.d.read_json(directory, 'dispatch.json', 1024, expected=fence, sync=True)
                 return False
             except FileNotFoundError:
-                self.engine.durable_json(directory, 'dispatch.json', fence)
+                self.persist(directory, 'dispatch.json', fence)
                 return True
 
     def require_dispatch(self, directory, value):
@@ -238,45 +255,38 @@ class ArchiveOperations:
             return self.run_pinned(value, pins)
 
     def run_pinned(self, value, pins):
-        with self.entry(value, create=True) as directory:
+        with self.entry(value, create=True, wait=True) as directory:
             previous = self.completed(directory, value)
             proof = self.proof(directory)
             if previous is not None or proof is not None or self.cancelled(directory):
                 return self.state(directory, value)
             proof = self.execution.identity()
             self.execution.validate(proof)
-            self.engine.durable_json(directory, 'execution.json', proof)
+            self.persist(directory, 'execution.json', proof)
             # New open descriptions pin the original inodes without retaining
             # the task flock while storage work runs. A copied replacement
             # journal cannot receive a result, even with identical JSON bytes.
-            root_pin = pins.enter_context(self.d.absolute(BASE))
+            root_pin = pins.enter_context(self.d.absolute(self.base()))
             task_pin = pins.enter_context(self.d.opened(directory, '.', DIR))
         # Deliberately release the task lock before any storage/global lock.
         # A new attempt may only be admitted by a future explicit authorized
         # retry after exact stop proof. This task ID never re-executes itself.
         try:
-            command = dict(storage=value['storage'], expectedEpoch=value['expectedEpoch'],
-                operationId=value['archiveId'], planSha256=value['planSha256'])
-            if value['phase'] == 'plan':
-                result = self.engine.plan(value['storage'], value['expectedEpoch'])
-            elif value['phase'] == 'capture':
-                result = self.engine.capture(command)
-            else:
-                result = self.engine.verify(command, value['receiptSha256'])
+            result = self.perform(value)
             completed = self.receipt(value, 'Succeeded', result=result)
         except self.d.files.Rejected as error:
             code = str(error)
             if not re.fullmatch('WORKSPACE_STORAGE_[A-Z_]{1,80}', code):
-                code = 'WORKSPACE_ARCHIVE_UNCONFIRMED'
+                code = self.io_failure('UNCONFIRMED')
             completed = self.receipt(value, 'Rejected', code=code)
         except OSError as error:
             code = {errno.ENOSPC: 'NO_SPACE', errno.EDQUOT: 'QUOTA_EXCEEDED', errno.EACCES: 'ACCESS_DENIED',
                 errno.EPERM: 'ACCESS_DENIED'}.get(error.errno, 'IO_UNCONFIRMED')
-            completed = self.receipt(value, 'Rejected', code='WORKSPACE_ARCHIVE_' + code)
+            completed = self.receipt(value, 'Rejected', code=self.io_failure(code))
         with self.entry(value, pinned=(root_pin, task_pin)) as directory:
             if self.proof(directory) != proof:
                 self.refuse('EXECUTION_CHANGED')
-            self.engine.durable_json(directory, 'result.json', completed)
+            self.persist(directory, 'result.json', completed)
             # The caller is itself still a populated unit. Independent Observe
             # waits for its disappearance before returning a terminal result.
             return self.receipt(value, 'Finishing')
