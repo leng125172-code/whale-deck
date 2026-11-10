@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-10，P3-14 `fed77228` 接入 BFF 与 Vue 逐文件差异。真实 HTTP、PostgreSQL、Unix Socket 与生产 Chrome 分别验证分页、所有者范围、实时撤权、异常回执和窄屏。继续逐行差异、合并及物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_DIFF_UI.md)。
+
 2026-11-10，P3-14 `444caf60` 接入 Agent 1.73 签名差异查询。真实 Unix Socket、sudo、systemd 和 ext4 验证分页、保护路径计数、请求绑定、重放和状态拒绝。继续 BFF/Vue、逐行差异与合并。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_DIFF_RPC.md)。
 
 2026-11-10，P3-14 `44b9ae03` 接入宿主逐文件差异分页。隔离 KVM 真实 ext4 验证计划绑定、Unicode、受保护路径计数及两树变化拒绝。继续签名查询、BFF/Vue、逐行差异与合并。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_DIFF_HOST.md)。
