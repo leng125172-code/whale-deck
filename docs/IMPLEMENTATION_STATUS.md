@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-10，P3-14 `47171897` 接入旧树所有者下载。真实 HTTP、PostgreSQL、Unix Socket 与生产 Chrome 分别验证授权审计、完整归档、故障断流和历史下载。继续逐文件差异、合并及物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_PREVIOUS_DOWNLOAD.md)。
+
 2026-11-10，P3-14 `918c9793` 接入 Agent 1.72 签名旧树流。真实 Unix Socket、sudo、systemd 和 ext4 验证多块完整归档、签名绑定、零字节拒绝和单元停止。继续所有者下载、逐文件差异及物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_PREVIOUS_RPC.md)。
 
 2026-11-10，P3-14 `6d16226d` 接入宿主留存旧树导出。隔离 KVM 真实 ext4 验证跨版本取回、重复归档、回执门禁和受保护路径拒绝。继续签名 Agent 流式传输、所有者下载及逐文件差异。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_PREVIOUS_HOST.md)。
