@@ -81,7 +81,8 @@ public sealed class WorkspaceRunDispatcher(IWorkspaceRunStore queue, WorkspaceRu
         try
         {
             var current = await access.RequireAsync(claim.Actor, claim.Workspace.Id, token);
-            return current.State == WorkspaceStorageAllocation.Allocated && current.Version == claim.Workspace.Version &&
+            return current.LifecycleState == "Active" && current.LifecycleVersion == claim.Workspace.LifecycleVersion &&
+                current.State == WorkspaceStorageAllocation.Allocated && current.Version == claim.Workspace.Version &&
                 current.StorageRootId == claim.Workspace.StorageRootId && current.EnvironmentSha256 == claim.Workspace.EnvironmentSha256 &&
                 current.Budget == claim.Workspace.Budget;
         }

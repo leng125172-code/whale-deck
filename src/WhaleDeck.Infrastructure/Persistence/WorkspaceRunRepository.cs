@@ -14,14 +14,26 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
     private const string PendingIndex = "uq_workspace_run_pending";
     private sealed record Snapshot(WorkspaceDefinition Workspace, WorkspaceRunCommand Command);
 
-    public async Task<WorkspaceRunView> EnqueueAsync(WorkspaceDefinition workspace, TerminalActor actor, Guid key,
-        WorkspaceRunInput input, CancellationToken token)
+    public Task<WorkspaceRunView> EnqueueAsync(WorkspaceDefinition workspace, TerminalActor actor, Guid key,
+        WorkspaceRunInput input, CancellationToken token) => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
     {
+        db.ChangeTracker.Clear();
+        await using var transaction = await db.Database.BeginTransactionAsync(token);
+        await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout='3s'", token);
         var idempotency = key.ToString("D");
         var request = JsonSerializer.Serialize(new { workspaceId = workspace.Id, version = workspace.Version,
             environmentSha256 = workspace.EnvironmentSha256, input.Runtime, input.Task }, Json);
         var prior = await ReplayAsync(actor.Subject, idempotency, request, token);
         if (prior is not null) return prior;
+        try { await WorkspaceMutationFence.RequireActiveAsync(db, workspace.Id, actor.Subject, token, workspace); }
+        catch (InvalidOperationException)
+        {
+            // A concurrent winner may have committed just before stop took the
+            // workspace fence. Exact replay remains a read, never new execution.
+            var winner = await ReplayAsync(actor.Subject, idempotency, request, token);
+            if (winner is not null) return winner;
+            throw;
+        }
         var now = clock.GetUtcNow();
         var job = new OperationJob
         {
@@ -42,9 +54,11 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
         try
         {
             await db.SaveChangesAsync(token);
+            await transaction.CommitAsync(token);
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } postgres)
         {
+            await transaction.RollbackAsync(token);
             db.ChangeTracker.Clear();
             var winner = await ReplayAsync(actor.Subject, idempotency, request, token);
             if (winner is not null) return winner;
@@ -52,7 +66,7 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
             throw;
         }
         return View(row, job);
-    }
+    });
 
     private async Task<WorkspaceRunView?> ReplayAsync(string subject, string key, string request, CancellationToken token)
     {
@@ -64,6 +78,11 @@ public sealed class WorkspaceRunRepository(PlatformDbContext db, TimeProvider cl
         var intent = await db.WorkspaceRunIntents.AsNoTracking().SingleAsync(row => row.Id == job.Id, token);
         return View(intent, job);
     }
+
+    public Task<WorkspaceRunView?> ReplayAsync(WorkspaceDefinition workspace, TerminalActor actor, Guid key,
+        WorkspaceRunInput input, CancellationToken token) => ReplayAsync(actor.Subject, key.ToString("D"),
+            JsonSerializer.Serialize(new { workspaceId = workspace.Id, version = workspace.Version,
+                environmentSha256 = workspace.EnvironmentSha256, input.Runtime, input.Task }, Json), token);
 
     public async Task<WorkspaceRunView?> GetAsync(Guid workspaceId, Guid runId, string owner, CancellationToken token)
     {

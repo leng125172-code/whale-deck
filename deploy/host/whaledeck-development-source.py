@@ -485,8 +485,10 @@ class SourceImports:
                 **{key: request[key] for key in fields - {'storage'}}}
 
     @contextlib.contextmanager
-    def locked(self, storage):
+    def locked(self, storage, *, mutating=False):
         with self.driver.attested_payload(storage) as (payload, proof):
+            if mutating:
+                self.driver.require_active(storage, proof)
             try:
                 fcntl.flock(payload, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
@@ -607,7 +609,7 @@ class SourceImports:
         def check():
             if time.monotonic() >= deadline:
                 refuse('DEADLINE')
-        with self.locked(request['storage']) as (payload, proof), self.directory(payload, IMPORTS, proof) as imports:
+        with self.locked(request['storage'], mutating=True) as (payload, proof), self.directory(payload, IMPORTS, proof) as imports:
             update = 'previousImportId' in intent
             if not update and self.exists(payload, WORK) and not self.exists(imports.value, intent['importId']):
                 refuse('WORK_ALREADY_PRESENT')
@@ -657,7 +659,7 @@ class SourceImports:
 
     def settle(self, request, *, discard=False):
         intent = self.request(request, False, publish=not discard)
-        with self.locked(request['storage']) as (payload, proof):
+        with self.locked(request['storage'], mutating=not discard) as (payload, proof):
             with self.driver.opened(payload, IMPORTS, DIR) as imports, self.driver.opened(imports, intent['importId'], DIR) as slot:
                 self.rootfs.private_directory(imports)
                 self.rootfs.private_directory(slot)

@@ -14,6 +14,8 @@ public sealed record WorkspaceRunClaim(WorkspaceRunView Run, WorkspaceDefinition
 
 public interface IWorkspaceRunStore
 {
+    Task<WorkspaceRunView?> ReplayAsync(WorkspaceDefinition workspace, TerminalActor actor, Guid key, WorkspaceRunInput input,
+        CancellationToken token);
     Task<WorkspaceRunView> EnqueueAsync(WorkspaceDefinition workspace, TerminalActor actor, Guid key, WorkspaceRunInput input,
         CancellationToken token);
     Task<WorkspaceRunView?> GetAsync(Guid workspaceId, Guid runId, string owner, CancellationToken token);
@@ -37,6 +39,9 @@ public sealed class WorkspaceRuns(DevelopmentWorkspaces access, IDevelopmentWork
         if (key == Guid.Empty) throw new ArgumentException("WORKSPACE_RUN_KEY_INVALID");
         _ = Arguments(input);
         var workspace = await RequireAsync(actor, id, token);
+        var replay = await queue.ReplayAsync(workspace, actor, key, input, token);
+        if (replay is not null) return replay;
+        if (workspace.LifecycleState != "Active") throw new InvalidOperationException("WORKSPACE_LIFECYCLE_INACTIVE");
         if (workspace.State != WorkspaceStorageAllocation.Allocated ||
             !workspace.Environment.Runtimes.Any(pin => pin.Key == input.Runtime))
             throw new InvalidOperationException("WORKSPACE_RUN_RUNTIME_UNAVAILABLE");

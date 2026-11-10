@@ -139,6 +139,24 @@ case "$action" in
       --property=ReadWritePaths=/var/lib/whaledeck-development "${runner_properties[@]}" \
       /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-runner.py "$runner_mode"
     ;;
+  development-lifecycle-plan|development-lifecycle-apply)
+    [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
+      --unit="whaledeck-development-lifecycle-${action##*-}-$2" \
+      --property=User=root --property=Group=root --property=UMask=0077 \
+      --property=ProtectSystem=strict --property=ProtectHome=yes --property=PrivateTmp=yes \
+      --property=PrivateDevices=yes --property=NoNewPrivileges=yes --property=RestrictSUIDSGID=no \
+      --property=ProtectKernelTunables=yes --property=ProtectKernelModules=yes --property=ProtectControlGroups=yes \
+      --property=RestrictNamespaces=yes --property=PrivateNetwork=yes --property=RestrictAddressFamilies=AF_UNIX \
+      --property=RuntimeMaxSec=15 --property=TimeoutStopSec=5 --property=KillMode=control-group \
+      --property=Restart=no --property=TasksMax=4 --property=MemoryMax=96M --property=CPUQuota=50% \
+      --property=LimitCORE=0 --property=LimitNOFILE=64 --property=LimitFSIZE=4096 \
+      --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
+      --property=CapabilityBoundingSet=CAP_SYS_ADMIN \
+      --property=SystemCallArchitectures=native --property="SystemCallFilter=@system-service prctl quotactl_fd" \
+      --property=ReadWritePaths=/var/lib/whaledeck-development \
+      /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-lifecycle.py "${action##*-}"
+    ;;
   development-storage-allocate|development-storage-attest)
     [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
     storage_args=()

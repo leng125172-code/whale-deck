@@ -8,6 +8,8 @@ public sealed class DevelopmentWorkspaceRecord
     public required string StorageRootId { get; init; }
     public required string State { get; set; }
     public long Version { get; set; }
+    public string LifecycleState { get; set; } = "Active";
+    public long LifecycleVersion { get; set; } = 1;
     public int CpuMillis { get; init; }
     public int MemoryMiB { get; init; }
     public int DiskMiB { get; init; }

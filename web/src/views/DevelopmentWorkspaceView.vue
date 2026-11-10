@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElCard } from 'element-plus'
 import WorkspaceSourceImport from '@/components/WorkspaceSourceImport.vue'
+import WorkspaceLifecycle from '@/components/WorkspaceLifecycle.vue'
 import { ApiError, createIdempotencyKey } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
 import {
@@ -26,6 +27,7 @@ const owned = computed(
   () => workspace.value && workspace.value.ownerSubject === authSession.user.value?.subject,
 )
 const allocated = computed(() => workspace.value?.state === 'StorageAllocated')
+const enabled = computed(() => (workspace.value?.lifecycleState ?? 'Active') === 'Active')
 const plan = ref<StoragePlan | null>(null)
 const checked = ref(false)
 const runs = ref<WorkspaceRun[]>([])
@@ -250,7 +252,7 @@ function preflight() {
 }
 function queue() {
   const input = pending.value?.input ?? picked.value
-  if (!input || !allocated.value) return
+  if (!input || !allocated.value || !enabled.value) return
   void perform('queue', async (signal) => {
     pending.value ??= { key: createIdempotencyKey(), input }
     const run = await api.queue(id.value, pending.value.input, pending.value.key, signal)
@@ -287,6 +289,17 @@ function cancel(run: WorkspaceRun) {
         >
         <RouterLink :to="detailRoute('development-workspace-runs')">运行记录</RouterLink>
       </nav>
+
+      <WorkspaceLifecycle
+        v-if="
+          !showRuns &&
+          !showSources &&
+          allocated &&
+          (owned || authSession.user.value?.isAdministrator)
+        "
+        :workspace="workspace"
+        @refresh="refresh"
+      />
 
       <el-card v-if="!showRuns && !showSources" shadow="never">
         <template #header><strong>环境与存储</strong></template>
@@ -351,6 +364,7 @@ function cancel(run: WorkspaceRun) {
           v-if="owned && allocated"
           :key="workspace.id"
           :workspace-id="workspace.id"
+          :inactive="!enabled"
         />
         <el-alert
           v-else
@@ -372,6 +386,7 @@ function cancel(run: WorkspaceRun) {
             show-icon
           />
           <p v-if="!allocated">分配存储后可执行开发任务。</p>
+          <p v-else-if="!enabled">空间已停用或正在切换状态，恢复后可提交新任务。</p>
           <p v-else-if="!tasks.length">这个空间没有可用的固定构建或测试任务。</p>
           <div v-else class="workspace-actions">
             <el-select v-model="selection" aria-label="开发任务" :disabled="!!pending || !!action">

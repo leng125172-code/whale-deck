@@ -4842,6 +4842,20 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("environment_sha256");
 
+                    b.Property<string>("LifecycleState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Active")
+                        .HasColumnName("lifecycle_state");
+
+                    b.Property<long>("LifecycleVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("lifecycle_version");
+
                     b.Property<int>("MemoryMiB")
                         .HasColumnType("integer")
                         .HasColumnName("memory_mi_b");
@@ -4910,6 +4924,8 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                     b.ToTable("development_workspaces", null, t =>
                         {
+                            t.HasCheckConstraint("ck_development_workspace_lifecycle", "lifecycle_version >= 1 AND\n(CASE lifecycle_state\n    WHEN 'Active' THEN lifecycle_version % 2 = 1\n    WHEN 'Stopping' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'\n    WHEN 'Stopped' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'\n    WHEN 'Resuming' THEN lifecycle_version >= 3 AND lifecycle_version % 2 = 1 AND state = 'StorageAllocated'\n    ELSE FALSE END) IS TRUE");
+
                             t.HasCheckConstraint("ck_development_workspace_manifest", "octet_length(environment_json) BETWEEN 1 AND 4096 AND environment_sha256 = encode(sha256(convert_to(environment_json,'UTF8')),'hex') AND request_sha256 ~ '^[a-f0-9]{64}$'");
 
                             t.HasCheckConstraint("ck_development_workspace_shape", "cpu_millis >= 100 AND memory_mi_b >= 128 AND disk_mi_b >= 256");
@@ -8959,6 +8975,78 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceLifecycleIntent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("action");
+
+                    b.Property<DateTimeOffset>("AvailableAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("available_at_utc");
+
+                    b.Property<string>("ExecutionSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("execution_subject");
+
+                    b.Property<long>("ExpectedVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("expected_version");
+
+                    b.Property<DateTimeOffset?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at_utc");
+
+                    b.Property<Guid?>("Lease")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease");
+
+                    b.Property<DateTimeOffset?>("LeaseUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until_utc");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("snapshot_json");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId")
+                        .IsUnique()
+                        .HasFilter("finished_at_utc IS NULL");
+
+                    b.HasIndex("AvailableAtUtc", "Id")
+                        .HasFilter("finished_at_utc IS NULL");
+
+                    b.ToTable("development_workspace_lifecycle", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_lifecycle_action", "action IN ('stop','resume') AND expected_version >= 1");
+
+                            t.HasCheckConstraint("ck_workspace_lifecycle_lease", "(lease IS NULL) = (lease_until_utc IS NULL) AND (finished_at_utc IS NULL OR lease IS NULL)");
+
+                            t.HasCheckConstraint("ck_workspace_lifecycle_snapshot", "octet_length(snapshot_json::text) BETWEEN 1 AND 16384");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceReportGrantRecord", b =>
                 {
                     b.Property<Guid>("WorkspaceId")
@@ -9881,6 +9969,21 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ChannelId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceLifecycleIntent", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithOne()
+                        .HasForeignKey("WhaleDeck.Domain.Entities.WorkspaceLifecycleIntent", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.DevelopmentWorkspaceRecord", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

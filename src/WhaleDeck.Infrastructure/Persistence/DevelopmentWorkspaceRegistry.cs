@@ -89,6 +89,7 @@ public sealed class DevelopmentWorkspaceRegistry(PlatformDbContext db) : IDevelo
                 """).ToListAsync(token);
             var row = locked.SingleOrDefault() ?? throw new KeyNotFoundException("WORKSPACE_NOT_FOUND");
             var workspace = Map(row);
+            if (row.LifecycleState != "Active") throw new InvalidOperationException("WORKSPACE_LIFECYCLE_INACTIVE");
             if (WorkspaceStorageAllocation.BuildPlan(workspace) != plan ||
                 (row.State != WorkspaceStorageAllocation.Registered && row.StoragePlanSha256 != plan.PlanSha256))
                 throw new InvalidOperationException("WORKSPACE_STORAGE_PLAN_CHANGED");
@@ -129,8 +130,9 @@ public sealed class DevelopmentWorkspaceRegistry(PlatformDbContext db) : IDevelo
         return owner is null ? query : query.Where(row => row.OwnerSubject == owner);
     }
 
-    private static WorkspaceDefinition Map(DevelopmentWorkspaceRecord row) => new(
+    internal static WorkspaceDefinition Map(DevelopmentWorkspaceRecord row) => new(
         row.Id, row.Slug, row.OwnerSubject, row.StorageRootId, row.State, row.Version,
         new(row.CpuMillis, row.MemoryMiB, row.DiskMiB), DevelopmentWorkspaces.DecodeEnvironment(row.EnvironmentJson, row.EnvironmentSha256),
-        row.EnvironmentSha256, row.CreatedAtUtc);
+        row.EnvironmentSha256, row.CreatedAtUtc)
+        { LifecycleState = row.LifecycleState, LifecycleVersion = row.LifecycleVersion };
 }

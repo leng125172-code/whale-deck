@@ -131,6 +131,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
         ConfigureWorkspaceRunReports(modelBuilder);
         ConfigureWorkspaceReportGrants(modelBuilder);
         ConfigureDevelopmentWorkspaces(modelBuilder);
+        ConfigureWorkspaceLifecycle(modelBuilder);
         ConfigureWorkspaceSources(modelBuilder);
         ConfigureContainerMoves(modelBuilder);
         ConfigureContainerFileHistory(modelBuilder);

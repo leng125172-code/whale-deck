@@ -22,6 +22,7 @@ IMAGE_ROOT = Path('/var/lib/whaledeck-development-disks')
 DIR = os.O_RDONLY | os.O_DIRECTORY
 READ = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW
 MARKER = 'allocation.json'
+LIFECYCLE = '.lifecycle-'
 PAYLOAD = 'data'
 UUID = r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}'
 KEY = r'[a-z0-9]+(?:-[a-z0-9]+)*'
@@ -460,12 +461,20 @@ class WorkspaceStorage:
         root_id, workspace = self.validate_request(request)
         pending = '.pending-' + workspace
         with self.locked_root(root_id, exclusive=True) as (parent, config):
+            lifecycle = self.lifecycle_state(parent, workspace, request)
+            if lifecycle is not None and lifecycle['state'] != 'Active':
+                self.reject('LIFECYCLE_STOPPED')
             current = self.read_existing(parent, workspace, request, config, sync=True)
             if current is not None:
                 # A prior rename may have happened just before a failed fsync.
                 os.fsync(parent)
                 self.recheck(parent, root_id, config)
-                return self.quota_proof(parent, workspace, current, config) if self.quota else current
+                bound = self.quota_proof(parent, workspace, current, config) if self.quota else current
+                self.lifecycle_state(parent, workspace, request, proof=bound)
+                return bound
+
+            if lifecycle is not None:
+                self.reject('LIFECYCLE_BINDING_CHANGED')
 
             if self.quota:
                 self.quota.require_enforcing(parent)
@@ -488,3 +497,31 @@ class WorkspaceStorage:
             if self.read_existing(parent, workspace, request, config) != proof:
                 self.reject('PUBLICATION_UNKNOWN')
             return self.quota_proof(parent, workspace, proof, config) if self.quota else proof
+
+    def lifecycle_state(self, parent, workspace, request, *, proof=None):
+        try:
+            value = self.read_json(parent, LIFECYCLE + workspace + '.json', 4096)
+        except FileNotFoundError:
+            return None
+        fields = {'schemaVersion', 'rootId', 'workspaceId', 'environmentSha256', 'diskMiB',
+                  'state', 'epoch', 'operationId', 'planSha256', 'storageProofSha256'}
+        if (set(value) != fields or type(value['schemaVersion']) is not int or type(value['diskMiB']) is not int
+                or any(value[key] != request[key] for key in request)
+                or type(value['epoch']) is not int or not 2 <= value['epoch'] <= 0x7ffffffffffffffe
+                or value['state'] not in ('Active', 'Stopped')
+                or (value['state'] == 'Stopped') != (value['epoch'] % 2 == 0)
+                or not isinstance(value['operationId'], str) or not re.fullmatch(UUID, value['operationId'])
+                or value['operationId'] == '00000000-0000-0000-0000-000000000000'
+                or any(not isinstance(value[key], str) or not re.fullmatch(DIGEST, value[key])
+                       for key in ('planSha256', 'storageProofSha256'))):
+            self.reject('LIFECYCLE_BINDING_CHANGED')
+        if proof is not None and value['storageProofSha256'] != hashlib.sha256(self.canonical(proof)).hexdigest():
+            self.reject('LIFECYCLE_BINDING_CHANGED')
+        return value
+
+    def require_active(self, request, proof):
+        root_id, workspace = self.validate_request(request)
+        with self.locked_root(root_id, exclusive=False) as (parent, _):
+            value = self.lifecycle_state(parent, workspace, request, proof=proof)
+            if value is not None and value['state'] != 'Active':
+                self.reject('LIFECYCLE_STOPPED')

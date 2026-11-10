@@ -27,6 +27,18 @@ public static class TraceAndErrors
             WorkspaceSourceException { Failure: WorkspaceSourceFailure.Rejected } => (StatusCodes.Status422UnprocessableEntity, "WORKSPACE_SOURCE_PREVIOUS_REJECTED", "The retained source cannot be exported."),
             WorkspaceSourceException { Failure: WorkspaceSourceFailure.Integrity } => (StatusCodes.Status502BadGateway, "WORKSPACE_SOURCE_PREVIOUS_INCOMPLETE", "The retained source export could not be verified."),
             WorkspaceSourceException => (StatusCodes.Status503ServiceUnavailable, "WORKSPACE_SOURCE_PREVIOUS_UNAVAILABLE", "The retained source export is temporarily unavailable."),
+            WorkspaceLifecycleException { Failure: WorkspaceLifecycleFailure.Integrity } =>
+                (StatusCodes.Status502BadGateway, "WORKSPACE_LIFECYCLE_UNVERIFIED", "The workspace host receipt could not be verified."),
+            WorkspaceLifecycleException { Failure: WorkspaceLifecycleFailure.Rejected } =>
+                (StatusCodes.Status409Conflict, "WORKSPACE_LIFECYCLE_HOST_CHANGED", "The workspace host state changed. Prepare a fresh plan."),
+            WorkspaceLifecycleException =>
+                (StatusCodes.Status503ServiceUnavailable, "WORKSPACE_LIFECYCLE_AGENT_REQUIRED", "The workspace lifecycle Agent is unavailable."),
+            InvalidOperationException { Message: "WORKSPACE_LIFECYCLE_NOT_IDLE" } =>
+                (StatusCodes.Status409Conflict, "WORKSPACE_LIFECYCLE_NOT_IDLE", "Finish or cancel active tasks and source imports before stopping the workspace."),
+            InvalidOperationException { Message: "WORKSPACE_LIFECYCLE_GIT_DRAINING" } =>
+                (StatusCodes.Status409Conflict, "WORKSPACE_LIFECYCLE_GIT_DRAINING", "A recently canceled Git acquisition is still within its host teardown window."),
+            InvalidOperationException { Message: "WORKSPACE_LIFECYCLE_INACTIVE" } =>
+                (StatusCodes.Status409Conflict, "WORKSPACE_LIFECYCLE_INACTIVE", "Resume the workspace before submitting new work."),
             UnauthorizedAccessException => (StatusCodes.Status403Forbidden, "AUTH_FORBIDDEN", "The operation is not permitted."),
             NotificationSnapshotUnavailableException => (StatusCodes.Status404NotFound, "NOTIFICATION_READ_SNAPSHOT_UNAVAILABLE", "The notification read snapshot is unavailable. Prepare a new snapshot."),
             KeyNotFoundException => (StatusCodes.Status404NotFound, "RESOURCE_NOT_FOUND", "The requested resource was not found."),

@@ -197,7 +197,8 @@ public sealed class WorkspaceSourceDispatcher(IWorkspaceSourceStore store, Works
         try
         {
             var live = await access.RequireAsync(claim.Actor, claim.Workspace.Id, claim.Import.ImportId, token);
-            return (claim.Import.Git is null || access.RequireGitGrant(claim.Actor, claim.Import.Git.RepositoryId).CredentialRef == claim.GitCredentialRef) &&
+            return live.LifecycleState == "Active" && live.LifecycleVersion == claim.Workspace.LifecycleVersion &&
+                (claim.Import.Git is null || access.RequireGitGrant(claim.Actor, claim.Import.Git.RepositoryId).CredentialRef == claim.GitCredentialRef) &&
                 live.Version == claim.Workspace.Version && live.StorageRootId == claim.Workspace.StorageRootId &&
                 live.EnvironmentSha256 == claim.Workspace.EnvironmentSha256 && live.Budget == claim.Workspace.Budget;
         }

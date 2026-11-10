@@ -23,6 +23,8 @@ export interface Workspace {
   storageRootId: string
   state: string
   version: number
+  lifecycleState?: string
+  lifecycleVersion?: number
   budget: WorkspaceBudget
   environment: { version: number; runtimes: RuntimePin[] }
   environmentSha256: string
@@ -44,6 +46,24 @@ export interface StoragePlan {
   environmentSha256: string
   diskMiB: number
   planSha256: string
+}
+export interface LifecyclePlan {
+  workspaceId: string
+  action: 'stop' | 'resume'
+  expectedVersion: number
+  planSha256: string
+  retainsData: boolean
+  reservesBudget: boolean
+  requiresIdle: boolean
+}
+export interface LifecycleOperation {
+  operationId: string
+  workspaceId: string
+  action: 'stop' | 'resume'
+  state: string
+  phase: string
+  code: string | null
+  completedAtUtc: string | null
 }
 export interface RunInput {
   runtime: string
@@ -119,6 +139,24 @@ export const developmentWorkspaces = {
       `${scope(id)}/runner-preflight`,
       post(signal),
     ),
+  lifecyclePlan: (id: string, action: 'stop' | 'resume', signal: AbortSignal) =>
+    apiRequest<LifecyclePlan>(`${scope(id)}/lifecycle/plan?action=${action}`, { signal }),
+  lifecycleCurrent: (id: string, signal: AbortSignal) =>
+    apiRequest<LifecycleOperation | null>(`${scope(id)}/lifecycle`, { signal }),
+  lifecycleGet: (id: string, operationId: string, signal: AbortSignal) =>
+    apiRequest<LifecycleOperation>(`${scope(id)}/lifecycle/${encodeURIComponent(operationId)}`, {
+      signal,
+    }),
+  lifecycleApply: (id: string, plan: LifecyclePlan, key: string, signal: AbortSignal) =>
+    apiRequest<LifecycleOperation>(
+      `${scope(id)}/lifecycle`,
+      post(signal, { action: plan.action, planSha256: plan.planSha256 }, key),
+    ),
+  lifecycleAuthorize: (id: string, operationId: string, signal: AbortSignal) =>
+    apiRequest<LifecycleOperation>(
+      `${scope(id)}/lifecycle/${encodeURIComponent(operationId)}/authorize`,
+      post(signal),
+    ),
   listRuns: (id: string, signal: AbortSignal, after?: string) =>
     apiRequest<Page<WorkspaceRun>>(`${scope(id)}/runs` + pageQuery(after), { signal }),
   run: (id: string, runId: string, signal: AbortSignal) =>
@@ -169,6 +207,12 @@ export async function readRunReport(
 
 export function workspaceError(error: unknown) {
   if (error instanceof ApiError) {
+    if (error.problem.code === 'WORKSPACE_LIFECYCLE_NOT_IDLE')
+      return '空间还有运行、导入或报告处理。请先完成或取消任务，再核对停用计划。'
+    if (error.problem.code === 'WORKSPACE_LIFECYCLE_GIT_DRAINING')
+      return '刚取消的 Git 获取仍在确认资源收尾，请稍后重新核对停用计划。'
+    if (error.problem.code === 'WORKSPACE_LIFECYCLE_INACTIVE')
+      return '空间已停用或正在切换状态。恢复后才能提交新任务和源码导入。'
     if (error.status === 403) return '当前账号没有这项开发空间权限，或权限已撤销。'
     if (error.status === 404) return '记录不存在、已到期或当前账号不可见。'
     if (error.status === 409)

@@ -55,6 +55,7 @@ jobs:
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_rootfs.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_unpack.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_runner.py
+          sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_lifecycle.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_source.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_git.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_recycle*.py'

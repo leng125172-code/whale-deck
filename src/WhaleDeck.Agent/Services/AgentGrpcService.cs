@@ -13,7 +13,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
         {
             AgentVersion = typeof(AgentGrpcService).Assembly.GetName().Version?.ToString() ?? "0.1.0",
             ProtocolMajor = 1,
-            ProtocolMinor = Math.Max(DevelopmentSourceBinding.TextDiffProtocolMinor, DevelopmentRunnerBinding.RestoreProtocolMinor),
+            ProtocolMinor = DevelopmentLifecycleBinding.ProtocolMinor,
             OperatingSystem = System.Runtime.InteropServices.RuntimeInformation.OSDescription
         };
         response.Capabilities.AddRange([
@@ -24,6 +24,7 @@ public sealed class AgentGrpcService(DockerEngine docker) : AgentService.AgentSe
             DevelopmentRunnerBinding.ReportCapability,
             DevelopmentRunnerBinding.ArtifactTransferCapability,
             DevelopmentRunnerBinding.RestoreCapability,
+            DevelopmentLifecycleBinding.Capability,
             DevelopmentSourceBinding.Capability,
             DevelopmentSourceBinding.UpdateCapability,
             DevelopmentSourceBinding.PreviousCapability,

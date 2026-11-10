@@ -56,6 +56,20 @@ async function fixture(page: Page, developer = true) {
     loseQueueReply: true,
     queueKeys: [] as string[],
     allocationBody: null as unknown,
+    lifecycleState: 'Active',
+    lifecycleVersion: 1,
+    lifecycleKeys: [] as string[],
+    loseLifecycleReply: false,
+    lifecycleAuthorization: false,
+    lifecycleOperation: null as null | {
+      operationId: string
+      workspaceId: string
+      action: string
+      state: string
+      phase: string
+      code: string | null
+      completedAtUtc: string | null
+    },
   }
   const runtime = { key: 'node', version: '22', image: 'registry.example/node@sha256:' + digest }
   const budget = { cpuMillis: 500, memoryMiB: 512, diskMiB: 1024 }
@@ -66,6 +80,8 @@ async function fixture(page: Page, developer = true) {
     storageRootId: 'qa-root',
     state: state.allocated ? 'StorageAllocated' : 'Registered',
     version: state.allocated ? 3 : 1,
+    lifecycleState: state.lifecycleState,
+    lifecycleVersion: state.lifecycleVersion,
     budget,
     environment: { version: 1, runtimes: [runtime] },
     environmentSha256: digest,
@@ -122,6 +138,60 @@ async function fixture(page: Page, developer = true) {
         return fulfill({ workspace: workspace(), replayed: false }, 201)
       }
       if (suffix === `/${id}`) return fulfill(workspace())
+      if (suffix === `/${id}/lifecycle/plan`) {
+        const action = new URL(request.url()).searchParams.get('action')
+        return fulfill({
+          workspaceId: id,
+          action,
+          expectedVersion: state.lifecycleVersion,
+          planSha256: planDigest,
+          retainsData: true,
+          reservesBudget: true,
+          requiresIdle: true,
+        })
+      }
+      if (suffix === `/${id}/lifecycle` && request.method() === 'POST') {
+        const body = request.postDataJSON()
+        expect(body.planSha256).toBe(planDigest)
+        const key = request.headers()['idempotency-key'] ?? ''
+        expect(key).toMatch(/^[a-f0-9-]{36}$/)
+        if (!state.lifecycleKeys.includes(key)) {
+          state.lifecycleKeys.push(key)
+          state.lifecycleVersion++
+          state.lifecycleState = body.action === 'stop' ? 'Stopping' : 'Resuming'
+          state.lifecycleOperation = {
+            operationId: runId,
+            workspaceId: id,
+            action: body.action,
+            state: 'Running',
+            phase: 'HostConfirmation',
+            completedAtUtc: null,
+            code: state.lifecycleAuthorization
+              ? 'WORKSPACE_LIFECYCLE_AUTHORIZATION_REQUIRED'
+              : null,
+          }
+        }
+        if (state.loseLifecycleReply) {
+          state.loseLifecycleReply = false
+          return route.abort('failed')
+        }
+        return fulfill(state.lifecycleOperation, 202)
+      }
+      if (suffix === `/${id}/lifecycle/${runId}/authorize`) {
+        state.lifecycleAuthorization = false
+        if (state.lifecycleOperation) state.lifecycleOperation.code = null
+        return fulfill(state.lifecycleOperation, 202)
+      }
+      if (suffix === `/${id}/lifecycle` || suffix === `/${id}/lifecycle/${runId}`) {
+        const operation = state.lifecycleOperation
+        if (operation && !state.lifecycleAuthorization) {
+          state.lifecycleState = operation.action === 'stop' ? 'Stopped' : 'Active'
+          operation.state = 'Succeeded'
+          operation.phase = state.lifecycleState
+          operation.completedAtUtc = '2026-11-10T06:00:00Z'
+        }
+        return fulfill(operation)
+      }
       if (suffix === `/${id}/storage-plan`)
         return fulfill({
           workspaceId: id,
@@ -163,6 +233,62 @@ async function fixture(page: Page, developer = true) {
   )
   return state
 }
+
+test('idle stop and resume preserve the plan and original key after a lost reply at 320px', async ({
+  page,
+}) => {
+  const state = await fixture(page)
+  state.registered = state.allocated = true
+  state.loseLifecycleReply = true
+  await page.setViewportSize({ width: 320, height: 800 })
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto(`${workspacePath}/${id}/environment`)
+  const card = page.locator('.workspace-lifecycle')
+  await card.getByRole('button', { name: '核对停用计划', exact: true }).click()
+  const confirm = card.getByRole('button', { name: '确认停用空间', exact: true })
+  await expect(confirm).toBeDisabled()
+  await card.locator('label.el-checkbox').click()
+  await confirm.click()
+  await expect(
+    card.getByText('未能确认服务器结果。请检查连接后刷新，或用原提交重试。'),
+  ).toBeVisible()
+  await confirm.click()
+  await expect(card.getByText('已停用', { exact: true })).toBeVisible()
+  expect(state.lifecycleKeys).toHaveLength(1)
+  await page.getByRole('link', { name: '运行记录', exact: true }).click()
+  await expect(page.getByText('空间已停用或正在切换状态，恢复后可提交新任务。')).toBeVisible()
+  await expect(page.getByRole('button', { name: '提交运行', exact: true })).toHaveCount(0)
+  await page.getByRole('link', { name: '环境与存储', exact: true }).click()
+  await card.getByRole('button', { name: '核对恢复计划', exact: true }).click()
+  await card.locator('label.el-checkbox').click()
+  await card.getByRole('button', { name: '确认恢复空间', exact: true }).click()
+  await expect(card.getByText('可用', { exact: true })).toBeVisible()
+  expect(state.lifecycleVersion).toBe(3)
+  expect(state.lifecycleKeys).toHaveLength(2)
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true)
+})
+
+test('a pending stop survives reload and requires fresh authorization before confirmation', async ({
+  page,
+}) => {
+  const state = await fixture(page)
+  state.registered = state.allocated = true
+  state.lifecycleAuthorization = true
+  await page.goto(`${workspacePath}/${id}/environment`)
+  const card = page.locator('.workspace-lifecycle')
+  await card.getByRole('button', { name: '核对停用计划', exact: true }).click()
+  await card.locator('label.el-checkbox').click()
+  await card.getByRole('button', { name: '确认停用空间', exact: true }).click()
+  await page.reload()
+  await expect(card.getByText('停用确认中', { exact: true })).toBeVisible()
+  await card.getByRole('button', { name: '重新授权继续', exact: true }).click()
+  await expect(card.getByText('已停用', { exact: true })).toBeVisible()
+  expect(state.lifecycleKeys).toHaveLength(1)
+})
 
 test('registers a space, confirms storage, recovers a lost submission and downloads a report', async ({
   page,

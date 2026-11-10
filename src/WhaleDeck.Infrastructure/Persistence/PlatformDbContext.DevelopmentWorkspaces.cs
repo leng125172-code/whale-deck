@@ -40,6 +40,15 @@ public sealed partial class PlatformDbContext
             {
                 table.HasCheckConstraint("ck_development_workspace_shape",
                     "cpu_millis >= 100 AND memory_mi_b >= 128 AND disk_mi_b >= 256");
+                table.HasCheckConstraint("ck_development_workspace_lifecycle", """
+                    lifecycle_version >= 1 AND
+                    (CASE lifecycle_state
+                        WHEN 'Active' THEN lifecycle_version % 2 = 1
+                        WHEN 'Stopping' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'
+                        WHEN 'Stopped' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'
+                        WHEN 'Resuming' THEN lifecycle_version >= 3 AND lifecycle_version % 2 = 1 AND state = 'StorageAllocated'
+                        ELSE FALSE END) IS TRUE
+                    """);
                 table.HasCheckConstraint("ck_development_workspace_storage_state", """
                     (CASE state
                         WHEN 'Registered' THEN version = 1 AND storage_plan_sha256 IS NULL
@@ -60,6 +69,8 @@ public sealed partial class PlatformDbContext
             entity.Property(row => row.OwnerSubject).HasMaxLength(256);
             entity.Property(row => row.StorageRootId).HasMaxLength(48);
             entity.Property(row => row.State).HasMaxLength(24);
+            entity.Property(row => row.LifecycleState).HasMaxLength(16).HasDefaultValue("Active");
+            entity.Property(row => row.LifecycleVersion).HasDefaultValue(1L);
             entity.Property(row => row.EnvironmentSha256).HasMaxLength(64);
             entity.Property(row => row.RequestSha256).HasMaxLength(64);
             entity.Property(row => row.StoragePlanSha256).HasMaxLength(64);

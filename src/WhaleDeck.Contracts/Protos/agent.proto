@@ -404,6 +404,31 @@ service DevelopmentStorageService {
   rpc Attest(WorkspaceAllocationRequest) returns (WorkspaceAllocationReceipt);
 }
 
+// Idle workspace stop/resume with durable host fencing (protocol 1.76).
+service DevelopmentLifecycleService {
+  rpc Plan(WorkspaceLifecycleRequest) returns (WorkspaceLifecycleReceipt);
+  rpc Apply(WorkspaceLifecycleRequest) returns (WorkspaceLifecycleReceipt);
+}
+
+message WorkspaceLifecycleRequest {
+  WorkspaceAllocationRequest storage = 1;
+  string action = 2;
+  uint64 expected_epoch = 3;
+  string operation_id = 4;
+  string plan_sha256 = 5;
+  string storage_proof_sha256 = 6;
+}
+
+message WorkspaceLifecycleReceipt {
+  string workspace_id = 1;
+  string action = 2;
+  uint64 epoch = 3;
+  string state = 4;
+  string plan_sha256 = 5;
+  string storage_proof_sha256 = 6;
+  string request_sha256 = 7;
+}
+
 message WorkspaceAllocationRequest {
   string workspace_id = 1;
   string storage_root_id = 2;

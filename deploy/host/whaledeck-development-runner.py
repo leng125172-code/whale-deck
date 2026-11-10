@@ -450,6 +450,7 @@ def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None, c
     namespace = isolation.RunnerMountNamespace()
     files = driver.files
     with driver.attested_payload(request['storage']) as (payload, proof), contextlib.ExitStack() as stack:
+        driver.require_active(request['storage'], proof)
         try:
             fcntl.flock(payload, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:

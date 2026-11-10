@@ -40,7 +40,7 @@ type Selection =
   | { kind: 'archive'; file: File; format: SourceArchive['format'] }
   | { kind: 'files' | 'directory'; files: File[] }
 
-const props = defineProps<{ workspaceId: string }>()
+const props = defineProps<{ workspaceId: string; inactive?: boolean }>()
 const lifecycle = new AbortController()
 const current = shallowRef<SourceImport | null>(null)
 const published = shallowRef<SourceImport | null>(null)
@@ -466,6 +466,13 @@ function cancel() {
   <el-card class="source-card" shadow="never">
     <template #header><h2>导入源码</h2></template>
     <div class="source-content">
+      <el-alert
+        v-if="props.inactive"
+        title="空间已停用或正在切换状态，源码与历史保留；恢复后可导入或发布。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
       <p>可从授权的 Git 仓库获取源码，或选择文件、目录与归档。暂存后核对计划再发布。</p>
       <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
       <p v-if="!synchronized && !busy && !denied" role="status">
@@ -599,7 +606,7 @@ function cancel() {
             native-type="submit"
             type="primary"
             :loading="busy === 'git'"
-            :disabled="!!busy || !synchronized || !validGitRef(gitRef)"
+            :disabled="props.inactive || !!busy || !synchronized || !validGitRef(gitRef)"
           >
             {{ published ? '获取 Git 更新' : '获取 Git 源码' }}
           </el-button>
@@ -737,7 +744,7 @@ function cancel() {
         <el-button
           v-if="canUpload"
           type="primary"
-          :disabled="!!busy || !selected"
+          :disabled="props.inactive || !!busy || !selected"
           :loading="busy === 'upload'"
           @click="upload"
         >
@@ -753,7 +760,7 @@ function cancel() {
         <el-button
           v-if="current?.state === 'Staged'"
           type="primary"
-          :disabled="!!busy || !canConfirm || !confirmed"
+          :disabled="props.inactive || !!busy || !canConfirm || !confirmed"
           :loading="busy === 'publish'"
           @click="publish"
           >确认发布源码</el-button

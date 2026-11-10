@@ -56,6 +56,7 @@ public sealed class WorkspaceStorageAllocation(DevelopmentWorkspaces workspaces,
     {
         await workspaces.RequireCreatorAsync(actor, token);
         var workspace = await registry.FindAsync(id, actor.Subject, token) ?? throw new KeyNotFoundException("WORKSPACE_NOT_FOUND");
+        if (workspace.LifecycleState != "Active") throw new InvalidOperationException("WORKSPACE_LIFECYCLE_INACTIVE");
         if (!policy.StorageRootIds.Contains(workspace.StorageRootId, StringComparer.Ordinal) ||
             workspace.Budget.DiskMiB is < 256 or > WorkspaceRegistrationPolicy.MaximumWorkspaceDiskMiB)
             throw new InvalidOperationException("WORKSPACE_STORAGE_PLAN_UNAVAILABLE");

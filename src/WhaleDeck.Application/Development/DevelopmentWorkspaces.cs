@@ -11,7 +11,11 @@ public sealed record WorkspaceRuntimeSpec(string Key, string Version, string Ima
 public sealed record WorkspaceEnvironment(int Version, WorkspaceRuntimeSpec[] Runtimes);
 public sealed record WorkspaceRegistrationCommand(string Slug, string StorageRootId, string[] Runtimes, WorkspaceBudget Budget);
 public sealed record WorkspaceDefinition(Guid Id, string Slug, string OwnerSubject, string StorageRootId, string State,
-    long Version, WorkspaceBudget Budget, WorkspaceEnvironment Environment, string EnvironmentSha256, DateTimeOffset CreatedAtUtc);
+    long Version, WorkspaceBudget Budget, WorkspaceEnvironment Environment, string EnvironmentSha256, DateTimeOffset CreatedAtUtc)
+{
+    public string LifecycleState { get; init; } = "Active";
+    public long LifecycleVersion { get; init; } = 1;
+}
 public sealed record WorkspaceRegistrationReceipt(WorkspaceDefinition Workspace, bool Replayed);
 public sealed record WorkspaceCatalog(WorkspaceRuntimeSpec[] Runtimes, string[] StorageRootIds, WorkspaceBudget Capacity);
 public sealed record WorkspacePage(WorkspaceDefinition[] Items, string? NextAfter);

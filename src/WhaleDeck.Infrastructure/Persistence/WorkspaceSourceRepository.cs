@@ -37,6 +37,7 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
             if (!matches) throw new InvalidOperationException("WORKSPACE_SOURCE_IMPORT_CONFLICT");
             return View(existing);
         }
+        await WorkspaceMutationFence.RequireActiveAsync(db, workspace.Id, actor.Subject, token, workspace);
         if (await db.WorkspaceSourceIntents.AnyAsync(row => row.WorkspaceId == workspace.Id && row.FinishedAtUtc == null, token))
             throw new InvalidOperationException("WORKSPACE_SOURCE_ALREADY_PENDING");
         if (git?.PreviousImportId is { } previous)
@@ -120,6 +121,7 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
     public Task<WorkspaceSourceView> AppendAsync(Guid workspaceId, Guid importId, TerminalActor actor, int offset,
         byte[] body, CancellationToken token) => TransactionAsync(async () =>
     {
+        await WorkspaceMutationFence.RequireActiveAsync(db, workspaceId, actor.Subject, token);
         var row = await LoadAsync(importId, token);
         RequireScope(row, workspaceId, actor.Subject);
         RequireSession(row, actor);
@@ -217,6 +219,7 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
     public Task<WorkspaceSourceView> ConfirmAsync(Guid workspaceId, Guid importId, TerminalActor actor, WorkspaceSourceConfirmation input,
         CancellationToken token) => TransactionAsync(async () =>
     {
+        await WorkspaceMutationFence.RequireActiveAsync(db, workspaceId, actor.Subject, token);
         var row = await LoadAsync(importId, token);
         RequireScope(row, workspaceId, actor.Subject);
         RequireSession(row, actor);
