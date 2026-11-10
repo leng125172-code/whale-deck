@@ -13,7 +13,7 @@ jobs:
   installer:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Prepare unprivileged owner for root Git observer tests
         run: |
           # The frozen aging fixture intentionally reproduces a root observer
@@ -334,7 +334,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
@@ -349,7 +349,7 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
@@ -390,7 +390,7 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
@@ -437,7 +437,7 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
@@ -469,7 +469,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
       - uses: actions/setup-node@v5
@@ -522,7 +522,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
       - uses: actions/setup-node@v5
@@ -549,7 +549,7 @@ jobs:
     needs: [frontend_checks, frontend_browser]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
       - name: Require preflight and every browser shard
