@@ -14,12 +14,15 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
     public async Task<WorkspaceSourceObservation> StageSourceAsync(WorkspaceSourceClaim claim,
         IAsyncEnumerable<ReadOnlyMemory<byte>> chunks, CancellationToken token)
     {
-        const string method = DevelopmentSourceBinding.Stage;
+        var update = claim.Import.PreviousImportId is not null;
+        var method = update ? DevelopmentSourceBinding.StageUpdate : DevelopmentSourceBinding.Stage;
         var request = SourceRequest(claim, method);
         try
         {
-            var client = await SourceClientAsync(token);
-            using var call = client.Stage(SourceHeaders(method, request), DateTime.UtcNow.AddSeconds(112), token);
+            var client = await SourceClientAsync(update, token);
+            var headers = SourceHeaders(method, request);
+            var deadline = DateTime.UtcNow.AddSeconds(112);
+            using var call = update ? client.StageUpdate(headers, deadline, token) : client.Stage(headers, deadline, token);
             await call.RequestStream.WriteAsync(new() { Header = request }, token);
             await foreach (var chunk in chunks.WithCancellation(token))
             {
@@ -36,22 +39,26 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
     }
 
     public Task<WorkspaceSourceObservation> InspectSourceAsync(WorkspaceSourceClaim claim, CancellationToken token) =>
-        ObserveSourceAsync(claim, null, DevelopmentSourceBinding.Inspect, token);
+        ObserveSourceAsync(claim, null, claim.Import.PreviousImportId is null ? DevelopmentSourceBinding.Inspect : DevelopmentSourceBinding.InspectUpdate, token);
 
     public Task<WorkspaceSourceObservation> PublishSourceAsync(WorkspaceSourceClaim claim, WorkspaceSourcePlan plan, CancellationToken token) =>
-        ObserveSourceAsync(claim, plan, DevelopmentSourceBinding.Publish, token);
+        ObserveSourceAsync(claim, plan, claim.Import.PreviousImportId is null ? DevelopmentSourceBinding.Publish : DevelopmentSourceBinding.PublishUpdate, token);
 
     public Task<WorkspaceSourceObservation> DiscardSourceAsync(WorkspaceSourceClaim claim, WorkspaceSourcePlan plan, CancellationToken token) =>
-        ObserveSourceAsync(claim, plan, DevelopmentSourceBinding.Discard, token);
+        ObserveSourceAsync(claim, plan, claim.Import.PreviousImportId is null ? DevelopmentSourceBinding.Discard : DevelopmentSourceBinding.DiscardUpdate, token);
 
     public async Task AbortSourceAsync(WorkspaceSourceClaim claim, CancellationToken token)
     {
-        const string method = DevelopmentSourceBinding.Abort;
+        var update = claim.Import.PreviousImportId is not null;
+        var method = update ? DevelopmentSourceBinding.AbortUpdate : DevelopmentSourceBinding.Abort;
         var request = SourceRequest(claim, method);
         try
         {
-            var client = await SourceClientAsync(token);
-            await client.AbortAsync(request, SourceHeaders(method, request), DateTime.UtcNow.AddSeconds(22), token);
+            var client = await SourceClientAsync(update, token);
+            var headers = SourceHeaders(method, request);
+            var deadline = DateTime.UtcNow.AddSeconds(22);
+            using var call = update ? client.AbortUpdateAsync(request, headers, deadline, token) : client.AbortAsync(request, headers, deadline, token);
+            await call.ResponseAsync;
         }
         catch (RpcException error) { token.ThrowIfCancellationRequested(); throw SourceFailure(error); }
     }
@@ -62,14 +69,17 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
         var request = SourceRequest(claim, method, plan);
         try
         {
-            var client = await SourceClientAsync(token);
+            var client = await SourceClientAsync(DevelopmentSourceBinding.IsUpdate(method), token);
             var headers = SourceHeaders(method, request);
-            var deadline = DateTime.UtcNow.AddSeconds(22);
+            var deadline = DateTime.UtcNow.AddSeconds(method == DevelopmentSourceBinding.PublishUpdate ? 112 : 22);
             using var call = method switch
             {
                 DevelopmentSourceBinding.Inspect => client.InspectAsync(request, headers, deadline, token),
                 DevelopmentSourceBinding.Publish => client.PublishAsync(request, headers, deadline, token),
-                _ => client.DiscardAsync(request, headers, deadline, token)
+                DevelopmentSourceBinding.Discard => client.DiscardAsync(request, headers, deadline, token),
+                DevelopmentSourceBinding.InspectUpdate => client.InspectUpdateAsync(request, headers, deadline, token),
+                DevelopmentSourceBinding.PublishUpdate => client.PublishUpdateAsync(request, headers, deadline, token),
+                _ => client.DiscardUpdateAsync(request, headers, deadline, token)
             };
             var result = SourceObservation(request, await call.ResponseAsync, method);
             if (plan is not null && result.Plan != plan) throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
@@ -78,18 +88,19 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
         catch (RpcException error) { token.ThrowIfCancellationRequested(); throw SourceFailure(error); }
     }
 
-    private async Task<DevelopmentSourceService.DevelopmentSourceServiceClient> SourceClientAsync(CancellationToken token)
+    private async Task<DevelopmentSourceService.DevelopmentSourceServiceClient> SourceClientAsync(bool update, CancellationToken token)
     {
         var caps = await _agent.GetCapabilitiesAsync(new Google.Protobuf.WellKnownTypes.Empty(),
             deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
-        if (!DevelopmentSourceBinding.IsSupported(caps) || caps.ProtocolMinor < DevelopmentSourceBinding.AbortProtocolMinor)
+        if (!DevelopmentSourceBinding.IsSupported(caps) || caps.ProtocolMinor < DevelopmentSourceBinding.AbortProtocolMinor ||
+            update && !DevelopmentSourceBinding.SupportsUpdate(caps))
             throw new WorkspaceSourceException(WorkspaceSourceFailure.Unsupported);
         return new(_channel);
     }
 
     private static WorkspaceSourceRequest SourceRequest(WorkspaceSourceClaim claim, string method, WorkspaceSourcePlan? plan = null)
     {
-        var (import, workspace, actor, _, _) = claim;
+        var (import, workspace, actor, _, _, _) = claim;
         if (import.WorkspaceId != workspace.Id || workspace.OwnerSubject != actor.Subject ||
             workspace.State != WorkspaceStorageAllocation.Allocated || import.Archive.ArchiveBytes <= 0)
             throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
@@ -98,7 +109,14 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
             Storage = SourceStorage(claim),
             ImportId = import.ImportId.ToString("N"), ArchiveFormat = import.Archive.Format,
             ArchiveBytes = (uint)import.Archive.ArchiveBytes, ArchiveSha256 = import.Archive.ArchiveSha256,
-            PlanSha256 = plan?.PlanSha256 ?? ""
+            PlanSha256 = plan?.PlanSha256 ?? "", PreviousImportId = import.PreviousImportId?.ToString("N") ?? "",
+            ConflictResolution = method != DevelopmentSourceBinding.PublishUpdate ? WorkspaceSourceConflictResolution.Unspecified :
+                import.ConflictResolution switch
+                {
+                    WorkspaceSources.CleanOnly => WorkspaceSourceConflictResolution.CleanOnly,
+                    WorkspaceSources.RetainAndReplace => WorkspaceSourceConflictResolution.RetainAndReplace,
+                    _ => WorkspaceSourceConflictResolution.Unspecified
+                }
         };
         if (!DevelopmentSourceBinding.IsValid(request, method))
             throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
@@ -109,7 +127,7 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
     {
         var hash = DevelopmentSourceBinding.Hash(request);
         var headers = SourceHeaders(method, hash, DevelopmentSourceBinding.Payload);
-        if (method == DevelopmentSourceBinding.Stage) headers.Add(DevelopmentSourceBinding.Header, hash);
+        if (DevelopmentSourceBinding.IsStage(method)) headers.Add(DevelopmentSourceBinding.Header, hash);
         return headers;
     }
 
@@ -132,7 +150,9 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
 
     private static WorkspaceSourceObservation SourceObservation(WorkspaceSourceRequest request, WorkspaceSourceReceipt receipt, string method) =>
         DevelopmentSourceBinding.Matches(request, receipt, method)
-            ? new(receipt.State, new(receipt.PlanSha256, receipt.ContentSha256, (int)receipt.FileCount, (long)receipt.TotalBytes))
+            ? new(receipt.State, new(receipt.PlanSha256, receipt.ContentSha256, (int)receipt.FileCount, (long)receipt.TotalBytes,
+                receipt.Update is { } update ? new(update.PreviousContentSha256, update.WorkContentSha256, update.Dirty,
+                    (int)update.AddedEntries, (int)update.RemovedEntries, (int)update.ChangedEntries) : null))
             : throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
 
     private static WorkspaceSourceException SourceFailure(RpcException error) => new(error.StatusCode switch
@@ -144,5 +164,5 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
         StatusCode.DataLoss => WorkspaceSourceFailure.Integrity,
         StatusCode.Unimplemented or StatusCode.PermissionDenied => WorkspaceSourceFailure.Unsupported,
         _ => WorkspaceSourceFailure.Retryable
-    });
+    }, error.Status.Detail);
 }

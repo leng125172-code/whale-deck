@@ -9178,6 +9178,11 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("code");
 
+                    b.Property<string>("ConflictResolution")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("conflict_resolution");
+
                     b.Property<string>("ContentSha256")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
@@ -9259,6 +9264,10 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("plan_sha256");
 
+                    b.Property<Guid?>("PreviousImportId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("previous_import_id");
+
                     b.Property<int>("ReceivedBytes")
                         .HasColumnType("integer")
                         .HasColumnName("received_bytes");
@@ -9273,6 +9282,10 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("total_bytes");
 
+                    b.Property<string>("UpdateJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("update_json");
+
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid")
                         .HasColumnName("workspace_id");
@@ -9284,6 +9297,11 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("PreviousImportId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_workspace_source_published_successor")
+                        .HasFilter("state = 'Published' AND previous_import_id IS NOT NULL");
+
                     b.HasIndex("WorkspaceId")
                         .IsUnique()
                         .HasDatabaseName("uq_workspace_source_pending")
@@ -9291,6 +9309,10 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AvailableAtUtc", "Id")
                         .HasFilter("finished_at_utc IS NULL");
+
+                    b.HasIndex(new[] { "WorkspaceId" }, "uq_workspace_source_first_publication")
+                        .IsUnique()
+                        .HasFilter("state = 'Published' AND previous_import_id IS NULL");
 
                     b.ToTable("development_workspace_source_imports", null, t =>
                         {
@@ -9301,6 +9323,8 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_workspace_source_plan", "(plan_sha256 IS NULL AND content_sha256 IS NULL AND file_count IS NULL AND total_bytes IS NULL\n    AND state NOT IN ('Staged','Publishing','Published'))\nOR (plan_sha256 IS NOT NULL AND plan_sha256 ~ '^[a-f0-9]{64}$'\n    AND content_sha256 IS NOT NULL AND content_sha256 ~ '^[a-f0-9]{64}$'\n    AND file_count IS NOT NULL AND file_count BETWEEN 1 AND 9999\n    AND total_bytes IS NOT NULL AND total_bytes BETWEEN 0 AND 1073741824)");
 
                             t.HasCheckConstraint("ck_workspace_source_state", "state IN ('Uploading','Acquiring','Ready','Staged','Publishing','Canceling','Published','Canceled','Failed')\nAND (state IN ('Published','Canceled','Failed')) = (finished_at_utc IS NOT NULL)\nAND (lease IS NULL) = (lease_until_utc IS NULL)\nAND (finished_at_utc IS NULL OR lease IS NULL)\nAND (state NOT IN ('Ready','Staged','Publishing','Published') OR received_bytes = archive_bytes)");
+
+                            t.HasCheckConstraint("ck_workspace_source_update", "(previous_import_id IS NULL AND update_json IS NULL AND conflict_resolution IS NULL)\nOR (previous_import_id IS NOT NULL AND previous_import_id <> id AND git_repository_id IS NOT NULL\n    AND ((plan_sha256 IS NULL AND update_json IS NULL)\n        OR (plan_sha256 IS NOT NULL AND update_json IS NOT NULL AND jsonb_typeof(update_json) = 'object'))\n    AND ((conflict_resolution IS NULL AND state NOT IN ('Publishing','Published'))\n        OR (conflict_resolution IS NOT NULL AND conflict_resolution IN ('clean-only','retain-and-replace')\n            AND plan_sha256 IS NOT NULL AND state IN ('Publishing','Published','Canceling','Canceled','Failed'))))");
                         });
                 });
 
@@ -9895,6 +9919,11 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceSourceIntent", b =>
                 {
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceSourceIntent", null)
+                        .WithMany()
+                        .HasForeignKey("PreviousImportId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("WhaleDeck.Domain.Entities.DevelopmentWorkspaceRecord", null)
                         .WithMany()
                         .HasForeignKey("WorkspaceId")

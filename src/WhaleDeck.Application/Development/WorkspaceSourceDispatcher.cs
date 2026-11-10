@@ -7,7 +7,8 @@ public sealed class WorkspaceSourceDispatcher(IWorkspaceSourceStore store, Works
         var claim = await store.ClaimAsync(token);
         if (claim is null) return;
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
-        lifetime.CancelAfter(TimeSpan.FromSeconds(118));
+        lifetime.CancelAfter(TimeSpan.FromSeconds(claim.Import.PreviousImportId is not null &&
+            claim.Import.State == WorkspaceSources.Publishing ? 145 : 118));
         var work = lifetime.Token;
         try
         {
@@ -47,8 +48,10 @@ public sealed class WorkspaceSourceDispatcher(IWorkspaceSourceStore store, Works
         catch (WorkspaceSourceException error) when (claim.Import.State != WorkspaceSources.Canceling &&
             error.Failure is WorkspaceSourceFailure.Rejected or WorkspaceSourceFailure.Conflict)
         {
-            await store.AdvanceAsync(claim, WorkspaceSources.Canceling, null,
-                error.Failure == WorkspaceSourceFailure.Conflict ? "WORKSPACE_SOURCE_HOST_CONFLICT" : "WORKSPACE_SOURCE_ARCHIVE_REJECTED", token);
+            var code = error.Failure != WorkspaceSourceFailure.Conflict ? "WORKSPACE_SOURCE_ARCHIVE_REJECTED" :
+                error.HostCode is "WORKSPACE_SOURCE_WORK_BASE_CONFLICT" or "WORKSPACE_SOURCE_WORK_CHANGED" or "WORKSPACE_SOURCE_WORK_DIRTY"
+                    ? error.HostCode : "WORKSPACE_SOURCE_HOST_CONFLICT";
+            await store.AdvanceAsync(claim, WorkspaceSources.Canceling, null, code, token);
         }
         catch (WorkspaceSourceException error)
         {
@@ -133,6 +136,7 @@ public sealed class WorkspaceSourceDispatcher(IWorkspaceSourceStore store, Works
             observed = await gateway.StageSourceAsync(claim, store.ReadChunksAsync(claim, token), token);
         }
         if (observed.State != WorkspaceSources.Staged) throw Integrity();
+        if (observed.Plan.Update?.PreviousContentSha256 != claim.BaseContentSha256) throw Integrity();
         if (claim.Import.Git?.Snapshot is { } git &&
             (observed.Plan.FileCount != git.FileCount || observed.Plan.TotalBytes != git.TotalBytes)) throw Integrity();
         await store.AdvanceAsync(claim, WorkspaceSources.Staged, observed.Plan, null, token);
@@ -177,7 +181,8 @@ public sealed class WorkspaceSourceDispatcher(IWorkspaceSourceStore store, Works
                 observed = await gateway.DiscardSourceAsync(claim, observed.Plan, token);
             if (observed.State != "Discarded") throw Integrity();
         }
-        var failed = claim.Import.Code is "WORKSPACE_SOURCE_HOST_CONFLICT" or "WORKSPACE_SOURCE_ARCHIVE_REJECTED";
+        var failed = claim.Import.Code is "WORKSPACE_SOURCE_HOST_CONFLICT" or "WORKSPACE_SOURCE_ARCHIVE_REJECTED" or
+            "WORKSPACE_SOURCE_WORK_BASE_CONFLICT" or "WORKSPACE_SOURCE_WORK_CHANGED" or "WORKSPACE_SOURCE_WORK_DIRTY";
         await store.AdvanceAsync(claim, failed ? WorkspaceSources.Failed : WorkspaceSources.Canceled, expected, claim.Import.Code, token);
     }
 

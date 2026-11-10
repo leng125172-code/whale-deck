@@ -54,6 +54,15 @@ public sealed partial class PlatformDbContext
                         AND file_count IS NOT NULL AND file_count BETWEEN 1 AND 9999
                         AND total_bytes IS NOT NULL AND total_bytes BETWEEN 0 AND 1073741824)
                     """);
+                table.HasCheckConstraint("ck_workspace_source_update", """
+                    (previous_import_id IS NULL AND update_json IS NULL AND conflict_resolution IS NULL)
+                    OR (previous_import_id IS NOT NULL AND previous_import_id <> id AND git_repository_id IS NOT NULL
+                        AND ((plan_sha256 IS NULL AND update_json IS NULL)
+                            OR (plan_sha256 IS NOT NULL AND update_json IS NOT NULL AND jsonb_typeof(update_json) = 'object'))
+                        AND ((conflict_resolution IS NULL AND state NOT IN ('Publishing','Published'))
+                            OR (conflict_resolution IS NOT NULL AND conflict_resolution IN ('clean-only','retain-and-replace')
+                                AND plan_sha256 IS NOT NULL AND state IN ('Publishing','Published','Canceling','Canceled','Failed'))))
+                    """);
             });
             entity.HasKey(row => row.Id);
             entity.Property(row => row.Id).ValueGeneratedNever();
@@ -71,7 +80,14 @@ public sealed partial class PlatformDbContext
             entity.Property(row => row.PlanSha256).HasMaxLength(64);
             entity.Property(row => row.ContentSha256).HasMaxLength(64);
             entity.Property(row => row.Code).HasMaxLength(64);
+            entity.Property(row => row.UpdateJson).HasColumnType("jsonb");
+            entity.Property(row => row.ConflictResolution).HasMaxLength(24);
             entity.HasOne<DevelopmentWorkspaceRecord>().WithMany().HasForeignKey(row => row.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WorkspaceSourceIntent>().WithMany().HasForeignKey(row => row.PreviousImportId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(row => row.PreviousImportId).IsUnique().HasFilter("state = 'Published' AND previous_import_id IS NOT NULL")
+                .HasDatabaseName("uq_workspace_source_published_successor");
+            entity.HasIndex(row => row.WorkspaceId, "uq_workspace_source_first_publication").IsUnique()
+                .HasFilter("state = 'Published' AND previous_import_id IS NULL");
             entity.HasIndex(row => row.WorkspaceId).IsUnique().HasFilter("finished_at_utc IS NULL")
                 .HasDatabaseName("uq_workspace_source_pending");
             entity.HasIndex(row => new { row.AvailableAtUtc, row.Id }).HasFilter("finished_at_utc IS NULL");

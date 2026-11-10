@@ -7,25 +7,34 @@ namespace WhaleDeck.Application.Development;
 
 public sealed record WorkspaceSourceInput(string Format, int ArchiveBytes, string ArchiveSha256);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record WorkspaceGitInput(string RepositoryId, string Ref);
+public sealed record WorkspaceGitInput(string RepositoryId, string Ref,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? PreviousImportId = null);
 public sealed record WorkspaceGitRepositoryGrant(string[] Subjects, string? CredentialRef = null);
 public sealed record WorkspaceGitProof(string ResolvedObject, string Commit, WorkspaceSourceInput Archive, int FileCount, long TotalBytes);
 public sealed record WorkspaceGitSource(string RepositoryId, string Ref, WorkspaceGitProof? Snapshot);
-public sealed record WorkspaceSourceConfirmation(string PlanSha256);
-public sealed record WorkspaceSourcePlan(string PlanSha256, string ContentSha256, int FileCount, long TotalBytes);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record WorkspaceSourceConfirmation(string PlanSha256,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ConflictResolution = null);
+public sealed record WorkspaceSourceUpdatePlan(string PreviousContentSha256, string WorkContentSha256, bool Dirty,
+    int AddedEntries, int RemovedEntries, int ChangedEntries);
+public sealed record WorkspaceSourcePlan(string PlanSha256, string ContentSha256, int FileCount, long TotalBytes,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WorkspaceSourceUpdatePlan? Update = null);
 public sealed record WorkspaceSourceView(Guid WorkspaceId, Guid ImportId, string State, WorkspaceSourceInput Archive,
     int ReceivedBytes, WorkspaceSourcePlan? Plan, string? Code, DateTimeOffset ExpiresAtUtc,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WorkspaceGitSource? Git = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? FinishedAtUtc = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? FinishedAtUtc = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? PreviousImportId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ConflictResolution = null);
 public sealed record WorkspaceSourceClaim(WorkspaceSourceView Import, WorkspaceDefinition Workspace, TerminalActor Actor, Guid Lease,
-    string? GitCredentialRef = null);
+    string? GitCredentialRef = null, string? BaseContentSha256 = null);
 public sealed record WorkspaceSourceObservation(string State, WorkspaceSourcePlan Plan);
 public sealed record WorkspaceSourceHistoryPage(WorkspaceSourceView[] Items, Guid? NextBefore);
 
 public enum WorkspaceSourceFailure { Missing, Rejected, Conflict, Retryable, Integrity, Unsupported }
-public sealed class WorkspaceSourceException(WorkspaceSourceFailure failure) : Exception("WORKSPACE_SOURCE_AGENT_" + failure)
+public sealed class WorkspaceSourceException(WorkspaceSourceFailure failure, string? hostCode = null) : Exception("WORKSPACE_SOURCE_AGENT_" + failure)
 {
     public WorkspaceSourceFailure Failure { get; } = failure;
+    public string? HostCode { get; } = hostCode;
 }
 
 public interface IWorkspaceSourceGateway
@@ -46,9 +55,10 @@ public interface IWorkspaceSourceStore
         WorkspaceGitInput input, string? credentialRef, CancellationToken token);
     Task<WorkspaceSourceView?> FindAsync(Guid workspaceId, Guid importId, string subject, CancellationToken token);
     Task<WorkspaceSourceView?> CurrentAsync(Guid workspaceId, string subject, CancellationToken token);
+    Task<WorkspaceSourceView?> PublishedAsync(Guid workspaceId, string subject, CancellationToken token);
     Task<WorkspaceSourceHistoryPage> HistoryAsync(Guid workspaceId, string subject, Guid? before, int take, CancellationToken token);
     Task<WorkspaceSourceView> AppendAsync(Guid workspaceId, Guid importId, TerminalActor actor, int offset, byte[] body, CancellationToken token);
-    Task<WorkspaceSourceView> ConfirmAsync(Guid workspaceId, Guid importId, TerminalActor actor, string planSha256, CancellationToken token);
+    Task<WorkspaceSourceView> ConfirmAsync(Guid workspaceId, Guid importId, TerminalActor actor, WorkspaceSourceConfirmation input, CancellationToken token);
     Task<WorkspaceSourceView> CancelAsync(Guid workspaceId, Guid importId, TerminalActor actor, CancellationToken token);
     Task<WorkspaceSourceClaim?> ClaimAsync(CancellationToken token);
     Task<bool> IsCurrentAsync(WorkspaceSourceClaim claim, CancellationToken token);
@@ -76,6 +86,8 @@ public sealed partial class WorkspaceSources(WorkspaceRuns access, IWorkspaceSou
     public const string Published = "Published";
     public const string Canceled = "Canceled";
     public const string Failed = "Failed";
+    public const string CleanOnly = "clean-only";
+    public const string RetainAndReplace = "retain-and-replace";
 
     public async Task<WorkspaceSourceView> BeginAsync(TerminalActor actor, Guid workspaceId, Guid importId, WorkspaceSourceInput input,
         CancellationToken token)
@@ -90,7 +102,8 @@ public sealed partial class WorkspaceSources(WorkspaceRuns access, IWorkspaceSou
         WorkspaceGitInput input, CancellationToken token)
     {
         var workspace = await RequireAsync(actor, workspaceId, importId, token);
-        if (input.RepositoryId is not { Length: > 0 and <= 48 } || !RepositoryId().IsMatch(input.RepositoryId) ||
+        if (input.PreviousImportId == Guid.Empty || input.PreviousImportId == importId ||
+            input.RepositoryId is not { Length: > 0 and <= 48 } || !RepositoryId().IsMatch(input.RepositoryId) ||
             input.Ref is not { Length: > 0 and <= 255 } ||
             input.Ref != "HEAD" && !GitObject(input.Ref) && !GitRef().IsMatch(input.Ref))
             throw new ArgumentException("WORKSPACE_SOURCE_GIT_INPUT_INVALID");
@@ -122,6 +135,12 @@ public sealed partial class WorkspaceSources(WorkspaceRuns access, IWorkspaceSou
         return await store.CurrentAsync(workspaceId, actor.Subject, token);
     }
 
+    public async Task<WorkspaceSourceView?> PublishedAsync(TerminalActor actor, Guid workspaceId, CancellationToken token)
+    {
+        _ = await RequireWorkspaceAsync(actor, workspaceId, token);
+        return await store.PublishedAsync(workspaceId, actor.Subject, token);
+    }
+
     public async Task<WorkspaceSourceHistoryPage> HistoryAsync(TerminalActor actor, Guid workspaceId, Guid? before, int take,
         CancellationToken token)
     {
@@ -145,11 +164,12 @@ public sealed partial class WorkspaceSources(WorkspaceRuns access, IWorkspaceSou
         finally { ChunkReaders.Release(); }
     }
 
-    public async Task<WorkspaceSourceView> ConfirmAsync(TerminalActor actor, Guid workspaceId, Guid importId, string digest, CancellationToken token)
+    public async Task<WorkspaceSourceView> ConfirmAsync(TerminalActor actor, Guid workspaceId, Guid importId, WorkspaceSourceConfirmation input, CancellationToken token)
     {
         _ = await RequireAsync(actor, workspaceId, importId, token);
-        if (!Digest(digest)) throw new ArgumentException("WORKSPACE_SOURCE_PLAN_INVALID");
-        return await store.ConfirmAsync(workspaceId, importId, actor, digest, token);
+        if (!Digest(input.PlanSha256) || input.ConflictResolution is not (null or CleanOnly or RetainAndReplace))
+            throw new ArgumentException("WORKSPACE_SOURCE_PLAN_INVALID");
+        return await store.ConfirmAsync(workspaceId, importId, actor, input, token);
     }
 
     public async Task<WorkspaceSourceView> CancelAsync(TerminalActor actor, Guid workspaceId, Guid importId, CancellationToken token)

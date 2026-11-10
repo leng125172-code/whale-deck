@@ -12,6 +12,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -64,13 +66,16 @@ public sealed partial class ContainerUploadHttpTests
             using var gateway = new AgentGateway(settings);
             var host = new WorkspaceSourceAgentFixture { GitGateway = gateway };
             var upstream = new WorkspaceGitWireFixture(key);
+            var updateHost = new WorkspaceUpdateWireFixture(key, upstream.Bytes);
             var builder = WebApplication.CreateSlimBuilder();
             builder.Logging.ClearProviders();
             builder.WebHost.ConfigureKestrel(kestrel => kestrel.ListenUnixSocket(socket, listen => listen.Protocols = HttpProtocols.Http2));
             builder.Services.AddGrpc();
             builder.Services.AddSingleton(upstream);
+            builder.Services.AddSingleton(updateHost);
             await using var wire = builder.Build();
             wire.MapGrpcService<WorkspaceGitWireFixture>();
+            wire.MapGrpcService<WorkspaceUpdateWireFixture>();
             wire.MapGrpcService<WorkspaceGitCapabilitiesFixture>();
             await wire.StartAsync();
 
@@ -203,9 +208,75 @@ public sealed partial class ContainerUploadHttpTests
                 Assert.Equal(HttpStatusCode.NotFound, wrongCursor.StatusCode);
             Console.WriteLine("INBOX_PHASE=workspace-git-real-http-uds-grpc-postgres-pinned-lease-recovery-encrypted-and-confirmed");
 
+            var gitDowngrade = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+                db.GetService<IMigrator>().MigrateAsync("20261109150125_DevelopmentWorkspaceSourceImports"));
+            Assert.Equal("workspace_source_git_history_present", gitDowngrade.MessageText);
+            await db.Database.MigrateAsync();
+            Assert.Equal(id, (await PublishedHead()).ImportId);
+            var wrongBase = Guid.NewGuid();
+            await Expect(HttpMethod.Put, Url(wrongBase) + "/git",
+                JsonContent.Create(source with { PreviousImportId = canceled }), HttpStatusCode.Conflict, owner, csrf);
+            var staleUpdate = Guid.NewGuid();
+            var updatePlan = await BeginUpdate(staleUpdate);
+            await ConfirmUpdate(staleUpdate, updatePlan.PlanSha256, null, HttpStatusCode.BadRequest);
+            await ConfirmUpdate(staleUpdate, updatePlan.PlanSha256, WorkspaceSources.CleanOnly, HttpStatusCode.Conflict);
+            await ConfirmUpdate(staleUpdate, updatePlan.PlanSha256, WorkspaceSources.RetainAndReplace, HttpStatusCode.Accepted);
+            updateHost.RejectLateWrite = true;
+            await Tick();
+            await Tick();
+            Assert.Equal(WorkspaceSources.Failed, (await Read(staleUpdate)).State);
+            Assert.Equal("WORKSPACE_SOURCE_WORK_CHANGED", (await Read(staleUpdate)).Code);
+            Assert.Equal(id, (await PublishedHead()).ImportId);
+
+            var replacement = Guid.NewGuid();
+            updatePlan = await BeginUpdate(replacement);
+            await ConfirmUpdate(replacement, updatePlan.PlanSha256, WorkspaceSources.RetainAndReplace, HttpStatusCode.Accepted);
+            await ConfirmUpdate(replacement, updatePlan.PlanSha256, WorkspaceSources.CleanOnly, HttpStatusCode.Conflict);
+            await ConfirmUpdate(replacement, updatePlan.PlanSha256, WorkspaceSources.RetainAndReplace, HttpStatusCode.Accepted);
+            await Expect(HttpMethod.Post, Url(replacement) + "/cancel", null, HttpStatusCode.Conflict, owner, csrf);
+            updateHost.LoseExchangeReply = true;
+            await Tick();
+            var pendingUpdate = await Read(replacement);
+            Assert.Equal(WorkspaceSources.Publishing, pendingUpdate.State);
+            Assert.Equal(WorkspaceSources.RetainAndReplace, pendingUpdate.ConflictResolution);
+            Assert.Equal(id, (await PublishedHead()).ImportId);
+            clock.Advance(6);
+            await Tick();
+            var publishedUpdate = await PublishedHead();
+            Assert.Equal(replacement, publishedUpdate.ImportId);
+            Assert.Equal(id, publishedUpdate.PreviousImportId);
+            Assert.Equal(updatePlan, publishedUpdate.Plan);
+            Assert.Equal(WorkspaceSources.RetainAndReplace, publishedUpdate.ConflictResolution);
+            Assert.Equal(1, updateHost.Exchanges);
+            Assert.Equal(2, updateHost.PublishRequests.Count(request => request.ImportId == replacement.ToString("N")));
+            Assert.All(updateHost.PublishRequests, request => Assert.Equal(WorkspaceSourceConflictResolution.RetainAndReplace, request.ConflictResolution));
+            await Expect(HttpMethod.Put, Url(Guid.NewGuid()) + "/git", JsonContent.Create(source with { PreviousImportId = id }),
+                HttpStatusCode.Conflict, owner, csrf);
+            await Expect(HttpMethod.Put, Url(replacement) + "/git", JsonContent.Create(source with { PreviousImportId = id }),
+                HttpStatusCode.Accepted, owner, csrf);
+            Assert.Empty(await db.WorkspaceSourceChunks.AsNoTracking().ToArrayAsync());
+            Console.WriteLine("INBOX_PHASE=workspace-git-update-real-http-uds-grpc-postgres-confirmed-choice-fence-and-recovery");
+
             string Url(Guid item) => $"{collection}/{item:D}";
             async Task<WorkspaceSourceView> Read(Guid item) => (await owner.GetFromJsonAsync<WorkspaceSourceView>(Url(item)))!;
             Task Begin(Guid item) => Expect(HttpMethod.Put, Url(item) + "/git", JsonContent.Create(source), HttpStatusCode.Accepted, owner, csrf);
+            async Task<WorkspaceSourceView> PublishedHead() =>
+                (await owner.GetFromJsonAsync<WorkspaceSourceView>(collection + "/published"))!;
+            async Task<WorkspaceSourcePlan> BeginUpdate(Guid item)
+            {
+                await Expect(HttpMethod.Put, Url(item) + "/git", JsonContent.Create(source with { PreviousImportId = id }),
+                    HttpStatusCode.Accepted, owner, csrf);
+                await Tick();
+                await Tick();
+                var update = await Read(item);
+                Assert.Equal(WorkspaceSources.Staged, update.State);
+                Assert.Equal(id, update.PreviousImportId);
+                Assert.True(update.Plan?.Update?.Dirty);
+                Assert.Equal(staged.Plan?.ContentSha256, update.Plan!.Update!.PreviousContentSha256);
+                return update.Plan;
+            }
+            Task ConfirmUpdate(Guid item, string digest, string? choice, HttpStatusCode status) => Expect(
+                HttpMethod.Post, Url(item) + "/publish", JsonContent.Create(new WorkspaceSourceConfirmation(digest, choice)), status, owner, csrf);
             async Task Tick()
             {
                 await using var scope = server.Scope();
@@ -218,7 +289,104 @@ public sealed partial class ContainerUploadHttpTests
     private sealed class WorkspaceGitCapabilitiesFixture : AgentService.AgentServiceBase
     {
         public override Task<CapabilitiesResponse> GetCapabilities(Empty request, ServerCallContext context) => Task.FromResult(
-            new CapabilitiesResponse { ProtocolMajor = 1, ProtocolMinor = DevelopmentGitBinding.ProtocolMinor, Capabilities = { DevelopmentGitBinding.Capability } });
+            new CapabilitiesResponse
+            {
+                ProtocolMajor = 1, ProtocolMinor = DevelopmentSourceBinding.UpdateProtocolMinor,
+                Capabilities = { DevelopmentGitBinding.Capability, DevelopmentSourceBinding.Capability, DevelopmentSourceBinding.UpdateCapability }
+            });
+    }
+
+    private sealed class WorkspaceUpdateWireFixture(byte[] key, byte[] expectedArchive) : DevelopmentSourceService.DevelopmentSourceServiceBase
+    {
+        private readonly ConcurrentDictionary<string, WorkspaceSourceReceipt> _operations = new(StringComparer.Ordinal);
+        public ConcurrentQueue<WorkspaceSourceRequest> PublishRequests { get; } = new();
+        public bool RejectLateWrite { get; set; }
+        public bool LoseExchangeReply { get; set; }
+        public int Exchanges { get; private set; }
+
+        public override async Task<WorkspaceSourceReceipt> StageUpdate(IAsyncStreamReader<WorkspaceSourceFrame> requestStream, ServerCallContext context)
+        {
+            Assert.True(await requestStream.MoveNext(context.CancellationToken));
+            var request = requestStream.Current.Header;
+            Authorize(request, context);
+            Assert.Equal(DevelopmentSourceBinding.Hash(request), context.RequestHeaders.GetValue(DevelopmentSourceBinding.Header));
+            using var body = new MemoryStream();
+            while (await requestStream.MoveNext(context.CancellationToken))
+                body.Write(requestStream.Current.Content.Span);
+            Assert.Equal(expectedArchive, body.ToArray());
+            using var payload = System.Text.Json.JsonDocument.Parse(DevelopmentSourceBinding.HostInput(request));
+            var storage = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(payload.RootElement.GetProperty("storage"));
+            var receipt = new WorkspaceSourceReceipt
+            {
+                WorkspaceId = request.Storage.WorkspaceId, StorageSha256 = Convert.ToHexStringLower(SHA256.HashData(storage)),
+                ImportId = request.ImportId, PreviousImportId = request.PreviousImportId, ArchiveBytes = request.ArchiveBytes,
+                ArchiveFormat = "tar", ArchiveSha256 = request.ArchiveSha256, PlanSha256 = new string('a', 64),
+                ContentSha256 = new string('d', 64), FileCount = 1, TotalBytes = WorkspaceSources.ChunkBytes + 317,
+                State = "Staged", Update = new()
+                {
+                    PreviousContentSha256 = new string('2', 64), WorkContentSha256 = new string('c', 64),
+                    Dirty = true, ChangedEntries = 1
+                }
+            };
+            Assert.True(_operations.TryAdd(request.ImportId, receipt));
+            return receipt.Clone();
+        }
+
+        public override Task<WorkspaceSourceReceipt> InspectUpdate(WorkspaceSourceRequest request, ServerCallContext context)
+        {
+            Authorize(request, context);
+            return Task.FromResult(Find(request).Clone());
+        }
+
+        public override Task<WorkspaceSourceReceipt> PublishUpdate(WorkspaceSourceRequest request, ServerCallContext context)
+        {
+            Authorize(request, context);
+            PublishRequests.Enqueue(request);
+            Assert.Equal(WorkspaceSourceConflictResolution.RetainAndReplace, request.ConflictResolution);
+            var receipt = Find(request);
+            Assert.Equal(receipt.PlanSha256, request.PlanSha256);
+            if (RejectLateWrite)
+            {
+                RejectLateWrite = false;
+                throw new RpcException(new Status(StatusCode.Aborted, "WORKSPACE_SOURCE_WORK_CHANGED"));
+            }
+            if (receipt.State == "Staged")
+            {
+                Exchanges++;
+                receipt.State = "PublishUnconfirmed";
+                if (LoseExchangeReply)
+                {
+                    LoseExchangeReply = false;
+                    throw new RpcException(new Status(StatusCode.Unavailable, "controlled lost reply"));
+                }
+            }
+            Assert.Equal("PublishUnconfirmed", receipt.State);
+            receipt.State = "Published";
+            return Task.FromResult(receipt.Clone());
+        }
+
+        public override Task<WorkspaceSourceReceipt> DiscardUpdate(WorkspaceSourceRequest request, ServerCallContext context)
+        {
+            Authorize(request, context);
+            var receipt = Find(request);
+            Assert.Equal("Staged", receipt.State);
+            Assert.Equal(receipt.PlanSha256, request.PlanSha256);
+            receipt.State = "Discarded";
+            return Task.FromResult(receipt.Clone());
+        }
+
+        private WorkspaceSourceReceipt Find(WorkspaceSourceRequest request) => _operations.TryGetValue(request.ImportId, out var receipt)
+            ? receipt : throw new RpcException(new Status(StatusCode.NotFound, "WORKSPACE_SOURCE_NOT_FOUND"));
+
+        private void Authorize(WorkspaceSourceRequest request, ServerCallContext context)
+        {
+            Assert.True(DevelopmentSourceBinding.IsValid(request, context.Method));
+            var parts = context.RequestHeaders.GetValue("x-whaledeck-capability")?.Split('.');
+            Assert.NotNull(parts);
+            Assert.Equal(3, parts.Length);
+            var signed = DevelopmentSourceBinding.Payload(parts[0], parts[1], context.Method, DevelopmentSourceBinding.Hash(request));
+            Assert.Equal(Convert.ToHexString(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(signed))), parts[2]);
+        }
     }
 
     private sealed class WorkspaceGitWireFixture(byte[] key) : DevelopmentGitService.DevelopmentGitServiceBase

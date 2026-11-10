@@ -20,6 +20,13 @@ public sealed class WorkspaceSourcesController(WorkspaceSources sources, Termina
     public async Task<string[]> GitRepositories(Guid workspaceId, CancellationToken token) =>
         await sources.GitRepositoriesAsync((await identity.ReadAsync(HttpContext)).Actor, workspaceId, token);
 
+    [HttpGet("published")]
+    public async Task<ActionResult<WorkspaceSourceView>> Published(Guid workspaceId, CancellationToken token)
+    {
+        var result = await sources.PublishedAsync((await identity.ReadAsync(HttpContext)).Actor, workspaceId, token);
+        return result is null ? NoContent() : result;
+    }
+
     [HttpGet("history")]
     public async Task<WorkspaceSourceHistoryPage> History(Guid workspaceId, Guid? before, CancellationToken token, int take = 10) =>
         await sources.HistoryAsync((await identity.ReadAsync(HttpContext)).Actor, workspaceId, before, take, token);
@@ -54,7 +61,7 @@ public sealed class WorkspaceSourcesController(WorkspaceSources sources, Termina
     [HttpPost("{importId:guid}/publish"), Consumes("application/json"), RequestSizeLimit(4096)]
     public async Task<ActionResult<WorkspaceSourceView>> Publish(Guid workspaceId, Guid importId, WorkspaceSourceConfirmation input, CancellationToken token)
     {
-        var result = await sources.ConfirmAsync((await identity.ReadAsync(HttpContext)).Actor, workspaceId, importId, input.PlanSha256, token);
+        var result = await sources.ConfirmAsync((await identity.ReadAsync(HttpContext)).Actor, workspaceId, importId, input, token);
         return AcceptedAtAction(nameof(Get), new { workspaceId, importId }, result);
     }
 

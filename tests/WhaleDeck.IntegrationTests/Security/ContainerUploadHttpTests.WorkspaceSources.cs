@@ -213,6 +213,8 @@ public sealed partial class ContainerUploadHttpTests
         public async Task<WorkspaceSourceObservation> StageSourceAsync(WorkspaceSourceClaim claim,
             IAsyncEnumerable<ReadOnlyMemory<byte>> chunks, CancellationToken token)
         {
+            if (claim.Import.PreviousImportId is not null)
+                return await (GitGateway ?? throw new NotSupportedException()).StageSourceAsync(claim, chunks, token);
             StageCount++;
             using var copy = new MemoryStream();
             await foreach (var chunk in chunks.WithCancellation(token)) await copy.WriteAsync(chunk, token);
@@ -225,11 +227,14 @@ public sealed partial class ContainerUploadHttpTests
         }
 
         public Task<WorkspaceSourceObservation> InspectSourceAsync(WorkspaceSourceClaim claim, CancellationToken token) =>
+            claim.Import.PreviousImportId is not null ? (GitGateway ?? throw new NotSupportedException()).InspectSourceAsync(claim, token) :
             _items.TryGetValue(claim.Import.ImportId, out var receipt) ? Task.FromResult(receipt) :
                 Task.FromException<WorkspaceSourceObservation>(new WorkspaceSourceException(WorkspaceSourceFailure.Missing));
 
         public Task<WorkspaceSourceObservation> PublishSourceAsync(WorkspaceSourceClaim claim, WorkspaceSourcePlan plan, CancellationToken token)
         {
+            if (claim.Import.PreviousImportId is not null)
+                return (GitGateway ?? throw new NotSupportedException()).PublishSourceAsync(claim, plan, token);
             PublishCount++;
             var receipt = Set(claim, plan, "Published");
             if (LosePublishReply)
@@ -242,12 +247,16 @@ public sealed partial class ContainerUploadHttpTests
 
         public Task<WorkspaceSourceObservation> DiscardSourceAsync(WorkspaceSourceClaim claim, WorkspaceSourcePlan plan, CancellationToken token)
         {
+            if (claim.Import.PreviousImportId is not null)
+                return (GitGateway ?? throw new NotSupportedException()).DiscardSourceAsync(claim, plan, token);
             DiscardCount++;
             return Task.FromResult(Set(claim, plan, "Discarded"));
         }
 
         public Task AbortSourceAsync(WorkspaceSourceClaim claim, CancellationToken token)
         {
+            if (claim.Import.PreviousImportId is not null)
+                return (GitGateway ?? throw new NotSupportedException()).AbortSourceAsync(claim, token);
             AbortCount++;
             Assert.False(_items.ContainsKey(claim.Import.ImportId));
             return Task.CompletedTask;

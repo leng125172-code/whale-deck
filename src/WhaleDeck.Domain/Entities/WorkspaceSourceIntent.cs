@@ -17,6 +17,9 @@ public sealed class WorkspaceSourceIntent
     public string? GitCommit { get; set; }
     public int? GitFileCount { get; set; }
     public long? GitTotalBytes { get; set; }
+    public Guid? PreviousImportId { get; init; }
+    public string? UpdateJson { get; set; }
+    public string? ConflictResolution { get; set; }
     public string State { get; set; } = "";
     public int ReceivedBytes { get; set; }
     public string? PlanSha256 { get; set; }

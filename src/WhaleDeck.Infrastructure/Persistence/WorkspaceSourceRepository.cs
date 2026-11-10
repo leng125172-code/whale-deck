@@ -32,13 +32,19 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
             RequireScope(existing, workspace.Id, actor.Subject);
             var matches = git is null
                 ? existing.GitRepositoryId is null && View(existing).Archive == archive
-                : existing.GitRepositoryId == git.RepositoryId && existing.GitRef == git.Ref && existing.GitCredentialRef == credentialRef;
+                : existing.GitRepositoryId == git.RepositoryId && existing.GitRef == git.Ref && existing.GitCredentialRef == credentialRef &&
+                    existing.PreviousImportId == git.PreviousImportId;
             if (!matches) throw new InvalidOperationException("WORKSPACE_SOURCE_IMPORT_CONFLICT");
             return View(existing);
         }
         if (await db.WorkspaceSourceIntents.AnyAsync(row => row.WorkspaceId == workspace.Id && row.FinishedAtUtc == null, token))
             throw new InvalidOperationException("WORKSPACE_SOURCE_ALREADY_PENDING");
-        if (await db.WorkspaceSourceIntents.AnyAsync(row => row.WorkspaceId == workspace.Id && row.State == Published, token))
+        if (git?.PreviousImportId is { } previous)
+        {
+            if (!await PublishedHeads(workspace.Id, actor.Subject).AnyAsync(row => row.Id == previous, token))
+                throw new InvalidOperationException("WORKSPACE_SOURCE_WORK_BASE_CONFLICT");
+        }
+        else if (await db.WorkspaceSourceIntents.AnyAsync(row => row.WorkspaceId == workspace.Id && row.State == Published, token))
             throw new InvalidOperationException("WORKSPACE_SOURCE_WORK_ALREADY_PRESENT");
         var reserved = await db.WorkspaceSourceIntents.Where(row => row.State == Uploading || row.State == Ready || row.State == Acquiring)
             .SumAsync(row => row.State == Acquiring ? (long)ArchiveLimit : row.ArchiveBytes, token);
@@ -51,10 +57,11 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
             Id = importId, WorkspaceId = workspace.Id, OwnerSubject = actor.Subject, LoginBinding = actor.LoginBinding,
             WorkspaceJson = JsonSerializer.Serialize(workspace, Json), Format = archive.Format, ArchiveBytes = archive.ArchiveBytes,
             ArchiveSha256 = archive.ArchiveSha256, GitRepositoryId = git?.RepositoryId, GitRef = git?.Ref, GitCredentialRef = credentialRef,
+            PreviousImportId = git?.PreviousImportId,
             State = git is null ? Uploading : Acquiring, AvailableAtUtc = git is null ? expires : now, ExpiresAtUtc = expires
         };
         db.WorkspaceSourceIntents.Add(row);
-        Audit(row, actor.TraceId, git is null ? "begin" : "git-begin");
+        Audit(row, actor.TraceId, git is null ? "begin" : git.PreviousImportId is null ? "git-begin" : "git-update-begin");
         return View(row);
     }, token);
 
@@ -73,6 +80,17 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
             .FirstOrDefaultAsync(token);
         return row is null ? null : View(row);
     }
+
+    public async Task<WorkspaceSourceView?> PublishedAsync(Guid workspaceId, string subject, CancellationToken token)
+    {
+        var row = await PublishedHeads(workspaceId, subject).SingleOrDefaultAsync(token);
+        return row is null ? null : View(row);
+    }
+
+    private IQueryable<WorkspaceSourceIntent> PublishedHeads(Guid workspaceId, string subject) =>
+        db.WorkspaceSourceIntents.AsNoTracking().Where(row => row.WorkspaceId == workspaceId && row.OwnerSubject == subject &&
+            row.State == Published && !db.WorkspaceSourceIntents.Any(successor => successor.PreviousImportId == row.Id &&
+                successor.WorkspaceId == workspaceId && successor.OwnerSubject == subject && successor.State == Published));
 
     public async Task<WorkspaceSourceHistoryPage> HistoryAsync(Guid workspaceId, string subject, Guid? before, int take, CancellationToken token)
     {
@@ -185,16 +203,26 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
         return row;
     }
 
-    public Task<WorkspaceSourceView> ConfirmAsync(Guid workspaceId, Guid importId, TerminalActor actor, string planSha256,
+    public Task<WorkspaceSourceView> ConfirmAsync(Guid workspaceId, Guid importId, TerminalActor actor, WorkspaceSourceConfirmation input,
         CancellationToken token) => TransactionAsync(async () =>
     {
         var row = await LoadAsync(importId, token);
         RequireScope(row, workspaceId, actor.Subject);
         RequireSession(row, actor);
-        if (planSha256 != row.PlanSha256) throw new InvalidOperationException("WORKSPACE_SOURCE_PLAN_CONFLICT");
-        if (row.State is Publishing or Published) return View(row);
+        if (input.PlanSha256 != row.PlanSha256) throw new InvalidOperationException("WORKSPACE_SOURCE_PLAN_CONFLICT");
+        var choice = input.ConflictResolution;
+        if (row.PreviousImportId is null ? choice is not null : choice is not (CleanOnly or RetainAndReplace))
+            throw new ArgumentException("WORKSPACE_SOURCE_UPDATE_CHOICE_INVALID");
+        if (row.State is Publishing or Published)
+        {
+            if (choice != row.ConflictResolution) throw new InvalidOperationException("WORKSPACE_SOURCE_UPDATE_CHOICE_CONFLICT");
+            return View(row);
+        }
         if (row.State != Staged || clock.GetUtcNow() >= row.ExpiresAtUtc)
             throw new InvalidOperationException("WORKSPACE_SOURCE_PLAN_UNAVAILABLE");
+        if (choice == CleanOnly && ReadUpdate(row) is { Dirty: true })
+            throw new InvalidOperationException("WORKSPACE_SOURCE_WORK_DIRTY");
+        row.ConflictResolution = choice;
         row.State = Publishing;
         row.AvailableAtUtc = clock.GetUtcNow();
         Audit(row, actor.TraceId, "confirm");
@@ -236,8 +264,15 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
             throw new InvalidDataException("WORKSPACE_SOURCE_SCOPE_INVALID");
         var lease = Guid.NewGuid();
         row.Lease = lease;
-        row.LeaseUntilUtc = now.AddSeconds(140);
-        return new(View(row), workspace, new(row.OwnerSubject, null, [], row.LoginBinding, row.Id.ToString("N"), null), lease, row.GitCredentialRef);
+        row.LeaseUntilUtc = now.AddSeconds(row.PreviousImportId is not null && row.State == Publishing ? 170 : 140);
+        var baseDigest = row.PreviousImportId is { } previous
+            ? await db.WorkspaceSourceIntents.AsNoTracking().Where(candidate => candidate.Id == previous &&
+                candidate.WorkspaceId == row.WorkspaceId && candidate.OwnerSubject == row.OwnerSubject && candidate.State == Published)
+                .Select(candidate => candidate.ContentSha256).SingleOrDefaultAsync(token)
+            : null;
+        if (row.PreviousImportId is not null && !Digest(baseDigest)) throw new InvalidDataException("WORKSPACE_SOURCE_WORK_BASE_CONFLICT");
+        return new(View(row), workspace, new(row.OwnerSubject, null, [], row.LoginBinding, row.Id.ToString("N"), null),
+            lease, row.GitCredentialRef, baseDigest);
     }, token);
 
     public Task<bool> IsCurrentAsync(WorkspaceSourceClaim claim, CancellationToken token)
@@ -285,6 +320,7 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
                 row.ContentSha256 = plan.ContentSha256;
                 row.FileCount = plan.FileCount;
                 row.TotalBytes = plan.TotalBytes;
+                row.UpdateJson = plan.Update is null ? null : JsonSerializer.Serialize(plan.Update, Json);
             }
             if (state == Staged) row.AvailableAtUtc = row.ExpiresAtUtc;
             else row.FinishedAtUtc = clock.GetUtcNow();
@@ -360,9 +396,13 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
 
     private static WorkspaceSourceView View(WorkspaceSourceIntent row) => new(row.WorkspaceId, row.Id, row.State,
         new(row.Format, row.ArchiveBytes, row.ArchiveSha256), row.ReceivedBytes,
-        row.PlanSha256 is null ? null : new(row.PlanSha256, row.ContentSha256!, row.FileCount!.Value, row.TotalBytes!.Value),
+        row.PlanSha256 is null ? null : new(row.PlanSha256, row.ContentSha256!, row.FileCount!.Value, row.TotalBytes!.Value, ReadUpdate(row)),
         row.Code, row.ExpiresAtUtc,
-        row.GitRepositoryId is null ? null : new(row.GitRepositoryId, row.GitRef!, GitProof(row)), row.FinishedAtUtc);
+        row.GitRepositoryId is null ? null : new(row.GitRepositoryId, row.GitRef!, GitProof(row)), row.FinishedAtUtc,
+        row.PreviousImportId, row.ConflictResolution);
+
+    private static WorkspaceSourceUpdatePlan? ReadUpdate(WorkspaceSourceIntent row) => row.UpdateJson is null ? null :
+        JsonSerializer.Deserialize<WorkspaceSourceUpdatePlan>(row.UpdateJson, Json) ?? throw new InvalidDataException("WORKSPACE_SOURCE_PLAN_INVALID");
 
     private static WorkspaceGitProof? GitProof(WorkspaceSourceIntent row) =>
         row.GitResolvedObject is null ? null : new(row.GitResolvedObject, row.GitCommit!,
