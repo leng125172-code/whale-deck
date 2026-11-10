@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-10，88f2df86 准确 CI 12/12 成功后已标准发布 dev，六组件/23 模块/11 核心及发布前 18191 条原记录保持。真实身份 UI 停用/恢复联合安装态 Agent 1.77 完成 Active Plan 拒绝、Stopped Plan 成功、签名拒绝、幂等与取消；另实际制造停用后 QA 异常并通过原 UI 恢复。两账号删除、8 原执行 cgroup/活动任务/锁为零，5 空间源码与配额、8401 原审计、18 原报告及 HDD 保持。准确捕获维护进程 restart 同期四端点 ECONNREFUSED，P0-05 未通过。持久归档/退役仍未完成，QA 新提交自身 CI 待完成，不增加完整主任务计数。见[安装态证据与剩余边界](qa/DEVELOPMENT_ARCHIVE_INSTALLED_PLAN.md)。
+
 2026-11-10，P3-18新增 Agent 1.77归档短任务签名协议、完整回执校验及内部Gateway。6249全量单测、55归档专项和真实签名RPC→隔离NVMe/HDD捕获/独立验证/复制中取消通过。前提交01206806准确CI已12/12成功并标准发布dev，六组件/23模块/11核心健康及5空间/9772原记录保持通过；观察到26次HTTPError，不签维护连续性。新RPC仍需准确CI、标准部署与持久授权用户闭环，产品归档/退役未完成。见[验证与边界](qa/DEVELOPMENT_ARCHIVE_RPC.md)。
 
 2026-11-10，P3-14 `f2806fbb` 接入 BFF 与 Vue 逐行差异。真实 HTTP、PostgreSQL、Unix Socket 与生产 Chrome 分别验证 CSRF、计划绑定、撤权、保护分类及纯文本预览。继续合并与物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_TEXT_DIFF_UI.md)。

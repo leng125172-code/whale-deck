@@ -21,6 +21,8 @@ def main():
     assert os.geteuid() == 0 and __debug__ and len(sys.argv) == 3
     assert os.environ.get('WHALEDECK_INSTALLED_ARCHIVE_PLAN_PROBE') == '1'
     revision, evidence = sys.argv[1], Path(sys.argv[2]).resolve(strict=True)
+    fault = os.environ.get('WHALEDECK_INSTALLED_ARCHIVE_QA_FAULT')
+    assert fault in (None, 'after-stopped-plan')
     assert re.fullmatch('[a-f0-9]{40}', revision) and evidence.is_dir()
     assert not (evidence/'state.json').exists(), 'FRESH_EVIDENCE_REQUIRED'
     os.umask(0o077)
@@ -66,14 +68,19 @@ def main():
         group = require(values, 'Authentication__Authentik__AdministratorGroupId')
         with account(client, 'administrator', group, cleaned) as identity:
             result = subprocess.run(['node', str(Path(__file__).with_suffix('.mjs'))], input=json.dumps(
-                dict(revision=revision, evidence=str(evidence), account=identity, storage=physical['storageProof'])),
+                dict(revision=revision, evidence=str(evidence), account=identity, storage=physical['storageProof'],
+                     faultAfterStopped=fault is not None)),
                 capture_output=True, text=True, timeout=720)
             save(evidence, 'browser-process.json', dict(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr))
         save(evidence, 'identity-cleanup.json', dict(removed=cleaned))
         assert cleaned == ['administrator']
-        assert result.returncode == 0, 'INSTALLED_ARCHIVE_ACCEPTANCE_FAILED'
         state = json.loads((evidence/'state.json').read_bytes())
-        assert state['passed'] and state['lifecycle']['passed']
+        if fault is None:
+            assert result.returncode == 0 and state['passed'] and state['lifecycle']['passed'], 'INSTALLED_ARCHIVE_ACCEPTANCE_FAILED'
+        else:
+            assert result.returncode == 1 and state['passed'] is False and state['faultInjected'] == fault
+            assert state['stoppedPlan']['passed'] and state['recovery']['active'] and state['recovery']['lifecycle']['passed']
+            assert state['recovery']['logout']['normalUiLogout']
         assert hashes(frozen) == original
         assert sources == {name: hashlib.sha256((Path(__file__).parent/name).read_bytes()).hexdigest() for name in sources}
         after = json.loads(subprocess.check_output(['python3', '-B', str(Path(__file__).with_name(
@@ -83,6 +90,7 @@ def main():
         assert after['marker']['state'] == 'Active' and after['marker']['epoch'] == physical['marker']['epoch'] + 2
         save(evidence, 'accepted.json', dict(passed=True, revision=revision, installedAgentPlan=True,
             realIdentityUiLifecycle=True, temporaryAccountsRemoved=1, payloadAndQuotaPreserved=True,
+            controlledQaFailure=fault,
             scope='Plan-only trusted RPC; no HDD capture, persistent archive business or retirement'))
         print(json.dumps(dict(passed=True, evidence=str(evidence), workspaceId=WORKSPACE)))
     finally:

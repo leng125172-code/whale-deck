@@ -99,12 +99,22 @@ try {
   phase = 'real-ui-stop-plan-resume'
   await installedLifecycle({ page, context, base, api, id, route, state, save, headers, poll, evidence, manageOnly: true,
     afterStopped: async stopped => {
-      try { return await plan(stopped.storageProof, stopped.marker.epoch, 'Succeeded') }
+      let receipt
+      try { receipt = await plan(stopped.storageProof, stopped.marker.epoch, 'Succeeded') }
       catch (error) {
         // A read-only plan failure still uses the product resume path. Keep
         // its original task/evidence and never disguise the failure as passed.
         return { passed: false, failureType: error.name }
       }
+      state.stoppedPlan = receipt
+      if (input.faultAfterStopped === true) {
+        // A deliberate QA exception after the actual Plan proves the real
+        // UI recovery path. No product response or task result is replaced.
+        state.faultInjected = 'after-stopped-plan'
+        await save()
+        throw new Error('INSTALLED_ARCHIVE_QA_AFTER_STOP_FAULT')
+      }
+      return receipt
     } })
   phase = 'real-ui-logout'
   state.logout = await logoutFromUserMenu(page, context, base, null)
