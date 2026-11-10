@@ -96,10 +96,15 @@ def main():
     evidence = repo / 'deploy/artifacts' / ('development-archives-native-' + identifier)
     evidence.mkdir(mode=0o700)
     for name in ('files', 'development-storage', 'development-project-quota', 'development-lifecycle',
-                 'file-tree', 'tree-archive', 'development-archives'):
+                 'file-tree', 'tree-archive', 'development-archives', 'development-retirement'):
         destination = evidence / ('whaledeck-' + name + '.py')
         shutil.copyfile(sources / destination.name, destination); destination.chmod(0o600)
     shutil.copyfile(__file__, evidence / 'probe.py'); (evidence / 'probe.py').chmod(0o600)
+    retirement_probe_path = Path(__file__).with_name('validate_development_retirement_native.py')
+    shutil.copyfile(retirement_probe_path, evidence / retirement_probe_path.name)
+    (evidence / retirement_probe_path.name).chmod(0o600)
+    retirement_spec = importlib.util.spec_from_file_location('native_retirement_probe', retirement_probe_path)
+    retirement_probe = importlib.util.module_from_spec(retirement_spec); retirement_spec.loader.exec_module(retirement_probe)
     before_layout = archives.LAYOUT.read_bytes()
     before_config = storage.CONFIG.read_bytes()
     # Real configured HDD attestation performs only opens, stats, reads/flock.
@@ -255,6 +260,8 @@ def main():
             captures.append(dict(cut=cut, request=capture, result=result, preservedBytesAndInode=True))
             save(evidence / 'captures.json', captures)
             if cut == 'none':
+                retirement_planner, retirement_request, retirement_plan, retirement_proof = retirement_probe.exercise(
+                    sys.modules[__name__], driver, engine, request, capture, result, evidence, payload)
                 old_mount = identity(driver, archive_target)['mountId']
                 command('umount', str(archive_target)); mounted.remove(archive_target); resources()
                 # Linux can immediately reuse a released mount ID. Consume
@@ -267,21 +274,27 @@ def main():
                 mounted.append(archive_target); resources(); command('udevadm', 'settle', '--timeout=20')
                 new_mount = identity(driver, archive_target)['mountId']; assert old_mount != new_mount
                 assert result == engine.verify(capture, result['receiptSha256'])
+                assert retirement_plan == retirement_planner.plan(retirement_request)
                 save(evidence / 'remount.json', dict(oldMountId=old_mount, newMountId=new_mount, sameReceiptVerified=True))
         # Prove verification can re-read HDD while the original source path is
         # genuinely absent. Its directory remains retained in this QA image.
         root = base / root_id
         original = root / request['workspaceId']; retained = root / 'retained-source-for-proof'
         original.rename(retained)
-        try: assert captures[0]['result'] == engine.verify(captures[0]['request'], captures[0]['result']['receiptSha256'])
+        try:
+            assert captures[0]['result'] == engine.verify(captures[0]['request'], captures[0]['result']['receiptSha256'])
+            try: retirement_planner.plan(retirement_request)
+            except files.Rejected: pass
+            else: raise AssertionError('MISSING_SOURCE_ACCEPTED_FOR_RETIREMENT')
         finally: retained.rename(original)
         after = physical(driver, quota, request, payload); save(evidence / 'after.json', after)
         assert before == after
         save(evidence / 'captures.json', captures)
         for name in ('files', 'development-storage', 'development-project-quota', 'development-lifecycle',
-                     'file-tree', 'tree-archive', 'development-archives'):
+                     'file-tree', 'tree-archive', 'development-archives', 'development-retirement'):
             filename = 'whaledeck-' + name + '.py'
             assert (evidence / filename).read_bytes() == (sources / filename).read_bytes()
+        assert (evidence / retirement_probe_path.name).read_bytes() == retirement_probe_path.read_bytes()
         assert before_config == Path('/etc/whaledeck/development-storage.json').read_bytes()
         assert before_layout == Path('/var/lib/whaledeck-development-disks/layout.json').read_bytes()
         accepted = dict(passed=True, configuredArchiveReadOnlyAttested=True, configuredArchiveBytes=300 * 10**9,
@@ -291,6 +304,8 @@ def main():
             archiveRemountPreservesVerification=True,
             independentHddVerificationWithoutSource=True, sourceInodesBytesAndQuotaUnchanged=True,
             productionConfigurationUnchanged=True, productionWorkspaceMutations=0, sandboxedArchiveHelper=helper_proof,
+            nativeReadOnlyRetirementPlan=retirement_proof, retirementPlanSurvivedRemount=True,
+            retirementRequiresPresentSource=True,
             scope='Internal helper/optional isolated signed RPC only; no product UI, retirement, deletion or quota release')
     except BaseException as error:
         save(evidence / 'failure.json', dict(type=type(error).__name__,
