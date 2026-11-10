@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { crc32 } from 'node:zlib'
 import { expect, test, type Page } from '@playwright/test'
 import { installTerminalFixture } from './fixtures/terminal.mjs'
+import type { WorkspaceArchive } from '../src/services/workspaceArchives'
 
 test.use({ baseURL: process.env.WHALEDECK_PRODUCTION_PREVIEW_URL || 'http://127.0.0.1:5174' })
 
@@ -10,6 +11,7 @@ const workspacePath = '/development/workspaces'
 const api = '/api/v1' + workspacePath
 const id = '784bbbe8-e60d-4f2a-a839-c64c9f474504'
 const runId = 'c42e390c-8cdd-4371-8afe-b20994d209ef'
+const archiveId = 'a44984f7-2960-458b-91a5-4bb96f553d77'
 const digest = 'a'.repeat(64)
 const planDigest = 'b'.repeat(64)
 const markdown = '# 开发空间运行报告\n\n已取消\n'
@@ -60,6 +62,14 @@ async function fixture(page: Page, developer = true) {
     lifecycleVersion: 1,
     lifecycleKeys: [] as string[],
     loseLifecycleReply: false,
+    archive: null as WorkspaceArchive | null,
+    archiveKeys: [] as string[],
+    archiveConfirmations: [] as string[],
+    archiveReads: 0,
+    archiveStatus: 200,
+    loseArchiveReply: false,
+    loseArchiveConfirmation: false,
+    loseArchiveCancel: false,
     lifecycleAuthorization: false,
     lifecycleOperation: null as null | {
       operationId: string
@@ -138,6 +148,53 @@ async function fixture(page: Page, developer = true) {
         return fulfill({ workspace: workspace(), replayed: false }, 201)
       }
       if (suffix === `/${id}`) return fulfill(workspace())
+      if (suffix.startsWith(`/${id}/archives`)) {
+        if (request.method() === 'GET') {
+          state.archiveReads++
+          if (state.archiveStatus !== 200)
+            return fulfill({ code: 'AUTH_FORBIDDEN' }, state.archiveStatus)
+          return fulfill(state.archive)
+        }
+        if (suffix === `/${id}/archives`) {
+          const key = request.headers()['idempotency-key'] ?? ''
+          expect(key).toMatch(/^[a-f0-9-]{36}$/)
+          expect(request.postDataJSON()).toEqual({ expectedEpoch: state.lifecycleVersion })
+          if (!state.archiveKeys.includes(key)) {
+            state.archiveKeys.push(key)
+            state.archive = archiveView()
+          }
+          if (state.loseArchiveReply) {
+            state.loseArchiveReply = false
+            return route.abort('failed')
+          }
+          return fulfill(state.archive, 202)
+        }
+        if (suffix === `/${id}/archives/${archiveId}/confirm` && state.archive) {
+          expect(request.postDataJSON()).toEqual({ planSha256: planDigest })
+          if (!state.archiveConfirmations.includes(archiveId))
+            state.archiveConfirmations.push(archiveId)
+          state.archive.awaitingConfirmation = false
+          state.archive.phase = 'Capture'
+          if (state.loseArchiveConfirmation) {
+            state.loseArchiveConfirmation = false
+            return route.abort('failed')
+          }
+          return fulfill(state.archive, 202)
+        }
+        if (suffix === `/${id}/archives/${archiveId}/cancel` && state.archive) {
+          state.archive.cancelRequested = true
+          if (state.loseArchiveCancel) {
+            state.loseArchiveCancel = false
+            return route.abort('failed')
+          }
+          return fulfill(state.archive, 202)
+        }
+        if (suffix === `/${id}/archives/${archiveId}/authorize` && state.archive) {
+          state.archive.authorizationRequired = false
+          state.archive.code = null
+          return fulfill(state.archive, 202)
+        }
+      }
       if (suffix === `/${id}/lifecycle/plan`) {
         const action = new URL(request.url()).searchParams.get('action')
         return fulfill({
@@ -233,6 +290,145 @@ async function fixture(page: Page, developer = true) {
   )
   return state
 }
+
+// Synthetic metadata exercises the production Vue bundle only. It does not
+// establish real Agent, identity, HDD copying or archive verification.
+function archiveView(): WorkspaceArchive {
+  return {
+    archiveId,
+    workspaceId: id,
+    state: 'Running',
+    phase: 'AwaitingConfirmation',
+    code: null,
+    awaitingConfirmation: true,
+    authorizationRequired: false,
+    cancelRequested: false,
+    planJson: JSON.stringify({ planSha256: planDigest, entryCount: 2, totalBytes: 17 }),
+    captureJson: null,
+    verifyJson: null,
+    completedAtUtc: null,
+    retainsSource: true,
+    reservesBudget: true,
+  }
+}
+function archiveReceipt() {
+  return JSON.stringify({
+    operationId: archiveId,
+    receiptSha256: 'c'.repeat(64),
+    archiveSha256: 'd'.repeat(64),
+    archiveIndexSha256: 'e'.repeat(64),
+    archiveBytes: 128,
+  })
+}
+for (const width of [320, 1440])
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`workspace HDD archive ${width} ${colorScheme}: explicit confirmation, reload, verify receipt and resume fence`, async ({
+      page,
+    }) => {
+      const state = await fixture(page)
+      state.registered = state.allocated = true
+      state.lifecycleState = 'Stopped'
+      state.lifecycleVersion = 2
+      await page.setViewportSize({ width, height: 900 })
+      await page.emulateMedia({ colorScheme })
+      await page.goto(`${workspacePath}/${id}/environment`)
+      const card = page.getByRole('region', { name: '开发空间 HDD 归档' })
+      await card.getByRole('button', { name: '核对 HDD 归档计划', exact: true }).click()
+      await expect(card.getByText('等待确认归档', { exact: true })).toBeVisible()
+      const confirm = card.getByRole('button', { name: '确认 HDD 归档', exact: true })
+      await expect(confirm).toBeDisabled()
+      await expect(page.getByRole('button', { name: '核对恢复计划', exact: true })).toBeDisabled()
+      await card.locator('label.el-checkbox').click()
+      await confirm.click()
+      await expect(card.getByText('正在复制到 HDD', { exact: true })).toBeVisible()
+      await page.reload()
+      await expect(card.getByText('正在复制到 HDD', { exact: true })).toBeVisible()
+      state.archive!.captureJson = archiveReceipt()
+      state.archive!.phase = 'Verify'
+      await card.getByRole('button', { name: '刷新归档状态' }).click()
+      await expect(card.getByText('正在独立校验归档', { exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: '核对恢复计划', exact: true })).toBeDisabled()
+      state.archive!.verifyJson = archiveReceipt()
+      state.archive!.state = 'Succeeded'
+      state.archive!.phase = 'Archived'
+      state.archive!.completedAtUtc = '2026-11-10T16:00:00Z'
+      await card.getByRole('button', { name: '刷新归档状态' }).click()
+      await expect(card.getByText('HDD 副本已独立校验；原源码与资源预算继续保留。')).toBeVisible()
+      await expect(card.getByText('c'.repeat(64), { exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: '核对恢复计划', exact: true })).toBeEnabled()
+      expect(state.archiveKeys).toHaveLength(1)
+      expect(state.archiveConfirmations).toHaveLength(1)
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+      ).toBe(true)
+      await page.screenshot({
+        path: `test-results/workspace-archive-${width}-${colorScheme}.png`,
+        fullPage: true,
+      })
+    })
+  }
+test('workspace HDD archive: lost replies recover the original operation and cancellation retains the fence until settled', async ({
+  page,
+}) => {
+  const state = await fixture(page)
+  state.registered = state.allocated = true
+  state.lifecycleState = 'Stopped'
+  state.lifecycleVersion = 2
+  state.loseArchiveReply = state.loseArchiveConfirmation = state.loseArchiveCancel = true
+  await page.goto(`${workspacePath}/${id}/environment`)
+  const card = page.getByRole('region', { name: '开发空间 HDD 归档' })
+  await card.getByRole('button', { name: '核对 HDD 归档计划', exact: true }).click()
+  await expect(card.getByText('等待确认归档', { exact: true })).toBeVisible({ timeout: 10_000 })
+  await card.locator('label.el-checkbox').click()
+  await card.getByRole('button', { name: '确认 HDD 归档', exact: true }).click()
+  await card.getByRole('button', { name: '刷新归档状态' }).click()
+  await expect(card.getByText('正在复制到 HDD', { exact: true })).toBeVisible()
+  state.archive!.authorizationRequired = true
+  state.archive!.code = 'WORKSPACE_ARCHIVE_AUTHORIZATION_REQUIRED'
+  await card.getByRole('button', { name: '刷新归档状态' }).click()
+  await card.getByRole('button', { name: '重新授权归档', exact: true }).click()
+  await expect(card.getByRole('button', { name: '重新授权归档', exact: true })).toHaveCount(0)
+  await card.getByRole('button', { name: '取消归档', exact: true }).click()
+  await card.getByRole('button', { name: '刷新归档状态' }).click()
+  await expect(card.getByRole('button', { name: '等待原任务停止确认', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '核对恢复计划', exact: true })).toBeDisabled()
+  state.archive!.state = state.archive!.phase = 'Canceled'
+  state.archive!.completedAtUtc = '2026-11-10T16:00:00Z'
+  await card.getByRole('button', { name: '刷新归档状态' }).click()
+  await expect(
+    card.getByText('原执行已结束。HDD 可能保留部分副本与日志，请勿把取消当作数据已清理。'),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: '核对恢复计划', exact: true })).toBeEnabled()
+  expect(state.archiveKeys).toHaveLength(1)
+  expect(state.archiveConfirmations).toHaveLength(1)
+})
+test('workspace HDD archive: denied reads stop polling and hide retained metadata until manual recovery', async ({
+  page,
+}) => {
+  const state = await fixture(page)
+  state.registered = state.allocated = true
+  state.lifecycleState = 'Stopped'
+  state.lifecycleVersion = 2
+  state.archive = archiveView()
+  await page.goto(`${workspacePath}/${id}/environment`)
+  const card = page.getByRole('region', { name: '开发空间 HDD 归档' })
+  await expect(card.getByText('等待确认归档', { exact: true })).toBeVisible()
+  state.archiveStatus = 403
+  await card.getByRole('button', { name: '刷新归档状态' }).click()
+  await expect(
+    card.getByText('登录或权限已变化，已停止自动刷新。请重新登录或恢复权限后刷新归档状态。'),
+  ).toBeVisible()
+  await expect(card.getByText(archiveId, { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '核对恢复计划', exact: true })).toBeDisabled()
+  const reads = state.archiveReads
+  await page.waitForTimeout(3500)
+  expect(state.archiveReads).toBe(reads)
+  state.archiveStatus = 200
+  await card.getByRole('button', { name: '刷新归档状态' }).click()
+  await expect(card.getByText('等待确认归档', { exact: true })).toBeVisible()
+})
 
 test('idle stop and resume preserve the plan and original key after a lost reply at 320px', async ({
   page,

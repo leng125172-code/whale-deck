@@ -10,7 +10,7 @@ import {
   type LifecycleOperation,
 } from '@/services/developmentWorkspaces'
 
-const props = defineProps<{ workspace: Workspace }>()
+const props = defineProps<{ workspace: Workspace; archivePending?: boolean }>()
 const emit = defineEmits<{ refresh: [] }>()
 const plan = ref<LifecyclePlan | null>(null)
 const operation = ref<LifecycleOperation | null>(null)
@@ -136,11 +136,15 @@ function closePlan() {
       <el-button v-if="state === 'Active'" :disabled="busy || waiting" @click="loadPlan('stop')"
         >核对停用计划</el-button
       >
-      <el-button v-if="state === 'Stopped'" :disabled="busy || waiting" @click="loadPlan('resume')"
+      <el-button
+        v-if="state === 'Stopped'"
+        :disabled="busy || waiting || archivePending"
+        @click="loadPlan('resume')"
         >核对恢复计划</el-button
       >
       <el-button :disabled="busy" @click="emit('refresh')">刷新启停状态</el-button>
     </div>
+    <p v-if="archivePending">请先完成或取消 HDD 归档，取得原任务结束确认后再恢复空间。</p>
     <template v-if="plan">
       <p>
         {{

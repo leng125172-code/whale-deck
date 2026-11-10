@@ -2,16 +2,18 @@ using WhaleDeck.Application.Models;
 
 namespace WhaleDeck.Application.Development;
 
-// Internal transport only. A future persistent workflow must resolve this
-// immutable task and the capture digest from its own authorized records.
-// No controller, Worker dispatcher, source removal or budget release yet.
+// Internal transport. The persistent workflow resolves the immutable task and
+// digest chain from authorized records; no source removal or budget release.
 public sealed record WorkspaceArchiveTask(Guid TaskId, Guid ArchiveId, string Phase, long ExpectedEpoch,
     string PlanSha256, string ReceiptSha256);
 public sealed record WorkspaceArchiveTaskProof(Guid TaskId, string RequestSha256, string Status, string? Code, string? ResultJson);
 public enum WorkspaceArchiveFailure { Unsupported, Retryable, Integrity, Unconfirmed }
-public sealed class WorkspaceArchiveException(WorkspaceArchiveFailure failure) : Exception("WORKSPACE_ARCHIVE_AGENT_" + failure)
+public sealed class WorkspaceArchiveException(WorkspaceArchiveFailure failure, bool startWasNotDispatched = false) : Exception("WORKSPACE_ARCHIVE_AGENT_" + failure)
 {
     public WorkspaceArchiveFailure Failure { get; } = failure;
+    // Only gateway preflight, before invoking the archive RPC, can establish
+    // this fact. An RPC error or lost reply after invocation never does.
+    public bool StartWasNotDispatched { get; } = startWasNotDispatched;
 }
 public interface IWorkspaceArchiveGateway
 {

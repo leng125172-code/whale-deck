@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElCard } from 'element-plus'
 import WorkspaceSourceImport from '@/components/WorkspaceSourceImport.vue'
 import WorkspaceLifecycle from '@/components/WorkspaceLifecycle.vue'
+import WorkspaceArchive from '@/components/WorkspaceArchive.vue'
 import { ApiError, createIdempotencyKey } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
 import {
@@ -23,6 +24,7 @@ const runId = computed(() => String(route.params.runId ?? ''))
 const showRuns = computed(() => route.name === 'development-workspace-runs')
 const showSources = computed(() => route.name === 'development-workspace-source')
 const workspace = ref<Workspace | null>(null)
+const archivePending = ref(false)
 const owned = computed(
   () => workspace.value && workspace.value.ownerSubject === authSession.user.value?.subject,
 )
@@ -105,6 +107,7 @@ watch(
     if (!previous || previous[0] !== id.value || previous[3] !== authSession.user.value?.subject)
       pending.value = null
     workspace.value = null
+    archivePending.value = false
     plan.value = null
     checked.value = false
     runs.value = []
@@ -298,7 +301,20 @@ function cancel(run: WorkspaceRun) {
           (owned || authSession.user.value?.isAdministrator)
         "
         :workspace="workspace"
+        :archive-pending="archivePending"
         @refresh="refresh"
+      />
+
+      <WorkspaceArchive
+        v-if="
+          !showRuns &&
+          !showSources &&
+          allocated &&
+          workspace.lifecycleState === 'Stopped' &&
+          (owned || authSession.user.value?.isAdministrator)
+        "
+        :workspace="workspace"
+        @pending="archivePending = $event"
       />
 
       <el-card v-if="!showRuns && !showSources" shadow="never">

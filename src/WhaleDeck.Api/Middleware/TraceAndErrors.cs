@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Grpc.Core;
 using WhaleDeck.Application.Development;
 using WhaleDeck.Application.Models;
@@ -29,6 +30,15 @@ public static class TraceAndErrors
             WorkspaceSourceException => (StatusCodes.Status503ServiceUnavailable, "WORKSPACE_SOURCE_PREVIOUS_UNAVAILABLE", "The retained source export is temporarily unavailable."),
             WorkspaceLifecycleException { Failure: WorkspaceLifecycleFailure.Integrity } =>
                 (StatusCodes.Status502BadGateway, "WORKSPACE_LIFECYCLE_UNVERIFIED", "The workspace host receipt could not be verified."),
+            WorkspaceArchiveException { Failure: WorkspaceArchiveFailure.Integrity } =>
+                (StatusCodes.Status502BadGateway, "WORKSPACE_ARCHIVE_UNVERIFIED", "The archive host receipt could not be verified."),
+            WorkspaceArchiveException =>
+                (StatusCodes.Status503ServiceUnavailable, "WORKSPACE_ARCHIVE_AGENT_REQUIRED", "The archive Agent is unavailable; the original task remains retained."),
+            InvalidOperationException { Message: "WORKSPACE_ARCHIVE_NOT_SETTLED" } =>
+                (StatusCodes.Status409Conflict, "WORKSPACE_ARCHIVE_NOT_SETTLED", "Cancel or complete the archive and obtain host confirmation before resuming."),
+            PostgresException { SqlState: PostgresErrorCodes.CheckViolation, ConstraintName: "ck_workspace_archive_not_settled" } or
+            DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.CheckViolation, ConstraintName: "ck_workspace_archive_not_settled" } } =>
+                (StatusCodes.Status409Conflict, "WORKSPACE_ARCHIVE_NOT_SETTLED", "Cancel or complete the archive and obtain host confirmation before resuming."),
             WorkspaceLifecycleException { Failure: WorkspaceLifecycleFailure.Rejected } =>
                 (StatusCodes.Status409Conflict, "WORKSPACE_LIFECYCLE_HOST_CHANGED", "The workspace host state changed. Prepare a fresh plan."),
             WorkspaceLifecycleException =>

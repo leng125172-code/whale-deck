@@ -207,6 +207,8 @@ export async function readRunReport(
 
 export function workspaceError(error: unknown) {
   if (error instanceof ApiError) {
+    if (error.problem.code === 'WORKSPACE_ARCHIVE_NOT_SETTLED')
+      return '归档尚未取得原执行结束确认。请先完成或取消归档，再恢复空间。'
     if (error.problem.code === 'WORKSPACE_LIFECYCLE_NOT_IDLE')
       return '空间还有运行、导入或报告处理。请先完成或取消任务，再核对停用计划。'
     if (error.problem.code === 'WORKSPACE_LIFECYCLE_GIT_DRAINING')

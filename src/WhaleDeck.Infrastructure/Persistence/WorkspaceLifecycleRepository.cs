@@ -13,6 +13,8 @@ public sealed class WorkspaceLifecycleRepository(PlatformDbContext db, TimeProvi
 
     public async Task RequireIdleAsync(Guid workspaceId, CancellationToken token)
     {
+        if (await db.WorkspaceArchiveIntents.AnyAsync(row => row.WorkspaceId == workspaceId && row.FinishedAtUtc == null, token))
+            throw new InvalidOperationException("WORKSPACE_ARCHIVE_NOT_SETTLED");
         // Legacy Git cancellation has no explicit host stop acknowledgement.
         // Its unit is bounded to 100s, capability admission to 60s, plus teardown
         // margin. Preserve the cancellation record; do not call it a stop proof.
@@ -211,7 +213,7 @@ public sealed class WorkspaceLifecycleRepository(PlatformDbContext db, TimeProvi
     {
         db.ChangeTracker.Clear();
         await using var transaction = await db.Database.BeginTransactionAsync(token);
-        await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout='3s'", token);
+        await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout='3s'; SELECT pg_advisory_xact_lock(41307420)", token);
         var result = await change();
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);

@@ -97,7 +97,7 @@ Webhook 引入时沿用签名/防重放/固定仓库约束；本功能可先手�
 | RPC-DEV-005 | OpenWorkspaceSession / CloseWorkspaceSession | 类型 IDE/terminal/debug/preview、主体/空间/目标、一次性 capability 和过期 |
 | RPC-DEV-006 | 1.66 支持宿主采集与回执清单，1.67 增加 `development.run.test-artifact.transfer` | 从固定输出槽封存 JUnit/TRX，读取及退役绑定原运行、摘要和字节数。Worker 提交脱敏报告后才退役摘要匹配的原件 |
 | RPC-DEV-007 | ManageWorkspaceLifecycle | 登记空间/计划、start/stop/rebuild/snapshot/delete 枚举及数据保留策略 |
-| RPC-DEV-008 | Agent 1.77内部归档 Start/Observe/Cancel候选 | 原task/archive、完整storage/停机epoch/phase/plan和服务端原capture摘要绑定；单次nonce签名。仍需持久业务授权及用户确认，不能据Stopped或Verify直接删除源码/释放配额。见[隔离实盘验证](qa/DEVELOPMENT_ARCHIVE_RPC.md) |
+| RPC-DEV-008 | Agent 1.77内部归档 Start/Observe/Cancel；持久业务候选 | 原task/archive、完整storage/停机epoch/phase/plan和服务端原capture摘要绑定；单次nonce签名。持久Plan/确认/Capture/独立Verify、当前身份/取消/重授权及旧Resume数据库围栏已通过本地真实PG，仍待标准发布及安装态身份/HDD验收，不能删除源码/释放配额。见[实盘协议](qa/DEVELOPMENT_ARCHIVE_RPC.md)及[持久业务边界](qa/DEVELOPMENT_WORKSPACE_ARCHIVE_WORKFLOW.md) |
 
 Agent 只管理登记工作负载与只读白名单路径。空间容器没有宿主 Agent/Docker Socket；run 的代码执行由空间内 runner/debug adapter 执行。Worker 协调任务、会话过期/孤儿回收、指标/工件持久化、报告生成与保留清理。跨重启凭原 run/operation 恢复观察，不重复启动测试；不可恢复的交互会话明确终态为中断，保留可用报告。
 

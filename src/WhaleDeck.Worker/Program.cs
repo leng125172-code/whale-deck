@@ -29,6 +29,7 @@ builder.Services.AddHostedService<WorkspaceRunWorker>();
 builder.Services.AddHostedService<WorkspaceSourceWorker>();
 builder.Services.AddHostedService<WorkspaceRunReportWorker>();
 builder.Services.AddHostedService<WorkspaceLifecycleWorker>();
+builder.Services.AddHostedService<WorkspaceArchiveWorker>();
 builder.Services.AddHostedService<NotificationSenderWorker>();
 builder.Services.AddHostedService<NotificationPrivateWorker>();
 builder.Services.AddHostedService<FileUploadWorker>();

@@ -163,8 +163,20 @@ public sealed class DevelopmentArchiveRpcTests
                 caps.Major = major; caps.Minor = minor; caps.Enabled = enabled;
                 var rejected = await Assert.ThrowsAsync<WorkspaceArchiveException>(() => gateway.StartArchiveAsync(actor, workspace, task, timeout.Token));
                 Assert.Equal(WorkspaceArchiveFailure.Unsupported, rejected.Failure); Assert.Equal(0, receiver.Calls);
+                Assert.True(rejected.StartWasNotDispatched);
             }
             caps.Major = 1; caps.Enabled = true;
+            caps.Fail = true;
+            var preflight = await Assert.ThrowsAsync<WorkspaceArchiveException>(() => gateway.StartArchiveAsync(actor, workspace, task, timeout.Token));
+            Assert.True(preflight.StartWasNotDispatched); Assert.Equal(0, receiver.Calls);
+            caps.Fail = false;
+            using (var missingKey = new AgentGateway(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+                { ["Agent:SocketPath"] = socket }).Build()))
+            {
+                var rejected = await Assert.ThrowsAsync<WorkspaceArchiveException>(() => missingKey.StartArchiveAsync(actor, workspace, task, timeout.Token));
+                Assert.True(rejected.StartWasNotDispatched); Assert.Equal(WorkspaceArchiveFailure.Unconfirmed, rejected.Failure);
+                Assert.Equal(0, receiver.Calls);
+            }
             var pending = await gateway.StartArchiveAsync(actor, workspace, task, timeout.Token); Assert.Equal("Pending", pending.Status);
             var request = receiver.LastRequest!; var consumed = receiver.LastToken!;
             Assert.Equal(actor.Subject, request.Storage.ActorSubject); Assert.NotEqual(workspace.OwnerSubject, request.Storage.ActorSubject);
@@ -230,6 +242,7 @@ public sealed class DevelopmentArchiveRpcTests
             receiver.Corrupt = false; receiver.Fail = true; count = receiver.Calls;
             var lost = await Assert.ThrowsAsync<WorkspaceArchiveException>(() => gateway.StartArchiveAsync(actor, workspace, task, timeout.Token));
             Assert.Equal(WorkspaceArchiveFailure.Retryable, lost.Failure); Assert.Equal(count + 1, receiver.Calls);
+            Assert.False(lost.StartWasNotDispatched);
             Assert.Equal(request, receiver.LastRequest); // No automatic retry/new task.
             Assert.False(server.Services.GetRequiredService<CapabilityValidator>().Validate(consumed, DevelopmentArchiveBinding.Start));
         }
@@ -239,8 +252,10 @@ public sealed class DevelopmentArchiveRpcTests
     public sealed class Capabilities : AgentService.AgentServiceBase
     {
         public uint Major { get; set; } = 1; public uint Minor { get; set; } = 77; public bool Enabled { get; set; } = true;
+        public bool Fail { get; set; }
         public override Task<CapabilitiesResponse> GetCapabilities(Google.Protobuf.WellKnownTypes.Empty request, ServerCallContext context)
         {
+            if (Fail) throw new RpcException(new Status(StatusCode.Unavailable, "WORKSPACE_ARCHIVE_TEST_PREFLIGHT_FAILED"));
             var reply = new CapabilitiesResponse { ProtocolMajor = Major, ProtocolMinor = Minor };
             if (Enabled) reply.Capabilities.Add(DevelopmentArchiveBinding.Capability); return Task.FromResult(reply);
         }

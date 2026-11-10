@@ -25,23 +25,14 @@ public sealed partial class AgentGateway : IWorkspaceArchiveGateway
         if (workspace.State != WorkspaceStorageAllocation.Allocated || workspace.LifecycleState != WorkspaceLifecycle.Stopped ||
             workspace.LifecycleVersion != task.ExpectedEpoch || task.ExpectedEpoch < 2)
             throw new ArgumentException("WORKSPACE_ARCHIVE_BINDING_INVALID");
-        var request = new WorkspaceArchiveRequest
-        {
-            Storage = new()
-            {
-                WorkspaceId = workspace.Id.ToString("D"), StorageRootId = workspace.StorageRootId,
-                EnvironmentSha256 = workspace.EnvironmentSha256, DiskMib = (uint)workspace.Budget.DiskMiB,
-                ActorSubject = actor.Subject, TraceId = actor.TraceId
-            },
-            TaskId = task.TaskId.ToString("D"), ArchiveId = task.ArchiveId.ToString("D"), Phase = task.Phase,
-            ExpectedEpoch = (ulong)task.ExpectedEpoch, PlanSha256 = task.PlanSha256, ReceiptSha256 = task.ReceiptSha256
-        };
+        var request = BuildArchiveRequest(actor, workspace, task);
         if (!DevelopmentArchiveBinding.IsValid(request)) throw new ArgumentException("WORKSPACE_ARCHIVE_BINDING_INVALID");
+        var archiveRpcInvoked = false;
         try
         {
             var caps = await _agent.GetCapabilitiesAsync(new Empty(), deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
-            if (!DevelopmentArchiveBinding.IsSupported(caps)) throw new WorkspaceArchiveException(WorkspaceArchiveFailure.Unsupported);
-            if (_capabilityKey is not { Length: >= 32 }) throw new WorkspaceArchiveException(WorkspaceArchiveFailure.Unconfirmed);
+            if (!DevelopmentArchiveBinding.IsSupported(caps)) throw new WorkspaceArchiveException(WorkspaceArchiveFailure.Unsupported, method == DevelopmentArchiveBinding.Start);
+            if (_capabilityKey is not { Length: >= 32 }) throw new WorkspaceArchiveException(WorkspaceArchiveFailure.Unconfirmed, method == DevelopmentArchiveBinding.Start);
             var expires = DateTimeOffset.UtcNow.AddSeconds(45).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
             var nonce = Guid.NewGuid().ToString("N");
             var signature = HMACSHA256.HashData(_capabilityKey, Encoding.UTF8.GetBytes(
@@ -49,6 +40,7 @@ public sealed partial class AgentGateway : IWorkspaceArchiveGateway
             var headers = new Metadata { { "x-whaledeck-capability", $"{expires}.{nonce}.{Convert.ToHexString(signature)}" } };
             var client = new DevelopmentArchiveService.DevelopmentArchiveServiceClient(_channel);
             var deadline = DateTime.UtcNow.AddSeconds(25);
+            archiveRpcInvoked = true;
             var receipt = method switch
             {
                 DevelopmentArchiveBinding.Start => await client.StartAsync(request, headers, deadline, token),
@@ -70,7 +62,24 @@ public sealed partial class AgentGateway : IWorkspaceArchiveGateway
                 StatusCode.DataLoss => WorkspaceArchiveFailure.Integrity,
                 StatusCode.FailedPrecondition or StatusCode.Aborted or StatusCode.InvalidArgument or StatusCode.PermissionDenied => WorkspaceArchiveFailure.Unconfirmed,
                 _ => WorkspaceArchiveFailure.Retryable
-            });
+            }, method == DevelopmentArchiveBinding.Start && !archiveRpcInvoked);
+        }
+        catch (OperationCanceledException) when (method == DevelopmentArchiveBinding.Start && !archiveRpcInvoked)
+        {
+            throw new WorkspaceArchiveException(WorkspaceArchiveFailure.Retryable, startWasNotDispatched: true);
         }
     }
+
+    internal static WorkspaceArchiveRequest BuildArchiveRequest(TerminalActor actor, WorkspaceDefinition workspace,
+        WorkspaceArchiveTask task) => new()
+        {
+            Storage = new()
+            {
+                WorkspaceId = workspace.Id.ToString("D"), StorageRootId = workspace.StorageRootId,
+                EnvironmentSha256 = workspace.EnvironmentSha256, DiskMib = (uint)workspace.Budget.DiskMiB,
+                ActorSubject = actor.Subject, TraceId = actor.TraceId
+            },
+            TaskId = task.TaskId.ToString("D"), ArchiveId = task.ArchiveId.ToString("D"), Phase = task.Phase,
+            ExpectedEpoch = (ulong)task.ExpectedEpoch, PlanSha256 = task.PlanSha256, ReceiptSha256 = task.ReceiptSha256
+        };
 }

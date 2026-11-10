@@ -8975,6 +8975,156 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceArchiveIntent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AuthorizationRequired")
+                        .HasColumnType("boolean")
+                        .HasColumnName("authorization_required");
+
+                    b.Property<DateTimeOffset>("AvailableAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("available_at_utc");
+
+                    b.Property<bool>("AwaitingConfirmation")
+                        .HasColumnType("boolean")
+                        .HasColumnName("awaiting_confirmation");
+
+                    b.Property<bool>("CancelRequested")
+                        .HasColumnType("boolean")
+                        .HasColumnName("cancel_requested");
+
+                    b.Property<string>("CaptureJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("capture_json");
+
+                    b.Property<string>("ExecutionSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("execution_subject");
+
+                    b.Property<long>("ExpectedEpoch")
+                        .HasColumnType("bigint")
+                        .HasColumnName("expected_epoch");
+
+                    b.Property<DateTimeOffset?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at_utc");
+
+                    b.Property<Guid?>("Lease")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease");
+
+                    b.Property<DateTimeOffset?>("LeaseUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until_utc");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("phase");
+
+                    b.Property<string>("PlanJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("plan_json");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("snapshot_json");
+
+                    b.Property<string>("VerifyJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("verify_json");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId")
+                        .IsUnique()
+                        .HasFilter("finished_at_utc IS NULL");
+
+                    b.HasIndex("AvailableAtUtc", "Id")
+                        .HasFilter("finished_at_utc IS NULL");
+
+                    b.ToTable("development_workspace_archives", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_archive_confirmation", "NOT awaiting_confirmation OR (phase = 'plan' AND plan_json IS NOT NULL AND finished_at_utc IS NULL)");
+
+                            t.HasCheckConstraint("ck_workspace_archive_epoch", "expected_epoch >= 2 AND expected_epoch % 2 = 0");
+
+                            t.HasCheckConstraint("ck_workspace_archive_lease", "(lease IS NULL) = (lease_until_utc IS NULL) AND (finished_at_utc IS NULL OR lease IS NULL)");
+
+                            t.HasCheckConstraint("ck_workspace_archive_phase", "phase IN ('plan','capture','verify')");
+
+                            t.HasCheckConstraint("ck_workspace_archive_snapshot", "octet_length(snapshot_json::text) BETWEEN 1 AND 16384");
+                        });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceArchiveStep", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ArchiveId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("archive_id");
+
+                    b.Property<DateTimeOffset?>("DispatchedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dispatched_at_utc");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("phase");
+
+                    b.Property<string>("ProofJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("proof_json");
+
+                    b.Property<string>("RequestJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("request_json");
+
+                    b.Property<DateTimeOffset?>("SettledAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("settled_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArchiveId", "Phase")
+                        .IsUnique();
+
+                    b.ToTable("development_workspace_archive_steps", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_archive_step_phase", "phase IN ('plan','capture','verify')");
+
+                            t.HasCheckConstraint("ck_workspace_archive_step_proof", "proof_json IS NULL OR octet_length(proof_json::text) BETWEEN 1 AND 32768");
+
+                            t.HasCheckConstraint("ck_workspace_archive_step_request", "octet_length(request_json) BETWEEN 1 AND 4096");
+
+                            t.HasCheckConstraint("ck_workspace_archive_step_settled", "settled_at_utc IS NULL OR proof_json IS NOT NULL");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceLifecycleIntent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9969,6 +10119,30 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ChannelId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceArchiveIntent", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithOne()
+                        .HasForeignKey("WhaleDeck.Domain.Entities.WorkspaceArchiveIntent", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.DevelopmentWorkspaceRecord", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceArchiveStep", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceArchiveIntent", null)
+                        .WithMany()
+                        .HasForeignKey("ArchiveId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
