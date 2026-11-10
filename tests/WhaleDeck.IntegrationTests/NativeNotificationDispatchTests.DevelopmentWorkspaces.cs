@@ -72,5 +72,9 @@ public sealed partial class NativeNotificationDispatchTests
         await ContainerUploadHttpTests.ArchiveWorkspaceInPostgres(options);
         var archiveDowngrade = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync("20261110063112_WorkspaceIdleLifecycle"));
         Assert.Equal("workspace_archive_history_present", archiveDowngrade.MessageText);
+        await db.Database.MigrateAsync();
+        await ContainerUploadHttpTests.PrepareWorkspaceRetirementInPostgres(options);
+        var retirementDowngrade = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync("20261110154425_WorkspaceArchiveWorkflow"));
+        Assert.Equal("workspace_retirement_history_present", retirementDowngrade.MessageText);
     }
 }

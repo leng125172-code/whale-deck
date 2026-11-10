@@ -133,6 +133,7 @@ public sealed partial class PlatformDbContext(DbContextOptions<PlatformDbContext
         ConfigureDevelopmentWorkspaces(modelBuilder);
         ConfigureWorkspaceLifecycle(modelBuilder);
         ConfigureWorkspaceArchives(modelBuilder);
+        ConfigureWorkspaceRetirements(modelBuilder);
         ConfigureWorkspaceSources(modelBuilder);
         ConfigureContainerMoves(modelBuilder);
         ConfigureContainerFileHistory(modelBuilder);

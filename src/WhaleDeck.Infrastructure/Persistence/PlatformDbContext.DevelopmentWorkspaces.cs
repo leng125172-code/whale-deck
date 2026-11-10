@@ -46,6 +46,7 @@ public sealed partial class PlatformDbContext
                         WHEN 'Active' THEN lifecycle_version % 2 = 1
                         WHEN 'Stopping' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'
                         WHEN 'Stopped' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'
+                        WHEN 'Retiring' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'
                         WHEN 'Resuming' THEN lifecycle_version >= 3 AND lifecycle_version % 2 = 1 AND state = 'StorageAllocated'
                         ELSE FALSE END) IS TRUE
                     """);

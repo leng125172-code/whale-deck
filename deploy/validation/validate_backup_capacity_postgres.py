@@ -147,6 +147,7 @@ def run_native(suite, report):
             assert len(runs) == 1 and runs[0].get('outcome') == 'Passed', 'Native result is not one complete passed execution'
             phases = re.findall(r'INBOX_PHASE=([a-z-]{1,160})', output)
             if suite == 'dispatch':
+                assert 'workspace-retirement-preparation-postgres-replay-row-fence-lease-expiry-ack-cancel-budget-retained' in phases, 'Workspace retirement preparation persistence boundaries were not executed'
                 assert 'container-recycle-restore-job-safe-summary-source-attribution-nullable-audit-projection' in phases, 'Independent restore safe job summary was not executed'
                 assert 'container-recycle-restore-source-locked-persistent-nullable-unknown-fourteen-fences-audited' in phases, 'Independent recycle restore persistence boundaries were not executed'
                 assert 'container-recycle-purge-two-phase-source-locked-fifteen-fences-nullable-audited' in phases, 'Purge persistence boundaries were not executed'
