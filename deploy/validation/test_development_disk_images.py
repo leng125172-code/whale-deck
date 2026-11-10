@@ -67,7 +67,9 @@ class DevelopmentDiskImageTests(unittest.TestCase):
                 p.write_bytes(original)
 
     def test_copied_inode_sparse_file_or_shared_link_is_rejected(self):
-        for key, wrong in [('inode', self.pin['inode'] + 1), ('device', '8:1'),
+        major, minor = map(int, self.pin['device'].split(':'))
+        wrong_device = f'{major + 1}:{minor}'
+        for key, wrong in [('inode', self.pin['inode'] + 1), ('device', wrong_device),
                            ('sizeBytes', self.pin['sizeBytes'] + 512),
                            ('filesystemUuid', '00000000-0000-0000-0000-000000000000')]:
             with self.subTest(key=key), self.assertRaisesRegex(fixture.files.Rejected, 'IMAGE_MISMATCH'):
