@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-10，`c51ed786` 已完成真实工作站覆盖部署、正常迁移及六组件/HTTP 来源核对，11 核心 healthy、8 数据库平台身份保持。新增真实 Authentik 与已部署开发空间页面验收，管理员/普通权限、布局和退出通过，临时账号删除。首轮 APT 发布失败及修复、两次维护重启连接失败原样保留；实际存储根/运行时为空，物理 NVMe 硬配额与完整导入/Runner/差异整链仍待，用户另有 NVMe 待核对。继续合并和完整 59 项，不签 master。见[实机部署与边界](qa/DEVELOPMENT_WORKSPACE_INSTALLED_BASELINE.md)。
+
 2026-11-10，P3-14 `f2806fbb` 接入 BFF 与 Vue 逐行差异。真实 HTTP、PostgreSQL、Unix Socket 与生产 Chrome 分别验证 CSRF、计划绑定、撤权、保护分类及纯文本预览。继续合并与物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_TEXT_DIFF_UI.md)。
 
 2026-11-10，P3-14 `83511315` 接入 Agent 1.74 签名逐行差异。真实 Unix Socket、sudo、systemd 和 ext4 验证逐行内容、路径绑定、重放及变更拒绝。继续 BFF/Vue、合并和物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_TEXT_DIFF_RPC.md)。
