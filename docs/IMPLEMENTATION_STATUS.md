@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-10，P3-14 `6d16226d` 接入宿主留存旧树导出。隔离 KVM 真实 ext4 验证跨版本取回、重复归档、回执门禁和受保护路径拒绝。继续签名 Agent 流式传输、所有者下载及逐文件差异。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_PREVIOUS_HOST.md)。
+
 2026-11-10，P3-14 `b35a18e7` 接入 Vue Git 更新与冲突策略。生产 Chrome 联合真实 HTTP、Worker 和 PostgreSQL 验证基线绑定、脏树确认、丢响应恢复及 320 像素暗色布局。继续旧树取回、逐文件差异及物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT_UPDATE_VUE.md)。
 
 2026-11-10，P3-14 `282caa37` 接入 Git 更新的 BFF 与 Worker。真实 HTTP、PostgreSQL 和 Unix Socket gRPC 验证当前基线校验、脏树确认、迟到修改拒绝及交换回执丢失后沿用原策略恢复。继续 Vue 冲突选择、旧树取回和物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT_UPDATE_WORKFLOW.md)。
