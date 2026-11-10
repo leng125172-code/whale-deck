@@ -164,6 +164,32 @@ public sealed class DevelopmentRunnerRpcTests
             Assert.Equal(WorkspaceRunnerFailure.Unsupported, unsupported.Failure);
             Assert.Equal(report, (await gateway.ObserveAsync(Actor, workspace, reporting, timeout.Token)).TestReport);
             Assert.Equal(report, (await gateway.CancelAsync(Actor, workspace, reporting, timeout.Token)).TestReport);
+            var capabilities = server.Services.GetRequiredService<RunnerCapabilities>();
+            capabilities.TransferEnabled = true;
+            var dotnetEnvironment = new WorkspaceEnvironment(1,
+                [new("dotnet", "10.0.402", "registry.example/sdk@sha256:" + new string('c', 64))]);
+            var dotnetWorkspace = workspace with { Environment = dotnetEnvironment,
+                EnvironmentSha256 = DevelopmentRunnerBinding.Digest(DevelopmentWorkspaces.EncodeEnvironment(dotnetEnvironment)) };
+            var dotnetBuild = command with { Runtime = "dotnet", Arguments = ["/usr/share/dotnet/dotnet", "build"] };
+            var beforeRestore = receiver.Calls;
+            foreach (var (minor, enabled) in new[] { (74u, true), (75u, false) })
+            {
+                capabilities.Minor = minor;
+                capabilities.RestoreEnabled = enabled;
+                foreach (var call in new Func<Task<WorkspaceRunnerReceipt>>[] {
+                    () => gateway.StartAsync(Actor, dotnetWorkspace, dotnetBuild, timeout.Token),
+                    () => gateway.ObserveAsync(Actor, dotnetWorkspace, dotnetBuild, timeout.Token),
+                    () => gateway.CancelAsync(Actor, dotnetWorkspace, dotnetBuild, timeout.Token),
+                    () => gateway.ReclaimAsync(Actor, dotnetWorkspace, dotnetBuild, timeout.Token) })
+                {
+                    var deniedRestore = await Assert.ThrowsAsync<WorkspaceRunnerException>(call);
+                    Assert.Equal(WorkspaceRunnerFailure.RestoreRequired, deniedRestore.Failure);
+                    Assert.Equal(beforeRestore, receiver.Calls);
+                }
+            }
+            capabilities.RestoreEnabled = true;
+            Assert.Equal("Succeeded", (await gateway.StartAsync(Actor, dotnetWorkspace, dotnetBuild, timeout.Token)).Status);
+            Assert.Equal(beforeRestore + 1, receiver.Calls);
         }
         finally { directory.Delete(recursive: true); }
     }
@@ -211,20 +237,38 @@ public sealed class DevelopmentRunnerRpcTests
 
     private static Metadata Headers(string value) => new() { { "x-whaledeck-capability", value } };
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DotnetTestFormatsKeepLegacyReceiptCompatibility(bool legacy)
+    {
+        var request = new WorkspaceRunRequest { Runtime = "dotnet" };
+        request.Argv.Add(["/usr/share/dotnet/dotnet", "test"]);
+        if (legacy) request.Argv.Add("--no-restore");
+        request.Argv.Add(["--results-directory", "/tmp/whaledeck-results", "--logger", "trx;LogFileName=tests.trx"]);
+        Assert.Equal("Trx", DevelopmentRunnerBinding.ReportFormat(request));
+        Assert.Equal(!legacy, DevelopmentRunnerBinding.RequiresRestoreSupport(request));
+        request.Argv.Add("--unknown");
+        Assert.Null(DevelopmentRunnerBinding.ReportFormat(request));
+    }
+
     public sealed class RunnerCapabilities : AgentService.AgentServiceBase
     {
         public bool TransferEnabled { get; set; } = true;
+        public bool RestoreEnabled { get; set; }
+        public uint? Minor { get; set; }
 
         public override Task<CapabilitiesResponse> GetCapabilities(Google.Protobuf.WellKnownTypes.Empty request, ServerCallContext context)
         {
             var result = new CapabilitiesResponse
             {
-                ProtocolMajor = 1, ProtocolMinor = TransferEnabled ? DevelopmentRunnerBinding.ArtifactTransferProtocolMinor :
-                    DevelopmentRunnerBinding.ReportProtocolMinor
+                ProtocolMajor = 1, ProtocolMinor = Minor ?? (TransferEnabled ? DevelopmentRunnerBinding.ArtifactTransferProtocolMinor :
+                    DevelopmentRunnerBinding.ReportProtocolMinor)
             };
             result.Capabilities.Add([DevelopmentRunnerBinding.Capability, DevelopmentRunnerBinding.ControlCapability,
                 DevelopmentRunnerBinding.ReportCapability]);
             if (TransferEnabled) result.Capabilities.Add(DevelopmentRunnerBinding.ArtifactTransferCapability);
+            if (RestoreEnabled) result.Capabilities.Add(DevelopmentRunnerBinding.RestoreCapability);
             return Task.FromResult(result);
         }
     }

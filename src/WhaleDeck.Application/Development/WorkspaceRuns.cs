@@ -79,8 +79,8 @@ public sealed class WorkspaceRuns(DevelopmentWorkspaces access, IDevelopmentWork
     {
         ("node", "test") => ["/usr/local/bin/node", "--test", "--test-reporter=junit",
             "--test-reporter-destination=/tmp/whaledeck-results/tests.xml"],
-        ("dotnet", "build") => ["/usr/share/dotnet/dotnet", "build", "--no-restore"],
-        ("dotnet", "test") => ["/usr/share/dotnet/dotnet", "test", "--no-restore", "--results-directory",
+        ("dotnet", "build") => ["/usr/share/dotnet/dotnet", "build"],
+        ("dotnet", "test") => ["/usr/share/dotnet/dotnet", "test", "--results-directory",
             "/tmp/whaledeck-results", "--logger", "trx;LogFileName=tests.trx"],
         _ => throw new ArgumentException("WORKSPACE_RUN_TASK_INVALID")
     };

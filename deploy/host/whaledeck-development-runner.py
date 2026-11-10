@@ -31,7 +31,7 @@ REPORT_SLOT = '/tmp/whaledeck-results'
 REPORT_COMMANDS = {
     'node': (['/usr/local/bin/node', '--test', '--test-reporter=junit',
               '--test-reporter-destination=' + REPORT_SLOT + '/tests.xml'], 'JUnit', 'tests.xml'),
-    'dotnet': (['/usr/share/dotnet/dotnet', 'test', '--no-restore', '--results-directory', REPORT_SLOT,
+    'dotnet': (['/usr/share/dotnet/dotnet', 'test', '--results-directory', REPORT_SLOT,
                 '--logger', 'trx;LogFileName=tests.trx'], 'Trx', 'tests.trx'),
 }
 KEY = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*\Z')
@@ -145,6 +145,10 @@ def verify_work(driver, payload, proof):
 
 def report_spec(request):
     spec = REPORT_COMMANDS.get(request['runtime'])
+    if request['runtime'] == 'dotnet' and request['argv'] == [
+            '/usr/share/dotnet/dotnet', 'test', '--no-restore', '--results-directory', REPORT_SLOT,
+            '--logger', 'trx;LogFileName=tests.trx']:
+        return 'Trx', 'tests.trx'
     return spec[1:] if spec is not None and request['argv'] == spec[0] else None
 
 

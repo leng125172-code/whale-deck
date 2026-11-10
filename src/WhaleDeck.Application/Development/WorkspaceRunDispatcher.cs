@@ -49,6 +49,10 @@ public sealed class WorkspaceRunDispatcher(IWorkspaceRunStore queue, WorkspaceRu
         {
             await queue.FinishAsync(claim, "Failed", "ResultUnknown", "WORKSPACE_RUN_RESULT_UNKNOWN", null, token);
         }
+        catch (WorkspaceRunnerException error) when (claim.DispatchedAtUtc is null && error.Failure == WorkspaceRunnerFailure.RestoreRequired)
+        {
+            await queue.FinishAsync(claim, "Failed", "AgentUnavailable", "WORKSPACE_RUN_AGENT_RESTORE_REQUIRED", null, token);
+        }
         catch (WorkspaceRunnerException error) when (claim.DispatchedAtUtc is null && error.Failure == WorkspaceRunnerFailure.Unsupported)
         {
             var code = claim.Command.ReportRetentionDays is not null && claim.Run.Task == "test"
@@ -96,7 +100,7 @@ public sealed class WorkspaceRunDispatcher(IWorkspaceRunStore queue, WorkspaceRu
             "Cancelled" when receipt.RuntimeExitCode is null =>
                 queue.FinishAsync(claim, "Canceled", "CanceledAtHost", null, receipt, token),
             "Failed" when receipt.RuntimeExitCode is >= 1 and <= 255 =>
-                queue.FinishAsync(claim, "Failed", "HostFailed", "WORKSPACE_RUN_HOST_FAILED", receipt, token),
+                queue.FinishAsync(claim, "Failed", "TaskFailed", "WORKSPACE_RUN_TASK_FAILED", receipt, token),
             "TimedOut" when receipt.RuntimeExitCode is null =>
                 queue.FinishAsync(claim, "Failed", "TimedOut", "WORKSPACE_RUN_TIMED_OUT", receipt, token),
             "Interrupted" when receipt.RuntimeExitCode is null =>

@@ -16,7 +16,7 @@ public sealed partial class AgentGateway
         var request = ArtifactRequest(actor, workspace, command, receipt);
         try
         {
-            await RequireArtifactCapabilityAsync(token);
+            await RequireArtifactCapabilityAsync(request.Run, token);
             var headers = SignWorkspaceRun(DevelopmentRunnerBinding.ReadTestArtifact, DevelopmentRunnerBinding.Hash(request));
             var client = new DevelopmentRunnerService.DevelopmentRunnerServiceClient(_channel);
             using var call = client.ReadTestArtifact(request, headers, DateTime.UtcNow.AddSeconds(25), token);
@@ -47,7 +47,7 @@ public sealed partial class AgentGateway
         var request = ArtifactRequest(actor, workspace, command, receipt);
         try
         {
-            await RequireArtifactCapabilityAsync(token);
+            await RequireArtifactCapabilityAsync(request.Run, token);
             var headers = SignWorkspaceRun(DevelopmentRunnerBinding.RetireTestArtifact, DevelopmentRunnerBinding.Hash(request));
             var client = new DevelopmentRunnerService.DevelopmentRunnerServiceClient(_channel);
             var retired = await client.RetireTestArtifactAsync(request, headers, DateTime.UtcNow.AddSeconds(25), token);
@@ -77,9 +77,11 @@ public sealed partial class AgentGateway
         return request;
     }
 
-    private async Task RequireArtifactCapabilityAsync(CancellationToken token)
+    private async Task RequireArtifactCapabilityAsync(WorkspaceRunRequest run, CancellationToken token)
     {
         var caps = await _agent.GetCapabilitiesAsync(new Empty(), deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
+        if (DevelopmentRunnerBinding.RequiresRestoreSupport(run) && !DevelopmentRunnerBinding.SupportsRestore(caps))
+            throw new WorkspaceRunnerException(WorkspaceRunnerFailure.RestoreRequired);
         if (!DevelopmentRunnerBinding.IsSupported(caps) || caps.ProtocolMinor < DevelopmentRunnerBinding.ArtifactTransferProtocolMinor ||
             !caps.Capabilities.Contains(DevelopmentRunnerBinding.ArtifactTransferCapability))
             throw new WorkspaceRunnerException(WorkspaceRunnerFailure.Unsupported);

@@ -14,10 +14,12 @@ public static partial class DevelopmentRunnerBinding
     public const uint ControlProtocolMinor = 65;
     public const uint ReportProtocolMinor = 66;
     public const uint ArtifactTransferProtocolMinor = 67;
+    public const uint RestoreProtocolMinor = 75;
     public const string Capability = "development.run";
     public const string ControlCapability = "development.run.control";
     public const string ReportCapability = "development.run.test-artifact";
     public const string ArtifactTransferCapability = "development.run.test-artifact.transfer";
+    public const string RestoreCapability = "development.run.dotnet-restore";
     public const int MaximumArtifactBytes = 16 * 1024 * 1024;
     public const string Service = "/whaledeck.agent.v1.DevelopmentRunnerService/";
     public const string Start = Service + "Start";
@@ -36,7 +38,16 @@ public static partial class DevelopmentRunnerBinding
     private static readonly string[] NodeReport =
         ["/usr/local/bin/node", "--test", "--test-reporter=junit", "--test-reporter-destination=/tmp/whaledeck-results/tests.xml"];
     private static readonly string[] DotnetReport =
+        ["/usr/share/dotnet/dotnet", "test", "--results-directory", "/tmp/whaledeck-results", "--logger", "trx;LogFileName=tests.trx"];
+    private static readonly string[] LegacyDotnetReport =
         ["/usr/share/dotnet/dotnet", "test", "--no-restore", "--results-directory", "/tmp/whaledeck-results", "--logger", "trx;LogFileName=tests.trx"];
+    private static readonly string[] DotnetBuild = ["/usr/share/dotnet/dotnet", "build"];
+
+    public static bool RequiresRestoreSupport(WorkspaceRunRequest request) => request.Runtime == "dotnet" &&
+        (request.Argv.SequenceEqual(DotnetBuild) || request.Argv.SequenceEqual(DotnetReport));
+
+    public static bool SupportsRestore(CapabilitiesResponse value) => IsSupported(value) &&
+        value.ProtocolMinor >= RestoreProtocolMinor && value.Capabilities.Contains(RestoreCapability);
 
     public static bool IsSupported(CapabilitiesResponse value, string method = Start) => value.ProtocolMajor == 1 &&
         value.ProtocolMinor >= ProtocolMinor && value.Capabilities.Contains(Capability) &&
@@ -101,7 +112,7 @@ public static partial class DevelopmentRunnerBinding
     public static string? ReportFormat(WorkspaceRunRequest request)
     {
         if (request.Runtime == "node" && request.Argv.SequenceEqual(NodeReport)) return "JUnit";
-        if (request.Runtime == "dotnet" && request.Argv.SequenceEqual(DotnetReport)) return "Trx";
+        if (request.Runtime == "dotnet" && (request.Argv.SequenceEqual(DotnetReport) || request.Argv.SequenceEqual(LegacyDotnetReport))) return "Trx";
         return null;
     }
 

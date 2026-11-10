@@ -7,7 +7,7 @@ public sealed record WorkspaceRunCommand(Guid RunId, string Runtime, string[] Ar
 public sealed record WorkspaceRunnerArtifact(WorkspaceTestFormat Format, string State, int Size, string Sha256);
 public sealed record WorkspaceRunnerReceipt(Guid RunId, string RequestSha256, string Status, int? RuntimeExitCode,
     WorkspaceRunnerArtifact? TestReport = null);
-public enum WorkspaceRunnerFailure { Retryable, NotFound, Interrupted, Unsupported, Integrity }
+public enum WorkspaceRunnerFailure { Retryable, NotFound, Interrupted, Unsupported, Integrity, RestoreRequired }
 public sealed class WorkspaceRunnerException(WorkspaceRunnerFailure failure) : Exception("WORKSPACE_RUN_HOST_UNAVAILABLE")
 {
     public WorkspaceRunnerFailure Failure { get; } = failure;

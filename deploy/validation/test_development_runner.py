@@ -27,6 +27,14 @@ control = load('whaledeck-development-runner-control.py')
 
 
 class RunnerTests(unittest.TestCase):
+    def test_dotnet_report_recognizes_restore_and_legacy_receipts(self):
+        current = ['/usr/share/dotnet/dotnet', 'test', '--results-directory', runner.REPORT_SLOT,
+                   '--logger', 'trx;LogFileName=tests.trx']
+        legacy = current[:2] + ['--no-restore'] + current[2:]
+        for command in (current, legacy):
+            self.assertEqual(('Trx', 'tests.trx'), runner.report_spec({'runtime': 'dotnet', 'argv': command}))
+        self.assertIsNone(runner.report_spec({'runtime': 'dotnet', 'argv': current + ['--logger', 'other']}))
+
     def setUp(self):
         self.driver = storage.WorkspaceStorage(files)
         self.image = 'registry.example/test/sdk@sha256:' + 'a' * 64

@@ -208,7 +208,8 @@ def oci_config(files, bundle, projected, argv, uid, cpu_millis, memory_mib, *, r
             'terminal': False, 'user': {'uid': uid, 'gid': uid, 'additionalGids': []},
             'args': argv.copy(), 'cwd': '/work', 'noNewPrivileges': True,
             'env': ['PATH=/usr/local/bin:/usr/bin:/bin', 'HOME=/tmp', 'TMPDIR=/tmp',
-                    'DOTNET_CLI_HOME=/tmp', 'DOTNET_CLI_TELEMETRY_OPTOUT=1', 'DOTNET_NOLOGO=1'],
+                    'DOTNET_CLI_HOME=/tmp', 'DOTNET_CLI_TELEMETRY_OPTOUT=1', 'DOTNET_NOLOGO=1'] + (
+                        ['NUGET_PACKAGES=/work/.nuget/packages'] if argv[0] == '/usr/share/dotnet/dotnet' else []),
             'capabilities': {key: [] for key in ('bounding', 'effective', 'inheritable', 'permitted', 'ambient')},
             'rlimits': [{'type': 'RLIMIT_CORE', 'soft': 0, 'hard': 0},
                         {'type': 'RLIMIT_NOFILE', 'soft': 4096, 'hard': 4096}],

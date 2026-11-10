@@ -175,6 +175,8 @@ public sealed partial class ContainerUploadHttpTests
         clock.Advance(5);
         await Tick(restarted.CreateAsyncScope());
         Assert.Equal("Pending", (await Read(reportRun.RunId)).ReportStatus);
+        Assert.Equal("TaskFailed", (await Read(reportRun.RunId)).Phase);
+        Assert.Equal("WORKSPACE_RUN_TASK_FAILED", (await Read(reportRun.RunId)).ErrorCode);
         await inspection.Database.ExecuteSqlRawAsync("""
             CREATE FUNCTION qa_workspace_report_reject() RETURNS trigger LANGUAGE plpgsql AS $$
             BEGIN RAISE EXCEPTION 'qa_report_write_failure'; END $$;

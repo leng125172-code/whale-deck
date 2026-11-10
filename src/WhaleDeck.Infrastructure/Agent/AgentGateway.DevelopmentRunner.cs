@@ -46,6 +46,8 @@ public sealed partial class AgentGateway : IWorkspaceRunnerGateway, IWorkspaceTe
     {
         var request = CreateWorkspaceRunRequest(actor, workspace, command);
         var caps = await _agent.GetCapabilitiesAsync(new Empty(), deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
+        if (DevelopmentRunnerBinding.RequiresRestoreSupport(request) && !DevelopmentRunnerBinding.SupportsRestore(caps))
+            throw new WorkspaceRunnerException(WorkspaceRunnerFailure.RestoreRequired);
         if (!DevelopmentRunnerBinding.IsSupported(caps, method) ||
             command.RequireControl && !DevelopmentRunnerBinding.IsSupported(caps, DevelopmentRunnerBinding.Reclaim) ||
             DevelopmentRunnerBinding.ReportFormat(request) is not null &&
