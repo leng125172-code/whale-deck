@@ -48,6 +48,7 @@ jobs:
           python3 -m unittest discover -s deploy/validation -p test_container_terminal.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p 'test_container_file*.py'
           sudo unshare -m -- env WHALEDECK_TEST_PARENT_MNT="$(readlink /proc/self/ns/mnt)" python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_storage.py
+          sudo python3 -B -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_archives.py
           sudo python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_disk_images.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_images.py
           python3 -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_development_project_quota.py

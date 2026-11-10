@@ -194,10 +194,7 @@ class WorkspaceStorage:
             self.reject('MOUNT_MISMATCH')
         if writable:
             self.require_writable(fd)
-        with self.absolute(UDEV) as udev:
-            self.directory(udev)
-            with self.opened(udev, 'b' + dev, READ) as descriptor:
-                records = self.read_file(descriptor, 65536).decode('utf-8').splitlines()
+        records = self.device_records(dev)
         uuids = [value for value in records if value.startswith('E:ID_FS_UUID=')]
         if uuids != ['E:ID_FS_UUID=' + root['filesystemUuid']] or 'E:ID_FS_USAGE=filesystem' not in records:
             self.reject('DEVICE_MISMATCH')
@@ -207,11 +204,33 @@ class WorkspaceStorage:
             self.require_nvme(dev)
         return mount_id
 
+    def device_records(self, dev):
+        with self.absolute(UDEV) as udev:
+            self.directory(udev)
+            with self.opened(udev, 'b' + dev, READ) as descriptor:
+                return self.read_file(descriptor, 65536).decode('utf-8').splitlines()
+
+    def require_hdd(self, dev):
+        device = (SYS_DEV / dev).resolve(strict=True)
+        disk = device.parent if (device / 'partition').is_file() else device
+        if (not device.is_relative_to(SYS_DEVICES) or 'virtual' in disk.parts
+                or (disk / 'queue/rotational').read_bytes() != b'1\n'):
+            self.reject('HDD_REQUIRED')
+
     def require_nvme_image(self, dev, image):
         # Root's explicit image declaration is required. A loop device alone
         # never proves NVMe storage. No device node or loop ioctl is exposed
         # to the allocator's PrivateDevices sandbox.
         self.validate_image(image)
+        self.require_reserved_image(dev, image, IMAGE_ROOT, self.require_nvme)
+
+    def require_reserved_image(self, dev, image, image_root, backing_verifier):
+        """Trusted callers validate their fixed declaration before this check.
+
+        The NVMe entry retains its original path and physical-device policy.
+        A separate private archive engine may attest its own HDD declaration;
+        neither a loop device nor this internal method grants a storage root.
+        """
         device = (SYS_DEV / dev).resolve(strict=True)
         if (device.parent != SYS_DEVICES / 'virtual/block' or not re.fullmatch(r'loop[0-9]+', device.name)
                 or (device / 'subsystem').resolve(strict=True) != BLOCK_CLASS):
@@ -224,7 +243,7 @@ class WorkspaceStorage:
                 if (device / name).read_bytes() != value.encode('utf-8'):
                     self.reject('IMAGE_MISMATCH')
         loop_matches()
-        with self.absolute(IMAGE_ROOT) as parent:
+        with self.absolute(image_root) as parent:
             self.directory(parent, private=True)
             with self.opened(parent, Path(image['path']).name, READ) as fd:
                 info = os.fstat(fd)
@@ -235,13 +254,9 @@ class WorkspaceStorage:
                         (image['device'], image['inode'], image['sizeBytes'])
                         or info.st_blocks * 512 < info.st_size):
                     self.reject('IMAGE_MISMATCH')
-                # Preserve the original direct PCIe NVMe attestation for the
-                # physical filesystem holding the fully reserved regular file.
-                self.require_nvme(backing)
-                with self.absolute(UDEV) as udev:
-                    self.directory(udev)
-                    with self.opened(udev, 'b' + backing, READ) as record:
-                        records = self.read_file(record, 65536).decode('utf-8').splitlines()
+                # The fixed caller verifies the backing's physical kind.
+                backing_verifier(backing)
+                records = self.device_records(backing)
                 if ([v for v in records if v.startswith('E:ID_FS_UUID=')] !=
                         ['E:ID_FS_UUID=' + image['filesystemUuid']] or 'E:ID_FS_USAGE=filesystem' not in records):
                     self.reject('IMAGE_MISMATCH')

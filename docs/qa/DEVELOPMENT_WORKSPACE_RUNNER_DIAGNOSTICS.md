@@ -2,6 +2,8 @@
 
 2026-11-10，修复提交 **ddc832df2e171a5ec3913d888a43b72e5f0d2c8e** 已完成标准 dev 覆盖部署和真实身份验收。准确 [CI 42792356973](https://github.com/leng125172-code/whale-deck/actions/runs/42792356973) 的 12 路全部成功；六组件实际来源、Agent/MaintenanceHost 运行进程及六个已安装宿主模块均核对。原失败任务、报告、审计和旧未提交源码合并预览保持；不计完整主任务或 master 完成。
 
+处理器断言及本页验收记录已随 ac93987d 提交推送，其准确 [CI 42797100929](https://github.com/leng125172-code/whale-deck/actions/runs/42797100929) 同样 12/12 成功；该提交不包含新的产品逻辑部署。
+
 ## 已定位的故障路径
 
 原 OCI 隔离只挂载 /proc、/dev、私有 /tmp 与 /work，不暴露宿主 cgroup 文件系统。实际固定 .NET SDK 10.0.402 在 CPU 1000 毫核、内存 2048 MiB、128 PID 限制下，Environment.ProcessorCount 返回 **32**。多进程的编译、测试平台和 CLR 会创建超过该预算适合数量的线程。
