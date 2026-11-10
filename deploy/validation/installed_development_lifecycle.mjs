@@ -134,8 +134,12 @@ export async function installedLifecycle({ page, context, base, api, id, route, 
     const sourceReplay = await context.request.put(`${base}${prefix}/source-imports/${source.id}`, {
       headers: await headers(context), data: sourceInput,
     })
-    assert.equal(sourceReplay.status(), 200)
-    assert.equal((await sourceReplay.json()).state, 'Published')
+    const sourceReplayView = await sourceReplay.json()
+    receipt.sourceReplay = { status: sourceReplay.status(), view: sourceReplayView }
+    await save()
+    // Begin returns AcceptedAtAction for both new intents and exact replays.
+    assert.equal(sourceReplay.status(), 202)
+    assert.equal(sourceReplayView.state, 'Published')
     const run = state.runs[0]
     const replay = await context.request.post(`${base}${prefix}/runs`, {
       headers: { ...await headers(context), 'Idempotency-Key': run.key }, data: { runtime: run.runtime, task: run.task },

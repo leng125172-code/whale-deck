@@ -12,6 +12,7 @@ import { installedLifecycle } from './installed_development_lifecycle.mjs'
 const base = 'http://127.0.0.1:8080', route = '/development/workspaces', api = '/api/v1' + route
 let browser, page, evidence, phase = 'startup', state
 async function save() {
+  state.phase = phase
   await writeFile(join(evidence, 'state.pending.json'), JSON.stringify(state, null, 2), { mode: 0o600 })
   await rename(join(evidence, 'state.pending.json'), join(evidence, 'state.json'))
 }
@@ -120,9 +121,16 @@ try {
   state.workspace = workspace
   await save()
   await page.reload()
-  await page.getByRole('button', { name: '核验 Runner 存储', exact: true }).click()
-  await expect(page.getByText('Runner 存储和配额核验通过。', { exact: true })).toBeVisible()
-  await page.screenshot({ path: join(evidence, 'allocated.png') })
+  if (!state.lifecycle?.stop?.operationId) {
+    await page.getByRole('button', { name: '核验 Runner 存储', exact: true }).click()
+    await expect(page.getByText('Runner 存储和配额核验通过。', { exact: true })).toBeVisible()
+    await page.screenshot({ path: join(evidence, 'allocated.png') })
+  } else {
+    // A repair may resume with the workspace legitimately stopped. The prior
+    // preflight and real runs remain evidence; do not require new admission.
+    assert.equal(workspace.state, 'StorageAllocated')
+    assert.ok(['Stopping', 'Stopped', 'Resuming', 'Active'].includes(workspace.lifecycleState))
+  }
   phase = 'real-source-upload'
   const raw = await readFile(input.archive), sha = createHash('sha256').update(raw).digest('hex')
   assert.equal(sha, input.archiveSha256)
@@ -275,12 +283,15 @@ try {
   const frame = error?.stack?.split('\n').find(line => ['validate_development_installed_runtime.mjs:', 'installed_development_lifecycle.mjs:'].some(file => line.includes(file)))?.trim()
   if (state && evidence) {
     state.failureHistory ??= state.lastFailure ? [state.lastFailure] : []
-    state.lastFailure = { phase, failureType: error?.name, frame }
+    state.lastFailure = { phase, failureType: error?.name, frame,
+      ...(typeof error?.actual === 'number' ? { actual: error.actual } : {}),
+      ...(typeof error?.expected === 'number' ? { expected: error.expected } : {}),
+    }
     state.failureHistory.push(state.lastFailure)
     await save().catch(() => {})
   }
   if (page && evidence && page.url().startsWith(base + route))
-    await page.screenshot({ path: join(evidence, 'last-failed-page.png') }).catch(() => {})
+    await page.screenshot({ path: join(evidence, `attempt-${state.browserAttempts}-failed-page.png`) }).catch(() => {})
   console.error(JSON.stringify({ installedRuntime: 'failed', phase, failureType: error?.name }))
   if (browser) await browser.close().catch(() => {})
   process.exitCode = 1
