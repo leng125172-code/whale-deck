@@ -19,7 +19,7 @@ public sealed partial class ContainerUploadHttpTests
         await using var inspect = new PlatformDbContext(options);
         var row = await inspect.DevelopmentWorkspaces.AsNoTracking().FirstAsync(w => w.Slug.StartsWith("archive-") && w.LifecycleState == "Stopped");
         var workspace = (await new DevelopmentWorkspaceRegistry(inspect).FindAsync(row.Id, null, default))!;
-        var clock = new WorkspaceRunClock(); var actor = new TerminalActor(workspace.OwnerSubject, null, [], new string('a', 64), "retirement-prepare-test", null);
+        var clock = new RetirementPreparationClock(); var actor = new TerminalActor(workspace.OwnerSubject, null, [], new string('a', 64), "retirement-prepare-test", null);
         var host = new ArchiveHost();
         var queued = await Archive(s => s.BeginAsync(actor, workspace, Guid.NewGuid(), workspace.LifecycleVersion, default));
         foreach (var phase in new[] { "plan", "capture", "verify" })
@@ -116,6 +116,14 @@ public sealed partial class ContainerUploadHttpTests
         { await using var db = new PlatformDbContext(options); return await action(new(db, clock, new WorkspaceLifecycleRepository(db, clock))); }
         async Task ArchiveWrite(Func<WorkspaceArchiveRepository, Task> action)
         { await using var db = new PlatformDbContext(options); await action(new(db, clock, new WorkspaceLifecycleRepository(db, clock))); }
+    }
+    private sealed class RetirementPreparationClock : TimeProvider
+    {
+        // Always exercise sub-microsecond ticks so a pre-persistence ACK
+        // cannot accidentally agree with its database replay by chance.
+        private DateTimeOffset _now = new(DateTimeOffset.UtcNow.UtcTicks / TimeSpan.TicksPerMicrosecond * TimeSpan.TicksPerMicrosecond + 3, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(int seconds) => _now = _now.AddSeconds(seconds);
     }
     private static string RetirementPlan(string verifyJson)
     {

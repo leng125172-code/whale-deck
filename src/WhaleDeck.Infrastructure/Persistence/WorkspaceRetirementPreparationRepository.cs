@@ -38,7 +38,7 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
             await db.WorkspaceRetirementIntents.AnyAsync(row => row.WorkspaceId == workspace.Id && row.FinishedAtUtc == null, token))
             throw new InvalidOperationException("WORKSPACE_RETIREMENT_ALREADY_PENDING");
         _ = await Evidence(workspace, archiveId, token);
-        var now = clock.GetUtcNow();
+        var now = Now();
         var job = new OperationJob { JobType = WorkspaceRetirementPreparations.JobType, ActorSubject = actor.Subject,
             ResourceId = workspace.Id, IdempotencyKey = key.ToString("D"), RequestJson = request, CreatedAtUtc = now, Phase = "Plan" };
         var intent = new WorkspaceRetirementIntent { Id = job.Id, WorkspaceId = workspace.Id, ArchiveId = archiveId,
@@ -61,7 +61,7 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
 
     public Task<WorkspaceRetirementPreparationClaim?> ClaimAsync(CancellationToken token) => Transaction<WorkspaceRetirementPreparationClaim?>(async () =>
     {
-        var now = clock.GetUtcNow();
+        var now = Now();
         var selected = await db.WorkspaceRetirementIntents.AsNoTracking().Where(row => row.FinishedAtUtc == null &&
             row.AvailableAtUtc <= now && (row.LeaseUntilUtc == null || row.LeaseUntilUtc <= now) &&
             (row.CancelRequested || row.PlanJson == null)).OrderBy(row => row.AvailableAtUtc).ThenBy(row => row.Id).FirstOrDefaultAsync(token);
@@ -82,8 +82,8 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
     {
         var workspace = await LockWorkspace(claim.Workspace.Id, token);
         var row = await LockIntent(claim.Workspace.Id, claim.View.RetirementId, token);
-        if (row.FinishedAtUtc is not null || row.Lease != claim.Lease || row.LeaseUntilUtc <= clock.GetUtcNow()) return false;
-        var snapshot = RequireFence(workspace, row); var job = await Job(row, token); var now = clock.GetUtcNow();
+        if (row.FinishedAtUtc is not null || row.Lease != claim.Lease || row.LeaseUntilUtc <= Now()) return false;
+        var snapshot = RequireFence(workspace, row); var job = await Job(row, token); var now = Now();
         if (row.CancelRequested) { Cancel(workspace, row, job, claim.Actor, now); return true; }
         var evidence = await Evidence(snapshot, row.ArchiveId, token);
         if (!DevelopmentRetirementPlanBinding.Matches(evidence.Request, evidence.Receipt, hostPlanJson))
@@ -99,18 +99,18 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
     {
         var workspace = await LockWorkspace(workspaceId, token); var row = await LockIntent(workspaceId, retirementId, token);
         var job = await Job(row, token);
-        if (row.FinishedAtUtc is not null || row.CancelRequested || row.PlanJson is null || row.PlanExpiresAtUtc <= clock.GetUtcNow() ||
+        if (row.FinishedAtUtc is not null || row.CancelRequested || row.PlanJson is null || row.PlanExpiresAtUtc <= Now() ||
             !DevelopmentLifecycleBinding.Digest(planSha256) || Digest(row.PlanJson) != planSha256)
             throw new InvalidOperationException("WORKSPACE_RETIREMENT_PLAN_CHANGED");
         _ = RequireFence(workspace, row); _ = await Evidence(ReadSnapshot(row), row.ArchiveId, token);
-        if (row.LeaseUntilUtc > clock.GetUtcNow()) throw new InvalidOperationException("WORKSPACE_RETIREMENT_WORKER_BUSY");
+        if (row.LeaseUntilUtc > Now()) throw new InvalidOperationException("WORKSPACE_RETIREMENT_WORKER_BUSY");
         if (row.ConfirmedAtUtc is not null) return View(row, job);
         // This acknowledges the preparation only. It cannot start a host task,
         // grant a capability, change source, or release budget. A future
         // execution workflow must reauthorize and revalidate all live facts.
-        row.ConfirmedAtUtc = clock.GetUtcNow(); row.ExecutionSubject = actor.Subject; row.LoginBinding = actor.LoginBinding;
+        row.ConfirmedAtUtc = Now(); row.ExecutionSubject = actor.Subject; row.LoginBinding = actor.LoginBinding;
         job.Phase = "Prepared"; job.Version++;
-        Event(job, "WORKSPACE_RETIREMENT_PREPARATION_ACKNOWLEDGED", clock.GetUtcNow()); Audit(actor, row, "acknowledge", clock.GetUtcNow());
+        Event(job, "WORKSPACE_RETIREMENT_PREPARATION_ACKNOWLEDGED", Now()); Audit(actor, row, "acknowledge", Now());
         return View(row, job);
     }, token);
 
@@ -122,10 +122,10 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
         _ = RequireFence(workspace, row);
         if (!row.CancelRequested)
         {
-            row.CancelRequested = true; row.AvailableAtUtc = clock.GetUtcNow(); job.CancelRequestedAtUtc = clock.GetUtcNow();
-            job.Version++; Event(job, "WORKSPACE_RETIREMENT_PREPARATION_CANCEL_REQUESTED", clock.GetUtcNow()); Audit(actor, row, "cancel-request", clock.GetUtcNow());
+            row.CancelRequested = true; row.AvailableAtUtc = Now(); job.CancelRequestedAtUtc = Now();
+            job.Version++; Event(job, "WORKSPACE_RETIREMENT_PREPARATION_CANCEL_REQUESTED", Now()); Audit(actor, row, "cancel-request", Now());
         }
-        if (row.LeaseUntilUtc is null || row.LeaseUntilUtc <= clock.GetUtcNow()) Cancel(workspace, row, job, actor, clock.GetUtcNow());
+        if (row.LeaseUntilUtc is null || row.LeaseUntilUtc <= Now()) Cancel(workspace, row, job, actor, Now());
         return View(row, job);
     }, token);
 
@@ -193,6 +193,13 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
     private Task<OperationJob> Job(WorkspaceRetirementIntent row, CancellationToken token) => db.OperationJobs.SingleAsync(job => job.Id == row.Id && job.JobType == WorkspaceRetirementPreparations.JobType, token);
     private static WorkspaceRetirementPreparationView View(WorkspaceRetirementIntent row, OperationJob job) => new(row.Id, row.WorkspaceId, row.ArchiveId,
         job.State, job.Phase, job.ErrorCode, row.PlanJson, row.PlanExpiresAtUtc, row.ConfirmedAtUtc, row.CancelRequested, row.FinishedAtUtc);
+    private DateTimeOffset Now()
+    {
+        // PostgreSQL stores timestamp values at microsecond precision. Return
+        // exactly the value a replay will read, including concurrent ACKs.
+        var now = clock.GetUtcNow();
+        return new(now.UtcTicks - now.UtcTicks % TimeSpan.TicksPerMicrosecond, TimeSpan.Zero);
+    }
     private void Event(OperationJob job, string code, DateTimeOffset now) => db.OperationJobEvents.Add(new()
     { JobId = job.Id, Sequence = job.Version + 1, State = job.State, Phase = job.Phase, MessageCode = code, OccurredAtUtc = now });
     private void Audit(TerminalActor actor, WorkspaceRetirementIntent row, string action, DateTimeOffset now) => db.AuditEvents.Add(new()
