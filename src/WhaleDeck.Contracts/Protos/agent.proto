@@ -487,6 +487,18 @@ service DevelopmentSourceService {
   rpc Discard(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
   // Fence and remove an incomplete upload (protocol 1.69).
   rpc Abort(WorkspaceSourceRequest) returns (google.protobuf.Empty);
+  // development.source.update (protocol 1.71). Separate methods fail closed on older Agents.
+  rpc StageUpdate(stream WorkspaceSourceFrame) returns (WorkspaceSourceReceipt);
+  rpc InspectUpdate(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
+  rpc PublishUpdate(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
+  rpc DiscardUpdate(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
+  rpc AbortUpdate(WorkspaceSourceRequest) returns (google.protobuf.Empty);
+}
+
+enum WorkspaceSourceConflictResolution {
+  WORKSPACE_SOURCE_CONFLICT_RESOLUTION_UNSPECIFIED = 0;
+  WORKSPACE_SOURCE_CONFLICT_RESOLUTION_CLEAN_ONLY = 1;
+  WORKSPACE_SOURCE_CONFLICT_RESOLUTION_RETAIN_AND_REPLACE = 2;
 }
 
 message WorkspaceSourceRequest {
@@ -496,6 +508,8 @@ message WorkspaceSourceRequest {
   uint32 archive_bytes = 4;
   string archive_sha256 = 5;
   string plan_sha256 = 6;
+  string previous_import_id = 7;
+  WorkspaceSourceConflictResolution conflict_resolution = 8;
 }
 
 message WorkspaceSourceFrame {
@@ -517,8 +531,18 @@ message WorkspaceSourceReceipt {
   uint32 file_count = 9;
   uint64 total_bytes = 10;
   string state = 11;
+  string previous_import_id = 12;
+  WorkspaceSourceUpdate update = 13;
 }
 
+message WorkspaceSourceUpdate {
+  string previous_content_sha256 = 1;
+  string work_content_sha256 = 2;
+  bool dirty = 3;
+  uint32 added_entries = 4;
+  uint32 removed_entries = 5;
+  uint32 changed_entries = 6;
+}
 // development.source.git (protocol 1.70).
 service DevelopmentGitService {
   rpc Acquire(WorkspaceGitRequest) returns (stream WorkspaceGitFrame);

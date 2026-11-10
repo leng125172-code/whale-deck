@@ -98,8 +98,7 @@ public sealed class CapabilityValidator(IConfiguration configuration)
         ValidateContentBound(token, method, DevelopmentRunnerBinding.Hash(request), DevelopmentRunnerBinding.Payload);
 
     public bool ValidateDevelopmentSource(string? token, string method, string? hash) =>
-        method is DevelopmentSourceBinding.Stage or DevelopmentSourceBinding.Inspect or
-            DevelopmentSourceBinding.Publish or DevelopmentSourceBinding.Discard or DevelopmentSourceBinding.Abort &&
+        DevelopmentSourceBinding.IsMethod(method) &&
         ValidateContentBound(token, method, hash, DevelopmentSourceBinding.Payload);
 
     public bool ValidateDevelopmentGit(string? token, string method, WorkspaceGitRequest request) =>
@@ -238,7 +237,7 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
         if (context.Method.StartsWith(DevelopmentSourceBinding.Service, StringComparison.Ordinal))
         {
             var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();
-            if (context.Method == DevelopmentSourceBinding.Stage || tokens.Length != 1 ||
+            if (DevelopmentSourceBinding.IsStage(context.Method) || tokens.Length != 1 ||
                 request is not WorkspaceSourceRequest source || source.CalculateSize() > DevelopmentSourceBinding.MaximumHeaderBytes ||
                 !validator.ValidateDevelopmentSource(tokens[0].Value, context.Method, DevelopmentSourceBinding.Hash(source)))
                 throw Denied();
@@ -313,7 +312,7 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
     public override Task<TResponse> ClientStreamingServerHandler<TRequest, TResponse>(IAsyncStreamReader<TRequest> requestStream,
         ServerCallContext context, ClientStreamingServerMethod<TRequest, TResponse> continuation)
     {
-        if (context.Method == DevelopmentSourceBinding.Stage)
+        if (DevelopmentSourceBinding.IsStage(context.Method))
         {
             var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();
             var hashes = context.RequestHeaders.GetAll(DevelopmentSourceBinding.Header).ToArray();

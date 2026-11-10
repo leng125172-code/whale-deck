@@ -13,7 +13,13 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
     private static readonly SemaphoreSlim Helpers = new(4, 4);
     private static readonly SemaphoreSlim Uploads = new(2, 2);
 
-    public override async Task<WorkspaceSourceReceipt> Stage(IAsyncStreamReader<WorkspaceSourceFrame> requestStream, ServerCallContext context)
+    public override Task<WorkspaceSourceReceipt> Stage(IAsyncStreamReader<WorkspaceSourceFrame> requestStream, ServerCallContext context) =>
+        ReceiveAsync(requestStream, context);
+
+    public override Task<WorkspaceSourceReceipt> StageUpdate(IAsyncStreamReader<WorkspaceSourceFrame> requestStream, ServerCallContext context) =>
+        ReceiveAsync(requestStream, context);
+
+    private static async Task<WorkspaceSourceReceipt> ReceiveAsync(IAsyncStreamReader<WorkspaceSourceFrame> requestStream, ServerCallContext context)
     {
         using var first = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
         first.CancelAfter(TimeSpan.FromSeconds(5));
@@ -35,13 +41,26 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
     public override Task<WorkspaceSourceReceipt> Inspect(WorkspaceSourceRequest request, ServerCallContext context) =>
         ExecuteAsync(request, context.Method, "inspect", context.CancellationToken);
 
+    public override Task<WorkspaceSourceReceipt> InspectUpdate(WorkspaceSourceRequest request, ServerCallContext context) =>
+        ExecuteAsync(request, context.Method, "inspect", context.CancellationToken);
+
     public override Task<WorkspaceSourceReceipt> Publish(WorkspaceSourceRequest request, ServerCallContext context) =>
+        ExecuteAsync(request, context.Method, "publish", context.CancellationToken);
+
+    public override Task<WorkspaceSourceReceipt> PublishUpdate(WorkspaceSourceRequest request, ServerCallContext context) =>
         ExecuteAsync(request, context.Method, "publish", context.CancellationToken);
 
     public override Task<WorkspaceSourceReceipt> Discard(WorkspaceSourceRequest request, ServerCallContext context) =>
         ExecuteAsync(request, context.Method, "discard", context.CancellationToken);
 
-    public override async Task<Empty> Abort(WorkspaceSourceRequest request, ServerCallContext context)
+    public override Task<WorkspaceSourceReceipt> DiscardUpdate(WorkspaceSourceRequest request, ServerCallContext context) =>
+        ExecuteAsync(request, context.Method, "discard", context.CancellationToken);
+
+    public override Task<Empty> Abort(WorkspaceSourceRequest request, ServerCallContext context) => AbortAsync(request, context);
+
+    public override Task<Empty> AbortUpdate(WorkspaceSourceRequest request, ServerCallContext context) => AbortAsync(request, context);
+
+    private static async Task<Empty> AbortAsync(WorkspaceSourceRequest request, ServerCallContext context)
     {
         var output = await RunAsync(request, context.Method, "abort", null, context.CancellationToken);
         if (output.Trim() != """{"state":"Aborted"}""")
@@ -69,7 +88,7 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
                     await input.WriteAsync(DevelopmentSourceBinding.HostInput(request), lifetime);
                     await input.WriteAsync("\n"u8.ToArray(), lifetime);
                     if (pump is not null) await pump(input, lifetime);
-                }, TimeSpan.FromSeconds(pump is null ? 20 : 110), token);
+                }, TimeSpan.FromSeconds(pump is not null || method == DevelopmentSourceBinding.PublishUpdate ? 110 : 20), token);
             token.ThrowIfCancellationRequested();
             return result.ExitCode == 0 ? result.StandardOutput : throw Rejected(result.StandardError);
         }
@@ -114,11 +133,11 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
         try
         {
             if (output.Length > 2048) throw new JsonException();
-            using var document = JsonDocument.Parse(output, new JsonDocumentOptions { MaxDepth = 2 });
+            using var document = JsonDocument.Parse(output, new JsonDocumentOptions { MaxDepth = 2, AllowDuplicateProperties = false });
             var root = document.RootElement;
-            var stage = method == DevelopmentSourceBinding.Stage;
-            if (root.EnumerateObject().Select(property => property.Name).Distinct(StringComparer.Ordinal).Count() != (stage ? 10 : 11) ||
-                root.EnumerateObject().Count() != (stage ? 10 : 11))
+            var stage = DevelopmentSourceBinding.IsStage(method);
+            var update = DevelopmentSourceBinding.IsUpdate(method);
+            if (root.EnumerateObject().Count() != (stage ? 10 : 11) + (update ? 2 : 0))
                 throw new JsonException();
             var receipt = new WorkspaceSourceReceipt
             {
@@ -134,6 +153,21 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
                 TotalBytes = root.GetProperty("totalBytes").GetUInt64(),
                 State = stage ? "Staged" : root.GetProperty("state").GetString()!
             };
+            if (update)
+            {
+                var details = root.GetProperty("update");
+                if (details.EnumerateObject().Count() != 6) throw new JsonException();
+                receipt.PreviousImportId = root.GetProperty("previousImportId").GetString()!;
+                receipt.Update = new()
+                {
+                    PreviousContentSha256 = details.GetProperty("previousContentSha256").GetString()!,
+                    WorkContentSha256 = details.GetProperty("workContentSha256").GetString()!,
+                    Dirty = details.GetProperty("dirty").GetBoolean(),
+                    AddedEntries = details.GetProperty("addedEntries").GetUInt32(),
+                    RemovedEntries = details.GetProperty("removedEntries").GetUInt32(),
+                    ChangedEntries = details.GetProperty("changedEntries").GetUInt32()
+                };
+            }
             return DevelopmentSourceBinding.Matches(request, receipt, method) ? receipt : throw new JsonException();
         }
         catch (Exception error) when (error is JsonException or ArgumentException or KeyNotFoundException or InvalidOperationException or FormatException)
@@ -152,6 +186,8 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
                 "WORKSPACE_SOURCE_CAPACITY" => StatusCode.ResourceExhausted,
                 "WORKSPACE_SOURCE_IMPORT_CONFLICT" or "WORKSPACE_SOURCE_PLAN_CONFLICT" or
                     "WORKSPACE_SOURCE_WORK_ALREADY_PRESENT" or "WORKSPACE_SOURCE_ALREADY_PUBLISHED" or
+                    "WORKSPACE_SOURCE_WORK_BASE_CONFLICT" or "WORKSPACE_SOURCE_WORK_CHANGED" or
+                    "WORKSPACE_SOURCE_WORK_DIRTY" or "WORKSPACE_SOURCE_UPDATE_CHOICE_CONFLICT" or
                     "WORKSPACE_SOURCE_DISCARDED" => StatusCode.Aborted,
                 "WORKSPACE_STORAGE_NOT_PUBLISHED" => StatusCode.FailedPrecondition,
                 "WORKSPACE_SOURCE_PLAN_CHANGED" or "WORKSPACE_SOURCE_STAGE_CHANGED" or
@@ -163,7 +199,8 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
                     "WORKSPACE_SOURCE_CREDENTIAL_CONTENT" or "WORKSPACE_SOURCE_ZIP_INVALID" or
                     "WORKSPACE_SOURCE_ZIP_ENTRY_INVALID" or "WORKSPACE_SOURCE_DEPTH_LIMIT" or
                     "WORKSPACE_SOURCE_EXPANSION_LIMIT" or "WORKSPACE_SOURCE_ENTRY_LIMIT" or
-                "WORKSPACE_SOURCE_TAR_INVALID" or "WORKSPACE_SOURCE_REJECTED" => StatusCode.InvalidArgument,
+                    "WORKSPACE_SOURCE_WORK_SCAN_LIMIT" or "WORKSPACE_SOURCE_WORK_UNSUPPORTED" or
+                    "WORKSPACE_SOURCE_TAR_INVALID" or "WORKSPACE_SOURCE_REJECTED" => StatusCode.InvalidArgument,
                 _ => StatusCode.OK
             };
             if (status != StatusCode.OK) return Error(status, line);
