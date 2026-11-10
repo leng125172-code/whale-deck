@@ -29,4 +29,6 @@
 
 前一 QA 提交 4af208c60feff1390e7d1d88ce0e56794ad3c6ff 的准确 CI 42823961806 已 12/12 success。本批 socket 候选仍需自身准确 CI；新增 CI 独立运行同一真实 systemd/netns 门禁。
 
+da1d902f56d140128e0b05287c398d4530cd0c42 已推送；其 CI 42827404148 的新门禁在创建证据目录时失败：干净检出没有 deploy/artifacts 父目录。尚未运行 Kestrel，不能追认为通过。已改为显式创建父目录，并补 CI 成功/失败证据归档下载；原失败 job 129868207829 日志保留于 maintenance-socket-ci-fix-20261110-da1d902f/ci-failed-job.log。以同样没有 artifacts 父目录的全新私有副本实际重跑，12 类 FD 场景、6 进程、2771 HTTP 观察零错误通过；随后最终脚本再实测 2776 次零错误，生产保持与精确收尾均通过。最终证据 maintenance-socket-native-8df6360658d8460fbfe6c64150de7c38，干净副本证据已经移出临时目录并保留，副本已删除。修正提交仍须自身完整 CI，未部署。
+
 当前实机仍为 88f2df86。本批尚未生产切换、未证明正式升级连续性，也未执行真实身份/BFF/UI 回归，不签 P0-05 完整验收。持久归档意图、授权确认、Worker/BFF/Vue、HDD 捕获校验和空间退役/预算释放闭环仍待；59 项与 ST/PET/供应商/Live2D 全部门槛继续，不恢复 17 项移出范围。

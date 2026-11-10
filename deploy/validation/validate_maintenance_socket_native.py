@@ -217,7 +217,7 @@ def main():
     unit = 'wd-maintenance-socket-qa-' + token
     runtime = Path('/run') / unit
     evidence = ROOT / 'deploy/artifacts' / ('maintenance-socket-native-' + token)
-    evidence.mkdir(mode=0o700)
+    evidence.mkdir(mode=0o700, parents=True)
     runtime.mkdir(mode=0o755)
     runtime.chmod(0o755)
     # /run is deliberately noexec on the workstation. Freeze executable code
@@ -344,7 +344,9 @@ def main():
         result['passed'] = result['passed'] and result['productionUnchanged'] and result['resourcesRemoved'] and not cleanup_errors
         (evidence / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         print(json.dumps(dict(evidence=str(evidence), passed=result['passed'],
-            productionUnchanged=result['productionUnchanged'], resourcesRemoved=result['resourcesRemoved'])))
+            productionUnchanged=result['productionUnchanged'], resourcesRemoved=result['resourcesRemoved'],
+            fdCases=len(result.get('fdMatrix', {})), processes=len(result.get('pids', [])),
+            httpObservations=len(result.get('observations', [])), connectionErrors=len(result.get('errors', [])))))
         require(result['passed'], 'native maintenance socket gate failed; evidence retained')
 
 

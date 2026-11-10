@@ -345,6 +345,18 @@ jobs:
           -p:RuntimeFrameworkVersion=10.0.13
       - name: Verify real inherited sockets and restart continuity in an isolated network
         run: sudo python3 -I -B -W error::ResourceWarning deploy/validation/validate_maintenance_socket_native.py --run
+      - name: Preserve isolated socket evidence, including failures
+        if: always()
+        run: |
+          if test -d deploy/artifacts; then
+            sudo tar -czf - deploy/artifacts/maintenance-socket-native-* > maintenance-socket-native-evidence.tgz
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: maintenance-socket-native-evidence
+          path: maintenance-socket-native-evidence.tgz
+          if-no-files-found: warn
 
   backend:
     runs-on: ubuntu-latest
