@@ -1,0 +1,15 @@
+[Unit]
+Description=Whale Deck persistent maintenance HTTP listeners
+# Wildcard listeners can be created before interfaces are configured. Keep
+# recovery/network ordering on the service: socket units precede basic.target.
+
+[Socket]
+ListenStream=0.0.0.0:8080
+ListenStream=0.0.0.0:8081
+Accept=no
+Service=whaledeck-maintenance.service
+FileDescriptorName=whaledeck-maintenance-http
+Backlog=4096
+
+[Install]
+WantedBy=sockets.target

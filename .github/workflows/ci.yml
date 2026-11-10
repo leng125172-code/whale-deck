@@ -330,6 +330,22 @@ jobs:
           python3 -W error -m py_compile deploy/host/whaledeck-container-recycle-purge-plan.py deploy/host/whaledeck-container-recycle-purge-fences.py deploy/host/whaledeck-container-recycle-purges.py deploy/host/whaledeck-container-recycle-purge-transport.py deploy/validation/validate_container_recycle_purge_plan.py deploy/validation/validate_container_recycle_purge_fences.py deploy/validation/validate_container_recycle_purges.py
           python3 -W error -m py_compile deploy/validation/container_recycle_purge_rpc_proof.py deploy/validation/container_recycle_purge_agent_io.py deploy/validation/validate_container_recycle_purge_probe.py
 
+  maintenance-socket-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Publish fixed self-contained maintenance candidate
+        run: >-
+          dotnet publish src/WhaleDeck.MaintenanceHost/WhaleDeck.MaintenanceHost.csproj
+          --configuration Release --runtime linux-x64 --self-contained true
+          -p:RuntimeFrameworkVersion=10.0.13
+      - name: Verify real inherited sockets and restart continuity in an isolated network
+        run: sudo python3 -I -B -W error::ResourceWarning deploy/validation/validate_maintenance_socket_native.py --run
+
   backend:
     runs-on: ubuntu-latest
     steps:

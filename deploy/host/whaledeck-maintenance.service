@@ -1,6 +1,7 @@
 [Unit]
 Description=Whale Deck stable maintenance and reverse proxy endpoint
-After=network-online.target
+Requires=whaledeck-maintenance.socket
+After=network-online.target whaledeck-maintenance.socket whaledeck-platform-control-recovery.service
 Wants=network-online.target
 
 [Service]
@@ -11,7 +12,8 @@ WorkingDirectory=/opt/whaledeck-maintenance
 ExecStart=/opt/whaledeck-maintenance/WhaleDeck.MaintenanceHost
 Restart=always
 RestartSec=3s
-Environment=Maintenance__Urls=http://0.0.0.0:8080;http://0.0.0.0:8081
+Sockets=whaledeck-maintenance.socket
+Environment=Maintenance__SocketActivation=required
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict

@@ -19,6 +19,51 @@ for unit in whaledeck-agent.service whaledeck-maintenance.service; do
   systemctl is-active --quiet "$unit"
   [[ $(systemctl show "$unit" -p NRestarts --value) == 0 ]]
 done
+systemctl is-enabled --quiet whaledeck-maintenance.socket
+systemctl is-active --quiet whaledeck-maintenance.socket
+assert_metadata /etc/systemd/system/whaledeck-maintenance.socket '644:root:root'
+[[ ! -L /etc/systemd/system/whaledeck-maintenance.socket ]]
+cmp --silent "$(dirname "$0")/whaledeck-maintenance.socket" /etc/systemd/system/whaledeck-maintenance.socket
+[[ $(systemctl show whaledeck-maintenance.socket -p Accept --value) == no ]]
+[[ $(systemctl show whaledeck-maintenance.socket -p FileDescriptorName --value) == whaledeck-maintenance-http ]]
+[[ " $(systemctl show whaledeck-maintenance.service -p TriggeredBy --value) " == *' whaledeck-maintenance.socket '* ]]
+python3 - <<'PY'
+from pathlib import Path
+import os
+import socket
+import subprocess
+import time
+
+def sockets(pid):
+    result = set()
+    for path in Path('/proc', str(pid), 'fd').iterdir():
+        try:
+            result.add(os.readlink(path))
+        except FileNotFoundError:
+            pass
+    return result
+
+for attempt in range(30):
+    pid = int(subprocess.check_output(['systemctl', 'show', 'whaledeck-maintenance.service',
+        '-p', 'MainPID', '--value'], text=True).strip())
+    listeners = {}
+    if pid > 1:
+        for line in Path('/proc', str(pid), 'net/tcp').read_text().splitlines()[1:]:
+            fields = line.split()
+            if fields[3] == '0A' and fields[1] in ('00000000:1F90', '00000000:1F91'):
+                port = int(fields[1].split(':')[1], 16)
+                assert port not in listeners, 'duplicate maintenance listener'
+                listeners[port] = 'socket:[' + fields[9] + ']'
+        if len(listeners) == 2 and set(listeners.values()) <= sockets(1) & sockets(pid):
+            break
+    time.sleep(1)
+else:
+    raise SystemExit('MAINTENANCE_INHERITED_LISTENERS_UNPROVEN')
+for port in (8080, 8081):
+    with socket.create_connection(('127.0.0.1', port), timeout=5):
+        pass
+print('Maintenance: PID 1 and live host share both accepting wildcard TCP listeners.')
+PY
 
 for attempt in {1..30}; do
   [[ -S /run/whaledeck/agent.sock ]] && break

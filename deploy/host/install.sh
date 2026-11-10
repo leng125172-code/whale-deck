@@ -252,13 +252,20 @@ visudo -cf /etc/sudoers.d/whaledeck-agent
 
 install -o root -g root -m 0644 "$(dirname "$0")/whaledeck-agent.service" /etc/systemd/system/whaledeck-agent.service
 install -o root -g root -m 0644 "$(dirname "$0")/whaledeck-maintenance.service" /etc/systemd/system/whaledeck-maintenance.service
+install -o root -g root -m 0644 "$(dirname "$0")/whaledeck-maintenance.socket" /etc/systemd/system/whaledeck-maintenance.socket
 systemctl daemon-reload
-systemctl enable whaledeck-agent.service whaledeck-maintenance.service
+systemctl enable whaledeck-agent.service whaledeck-maintenance.service whaledeck-maintenance.socket
 systemctl enable whaledeck-platform-control-recovery.service
 systemctl enable --now whaledeck-platform-control-recovery.timer
 systemctl enable --now whaledeck-application-backup-recovery.timer
 # `enable --now` does not restart an already active service after an upgrade.
 # Explicit restart guarantees the copied binaries and settings become active.
+# The first migration from process-owned listeners requires one controlled
+# handover. Later upgrades never stop or restart the active socket unit.
+if ! systemctl is-active --quiet whaledeck-maintenance.socket; then
+  systemctl stop whaledeck-maintenance.service
+  systemctl start whaledeck-maintenance.socket
+fi
 systemctl restart whaledeck-agent.service whaledeck-maintenance.service
-systemctl --no-pager --full status whaledeck-agent.service whaledeck-maintenance.service
+systemctl --no-pager --full status whaledeck-agent.service whaledeck-maintenance.service whaledeck-maintenance.socket
 echo "Whale Deck group id: $(getent group whaledeck | cut -d: -f3)"
