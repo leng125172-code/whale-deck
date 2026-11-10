@@ -62,7 +62,9 @@ const recycleNotice = computed(
 const canCancel = computed(
   () =>
     selected.value &&
-    selected.value.jobType !== 'development.workspace.run' &&
+    !['development.workspace.run', 'development.workspace.lifecycle'].includes(
+      selected.value.jobType,
+    ) &&
     !terminalStates.has(selected.value.state) &&
     !(
       recursiveAclTask.value &&
@@ -116,7 +118,9 @@ const byteUpload = computed(
 const canRetry = computed(
   () =>
     selected.value &&
-    selected.value.jobType !== 'development.workspace.run' &&
+    !['development.workspace.run', 'development.workspace.lifecycle'].includes(
+      selected.value.jobType,
+    ) &&
     !byteUpload.value &&
     !aclTask.value &&
     !recursiveAclTask.value &&
@@ -380,6 +384,13 @@ onBeforeUnmount(() => {
 
     <el-drawer v-model="drawerVisible" title="任务详情" size="min(560px, 94vw)" destroy-on-close>
       <template v-if="selected">
+        <el-alert
+          v-if="selected.jobType === 'development.workspace.lifecycle'"
+          title="请在开发空间页面查看启停状态或重新授权继续，原任务记录在此保留。"
+          type="info"
+          :closable="false"
+          show-icon
+        />
         <el-descriptions class="job-details" :column="1" border>
           <el-descriptions-item label="任务 ID">{{ selected.id }}</el-descriptions-item>
           <el-descriptions-item label="类型">{{ selected.jobType }}</el-descriptions-item>

@@ -468,6 +468,11 @@ jobs:
         run: node --test ../deploy/validation/test_browser_upload_probe.mjs
       - name: Check installed login browser gate syntax without production access
         run: node --check ../deploy/validation/validate_bff_login_browser.mjs
+      - name: Check installed development lifecycle acceptance entrypoints without production access
+        run: |
+          node --check ../deploy/validation/validate_development_installed_runtime.mjs
+          node --check ../deploy/validation/installed_development_lifecycle.mjs
+          python3 -W error -m py_compile ../deploy/validation/validate_development_installed_runtime.py ../deploy/validation/inspect_development_workspace_lifecycle.py
       - name: Check installed container editor browser gate syntax without production access
         run: node --check ../deploy/validation/validate_container_text_browser.mjs
       - name: Check installed partial upload browser gate syntax without production access

@@ -251,6 +251,35 @@ describe('Job retry', () => {
 })
 
 describe('Task result empty states', () => {
+  it.each(['Running', 'Failed'])(
+    'workspace lifecycle %s keeps its bound controls on the workspace page',
+    async (state) => {
+      const job = {
+        ...source,
+        jobType: 'development.workspace.lifecycle',
+        state,
+        phase: 'HostConfirmation',
+      }
+      request.mockImplementation(async (path) =>
+        path === 'jobs?take=100' ? [{ ...job }] : { ...job },
+      )
+      const wrapper = mount(JobsView, { global: { plugins: [ElementPlus], stubs } })
+      wrappers.push(wrapper)
+      await flushPromises()
+      await wrapper.get('.el-table__body tr').trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain('请在开发空间页面查看启停状态或重新授权继续')
+      expect(
+        wrapper
+          .findAll('button')
+          .some((button) => ['取消任务', '重新预检并重试'].includes(button.text())),
+      ).toBe(false)
+      expect(
+        request.mock.calls.some(([path]) => path.includes('/cancel') || path.includes('/retry')),
+      ).toBe(false)
+    },
+  )
+
   it.each(['containers.files.acl', 'containers.files.acl-plan'])(
     '%s never offers generic retry or Unknown cancellation',
     async (jobType) => {

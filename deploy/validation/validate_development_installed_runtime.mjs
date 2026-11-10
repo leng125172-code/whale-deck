@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { chromium, expect } from '../../web/node_modules/@playwright/test/index.mjs'
 import { loginVisible } from './installed_ui_permission_session.mjs'
 import { logoutFromUserMenu } from './installed_ui_logout.mjs'
+import { installedLifecycle } from './installed_development_lifecycle.mjs'
 
 const base = 'http://127.0.0.1:8080', route = '/development/workspaces', api = '/api/v1' + route
 let browser, page, evidence, phase = 'startup', state
@@ -30,7 +31,7 @@ async function poll(context, path, predicate, timeout = 240_000) {
     }
     assert.equal(response.status(), 200)
     value = await response.json()
-    if (predicate(value)) return value
+    if (await predicate(value)) return value
     await new Promise(resolve => setTimeout(resolve, 3000))
   }
   throw new Error('INSTALLED_RUNTIME_POLL_DEADLINE')
@@ -204,7 +205,7 @@ try {
       const response = await posted
       assert.equal(response.status(), 202)
       run = await response.json()
-      saved = { id: run.runId, runtime, task }
+      saved = { id: run.runId, runtime, task, key: response.request().headers()['idempotency-key'] }
       state.runs.push(saved)
       await save()
     }
@@ -240,11 +241,25 @@ try {
     await expect(page.getByText('运行结论', { exact: true })).toBeVisible()
     await page.screenshot({ path: join(evidence, `${runtime}-${task}-report.png`) })
   }
+  phase = 'actual-idle-lifecycle-preserves-code-and-quota'
+  await installedLifecycle({ page, context, base, api, id, route, state, save, headers, poll, evidence })
+  phase = 'actual-administrator-manages-deleted-owner-workspaces'
+  state.retainedLifecycle ??= {}
+  for (const retainedId of ['c23526c5-fc43-4944-9f27-75ac540f6df0', 'df31e4e1-8a7e-4ffe-9bef-246ce9b6f218']) {
+    state.retainedLifecycle[retainedId] ??= {}
+    const retained = await (await context.request.get(`${base}${api}/${retainedId}`)).json()
+    assert.notEqual(retained.ownerSubject, state.ownerSubject)
+    await installedLifecycle({ page, context, base, api, id: retainedId, route,
+      state: { lifecycle: state.retainedLifecycle[retainedId] }, save, headers, poll, evidence,
+      manageOnly: true })
+  }
   phase = 'ordinary-owner-boundary'
   const other = await browser.newContext({ viewport: { width: 320, height: 800 } }), ordinary = await other.newPage()
   await loginVisible(ordinary, other, base, '/', false, input.accounts[1])
   assert.equal((await other.request.get(`${base}${api}/${id}`)).status(), 404)
   assert.equal((await other.request.get(`${base}${api}/${id}/runs/${state.runs[0].id}/report/json`)).status(), 403)
+  assert.equal((await other.request.get(`${base}${api}/${id}/lifecycle/plan?action=stop`)).status(), 404)
+  assert.equal((await other.request.get(`${base}${api}/${id}/lifecycle/${state.lifecycle.stop.operationId}`)).status(), 404)
   const ordinaryLogout = await logoutFromUserMenu(ordinary, other, base)
   await other.close()
   phase = 'owner-normal-logout'
@@ -257,7 +272,7 @@ try {
   browser = undefined
   console.log(JSON.stringify({ installedRuntime: 'passed', workspaceId: id, retainedForProductDecommission: true }))
 } catch (error) {
-  const frame = error?.stack?.split('\n').find(line => line.includes('validate_development_installed_runtime.mjs:'))?.trim()
+  const frame = error?.stack?.split('\n').find(line => ['validate_development_installed_runtime.mjs:', 'installed_development_lifecycle.mjs:'].some(file => line.includes(file)))?.trim()
   if (state && evidence) {
     state.failureHistory ??= state.lastFailure ? [state.lastFailure] : []
     state.lastFailure = { phase, failureType: error?.name, frame }

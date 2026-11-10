@@ -101,7 +101,8 @@ def main():
                 save(evidence, f'before-{attempt}.json', before)
                 sources = {}
                 for name in ('validate_development_installed_runtime.py', 'validate_development_installed_runtime.mjs',
-                             'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs'):
+                             'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs',
+                             'installed_development_lifecycle.mjs', 'inspect_development_workspace_lifecycle.py'):
                     data = (Path(__file__).parent / name).read_bytes()
                     target = evidence / f'attempt-{attempt}-{name}'
                     target.write_bytes(data)
@@ -135,10 +136,10 @@ def main():
         save(evidence, 'after.json', after)
         assert accepted_before['protected'] == after['protected'] and accepted_before['runtime'] == after['runtime']
         state = json.loads((evidence / 'state.json').read_text())
-        assert state['passed'] and state['retainedForProductDecommission']
+        assert state['passed'] and state['retainedForProductDecommission'] and state['lifecycle']['passed']
         save(evidence, 'accepted.json', dict(passed=True, runtimeRevision=revision, actualUi=True,
             temporaryAccountsRemoved=2, coreUnchanged=11, workspaceId=state['workspace']['id'],
-            retainedForProductDecommission=True, sourceImportId=state['imports'][-1]['id'],
+            retainedForProductDecommission=True, idleLifecyclePassed=True, sourceImportId=state['imports'][-1]['id'],
             successfulRuns=[r['id'] for r in state['runs'] if r.get('result', {}).get('state') == 'Succeeded']))
         print(json.dumps(dict(passed=True, evidence=str(evidence), workspaceId=state['workspace']['id'], retainedForProductDecommission=True)))
     except BaseException as error:

@@ -112,15 +112,10 @@ class LifecycleTests(unittest.TestCase):
                         self.control.run(request, apply=True)
                 finally:
                     os._exit(3)
-            try:
-                _, status = os.waitpid(child, os.WUNTRACED)
-                self.assertTrue(os.WIFSTOPPED(status))
-            finally:
-                try:
-                    os.kill(child, signal.SIGKILL)
-                    os.waitpid(child, 0)
-                except ProcessLookupError:
-                    pass
+            _, status = os.waitpid(child, os.WUNTRACED)
+            self.assertTrue(os.WIFSTOPPED(status))
+            os.kill(child, signal.SIGKILL)
+            os.waitpid(child, 0)
             self.assertEqual(epoch + 1, self.control.run(request, apply=True)['epoch'])
             self.assertEqual('retained source', self.source.read_text())
 
