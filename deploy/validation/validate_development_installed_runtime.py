@@ -44,7 +44,8 @@ def fixture(package_feed):
             '</ItemGroup></Project>\n').encode(),
         'ArithmeticTests.cs': ('using Xunit;\npublic class ArithmeticTests {\n'
             '[Fact] public void Adds() => Assert.Equal(5, 2 + 3);\n'
-            '[Fact] public void HandlesNegativeValues() => Assert.Equal(1, -2 + 3);\n}\n').encode(),
+            '[Fact] public void HandlesNegativeValues() { Assert.Equal(1, -2 + 3); '
+            'Assert.Equal(1, System.Environment.ProcessorCount); }\n}\n').encode(),
         '说明.txt': '真实工作站专用验收源码。\n'.encode(),
     }
     packages = sorted(package_feed.glob('*.nupkg'))
