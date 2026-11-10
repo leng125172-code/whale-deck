@@ -45,15 +45,35 @@ def main():
         values = container_environment()
         client.headers['Authorization'] = 'Bearer ' + require(values, 'Authentication__Authentik__ApiToken')
         group = require(values, 'Authentication__Authentik__AdministratorGroupId')
-        with account(client, 'administrator', group, cleaned) as identity:
-            result = subprocess.run(['node', str(Path(__file__).with_suffix('.mjs'))], input=json.dumps(
-                dict(revision=revision, evidence=str(evidence), account=identity)),
-                capture_output=True, text=True, timeout=900)
-            save(evidence, 'browser-process.json', dict(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr))
-        save(evidence, 'identity-cleanup.json', dict(removed=cleaned))
+        try:
+            with account(client, 'administrator', group, cleaned) as identity:
+                result = subprocess.run(['node', str(Path(__file__).with_suffix('.mjs'))], input=json.dumps(
+                    dict(revision=revision, evidence=str(evidence), account=identity)),
+                    capture_output=True, text=True, timeout=900)
+                save(evidence, 'browser-process.json', dict(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr))
+        finally:
+            save(evidence, 'identity-cleanup.json', dict(removed=cleaned))
         assert cleaned == ['administrator']
         state = json.loads((evidence / 'state.json').read_bytes())
         assert result.returncode == 0 and state['passed'] and state['lifecycle']['passed'], 'INSTALLED_ARCHIVE_BUSINESS_FAILED'
+        assert state['revision'] == revision and state['workspaceId'] == WORKSPACE
+        assert len(state['archives']) == 2
+        canceled, archived = state['archives']
+        assert canceled['state'] == 'Canceled' and canceled['completedAtUtc']
+        assert canceled['captureJson'] is None and canceled['verifyJson'] is None
+        assert archived['state'] == 'Succeeded' and archived['phase'] == 'Archived' and archived['completedAtUtc']
+        assert canceled['archiveId'] != archived['archiveId']
+        for archive in state['archives']:
+            assert archive['workspaceId'] == WORKSPACE and archive['retainsSource'] and archive['reservesBudget']
+        capture, verify = json.loads(archived['captureJson']), json.loads(archived['verifyJson'])
+        assert capture['operationId'] == verify['operationId'] == archived['archiveId']
+        for name in ('receiptSha256', 'archiveSha256', 'archiveIndexSha256'):
+            assert re.fullmatch('[a-f0-9]{64}', capture[name]) and capture[name] == verify[name]
+        assert type(capture['archiveBytes']) is int and capture['archiveBytes'] == verify['archiveBytes'] > 0
+        assert state['lifecycle']['stoppedCheck']['canceledPlan'] == canceled['archiveId']
+        assert state['lifecycle']['stoppedCheck']['verifiedArchive'] == archived['archiveId']
+        assert state['logout']['normalUiLogout'] and state['logout']['rpCallbackObserved']
+        assert state['logout']['bffStatus'] == 401 and state['logout']['identityStatus'] in (401, 403)
         assert sources == {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest() for name in sources}
         after = physical()
         save(evidence, 'physical-after.json', after)

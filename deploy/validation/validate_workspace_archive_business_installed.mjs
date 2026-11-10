@@ -44,14 +44,33 @@ async function resumeFence() {
 }
 async function begin() {
   const card = page.getByRole('region', { name: '开发空间 HDD 归档' })
-  const response = page.waitForResponse(r => new URL(r.url()).pathname === endpoint && r.request().method() === 'POST')
-  await card.getByRole('button', { name: '核对 HDD 归档计划', exact: true }).click()
-  const accepted = await response
-  assert.equal(accepted.status(), 202)
-  const key = accepted.request().headers()['idempotency-key'], command = accepted.request().postDataJSON()
-  assert.match(key, /^[a-f0-9-]{36}$/)
-  const view = await accepted.json()
-  state.archives.push({ key, command, ...view })
+  let intent, view
+  const matches = url => url.origin === base && url.pathname === endpoint
+  const observe = async route => {
+    const request = route.request()
+    assert.equal(request.method(), 'POST')
+    assert.equal(intent, undefined, 'ONE_BEGIN_REQUEST_EXPECTED')
+    intent = { key: request.headers()['idempotency-key'], command: request.postDataJSON() }
+    assert.match(intent.key, /^[a-f0-9-]{36}$/)
+    assert.equal(intent.command.expectedEpoch, state.lifecycle.expectedEpochs.stopped)
+    state.archives.push(intent)
+    // Save the exact public intent before forwarding the genuine UI request.
+    // An absent response can then be recovered with the same idempotency key.
+    await save()
+    await route.continue()
+  }
+  await page.route(matches, observe)
+  try {
+    const response = page.waitForResponse(r => new URL(r.url()).pathname === endpoint && r.request().method() === 'POST')
+    await card.getByRole('button', { name: '核对 HDD 归档计划', exact: true }).click()
+    const accepted = await response
+    assert.equal(accepted.status(), 202)
+    view = await accepted.json()
+    Object.assign(intent, view)
+  } finally {
+    await page.unroute(matches, observe)
+  }
+  const { key, command } = intent
   await save()
   const plan = await poll(context, endpoint + '/' + view.archiveId, value => {
     assert.equal(value.workspaceId, id)
@@ -148,6 +167,16 @@ try {
   if (context && page) {
     try {
       for (const archive of state.archives ?? []) {
+        if (!archive.archiveId) {
+          assert.match(archive.key, /^[a-f0-9-]{36}$/)
+          assert.equal(archive.command.expectedEpoch, state.lifecycle.expectedEpochs.stopped)
+          const replay = await context.request.post(base + endpoint, {
+            headers: { ...await headers(context), 'Idempotency-Key': archive.key }, data: archive.command,
+          })
+          assert.equal(replay.status(), 202)
+          Object.assign(archive, await replay.json())
+          await save()
+        }
         const original = await context.request.get(`${base}${endpoint}/${archive.archiveId}`)
         assert.equal(original.status(), 200)
         if (!(await original.json()).completedAtUtc) {
