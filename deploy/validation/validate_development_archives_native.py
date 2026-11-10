@@ -291,7 +291,7 @@ def main():
             archiveRemountPreservesVerification=True,
             independentHddVerificationWithoutSource=True, sourceInodesBytesAndQuotaUnchanged=True,
             productionConfigurationUnchanged=True, productionWorkspaceMutations=0, sandboxedArchiveHelper=helper_proof,
-            scope='Internal archive candidate only; no RPC/UI, retirement, deletion or quota release')
+            scope='Internal helper/optional isolated signed RPC only; no product UI, retirement, deletion or quota release')
     except BaseException as error:
         save(evidence / 'failure.json', dict(type=type(error).__name__,
             reason=str(error) if isinstance(error, RuntimeError) else 'Native proof assertion or dependency failed'))

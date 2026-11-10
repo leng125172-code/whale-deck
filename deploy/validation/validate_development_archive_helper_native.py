@@ -9,8 +9,10 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import shutil
 import subprocess
+import sys
 import time
 import uuid
 
@@ -29,6 +31,104 @@ def isolate_text(text, replacements):
     paths = re.compile('(?:' + '|'.join(re.escape(p) for p in sorted(replacements, key=len, reverse=True))
                        + r')(?![A-Za-z0-9_-])')
     return paths.sub(lambda match: replacements[match[0]], text)
+
+
+def rpc_publication():
+    option = os.environ.get('WHALEDECK_ARCHIVE_RPC_PROBE')
+    if option is None: return None
+    if option != '1': raise ValueError('NATIVE_ARCHIVE_RPC_OPTION_INVALID')
+    # This is a manually authorized root QA script, not a privileged entrypoint.
+    # Execute only this repository's reviewed fixed project publication. The
+    # mount namespace does not sandbox arbitrary root assemblies.
+    return Path(__file__).resolve().parent / 'DevelopmentArchiveRpcProbe/bin/Release/net10.0/publish'
+
+
+class RpcBridge:
+    """QA-only private mount binding; calls the unchanged production C# facade."""
+    def __init__(self, published, library, evidence):
+        self.fixed_helper = Path('/usr/local/libexec/whaledeck-privileged')
+        self.fixed_original = self.fixed_helper.lstat()
+        self.fixed_sha256 = hashlib.sha256(self.fixed_helper.read_bytes()).hexdigest()
+        self.home = Path('/run/wd-arpc-' + uuid.uuid4().hex)
+        self.home.mkdir(mode=0o700); self.original = self.home.stat()
+        self.process = None; self.errors = None
+        try:
+            assert published.resolve(strict=True) == published and published.is_dir()
+            originals = {}
+            for path in published.rglob('*'):
+                assert not path.is_symlink()
+                if path.is_file():
+                    assert path.lstat().st_nlink == 1
+                    originals[str(path.relative_to(published))] = hashlib.sha256(path.read_bytes()).hexdigest()
+            runtime = self.home / 'runtime'; shutil.copytree(published, runtime, symlinks=True)
+            runtime.chmod(0o700)
+            for path in runtime.rglob('*'):
+                assert not path.is_symlink()
+                path.chmod(0o700 if path.is_dir() else 0o600)
+            assert originals == {str(p.relative_to(runtime)): hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in runtime.rglob('*') if p.is_file()}
+            assert originals == {str(p.relative_to(published)): hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in published.rglob('*') if p.is_file()}
+            assert (runtime / 'DevelopmentArchiveRpcProbe.dll').is_file()
+            self.errors = (evidence / 'rpc-bridge.stderr').open('x')
+            save(evidence / 'rpc-binary-sha256.json', {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in runtime.iterdir() if p.is_file()})
+            self.process = subprocess.Popen(['unshare', '--mount', '--propagation', 'private',
+                sys.executable, '-B', '-I', __file__, '--rpc-namespace', str(library / 'whaledeck-privileged'),
+                str(runtime / 'DevelopmentArchiveRpcProbe.dll'), str(self.home),
+                str(Path('/proc/self/ns/mnt').readlink()), str(Path(shutil.which('dotnet')).resolve())],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.errors, text=True, bufsize=1)
+            assert self.read() == dict(ready=True), 'NATIVE_ARCHIVE_RPC_NOT_READY'
+        except BaseException:
+            self.close(failed=True); raise
+
+    def read(self):
+        assert select.select([self.process.stdout], [], [], 30)[0], 'NATIVE_ARCHIVE_RPC_READ_TIMEOUT'
+        line = self.process.stdout.readline(32769)
+        assert 0 < len(line) <= 32768, 'NATIVE_ARCHIVE_RPC_OUTPUT_INVALID'
+        return json.loads(line)
+
+    def call(self, action, value):
+        self.process.stdin.write(json.dumps(dict(action=action, request=value), separators=(',', ':')) + chr(10))
+        self.process.stdin.flush()
+        return self.read()
+
+    def close(self, failed=False):
+        code = None
+        try:
+            if self.process is not None:
+                try: self.process.stdin.close()
+                except OSError: pass
+                finally:
+                    try: code = self.process.wait(timeout=8)
+                    except subprocess.TimeoutExpired:
+                        self.process.kill(); code = self.process.wait(timeout=5)
+                    self.process.stdout.close()
+            if self.errors is not None: self.errors.close()
+        finally:
+            # Keep the private tree and possible ephemeral key if termination
+            # is uncertain. Never remove paths still owned by a live bridge.
+            assert self.process is None or self.process.poll() is not None, 'NATIVE_ARCHIVE_RPC_PROCESS_STILL_ALIVE'
+            assert os.path.samestat(self.original, self.home.lstat()) and not self.home.is_mount()
+            assert not any(p.is_mount() for p in self.home.rglob('*') if p.is_dir())
+            shutil.rmtree(self.home)
+            assert os.path.samestat(self.fixed_original, self.fixed_helper.lstat())
+            assert self.fixed_sha256 == hashlib.sha256(self.fixed_helper.read_bytes()).hexdigest()
+        if not failed: assert code == 0, 'NATIVE_ARCHIVE_RPC_EXIT_UNCONFIRMED'
+
+
+def rpc_namespace():
+    assert os.geteuid() == 0 and len(sys.argv) == 7 and sys.argv[1] == '--rpc-namespace'
+    helper, binary, home, parent_namespace, dotnet = sys.argv[2:]
+    assert str(Path('/proc/self/ns/mnt').readlink()) != parent_namespace
+    for path in (Path(helper), Path(binary)):
+        info = path.lstat()
+        assert path.is_absolute() and path.is_file() and not path.is_symlink() and info.st_uid == 0 and not info.st_mode & 0o022
+    # Bind only this entrypoint in this process's mount namespace. PID 1's
+    # transient units use the already path-rewritten private helper modules.
+    subprocess.run(['mount', '--bind', helper, '/usr/local/libexec/whaledeck-privileged'], check=True)
+    os.chdir(home)
+    os.execv(dotnet, [dotnet, binary, home])
 
 
 def exercise(sources, evidence, runtime_home, config, base, layout, hdd, request):
@@ -66,20 +166,29 @@ def exercise(sources, evidence, runtime_home, config, base, layout, hdd, request
     def call(action, value, attempt=0):
         values[value['taskId']] = value
         commands.append(dict(action=action, taskId=value['taskId']))
-        result = subprocess.run([str(library / 'whaledeck-privileged'), 'development-archive-' + action, uuid.uuid4().hex],
-            input=json.dumps(value), capture_output=True, text=True, timeout=25)
+        wire = None
+        if bridge is None:
+            result = subprocess.run([str(library / 'whaledeck-privileged'), 'development-archive-' + action, uuid.uuid4().hex],
+                input=json.dumps(value), capture_output=True, text=True, timeout=25)
+        else:
+            wire = bridge.call(action, value)
+            result = subprocess.CompletedProcess([], 0 if wire['rpcStatus'] == 'OK' else 2, wire['stdout'], wire['stderr'])
         save(evidence / ('helper-call-' + str(len(commands)) + '.json'),
-             dict(action=action, taskId=value['taskId'], exitCode=result.returncode, stdout=result.stdout, stderr=result.stderr))
+             dict(action=action, taskId=value['taskId'], request=value, exitCode=result.returncode,
+                  stdout=result.stdout, stderr=result.stderr, signedRpc=wire))
         path = '/system.slice/whaledeck-development-archive-run-' + value['taskId'].replace('-', '') + '.service'
         if action == 'start' and path not in owned:
             try: info = os.stat(control.CGROUP / path[1:])
             except FileNotFoundError: pass
             else: owned[path] = dict(bootId=execution.boot(), path=path, device=info.st_dev, inode=info.st_ino)
-        if (result.returncode == 2 and result.stderr.strip() == 'WORKSPACE_STORAGE_ARCHIVE_TASK_BUSY'
+        busy = (wire is None and result.stderr.strip() == 'WORKSPACE_STORAGE_ARCHIVE_TASK_BUSY' or
+                wire is not None and wire['rpcStatus'] == 'Unavailable' and result.stderr == 'WORKSPACE_ARCHIVE_HOST_BUSY')
+        if (result.returncode == 2 and busy
                 and action in ('observe', 'cancel') and attempt < 10):
             time.sleep(0.1)
             return call(action, value, attempt + 1)
         assert result.returncode == 0, 'NATIVE_ARCHIVE_HELPER_' + action.upper() + '_FAILED'
+        if wire is not None: assert wire['signatureRefusalsPassed'] is True
         receipt = json.loads(result.stdout); assert receipt['taskId'] == value['taskId']
         return receipt
     def finish(value):
@@ -92,8 +201,10 @@ def exercise(sources, evidence, runtime_home, config, base, layout, hdd, request
         assert receipt['status'] == 'Succeeded', 'NATIVE_ARCHIVE_HELPER_RESULT_REJECTED'
         assert call('start', value) == receipt
         return receipt
-    accepted, partial = None, None
+    accepted, partial, bridge = None, None, None
     try:
+        published = rpc_publication()
+        if published is not None: bridge = RpcBridge(published, library, evidence)
         command = dict(schemaVersion=1, taskId=str(uuid.uuid4()), archiveId=str(uuid.uuid4()),
             phase='plan', storage=request, expectedEpoch=2, planSha256='', receiptSha256='')
         plan = finish(command)
@@ -143,8 +254,12 @@ def exercise(sources, evidence, runtime_home, config, base, layout, hdd, request
             receiptSha256=copied['result']['receiptSha256'], durablePrestartCancel=True,
             duplicateStartDoesNotRedispatch=True, lateCancelPreservesCompleted=True,
             activeCaptureCancelledUnderRealStorageLocks=True, cancelledPartialInodeAndBytesPreserved=True,
-            nativeWorkerCpuQuotaPercent=10, productWorkflow=False)
+            nativeWorkerCpuQuotaPercent=10, signedAgentRpc=bridge is not None, productWorkflow=False)
     finally:
+        bridge_error = None
+        if bridge is not None:
+            try: bridge.close()
+            except BaseException as error: bridge_error = error
         # Original execution identities only. Failure keeps the journal and
         # stops teardown before the parent's images can be removed if uncertain.
         archives = load(library / 'whaledeck-development-archives.py')
@@ -177,5 +292,11 @@ def exercise(sources, evidence, runtime_home, config, base, layout, hdd, request
         retained = evidence / 'helper-journal'; shutil.copytree(journal, retained)
         for p in retained.rglob('*'): p.chmod(0o700 if p.is_dir() else 0o600)
         if accepted is not None:
-            accepted['executionResourcesSettled'] = True; save(evidence / 'helper-accepted.json', accepted)
+            accepted['executionResourcesSettled'] = True
+            if bridge_error is None: save(evidence / 'helper-accepted.json', accepted)
+        if bridge_error is not None: raise bridge_error
     return accepted
+
+
+if __name__ == '__main__':
+    rpc_namespace()

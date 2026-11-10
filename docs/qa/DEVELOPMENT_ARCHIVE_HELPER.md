@@ -1,5 +1,7 @@
 # 开发空间归档固定 helper 与隔离实盘候选
 
+后续2026-11-10：01206806准确CI已12/12成功，并已标准发布dev、独立通过六组件来源/健康/模块字节及原空间与记录保持核验；本页以下仍保留原候选时态。[签名RPC隔离实盘及本次安装记录](DEVELOPMENT_ARCHIVE_RPC.md)另列，新RPC与用户归档退役闭环尚未部署验收。
+
 2026-11-10，接续 [长任务执行控制](DEVELOPMENT_ARCHIVE_TASK_CONTROL.md)。前提交 c63fa91126922e9366c3de1feb481c792a346959 的准确 [CI 42809843872](https://github.com/leng125172-code/whale-deck/actions/runs/42809843872) 已完整 12/12 成功。本批固定宿主 helper、安装清单和验证代码尚未标准安装或接入签名 Agent RPC、持久业务、Worker/BFF/Vue；实机仍为 42ea297d。没有开放空间删除或配额释放，不增加59项主任务及全部子门槛完成数。
 
 ## 实现

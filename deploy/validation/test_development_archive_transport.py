@@ -4,6 +4,7 @@ Task codec/FDs are real; the launch manager, storage attestation and cgroup
 execution in dispatch tests are explicit doubles. Native systemd is separate.
 """
 import errno
+import hashlib
 import io
 import json
 import os
@@ -15,7 +16,7 @@ import tempfile
 import threading
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import test_development_archive_operations as task_tests
 import validate_development_archive_helper_native as native_helper
@@ -86,6 +87,39 @@ class DispatchTests(unittest.TestCase):
 
 
 class KernelGuardTests(unittest.TestCase):
+    def test_rpc_bridge_reaps_after_broken_stdin_and_keeps_tree_if_exit_is_uncertain(self):
+        # Process double only: native proof separately exercises real children.
+        for uncertain, timed_out in ((False, False), (False, True), (True, False)):
+            with self.subTest(uncertain=uncertain, timed_out=timed_out), tempfile.TemporaryDirectory() as root:
+                home = Path(root) / 'owned'; home.mkdir(mode=0o700)
+                helper = Path(root) / 'fixed-helper'; helper.write_bytes(b'unchanged')
+                process = SimpleNamespace(stdin=SimpleNamespace(close=Mock(side_effect=BrokenPipeError())),
+                    stdout=SimpleNamespace(close=Mock()), wait=Mock(return_value=0), kill=Mock(),
+                    poll=Mock(return_value=None if uncertain else 0))
+                if timed_out: process.wait.side_effect = [subprocess.TimeoutExpired('owned', 8), 0]
+                bridge = native_helper.RpcBridge.__new__(native_helper.RpcBridge)
+                bridge.home = home; bridge.original = home.stat(); bridge.process = process; bridge.errors = None
+                bridge.fixed_helper = helper; bridge.fixed_original = helper.stat()
+                bridge.fixed_sha256 = hashlib.sha256(helper.read_bytes()).hexdigest()
+                if uncertain:
+                    with self.assertRaisesRegex(AssertionError, 'PROCESS_STILL_ALIVE'): bridge.close()
+                    self.assertTrue(home.exists())
+                else:
+                    bridge.close(); self.assertFalse(home.exists())
+                self.assertTrue(process.wait.called)
+                self.assertEqual(int(timed_out), process.kill.call_count)
+                self.assertEqual(b'unchanged', helper.read_bytes())
+
+    def test_rpc_probe_accepts_only_opt_in_to_the_fixed_repository_project(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(native_helper.rpc_publication())
+        for option in ('/untrusted/assemblies', 'true', '', '0'):
+            with patch.dict(os.environ, {'WHALEDECK_ARCHIVE_RPC_PROBE': option}, clear=True):
+                with self.assertRaisesRegex(ValueError, 'OPTION_INVALID'): native_helper.rpc_publication()
+        with patch.dict(os.environ, {'WHALEDECK_ARCHIVE_RPC_PROBE': '1'}, clear=True):
+            self.assertEqual(Path(native_helper.__file__).resolve().parent /
+                'DevelopmentArchiveRpcProbe/bin/Release/net10.0/publish', native_helper.rpc_publication())
+
     def test_runtime_caps_are_exact_and_resource_bypass_or_missing_seccomp_is_refused(self):
         def status(caps):
             return ''.join(name + ': ' + format(caps, '016x') + chr(10) for name in ('CapEff', 'CapPrm', 'CapBnd')) + 'NoNewPrivs: 1' + chr(10) + 'Seccomp: 2' + chr(10)

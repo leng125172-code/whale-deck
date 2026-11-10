@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Content Include="Agent/Fixtures/development-archive-protocol.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
