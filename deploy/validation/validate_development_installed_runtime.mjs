@@ -19,10 +19,19 @@ async function poll(context, path, predicate, timeout = 240_000) {
   let value
   while (Date.now() < deadline) {
     const response = await context.request.get(base + path)
+    if (response.status() === 429) {
+      const seconds = Number(response.headers()['retry-after'] ?? '60')
+      const retryAfter = Number.isFinite(seconds) ? Math.max(1, Math.min(60, seconds)) : 60
+      state.rateLimits ??= []
+      state.rateLimits.push({ path, retryAfter })
+      await save()
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000))
+      continue
+    }
     assert.equal(response.status(), 200)
     value = await response.json()
     if (predicate(value)) return value
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise(resolve => setTimeout(resolve, 3000))
   }
   throw new Error('INSTALLED_RUNTIME_POLL_DEADLINE')
 }
