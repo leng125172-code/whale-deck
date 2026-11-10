@@ -152,6 +152,41 @@ try {
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth))
         await page.screenshot({ path: join(evidence, `archive-${width}-${colorScheme}.png`), fullPage: true })
       }
+      if (input.retirementPlanProbe) {
+        assert.equal(input.retirementPlanProbe, true)
+        assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_PLAN_PROBE, '1')
+        phase = 'installed-retirement-readonly-plan'
+        state.installedRetirementHandoff = { safeToResume: false }
+        await save()
+        await writeFile(join(evidence, 'retirement-plan-ready.pending.json'), JSON.stringify({
+          workspaceId: id, archiveId: second.archiveId, expectedEpoch: state.lifecycle.expectedEpochs.stopped,
+        }), { mode: 0o600, flag: 'wx' })
+        await rename(join(evidence, 'retirement-plan-ready.pending.json'), join(evidence, 'retirement-plan-ready.json'))
+        // Parent budget includes 120s RPC work, 60s exact-task cleanup and
+        // journal/cgroup checks. Never resume while its outcome is unknown.
+        const deadline = Date.now() + 300_000
+        let proof
+        while (Date.now() < deadline) {
+          try {
+            proof = JSON.parse(await readFile(join(evidence, 'retirement-plan-result.json'), 'utf8'))
+            break
+          } catch (error) {
+            if (error.code !== 'ENOENT') throw error
+          }
+          await new Promise(resolve => setTimeout(resolve, 200))
+        }
+        state.installedRetirementHandoff.safeToResume = proof?.safeToResume === true
+        await save()
+        assert.equal(proof?.passed, true)
+        assert.equal(proof.safeToResume, true)
+        assert.equal(proof.installedAgent, true)
+        assert.equal(proof.Status, 'Succeeded')
+        assert.equal(proof.result.deletionAuthorized, false)
+        assert.equal(proof.result.retainsSource, true)
+        assert.equal(proof.result.reservesBudget, true)
+        state.installedRetirementPlan = proof
+        await save()
+      }
       return { passed: true, canceledPlan: first.archiveId, verifiedArchive: second.archiveId }
     } })
   phase = 'real-ui-logout'
@@ -164,7 +199,7 @@ try {
   state.failureType = error.name; state.passed = false
   // Recover only this run's known operations via the supported product API.
   // Never guess a task ID, delete a source/HDD copy, clear SQL, or release quota.
-  if (context && page) {
+  if (context && page && state.installedRetirementHandoff?.safeToResume !== false) {
     try {
       for (const archive of state.archives ?? []) {
         if (!archive.archiveId) {
@@ -203,6 +238,8 @@ try {
     } catch (recoveryError) {
       state.recovery ??= {}; state.recovery.failureType = recoveryError.name
     }
+  } else if (state.installedRetirementHandoff?.safeToResume === false) {
+    state.recovery = { blockedOnReadonlyPlan: true, originalTaskMustSettleBeforeResume: true }
   }
   if (evidence) await save()
   console.error(JSON.stringify({ passed: false, phase, failureType: error.name }))

@@ -1,5 +1,7 @@
 # 开发空间独立退役签名 RPC
 
+后续：本候选d0bb965c已完成准确CI、标准dev发布和安装态只读计划验收，见[发布与真实身份回归](DEVELOPMENT_WORKSPACE_RETIREMENT_RPC_RELEASE.md)。以下保留候选阶段的原始事实；完整用户退役仍待业务编排。
+
 2026-11-11，接续已部署的34fcc3f0，新增Agent 1.78独立退役协议、C#固定helper入口和内部Gateway。候选通过真实隔离Unix Socket→C# Agent→sudo→固定helper→systemd→NVMe/HDD实盘验证；尚未部署本候选，也没有当前身份/Worker/API/Vue完整用户退役闭环。不增加完整主任务。
 
 ## 合同和边界

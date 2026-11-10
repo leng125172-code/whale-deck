@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-11，d0bb965c准确CI 42887558226全13成功并经一次标准dev更新；六组件/23模块同源、11核心健康，414 HTTP样本391×200/23×维护HTML503、零连接错误和429，双监听保持。真实身份Vue/BFF/Worker完成Active23→Stopped24、首HDD计划取消、第二Capture/独立Verify及恢复Active25；安装态Agent1.78退役只读计划成功、Active拒绝，两状态各7类签名拒绝/同task重放/晚取消/预取消保持，4任务收尾。18419原非空间记录/5空间源码配额预算/18报告/120GB与300GB保持，新HDD准确4项/3025字节，临时账号删除。65文件封存；前置Git代理问题及修复记录保留，未重发更新。验收脚本6失败门禁/14CI合同/8范围通过，其新提交CI另待；继续持久退役执行/身份/Worker/API/Vue及预算墓碑，完整主任务0/59，图谱待同步。见[标准部署与安装态证据](qa/DEVELOPMENT_WORKSPACE_RETIREMENT_RPC_RELEASE.md)。
+
 2026-11-11，34fcc3f0准确CI 42879989081全13成功并已一次标准发布dev，六组件/23模块同源、11核心健康及真实身份归档回归通过；epoch21→23、2意图/4任务/3025字节新HDD副本独立核对，18379原非空间记录/5空间源码预算配额/18报告及120GB与300GB保持，临时账号和执行资源收尾。1712 HTTP采样存在4×429和1次超时，连续性明确未通过，原失败保留且未重发部署。另新增独立退役Agent1.78/C# Gateway候选：6266单测、13最终RPC专项、213开发空间零跳过及837普通集成通过（7专用native另验）；真实签名Unix Socket→固定helper→隔离NVMe/HDD完成2新QA空间退役、执行中取消/新task接续、配额八项归零和HDD保持，隔离资源清理。候选自身CI/标准发布、当前身份/Worker/API/Vue和应用预算墓碑继续，完整主任务0/59；图谱待同步。见[签名RPC验证与边界](qa/DEVELOPMENT_WORKSPACE_RETIREMENT_RPC.md)及[已部署helper记录](qa/DEVELOPMENT_WORKSPACE_RETIREMENT_HELPER.md)。
 
 2026-11-11，新增源码退役独立长任务与固定helper，213开发空间测试/14CI合同/8范围及5安装预览通过；真实systemd/Landlock/seccomp完成2新QA空间、0700用户目录、执行中精确取消/新任务接续、配额全零及HDD保持，原归档与7退役内核场景保持。首轮HDD只读门禁冲突安全拒绝后修复，失败原件保留；标准安装清单和逐字节校验已补齐，原5产品空间/18报告/18384原记录/120GB与300GB及用户source改动保持。前提交a8796811准确CI已13/13 success，本批自身CI/标准部署与签名RPC/当前身份/Worker/API/Vue及预算释放继续，完整主任务0/59，图谱待同步。见[验证与边界](qa/DEVELOPMENT_WORKSPACE_RETIREMENT_HELPER.md)。

@@ -48,7 +48,8 @@ def main():
         try:
             with account(client, 'administrator', group, cleaned) as identity:
                 result = subprocess.run(['node', str(Path(__file__).with_suffix('.mjs'))], input=json.dumps(
-                    dict(revision=revision, evidence=str(evidence), account=identity)),
+                    dict(revision=revision, evidence=str(evidence), account=identity,
+                        retirementPlanProbe=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_PLAN_PROBE') == '1')),
                     capture_output=True, text=True, timeout=900)
                 save(evidence, 'browser-process.json', dict(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr))
         finally:

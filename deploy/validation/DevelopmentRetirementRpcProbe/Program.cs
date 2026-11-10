@@ -11,6 +11,8 @@ using WhaleDeck.Contracts;
 using WhaleDeck.Contracts.Agent.V1;
 
 
+if (args is ["--installed-plan"]) return await InstalledPlanProbe.RunAsync();
+
 // Root-only QA bridge. The caller first supplies a PRIVATE mount namespace
 // binding the fixed helper entrypoint to the isolated native probe copy.
 // Production code, services, sockets, keys and configurations are untouched.

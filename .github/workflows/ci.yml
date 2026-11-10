@@ -519,6 +519,8 @@ jobs:
           python3 -W error -m py_compile ../deploy/validation/validate_development_installed_runtime.py ../deploy/validation/inspect_development_workspace_lifecycle.py
           python3 -W error -m py_compile ../deploy/validation/validate_development_archive_installed.py
           python3 -W error -m py_compile ../deploy/validation/validate_workspace_archive_business_installed.py
+          python3 -W error -m py_compile ../deploy/validation/validate_workspace_retirement_plan_installed.py
+          python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_workspace_retirement_plan_scope.py
           python3 -W error -m py_compile ../deploy/validation/validate_workspace_archive_faults_installed.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_workspace_archive_fault_scope.py
           python3 -W error -m py_compile ../deploy/validation/validate_development_layout_installed.py
