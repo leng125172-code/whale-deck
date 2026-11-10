@@ -15,7 +15,7 @@ async function physical(id) {
   return JSON.parse(result.stdout)
 }
 
-export async function installedLifecycle({ page, context, base, api, id, route, state, save, headers, poll, evidence, manageOnly = false }) {
+export async function installedLifecycle({ page, context, base, api, id, route, state, save, headers, poll, evidence, manageOnly = false, afterStopped, resumeOnly = false }) {
   const prefix = `${api}/${id}`, endpoint = `${prefix}/lifecycle`
   state.lifecycle ??= {}
   const receipt = state.lifecycle
@@ -29,7 +29,7 @@ export async function installedLifecycle({ page, context, base, api, id, route, 
     // including retained spaces already stopped/resumed by an earlier batch.
     const baseline = receipt.before ? (receipt.before.marker?.epoch ?? 1) : (await current()).lifecycleVersion
     assert.ok(Number.isSafeInteger(baseline) && baseline >= 1)
-    receipt.expectedEpochs = { stopped: baseline + 1, resumed: baseline + 2 }
+    receipt.expectedEpochs = resumeOnly ? { stopped: baseline, resumed: baseline + 1 } : { stopped: baseline + 1, resumed: baseline + 2 }
     await save()
   }
   async function transition(action, expectedEpoch, target) {
@@ -118,6 +118,7 @@ export async function installedLifecycle({ page, context, base, api, id, route, 
     assert.equal((await replay.json()).operationId, operation.operationId)
     await save()
   }
+  if (!resumeOnly) {
   await transition('stop', receipt.expectedEpochs.stopped, 'Stopped')
   assert.ok(receipt.before)
   receipt.stopped ??= await physical(id)
@@ -167,6 +168,15 @@ export async function installedLifecycle({ page, context, base, api, id, route, 
     receipt.stoppedAdmissionsDenied = true
     receipt.originalReadOnlyReplaysPassed = true
     receipt.csrfOriginDenied = true
+    await save()
+  }
+  if (afterStopped && !receipt.resume?.completedAtUtc) {
+    receipt.stoppedCheck = await afterStopped(receipt.stopped)
+    await save()
+  }
+  } else {
+    assert.equal((await current()).lifecycleState, 'Stopped')
+    receipt.before ??= await physical(id)
     await save()
   }
   await transition('resume', receipt.expectedEpochs.resumed, 'Active')

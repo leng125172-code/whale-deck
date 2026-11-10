@@ -478,7 +478,9 @@ jobs:
         run: |
           node --check ../deploy/validation/validate_development_installed_runtime.mjs
           node --check ../deploy/validation/installed_development_lifecycle.mjs
+          node --check ../deploy/validation/validate_development_archive_installed.mjs
           python3 -W error -m py_compile ../deploy/validation/validate_development_installed_runtime.py ../deploy/validation/inspect_development_workspace_lifecycle.py
+          python3 -W error -m py_compile ../deploy/validation/validate_development_archive_installed.py
       - name: Check installed container editor browser gate syntax without production access
         run: node --check ../deploy/validation/validate_container_text_browser.mjs
       - name: Check installed partial upload browser gate syntax without production access
