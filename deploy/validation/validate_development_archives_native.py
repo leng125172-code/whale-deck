@@ -85,6 +85,8 @@ def physical(driver, quota, request, payload):
 
 def main():
     assert os.geteuid() == 0 and __debug__, 'Requires explicit root invocation with assertions enabled'
+    assert sys.argv[1:] in ([], ['--retirement-execution']), 'NATIVE_ARCHIVE_OPTION_INVALID'
+    execute_retirement = sys.argv[1:] == ['--retirement-execution']
     os.umask(0o077)
     repo = Path(__file__).resolve().parents[2]
     sources = repo / 'deploy/host'
@@ -105,6 +107,17 @@ def main():
     (evidence / retirement_probe_path.name).chmod(0o600)
     retirement_spec = importlib.util.spec_from_file_location('native_retirement_probe', retirement_probe_path)
     retirement_probe = importlib.util.module_from_spec(retirement_spec); retirement_spec.loader.exec_module(retirement_probe)
+    execution_probe = None
+    if execute_retirement:
+        execution_path = Path(__file__).with_name('validate_development_retirement_execution_native.py')
+        shutil.copyfile(execution_path, evidence / execution_path.name)
+        (evidence / execution_path.name).chmod(0o600)
+        shutil.copyfile(sources / 'whaledeck-development-retirement-execution.py',
+            evidence / 'whaledeck-development-retirement-execution.py')
+        (evidence / 'whaledeck-development-retirement-execution.py').chmod(0o600)
+        execution_spec = importlib.util.spec_from_file_location('native_retirement_execution_probe', execution_path)
+        execution_probe = importlib.util.module_from_spec(execution_spec)
+        execution_spec.loader.exec_module(execution_probe)
     before_layout = archives.LAYOUT.read_bytes()
     before_config = storage.CONFIG.read_bytes()
     # Real configured HDD attestation performs only opens, stats, reads/flock.
@@ -289,6 +302,14 @@ def main():
         finally: retained.rename(original)
         after = physical(driver, quota, request, payload); save(evidence / 'after.json', after)
         assert before == after
+        execution_proof = None
+        if execution_probe is not None:
+            execution_proof = execution_probe.exercise(sys.modules[__name__], driver, engine, request, evidence, payload)
+            assert before == physical(driver, quota, request, payload)
+            for filename, original_path in (('whaledeck-development-retirement-execution.py',
+                    sources / 'whaledeck-development-retirement-execution.py'),
+                    (execution_path.name, execution_path)):
+                assert (evidence / filename).read_bytes() == original_path.read_bytes()
         save(evidence / 'captures.json', captures)
         for name in ('files', 'development-storage', 'development-project-quota', 'development-lifecycle',
                      'file-tree', 'tree-archive', 'development-archives', 'development-retirement'):
@@ -307,6 +328,9 @@ def main():
             nativeReadOnlyRetirementPlan=retirement_proof, retirementPlanSurvivedRemount=True,
             retirementRequiresPresentSource=True,
             scope='Internal helper/optional isolated signed RPC only; no product UI, retirement, deletion or quota release')
+        if execution_proof is not None:
+            accepted.update(nativeRetirementExecution=execution_proof,
+                scope='Internal helper and new disposable allocation retirement only; no product UI/RPC retirement or application budget release')
     except BaseException as error:
         save(evidence / 'failure.json', dict(type=type(error).__name__,
             reason=str(error) if isinstance(error, RuntimeError) else 'Native proof assertion or dependency failed'))

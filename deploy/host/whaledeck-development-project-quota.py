@@ -145,3 +145,33 @@ def attach(fd, project, disk_mib):
     except OSError as error:
         raise QuotaError('QUOTA_ATTACH_FAILED') from error
     verify(fd, project, disk_mib)
+
+
+def release_empty(fd, project, disk_mib):
+    """Clear only a claimed, fully unreferenced project's exact old limits.
+
+    Internal primitive, not authorization. The caller must hold the attested
+    filesystem's exclusive allocation lock and its original durable claim.
+    All tagged inodes and open references must already be gone. Never call
+    this again after publishing release and allowing a project-ID reuse.
+    """
+    expected = limits(project, disk_mib)
+    info = os.fstat(fd)
+    if info.st_uid != 0 or not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o700:
+        raise QuotaError('QUOTA_DIRECTORY_UNSAFE')
+    require_enforcing(fd)
+    state = read_quota(fd, project)
+    if state[2] or state[5]:
+        raise QuotaError('QUOTA_STILL_REFERENCED')
+    if any(state) and not matches_limits(state, expected):
+        raise QuotaError('QUOTA_BINDING_CHANGED')
+    try:
+        if any(state):
+            quota_call(fd, Q_SETQUOTA, project, bytearray(QUOTA.pack(*(0,) * 8, QIF_LIMITS)))
+        # Quota accounting/limits belong to the superblock, not the parent
+        # directory inode. Sync that filesystem before a durable release proof.
+        if LIBC.syncfs(ctypes.c_int(fd)) != 0:
+            raise OSError(ctypes.get_errno(), 'quota filesystem sync failed')
+    except OSError as error:
+        raise QuotaError('QUOTA_RELEASE_FAILED') from error
+    require_unused(fd, project)

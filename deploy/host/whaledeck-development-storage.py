@@ -23,6 +23,7 @@ DIR = os.O_RDONLY | os.O_DIRECTORY
 READ = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW
 MARKER = 'allocation.json'
 LIFECYCLE = '.lifecycle-'
+RETIREMENT = '.retirement-'
 PAYLOAD = 'data'
 UUID = r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}'
 KEY = r'[a-z0-9]+(?:-[a-z0-9]+)*'
@@ -321,6 +322,7 @@ class WorkspaceStorage:
                     directoryInode=os.fstat(child).st_ino)
 
     def read_existing(self, parent, name, request, config, *, pending=False, sync=False):
+        self.require_not_retired(parent, request['workspaceId'])
         try:
             fd = self.files.open_at(parent, name, DIR)
         except FileNotFoundError:
@@ -400,6 +402,7 @@ class WorkspaceStorage:
 
     @contextlib.contextmanager
     def quota_payload(self, parent, name, proof, config, *, prepare=False):
+        self.require_not_retired(parent, proof['workspaceId'])
         with self.opened(parent, name, DIR) as child:
             if self.directory(child, private=True).st_ino != proof['directoryInode']:
                 self.reject('DIRECTORY_CONFLICT')
@@ -514,6 +517,7 @@ class WorkspaceStorage:
             return self.quota_proof(parent, workspace, proof, config) if self.quota else proof
 
     def lifecycle_state(self, parent, workspace, request, *, proof=None):
+        self.require_not_retired(parent, workspace)
         try:
             value = self.read_json(parent, LIFECYCLE + workspace + '.json', 4096)
         except FileNotFoundError:
@@ -540,3 +544,13 @@ class WorkspaceStorage:
             value = self.lifecycle_state(parent, workspace, request, proof=proof)
             if value is not None and value['state'] != 'Active':
                 self.reject('LIFECYCLE_STOPPED')
+
+    def require_not_retired(self, parent, workspace):
+        # Presence alone is a fail-closed, permanent fence, including an
+        # interrupted preparation or malformed/symlink marker. Never follow it
+        # here or infer that an absent source makes this workspace reusable.
+        try:
+            os.stat(RETIREMENT + workspace, dir_fd=parent, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        self.reject('RETIRED')

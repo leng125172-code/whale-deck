@@ -167,6 +167,43 @@ class ProjectQuotaTests(unittest.TestCase):
             self.attach()
         self.assertEqual(['limits', 'attributes'], self.writes)
 
+    def test_release_empty_zeros_only_exact_unreferenced_limits_and_syncs(self):
+        self.state = (262144, 0, 0, 65536, 0, 0, 0, 0)
+        with patch.object(quota.LIBC, 'syncfs', return_value=0) as sync:
+            quota.release_empty(self.fd, self.project, self.disk_mib)
+            quota.release_empty(self.fd, self.project, self.disk_mib)
+        self.assertEqual((0,) * 8, self.state)
+        self.assertEqual(['limits'], self.writes)
+        self.assertEqual(2, sync.call_count)
+
+    def test_release_refuses_even_one_open_unlinked_inode_or_remaining_byte(self):
+        for used_bytes, used_inodes in ((1, 0), (0, 1), (4096, 2)):
+            self.state = (262144, 0, used_bytes, 65536, 0, used_inodes, 0, 0)
+            with self.subTest(bytes=used_bytes, inodes=used_inodes), self.assertRaisesRegex(quota.QuotaError, 'QUOTA_STILL_REFERENCED'):
+                quota.release_empty(self.fd, self.project, self.disk_mib)
+        self.assertEqual([], self.writes)
+
+    def test_release_refuses_foreign_limits_soft_limits_timers_and_disabled_enforcement(self):
+        for state in ((65536, 0, 0, 65536, 0, 0, 0, 0),
+                      (262144, 1, 0, 65536, 0, 0, 0, 0),
+                      (262144, 0, 0, 65536, 0, 0, 1, 0)):
+            self.state = state
+            with self.subTest(state=state), self.assertRaisesRegex(quota.QuotaError, 'QUOTA_BINDING_CHANGED'):
+                quota.release_empty(self.fd, self.project, self.disk_mib)
+        self.flags = 0x10
+        with self.assertRaisesRegex(quota.QuotaError, 'QUOTA_NOT_ENFORCING'):
+            quota.release_empty(self.fd, self.project, self.disk_mib)
+        self.assertEqual([], self.writes)
+
+    def test_failed_sync_keeps_release_unknown_and_can_recheck_zero_without_rewriting(self):
+        self.state = (262144, 0, 0, 65536, 0, 0, 0, 0)
+        with patch.object(quota.LIBC, 'syncfs', return_value=-1):
+            with self.assertRaisesRegex(quota.QuotaError, 'QUOTA_RELEASE_FAILED'):
+                quota.release_empty(self.fd, self.project, self.disk_mib)
+        with patch.object(quota.LIBC, 'syncfs', return_value=0):
+            quota.release_empty(self.fd, self.project, self.disk_mib)
+        self.assertEqual(['limits'], self.writes)
+
 
 if __name__ == '__main__':
     unittest.main()
