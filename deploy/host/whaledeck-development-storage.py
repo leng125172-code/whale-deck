@@ -17,6 +17,8 @@ UDEV = Path('/run/udev/data')
 SYS_DEV = Path('/sys/dev/block')
 SYS_DEVICES = Path('/sys/devices')
 NVME_CLASS = Path('/sys/class/nvme')
+BLOCK_CLASS = Path('/sys/class/block')
+IMAGE_ROOT = Path('/var/lib/whaledeck-development-disks')
 DIR = os.O_RDONLY | os.O_DIRECTORY
 READ = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW
 MARKER = 'allocation.json'
@@ -117,6 +119,11 @@ class WorkspaceStorage:
         fields = {'mountPoint', 'filesystemUuid', 'reserveMiB'}
         if self.quota:
             fields.update(('projectIdStart', 'projectIdEnd'))
+        if isinstance(root, dict) and 'diskImage' in root:
+            if not self.quota:
+                self.reject('CONFIGURATION_INVALID')
+            fields.add('diskImage')
+            self.validate_image(root['diskImage'])
         if (not isinstance(root_id, str) or len(root_id) > 48 or not re.fullmatch(KEY, root_id)
                 or not isinstance(root, dict)
                 or set(root) != fields
@@ -131,6 +138,18 @@ class WorkspaceStorage:
         if (not isinstance(mount, str) or not mount.startswith('/') or len(mount) > 4096
                 or mount.startswith('//') or os.path.normpath(mount) != mount
                 or any(ord(c) < 32 for c in mount) or not (BASE / root_id).is_relative_to(Path(mount))):
+            self.reject('CONFIGURATION_INVALID')
+
+    def validate_image(self, image):
+        if (not isinstance(image, dict) or set(image) != {'path', 'device', 'inode', 'sizeBytes', 'filesystemUuid'}
+                or not isinstance(image['path'], str) or Path(image['path']).parent != IMAGE_ROOT
+                or not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*\.ext4', Path(image['path']).name)
+                or str(Path(image['path'])) != image['path']
+                or not isinstance(image['device'], str) or not re.fullmatch(r'[0-9]+:[0-9]+', image['device'])
+                or not isinstance(image['filesystemUuid'], str) or not re.fullmatch(UUID, image['filesystemUuid'])
+                or type(image['inode']) is not int or image['inode'] <= 0
+                or type(image['sizeBytes']) is not int or not 1024**3 <= image['sizeBytes'] <= 1024**4
+                or image['sizeBytes'] % 512):
             self.reject('CONFIGURATION_INVALID')
 
     @staticmethod
@@ -181,8 +200,54 @@ class WorkspaceStorage:
         uuids = [value for value in records if value.startswith('E:ID_FS_UUID=')]
         if uuids != ['E:ID_FS_UUID=' + root['filesystemUuid']] or 'E:ID_FS_USAGE=filesystem' not in records:
             self.reject('DEVICE_MISMATCH')
-        self.require_nvme(dev)
+        if 'diskImage' in root:
+            self.require_nvme_image(dev, root['diskImage'])
+        else:
+            self.require_nvme(dev)
         return mount_id
+
+    def require_nvme_image(self, dev, image):
+        # Root's explicit image declaration is required. A loop device alone
+        # never proves NVMe storage. No device node or loop ioctl is exposed
+        # to the allocator's PrivateDevices sandbox.
+        self.validate_image(image)
+        device = (SYS_DEV / dev).resolve(strict=True)
+        if (device.parent != SYS_DEVICES / 'virtual/block' or not re.fullmatch(r'loop[0-9]+', device.name)
+                or (device / 'subsystem').resolve(strict=True) != BLOCK_CLASS):
+            self.reject('IMAGE_MISMATCH')
+        expected = {'loop/backing_file': image['path'] + '\n', 'loop/offset': '0\n',
+                    'loop/sizelimit': '0\n', 'loop/partscan': '0\n', 'ro': '0\n',
+                    'size': str(image['sizeBytes'] // 512) + '\n', 'dev': dev + '\n'}
+        def loop_matches():
+            for name, value in expected.items():
+                if (device / name).read_bytes() != value.encode('utf-8'):
+                    self.reject('IMAGE_MISMATCH')
+        loop_matches()
+        with self.absolute(IMAGE_ROOT) as parent:
+            self.directory(parent, private=True)
+            with self.opened(parent, Path(image['path']).name, READ) as fd:
+                info = os.fstat(fd)
+                backing = f'{os.major(info.st_dev)}:{os.minor(info.st_dev)}'
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_gid != 0
+                        or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1
+                        or (backing, info.st_ino, info.st_size) !=
+                        (image['device'], image['inode'], image['sizeBytes'])
+                        or info.st_blocks * 512 < info.st_size):
+                    self.reject('IMAGE_MISMATCH')
+                # Preserve the original direct PCIe NVMe attestation for the
+                # physical filesystem holding the fully reserved regular file.
+                self.require_nvme(backing)
+                with self.absolute(UDEV) as udev:
+                    self.directory(udev)
+                    with self.opened(udev, 'b' + backing, READ) as record:
+                        records = self.read_file(record, 65536).decode('utf-8').splitlines()
+                if ([v for v in records if v.startswith('E:ID_FS_UUID=')] !=
+                        ['E:ID_FS_UUID=' + image['filesystemUuid']] or 'E:ID_FS_USAGE=filesystem' not in records):
+                    self.reject('IMAGE_MISMATCH')
+                loop_matches()
+                live = os.stat(Path(image['path']).name, dir_fd=parent, follow_symlinks=False)
+                if not os.path.samestat(info, live) or live.st_size != info.st_size:
+                    self.reject('IMAGE_MISMATCH')
 
     def require_nvme(self, dev):
         device = (SYS_DEV / dev).resolve(strict=True)
