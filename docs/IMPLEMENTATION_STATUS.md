@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-10，P3-14 `83511315` 接入 Agent 1.74 签名逐行差异。真实 Unix Socket、sudo、systemd 和 ext4 验证逐行内容、路径绑定、重放及变更拒绝。继续 BFF/Vue、合并和物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_TEXT_DIFF_RPC.md)。
+
 2026-11-10，P3-14 `78927859` 接入宿主逐行差异。隔离 KVM 的真实 ext4 验证 Unicode、CRLF、增删改、凭据边界和计划变化拒绝。继续签名查询、BFF/Vue、合并及物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_TEXT_DIFF_HOST.md)。
 
 2026-11-10，P3-14 `fed77228` 接入 BFF 与 Vue 逐文件差异。真实 HTTP、PostgreSQL、Unix Socket 与生产 Chrome 分别验证分页、所有者范围、实时撤权、异常回执和窄屏。继续逐行差异、合并及物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_DIFF_UI.md)。
