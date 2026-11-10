@@ -51,3 +51,5 @@ Agent 新增协议 1.75 和 `development.run.dotnet-restore`。新命令在运�
 完整产品停用/退役、HDD 留存及空间配额释放仍需实现和验收；现有两个专用空间和原失败证据继续保留。当前报告的源码指纹/Git 提交仍为未知，不把成功运行报告算成源码来源、调试、覆盖率或完整 P3-17 验收。
 
 退役不能只加状态后删除目录：现有 run/source 写入尚无共享的 workspace 生命周期锁；必须补充事务内状态围栏、后台任务排空，以及阻止迟到分配 RPC 复活空间的宿主持久屏障。只有独立证明数据/资源已收尾后才释放注册预算；保留 workspace 终态、原幂等键、run/source/job/event/report 与审计。HDD 目录存在不算备份成功。
+
+后续状态更正：上述共享入场锁缺口已由 4ad7669a 的事务 FOR SHARE/FOR UPDATE 与数据库触发器补齐，见[闲置启停验收](DEVELOPMENT_WORKSPACE_IDLE_LIFECYCLE.md)；不能重复按缺失实现。42ea297d 已再次通过真实运行及启停回归，见[本批记录](DEVELOPMENT_WORKSPACE_ARCHIVES_RELEASE.md)。真正退役、防迟到分配复活、HDD 留存授权及物理/预算释放仍待。

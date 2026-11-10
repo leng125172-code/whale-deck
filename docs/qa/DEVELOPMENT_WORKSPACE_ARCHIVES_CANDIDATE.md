@@ -1,6 +1,6 @@
 # 开发空间退役前 HDD 归档候选
 
-2026-11-10，本批实现内部归档引擎及标准安装清单，尚未标准部署、接入签名 RPC/Worker/BFF/Vue，未开放空间删除或配额释放。不计 P3-18 或任何完整主任务完成。实机仍为已验收 ddc832df；验收记录提交 ac93987d 的准确 [CI 42797100929](https://github.com/leng125172-code/whale-deck/actions/runs/42797100929) 已 12/12 成功。
+2026-11-10，本批实现内部归档引擎及标准安装清单；候选验证时尚未标准部署、接入签名 RPC/Worker/BFF/Vue，未开放空间删除或配额释放。不计 P3-18 或任何完整主任务完成。当时实机为已验收 ddc832df；验收记录提交 ac93987d 的准确 [CI 42797100929](https://github.com/leng125172-code/whale-deck/actions/runs/42797100929) 已 12/12 成功。后续 42ea297d 已完成标准安装及真实运行回归，未完成边界和维护入口/窄屏问题见[部署验收记录](DEVELOPMENT_WORKSPACE_ARCHIVES_RELEASE.md)。
 
 ## 实现与边界
 
