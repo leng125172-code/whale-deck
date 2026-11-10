@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import sys
 
 GIT_CGROUP = Path('/sys/fs/cgroup/system.slice/whaledeck-development-git-acquire.service')
@@ -103,15 +104,23 @@ class Lifecycle:
         temporary = '.lifecycle-staging-' + value['operationId'] + '.json'
         raw = driver.canonical(value)
         try:
-            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent)
+            fd = os.open(temporary, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent)
         except FileExistsError:
-            if driver.read_json(parent, temporary, 4096) != value:
+            fd = os.open(temporary, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent)
+        with os.fdopen(fd, 'r+b') as stream:
+            info = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1
+                    or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > len(raw)):
                 self.refuse('STAGING_CONFLICT')
-        else:
-            with os.fdopen(fd, 'wb') as stream:
-                stream.write(raw)
-                stream.flush()
-                os.fsync(stream.fileno())
+            previous = stream.read(len(raw) + 1)
+            # A crash can leave the exclusively owned operation file empty or
+            # partially written. Complete only an exact prefix of this already
+            # verified operation; never overwrite conflicting metadata.
+            if not raw.startswith(previous):
+                self.refuse('STAGING_CONFLICT')
+            stream.write(raw[len(previous):])
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(temporary, name, src_dir_fd=parent, dst_dir_fd=parent)
         os.fsync(parent)
 

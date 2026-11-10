@@ -2,6 +2,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import signal
 import unittest
 import uuid
 from unittest.mock import patch
@@ -72,6 +73,70 @@ class LifecycleTests(unittest.TestCase):
                 self.control.run(stop, apply=True)
         self.assertFalse((self.root / (fixture.storage.LIFECYCLE + self.request['workspaceId'] + '.json')).exists())
         self.assertEqual('Stopped', self.control.run(stop, apply=True)['state'])
+
+    def test_interrupted_staging_prefix_is_completed_but_conflicting_bytes_are_kept(self):
+        self.provision()
+        for action, epoch, partial in [('stop', 1, False), ('resume', 2, True)]:
+            request = self.operation(action, epoch)
+            marker = dict(self.request, state='Stopped' if action == 'stop' else 'Active',
+                epoch=epoch + 1, operationId=request['operationId'], planSha256=request['planSha256'],
+                storageProofSha256=request['storageProofSha256'])
+            expected = self.engine.canonical(marker)
+            staging = self.root / ('.lifecycle-staging-' + request['operationId'] + '.json')
+            staging.write_bytes(expected[:len(expected) // 2 if partial else 0])
+            staging.chmod(0o600)
+            self.assertEqual(epoch + 1, self.control.run(request, apply=True)['epoch'])
+            self.assertFalse(staging.exists())
+        request = self.operation('stop', 3)
+        staging = self.root / ('.lifecycle-staging-' + request['operationId'] + '.json')
+        staging.write_bytes(b'conflicting bytes');staging.chmod(0o600)
+        with self.assertRaisesRegex(fixture.files.Rejected, 'LIFECYCLE_STAGING_CONFLICT'):
+            self.control.run(request, apply=True)
+        self.assertEqual(b'conflicting bytes', staging.read_bytes())
+
+    def test_real_process_kill_during_staging_recovers_original_operation(self):
+        self.provision()
+        for action, epoch, prefix in [('stop', 1, b''), ('resume', 2, b'{"diskMiB":')]:
+            request = self.operation(action, epoch)
+            real_open = os.open
+            def interrupted_open(path, flags, *args, **kwargs):
+                descriptor = real_open(path, flags, *args, **kwargs)
+                if str(path).startswith('.lifecycle-staging-') and flags & os.O_CREAT:
+                    os.write(descriptor, prefix)
+                    os.kill(os.getpid(), signal.SIGSTOP)
+                return descriptor
+            child = os.fork()
+            if child == 0:
+                try:
+                    with patch.object(lifecycle.os, 'open', interrupted_open):
+                        self.control.run(request, apply=True)
+                finally:
+                    os._exit(3)
+            try:
+                _, status = os.waitpid(child, os.WUNTRACED)
+                self.assertTrue(os.WIFSTOPPED(status))
+            finally:
+                try:
+                    os.kill(child, signal.SIGKILL)
+                    os.waitpid(child, 0)
+                except ProcessLookupError:
+                    pass
+            self.assertEqual(epoch + 1, self.control.run(request, apply=True)['epoch'])
+            self.assertEqual('retained source', self.source.read_text())
+
+    def test_staging_symlink_and_hardlink_are_refused_without_mutating_external_bytes(self):
+        self.provision()
+        request = self.operation()
+        staging = self.root / ('.lifecycle-staging-' + request['operationId'] + '.json')
+        external = self.mount / 'external-staging';external.write_bytes(b'');external.chmod(0o600)
+        staging.symlink_to(external)
+        with self.assertRaises((fixture.files.Rejected, OSError)):
+            self.control.run(request, apply=True)
+        self.assertEqual(b'', external.read_bytes())
+        staging.unlink();os.link(external, staging)
+        with self.assertRaisesRegex(fixture.files.Rejected, 'LIFECYCLE_STAGING_CONFLICT'):
+            self.control.run(request, apply=True)
+        self.assertEqual(b'', external.read_bytes())
 
     def test_changed_plan_or_physical_binding_is_refused(self):
         self.provision()
