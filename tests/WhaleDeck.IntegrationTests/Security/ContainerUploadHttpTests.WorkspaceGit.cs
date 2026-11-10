@@ -86,6 +86,7 @@ public sealed partial class ContainerUploadHttpTests
                 services.AddSingleton<IPrivilegedIdentityDirectory>(identities);
                 services.AddSingleton<IWorkspaceSourceGateway>(host);
                 services.AddSingleton<IWorkspaceSourceDownloadGateway>(gateway);
+                services.AddSingleton<IWorkspaceSourceDiffGateway>(gateway);
                 services.AddSingleton(_ => new WorkspaceSourceProtector(settings));
                 services.AddScoped(_ => new PlatformDbContext(options));
                 services.AddScoped<IDevelopmentWorkspaceRegistry, DevelopmentWorkspaceRegistry>();
@@ -97,6 +98,7 @@ public sealed partial class ContainerUploadHttpTests
                 services.AddScoped<IWorkspaceSourceStore, WorkspaceSourceRepository>();
                 services.AddScoped<WorkspaceSources>();
                 services.AddScoped<WorkspaceSourceDownloads>();
+                services.AddScoped<WorkspaceSourceDiffs>();
                 services.AddScoped<WorkspaceSourceDispatcher>();
             });
             using var owner = await server.Client("developer-subject", false, TimeSpan.FromHours(2));
@@ -220,9 +222,32 @@ public sealed partial class ContainerUploadHttpTests
                 JsonContent.Create(source with { PreviousImportId = canceled }), HttpStatusCode.Conflict, owner, csrf);
             var staleUpdate = Guid.NewGuid();
             var updatePlan = await BeginUpdate(staleUpdate);
+            var diffUrl = Url(staleUpdate) + "/diff?limit=1&planSha256=" + updatePlan.PlanSha256;
+            using (var anonymousDiff = await server.Client("anonymous", false))
+                await Expect(HttpMethod.Get, diffUrl, null, HttpStatusCode.Unauthorized, anonymousDiff, null);
+            using (var otherDiff = await server.Client("admin-subject", true))
+                await Expect(HttpMethod.Get, diffUrl, null, HttpStatusCode.NotFound, otherDiff, null);
+            await Expect(HttpMethod.Get, Url(staleUpdate) + "/diff?planSha256=" + new string('b', 64),
+                null, HttpStatusCode.Conflict, owner, null);
+            var diffPage = (await owner.GetFromJsonAsync<WorkspaceSourceDiffPageView>(diffUrl))!;
+            Assert.Equal(1, diffPage.NextOffset);
+            Assert.Equal(1, diffPage.RedactedEntries);
+            Assert.Equal("src/源码.cjs", Assert.Single(diffPage.Entries).Path);
+            var lastDiff = (await owner.GetFromJsonAsync<WorkspaceSourceDiffPageView>(diffUrl + "&offset=1"))!;
+            Assert.Null(lastDiff.NextOffset);
+            Assert.Equal("src/末尾.cjs", Assert.Single(lastDiff.Entries).Path);
+            updateHost.AfterDiff = () => identities.LiveMembership = false;
+            await Expect(HttpMethod.Get, diffUrl, null, HttpStatusCode.Forbidden, owner, null);
+            updateHost.AfterDiff = null;
+            identities.LiveMembership = true;
+            updateHost.InvalidDiff = true;
+            await Expect(HttpMethod.Get, diffUrl, null, HttpStatusCode.BadGateway, owner, null);
+            updateHost.InvalidDiff = false;
             await ConfirmUpdate(staleUpdate, updatePlan.PlanSha256, null, HttpStatusCode.BadRequest);
             await ConfirmUpdate(staleUpdate, updatePlan.PlanSha256, WorkspaceSources.CleanOnly, HttpStatusCode.Conflict);
             await ConfirmUpdate(staleUpdate, updatePlan.PlanSha256, WorkspaceSources.RetainAndReplace, HttpStatusCode.Accepted);
+            await Expect(HttpMethod.Get, diffUrl, null, HttpStatusCode.Conflict, owner, null);
+            Console.WriteLine("INBOX_PHASE=workspace-source-diff-real-http-uds-postgres-paging-scope-and-live-revocation");
             updateHost.RejectLateWrite = true;
             await Tick();
             await Tick();
@@ -348,9 +373,9 @@ public sealed partial class ContainerUploadHttpTests
         public override Task<CapabilitiesResponse> GetCapabilities(Empty request, ServerCallContext context) => Task.FromResult(
             new CapabilitiesResponse
             {
-                ProtocolMajor = 1, ProtocolMinor = DevelopmentSourceBinding.PreviousProtocolMinor,
+                ProtocolMajor = 1, ProtocolMinor = DevelopmentSourceBinding.DiffProtocolMinor,
                 Capabilities = { DevelopmentGitBinding.Capability, DevelopmentSourceBinding.Capability, DevelopmentSourceBinding.UpdateCapability,
-                    DevelopmentSourceBinding.PreviousCapability }
+                    DevelopmentSourceBinding.PreviousCapability, DevelopmentSourceBinding.DiffCapability }
             });
     }
 
@@ -364,6 +389,31 @@ public sealed partial class ContainerUploadHttpTests
         public int Exports { get; private set; }
         public string? ExportMode { get; set; }
         public Task? ExportFooterGate { get; set; }
+        public Action? AfterDiff { get; set; }
+        public bool InvalidDiff { get; set; }
+
+        public override Task<WorkspaceSourceDiffPage> ReadDiff(WorkspaceSourceDiffRequest request, ServerCallContext context)
+        {
+            Assert.True(DevelopmentSourceDiffBinding.IsValid(request));
+            Authorize(DevelopmentSourceDiffBinding.Hash(request), context);
+            var receipt = Find(request.Source);
+            Assert.Equal("Staged", receipt.State);
+            Assert.Equal(receipt.PlanSha256, request.Source.PlanSha256);
+            var page = new WorkspaceSourceDiffPage
+            {
+                WorkspaceId = receipt.WorkspaceId, ImportId = receipt.ImportId, PreviousImportId = receipt.PreviousImportId,
+                PlanSha256 = receipt.PlanSha256, Offset = request.Offset, VisibleEntries = 2, RedactedEntries = InvalidDiff ? 2U : 1U,
+                Entries = { new WorkspaceSourceDiffEntry
+                {
+                    Path = request.Offset == 0 ? "src/源码.cjs" : "src/末尾.cjs", Change = WorkspaceSourceDiffChange.Changed,
+                    Before = new() { Kind = WorkspaceSourceDiffKind.File, SizeBytes = 10 },
+                    After = new() { Kind = WorkspaceSourceDiffKind.File, SizeBytes = 12 }
+                } }
+            };
+            if (request.Offset == 0) page.NextOffset = 1;
+            AfterDiff?.Invoke();
+            return Task.FromResult(page);
+        }
 
         public override async Task ExportPrevious(WorkspaceSourceRequest request,
             IServerStreamWriter<WorkspaceSourceExportFrame> response, ServerCallContext context)
@@ -410,7 +460,7 @@ public sealed partial class ContainerUploadHttpTests
                 State = "Staged", Update = new()
                 {
                     PreviousContentSha256 = new string('2', 64), WorkContentSha256 = new string('c', 64),
-                    Dirty = true, ChangedEntries = 1
+                    Dirty = true, ChangedEntries = 3
                 }
             };
             Assert.True(_operations.TryAdd(request.ImportId, receipt));
@@ -466,10 +516,15 @@ public sealed partial class ContainerUploadHttpTests
         private void Authorize(WorkspaceSourceRequest request, ServerCallContext context)
         {
             Assert.True(DevelopmentSourceBinding.IsValid(request, context.Method));
+            Authorize(DevelopmentSourceBinding.Hash(request), context);
+        }
+
+        private void Authorize(string hash, ServerCallContext context)
+        {
             var parts = context.RequestHeaders.GetValue("x-whaledeck-capability")?.Split('.');
             Assert.NotNull(parts);
             Assert.Equal(3, parts.Length);
-            var signed = DevelopmentSourceBinding.Payload(parts[0], parts[1], context.Method, DevelopmentSourceBinding.Hash(request));
+            var signed = DevelopmentSourceBinding.Payload(parts[0], parts[1], context.Method, hash);
             Assert.Equal(Convert.ToHexString(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(signed))), parts[2]);
         }
     }

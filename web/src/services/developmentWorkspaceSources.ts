@@ -33,6 +33,25 @@ export interface SourcePlan {
   update?: SourceUpdatePlan
 }
 
+export interface SourceDiffNode {
+  kind: 'File' | 'Directory'
+  sizeBytes: number | null
+  executable: boolean | null
+}
+
+export interface SourceDiffPage {
+  offset: number
+  nextOffset: number | null
+  visibleEntries: number
+  redactedEntries: number
+  entries: {
+    path: string
+    change: 'added' | 'removed' | 'changed'
+    before: SourceDiffNode | null
+    after: SourceDiffNode | null
+  }[]
+}
+
 interface SourceUpdatePlan {
   previousContentSha256: string
   workContentSha256: string
@@ -306,7 +325,79 @@ const request = async (
 ): Promise<SourceImport> =>
   sourceReceipt(await apiRequest<unknown>(target(id, importId) + suffix, init), id, importId)
 
+function validDiffNode(node: unknown) {
+  return (
+    node === null ||
+    (isRecord(node) &&
+      (node.kind === 'Directory'
+        ? node.sizeBytes === null && node.executable === null
+        : node.kind === 'File' &&
+          isInt(node.sizeBytes, 0, 1024 ** 3) &&
+          typeof node.executable === 'boolean'))
+  )
+}
+
+function validDiffEntry(entry: unknown) {
+  if (
+    !isRecord(entry) ||
+    typeof entry.path !== 'string' ||
+    !entry.path ||
+    entry.path.length > 4096 ||
+    /[\\:\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(entry.path) ||
+    entry.path.split('/').some((part) => !part || part === '.' || part === '..') ||
+    !validDiffNode(entry.before) ||
+    !validDiffNode(entry.after)
+  )
+    return false
+  switch (entry.change) {
+    case 'added':
+      return entry.before === null && entry.after !== null
+    case 'removed':
+      return entry.before !== null && entry.after === null
+    case 'changed':
+      return entry.before !== null && entry.after !== null
+    default:
+      return false
+  }
+}
+
 export const workspaceSources = {
+  async diff(item: SourceImport, offset: number, signal: AbortSignal): Promise<SourceDiffPage> {
+    const update = item.plan?.update
+    if (item.state !== 'Staged' || !item.previousImportId || !item.plan || !update)
+      return malformed()
+    const query = new URLSearchParams({ planSha256: item.plan.planSha256, offset: String(offset) })
+    const result = await apiRequest<unknown>(
+      target(item.workspaceId, item.importId) + '/diff?' + query,
+      { signal },
+    )
+    if (
+      !isRecord(result) ||
+      result.workspaceId !== item.workspaceId ||
+      result.importId !== item.importId ||
+      result.previousImportId !== item.previousImportId ||
+      result.planSha256 !== item.plan.planSha256 ||
+      result.offset !== offset ||
+      !isInt(result.visibleEntries, offset, 19999) ||
+      !isInt(result.redactedEntries, 0, 19999) ||
+      result.visibleEntries + result.redactedEntries !==
+        update.addedEntries + update.removedEntries + update.changedEntries ||
+      !Array.isArray(result.entries) ||
+      result.entries.length > 50 ||
+      !result.entries.every(validDiffEntry) ||
+      new Set(result.entries.map((entry) => entry.path)).size !== result.entries.length
+    )
+      return malformed()
+    const end = offset + result.entries.length
+    if (
+      end > result.visibleEntries ||
+      (end < result.visibleEntries
+        ? end === offset || result.nextOffset !== end
+        : result.nextOffset !== null)
+    )
+      return malformed()
+    return result as unknown as SourceDiffPage
+  },
   async current(id: string, signal: AbortSignal): Promise<SourceImport | null> {
     const result = await apiRequest<unknown>(scope(id), { signal })
     return result === undefined ? null : sourceReceipt(result, id)

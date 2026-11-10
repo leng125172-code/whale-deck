@@ -20,6 +20,8 @@ import {
   validGitRef,
   workspaceSources as api,
   type SourceConflictResolution,
+  type SourceDiffNode,
+  type SourceDiffPage,
   type SourceImport,
   type GitSourceInput,
 } from '@/services/developmentWorkspaceSources'
@@ -46,7 +48,7 @@ const fileInput = ref<HTMLInputElement>()
 const rawInput = ref<HTMLInputElement>()
 const directoryInput = ref<HTMLInputElement>()
 const directorySupported = 'webkitdirectory' in document.createElement('input')
-const busy = ref<'refresh' | 'upload' | 'git' | 'publish' | 'cancel' | 'history' | ''>('')
+const busy = ref<'refresh' | 'upload' | 'git' | 'publish' | 'cancel' | 'history' | 'diff' | ''>('')
 const error = ref('')
 const confirmed = ref(false)
 const resolution = ref<SourceConflictResolution>()
@@ -58,6 +60,8 @@ const repository = ref('')
 const gitRef = ref('HEAD')
 const history = shallowRef<SourceImport[] | null>(null)
 const before = ref<string | null>(null)
+const diff = shallowRef<SourceDiffPage | null>(null)
+const diffOffsets = shallowRef<number[]>([])
 let transfer: AbortController | undefined
 let pending: { id: string; archive: SourceArchive } | undefined
 let pendingGit: (GitSourceInput & { id: string }) | undefined
@@ -94,7 +98,11 @@ const conflictErrors: Record<string, string> = {
   WORKSPACE_SOURCE_WORK_BASE_CONFLICT: '已发布的基线发生变化。请刷新后重新核对更新。',
   WORKSPACE_SOURCE_WORK_CHANGED: '工作树在暂存后发生变化。请重新获取源码并核对新计划。',
   WORKSPACE_SOURCE_WORK_DIRTY: '工作树含未发布修改。请保留旧树后替换，或清理后重新获取源码。',
+  WORKSPACE_SOURCE_DIFF_CHANGED: '暂存计划或工作树已变化。请刷新导入状态并重新核对。',
+  WORKSPACE_SOURCE_DIFF_INCOMPLETE: '差异回执未通过核验。',
+  WORKSPACE_SOURCE_DIFF_UNAVAILABLE: '差异查询暂不可用。',
 }
+const changeLabels = { added: '新增', removed: '删除', changed: '修改' }
 const publishedDownload = computed(() => previousSourceDownloadUrl(published.value))
 const percentage = computed(() =>
   current.value?.archive.archiveBytes
@@ -151,6 +159,7 @@ function accept(
   ) {
     confirmed.value = false
     resolution.value = undefined
+    clearDiff()
   }
   current.value = result
   if (result?.state === 'Published') published.value = result
@@ -168,6 +177,7 @@ function clearFile(except?: HTMLInputElement) {
 
 async function load(signal: AbortSignal) {
   synchronized.value = false
+  clearDiff()
   const latest = await api.current(props.workspaceId, signal)
   const head = await api.published(props.workspaceId, signal)
   if (latest?.state === 'Published' && !head)
@@ -198,6 +208,7 @@ async function run(action: typeof busy.value, work: (signal: AbortSignal) => Pro
       repository.value = ''
       history.value = null
       before.value = null
+      clearDiff()
       clearFile()
     }
     error.value =
@@ -266,6 +277,53 @@ function loadHistory(more = false) {
     history.value = more ? [...(history.value ?? []), ...page.items] : page.items
     before.value = page.nextBefore
   })
+}
+
+function clearDiff() {
+  diff.value = null
+  diffOffsets.value = []
+}
+
+function loadDiff(direction: 'first' | 'next' | 'previous') {
+  const item = current.value
+  if (!synchronized.value || item?.state !== 'Staged' || !item.plan?.update) return
+  const page = diff.value
+  const offsets = diffOffsets.value
+  const offset =
+    direction === 'first'
+      ? 0
+      : direction === 'next'
+        ? page?.nextOffset
+        : offsets[offsets.length - 1]
+  if (offset == null) return
+  void run('diff', async (signal) => {
+    try {
+      const result = await api.diff(item, offset, signal)
+      signal.throwIfAborted()
+      diff.value = result
+      diffOffsets.value =
+        direction === 'first'
+          ? []
+          : direction === 'next' && page
+            ? [...offsets, page.offset]
+            : offsets.slice(0, -1)
+    } catch (failure) {
+      clearDiff()
+      if (failure instanceof ApiError && failure.status === 409) {
+        confirmed.value = false
+        resolution.value = undefined
+        synchronized.value = false
+      }
+      throw failure
+    }
+  })
+}
+
+function diffNodeLabel(node: SourceDiffNode | null) {
+  if (!node) return '无'
+  return node.kind === 'Directory'
+    ? '目录'
+    : [byteLabel(node.sizeBytes ?? 0), node.executable ? '可执行' : '不可执行'].join(' · ')
 }
 
 function selectFile(event: Event, kind: Selection['kind']) {
@@ -557,6 +615,49 @@ function cancel() {
       </div>
       <div v-if="current?.state === 'Staged'" class="source-confirm">
         <template v-if="current.plan?.update">
+          <section class="source-diff" aria-labelledby="workspace-source-diff-title">
+            <h3 id="workspace-source-diff-title">逐文件差异</h3>
+            <div class="source-actions">
+              <el-button
+                :disabled="!!busy || !synchronized"
+                :loading="busy === 'diff'"
+                @click="loadDiff('first')"
+              >
+                {{ diff ? '重新读取差异' : '查看逐文件差异' }}
+              </el-button>
+              <el-button v-if="diffOffsets.length" :disabled="!!busy" @click="loadDiff('previous')"
+                >上一页差异</el-button
+              >
+              <el-button
+                v-if="diff?.nextOffset != null"
+                :disabled="!!busy"
+                @click="loadDiff('next')"
+                >下一页差异</el-button
+              >
+            </div>
+            <template v-if="diff">
+              <p role="status">
+                <template v-if="diff.entries.length">
+                  第 {{ diff.offset + 1 }}–{{ diff.offset + diff.entries.length }} 条，共
+                  {{ diff.visibleEntries }} 条可显示
+                </template>
+                <template v-else>没有可显示的路径变化。</template>
+                <template v-if="diff.redactedEntries">
+                  · 隐藏 {{ diff.redactedEntries }} 条受保护路径</template
+                >
+              </p>
+              <ul v-if="diff.entries.length">
+                <li v-for="entry in diff.entries" :key="entry.path">
+                  <el-tag effect="plain" size="small">{{ changeLabels[entry.change] }}</el-tag>
+                  <code>{{ entry.path }}</code>
+                  <small
+                    >当前 {{ diffNodeLabel(entry.before) }} → 候选
+                    {{ diffNodeLabel(entry.after) }}</small
+                  >
+                </li>
+              </ul>
+            </template>
+          </section>
           <p id="workspace-update-strategy">请选择工作树更新策略</p>
           <el-radio-group
             v-model="resolution"
@@ -729,12 +830,34 @@ function cancel() {
   margin: 0;
 }
 .source-git,
-.source-history {
+.source-history,
+.source-diff {
   display: grid;
   gap: 12px;
   min-width: 0;
   padding-block: 12px;
   border-block-start: 1px solid var(--el-border-color-light);
+}
+.source-diff h3,
+.source-diff ul {
+  margin: 0;
+}
+.source-diff ul {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+.source-diff li {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 8px;
+  overflow-wrap: anywhere;
+}
+.source-diff small {
+  grid-column: 2;
+  color: var(--el-text-color-secondary);
 }
 .source-git :deep(.el-select),
 .source-git :deep(.el-input) {

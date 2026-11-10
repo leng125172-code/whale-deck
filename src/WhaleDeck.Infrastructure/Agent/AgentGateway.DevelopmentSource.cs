@@ -10,8 +10,43 @@ using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Infrastructure.Agent;
 
-public sealed partial class AgentGateway : IWorkspaceSourceGateway, IWorkspaceSourceDownloadGateway
+public sealed partial class AgentGateway : IWorkspaceSourceGateway, IWorkspaceSourceDownloadGateway, IWorkspaceSourceDiffGateway
 {
+    public async Task<WorkspaceSourceDiffPageView> ReadDiffAsync(WorkspaceDefinition workspace, WorkspaceSourceView import,
+        TerminalActor actor, int offset, int limit, CancellationToken token)
+    {
+        const string method = DevelopmentSourceBinding.ReadDiff;
+        var request = new WorkspaceSourceDiffRequest
+        {
+            Source = SourceRequest(import, workspace, actor, method, import.Plan),
+            Offset = (uint)offset, Limit = (uint)limit
+        };
+        if (!DevelopmentSourceDiffBinding.IsValid(request) || import.PreviousImportId is not { } previous ||
+            import.Plan?.Update is not { } update)
+            throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+        try
+        {
+            var client = await SourceClientAsync(true, token, diff: true);
+            var headers = SourceHeaders(method, DevelopmentSourceDiffBinding.Hash(request), DevelopmentSourceBinding.Payload);
+            var page = await client.ReadDiffAsync(request, headers, DateTime.UtcNow.AddSeconds(112), token).ResponseAsync;
+            if (!DevelopmentSourceDiffBinding.Matches(request, page) ||
+                page.VisibleEntries + page.RedactedEntries != update.AddedEntries + update.RemovedEntries + update.ChangedEntries)
+                throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+            return new(workspace.Id, import.ImportId, previous, page.PlanSha256, offset,
+                page.HasNextOffset ? (int)page.NextOffset : null, (int)page.VisibleEntries, (int)page.RedactedEntries,
+                page.Entries.Select(entry => new WorkspaceSourceDiffEntryView(entry.Path,
+                    entry.Change.ToString().ToLowerInvariant(), Node(entry.Before), Node(entry.After))).ToArray());
+        }
+        catch (RpcException error) { token.ThrowIfCancellationRequested(); throw SourceFailure(error); }
+
+        static WorkspaceSourceDiffNodeView? Node(WorkspaceSourceDiffNode? node) => node?.Kind switch
+        {
+            WorkspaceSourceDiffKind.File => new("File", (long)node.SizeBytes, node.Executable),
+            WorkspaceSourceDiffKind.Directory => new("Directory", null, null),
+            _ => null
+        };
+    }
+
     public async Task<ReadOnlyMemory<byte>> ExportPreviousAsync(WorkspaceDefinition workspace, WorkspaceSourceView import,
         TerminalActor actor, Func<ReadOnlyMemory<byte>, CancellationToken, Task> write, CancellationToken token)
     {
@@ -129,13 +164,14 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway, IWorkspaceSo
     }
 
     private async Task<DevelopmentSourceService.DevelopmentSourceServiceClient> SourceClientAsync(bool update, CancellationToken token,
-        bool previous = false)
+        bool previous = false, bool diff = false)
     {
         var caps = await _agent.GetCapabilitiesAsync(new Google.Protobuf.WellKnownTypes.Empty(),
             deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
         if (!DevelopmentSourceBinding.IsSupported(caps) || caps.ProtocolMinor < DevelopmentSourceBinding.AbortProtocolMinor ||
             update && !DevelopmentSourceBinding.SupportsUpdate(caps) ||
-            previous && !DevelopmentSourceBinding.SupportsPrevious(caps))
+            previous && !DevelopmentSourceBinding.SupportsPrevious(caps) ||
+            diff && !DevelopmentSourceBinding.SupportsDiff(caps))
             throw new WorkspaceSourceException(WorkspaceSourceFailure.Unsupported);
         return new(_channel);
     }
