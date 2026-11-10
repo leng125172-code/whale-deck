@@ -52,6 +52,7 @@ class InertArchiveWorkDouble:
                 time.sleep(0.025)
         finally:
             child.terminate(); child.wait(timeout=3)
+        (self.private / (self.task_id + '.computed')).touch(mode=0o600)
         return dict(nativeExecutionOnly=True)
 
 
@@ -217,6 +218,24 @@ def main():
         wait(lambda: observe(tasks, value) == 'Succeeded')
         assert tasks.cancel(value)['status'] == 'Succeeded'
         evidence['committedResultAfterRealExitAndLateCancel'] = 'passed'
+
+        # An independent observer may hold the short metadata lock exactly
+        # when the original unit finishes storage work. The original process
+        # must persist its result after that observer returns, without a new
+        # execution or any wait while source/HDD locks are held.
+        value = request(); tasks = task_engine(private, value); unit = start(private, value, owned)
+        wait(lambda: (private / (value['taskId'] + '.entered')).exists())
+        original = proof(private, value)
+        with tasks.entry(value):
+            (private / (value['taskId'] + '.release')).touch(mode=0o600)
+            wait(lambda: (private / (value['taskId'] + '.computed')).exists())
+            time.sleep(0.05)
+            assert not (private / 'journal' / value['taskId'] / 'result.json').exists()
+            assert int(run('/usr/bin/systemctl', 'show', unit, '--property=MainPID', '--value').stdout.strip()) > 1
+        wait(lambda: observe(tasks, value) == 'Succeeded')
+        assert proof(private, value) == original and tasks.execution.settled(original)
+        assert tasks.run(value)['status'] == 'Succeeded'
+        evidence['resultCommitWaitsForIndependentObserverWithoutReplay'] = 'passed'
 
         value = request(); tasks = task_engine(private, value)
         assert tasks.cancel(value)['status'] == 'Stopped'

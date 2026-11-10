@@ -12,9 +12,11 @@ import os
 from pathlib import Path
 import re
 import stat
+import time
 
 BASE = Path('/var/lib/whaledeck-development-archive-operations')
 MAX_TASKS = 30000
+RESULT_LOCK_WAIT_SECONDS = 2
 UUID = r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}'
 ZERO = '00000000-0000-0000-0000-000000000000'
 SHA = r'[a-f0-9]{64}'
@@ -80,10 +82,18 @@ class ArchiveOperations:
                 original = d.directory(directory, private=True)
                 if pinned is not None and not os.path.samestat(original, os.fstat(pinned[1])):
                     self.refuse('JOURNAL_CHANGED')
-                try:
-                    fcntl.flock(directory, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    self.refuse('BUSY')
+                # Only the original execution's pinned result commit may
+                # wait briefly. Observe/Cancel/admission retain nonblocking
+                # behavior; no source or HDD lock is held at this boundary.
+                deadline = time.monotonic() + RESULT_LOCK_WAIT_SECONDS if pinned is not None else None
+                while True:
+                    try:
+                        fcntl.flock(directory, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        if deadline is None or time.monotonic() >= deadline:
+                            self.refuse('BUSY')
+                        time.sleep(0.01)
                 if create:
                     self.engine.durable_json(directory, 'request.json', value)
                     self.cancelled(directory, initialize=True)

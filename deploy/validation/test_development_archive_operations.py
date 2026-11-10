@@ -195,6 +195,66 @@ class OperationTests(unittest.TestCase):
         self.execution.alive = False
         self.assertEqual('Succeeded', self.tasks.observe(self.base)['status'])
 
+    def test_result_commit_waits_for_a_contending_observer_without_repeating_storage_work(self):
+        ready, contended = threading.Event(), threading.Event()
+        main = threading.get_ident(); original_flock = operations.fcntl.flock
+        original_plan = self.capture.plan; calls = []; observer_finished = []
+        def observer():
+            with self.tasks.entry(self.base):
+                ready.set()
+                observer_finished.append(contended.wait(3))
+        thread = threading.Thread(target=observer)
+        def scan(*args):
+            calls.append(1); result = original_plan(*args)
+            thread.start(); self.assertTrue(ready.wait(3))
+            return result
+        def flock(fd, flags):
+            try:
+                return original_flock(fd, flags)
+            except BlockingIOError:
+                if threading.get_ident() == main and ready.is_set():
+                    contended.set()
+                raise
+        try:
+            with patch.object(self.capture, 'plan', side_effect=scan), patch.object(operations.fcntl, 'flock', side_effect=flock):
+                self.assertEqual('Finishing', self.tasks.run(self.base)['status'])
+        finally:
+            contended.set()
+            if thread.ident is not None: thread.join(3)
+        self.assertFalse(thread.is_alive()); self.assertEqual([True], observer_finished)
+        self.assertTrue(contended.is_set()); self.assertEqual([1], calls)
+        self.execution.alive = False
+        self.assertEqual('Succeeded', self.tasks.observe(self.base)['status'])
+        self.assertEqual(1, self.execution.identity_calls)
+
+    def test_result_lock_wait_is_bounded_and_never_reexecutes_an_unknown_task(self):
+        ready, release = threading.Event(), threading.Event()
+        original_plan = self.capture.plan; calls = []
+        def observer():
+            with self.tasks.entry(self.base):
+                ready.set(); release.wait(3)
+        thread = threading.Thread(target=observer)
+        def scan(*args):
+            calls.append(1); result = original_plan(*args)
+            thread.start(); self.assertTrue(ready.wait(3))
+            return result
+        try:
+            with patch.object(self.capture, 'plan', side_effect=scan), patch.object(operations, 'RESULT_LOCK_WAIT_SECONDS', 0.03):
+                started = time.monotonic()
+                with self.assertRaisesRegex(fixture.files.Rejected, 'ARCHIVE_TASK_BUSY'):
+                    self.tasks.run(self.base)
+                self.assertLess(time.monotonic() - started, 1)
+                with self.assertRaisesRegex(fixture.files.Rejected, 'ARCHIVE_TASK_BUSY'):
+                    self.tasks.observe(self.base)
+        finally:
+            release.set()
+            if thread.ident is not None: thread.join(3)
+        self.assertFalse(thread.is_alive()); self.assertFalse((self.directory() / 'result.json').exists())
+        self.execution.alive = False
+        with patch.object(self.capture, 'plan', side_effect=AssertionError('unknown task automatically replayed')):
+            self.assertEqual('Interrupted', self.tasks.run(self.base)['status'])
+        self.assertEqual([1], calls); self.assertEqual(1, self.execution.identity_calls)
+
     def test_corrupt_completed_schema_or_request_binding_is_refused(self):
         self.finish(self.base); self.execution.alive = False
         path = self.directory() / 'result.json'
