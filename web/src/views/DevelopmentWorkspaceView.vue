@@ -5,6 +5,7 @@ import { ElCard } from 'element-plus'
 import WorkspaceSourceImport from '@/components/WorkspaceSourceImport.vue'
 import WorkspaceLifecycle from '@/components/WorkspaceLifecycle.vue'
 import WorkspaceArchive from '@/components/WorkspaceArchive.vue'
+import WorkspaceRetirement from '@/components/WorkspaceRetirement.vue'
 import { ApiError, createIdempotencyKey } from '@/services/apiClient'
 import { authSession } from '@/services/authSession'
 import {
@@ -25,6 +26,7 @@ const showRuns = computed(() => route.name === 'development-workspace-runs')
 const showSources = computed(() => route.name === 'development-workspace-source')
 const workspace = ref<Workspace | null>(null)
 const archivePending = ref(false)
+const retirementPending = ref(false)
 const owned = computed(
   () => workspace.value && workspace.value.ownerSubject === authSession.user.value?.subject,
 )
@@ -108,6 +110,7 @@ watch(
       pending.value = null
     workspace.value = null
     archivePending.value = false
+    retirementPending.value = false
     plan.value = null
     checked.value = false
     runs.value = []
@@ -240,6 +243,7 @@ function allocate() {
   })
 }
 function preflight() {
+  if (!enabled.value) return
   checked.value = false
   void perform('preflight', async (signal) => {
     const result = await api.preflight(id.value, signal)
@@ -302,6 +306,7 @@ function cancel(run: WorkspaceRun) {
         "
         :workspace="workspace"
         :archive-pending="archivePending"
+        :retirement-pending="retirementPending"
         @refresh="refresh"
       />
 
@@ -314,18 +319,40 @@ function cancel(run: WorkspaceRun) {
           (owned || authSession.user.value?.isAdministrator)
         "
         :workspace="workspace"
+        :retirement-pending="retirementPending"
         @pending="archivePending = $event"
+      />
+
+      <WorkspaceRetirement
+        v-if="
+          !showRuns &&
+          !showSources &&
+          allocated &&
+          ['Stopped', 'Retiring', 'Retired'].includes(workspace.lifecycleState ?? '') &&
+          (owned || authSession.user.value?.isAdministrator)
+        "
+        :workspace="workspace"
+        :archive-pending="archivePending"
+        @pending="retirementPending = $event"
+        @refresh="refresh"
       />
 
       <el-card v-if="!showRuns && !showSources" shadow="never">
         <template #header><strong>环境与存储</strong></template>
         <dl>
           <dt>空间状态</dt>
-          <dd>{{ states[workspace.state] ?? workspace.state }}</dd>
+          <dd>
+            {{
+              workspace.lifecycleState === 'Retired'
+                ? '已退役'
+                : (states[workspace.state] ?? workspace.state)
+            }}
+          </dd>
           <dt>批准存储根</dt>
           <dd>{{ workspace.storageRootId }}</dd>
           <dt>资源预算</dt>
           <dd>
+            <span v-if="workspace.lifecycleState === 'Retired'">已释放，原登记： </span>
             {{ workspace.budget.cpuMillis }} 毫核 · {{ workspace.budget.memoryMiB }} MiB 内存 ·
             {{ workspace.budget.diskMiB }} MiB 磁盘
           </dd>
@@ -348,7 +375,7 @@ function cancel(run: WorkspaceRun) {
             核对存储计划
           </el-button>
           <el-button
-            v-else
+            v-else-if="enabled"
             :disabled="!!action"
             :loading="action === 'preflight'"
             @click="preflight"

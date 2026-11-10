@@ -256,6 +256,9 @@ public static class DependencyInjection
         services.AddScoped<WorkspaceLifecycle>();
         services.AddScoped<WorkspaceLifecycleDispatcher>();
         services.AddScoped<IWorkspaceLifecycleStore, WorkspaceLifecycleRepository>();
+        services.AddScoped<WorkspaceRetirements>();
+        services.AddScoped<WorkspaceRetirementDispatcher>();
+        services.AddScoped<IWorkspaceRetirementStore, WorkspaceRetirementRepository>();
         services.AddScoped<WorkspaceArchives>();
         services.AddScoped<WorkspaceArchiveDispatcher>();
         services.AddScoped<IWorkspaceArchiveStore, WorkspaceArchiveRepository>();

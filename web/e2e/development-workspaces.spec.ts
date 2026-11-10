@@ -4,6 +4,7 @@ import { crc32 } from 'node:zlib'
 import { expect, test, type Page } from '@playwright/test'
 import { installTerminalFixture } from './fixtures/terminal.mjs'
 import type { WorkspaceArchive } from '../src/services/workspaceArchives'
+import type { WorkspaceRetirement } from '../src/services/workspaceRetirements'
 
 test.use({ baseURL: process.env.WHALEDECK_PRODUCTION_PREVIEW_URL || 'http://127.0.0.1:5174' })
 
@@ -12,6 +13,7 @@ const api = '/api/v1' + workspacePath
 const id = '784bbbe8-e60d-4f2a-a839-c64c9f474504'
 const runId = 'c42e390c-8cdd-4371-8afe-b20994d209ef'
 const archiveId = 'a44984f7-2960-458b-91a5-4bb96f553d77'
+const retirementId = 'b44984f7-2960-458b-91a5-4bb96f553d77'
 const digest = 'a'.repeat(64)
 const planDigest = 'b'.repeat(64)
 const markdown = '# 开发空间运行报告\n\n已取消\n'
@@ -63,6 +65,9 @@ async function fixture(page: Page, developer = true) {
     lifecycleKeys: [] as string[],
     loseLifecycleReply: false,
     archive: null as WorkspaceArchive | null,
+    retirement: null as WorkspaceRetirement | null,
+    retirementKeys: [] as string[],
+    retirementConfirmations: [] as unknown[],
     archiveKeys: [] as string[],
     archiveConfirmations: [] as string[],
     archiveReads: 0,
@@ -148,6 +153,31 @@ async function fixture(page: Page, developer = true) {
         return fulfill({ workspace: workspace(), replayed: false }, 201)
       }
       if (suffix === `/${id}`) return fulfill(workspace())
+      if (suffix.startsWith(`/${id}/retirements`)) {
+        if (request.method() === 'GET') return fulfill(state.retirement)
+        if (suffix === `/${id}/retirements`) {
+          const key = request.headers()['idempotency-key'] ?? ''
+          expect(key).toMatch(/^[a-f0-9-]{36}$/)
+          expect(request.postDataJSON()).toEqual({
+            archiveId,
+            expectedEpoch: state.lifecycleVersion,
+          })
+          state.retirementKeys.push(key)
+          state.retirement ??= retirementView(state.lifecycleVersion)
+          state.lifecycleState = 'Retiring'
+          return fulfill(state.retirement, 202)
+        }
+        if (suffix === `/${id}/retirements/${retirementId}/confirm` && state.retirement) {
+          expect(request.postDataJSON()).toEqual({
+            planSha256: planDigest,
+            deleteSourceAndReleaseBudget: true,
+          })
+          state.retirementConfirmations.push(request.postDataJSON())
+          state.retirement.phase = 'Execute'
+          state.retirement.awaitingConfirmation = false
+          return fulfill(state.retirement, 202)
+        }
+      }
       if (suffix.startsWith(`/${id}/archives`)) {
         if (request.method() === 'GET') {
           state.archiveReads++
@@ -807,3 +837,112 @@ test('rejects duplicate and protected direct files before creating an import', a
   expect(state.beginCalls).toBe(0)
   expect(state.offsets).toEqual([])
 })
+
+function retirementView(epoch: number): WorkspaceRetirement {
+  return {
+    retirementId,
+    workspaceId: id,
+    archiveId,
+    state: 'Running',
+    phase: 'AwaitingConfirmation',
+    code: null,
+    awaitingConfirmation: true,
+    authorizationRequired: false,
+    cancelRequested: false,
+    attentionRequired: false,
+    planJson: JSON.stringify({
+      archiveId,
+      retirementPlanSha256: planDigest,
+      expectedEpoch: epoch,
+      entryCount: 2,
+      totalBytes: 17,
+      retainsSource: true,
+      reservesBudget: true,
+      deletionAuthorized: false,
+    }),
+    planExpiresAtUtc: '2026-11-11T12:10:00Z',
+    confirmedAtUtc: null,
+    executionJson: null,
+    completedAtUtc: null,
+    sourceRetired: false,
+    budgetReleased: false,
+    retainsHdd: true,
+  }
+}
+for (const width of [320, 1440])
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`workspace retirement ${width} ${colorScheme}: independent delete consent, reload and retained history`, async ({
+      page,
+    }, testInfo) => {
+      const state = await fixture(page)
+      state.registered = state.allocated = true
+      state.lifecycleState = 'Stopped'
+      state.lifecycleVersion = 2
+      state.archive = {
+        ...archiveView(),
+        state: 'Succeeded',
+        phase: 'Archived',
+        awaitingConfirmation: false,
+        planJson: JSON.stringify({
+          planSha256: planDigest,
+          expectedEpoch: 2,
+          entryCount: 2,
+          totalBytes: 17,
+        }),
+        captureJson: archiveReceipt(),
+        verifyJson: archiveReceipt(),
+        completedAtUtc: '2026-11-11T11:00:00Z',
+      }
+      await page.setViewportSize({ width, height: 900 })
+      await page.emulateMedia({ colorScheme })
+      await page.goto(`${workspacePath}/${id}/environment`)
+      const card = page.getByRole('region', { name: '开发空间退役', exact: true })
+      await card.getByRole('button', { name: '核对空间退役计划', exact: true }).click()
+      const confirm = card.getByRole('button', { name: '确认删除源码并退役空间', exact: true })
+      await expect(confirm).toBeDisabled()
+      expect(state.retirementConfirmations).toHaveLength(0)
+      await card.locator('label.el-checkbox').click()
+      await expect(card.getByRole('checkbox')).toBeChecked()
+      await confirm.click()
+      await expect(card.getByText('正在退役源码和释放配额', { exact: true })).toBeVisible()
+      expect(state.retirementKeys).toHaveLength(1)
+      expect(state.retirementConfirmations).toHaveLength(1)
+      await page.reload()
+      await expect(card.getByText('正在退役源码和释放配额', { exact: true })).toBeVisible()
+      expect(state.retirementKeys).toHaveLength(1)
+      state.lifecycleState = 'Retired'
+      Object.assign(state.retirement!, {
+        state: 'Succeeded',
+        phase: 'Retired',
+        completedAtUtc: '2026-11-11T12:00:00Z',
+        budgetReleased: true,
+        sourceRetired: true,
+        executionJson: JSON.stringify({
+          workspaceId: id,
+          retirementId,
+          retirementPlanSha256: planDigest,
+          sourceRemoved: true,
+          quotaReleased: true,
+          claimReleased: true,
+          retainsHdd: true,
+        }),
+      })
+      await card.getByRole('button', { name: '刷新退役状态', exact: true }).click()
+      await expect(
+        card.getByText(
+          '源码和磁盘配额已退役，应用资源预算已释放。HDD 留存、历史记录和报告仍可读取。',
+        ),
+      ).toBeVisible()
+      await expect(page.getByRole('link', { name: '运行记录', exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: '核对恢复计划', exact: true })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: '核验 Runner 存储', exact: true })).toHaveCount(0)
+      await expect(page.getByText('已释放，原登记：')).toBeVisible()
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true)
+      await page.screenshot({
+        path: testInfo.outputPath(`retirement-${width}-${colorScheme}.png`),
+        fullPage: true,
+      })
+    })
+  }

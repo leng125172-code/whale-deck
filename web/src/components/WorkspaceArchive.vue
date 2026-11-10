@@ -5,7 +5,7 @@ import { ApiError, createIdempotencyKey } from '@/services/apiClient'
 import { workspaceError, type Workspace } from '@/services/developmentWorkspaces'
 import { workspaceArchives as api, type WorkspaceArchive } from '@/services/workspaceArchives'
 
-const props = defineProps<{ workspace: Workspace }>()
+const props = defineProps<{ workspace: Workspace; retirementPending?: boolean }>()
 const emit = defineEmits<{ pending: [value: boolean] }>()
 const operation = ref<WorkspaceArchive | null>(null),
   confirmed = ref(false),
@@ -149,6 +149,7 @@ watch(
   { immediate: true },
 )
 function begin() {
+  if (props.retirementPending) return
   void perform(async (signal) => {
     if (operation.value?.completedAtUtc) key = undefined
     key ??= createIdempotencyKey()
@@ -199,7 +200,9 @@ function change(action: 'cancel' | 'authorize') {
     <p>先核对计划，再确认复制和独立校验。源码、历史和磁盘配额继续保留，归档结束前不能恢复空间。</p>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <div class="archive-actions">
-      <el-button :disabled="busy || pending || denied" @click="begin">核对 HDD 归档计划</el-button>
+      <el-button :disabled="busy || pending || denied || retirementPending" @click="begin"
+        >核对 HDD 归档计划</el-button
+      >
       <el-button :disabled="busy" @click="observe">刷新归档状态</el-button>
     </div>
     <template v-if="operation">

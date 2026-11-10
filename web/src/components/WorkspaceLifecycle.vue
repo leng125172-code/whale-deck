@@ -10,7 +10,11 @@ import {
   type LifecycleOperation,
 } from '@/services/developmentWorkspaces'
 
-const props = defineProps<{ workspace: Workspace; archivePending?: boolean }>()
+const props = defineProps<{
+  workspace: Workspace
+  archivePending?: boolean
+  retirementPending?: boolean
+}>()
 const emit = defineEmits<{ refresh: [] }>()
 const plan = ref<LifecyclePlan | null>(null)
 const operation = ref<LifecycleOperation | null>(null)
@@ -25,6 +29,8 @@ const labels: Record<string, string> = {
   Stopping: '停用确认中',
   Stopped: '已停用',
   Resuming: '恢复确认中',
+  Retiring: '退役处理中',
+  Retired: '已退役',
 }
 const waiting = computed(
   () =>
@@ -130,7 +136,13 @@ function closePlan() {
   <el-card shadow="never" class="workspace-lifecycle">
     <template #header><strong>空间启停</strong></template>
     <p role="status">{{ labels[state] ?? state }}</p>
-    <p>停用只阻止新任务和源码写入，源码、历史与磁盘配额继续保留。请先完成或取消正在处理的任务。</p>
+    <p v-if="state === 'Retired'">空间已退役，保留 HDD 归档、历史任务和报告。</p>
+    <p v-else-if="state === 'Retiring'">
+      正在核对或执行退役。完成前空间保持隔离并占用预算；源码可能已开始删除，请以退役回执为准。
+    </p>
+    <p v-else>
+      停用只阻止新任务和源码写入，源码、历史与磁盘配额继续保留。请先完成或取消正在处理的任务。
+    </p>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <div class="lifecycle-actions">
       <el-button v-if="state === 'Active'" :disabled="busy || waiting" @click="loadPlan('stop')"
@@ -138,13 +150,14 @@ function closePlan() {
       >
       <el-button
         v-if="state === 'Stopped'"
-        :disabled="busy || waiting || archivePending"
+        :disabled="busy || waiting || archivePending || retirementPending"
         @click="loadPlan('resume')"
         >核对恢复计划</el-button
       >
       <el-button :disabled="busy" @click="emit('refresh')">刷新启停状态</el-button>
     </div>
     <p v-if="archivePending">请先完成或取消 HDD 归档，取得原任务结束确认后再恢复空间。</p>
+    <p v-if="retirementPending">退役请求尚未结束，空间继续隔离，预算仍保留。</p>
     <template v-if="plan">
       <p>
         {{
