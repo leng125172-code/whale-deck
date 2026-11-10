@@ -91,7 +91,11 @@ builder.Services.AddReverseProxy()
                 ["authentik"] = new() { Address = "http://127.0.0.1:18081/" }
             }
         }])
-    .AddTransforms(context => OidcLogoutHost.Configure(context, builder.Configuration));
+    .AddTransforms(context =>
+    {
+        OidcLogoutHost.Configure(context, builder.Configuration);
+        MaintenanceUnavailableResponse.Configure(context, builder.Configuration);
+    });
 
 var app = builder.Build();
 var statusPath = builder.Configuration["Maintenance:StatusPath"]
@@ -121,7 +125,7 @@ app.UseStatusCodePages(async context =>
     context.HttpContext.Response.ContentType = "text/html; charset=utf-8";
     var status = await context.HttpContext.RequestServices.GetRequiredService<MaintenanceStatusReader>()
         .ReadAsync(statusPath, context.HttpContext.RequestAborted);
-    await context.HttpContext.Response.WriteAsync(MaintenancePage(status.Body.Message));
+    await context.HttpContext.Response.WriteAsync(MaintenanceUnavailableResponse.Page(status.Body.Message));
 });
 app.MapGet("/maintenance/status", async (MaintenanceStatusReader reader, HttpContext context) =>
 {
@@ -134,13 +138,3 @@ await app.RunAsync();
 
 static IReadOnlyList<IReadOnlyDictionary<string, string>> PreserveOriginalHost() =>
     [new Dictionary<string, string> { ["RequestHeaderOriginalHost"] = "true" }];
-
-static string MaintenancePage(string status)
-{
-    return $$"""
-        <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <meta http-equiv="refresh" content="6"><title>Whale Deck 维护中</title>
-        <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f172a;color:#dbeafe;font:14px ui-monospace,monospace}.card{padding:32px;border:1px solid #1d4ed8;border-radius:16px;background:#111827;box-shadow:0 20px 60px #02061780}h1{font-size:20px;color:#60a5fa}</style></head>
-        <body><main class="card"><h1>Whale Deck</h1><p>{{System.Net.WebUtility.HtmlEncode(status)}}</p><p>页面将在 6 秒后自动重试。</p></main></body></html>
-        """;
-}
