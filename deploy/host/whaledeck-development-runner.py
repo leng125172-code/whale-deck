@@ -11,10 +11,12 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import shutil
 import stat
 import subprocess
 import sys
+import time
 import uuid
 
 IMAGE_ROOT = Path('/var/lib/whaledeck-development-images')
@@ -28,6 +30,8 @@ REPORT_RETIRED = 'test-report-retired.json'
 REPORT_RETIRE_STAGING = '.test-report-retirement-staging'
 REPORT_LIMIT = 16 * 1024 * 1024
 REPORT_SLOT = '/tmp/whaledeck-results'
+DIAGNOSTICS = 'diagnostics.json'
+DIAGNOSTIC_SCAN_LIMIT = 1024 * 1024
 REPORT_COMMANDS = {
     'node': (['/usr/local/bin/node', '--test', '--test-reporter=junit',
               '--test-reporter-destination=' + REPORT_SLOT + '/tests.xml'], 'JUnit', 'tests.xml'),
@@ -214,15 +218,137 @@ def valid_report(value, spec, status):
             and (status in ('Succeeded', 'Failed') or state == 'Unavailable'))
 
 
-def execute(bundle, workspace_id, run_id, deadline):
+class ExecutionDiagnostics:
+    """Untrusted output is scanned in memory; no arbitrary text is retained."""
+
+    def __init__(self):
+        self.output_bytes = 0
+        self.scanned_bytes = 0
+        self.tail = b''
+        self.codes = set()
+        self.codes_limited = False
+        self.categories = set()
+        self.resources = {}
+        self.samples = 0
+
+    def consume(self, block):
+        self.output_bytes += len(block)
+        allowed = min(len(block), DIAGNOSTIC_SCAN_LIMIT - self.scanned_bytes)
+        if allowed <= 0:
+            return
+        data = self.tail + block[:allowed]
+        self.scanned_bytes += allowed
+        for match in re.findall(rb'\berror[ \t]+((?:MSB|CS|NETSDK|NU|VSTEST)[0-9]{4,5})\b', data):
+            code = match.decode('ascii')
+            if len(self.codes) < 32 or code in self.codes:
+                self.codes.add(code)
+            else:
+                self.codes_limited = True
+        lower = data.lower()
+        for needle, category in ((b'no space left on device', 'NoSpace'),
+                                 (b'disk quota exceeded', 'QuotaExceeded'),
+                                 (b'out of memory', 'OutOfMemory'),
+                                 (b'failed to create coreclr', 'RuntimeStartupFailure'),
+                                 (b'permission denied', 'PermissionDenied'),
+                                 (b'resource temporarily unavailable', 'ResourceUnavailable')):
+            if needle in lower:
+                self.categories.add(category)
+        # Bounded overlap also recognizes codes split across pipe reads.
+        self.tail = data[-96:]
+
+    def sample(self, group):
+        if group is None:
+            return
+        fields = {'memory.events': {'oom', 'oom_kill', 'max'},
+                  'pids.events': {'max'}, 'cpu.stat': {'usage_usec', 'nr_throttled', 'throttled_usec'}}
+        observed = False
+        for filename in (*fields, 'memory.peak'):
+            try:
+                fd = os.open(group / filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+                try:
+                    raw = os.read(fd, 4097)
+                finally:
+                    os.close(fd)
+            except OSError:
+                continue
+            if len(raw) > 4096:
+                continue
+            lines = [(b'bytes', raw.strip())] if filename == 'memory.peak' else [line.split() for line in raw.splitlines()]
+            for parts in lines:
+                if len(parts) != 2:
+                    continue
+                key, value = parts
+                if (filename != 'memory.peak' and key.decode('ascii', errors='replace') not in fields[filename]
+                        or not value.isdigit() or len(value) > 20):
+                    continue
+                name = filename + ':' + key.decode('ascii')
+                self.resources[name] = max(self.resources.get(name, 0), int(value))
+                observed = True
+        self.samples += int(observed)
+
+    def summary(self):
+        return {'outputBytes': self.output_bytes, 'scannedBytes': self.scanned_bytes,
+                'scanLimitBytes': DIAGNOSTIC_SCAN_LIMIT, 'scanLimited': self.output_bytes > self.scanned_bytes,
+                'untrustedErrorCodes': sorted(self.codes), 'errorCodesLimited': self.codes_limited,
+                'untrustedCategories': sorted(self.categories),
+                'resourceSamples': self.samples, 'resourceMaxima': self.resources}
+
+
+def monitored_process(argv, deadline, diagnostics, group, options):
+    process = subprocess.Popen(argv, **(options | {'stdout': subprocess.PIPE, 'stderr': subprocess.STDOUT}))
+    try:
+        os.set_blocking(process.stdout.fileno(), False)
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            end, next_sample = time.monotonic() + deadline, 0
+            while selector.get_map() or process.poll() is None:
+                now = time.monotonic()
+                if now >= next_sample:
+                    diagnostics.sample(group)
+                    next_sample = now + 0.2
+                if now >= end:
+                    raise subprocess.TimeoutExpired(argv, deadline)
+                for key, _ in selector.select(min(0.1, end - now)):
+                    block = os.read(key.fd, 65536)
+                    if block:
+                        diagnostics.consume(block)
+                    else:
+                        selector.unregister(key.fileobj)
+            return subprocess.CompletedProcess(argv, process.wait(timeout=max(0.01, end - time.monotonic())))
+    finally:
+        process.stdout.close()
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+
+
+def persist_diagnostics(rootfs, directory, binding, status, code, diagnostics):
+    # Authoritative execution/cleanup receipts are committed first. Optional
+    # telemetry must never turn a completed task into a host failure, including
+    # a workspace that exhausted its hard quota. Readers must parse the entire
+    # sidecar; missing or incomplete telemetry is unavailable, never zero.
+    try:
+        rootfs.write_metadata(directory, DIAGNOSTICS,
+                              {'schemaVersion': 1, **binding, 'status': status, 'runtimeExitCode': code,
+                               **diagnostics.summary()})
+    except OSError:
+        return False
+    return True
+
+
+def execute(bundle, workspace_id, run_id, deadline, *, diagnostics=None, cgroup_parent=None):
     state = bundle / '.runner-state'
     state.mkdir(mode=0o700)
     name = 'whaledeck-dev-' + workspace_id.replace('-', '') + '-' + run_id
     prefix = [RUNC, '--root', str(state)]
     options = {'stdin': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL, 'stderr': subprocess.DEVNULL,
                'env': {'PATH': '/usr/bin:/bin', 'LANG': 'C'}}
+    diagnostics = diagnostics if diagnostics is not None else ExecutionDiagnostics()
+    if cgroup_parent is not None and not SERVICE_CGROUP.fullmatch('0::' + cgroup_parent + '/launcher'):
+        refuse('DELEGATION_UNAVAILABLE')
+    group = Path('/sys/fs/cgroup' + cgroup_parent) / 'workload' if cgroup_parent is not None else None
     try:
-        job = subprocess.run(prefix + ['run', '--bundle', str(bundle), name], timeout=deadline, **options)
+        job = monitored_process(prefix + ['run', '--bundle', str(bundle), name], deadline, diagnostics, group, options)
     except subprocess.TimeoutExpired:
         try:
             subprocess.run(prefix + ['delete', '--force', name], timeout=15, check=True, **options)
@@ -502,8 +628,9 @@ def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None, c
             if cgroup_parent:
                 config['linux']['cgroupsPath'] = cgroup_parent + '/workload'
             rootfs.write_metadata(bundle, 'config.json', config)
+            diagnostics = ExecutionDiagnostics()
             status, code = execute(Path(os.readlink(f'/proc/self/fd/{bundle}')), proof['workspaceId'],
-                                   run_id, request['deadlineSeconds'])
+                                   run_id, request['deadlineSeconds'], diagnostics=diagnostics, cgroup_parent=cgroup_parent)
         with lock_run(directory, wait=True):
             existing = terminal_result(driver, directory, binding, spec)
             if existing is not None:
@@ -511,7 +638,9 @@ def start(driver, isolation, rootfs, unpacker, request, *, cgroup_parent=None, c
             report = (seal_report(driver, output, directory, spec) if output is not None and code is not None
                       else report_unavailable(spec))
             discard_bundle(driver, rootfs, directory)
-            return persist_result(driver, rootfs, directory, binding, status, code, report=report)
+            result = persist_result(driver, rootfs, directory, binding, status, code, report=report)
+            persist_diagnostics(rootfs, directory, binding, status, code, diagnostics)
+            return result
 
 
 def load(filename):

@@ -174,6 +174,19 @@ def validate_process(argv, uid, cpu_millis, memory_mib):
         raise ValueError('Runner identity or budget is invalid')
 
 
+def runtime_environment(argv, cpu_millis):
+    environment = ['PATH=/usr/local/bin:/usr/bin:/bin', 'HOME=/tmp', 'TMPDIR=/tmp',
+                   'DOTNET_CLI_HOME=/tmp', 'DOTNET_CLI_TELEMETRY_OPTOUT=1', 'DOTNET_NOLOGO=1']
+    if argv[0] == '/usr/share/dotnet/dotnet':
+        # The sandbox deliberately exposes no host cgroup filesystem. Without
+        # an explicit count the CLR sees host CPUs and can exhaust pids.max
+        # while starting compiler/testhost threads. Kernel quotas remain the
+        # enforcement boundary; this hint follows the approved CPU budget.
+        environment += ['NUGET_PACKAGES=/work/.nuget/packages',
+                        'DOTNET_PROCESSOR_COUNT=' + str(max(1, (cpu_millis + 999) // 1000))]
+    return environment
+
+
 def oci_config(files, bundle, projected, argv, uid, cpu_millis, memory_mib, *, rootfs_policy, runtime_image):
     """Build the fixed OCI policy inside the trusted launcher's private namespace."""
     identity = require_private_directory(bundle)
@@ -207,9 +220,7 @@ def oci_config(files, bundle, projected, argv, uid, cpu_millis, memory_mib, *, r
         'process': {
             'terminal': False, 'user': {'uid': uid, 'gid': uid, 'additionalGids': []},
             'args': argv.copy(), 'cwd': '/work', 'noNewPrivileges': True,
-            'env': ['PATH=/usr/local/bin:/usr/bin:/bin', 'HOME=/tmp', 'TMPDIR=/tmp',
-                    'DOTNET_CLI_HOME=/tmp', 'DOTNET_CLI_TELEMETRY_OPTOUT=1', 'DOTNET_NOLOGO=1'] + (
-                        ['NUGET_PACKAGES=/work/.nuget/packages'] if argv[0] == '/usr/share/dotnet/dotnet' else []),
+            'env': runtime_environment(argv, cpu_millis),
             'capabilities': {key: [] for key in ('bounding', 'effective', 'inheritable', 'permitted', 'ambient')},
             'rlimits': [{'type': 'RLIMIT_CORE', 'soft': 0, 'hard': 0},
                         {'type': 'RLIMIT_NOFILE', 'soft': 4096, 'hard': 4096}],

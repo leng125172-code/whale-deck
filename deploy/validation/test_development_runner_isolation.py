@@ -16,6 +16,16 @@ files_spec.loader.exec_module(files)
 
 
 class RunnerIsolationTests(unittest.TestCase):
+    def test_dotnet_processor_count_tracks_approved_cpu_budget_without_affecting_node(self):
+        for cpu, count in ((100, 1), (500, 1), (1000, 1), (1500, 2), (64000, 64)):
+            with self.subTest(cpu=cpu):
+                environment = isolation.runtime_environment(['/usr/share/dotnet/dotnet', 'test'], cpu)
+                self.assertEqual([f'DOTNET_PROCESSOR_COUNT={count}'],
+                                 [value for value in environment if value.startswith('DOTNET_PROCESSOR_COUNT=')])
+                self.assertIn('NUGET_PACKAGES=/work/.nuget/packages', environment)
+        node = isolation.runtime_environment(['/usr/local/bin/node', '--test'], 1000)
+        self.assertFalse(any(value.startswith(('DOTNET_PROCESSOR_COUNT=', 'NUGET_PACKAGES=')) for value in node))
+
     def test_profile_blocks_quota_mutation_and_namespace_creation(self):
         profile = isolation.seccomp_profile()
         self.assertEqual('SCMP_ACT_ERRNO', profile['defaultAction'])

@@ -24,6 +24,14 @@ export async function installedLifecycle({ page, context, base, api, id, route, 
     assert.equal(response.status(), 200)
     return response.json()
   }
+  if (!receipt.expectedEpochs) {
+    // Repeated installed acceptance must advance the actual monotonic epoch,
+    // including retained spaces already stopped/resumed by an earlier batch.
+    const baseline = receipt.before ? (receipt.before.marker?.epoch ?? 1) : (await current()).lifecycleVersion
+    assert.ok(Number.isSafeInteger(baseline) && baseline >= 1)
+    receipt.expectedEpochs = { stopped: baseline + 1, resumed: baseline + 2 }
+    await save()
+  }
   async function transition(action, expectedEpoch, target) {
     if (receipt[action]?.completedAtUtc) return
     const selected = await current()
@@ -110,12 +118,12 @@ export async function installedLifecycle({ page, context, base, api, id, route, 
     assert.equal((await replay.json()).operationId, operation.operationId)
     await save()
   }
-  await transition('stop', 2, 'Stopped')
+  await transition('stop', receipt.expectedEpochs.stopped, 'Stopped')
   assert.ok(receipt.before)
   receipt.stopped ??= await physical(id)
   assert.deepEqual({ ...receipt.stopped, marker: null }, { ...receipt.before, marker: null })
   assert.equal(receipt.stopped.marker.state, 'Stopped')
-  assert.equal(receipt.stopped.marker.epoch, 2)
+  assert.equal(receipt.stopped.marker.epoch, receipt.expectedEpochs.stopped)
   assert.equal(receipt.stopped.marker.operationId, receipt.stop.operationId)
   await save()
   if (!manageOnly && !receipt.resume?.completedAtUtc) {
@@ -161,11 +169,11 @@ export async function installedLifecycle({ page, context, base, api, id, route, 
     receipt.csrfOriginDenied = true
     await save()
   }
-  await transition('resume', 3, 'Active')
+  await transition('resume', receipt.expectedEpochs.resumed, 'Active')
   receipt.resumed ??= await physical(id)
   assert.deepEqual({ ...receipt.resumed, marker: null }, { ...receipt.before, marker: null })
   assert.equal(receipt.resumed.marker.state, 'Active')
-  assert.equal(receipt.resumed.marker.epoch, 3)
+  assert.equal(receipt.resumed.marker.epoch, receipt.expectedEpochs.resumed)
   assert.equal(receipt.resumed.marker.operationId, receipt.resume.operationId)
   if (manageOnly) {
     receipt.passed = true

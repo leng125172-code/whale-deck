@@ -1,4 +1,5 @@
 import hashlib
+import errno
 import importlib.util
 import json
 import os
@@ -27,6 +28,92 @@ control = load('whaledeck-development-runner-control.py')
 
 
 class RunnerTests(unittest.TestCase):
+    def test_private_diagnostics_are_bound_to_original_run_and_never_overwrite(self):
+        diagnostics = runner.ExecutionDiagnostics()
+        diagnostics.consume(b'not-a-real-secret: sample-value; error CS0103: source text')
+        binding = {'runId': '1' * 32, 'requestSha256': 'a' * 64}
+        with tempfile.TemporaryDirectory() as folder:
+            fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                self.assertTrue(runner.persist_diagnostics(rootfs, fd, binding, 'Failed', 1, diagnostics))
+                path = Path(folder) / runner.DIAGNOSTICS
+                raw = path.read_bytes()
+                value = json.loads(raw)
+                self.assertEqual(binding['requestSha256'], value['requestSha256'])
+                self.assertEqual(['CS0103'], value['untrustedErrorCodes'])
+                self.assertEqual(0o600, path.stat().st_mode & 0o777)
+                self.assertNotIn(b'sample-value', raw)
+                self.assertFalse(runner.persist_diagnostics(rootfs, fd, binding, 'Succeeded', 0, diagnostics))
+                self.assertEqual(raw, path.read_bytes())
+                with patch.object(rootfs, 'write_metadata', side_effect=OSError(errno.EDQUOT, 'quota')):
+                    self.assertFalse(runner.persist_diagnostics(rootfs, fd, binding, 'Failed', 1, diagnostics))
+            finally:
+                os.close(fd)
+
+    def monitored(self, code, diagnostics, deadline=5):
+        return runner.monitored_process([sys.executable, '-c', code], deadline, diagnostics, None,
+            {'stdin': subprocess.DEVNULL, 'env': {'PATH': '/usr/bin:/bin', 'LANG': 'C'}})
+
+    def test_real_output_flood_is_drained_with_bounded_summary_and_no_arbitrary_text(self):
+        diagnostics = runner.ExecutionDiagnostics()
+        code = (r'import os; os.write(1,b"private-key-value\nerror MSB3021: Permission denied\n");'
+                'os.write(2,b"x"*(3*1024*1024));raise SystemExit(1)')
+        result = self.monitored(code, diagnostics)
+        summary = diagnostics.summary()
+        self.assertEqual(1, result.returncode)
+        self.assertGreater(summary['outputBytes'], 3 * 1024 * 1024)
+        self.assertEqual(runner.DIAGNOSTIC_SCAN_LIMIT, summary['scannedBytes'])
+        self.assertTrue(summary['scanLimited'])
+        self.assertEqual(['MSB3021'], summary['untrustedErrorCodes'])
+        self.assertEqual(['PermissionDenied'], summary['untrustedCategories'])
+        self.assertNotIn('private-key-value', json.dumps(summary))
+        self.assertLess(len(json.dumps(summary)), 4096)
+        self.assertLessEqual(len(diagnostics.tail), 96)
+
+    def test_split_errors_and_many_codes_remain_bounded(self):
+        diagnostics = runner.ExecutionDiagnostics()
+        diagnostics.consume(b'error MS')
+        diagnostics.consume(b'B3021: No space left on device')
+        diagnostics.consume(b' '.join(('error CS' + str(number)).encode() for number in range(1000, 1200)))
+        summary = diagnostics.summary()
+        self.assertIn('MSB3021', summary['untrustedErrorCodes'])
+        self.assertEqual(32, len(summary['untrustedErrorCodes']))
+        self.assertTrue(summary['errorCodesLimited'])
+        self.assertEqual(['NoSpace'], summary['untrustedCategories'])
+
+    def test_real_child_timeout_kills_and_reaps_the_launcher(self):
+        with tempfile.TemporaryDirectory() as folder:
+            pidfile = Path(folder) / 'pid'
+            code = f'import os,time;open({str(pidfile)!r},"w").write(str(os.getpid()));time.sleep(10)'
+            with self.assertRaises(subprocess.TimeoutExpired):
+                self.monitored(code, runner.ExecutionDiagnostics(), deadline=0.5)
+            pid = int(pidfile.read_text())
+            with self.assertRaises(ProcessLookupError):
+                os.kill(pid, 0)
+
+    def test_resource_maxima_are_allowlisted_and_missing_samples_are_not_zero(self):
+        diagnostics = runner.ExecutionDiagnostics()
+        with tempfile.TemporaryDirectory() as folder:
+            group = Path(folder)
+            diagnostics.sample(group)
+            self.assertEqual({}, diagnostics.summary()['resourceMaxima'])
+            self.assertEqual(0, diagnostics.summary()['resourceSamples'])
+            (group / 'memory.events').write_text('oom 2\nsecret 900\noom_kill 1\n')
+            (group / 'memory.peak').write_text('123456')
+            (group / 'pids.events').write_text('max 3\n')
+            diagnostics.sample(group)
+            (group / 'memory.peak').write_text('120000')
+            diagnostics.sample(group)
+            self.assertEqual({'memory.events:oom': 2, 'memory.events:oom_kill': 1,
+                              'memory.peak:bytes': 123456, 'pids.events:max': 3}, diagnostics.summary()['resourceMaxima'])
+
+    def test_diagnostic_sampling_cannot_select_an_arbitrary_cgroup(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(runner, 'monitored_process') as process:
+            with self.assertRaisesRegex(runner.RunError, 'DELEGATION_UNAVAILABLE'):
+                runner.execute(Path(folder), self.request['storage']['workspaceId'], self.request['runId'],
+                               1, cgroup_parent='/../../etc')
+            process.assert_not_called()
+
     def test_dotnet_report_recognizes_restore_and_legacy_receipts(self):
         current = ['/usr/share/dotnet/dotnet', 'test', '--results-directory', runner.REPORT_SLOT,
                    '--logger', 'trx;LogFileName=tests.trx']
@@ -132,9 +219,10 @@ for line in Path('/proc/self/status').read_text().splitlines():
             identifier = self.request['storage']['workspaceId']
             run_id = self.request['runId']
             timeout = subprocess.TimeoutExpired('runc', 30)
-            with patch.object(runner.subprocess, 'run', side_effect=[timeout, None]) as run:
+            with patch.object(runner, 'monitored_process', side_effect=timeout) as start_run, \
+                    patch.object(runner.subprocess, 'run') as run:
                 self.assertEqual(('TimedOut', None), runner.execute(Path(folder), identifier, run_id, 30))
-            start, delete = (call.args[0] for call in run.call_args_list)
+            start, delete = start_run.call_args.args[0], run.call_args.args[0]
             name = f'whaledeck-dev-{identifier.replace("-", "")}-{run_id}'
             self.assertEqual(name, start[-1])
             self.assertEqual(start[:3] + ['delete', '--force', name], delete)
@@ -142,7 +230,9 @@ for line in Path('/proc/self/status').read_text().splitlines():
     def test_runtime_signal_or_uncertain_cleanup_never_returns_a_result(self):
         for first, second in ((subprocess.CompletedProcess('runc', -9), None),
                               (subprocess.TimeoutExpired('runc', 30), subprocess.CalledProcessError(1, 'runc'))):
-            with tempfile.TemporaryDirectory() as folder, patch.object(runner.subprocess, 'run', side_effect=[first, second]):
+            with tempfile.TemporaryDirectory() as folder, patch.object(runner, 'monitored_process', side_effect=
+                    first if isinstance(first, BaseException) else None, return_value=first), \
+                    patch.object(runner.subprocess, 'run', side_effect=second):
                 with self.assertRaisesRegex(runner.RunError, 'CLEANUP_UNCONFIRMED'):
                     runner.execute(Path(folder), self.request['storage']['workspaceId'], self.request['runId'], 30)
 
