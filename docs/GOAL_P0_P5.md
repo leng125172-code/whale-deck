@@ -35,6 +35,8 @@
 
 ## 3. 当前证据与暂停恢复点
 
+2026-11-10，`40535499` 已标准覆盖部署并通过六组件/HTTP 来源核对。按用户目录配置 NVMe 120 GB 与 HDD 300 GB 独立定长文件系统和硬配额，没有格式化现有分区；真实小型磁盘完成配额/容量拒绝、受限服务、迟到写入及四处进程中断接续。继续固定运行时、签名 Agent 和完整开发空间实机链路，HDD 开发备份尚待接入；不签完整 59 项或 master。见[容量配置与真实证据](qa/DEVELOPMENT_WORKSPACE_BOUNDED_STORAGE.md)。
+
 2026-11-10，`c51ed786` 已完成真实工作站覆盖部署、正常迁移及六组件/HTTP 来源核对，11 核心 healthy、8 数据库平台身份保持。新增真实 Authentik 与已部署开发空间页面验收，管理员/普通权限、布局和退出通过，临时账号删除。首轮 APT 发布失败及修复、两次维护重启连接失败原样保留；实际存储根/运行时为空，物理 NVMe 硬配额与完整导入/Runner/差异整链仍待，用户另有 NVMe 待核对。继续合并和完整 59 项，不签 master。见[实机部署与边界](qa/DEVELOPMENT_WORKSPACE_INSTALLED_BASELINE.md)。
 
 2026-11-10，P3-14 `f2806fbb` 接入 BFF 与 Vue 逐行差异。真实 HTTP、PostgreSQL、Unix Socket 与生产 Chrome 分别验证 CSRF、计划绑定、撤权、保护分类及纯文本预览。继续合并与物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_TEXT_DIFF_UI.md)。
