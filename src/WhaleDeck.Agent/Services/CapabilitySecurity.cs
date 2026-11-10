@@ -283,6 +283,16 @@ public sealed class CapabilityInterceptor(CapabilityValidator validator) : Inter
         ServerCallContext context,
         ServerStreamingServerMethod<TRequest, TResponse> continuation)
     {
+        if (context.Method == DevelopmentSourceBinding.ExportPrevious)
+        {
+            var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();
+            if (tokens.Length != 1 || request is not WorkspaceSourceRequest source ||
+                source.CalculateSize() > DevelopmentSourceBinding.MaximumHeaderBytes ||
+                !DevelopmentSourceBinding.IsValid(source, context.Method) ||
+                !validator.ValidateDevelopmentSource(tokens[0].Value, context.Method, DevelopmentSourceBinding.Hash(source)))
+                throw Denied();
+            return continuation(request, responseStream, context);
+        }
         if (context.Method.StartsWith(DevelopmentGitBinding.Service, StringComparison.Ordinal))
         {
             var tokens = context.RequestHeaders.GetAll("x-whaledeck-capability").ToArray();

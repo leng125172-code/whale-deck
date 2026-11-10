@@ -2,6 +2,7 @@
 
 import ctypes
 import errno
+import os
 import platform
 import sys
 
@@ -13,6 +14,23 @@ class Filter(ctypes.Structure):
 
 class Program(ctypes.Structure):
     _fields_ = [('length', ctypes.c_ushort), ('filters', ctypes.POINTER(Filter))]
+
+
+def restrict_path_writes():
+    # Linux Landlock ABI 3. Handle all path mutation rights without
+    # granting any. The inherited stdout pipe remains usable.
+    write_file = 1 << 1
+    remove_make_refer_truncate = ((1 << 15) - 1) ^ ((1 << 4) - 1)
+    rules = ctypes.c_uint64(write_file | remove_make_refer_truncate)
+    libc = ctypes.CDLL(None, use_errno=True)
+    fd = libc.syscall(444, ctypes.byref(rules), ctypes.sizeof(rules), 0)
+    if fd < 0:
+        raise OSError(ctypes.get_errno(), 'Source export write guard unavailable')
+    try:
+        if libc.syscall(446, fd, 0) != 0:
+            raise OSError(ctypes.get_errno(), 'Source export write guard unavailable')
+    finally:
+        os.close(fd)
 
 
 def install(quota, *, read_only=False):

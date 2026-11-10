@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
@@ -8,10 +9,12 @@ using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Agent.Services;
 
-public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.DevelopmentSourceServiceBase
+public sealed class DevelopmentSourceGrpcService(BoundedProcessRunner processes) : DevelopmentSourceService.DevelopmentSourceServiceBase
 {
+    private const string Privileged = "/usr/local/libexec/whaledeck-privileged";
     private static readonly SemaphoreSlim Helpers = new(4, 4);
     private static readonly SemaphoreSlim Uploads = new(2, 2);
+    private static readonly SemaphoreSlim Exports = new(1, 1);
 
     public override Task<WorkspaceSourceReceipt> Stage(IAsyncStreamReader<WorkspaceSourceFrame> requestStream, ServerCallContext context) =>
         ReceiveAsync(requestStream, context);
@@ -60,6 +63,85 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
 
     public override Task<Empty> AbortUpdate(WorkspaceSourceRequest request, ServerCallContext context) => AbortAsync(request, context);
 
+    public override async Task ExportPrevious(WorkspaceSourceRequest request,
+        IServerStreamWriter<WorkspaceSourceExportFrame> responseStream, ServerCallContext context)
+    {
+        if (!DevelopmentSourceBinding.IsValid(request, context.Method))
+            throw Error(StatusCode.InvalidArgument, "WORKSPACE_SOURCE_REQUEST_INVALID");
+        if (!await Exports.WaitAsync(0, context.CancellationToken))
+            throw Error(StatusCode.ResourceExhausted, "WORKSPACE_SOURCE_BUSY");
+        var unit = Guid.NewGuid().ToString("N");
+        try
+        {
+            byte[] input = [.. DevelopmentSourceBinding.HostInput(request), (byte)'\n'];
+            var result = await BoundedProcessRunner.RunWithOutputAsync("/usr/bin/sudo",
+                ["-n", Privileged, "development-source-export", unit], input,
+                (output, token) => ReadPreviousAsync(output, responseStream, token),
+                TimeSpan.FromSeconds(110), context.CancellationToken);
+            if (result.ExitCode != 0) throw Rejected(result.Error);
+            if (result.Output is not { } export || export.Length < 10240 || export.Length % 512 != 0)
+                throw Error(StatusCode.DataLoss, "WORKSPACE_SOURCE_STREAM_INVALID");
+            await responseStream.WriteAsync(new() { Offset = export.Length - (ulong)export.Tail.Length, Content = export.Tail },
+                context.CancellationToken);
+            await responseStream.WriteAsync(new() { Offset = export.Length, ArchiveSha256 = export.Sha256 },
+                context.CancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            await StopExportAsync(unit);
+            throw Error(StatusCode.DeadlineExceeded, "WORKSPACE_SOURCE_DEADLINE");
+        }
+        catch (InvalidDataException)
+        {
+            await StopExportAsync(unit);
+            throw Error(StatusCode.DataLoss, "WORKSPACE_SOURCE_STREAM_INVALID");
+        }
+        catch (Exception error) when (error is IOException or InvalidOperationException or Win32Exception)
+        {
+            await StopExportAsync(unit);
+            throw Error(StatusCode.Unavailable, "WORKSPACE_SOURCE_HELPER_UNAVAILABLE");
+        }
+        finally { Exports.Release(); }
+    }
+
+    private async Task StopExportAsync(string unit)
+    {
+        try
+        {
+            await processes.RunAsync("/usr/bin/sudo", ["-n", Privileged, "development-source-export-stop", unit],
+                null, TimeSpan.FromSeconds(6), "WORKSPACE_SOURCE_EXPORT_STOP_FAILED", CancellationToken.None);
+        }
+        catch (Exception error) when (error is IOException or InvalidOperationException or Win32Exception or OperationCanceledException)
+        {
+            // The uniquely named transient unit also has its own deadline.
+        }
+    }
+
+    internal sealed record PreviousArchive(ByteString Tail, ulong Length, string Sha256);
+
+    internal static async Task<PreviousArchive?> ReadPreviousAsync(Stream output,
+        IServerStreamWriter<WorkspaceSourceExportFrame> response, CancellationToken token)
+    {
+        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[DevelopmentSourceBinding.ChunkBytes];
+        ulong length = 0;
+        ByteString? tail = null;
+        while (true)
+        {
+            var size = await output.ReadAtLeastAsync(buffer, buffer.Length, false, token);
+            if (size == 0) break;
+            if ((ulong)size > DevelopmentSourceBinding.MaximumPreviousArchiveBytes - length)
+                throw new InvalidDataException();
+            if (tail is not null)
+                await response.WriteAsync(new() { Offset = length - (ulong)tail.Length, Content = tail }, token);
+            length += (ulong)size;
+            digest.AppendData(buffer, 0, size);
+            tail = ByteString.CopyFrom(buffer, 0, size);
+        }
+        // The caller sends this final chunk and digest only after successful helper exit.
+        return tail is null ? null : new(tail, length, Convert.ToHexStringLower(digest.GetHashAndReset()));
+    }
+
     private static async Task<Empty> AbortAsync(WorkspaceSourceRequest request, ServerCallContext context)
     {
         var output = await RunAsync(request, context.Method, "abort", null, context.CancellationToken);
@@ -82,7 +164,7 @@ public sealed class DevelopmentSourceGrpcService : DevelopmentSourceService.Deve
         try
         {
             var result = await BoundedProcessRunner.RunWithInputAsync("/usr/bin/sudo",
-                ["-n", "/usr/local/libexec/whaledeck-privileged", "development-source-" + action, Guid.NewGuid().ToString("N")],
+                ["-n", Privileged, "development-source-" + action, Guid.NewGuid().ToString("N")],
                 async (input, lifetime) =>
                 {
                     await input.WriteAsync(DevelopmentSourceBinding.HostInput(request), lifetime);

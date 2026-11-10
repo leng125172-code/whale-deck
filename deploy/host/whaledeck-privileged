@@ -67,8 +67,22 @@ case "$action" in
     [[ $# -eq 1 ]] || exit 2
     exec /usr/bin/systemctl stop whaledeck-development-git-acquire.service
     ;;
-  development-source-stage|development-source-inspect|development-source-publish|development-source-discard|development-source-abort)
+  development-source-export-stop)
     [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
+    exec /usr/bin/systemctl stop "whaledeck-development-source-export-$2.service"
+    ;;
+  development-source-stage|development-source-inspect|development-source-publish|development-source-discard|development-source-abort|development-source-export)
+    [[ $# -eq 2 && "$2" =~ ^[a-f0-9]{32}$ && "$2" != 00000000000000000000000000000000 ]] || exit 2
+    source_syscalls='@system-service prctl capget capset quotactl_fd'
+    if [[ "$action" == development-source-export ]]; then
+      # Kernel quota reads require a writable mount. Landlock in the
+      # helper forbids path writes while this filter forbids metadata changes.
+      source_syscalls+=' landlock_create_ruleset landlock_restrict_self'
+      source_access=(--property="CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_READ_SEARCH"
+        --property="SystemCallFilter=~@chown chmod fchmod fchmodat fchmodat2 utime utimes futimesat utimensat file_setattr setxattr lsetxattr fsetxattr setxattrat removexattr lremovexattr fremovexattr removexattrat")
+    else
+      source_access=(--property="CapabilityBoundingSet=CAP_SYS_ADMIN CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER")
+    fi
     exec /usr/bin/systemd-run --quiet --wait --pipe --collect --service-type=exec \
       --unit="whaledeck-development-source-${action##*-}-$2" \
       --property=User=root --property=Group=root --property=UMask=0077 \
@@ -80,9 +94,9 @@ case "$action" in
       --property=Restart=no --property=TasksMax=4 --property=MemoryMax=128M --property=CPUQuota=100% \
       --property=LimitCORE=0 --property=LimitNOFILE=128 --property=LimitFSIZE=1073741824 \
       --property=BindsTo=whaledeck-agent.service --property=After=whaledeck-agent.service \
-      --property="CapabilityBoundingSet=CAP_SYS_ADMIN CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER" \
-      --property=SystemCallArchitectures=native --property="SystemCallFilter=@system-service prctl capget capset quotactl_fd" \
+      --property=SystemCallArchitectures=native --property="SystemCallFilter=$source_syscalls" \
       --property=ReadWritePaths=/var/lib/whaledeck-development \
+      "${source_access[@]}" \
       /usr/bin/python3 -B -I /usr/local/libexec/whaledeck-development-source.py "service-${action##*-}"
     ;;
   development-run-start|development-run-observe|development-run-cancel|development-run-reclaim|development-run-readtest|development-run-retiretest)

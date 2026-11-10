@@ -18,14 +18,39 @@ public sealed class DevelopmentSourceRpcTests
         Assert.False(DevelopmentSourceBinding.IsValid(request, DevelopmentSourceBinding.Stage));
         request.PlanSha256 = new string('a', 64);
         Assert.False(DevelopmentSourceBinding.IsValid(request, DevelopmentSourceBinding.PublishUpdate));
+        Assert.False(DevelopmentSourceBinding.IsValid(request, DevelopmentSourceBinding.ExportPrevious));
         request.ConflictResolution = WorkspaceSourceConflictResolution.RetainAndReplace;
         Assert.True(DevelopmentSourceBinding.IsValid(request, DevelopmentSourceBinding.PublishUpdate));
+        Assert.True(DevelopmentSourceBinding.IsValid(request, DevelopmentSourceBinding.ExportPrevious));
         Assert.False(DevelopmentSourceBinding.IsValid(request, DevelopmentSourceBinding.DiscardUpdate));
         using var payload = JsonDocument.Parse(DevelopmentSourceBinding.HostInput(request));
         Assert.Equal("retain-and-replace", payload.RootElement.GetProperty("conflictResolution").GetString());
         Assert.Equal(request.PreviousImportId, payload.RootElement.GetProperty("previousImportId").GetString());
         request.PreviousImportId = request.ImportId;
         Assert.False(DevelopmentSourceBinding.IsValid(request, DevelopmentSourceBinding.PublishUpdate));
+        Assert.False(DevelopmentSourceBinding.IsValid(request, DevelopmentSourceBinding.ExportPrevious));
+    }
+
+    [Fact]
+    public async Task PreviousExportWithholdsTailAndBindsOffsetsAndDigest()
+    {
+        var bytes = new byte[DevelopmentSourceBinding.ChunkBytes * 2 + 512];
+        RandomNumberGenerator.Fill(bytes);
+        using var input = new MemoryStream(bytes, writable: false);
+        var responses = new ExportResponses();
+        var complete = await DevelopmentSourceGrpcService.ReadPreviousAsync(input, responses, CancellationToken.None);
+
+        Assert.NotNull(complete);
+        Assert.Equal((ulong)bytes.Length, complete.Length);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(bytes)), complete.Sha256);
+        Assert.Equal(bytes[^512..], complete.Tail.ToByteArray());
+        Assert.Equal(2, responses.Frames.Count);
+        for (var i = 0; i < responses.Frames.Count; i++)
+        {
+            var offset = i * DevelopmentSourceBinding.ChunkBytes;
+            Assert.Equal((ulong)offset, responses.Frames[i].Offset);
+            Assert.Equal(bytes.AsSpan(offset, DevelopmentSourceBinding.ChunkBytes).ToArray(), responses.Frames[i].Content.ToByteArray());
+        }
     }
 
     [Fact]
@@ -124,6 +149,18 @@ public sealed class DevelopmentSourceRpcTests
             ReadingEnd.SetResult();
             await End.Task.WaitAsync(cancellationToken);
             return extraFrame;
+        }
+    }
+
+    private sealed class ExportResponses : IServerStreamWriter<WorkspaceSourceExportFrame>
+    {
+        public List<WorkspaceSourceExportFrame> Frames { get; } = [];
+        public WriteOptions? WriteOptions { get; set; }
+
+        public Task WriteAsync(WorkspaceSourceExportFrame message)
+        {
+            Frames.Add(message);
+            return Task.CompletedTask;
         }
     }
 }

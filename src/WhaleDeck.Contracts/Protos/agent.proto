@@ -493,6 +493,16 @@ service DevelopmentSourceService {
   rpc PublishUpdate(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
   rpc DiscardUpdate(WorkspaceSourceRequest) returns (WorkspaceSourceReceipt);
   rpc AbortUpdate(WorkspaceSourceRequest) returns (google.protobuf.Empty);
+  // development.source.previous (protocol 1.72).
+  rpc ExportPrevious(WorkspaceSourceRequest) returns (stream WorkspaceSourceExportFrame);
+}
+
+message WorkspaceSourceExportFrame {
+  uint64 offset = 1;
+  oneof payload {
+    bytes content = 2;
+    string archive_sha256 = 3;
+  }
 }
 
 enum WorkspaceSourceConflictResolution {

@@ -10,8 +10,10 @@ public static class DevelopmentSourceBinding
     public const uint ProtocolMinor = 68;
     public const uint AbortProtocolMinor = 69;
     public const uint UpdateProtocolMinor = 71;
+    public const uint PreviousProtocolMinor = 72;
     public const string Capability = "development.source.archive";
     public const string UpdateCapability = "development.source.update";
+    public const string PreviousCapability = "development.source.previous";
     public const string Service = "/whaledeck.agent.v1.DevelopmentSourceService/";
     public const string Stage = Service + "Stage";
     public const string Inspect = Service + "Inspect";
@@ -23,11 +25,14 @@ public static class DevelopmentSourceBinding
     public const string PublishUpdate = Service + "PublishUpdate";
     public const string DiscardUpdate = Service + "DiscardUpdate";
     public const string AbortUpdate = Service + "AbortUpdate";
+    public const string ExportPrevious = Service + "ExportPrevious";
     public const string Header = "x-whaledeck-development-source-sha256";
     public const uint MaximumArchiveBytes = 128 * 1024 * 1024;
     public const int ChunkBytes = 64 * 1024;
     public const int MaximumHeaderBytes = 2048;
     private const ulong MaximumExpandedBytes = 1024UL * 1024 * 1024;
+    // Bound the source bytes plus PAX path headers and padding.
+    public const ulong MaximumPreviousArchiveBytes = MaximumExpandedBytes + 64UL * 1024 * 1024;
 
     public static string Hash(WorkspaceSourceRequest request) =>
         Convert.ToHexString(SHA256.HashData(request.ToByteArray()));
@@ -41,7 +46,10 @@ public static class DevelopmentSourceBinding
     public static bool SupportsUpdate(CapabilitiesResponse response) => IsSupported(response) &&
         response.ProtocolMinor >= UpdateProtocolMinor && response.Capabilities.Contains(UpdateCapability);
 
-    public static bool IsUpdate(string method) => method is StageUpdate or InspectUpdate or PublishUpdate or DiscardUpdate or AbortUpdate;
+    public static bool SupportsPrevious(CapabilitiesResponse response) => SupportsUpdate(response) &&
+        response.ProtocolMinor >= PreviousProtocolMinor && response.Capabilities.Contains(PreviousCapability);
+
+    public static bool IsUpdate(string method) => method is StageUpdate or InspectUpdate or PublishUpdate or DiscardUpdate or AbortUpdate or ExportPrevious;
 
     public static bool IsMethod(string method) => method is Stage or Inspect or Publish or Discard or Abort || IsUpdate(method);
 
@@ -53,10 +61,10 @@ public static class DevelopmentSourceBinding
         IsImportId(request.ImportId) &&
         request.ArchiveFormat is "zip" or "tar" or "tar.gz" && request.ArchiveBytes is > 0 and <= MaximumArchiveBytes &&
         IsDigest(request.ArchiveSha256) &&
-        (method is Publish or Discard or PublishUpdate or DiscardUpdate ? IsDigest(request.PlanSha256) : request.PlanSha256.Length == 0) &&
+        (method is Publish or Discard or PublishUpdate or DiscardUpdate or ExportPrevious ? IsDigest(request.PlanSha256) : request.PlanSha256.Length == 0) &&
         (IsUpdate(method) ? request.ArchiveFormat == "tar" && IsImportId(request.PreviousImportId) && request.PreviousImportId != request.ImportId
             : request.PreviousImportId.Length == 0) &&
-        (method == PublishUpdate
+        (method is PublishUpdate or ExportPrevious
             ? request.ConflictResolution is WorkspaceSourceConflictResolution.CleanOnly or WorkspaceSourceConflictResolution.RetainAndReplace
             : request.ConflictResolution == WorkspaceSourceConflictResolution.Unspecified);
 

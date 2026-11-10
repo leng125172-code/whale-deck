@@ -840,7 +840,10 @@ def main():
         rootfs = runner.load('whaledeck-development-rootfs.py')
         archive = runner.load('whaledeck-tree-archive.py')
         if sandboxed:
-            runner.load('whaledeck-development-quota-guard.py').install(quota, read_only=True)
+            guard = runner.load('whaledeck-development-quota-guard.py')
+            guard.install(quota, read_only=True)
+            if action == 'export':
+                guard.restrict_path_writes()
     except (OSError, ImportError, SourceError):
         print('WORKSPACE_SOURCE_HELPER_UNAVAILABLE', file=sys.stderr)
         return 2
