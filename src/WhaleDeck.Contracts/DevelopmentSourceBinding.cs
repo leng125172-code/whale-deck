@@ -11,9 +11,11 @@ public static class DevelopmentSourceBinding
     public const uint AbortProtocolMinor = 69;
     public const uint UpdateProtocolMinor = 71;
     public const uint PreviousProtocolMinor = 72;
+    public const uint DiffProtocolMinor = 73;
     public const string Capability = "development.source.archive";
     public const string UpdateCapability = "development.source.update";
     public const string PreviousCapability = "development.source.previous";
+    public const string DiffCapability = "development.source.diff";
     public const string Service = "/whaledeck.agent.v1.DevelopmentSourceService/";
     public const string Stage = Service + "Stage";
     public const string Inspect = Service + "Inspect";
@@ -26,6 +28,7 @@ public static class DevelopmentSourceBinding
     public const string DiscardUpdate = Service + "DiscardUpdate";
     public const string AbortUpdate = Service + "AbortUpdate";
     public const string ExportPrevious = Service + "ExportPrevious";
+    public const string ReadDiff = Service + "ReadDiff";
     public const string Header = "x-whaledeck-development-source-sha256";
     public const uint MaximumArchiveBytes = 128 * 1024 * 1024;
     public const int ChunkBytes = 64 * 1024;
@@ -49,7 +52,10 @@ public static class DevelopmentSourceBinding
     public static bool SupportsPrevious(CapabilitiesResponse response) => SupportsUpdate(response) &&
         response.ProtocolMinor >= PreviousProtocolMinor && response.Capabilities.Contains(PreviousCapability);
 
-    public static bool IsUpdate(string method) => method is StageUpdate or InspectUpdate or PublishUpdate or DiscardUpdate or AbortUpdate or ExportPrevious;
+    public static bool SupportsDiff(CapabilitiesResponse response) => SupportsUpdate(response) &&
+        response.ProtocolMinor >= DiffProtocolMinor && response.Capabilities.Contains(DiffCapability);
+
+    public static bool IsUpdate(string method) => method is StageUpdate or InspectUpdate or PublishUpdate or DiscardUpdate or AbortUpdate or ExportPrevious or ReadDiff;
 
     public static bool IsMethod(string method) => method is Stage or Inspect or Publish or Discard or Abort || IsUpdate(method);
 
@@ -61,14 +67,17 @@ public static class DevelopmentSourceBinding
         IsImportId(request.ImportId) &&
         request.ArchiveFormat is "zip" or "tar" or "tar.gz" && request.ArchiveBytes is > 0 and <= MaximumArchiveBytes &&
         IsDigest(request.ArchiveSha256) &&
-        (method is Publish or Discard or PublishUpdate or DiscardUpdate or ExportPrevious ? IsDigest(request.PlanSha256) : request.PlanSha256.Length == 0) &&
+        (method is Publish or Discard or PublishUpdate or DiscardUpdate or ExportPrevious or ReadDiff
+            ? IsDigest(request.PlanSha256) : request.PlanSha256.Length == 0) &&
         (IsUpdate(method) ? request.ArchiveFormat == "tar" && IsImportId(request.PreviousImportId) && request.PreviousImportId != request.ImportId
             : request.PreviousImportId.Length == 0) &&
         (method is PublishUpdate or ExportPrevious
             ? request.ConflictResolution is WorkspaceSourceConflictResolution.CleanOnly or WorkspaceSourceConflictResolution.RetainAndReplace
             : request.ConflictResolution == WorkspaceSourceConflictResolution.Unspecified);
 
-    public static byte[] HostInput(WorkspaceSourceRequest request)
+    public static byte[] HostInput(WorkspaceSourceRequest request) => JsonSerializer.SerializeToUtf8Bytes(HostFields(request));
+
+    internal static Dictionary<string, object> HostFields(WorkspaceSourceRequest request)
     {
         var fields = new Dictionary<string, object>
         {
@@ -87,7 +96,7 @@ public static class DevelopmentSourceBinding
                 WorkspaceSourceConflictResolution.RetainAndReplace => "retain-and-replace",
                 _ => throw new ArgumentException("WORKSPACE_SOURCE_REQUEST_INVALID", nameof(request))
             });
-        return JsonSerializer.SerializeToUtf8Bytes(fields);
+        return fields;
     }
 
     public static bool Matches(WorkspaceSourceRequest request, WorkspaceSourceReceipt receipt, string method) =>

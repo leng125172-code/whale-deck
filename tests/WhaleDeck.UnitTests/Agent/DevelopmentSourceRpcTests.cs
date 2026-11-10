@@ -32,6 +32,41 @@ public sealed class DevelopmentSourceRpcTests
     }
 
     [Fact]
+    public void DiffBindsPaginationAndRejectsUnrelatedOrInvalidReceipts()
+    {
+        var source = UpdateRequest();
+        source.PlanSha256 = new string('a', 64);
+        var request = new WorkspaceSourceDiffRequest { Source = source, Offset = 0, Limit = 1 };
+        Assert.True(DevelopmentSourceDiffBinding.IsValid(request));
+        Assert.False(DevelopmentSourceDiffBinding.IsValid(new() { Source = source, Limit = 51 }));
+        Assert.NotEqual(DevelopmentSourceDiffBinding.Hash(request),
+            DevelopmentSourceDiffBinding.Hash(new() { Source = source, Offset = 1, Limit = 1 }));
+        using var input = JsonDocument.Parse(DevelopmentSourceDiffBinding.HostInput(request));
+        Assert.Equal(1U, input.RootElement.GetProperty("limit").GetUInt32());
+        Assert.Equal(source.PreviousImportId, input.RootElement.GetProperty("previousImportId").GetString());
+        var receipt = JsonSerializer.Serialize(new
+        {
+            workspaceId = source.Storage.WorkspaceId, importId = source.ImportId, previousImportId = source.PreviousImportId,
+            planSha256 = source.PlanSha256, offset = 0, nextOffset = 1, visibleEntries = 2, redactedEntries = 1,
+            entries = new[] { new { path = "src/file", change = "added", before = (object?)null,
+                after = new { kind = "File", sizeBytes = 42, executable = true } } }
+        });
+        var page = DevelopmentSourceGrpcService.ParseDiff(request, receipt);
+        Assert.Equal(1U, page.NextOffset);
+        Assert.Equal(42UL, Assert.Single(page.Entries).After.SizeBytes);
+        foreach (var invalid in new[]
+        {
+            receipt.Replace("\"nextOffset\":1", "\"nextOffset\":2", StringComparison.Ordinal),
+            receipt.Replace("src/file", "../file", StringComparison.Ordinal),
+            receipt.Replace("\"added\"", "\"removed\"", StringComparison.Ordinal),
+            receipt.Replace("\"executable\":true", "\"executable\":true,\"executable\":false", StringComparison.Ordinal),
+            receipt.Replace(source.PreviousImportId, source.ImportId, StringComparison.Ordinal)
+        })
+            Assert.Equal(StatusCode.DataLoss, Assert.Throws<RpcException>(() =>
+                DevelopmentSourceGrpcService.ParseDiff(request, invalid)).StatusCode);
+    }
+
+    [Fact]
     public async Task PreviousExportWithholdsTailAndBindsOffsetsAndDigest()
     {
         var bytes = new byte[DevelopmentSourceBinding.ChunkBytes * 2 + 512];

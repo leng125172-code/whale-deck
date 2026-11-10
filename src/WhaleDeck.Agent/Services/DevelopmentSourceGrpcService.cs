@@ -9,7 +9,7 @@ using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Agent.Services;
 
-public sealed class DevelopmentSourceGrpcService(BoundedProcessRunner processes) : DevelopmentSourceService.DevelopmentSourceServiceBase
+public sealed partial class DevelopmentSourceGrpcService(BoundedProcessRunner processes) : DevelopmentSourceService.DevelopmentSourceServiceBase
 {
     private const string Privileged = "/usr/local/libexec/whaledeck-privileged";
     private static readonly SemaphoreSlim Helpers = new(4, 4);
@@ -88,28 +88,28 @@ public sealed class DevelopmentSourceGrpcService(BoundedProcessRunner processes)
         }
         catch (OperationCanceledException)
         {
-            await StopExportAsync(unit);
+            await StopReadAsync("export", unit);
             throw Error(StatusCode.DeadlineExceeded, "WORKSPACE_SOURCE_DEADLINE");
         }
         catch (InvalidDataException)
         {
-            await StopExportAsync(unit);
+            await StopReadAsync("export", unit);
             throw Error(StatusCode.DataLoss, "WORKSPACE_SOURCE_STREAM_INVALID");
         }
         catch (Exception error) when (error is IOException or InvalidOperationException or Win32Exception)
         {
-            await StopExportAsync(unit);
+            await StopReadAsync("export", unit);
             throw Error(StatusCode.Unavailable, "WORKSPACE_SOURCE_HELPER_UNAVAILABLE");
         }
         finally { Exports.Release(); }
     }
 
-    private async Task StopExportAsync(string unit)
+    private async Task StopReadAsync(string action, string unit)
     {
         try
         {
-            await processes.RunAsync("/usr/bin/sudo", ["-n", Privileged, "development-source-export-stop", unit],
-                null, TimeSpan.FromSeconds(6), "WORKSPACE_SOURCE_EXPORT_STOP_FAILED", CancellationToken.None);
+            await processes.RunAsync("/usr/bin/sudo", ["-n", Privileged, "development-source-" + action + "-stop", unit],
+                null, TimeSpan.FromSeconds(6), "WORKSPACE_SOURCE_READ_STOP_FAILED", CancellationToken.None);
         }
         catch (Exception error) when (error is IOException or InvalidOperationException or Win32Exception or OperationCanceledException)
         {
@@ -154,23 +154,30 @@ public sealed class DevelopmentSourceGrpcService(BoundedProcessRunner processes)
         string action, CancellationToken token, Func<Stream, CancellationToken, Task>? pump = null) =>
         ParseReceipt(request, await RunAsync(request, method, action, pump, token), method);
 
-    private static async Task<string> RunAsync(WorkspaceSourceRequest request, string method,
+    private static Task<string> RunAsync(WorkspaceSourceRequest request, string method,
         string action, Func<Stream, CancellationToken, Task>? pump, CancellationToken token)
     {
         if (!DevelopmentSourceBinding.IsValid(request, method))
             throw Error(StatusCode.InvalidArgument, "WORKSPACE_SOURCE_REQUEST_INVALID");
+        return RunHostAsync(DevelopmentSourceBinding.HostInput(request), action, Guid.NewGuid().ToString("N"), pump,
+            pump is not null || method == DevelopmentSourceBinding.PublishUpdate ? 110 : 20, token);
+    }
+
+    private static async Task<string> RunHostAsync(byte[] header, string action, string unit,
+        Func<Stream, CancellationToken, Task>? pump, int timeoutSeconds, CancellationToken token)
+    {
         if (!await Helpers.WaitAsync(0, token))
             throw Error(StatusCode.ResourceExhausted, "WORKSPACE_SOURCE_BUSY");
         try
         {
             var result = await BoundedProcessRunner.RunWithInputAsync("/usr/bin/sudo",
-                ["-n", Privileged, "development-source-" + action, Guid.NewGuid().ToString("N")],
+                ["-n", Privileged, "development-source-" + action, unit],
                 async (input, lifetime) =>
                 {
-                    await input.WriteAsync(DevelopmentSourceBinding.HostInput(request), lifetime);
+                    await input.WriteAsync(header, lifetime);
                     await input.WriteAsync("\n"u8.ToArray(), lifetime);
                     if (pump is not null) await pump(input, lifetime);
-                }, TimeSpan.FromSeconds(pump is not null || method == DevelopmentSourceBinding.PublishUpdate ? 110 : 20), token);
+                }, TimeSpan.FromSeconds(timeoutSeconds), token);
             token.ThrowIfCancellationRequested();
             return result.ExitCode == 0 ? result.StandardOutput : throw Rejected(result.StandardError);
         }
@@ -270,7 +277,7 @@ public sealed class DevelopmentSourceGrpcService(BoundedProcessRunner processes)
                     "WORKSPACE_SOURCE_WORK_ALREADY_PRESENT" or "WORKSPACE_SOURCE_ALREADY_PUBLISHED" or
                     "WORKSPACE_SOURCE_WORK_BASE_CONFLICT" or "WORKSPACE_SOURCE_WORK_CHANGED" or
                     "WORKSPACE_SOURCE_WORK_DIRTY" or "WORKSPACE_SOURCE_UPDATE_CHOICE_CONFLICT" or
-                    "WORKSPACE_SOURCE_DISCARDED" => StatusCode.Aborted,
+                    "WORKSPACE_SOURCE_DISCARDED" or "WORKSPACE_SOURCE_DIFF_UNAVAILABLE" => StatusCode.Aborted,
                 "WORKSPACE_STORAGE_NOT_PUBLISHED" => StatusCode.FailedPrecondition,
                 "WORKSPACE_SOURCE_PLAN_CHANGED" or "WORKSPACE_SOURCE_STAGE_CHANGED" or
                     "WORKSPACE_SOURCE_RECEIPT_CHANGED" or "WORKSPACE_SOURCE_PUBLICATION_UNCONFIRMED" or
@@ -282,7 +289,7 @@ public sealed class DevelopmentSourceGrpcService(BoundedProcessRunner processes)
                     "WORKSPACE_SOURCE_ZIP_ENTRY_INVALID" or "WORKSPACE_SOURCE_DEPTH_LIMIT" or
                     "WORKSPACE_SOURCE_EXPANSION_LIMIT" or "WORKSPACE_SOURCE_ENTRY_LIMIT" or
                     "WORKSPACE_SOURCE_WORK_SCAN_LIMIT" or "WORKSPACE_SOURCE_WORK_UNSUPPORTED" or
-                    "WORKSPACE_SOURCE_TAR_INVALID" or "WORKSPACE_SOURCE_REJECTED" => StatusCode.InvalidArgument,
+                    "WORKSPACE_SOURCE_TAR_INVALID" or "WORKSPACE_SOURCE_DIFF_CURSOR_INVALID" or "WORKSPACE_SOURCE_REJECTED" => StatusCode.InvalidArgument,
                 _ => StatusCode.OK
             };
             if (status != StatusCode.OK) return Error(status, line);

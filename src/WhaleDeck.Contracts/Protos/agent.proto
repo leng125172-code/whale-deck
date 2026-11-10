@@ -495,6 +495,52 @@ service DevelopmentSourceService {
   rpc AbortUpdate(WorkspaceSourceRequest) returns (google.protobuf.Empty);
   // development.source.previous (protocol 1.72).
   rpc ExportPrevious(WorkspaceSourceRequest) returns (stream WorkspaceSourceExportFrame);
+  // development.source.diff (protocol 1.73).
+  rpc ReadDiff(WorkspaceSourceDiffRequest) returns (WorkspaceSourceDiffPage);
+}
+
+message WorkspaceSourceDiffRequest {
+  WorkspaceSourceRequest source = 1;
+  uint32 offset = 2;
+  uint32 limit = 3;
+}
+
+message WorkspaceSourceDiffPage {
+  string workspace_id = 1;
+  string import_id = 2;
+  string previous_import_id = 3;
+  string plan_sha256 = 4;
+  uint32 offset = 5;
+  optional uint32 next_offset = 6;
+  uint32 visible_entries = 7;
+  uint32 redacted_entries = 8;
+  repeated WorkspaceSourceDiffEntry entries = 9;
+}
+
+enum WorkspaceSourceDiffChange {
+  WORKSPACE_SOURCE_DIFF_CHANGE_UNSPECIFIED = 0;
+  WORKSPACE_SOURCE_DIFF_CHANGE_ADDED = 1;
+  WORKSPACE_SOURCE_DIFF_CHANGE_REMOVED = 2;
+  WORKSPACE_SOURCE_DIFF_CHANGE_CHANGED = 3;
+}
+
+message WorkspaceSourceDiffEntry {
+  string path = 1;
+  WorkspaceSourceDiffChange change = 2;
+  WorkspaceSourceDiffNode before = 3;
+  WorkspaceSourceDiffNode after = 4;
+}
+
+enum WorkspaceSourceDiffKind {
+  WORKSPACE_SOURCE_DIFF_KIND_UNSPECIFIED = 0;
+  WORKSPACE_SOURCE_DIFF_KIND_DIRECTORY = 1;
+  WORKSPACE_SOURCE_DIFF_KIND_FILE = 2;
+}
+
+message WorkspaceSourceDiffNode {
+  WorkspaceSourceDiffKind kind = 1;
+  uint64 size_bytes = 2;
+  bool executable = 3;
 }
 
 message WorkspaceSourceExportFrame {
