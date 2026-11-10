@@ -15,7 +15,8 @@ async function physical(id) {
   return JSON.parse(result.stdout)
 }
 
-export async function installedLifecycle({ page, context, base, api, id, route, state, save, headers, poll, evidence, manageOnly = false, afterStopped, resumeOnly = false }) {
+export async function installedLifecycle({ page, context, base, api, id, route, state, save, headers, poll, evidence, manageOnly = false, afterStopped, resumeOnly = false, stopOnly = false }) {
+  assert.ok(!(resumeOnly && stopOnly))
   const prefix = `${api}/${id}`, endpoint = `${prefix}/lifecycle`
   state.lifecycle ??= {}
   const receipt = state.lifecycle
@@ -184,6 +185,11 @@ export async function installedLifecycle({ page, context, base, api, id, route, 
   if (afterStopped && !receipt.resume?.completedAtUtc) {
     receipt.stoppedCheck = await afterStopped(receipt.stopped)
     await save()
+  }
+  if (stopOnly) {
+    receipt.passed = true
+    await save()
+    return
   }
   } else {
     assert.equal((await current()).lifecycleState, 'Stopped')

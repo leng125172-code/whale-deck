@@ -103,7 +103,8 @@ def main():
                 sources = {}
                 for name in ('validate_development_installed_runtime.py', 'validate_development_installed_runtime.mjs',
                              'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs',
-                             'installed_development_lifecycle.mjs', 'inspect_development_workspace_lifecycle.py'):
+                             'installed_development_lifecycle.mjs', 'inspect_development_workspace_lifecycle.py',
+                             'installed_workspace_retirement.mjs', 'inspect_development_workspace_retirement.py'):
                     data = (Path(__file__).parent / name).read_bytes()
                     target = evidence / f'attempt-{attempt}-{name}'
                     target.write_bytes(data)

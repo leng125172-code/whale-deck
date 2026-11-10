@@ -8,6 +8,7 @@ import { chromium, expect } from '../../web/node_modules/@playwright/test/index.
 import { loginVisible } from './installed_ui_permission_session.mjs'
 import { logoutFromUserMenu } from './installed_ui_logout.mjs'
 import { installedLifecycle } from './installed_development_lifecycle.mjs'
+import { installedRetirementBusiness } from './installed_workspace_retirement.mjs'
 
 const base = 'http://127.0.0.1:8080', route = '/development/workspaces', api = '/api/v1' + route
 let browser, page, evidence, phase = 'startup', state
@@ -47,6 +48,7 @@ async function headers(context, contentType = 'application/json') {
 }
 try {
   const input = JSON.parse(await readFile('/dev/stdin', 'utf8'))
+  if (input.retirementProbe) assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_BUSINESS_PROBE, '1')
   evidence = input.evidence
   try { state = JSON.parse(await readFile(join(evidence, 'state.json'), 'utf8')) }
   catch (error) { if (error.code !== 'ENOENT') throw error; state = { slug: input.slug, imports: [], runs: [] } }
@@ -77,6 +79,7 @@ try {
   const wrongOrigin = await headers(context)
   wrongOrigin.Origin = 'https://invalid.example'
   assert.equal((await context.request.post(`${base}${api}/${invalid}/runner-preflight`, { headers: wrongOrigin, data: {} })).status(), 403)
+  if (!state.retirementStarted) {
   phase = 'register-workspace'
   if (!state.workspace) {
     const listed = await (await context.request.get(base + api + '?take=100')).json()
@@ -253,13 +256,23 @@ try {
   await installedLifecycle({ page, context, base, api, id, route, state, save, headers, poll, evidence })
   phase = 'actual-administrator-manages-deleted-owner-workspaces'
   state.retainedLifecycle ??= {}
-  for (const retainedId of ['c23526c5-fc43-4944-9f27-75ac540f6df0', 'df31e4e1-8a7e-4ffe-9bef-246ce9b6f218']) {
+  for (const retainedId of input.retirementProbe ? [] : ['c23526c5-fc43-4944-9f27-75ac540f6df0', 'df31e4e1-8a7e-4ffe-9bef-246ce9b6f218']) {
     state.retainedLifecycle[retainedId] ??= {}
     const retained = await (await context.request.get(`${base}${api}/${retainedId}`)).json()
     assert.notEqual(retained.ownerSubject, state.ownerSubject)
     await installedLifecycle({ page, context, base, api, id: retainedId, route,
       state: { lifecycle: state.retainedLifecycle[retainedId] }, save, headers, poll, evidence,
       manageOnly: true })
+  }
+  }
+  const id = state.workspace.id
+  if (input.retirementProbe) {
+    assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_BUSINESS_PROBE, '1')
+    phase = 'real-archive-retirement-budget-reuse'
+    state.retirementStarted = true
+    state.legacyLifecycleSkipped = true
+    await save()
+    await installedRetirementBusiness({ page, context, base, api, id, route, state, save, headers, poll, evidence })
   }
   phase = 'ordinary-owner-boundary'
   const other = await browser.newContext({ viewport: { width: 320, height: 800 } }), ordinary = await other.newPage()
@@ -268,19 +281,23 @@ try {
   assert.equal((await other.request.get(`${base}${api}/${id}/runs/${state.runs[0].id}/report/json`)).status(), 403)
   assert.equal((await other.request.get(`${base}${api}/${id}/lifecycle/plan?action=stop`)).status(), 404)
   assert.equal((await other.request.get(`${base}${api}/${id}/lifecycle/${state.lifecycle.stop.operationId}`)).status(), 404)
+  if (input.retirementProbe) {
+    assert.equal((await other.request.get(`${base}${api}/${id}/retirements`)).status(), 403)
+    state.retirementOrdinaryDenied = true
+  }
   const ordinaryLogout = await logoutFromUserMenu(ordinary, other, base)
   await other.close()
   phase = 'owner-normal-logout'
   const ownerLogout = await logoutFromUserMenu(page, context, base)
   state.passed = true
-  state.retainedForProductDecommission = true
+  state.retainedForProductDecommission = !input.retirementProbe
   state.logouts = { owner: ownerLogout, ordinary: ordinaryLogout }
   await save()
   await browser.close()
   browser = undefined
-  console.log(JSON.stringify({ installedRuntime: 'passed', workspaceId: id, retainedForProductDecommission: true }))
+  console.log(JSON.stringify({ installedRuntime: 'passed', workspaceId: id, retainedForProductDecommission: state.retainedForProductDecommission }))
 } catch (error) {
-  const frame = error?.stack?.split('\n').find(line => ['validate_development_installed_runtime.mjs:', 'installed_development_lifecycle.mjs:'].some(file => line.includes(file)))?.trim()
+  const frame = error?.stack?.split('\n').find(line => ['validate_development_installed_runtime.mjs:', 'installed_development_lifecycle.mjs:', 'installed_workspace_retirement.mjs:'].some(file => line.includes(file)))?.trim()
   if (state && evidence) {
     state.failureHistory ??= state.lastFailure ? [state.lastFailure] : []
     state.lastFailure = { phase, failureType: error?.name, frame,

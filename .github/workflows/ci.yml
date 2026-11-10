@@ -514,11 +514,13 @@ jobs:
         run: |
           node --check ../deploy/validation/validate_development_installed_runtime.mjs
           node --check ../deploy/validation/installed_development_lifecycle.mjs
+          node --check ../deploy/validation/installed_workspace_retirement.mjs
           node --check ../deploy/validation/validate_development_archive_installed.mjs
           node --check ../deploy/validation/validate_workspace_archive_business_installed.mjs
           node --check ../deploy/validation/validate_workspace_archive_faults_installed.mjs
           node --check ../deploy/validation/validate_development_layout_installed.mjs
           python3 -W error -m py_compile ../deploy/validation/validate_development_installed_runtime.py ../deploy/validation/inspect_development_workspace_lifecycle.py
+          python3 -W error -m py_compile ../deploy/validation/validate_workspace_retirement_business_installed.py ../deploy/validation/inspect_development_workspace_retirement.py
           python3 -W error -m py_compile ../deploy/validation/validate_development_archive_installed.py
           python3 -W error -m py_compile ../deploy/validation/validate_workspace_archive_business_installed.py
           python3 -W error -m py_compile ../deploy/validation/validate_workspace_retirement_plan_installed.py

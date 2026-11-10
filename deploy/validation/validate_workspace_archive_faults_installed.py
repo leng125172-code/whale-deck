@@ -100,7 +100,9 @@ def tree(root):
 
 
 def snapshot():
-    spaces = sql('SELECT to_json(id) FROM development_workspaces ORDER BY id;')
+    # Registered spaces have no allocation; retired allocations are permanently
+    # absent. Their database/tombstone history is still included in rows/spaces.
+    spaces = sql("SELECT to_json(id) FROM development_workspaces WHERE state='StorageAllocated' AND lifecycle_state <> 'Retired' ORDER BY id;")
     physical = {identifier: json.loads(subprocess.check_output(['python3', '-B',
         str(ROOT / 'deploy/validation/inspect_development_workspace_lifecycle.py'), identifier], timeout=30)) for identifier in spaces}
     tables = sql("SELECT to_json(table_name) FROM information_schema.tables WHERE table_schema='public' AND "
