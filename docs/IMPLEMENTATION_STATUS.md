@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-10，P3-14 `918c9793` 接入 Agent 1.72 签名旧树流。真实 Unix Socket、sudo、systemd 和 ext4 验证多块完整归档、签名绑定、零字节拒绝和单元停止。继续所有者下载、逐文件差异及物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_PREVIOUS_RPC.md)。
+
 2026-11-10，P3-14 `6d16226d` 接入宿主留存旧树导出。隔离 KVM 真实 ext4 验证跨版本取回、重复归档、回执门禁和受保护路径拒绝。继续签名 Agent 流式传输、所有者下载及逐文件差异。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_PREVIOUS_HOST.md)。
 
 2026-11-10，P3-14 `b35a18e7` 接入 Vue Git 更新与冲突策略。生产 Chrome 联合真实 HTTP、Worker 和 PostgreSQL 验证基线绑定、脏树确认、丢响应恢复及 320 像素暗色布局。继续旧树取回、逐文件差异及物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT_UPDATE_VUE.md)。
