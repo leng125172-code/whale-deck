@@ -13,6 +13,7 @@ import signal
 import stat
 import struct
 import sys
+import tarfile
 import time
 import unicodedata
 import zipfile
@@ -165,7 +166,7 @@ class SourceTree:
         return {'contentSha256': rows_digest(self.rows), 'fileCount': self.count, 'totalBytes': self.bytes}
 
 
-def work_manifest(driver, root, owner, check, *, durable=False):
+def work_manifest(driver, root, owner, check, *, durable=False, export_blocks=None):
     rows, versions = {}, {}
     total = 0
     normalized = True
@@ -179,6 +180,8 @@ def work_manifest(driver, root, owner, check, *, durable=False):
         if driver.files.version(os.fstat(fd)) != version:
             refuse('WORK_CHANGED')
         versions[path] = (version,)
+        if export_blocks is not None:
+            source_path(driver.files, path, stat.S_ISDIR(info.st_mode))
         mode = stat.S_IMODE(info.st_mode)
         if stat.S_ISDIR(info.st_mode):
             rows[path] = ('Directory',)
@@ -211,14 +214,25 @@ def work_manifest(driver, root, owner, check, *, durable=False):
             if total > MAX_EXPANDED:
                 refuse('WORK_SCAN_LIMIT')
             digest = hashlib.sha256()
+            if export_blocks is not None:
+                blocks, carry = [], b''
             remaining = info.st_size
             while remaining:
                 check()
-                block = os.read(fd, min(BLOCK, remaining))
-                if not block:
+                length = min(BLOCK, remaining)
+                block = os.read(fd, length)
+                if len(block) != length:
                     refuse('WORK_CHANGED')
+                if export_blocks is not None:
+                    probe = carry + block
+                    if TOKEN.search(probe):
+                        refuse('CREDENTIAL_CONTENT')
+                    carry = probe[-256:]
+                    blocks.append(hashlib.sha256(block).digest())
                 digest.update(block)
                 remaining -= len(block)
+            if export_blocks is not None:
+                export_blocks[path] = blocks
             if os.read(fd, 1):
                 refuse('WORK_CHANGED')
             executable = bool(mode & 0o111)
@@ -245,6 +259,42 @@ def work_manifest(driver, root, owner, check, *, durable=False):
     content = rows_digest(rows)
     fingerprint = rows_digest(versions, b'whaledeck-development-source-work-v1\n' + content.encode('ascii') + b'\n')
     return content, fingerprint, normalized, rows
+
+
+class VerifiedPreviousFile:
+    def __init__(self, fd, blocks, check):
+        self.fd, self.blocks, self.check = fd, iter(blocks), check
+
+    def read(self, size):
+        self.check()
+        data = os.read(self.fd, size)
+        # An open writer may outlive publication. Only emit blocks scanned
+        # before the archive started, including the credential check.
+        if len(data) != size or hashlib.sha256(data).digest() != next(self.blocks, None):
+            refuse('WORK_CHANGED')
+        return data
+
+
+def write_previous_tar(driver, root, rows, blocks, output, check):
+    with tarfile.open(fileobj=output, mode='w|', format=tarfile.PAX_FORMAT, copybufsize=BLOCK) as archive:
+        for path, row in sorted(rows.items()):
+            check()
+            if not path:
+                continue
+            entry = tarfile.TarInfo(path)
+            if row[0] == 'Directory':
+                entry.type, entry.mode = tarfile.DIRTYPE, 0o700
+                archive.addfile(entry)
+                continue
+            _, entry.size, _, executable = row
+            entry.mode = 0o700 if executable else 0o600
+            with driver.opened(root, path, os.O_PATH) as node:
+                info = os.fstat(node)
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != entry.size:
+                    refuse('WORK_CHANGED')
+                descriptor = os.open(f'/proc/self/fd/{node}', os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+                with contextlib.closing(Fd(descriptor)):
+                    archive.addfile(entry, VerifiedPreviousFile(descriptor, blocks[path], check))
 
 
 class Fd:
@@ -717,6 +767,42 @@ class SourceImports:
                     self.store(slot, ABORT, marker)
                 return {'state': 'Aborted'}
 
+    def export_previous(self, request, output):
+        intent = self.request(request, False, publish=True)
+        if 'previousImportId' not in intent:
+            refuse('REQUEST_INVALID')
+        with self.locked(request['storage']) as (payload, proof), contextlib.ExitStack() as directories:
+            try:
+                imports = directories.enter_context(self.driver.opened(payload, IMPORTS, DIR))
+                self.rootfs.private_directory(imports)
+                slot = directories.enter_context(self.driver.opened(imports, intent['importId'], DIR))
+                self.rootfs.private_directory(slot)
+                self.verify_intent(slot, intent)
+                plan = self.verified_plan(slot, intent)
+                if plan is None:
+                    refuse('NOT_FOUND')
+                public = self.public_plan(plan)
+                if public['planSha256'] != request['planSha256']:
+                    refuse('PLAN_CONFLICT')
+                if self.metadata(slot, RECEIPT) != dict(public, state='Published'):
+                    refuse('NOT_FOUND')
+                if self.metadata(slot, UPDATE) != {'planSha256': public['planSha256'],
+                                                   'conflictResolution': request['conflictResolution']}:
+                    refuse('UPDATE_CHOICE_CONFLICT')
+                base = plan['updateBase']
+                self.verify_tree(slot, PREVIOUS, {'treeInode': base['inode']}, proof)
+                previous = directories.enter_context(self.driver.opened(slot, PREVIOUS, DIR))
+                if os.fstat(previous).st_ino != base['inode']:
+                    refuse('WORK_CHANGED')
+                blocks = {}
+                content, _, _, rows = work_manifest(self.driver, previous, self.runner.RUN_UID, lambda: None,
+                                                    export_blocks=blocks)
+                if content != base['workContentSha256']:
+                    refuse('WORK_CHANGED')
+                write_previous_tar(self.driver, previous, rows, blocks, output, lambda: None)
+            except FileNotFoundError:
+                refuse('NOT_FOUND')
+
     def verify_tree(self, parent, name, plan, proof):
         try:
             with self.driver.opened(parent, name, DIR) as tree:
@@ -737,7 +823,7 @@ def main():
     mode = sys.argv[1]
     sandboxed = mode.startswith('service-')
     action = mode.removeprefix('service-')
-    if action not in ('stage', 'inspect', 'publish', 'discard', 'abort'):
+    if action not in ('stage', 'inspect', 'publish', 'discard', 'abort', 'export'):
         return 2
     from importlib.util import module_from_spec, spec_from_file_location
     try:
@@ -772,7 +858,10 @@ def main():
         else:
             if sys.stdin.buffer.read(1):
                 refuse('REQUEST_INVALID')
-            if action == 'inspect':
+            if action == 'export':
+                service.export_previous(request, sys.stdout.buffer)
+                return 0
+            elif action == 'inspect':
                 result = service.inspect(request)
             elif action == 'abort':
                 result = service.abort(request)

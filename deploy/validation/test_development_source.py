@@ -134,6 +134,49 @@ class DevelopmentSourceTests(unittest.TestCase):
                 with self.assertRaisesRegex(source.SourceError, 'WORK_UNSUPPORTED'):
                     source.work_manifest(driver, fd, os.geteuid(), lambda: None)
 
+    def test_previous_tar_preserves_approved_content_and_refuses_late_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = b'a' * source.BLOCK + b'tail'
+            script = root / '脚本'
+            script.write_bytes(original)
+            script.chmod(0o700)
+            (root / 'empty').mkdir()
+            (root / 'zero').touch()
+            driver = storage.WorkspaceStorage(files)
+            with driver.absolute(directory) as fd:
+                blocks = {}
+                _, _, _, rows = source.work_manifest(driver, fd, os.geteuid(), lambda: None,
+                                                      export_blocks=blocks)
+                result = io.BytesIO()
+                source.write_previous_tar(driver, fd, rows, blocks, result, lambda: None)
+                with tarfile.open(fileobj=io.BytesIO(result.getvalue())) as downloaded:
+                    self.assertEqual({'脚本', 'empty', 'zero'}, set(downloaded.getnames()))
+                    self.assertEqual(original, downloaded.extractfile('脚本').read())
+                    self.assertEqual(0o700, downloaded.getmember('脚本').mode)
+                    self.assertTrue(downloaded.getmember('empty').isdir())
+                    self.assertEqual(b'', downloaded.extractfile('zero').read())
+                script.write_bytes(original[:-4] + b'late')
+                rejected = io.BytesIO()
+                with self.assertRaisesRegex(source.SourceError, 'WORK_CHANGED'):
+                    source.write_previous_tar(driver, fd, rows, blocks, rejected, lambda: None)
+                self.assertNotIn(b'late', rejected.getvalue())
+
+    def test_previous_tar_refuses_protected_paths_and_split_credential_signatures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            driver = storage.WorkspaceStorage(files)
+            with driver.absolute(directory) as fd:
+                protected = root / '.env'
+                protected.touch()
+                with self.assertRaisesRegex(source.SourceError, 'PROTECTED_PATH'):
+                    source.work_manifest(driver, fd, os.geteuid(), lambda: None, export_blocks={})
+                protected.unlink()
+                (root / 'config.txt').write_bytes(
+                    b'x' * (source.BLOCK - 5) + b'-----BEGIN OPENSSH PRIVATE KEY-----')
+                with self.assertRaisesRegex(source.SourceError, 'CREDENTIAL_CONTENT'):
+                    source.work_manifest(driver, fd, os.geteuid(), lambda: None, export_blocks={})
+
 
 if __name__ == '__main__':
     unittest.main()
