@@ -49,6 +49,39 @@ def tar_bytes(entries):
 
 
 class DevelopmentSourceTests(unittest.TestCase):
+    def test_diff_pages_compare_files_and_directories_without_exposing_private_paths(self):
+        directory = ('Directory',)
+        old = ('File', 12, 'a' * 64, False)
+        new = ('File', 18, 'b' * 64, True)
+        before = {'': directory, '.env': old, 'd': directory, 'd/old': old,
+                  'same': old, 'z': old, 'token/glpat-' + 'x' * 20: old}
+        after = {'': directory, 'a': new, 'd': new, 'same': old, 'z': new}
+        first, counts = source.diff_page(files, before, after, 0, 2)
+        self.assertEqual({'addedEntries': 1, 'removedEntries': 3, 'changedEntries': 2}, counts)
+        self.assertEqual((4, 2, 2), (first['visibleEntries'], first['redactedEntries'], first['nextOffset']))
+        self.assertEqual([
+            {'path': 'a', 'change': 'added', 'before': None,
+             'after': {'kind': 'File', 'sizeBytes': 18, 'executable': True}},
+            {'path': 'd', 'change': 'changed', 'before': {'kind': 'Directory'},
+             'after': {'kind': 'File', 'sizeBytes': 18, 'executable': True}},
+        ], first['entries'])
+        second, _ = source.diff_page(files, before, after, first['nextOffset'], 2)
+        self.assertEqual(['d/old', 'z'], [entry['path'] for entry in second['entries']])
+        self.assertIsNone(second['nextOffset'])
+        self.assertEqual([], source.diff_page(files, before, after, 4, 2)[0]['entries'])
+        with self.assertRaisesRegex(source.SourceError, 'DIFF_CURSOR_INVALID'):
+            source.diff_page(files, before, after, 5, 2)
+
+    def test_diff_page_byte_budget_retains_a_contiguous_cursor(self):
+        old = ('File', 12, 'a' * 64, False)
+        paths = [('/'.join(['"' * 248] * 16)) + '/' + f'{index:02}' for index in range(10)]
+        before = dict.fromkeys(paths, old)
+        first, _ = source.diff_page(files, before, {}, 0, source.DIFF_PAGE_LIMIT)
+        self.assertGreater(first['nextOffset'], 0)
+        self.assertLess(first['nextOffset'], len(paths))
+        second, _ = source.diff_page(files, before, {}, first['nextOffset'], source.DIFF_PAGE_LIMIT)
+        self.assertEqual(paths, [entry['path'] for entry in first['entries'] + second['entries']])
+
     def extract(self, body, fmt, output, maximum=source.MAX_EXPANDED):
         root = os.open(output, source.DIR)
         try:

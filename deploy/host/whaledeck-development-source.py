@@ -34,6 +34,8 @@ MAX_EXPANDED = 1024**3
 MAX_ENTRIES = 10000
 MAX_EXPANSION = 256
 BLOCK = 64 * 1024
+DIFF_PAGE_LIMIT = 50
+DIFF_PAGE_BYTES = 48 * 1024
 DIGEST = re.compile(r'[a-f0-9]{64}\Z')
 TOKEN = re.compile(
     rb'-----BEGIN [A-Z0-9 ]{0,32}PRIVATE KEY-----|'
@@ -82,6 +84,47 @@ def rows_digest(rows, domain=b'whaledeck-development-source-tree-v1\n'):
     for path, row in sorted(rows.items()):
         digest.update(json.dumps([path, *row], ensure_ascii=False, separators=(',', ':')).encode('utf-8') + b'\n')
     return digest.hexdigest()
+
+
+def diff_entry(row):
+    if row is None:
+        return None
+    if row[0] == 'Directory':
+        return {'kind': 'Directory'}
+    return {'kind': 'File', 'sizeBytes': row[1], 'executable': row[3]}
+
+
+def diff_page(files, before, after, offset, limit):
+    visible = redacted = size = 0
+    entries = []
+    counts = {'addedEntries': 0, 'removedEntries': 0, 'changedEntries': 0}
+    page_full = False
+    for path in sorted(before.keys() | after.keys()):
+        previous, candidate = before.get(path), after.get(path)
+        if previous == candidate:
+            continue
+        change = 'added' if previous is None else 'removed' if candidate is None else 'changed'
+        counts[change + 'Entries'] += 1
+        try:
+            source_path(files, path, (candidate or previous)[0] == 'Directory')
+            if TOKEN.search(path.encode('utf-8')):
+                refuse('CREDENTIAL_CONTENT')
+        except SourceError:
+            redacted += 1
+            continue
+        visible += 1
+        if visible <= offset or page_full:
+            continue
+        entry = {'path': path, 'change': change, 'before': diff_entry(previous), 'after': diff_entry(candidate)}
+        size += len(json.dumps(entry, ensure_ascii=False, separators=(',', ':')).encode('utf-8')) + 1
+        page_full = len(entries) >= limit or size > DIFF_PAGE_BYTES
+        if not page_full:
+            entries.append(entry)
+    if offset > visible:
+        refuse('DIFF_CURSOR_INVALID')
+    end = offset + len(entries)
+    return dict(offset=offset, nextOffset=end if end < visible else None, visibleEntries=visible,
+                redactedEntries=redacted, entries=entries), counts
 
 
 class SourceTree:
@@ -803,6 +846,48 @@ class SourceImports:
             except FileNotFoundError:
                 refuse('NOT_FOUND')
 
+    def read_update_diff(self, request):
+        if not isinstance(request, dict) or not {'offset', 'limit'} <= request.keys():
+            refuse('REQUEST_INVALID')
+        offset, limit = request['offset'], request['limit']
+        if type(offset) is not int or not 0 <= offset < 2 * MAX_ENTRIES or type(limit) is not int or not 1 <= limit <= DIFF_PAGE_LIMIT:
+            refuse('DIFF_CURSOR_INVALID')
+        intent = self.request({key: value for key, value in request.items() if key not in ('offset', 'limit')}, False)
+        if 'previousImportId' not in intent:
+            refuse('REQUEST_INVALID')
+        with self.locked(request['storage']) as (payload, proof), contextlib.ExitStack() as directories:
+            try:
+                imports = directories.enter_context(self.driver.opened(payload, IMPORTS, DIR))
+                self.rootfs.private_directory(imports)
+                slot = directories.enter_context(self.driver.opened(imports, intent['importId'], DIR))
+                self.rootfs.private_directory(slot)
+                self.verify_intent(slot, intent)
+                plan = self.verified_plan(slot, intent)
+                if plan is None or self.public_plan(plan)['planSha256'] != request['planSha256']:
+                    refuse('PLAN_CONFLICT')
+                if any(self.metadata(slot, marker) is not None for marker in (DISCARD, ABORT, RECEIPT, UPDATE)):
+                    refuse('DIFF_UNAVAILABLE')
+                base = plan['updateBase']
+                self.verify_tree(payload, WORK, {'treeInode': base['inode']}, proof)
+                work = directories.enter_context(self.driver.opened(payload, WORK, DIR))
+                _, fingerprint, _, before = work_manifest(self.driver, work, self.runner.RUN_UID, lambda: None)
+                if fingerprint != base['fingerprint']:
+                    refuse('WORK_CHANGED')
+                bundle = directories.enter_context(self.driver.opened(slot, 'bundle', DIR))
+                self.rootfs.private_directory(bundle)
+                self.verify_tree(bundle, TREE, plan, proof)
+                tree = directories.enter_context(self.driver.opened(bundle, TREE, DIR))
+                content, _, normalized, after = work_manifest(self.driver, tree, self.runner.RUN_UID, lambda: None)
+                if not normalized or content != plan['contentSha256']:
+                    refuse('STAGE_CHANGED')
+                page, counts = diff_page(self.driver.files, before, after, offset, limit)
+                if any(base[key] != value for key, value in counts.items()):
+                    refuse('PLAN_CHANGED')
+                return dict(page, workspaceId=intent['workspaceId'], importId=intent['importId'],
+                            previousImportId=intent['previousImportId'], planSha256=request['planSha256'])
+            except FileNotFoundError:
+                refuse('NOT_FOUND')
+
     def verify_tree(self, parent, name, plan, proof):
         try:
             with self.driver.opened(parent, name, DIR) as tree:
@@ -823,7 +908,7 @@ def main():
     mode = sys.argv[1]
     sandboxed = mode.startswith('service-')
     action = mode.removeprefix('service-')
-    if action not in ('stage', 'inspect', 'publish', 'discard', 'abort', 'export'):
+    if action not in ('stage', 'inspect', 'publish', 'discard', 'abort', 'export', 'diff'):
         return 2
     from importlib.util import module_from_spec, spec_from_file_location
     try:
@@ -842,7 +927,7 @@ def main():
         if sandboxed:
             guard = runner.load('whaledeck-development-quota-guard.py')
             guard.install(quota, read_only=True)
-            if action == 'export':
+            if action in ('export', 'diff'):
                 guard.restrict_path_writes()
     except (OSError, ImportError, SourceError):
         print('WORKSPACE_SOURCE_HELPER_UNAVAILABLE', file=sys.stderr)
@@ -864,13 +949,18 @@ def main():
             if action == 'export':
                 service.export_previous(request, sys.stdout.buffer)
                 return 0
+            elif action == 'diff':
+                result = service.read_update_diff(request)
             elif action == 'inspect':
                 result = service.inspect(request)
             elif action == 'abort':
                 result = service.abort(request)
             else:
                 result = service.settle(request, discard=action == 'discard')
-        print(json.dumps(result, separators=(',', ':')))
+        if action == 'diff':
+            sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode('utf-8') + b'\n')
+        else:
+            print(json.dumps(result, separators=(',', ':')))
         return 0
     except (SourceError, files.Rejected, runner.RunError, rootfs.RootfsError) as error:
         code = str(error)
