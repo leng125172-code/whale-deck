@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-10，P3-14 `282caa37` 接入 Git 更新的 BFF 与 Worker。真实 HTTP、PostgreSQL 和 Unix Socket gRPC 验证当前基线校验、脏树确认、迟到修改拒绝及交换回执丢失后沿用原策略恢复。继续 Vue 冲突选择、旧树取回和物理工作站验收。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT_UPDATE_WORKFLOW.md)。
+
 2026-11-10，P3-14 `424e02ba` 接入 Agent 1.71 签名更新协议。离线 KVM 验证 Git 新提交的暂存、基线和策略绑定、迟到修改拒绝、交换后恢复和旧树留存。继续 Worker/BFF、Vue 冲突选择、旧树取回及物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT_UPDATE_RPC.md)。
 
 2026-11-10，P3-14 `42062945` 加入宿主 Git 工作树更新。离线 KVM 真实 ext4 验证旧基线和迟到修改拒绝、显式保留旧树、原子交换与强杀恢复。继续签名 Agent、Worker/BFF、Vue 和物理工作站。见[本批验收](qa/DEVELOPMENT_WORKSPACE_SOURCE_GIT_UPDATE.md)。
