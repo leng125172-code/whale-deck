@@ -1,4 +1,4 @@
-# 维护入口 socket 接管、真实隔离验证与首次部署
+# 维护入口 socket 接管、真实隔离验证与标准升级
 
 2026-11-10。本批修复安装态归档验收时取得的维护服务重启监听空档；只登记已实际发生的结果，不增加完整主任务计数。
 
@@ -39,6 +39,20 @@ da1d902f56d140128e0b05287c398d4530cd0c42 已推送；其 CI 42827404148 的新�
 
 封存证据：deploy/artifacts/maintenance-socket-release-c1374ef2-20261110/，99 文件，SHA256-MANIFEST.json 摘要 44986acd8be8d30af6391d8a5f72cf4157ea7687586724571d60bb74d90b8b63；10 份前序封存清单重新逐文件核验通过。独立验收见 batch-acceptance.json、final-state.json、installed-socket.json、installed-plan/accepted.json；首次迁移拒连见 deployment-errors.json。检查旧证据时曾误用文本清单名，改按原 JSON 清单格式验证，未修改旧清单或原件，调整记录保留。
 
+## 已活动 socket 的真实标准升级
+
+2026-11-10，2e4709bd3eb163a1aa099141f84aa1050e3eba98 的准确 CI [42834959739](https://github.com/leng125172-code/whale-deck/actions/runs/42834959739) 最终 13/13 success。首次 installer 在受控退出观察夹具的 Node 子进程超过 10 秒处失败；原日志保留，不能推断产品身份根因。本机原夹具 90 次（最慢 0.066 秒）及原 869 项整套（98.624 秒）均通过。等其余 12 项成功且 run 结束后，仅原样复验失败 installer 一次并通过，没有改断言、超时或产品代码。workflow 仍运行时一次复验请求被 GitHub 拒绝，未启动重复 job；成功日志下载一次 EOF 后重取成功，保留脱敏记录，根因仍未确证。
+
+正式干净仓库固定为 2e4709bd，经标准维护 update 入口发布成功；六组件/23 模块同源、11 核心健康、8 个原数据库依赖身份及 18233 条发布前记录保持，正式网卡/桥隔离与维护校验通过。独立开发仓库随后提交的 afcb11c2 不会改变本次固定本地 HEAD 的发布来源。
+
+四端点升级观察共 2536 次：2505 次 200、31 次真实维护 HTML 503、零连接错误。维护 PID 从 513312 变为 635279，8080/8081 始终为 socket:[80823811]/socket:[80827796]，PID 1 持有，激活时间 466060830994 保持。监听、实际新进程 FD/CLOEXEC、模板与前后来源复核均通过；只签该次标准升级的实际观察窗口，首次旧自监听迁移的拒连不改写成通过。
+
+真实 Authentik/Vue/BFF 启停、退出及安装态 Agent Plan 回归通过，目标 Active epoch13→15。18228 条原不可变记录、其他四空间、18 原报告、源码与硬配额保持；新增 4 审计、6 任务事件、2 任务和 2 生命周期记录。临时账号删除、四个新 Plan/预取消日志保留，执行 cgroup、活动任务及文件锁均为零；HDD 仍无 Capture。120GB/300GB 完整预留强制限制、原配置、user NOPASSWD 和原用户未提交差异保持。成功发布单元精确退役，journal 留存。
+
+证据：deploy/artifacts/maintenance-socket-upgrade-2e4709bd-20261110/，120 文件，SHA256-MANIFEST.json 摘要 1f5215671df903613dcfe523c53a478ead0247f328983c962c5109e247399fa6；12 份前序清单及原件再核通过。batch-acceptance.json、upgrade-continuity.json、final-state.json 与 installed-plan/accepted.json 保存独立结果。一次普通用户读取私密 root QA JSON 被拒绝，改为授权 root 只读，保留权限且未放宽验收条件。
+
 ## 未完成边界
 
-尚未证明活动 socket 的正式升级连续性，不签 P0-05 完整验收。持久归档意图、授权确认、Worker/BFF/Vue、HDD 捕获校验和空间退役/预算释放闭环仍待；完整主任务仍 0/59，ST/PET/供应商/Live2D 全部门槛继续，不恢复 17 项移出范围。
+后续 afcb11c2 布局修复也已完成 13/13 准确 CI 和标准发布。1600 次四端点采样为 1568×200、32×维护 HTML503、零连接错误，维护 PID 更新而同一 PID 1 监听及激活时间保持；真实身份只读布局及正常退出通过，18247 原记录、5 空间、18 报告和 epoch15 不变。发布单元退役、源码配额及原配置保持；71 文件证据及首次观察器失败见[布局实机验收](DEVELOPMENT_WORKSPACE_DESCRIPTION_LAYOUT.md)。
+
+活动 socket 的上述标准升级连续性分项已通过，不签 P0-05 整项完成。持久归档意图、授权确认、Worker/BFF/Vue、HDD 捕获校验和空间退役/预算释放闭环仍待；完整主任务仍 0/59，ST/PET/供应商/Live2D 全部门槛继续，不恢复 17 项移出范围。
