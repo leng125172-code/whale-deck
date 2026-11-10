@@ -45,12 +45,18 @@ export async function installedLifecycle({ page, context, base, api, id, route, 
     }
     if (!receipt[action]?.operationId) {
       assert.equal(selected.lifecycleState, action === 'stop' ? 'Active' : 'Stopped')
+      assert.equal(selected.lifecycleVersion, action === 'stop' ? receipt.expectedEpochs.stopped - 1 : receipt.expectedEpochs.resumed - 1)
       // Reports can already be downloadable while raw-artifact retirement is
       // still pending. Wait for the real idle gate, never edit the database.
       const deadline = Date.now() + 180_000
+      let verifiedPlan
       while (true) {
         const response = await context.request.get(`${base}${endpoint}/plan?action=${action}`)
-        if (response.status() === 200) break
+        if (response.status() === 200) {
+          verifiedPlan = await response.json()
+          assert.equal(verifiedPlan.expectedVersion, selected.lifecycleVersion)
+          break
+        }
         assert.equal(response.status(), 409)
         assert.ok(['WORKSPACE_LIFECYCLE_NOT_IDLE', 'WORKSPACE_LIFECYCLE_GIT_DRAINING'].includes((await response.json()).code))
         assert.ok(Date.now() < deadline)
@@ -71,7 +77,12 @@ export async function installedLifecycle({ page, context, base, api, id, route, 
       const observe = async route => {
         const request = route.request()
         assert.equal(request.method(), 'POST')
-        receipt[action] = { key: request.headers()['idempotency-key'], command: request.postDataJSON() }
+        const command = request.postDataJSON()
+        if (command.planSha256 !== verifiedPlan.planSha256) {
+          await route.abort()
+          throw new Error('INSTALLED_LIFECYCLE_PLAN_CHANGED')
+        }
+        receipt[action] = { key: request.headers()['idempotency-key'], command }
         assert.equal(receipt[action].command.action, action)
         assert.match(receipt[action].key, /^[a-f0-9-]{36}$/)
         // Persist only public plan/key fields before forwarding the genuine UI

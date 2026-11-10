@@ -141,6 +141,8 @@ try {
       assert.equal(selected.status(), 200)
       const current = await selected.json()
       if (current.lifecycleState === 'Stopped') {
+        assert.ok(original?.operationId && original.completedAtUtc && original.state === 'Succeeded' && original.phase === 'Stopped')
+        assert.equal(current.lifecycleVersion, state.lifecycle.expectedEpochs.stopped)
         state.recovery = { lifecycle: {} }
         await installedLifecycle({ page, context, base, api, id, route, state: state.recovery,
           save, headers, poll, evidence, manageOnly: true, resumeOnly: true })
