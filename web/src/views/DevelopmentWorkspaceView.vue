@@ -544,8 +544,25 @@ function cancel(run: WorkspaceRun) {
 .workspace-history time {
   color: var(--el-text-color-secondary);
 }
+.workspace-page dt {
+  grid-column: 1;
+}
 .workspace-page dd {
+  grid-column: 2;
   margin: 0;
+}
+@media (max-width: 600px) {
+  .workspace-page dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .workspace-page dt,
+  .workspace-page dd {
+    grid-column: 1;
+  }
+  .workspace-page dt:not(:first-child) {
+    margin-top: 8px;
+  }
 }
 .workspace-plan {
   margin-top: 16px;
