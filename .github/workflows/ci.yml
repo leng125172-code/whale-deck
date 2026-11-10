@@ -374,6 +374,7 @@ jobs:
       - name: Compile native Agent validation clients
         run: dotnet build deploy/validation/TerminalProbe/TerminalProbe.csproj --configuration Release
       - run: dotnet build deploy/validation/DevelopmentArchiveRpcProbe/DevelopmentArchiveRpcProbe.csproj --configuration Release
+      - run: dotnet build deploy/validation/DevelopmentRetirementRpcProbe/DevelopmentRetirementRpcProbe.csproj --configuration Release
       - run: dotnet test --configuration Release --no-build --logger trx
       - run: dotnet list package --vulnerable --include-transitive
       - name: Inspect actual application binaries without dependency configuration

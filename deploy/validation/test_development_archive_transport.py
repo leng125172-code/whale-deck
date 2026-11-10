@@ -20,6 +20,7 @@ from unittest.mock import Mock, patch
 
 import test_development_archive_operations as task_tests
 import validate_development_archive_helper_native as native_helper
+import validate_development_retirement_helper_native as retirement_helper
 
 fixture = task_tests.fixture
 transport = fixture.load('archive_transport_tests', 'whaledeck-development-archive-transport.py')
@@ -134,6 +135,14 @@ class KernelGuardTests(unittest.TestCase):
         with patch.dict(os.environ, {'WHALEDECK_ARCHIVE_RPC_PROBE': '1'}, clear=True):
             self.assertEqual(Path(native_helper.__file__).resolve().parent /
                 'DevelopmentArchiveRpcProbe/bin/Release/net10.0/publish', native_helper.rpc_publication())
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(retirement_helper.rpc_publication())
+        for option in ('/untrusted/assemblies', 'true', '', '0'):
+            with patch.dict(os.environ, {'WHALEDECK_RETIREMENT_RPC_PROBE': option}, clear=True):
+                with self.assertRaisesRegex(ValueError, 'OPTION_INVALID'): retirement_helper.rpc_publication()
+        with patch.dict(os.environ, {'WHALEDECK_RETIREMENT_RPC_PROBE': '1'}, clear=True):
+            self.assertEqual(Path(retirement_helper.__file__).resolve().parent /
+                'DevelopmentRetirementRpcProbe/bin/Release/net10.0/publish', retirement_helper.rpc_publication())
 
     def test_runtime_caps_are_exact_and_resource_bypass_or_missing_seccomp_is_refused(self):
         def status(caps):

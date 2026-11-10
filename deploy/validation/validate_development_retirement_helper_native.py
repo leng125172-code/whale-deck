@@ -17,6 +17,13 @@ import validate_development_archive_helper_native as shared_probe
 import validate_development_retirement_execution_native as execution_probe
 
 
+def rpc_publication():
+    option = os.environ.get('WHALEDECK_RETIREMENT_RPC_PROBE')
+    if option is None: return None
+    if option != '1': raise ValueError('NATIVE_RETIREMENT_RPC_OPTION_INVALID')
+    return Path(__file__).resolve().parent / 'DevelopmentRetirementRpcProbe/bin/Release/net10.0/publish'
+
+
 def exercise(probe, driver, engine, request, evidence, payload, runtime_home, configuration, base, layout):
     sources = Path(__file__).resolve().parents[1] / 'host'
     private = runtime_home / 'retirement-helper-native'; private.mkdir(mode=0o700)
@@ -57,23 +64,31 @@ def exercise(probe, driver, engine, request, evidence, payload, runtime_home, co
     original=probe.physical(driver,driver.quota,request,payload)
     root=payload.parent.parent
     owned,values,calls={},{},[]
-    accepted=None
+    accepted,bridge=None,None
 
     def call(action,value,attempt=0):
         values[value['taskId']]=value
-        result=subprocess.run([str(library/'whaledeck-privileged'),'development-retirement-'+action,uuid.uuid4().hex],
-            input=json.dumps(value),capture_output=True,text=True,timeout=25)
-        calls.append(dict(action=action,request=value,returncode=result.returncode,stdout=result.stdout,stderr=result.stderr))
+        wire=None
+        if bridge is None:
+            result=subprocess.run([str(library/'whaledeck-privileged'),'development-retirement-'+action,uuid.uuid4().hex],
+                input=json.dumps(value),capture_output=True,text=True,timeout=25)
+        else:
+            wire=bridge.call(action,value)
+            result=subprocess.CompletedProcess([],0 if wire['rpcStatus']=='OK' else 2,wire['stdout'],wire['stderr'])
+        calls.append(dict(action=action,request=value,returncode=result.returncode,stdout=result.stdout,stderr=result.stderr,signedRpc=wire))
         probe.save(evidence/('retirement-helper-call-'+str(len(calls))+'.json'),calls[-1])
         if action=='start':
             path='/system.slice/whaledeck-development-retirement-run-'+value['taskId'].replace('-','')+'.service'
             try:info=os.stat(control.CGROUP/path[1:])
             except FileNotFoundError:pass
             else:owned[path]=dict(bootId=execution.boot(),path=path,device=info.st_dev,inode=info.st_ino)
-        if (result.returncode==2 and result.stderr.strip()=='WORKSPACE_STORAGE_RETIREMENT_TASK_BUSY'
+        busy=(wire is None and result.stderr.strip()=='WORKSPACE_STORAGE_RETIREMENT_TASK_BUSY' or
+            wire is not None and wire['rpcStatus']=='Unavailable' and result.stderr=='WORKSPACE_RETIREMENT_HOST_BUSY')
+        if (result.returncode==2 and busy
                 and action in ('observe','cancel') and attempt<20):
             time.sleep(0.05);return call(action,value,attempt+1)
         assert result.returncode==0,'NATIVE_RETIREMENT_HELPER_'+action.upper()+'_FAILED'
+        if wire is not None:assert wire['signatureRefusalsPassed'] is True
         receipt=json.loads(result.stdout);assert receipt['taskId']==value['taskId']
         return receipt
 
@@ -120,6 +135,8 @@ def exercise(probe, driver, engine, request, evidence, payload, runtime_home, co
         else:raise AssertionError('RETIRED_ALLOCATION_RECREATED')
 
     try:
+        published=rpc_publication()
+        if published is not None:bridge=shared_probe.RpcBridge(published,library,evidence,kind='retirement')
         other,archive,copied,value=prepare(4)
         hdd_before=execution_probe.snapshot(hdd)
         plan=finish(value)
@@ -159,10 +176,14 @@ def exercise(probe, driver, engine, request, evidence, payload, runtime_home, co
             rootlessOwnedPrivateSourceRemoved=True,kernelQuotaLimitsAndUsageZero=True,hddUnchanged=True,
             prestartCancellation=True,activeExecutionPreciselyStopped=True,sameTaskNeverRedispatched=True,
             explicitNewTaskResumesOriginalEngineRequest=True,originalSourceAndQuotaPreserved=True,
-            signedAgentRpc=False,productWorkflow=False,releasesApplicationBudget=False)
+            signedAgentRpc=bridge is not None,productWorkflow=False,releasesApplicationBudget=False)
         for name,record in records.items():
             assert record['sourceSha256']==hashlib.sha256((sources/name).read_bytes()).hexdigest()
     finally:
+        bridge_error=None
+        if bridge is not None:
+            try:bridge.close()
+            except BaseException as error:bridge_error=error
         shared=shared_probe.load(library/'whaledeck-development-archive-operations.py')
         operations=shared_probe.load(library/'whaledeck-development-retirement-operations.py')
         executor=probe.load(sources,'development-retirement-execution').DevelopmentRetirementExecution(engine,
@@ -191,7 +212,8 @@ def exercise(probe, driver, engine, request, evidence, payload, runtime_home, co
         retained=evidence/'retirement-helper-journal';shutil.copytree(journal,retained)
         for p in retained.rglob('*'):p.chmod(0o700 if p.is_dir() else 0o600)
         probe.save(evidence/'retirement-helper-commands.json',calls)
-        if accepted is not None:
+        if accepted is not None and bridge_error is None:
             accepted['executionResourcesSettled']=True
             probe.save(evidence/'retirement-helper-accepted.json',accepted)
+        if bridge_error is not None:raise bridge_error
     return accepted

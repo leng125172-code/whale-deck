@@ -294,6 +294,7 @@ public static class DependencyInjection
         services.AddSingleton<IWorkspaceStorageGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IWorkspaceLifecycleGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IWorkspaceArchiveGateway>(provider => provider.GetRequiredService<AgentGateway>());
+        services.AddSingleton<IWorkspaceRetirementGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IWorkspaceRunnerGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IWorkspaceSourceGateway>(provider => provider.GetRequiredService<AgentGateway>());
         services.AddSingleton<IWorkspaceSourceDownloadGateway>(provider => provider.GetRequiredService<AgentGateway>());

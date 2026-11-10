@@ -30,6 +30,12 @@ release-only seccomp 允许 quota limit 调用及必需读取，拒绝 project t
 
 ## 发布与接续
 
-a87968110d33c8ca2416960eb0fab4622f85d195 准确CI 42876046498 已13/13 success。本批仍需自身准确提交CI及标准dev覆盖部署，然后接独立签名合同/Agent/Gateway、当前身份授权、持久退役意图及预算墓碑、Worker/API/Vue和新专属空间的真实用户闭环。构建不能代替测试，隔离helper不能代替产品验收。
+a87968110d33c8ca2416960eb0fab4622f85d195 准确CI 42876046498 已13/13 success。34fcc3f0d764da4e970a7def34e594231118d989准确CI [42879989081](https://github.com/leng125172-code/whale-deck/actions/runs/42879989081)也已全部13成功，经干净正式检出和固定维护入口一次覆盖发布dev，update退出0；未回滚或重发。六组件来源、23宿主模块逐字节、host validator、两个运行程序inode及11核心健康通过。独立退役非法请求被已安装helper严格拒绝，未新增退役journal。
+
+本次HTTP连续性未通过：1712样本为1576×200、131×维护503、4×429与1次3秒TimeoutError。4个限流全部来自约每0.5秒采样的/api/v1/system/status；API实际策略为每匿名IP/预算分区120次/分钟。超时发生于容器替换窗口，维护YARP上游活动超时5秒、观察器仅3秒；缺少足够时延/服务端关联事实，不能据此认定超时根因或宣布无断档。PID1双监听inode及激活时间虽保持，也不能抵消请求失败。原样本/协调器失败保留，continuityPassed=false；以后在新版本真实发布中调整观察频率和超时并复验，不对本次重新部署追绿。
+
+真实临时Authentik管理员通过已部署Vue/BFF/Worker/Agent完成停用、首Plan取消、第二Plan显式确认Capture/独立Verify、重载、恢复与双端正常退出。目标epoch21→23；独立SQL/实盘核对2意图/4唯一task和3025字节HDD副本、摘要/inode/回执一致，旧HDD14项与journal150项逐事实保持，新副本及全部审计保留。18379原非空间记录、5空间登记/源码/预算/硬配额及18报告保持；临时账号删除，活动job/锁/lease/执行cgroup收尾。320px暗色实图已查看。最初独立观察器错误地断言jobs字典为空，在任何账号或业务写入前失败；修正为active/locks计数后重新完成，失败原件保留。
+
+发布与回归证据deploy/artifacts/development-retirement-helper-release-34fcc3f0-20261111/已封存47文件，清单SHA-256为cdb1125d9ce77ea1b94b9f94e139fd27cfd83b5f8b72d05fd0e89a7ba80acbaf。后续独立退役签名RPC候选与真实隔离实盘见[RPC记录](DEVELOPMENT_WORKSPACE_RETIREMENT_RPC.md)，其自身CI/标准部署及当前身份授权、持久退役任务与预算墓碑、Worker/API/Vue和新专属空间用户闭环继续。构建不能代替测试，隔离helper/RPC不能代替产品验收。
 
 完整主任务维持0/59，ST272、PET6、供应商/Live2D16继续，17项移出不恢复。项目图谱保留本地pending待同步。

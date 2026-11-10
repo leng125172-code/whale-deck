@@ -33,6 +33,11 @@ builder.Services.AddGrpc(options =>
     options.Interceptors.Add<AgentErrorInterceptor>();
 }).AddServiceOptions<DevelopmentSourceGrpcService>(options => options.MaxReceiveMessageSize = DevelopmentSourceBinding.ChunkBytes + 16)
     .AddServiceOptions<DevelopmentGitGrpcService>(options => options.MaxReceiveMessageSize = DevelopmentGitBinding.MaximumHeaderBytes)
+    .AddServiceOptions<DevelopmentRetirementGrpcService>(options =>
+    {
+        options.MaxReceiveMessageSize = DevelopmentRetirementBinding.MaximumRequestBytes;
+        options.MaxSendMessageSize = DevelopmentRetirementBinding.MaximumReceiptBytes;
+    })
     .AddServiceOptions<DevelopmentArchiveGrpcService>(options =>
     {
         options.MaxReceiveMessageSize = DevelopmentArchiveBinding.MaximumRequestBytes;
@@ -73,6 +78,7 @@ app.MapGrpcService<AgentGrpcService>();
 app.MapGrpcService<DevelopmentStorageGrpcService>();
 app.MapGrpcService<DevelopmentLifecycleGrpcService>();
 app.MapGrpcService<DevelopmentArchiveGrpcService>();
+app.MapGrpcService<DevelopmentRetirementGrpcService>();
 app.MapGrpcService<DevelopmentRunnerGrpcService>();
 app.MapGrpcService<DevelopmentSourceGrpcService>();
 app.MapGrpcService<DevelopmentGitGrpcService>();

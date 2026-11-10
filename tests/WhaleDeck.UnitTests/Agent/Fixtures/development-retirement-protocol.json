@@ -1,0 +1,113 @@
+[
+  {
+    "request": {
+      "schemaVersion": 1,
+      "taskId": "44444444-4444-4444-4444-444444444444",
+      "retirementId": "55555555-5555-5555-5555-555555555555",
+      "phase": "plan",
+      "prerequisite": {
+        "schemaVersion": 1,
+        "storage": {
+          "diskMiB": 256,
+          "environmentSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "rootId": "nvme-main",
+          "schemaVersion": 1,
+          "workspaceId": "11111111-1111-1111-1111-111111111111"
+        },
+        "expectedEpoch": 2,
+        "archiveId": "33333333-3333-3333-3333-333333333333",
+        "archivePlanSha256": "3cddcb438ea1f4490ad737ea2201a1c14350f589441bc28f8269526878e0fa94",
+        "captureReceiptSha256": "7edf0ad446913c1c8e21c6e825cfacce99d8aa61ba8a64474acd6d32f4f2de0e"
+      },
+      "retirementPlanSha256": ""
+    },
+    "canonicalRequest": "{\"phase\":\"plan\",\"prerequisite\":{\"archiveId\":\"33333333-3333-3333-3333-333333333333\",\"archivePlanSha256\":\"3cddcb438ea1f4490ad737ea2201a1c14350f589441bc28f8269526878e0fa94\",\"captureReceiptSha256\":\"7edf0ad446913c1c8e21c6e825cfacce99d8aa61ba8a64474acd6d32f4f2de0e\",\"expectedEpoch\":2,\"schemaVersion\":1,\"storage\":{\"diskMiB\":256,\"environmentSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"rootId\":\"nvme-main\",\"schemaVersion\":1,\"workspaceId\":\"11111111-1111-1111-1111-111111111111\"}},\"retirementId\":\"55555555-5555-5555-5555-555555555555\",\"retirementPlanSha256\":\"\",\"schemaVersion\":1,\"taskId\":\"44444444-4444-4444-4444-444444444444\"}",
+    "engineSha256": "f708290a802a8820b6ef50fbddd377bb3b876a114c7b16bfd2e82a4f42a441d3",
+    "receipt": {
+      "schemaVersion": 1,
+      "taskId": "44444444-4444-4444-4444-444444444444",
+      "requestSha256": "1ba453799909a0373415d83112db68125c6aef4dc3f3a423f7e08091c340a1db",
+      "status": "Succeeded",
+      "code": null,
+      "result": {
+        "archiveBytes": 123,
+        "archiveFilesystemUuid": "22222222-2222-2222-2222-222222222222",
+        "archiveId": "33333333-3333-3333-3333-333333333333",
+        "archiveIndexSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "archiveInode": 12345,
+        "archivePlanSha256": "3cddcb438ea1f4490ad737ea2201a1c14350f589441bc28f8269526878e0fa94",
+        "archiveSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "captureReceiptSha256": "7edf0ad446913c1c8e21c6e825cfacce99d8aa61ba8a64474acd6d32f4f2de0e",
+        "deletionAuthorized": false,
+        "entryCount": 2,
+        "expectedEpoch": 2,
+        "hddProofSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "purpose": "whaledeck-development-source-retirement-plan-v1",
+        "reservesBudget": true,
+        "retainsSource": true,
+        "retirementPlanSha256": "15828feb5cc0d10cf97c3f6be270135979f4ebc657b975289ae7f3f468067e74",
+        "schemaVersion": 1,
+        "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "sourceVersion": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+        "storage": {
+          "diskMiB": 256,
+          "environmentSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "rootId": "nvme-main",
+          "schemaVersion": 1,
+          "workspaceId": "11111111-1111-1111-1111-111111111111"
+        },
+        "storageProofSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "totalBytes": 5
+      }
+    }
+  },
+  {
+    "request": {
+      "schemaVersion": 1,
+      "taskId": "66666666-6666-6666-6666-666666666666",
+      "retirementId": "55555555-5555-5555-5555-555555555555",
+      "phase": "execute",
+      "prerequisite": {
+        "schemaVersion": 1,
+        "storage": {
+          "diskMiB": 256,
+          "environmentSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "rootId": "nvme-main",
+          "schemaVersion": 1,
+          "workspaceId": "11111111-1111-1111-1111-111111111111"
+        },
+        "expectedEpoch": 2,
+        "archiveId": "33333333-3333-3333-3333-333333333333",
+        "archivePlanSha256": "3cddcb438ea1f4490ad737ea2201a1c14350f589441bc28f8269526878e0fa94",
+        "captureReceiptSha256": "7edf0ad446913c1c8e21c6e825cfacce99d8aa61ba8a64474acd6d32f4f2de0e"
+      },
+      "retirementPlanSha256": "15828feb5cc0d10cf97c3f6be270135979f4ebc657b975289ae7f3f468067e74"
+    },
+    "canonicalRequest": "{\"phase\":\"execute\",\"prerequisite\":{\"archiveId\":\"33333333-3333-3333-3333-333333333333\",\"archivePlanSha256\":\"3cddcb438ea1f4490ad737ea2201a1c14350f589441bc28f8269526878e0fa94\",\"captureReceiptSha256\":\"7edf0ad446913c1c8e21c6e825cfacce99d8aa61ba8a64474acd6d32f4f2de0e\",\"expectedEpoch\":2,\"schemaVersion\":1,\"storage\":{\"diskMiB\":256,\"environmentSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"rootId\":\"nvme-main\",\"schemaVersion\":1,\"workspaceId\":\"11111111-1111-1111-1111-111111111111\"}},\"retirementId\":\"55555555-5555-5555-5555-555555555555\",\"retirementPlanSha256\":\"15828feb5cc0d10cf97c3f6be270135979f4ebc657b975289ae7f3f468067e74\",\"schemaVersion\":1,\"taskId\":\"66666666-6666-6666-6666-666666666666\"}",
+    "engineSha256": "468d695d5531062383209b10b705115a31773311263cbc81ac87b361cb343a06",
+    "receipt": {
+      "schemaVersion": 1,
+      "taskId": "66666666-6666-6666-6666-666666666666",
+      "requestSha256": "b29c8decd1ca439f0f56d5c64fc29de89ac8e5047a5b130be04ffe8d07e12d4b",
+      "status": "Succeeded",
+      "code": null,
+      "result": {
+        "schemaVersion": 1,
+        "purpose": "whaledeck-development-source-retirement-receipt-v1",
+        "retirementId": "55555555-5555-5555-5555-555555555555",
+        "workspaceId": "11111111-1111-1111-1111-111111111111",
+        "requestSha256": "468d695d5531062383209b10b705115a31773311263cbc81ac87b361cb343a06",
+        "retirementPlanSha256": "15828feb5cc0d10cf97c3f6be270135979f4ebc657b975289ae7f3f468067e74",
+        "storageProofSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "captureReceiptSha256": "7edf0ad446913c1c8e21c6e825cfacce99d8aa61ba8a64474acd6d32f4f2de0e",
+        "projectId": 12345,
+        "sourceRemoved": true,
+        "quotaReleased": true,
+        "claimReleased": true,
+        "retainsHdd": true,
+        "releasesApplicationBudget": false
+      }
+    }
+  }
+]

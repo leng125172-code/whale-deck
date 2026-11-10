@@ -45,7 +45,10 @@ def rpc_publication():
 
 class RpcBridge:
     """QA-only private mount binding; calls the unchanged production C# facade."""
-    def __init__(self, published, library, evidence):
+    def __init__(self, published, library, evidence, kind="archive"):
+        assert kind in ("archive", "retirement")
+        project = "DevelopmentArchiveRpcProbe" if kind == "archive" else "DevelopmentRetirementRpcProbe"
+        prefix = "" if kind == "archive" else "retirement-"
         self.fixed_helper = Path('/usr/local/libexec/whaledeck-privileged')
         self.fixed_original = self.fixed_helper.lstat()
         self.fixed_sha256 = hashlib.sha256(self.fixed_helper.read_bytes()).hexdigest()
@@ -69,13 +72,13 @@ class RpcBridge:
                 for p in runtime.rglob('*') if p.is_file()}
             assert originals == {str(p.relative_to(published)): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in published.rglob('*') if p.is_file()}
-            assert (runtime / 'DevelopmentArchiveRpcProbe.dll').is_file()
-            self.errors = (evidence / 'rpc-bridge.stderr').open('x')
-            save(evidence / 'rpc-binary-sha256.json', {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+            assert (runtime / (project + '.dll')).is_file()
+            self.errors = (evidence / (prefix + 'rpc-bridge.stderr')).open('x')
+            save(evidence / (prefix + 'rpc-binary-sha256.json'), {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in runtime.iterdir() if p.is_file()})
             self.process = subprocess.Popen(['unshare', '--mount', '--propagation', 'private',
                 sys.executable, '-B', '-I', __file__, '--rpc-namespace', str(library / 'whaledeck-privileged'),
-                str(runtime / 'DevelopmentArchiveRpcProbe.dll'), str(self.home),
+                str(runtime / (project + '.dll')), str(self.home),
                 str(Path('/proc/self/ns/mnt').readlink()), str(Path(shutil.which('dotnet')).resolve())],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.errors, text=True, bufsize=1)
             assert self.read() == dict(ready=True), 'NATIVE_ARCHIVE_RPC_NOT_READY'

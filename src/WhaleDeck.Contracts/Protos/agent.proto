@@ -412,6 +412,35 @@ service DevelopmentArchiveService {
   rpc Cancel(WorkspaceArchiveRequest) returns (WorkspaceArchiveReceipt);
 }
 
+// Independent source retirement tasks, never authorized by archive signatures.
+// Protocol 1.78. A successful host receipt retains HDD and does not release
+// the application registration budget. That requires a later business commit.
+service DevelopmentRetirementService {
+  rpc Start(WorkspaceRetirementRequest) returns (WorkspaceRetirementReceipt);
+  rpc Observe(WorkspaceRetirementRequest) returns (WorkspaceRetirementReceipt);
+  rpc Cancel(WorkspaceRetirementRequest) returns (WorkspaceRetirementReceipt);
+}
+
+message WorkspaceRetirementRequest {
+  WorkspaceAllocationRequest storage = 1;
+  string task_id = 2;
+  string retirement_id = 3;
+  string phase = 4; // plan or execute; no archive phases
+  uint64 expected_epoch = 5;
+  string archive_id = 6;
+  string archive_plan_sha256 = 7;
+  string capture_receipt_sha256 = 8;
+  string retirement_plan_sha256 = 9; // execute: original verified plan
+}
+
+message WorkspaceRetirementReceipt {
+  string task_id = 1;
+  string request_sha256 = 2;
+  string status = 3;
+  string code = 4;
+  bytes result_json = 5; // strict canonical bounded facts, never file content
+}
+
 message WorkspaceArchiveRequest {
   WorkspaceAllocationRequest storage = 1;
   string task_id = 2;
