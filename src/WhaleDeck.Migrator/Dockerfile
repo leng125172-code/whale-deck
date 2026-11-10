@@ -20,8 +20,9 @@ ARG WHALEDECK_BUILD_REVISION
 LABEL org.opencontainers.image.revision="$WHALEDECK_BUILD_REVISION" \
       org.opencontainers.image.source="https://github.com/leng125172-code/whale-deck" \
       org.opencontainers.image.version="0.1.0"
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=30 -o APT::Update::Error-Mode=any update \
+    && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=30 install -y --no-install-recommends libgssapi-krb5-2 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app .
 USER $APP_UID
