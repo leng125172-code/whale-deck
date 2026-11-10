@@ -4,13 +4,53 @@ using System.Text;
 using Google.Protobuf;
 using Grpc.Core;
 using WhaleDeck.Application.Development;
+using WhaleDeck.Application.Models;
 using WhaleDeck.Contracts;
 using WhaleDeck.Contracts.Agent.V1;
 
 namespace WhaleDeck.Infrastructure.Agent;
 
-public sealed partial class AgentGateway : IWorkspaceSourceGateway
+public sealed partial class AgentGateway : IWorkspaceSourceGateway, IWorkspaceSourceDownloadGateway
 {
+    public async Task<ReadOnlyMemory<byte>> ExportPreviousAsync(WorkspaceDefinition workspace, WorkspaceSourceView import,
+        TerminalActor actor, Func<ReadOnlyMemory<byte>, CancellationToken, Task> write, CancellationToken token)
+    {
+        const string method = DevelopmentSourceBinding.ExportPrevious;
+        var request = SourceRequest(import, workspace, actor, method, import.Plan);
+        try
+        {
+            var client = await SourceClientAsync(true, token, previous: true);
+            using var call = client.ExportPrevious(request, SourceHeaders(method, request), DateTime.UtcNow.AddSeconds(112), token);
+            using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            ulong count = 0;
+            var pending = ReadOnlyMemory<byte>.Empty;
+            var ended = false;
+            while (await call.ResponseStream.MoveNext(token))
+            {
+                var frame = call.ResponseStream.Current;
+                if (ended || frame.Offset != count)
+                    throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+                if (frame.PayloadCase == WorkspaceSourceExportFrame.PayloadOneofCase.Content &&
+                    frame.Content.Length is > 0 and <= DevelopmentSourceBinding.ChunkBytes &&
+                    (ulong)frame.Content.Length <= DevelopmentSourceBinding.MaximumPreviousArchiveBytes - count)
+                {
+                    if (!pending.IsEmpty) await write(pending, token);
+                    pending = frame.Content.Memory;
+                    count += (ulong)pending.Length;
+                    digest.AppendData(pending.Span);
+                }
+                else if (frame.PayloadCase == WorkspaceSourceExportFrame.PayloadOneofCase.ArchiveSha256 &&
+                    count >= 10240 && count % 512 == 0 &&
+                    frame.ArchiveSha256 == Convert.ToHexStringLower(digest.GetHashAndReset()))
+                    ended = true;
+                else throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+            }
+            // A valid footer must be followed by a successful RPC status.
+            return ended ? pending : throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
+        }
+        catch (RpcException error) { token.ThrowIfCancellationRequested(); throw SourceFailure(error); }
+    }
+
     public async Task<WorkspaceSourceObservation> StageSourceAsync(WorkspaceSourceClaim claim,
         IAsyncEnumerable<ReadOnlyMemory<byte>> chunks, CancellationToken token)
     {
@@ -88,29 +128,35 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
         catch (RpcException error) { token.ThrowIfCancellationRequested(); throw SourceFailure(error); }
     }
 
-    private async Task<DevelopmentSourceService.DevelopmentSourceServiceClient> SourceClientAsync(bool update, CancellationToken token)
+    private async Task<DevelopmentSourceService.DevelopmentSourceServiceClient> SourceClientAsync(bool update, CancellationToken token,
+        bool previous = false)
     {
         var caps = await _agent.GetCapabilitiesAsync(new Google.Protobuf.WellKnownTypes.Empty(),
             deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: token);
         if (!DevelopmentSourceBinding.IsSupported(caps) || caps.ProtocolMinor < DevelopmentSourceBinding.AbortProtocolMinor ||
-            update && !DevelopmentSourceBinding.SupportsUpdate(caps))
+            update && !DevelopmentSourceBinding.SupportsUpdate(caps) ||
+            previous && !DevelopmentSourceBinding.SupportsPrevious(caps))
             throw new WorkspaceSourceException(WorkspaceSourceFailure.Unsupported);
         return new(_channel);
     }
 
-    private static WorkspaceSourceRequest SourceRequest(WorkspaceSourceClaim claim, string method, WorkspaceSourcePlan? plan = null)
+    private static WorkspaceSourceRequest SourceRequest(WorkspaceSourceClaim claim, string method, WorkspaceSourcePlan? plan = null) =>
+        SourceRequest(claim.Import, claim.Workspace, claim.Actor, method, plan);
+
+    private static WorkspaceSourceRequest SourceRequest(WorkspaceSourceView import, WorkspaceDefinition workspace,
+        TerminalActor actor, string method, WorkspaceSourcePlan? plan)
     {
-        var (import, workspace, actor, _, _, _) = claim;
         if (import.WorkspaceId != workspace.Id || workspace.OwnerSubject != actor.Subject ||
             workspace.State != WorkspaceStorageAllocation.Allocated || import.Archive.ArchiveBytes <= 0)
             throw new WorkspaceSourceException(WorkspaceSourceFailure.Integrity);
         var request = new WorkspaceSourceRequest
         {
-            Storage = SourceStorage(claim),
+            Storage = SourceStorage(workspace, actor),
             ImportId = import.ImportId.ToString("N"), ArchiveFormat = import.Archive.Format,
             ArchiveBytes = (uint)import.Archive.ArchiveBytes, ArchiveSha256 = import.Archive.ArchiveSha256,
             PlanSha256 = plan?.PlanSha256 ?? "", PreviousImportId = import.PreviousImportId?.ToString("N") ?? "",
-            ConflictResolution = method != DevelopmentSourceBinding.PublishUpdate ? WorkspaceSourceConflictResolution.Unspecified :
+            ConflictResolution = method is not (DevelopmentSourceBinding.PublishUpdate or DevelopmentSourceBinding.ExportPrevious)
+                ? WorkspaceSourceConflictResolution.Unspecified :
                 import.ConflictResolution switch
                 {
                     WorkspaceSources.CleanOnly => WorkspaceSourceConflictResolution.CleanOnly,
@@ -141,11 +187,11 @@ public sealed partial class AgentGateway : IWorkspaceSourceGateway
         return new Metadata { { "x-whaledeck-capability", $"{expires}.{nonce}.{signature}" } };
     }
 
-    private static WorkspaceAllocationRequest SourceStorage(WorkspaceSourceClaim claim) => new()
+    private static WorkspaceAllocationRequest SourceStorage(WorkspaceDefinition workspace, TerminalActor actor) => new()
     {
-        WorkspaceId = claim.Workspace.Id.ToString("D"), StorageRootId = claim.Workspace.StorageRootId,
-        EnvironmentSha256 = claim.Workspace.EnvironmentSha256, DiskMib = (uint)claim.Workspace.Budget.DiskMiB,
-        ActorSubject = claim.Actor.Subject, TraceId = claim.Actor.TraceId
+        WorkspaceId = workspace.Id.ToString("D"), StorageRootId = workspace.StorageRootId,
+        EnvironmentSha256 = workspace.EnvironmentSha256, DiskMib = (uint)workspace.Budget.DiskMiB,
+        ActorSubject = actor.Subject, TraceId = actor.TraceId
     };
 
     private static WorkspaceSourceObservation SourceObservation(WorkspaceSourceRequest request, WorkspaceSourceReceipt receipt, string method) =>

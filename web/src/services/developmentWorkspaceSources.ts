@@ -1,4 +1,4 @@
-import { apiRequest } from './apiClient'
+import { apiRequest, apiUrl } from './apiClient'
 import {
   isSourceFormat,
   sameSourceArchive,
@@ -287,6 +287,17 @@ function sourceReceipt(value: unknown, workspaceId: string, importId?: string): 
 
 const scope = (id: string) => `development/workspaces/${encodeURIComponent(id)}/source-imports`
 const target = (id: string, importId: string) => `${scope(id)}/${encodeURIComponent(importId)}`
+
+export function previousSourceDownloadUrl(item: SourceImport | null) {
+  if (
+    item?.state === 'Published' &&
+    item.previousImportId &&
+    item.plan?.update &&
+    item.conflictResolution
+  )
+    return apiUrl(target(item.workspaceId, item.importId) + '/previous')
+}
+
 const request = async (
   id: string,
   importId: string,

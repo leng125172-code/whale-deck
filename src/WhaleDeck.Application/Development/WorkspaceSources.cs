@@ -57,6 +57,7 @@ public interface IWorkspaceSourceStore
     Task<WorkspaceSourceView?> CurrentAsync(Guid workspaceId, string subject, CancellationToken token);
     Task<WorkspaceSourceView?> PublishedAsync(Guid workspaceId, string subject, CancellationToken token);
     Task<WorkspaceSourceHistoryPage> HistoryAsync(Guid workspaceId, string subject, Guid? before, int take, CancellationToken token);
+    Task RecordPreviousDownloadAsync(Guid workspaceId, Guid importId, TerminalActor actor, CancellationToken token);
     Task<WorkspaceSourceView> AppendAsync(Guid workspaceId, Guid importId, TerminalActor actor, int offset, byte[] body, CancellationToken token);
     Task<WorkspaceSourceView> ConfirmAsync(Guid workspaceId, Guid importId, TerminalActor actor, WorkspaceSourceConfirmation input, CancellationToken token);
     Task<WorkspaceSourceView> CancelAsync(Guid workspaceId, Guid importId, TerminalActor actor, CancellationToken token);

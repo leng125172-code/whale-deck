@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Grpc.Core;
+using WhaleDeck.Application.Development;
 using WhaleDeck.Application.Models;
 
 namespace WhaleDeck.Api.Middleware;
@@ -21,6 +22,11 @@ public static class TraceAndErrors
             RpcException { StatusCode: StatusCode.ResourceExhausted } => (StatusCodes.Status429TooManyRequests, "AGENT_RESOURCE_BUDGET", "The Agent resource budget is exhausted. Try again later."),
             RpcException { StatusCode: StatusCode.Unavailable or StatusCode.DeadlineExceeded } => (StatusCodes.Status503ServiceUnavailable, "AGENT_UNAVAILABLE", "The Agent is temporarily unavailable."),
             RpcException { StatusCode: StatusCode.Unimplemented } => (StatusCodes.Status503ServiceUnavailable, "AGENT_CAPABILITY_UNSUPPORTED", "The Agent does not support this capability."),
+            WorkspaceSourceException { Failure: WorkspaceSourceFailure.Missing } => (StatusCodes.Status404NotFound, "WORKSPACE_SOURCE_PREVIOUS_NOT_FOUND", "The retained source is unavailable."),
+            WorkspaceSourceException { Failure: WorkspaceSourceFailure.Conflict } => (StatusCodes.Status409Conflict, "WORKSPACE_SOURCE_PREVIOUS_CHANGED", "The retained source no longer matches the publication."),
+            WorkspaceSourceException { Failure: WorkspaceSourceFailure.Rejected } => (StatusCodes.Status422UnprocessableEntity, "WORKSPACE_SOURCE_PREVIOUS_REJECTED", "The retained source cannot be exported."),
+            WorkspaceSourceException { Failure: WorkspaceSourceFailure.Integrity } => (StatusCodes.Status502BadGateway, "WORKSPACE_SOURCE_PREVIOUS_INCOMPLETE", "The retained source export could not be verified."),
+            WorkspaceSourceException => (StatusCodes.Status503ServiceUnavailable, "WORKSPACE_SOURCE_PREVIOUS_UNAVAILABLE", "The retained source export is temporarily unavailable."),
             UnauthorizedAccessException => (StatusCodes.Status403Forbidden, "AUTH_FORBIDDEN", "The operation is not permitted."),
             NotificationSnapshotUnavailableException => (StatusCodes.Status404NotFound, "NOTIFICATION_READ_SNAPSHOT_UNAVAILABLE", "The notification read snapshot is unavailable. Prepare a new snapshot."),
             KeyNotFoundException => (StatusCodes.Status404NotFound, "RESOURCE_NOT_FOUND", "The requested resource was not found."),

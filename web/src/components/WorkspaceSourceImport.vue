@@ -15,6 +15,7 @@ import { workspaceError } from '@/services/developmentWorkspaces'
 import {
   sameSourcePlan,
   sameSourceOrigin,
+  previousSourceDownloadUrl,
   sourceStates,
   validGitRef,
   workspaceSources as api,
@@ -94,6 +95,7 @@ const conflictErrors: Record<string, string> = {
   WORKSPACE_SOURCE_WORK_CHANGED: '工作树在暂存后发生变化。请重新获取源码并核对新计划。',
   WORKSPACE_SOURCE_WORK_DIRTY: '工作树含未发布修改。请保留旧树后替换，或清理后重新获取源码。',
 }
+const publishedDownload = computed(() => previousSourceDownloadUrl(published.value))
 const percentage = computed(() =>
   current.value?.archive.archiveBytes
     ? Math.floor((100 * current.value.receivedBytes) / current.value.archive.archiveBytes)
@@ -606,6 +608,9 @@ function cancel() {
         <el-button :disabled="!!busy" :loading="busy === 'refresh'" @click="refresh"
           >刷新导入状态</el-button
         >
+        <el-button v-if="publishedDownload" tag="a" :href="publishedDownload" download
+          >下载留存旧树</el-button
+        >
         <el-button
           v-if="!denied"
           :disabled="!!busy"
@@ -634,6 +639,14 @@ function cancel() {
             <time v-if="entry.finishedAtUtc" :datetime="entry.finishedAtUtc">{{
               new Date(entry.finishedAtUtc).toLocaleString()
             }}</time>
+            <el-button
+              v-if="previousSourceDownloadUrl(entry)"
+              tag="a"
+              :href="previousSourceDownloadUrl(entry)"
+              download
+              size="small"
+              >下载该次更新的旧树</el-button
+            >
           </li>
         </ul>
         <el-button v-if="before" :disabled="!!busy" @click="loadHistory(true)"

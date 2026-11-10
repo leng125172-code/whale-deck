@@ -16,7 +16,7 @@ public sealed partial class AgentGateway
             claim.Workspace.State != WorkspaceStorageAllocation.Allocated) throw GitIntegrity();
         var request = new WorkspaceGitRequest
         {
-            Storage = SourceStorage(claim), ImportId = claim.Import.ImportId.ToString("N"), RepositoryId = git.RepositoryId,
+            Storage = SourceStorage(claim.Workspace, claim.Actor), ImportId = claim.Import.ImportId.ToString("N"), RepositoryId = git.RepositoryId,
             Ref = git.Snapshot?.ResolvedObject ?? git.Ref, CredentialRef = claim.GitCredentialRef ?? ""
         };
         if (!DevelopmentGitBinding.IsValid(request)) throw GitIntegrity();

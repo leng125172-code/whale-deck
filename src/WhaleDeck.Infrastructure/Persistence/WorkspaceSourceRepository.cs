@@ -87,6 +87,17 @@ public sealed class WorkspaceSourceRepository(PlatformDbContext db, TimeProvider
         return row is null ? null : View(row);
     }
 
+    public async Task RecordPreviousDownloadAsync(Guid workspaceId, Guid importId, TerminalActor actor, CancellationToken token)
+    {
+        var row = await db.WorkspaceSourceIntents.AsNoTracking().SingleOrDefaultAsync(item =>
+            item.Id == importId && item.WorkspaceId == workspaceId && item.OwnerSubject == actor.Subject &&
+            item.State == Published && item.PreviousImportId != null, token)
+            ?? throw new KeyNotFoundException("WORKSPACE_SOURCE_PREVIOUS_NOT_FOUND");
+        // Records authorization to export, not delivery to the browser.
+        Audit(row, actor.TraceId, "download-previous-authorized");
+        await db.SaveChangesAsync(token);
+    }
+
     private IQueryable<WorkspaceSourceIntent> PublishedHeads(Guid workspaceId, string subject) =>
         db.WorkspaceSourceIntents.AsNoTracking().Where(row => row.WorkspaceId == workspaceId && row.OwnerSubject == subject &&
             row.State == Published && !db.WorkspaceSourceIntents.Any(successor => successor.PreviousImportId == row.Id &&

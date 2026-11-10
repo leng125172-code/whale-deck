@@ -85,6 +85,7 @@ public sealed partial class ContainerUploadHttpTests
                 services.AddSingleton(policy);
                 services.AddSingleton<IPrivilegedIdentityDirectory>(identities);
                 services.AddSingleton<IWorkspaceSourceGateway>(host);
+                services.AddSingleton<IWorkspaceSourceDownloadGateway>(gateway);
                 services.AddSingleton(_ => new WorkspaceSourceProtector(settings));
                 services.AddScoped(_ => new PlatformDbContext(options));
                 services.AddScoped<IDevelopmentWorkspaceRegistry, DevelopmentWorkspaceRegistry>();
@@ -95,6 +96,7 @@ public sealed partial class ContainerUploadHttpTests
                 services.AddScoped<WorkspaceRuns>();
                 services.AddScoped<IWorkspaceSourceStore, WorkspaceSourceRepository>();
                 services.AddScoped<WorkspaceSources>();
+                services.AddScoped<WorkspaceSourceDownloads>();
                 services.AddScoped<WorkspaceSourceDispatcher>();
             });
             using var owner = await server.Client("developer-subject", false, TimeSpan.FromHours(2));
@@ -240,6 +242,7 @@ public sealed partial class ContainerUploadHttpTests
             Assert.Equal(WorkspaceSources.Publishing, pendingUpdate.State);
             Assert.Equal(WorkspaceSources.RetainAndReplace, pendingUpdate.ConflictResolution);
             Assert.Equal(id, (await PublishedHead()).ImportId);
+            await Expect(HttpMethod.Get, Url(replacement) + "/previous", null, HttpStatusCode.NotFound, owner, null);
             clock.Advance(6);
             await Tick();
             var publishedUpdate = await PublishedHead();
@@ -256,6 +259,60 @@ public sealed partial class ContainerUploadHttpTests
                 HttpStatusCode.Accepted, owner, csrf);
             Assert.Empty(await db.WorkspaceSourceChunks.AsNoTracking().ToArrayAsync());
             Console.WriteLine("INBOX_PHASE=workspace-git-update-real-http-uds-grpc-postgres-confirmed-choice-fence-and-recovery");
+
+            var download = Url(replacement) + "/previous";
+            using var anonymous = await server.Client("anonymous", false);
+            using var other = await server.Client("admin-subject", true);
+            await Expect(HttpMethod.Get, download, null, HttpStatusCode.Unauthorized, anonymous, null);
+            using (var forbidden = await other.GetAsync(download))
+                Assert.Contains(forbidden.StatusCode, new[] { HttpStatusCode.Forbidden, HttpStatusCode.NotFound });
+            await Expect(HttpMethod.Get, Url(id) + "/previous", null, HttpStatusCode.NotFound, owner, null);
+            using (var range = new HttpRequestMessage(HttpMethod.Get, download))
+            {
+                range.Headers.Range = new RangeHeaderValue(0, 32);
+                using var rejected = await owner.SendAsync(range);
+                Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+            }
+            Assert.Equal(0, updateHost.Exports);
+            using (var attachment = await owner.GetAsync(download))
+            {
+                Assert.Equal(HttpStatusCode.OK, attachment.StatusCode);
+                Assert.Equal("application/x-tar", attachment.Content.Headers.ContentType?.MediaType);
+                Assert.Equal($"workspace-previous-{replacement:N}.tar", attachment.Content.Headers.ContentDisposition?.FileName);
+                Assert.True(attachment.Headers.CacheControl?.NoStore);
+                Assert.Equal("nosniff", Assert.Single(attachment.Headers.GetValues("X-Content-Type-Options")));
+                Assert.Equal(upstream.Bytes, await attachment.Content.ReadAsByteArrayAsync());
+            }
+            updateHost.ExportMode = "bad-offset";
+            await Expect(HttpMethod.Get, download, null, HttpStatusCode.BadGateway, owner, null);
+            await Incomplete("bad-digest");
+            await Incomplete("failed-after-footer");
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            updateHost.ExportMode = null;
+            updateHost.ExportFooterGate = release.Task;
+            using (var revoked = await owner.GetAsync(download, HttpCompletionOption.ResponseHeadersRead).WaitAsync(TimeSpan.FromSeconds(10)))
+            {
+                Assert.Equal(HttpStatusCode.OK, revoked.StatusCode);
+                identities.LiveMembership = false;
+                release.SetResult();
+                await Assert.ThrowsAnyAsync<HttpRequestException>(() => revoked.Content.ReadAsByteArrayAsync());
+                identities.LiveMembership = true;
+            }
+            updateHost.ExportFooterGate = null;
+            Assert.Equal(upstream.Bytes, await owner.GetByteArrayAsync(download));
+            var exportAudits = await db.AuditEvents.AsNoTracking().Where(row =>
+                row.Action == "development.workspace.source.download-previous-authorized" && row.TargetId == replacement.ToString("D")).ToArrayAsync();
+            Assert.Equal(6, exportAudits.Length);
+            Assert.All(exportAudits, row => Assert.Equal("developer-subject", row.ActorSubject));
+            Console.WriteLine("INBOX_PHASE=workspace-git-previous-real-http-uds-postgres-owner-audit-verified-completion-and-revocation");
+
+            async Task Incomplete(string mode)
+            {
+                updateHost.ExportMode = mode;
+                using var response = await owner.GetAsync(download, HttpCompletionOption.ResponseHeadersRead);
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                await Assert.ThrowsAnyAsync<HttpRequestException>(() => response.Content.ReadAsByteArrayAsync());
+            }
 
             string Url(Guid item) => $"{collection}/{item:D}";
             async Task<WorkspaceSourceView> Read(Guid item) => (await owner.GetFromJsonAsync<WorkspaceSourceView>(Url(item)))!;
@@ -291,8 +348,9 @@ public sealed partial class ContainerUploadHttpTests
         public override Task<CapabilitiesResponse> GetCapabilities(Empty request, ServerCallContext context) => Task.FromResult(
             new CapabilitiesResponse
             {
-                ProtocolMajor = 1, ProtocolMinor = DevelopmentSourceBinding.UpdateProtocolMinor,
-                Capabilities = { DevelopmentGitBinding.Capability, DevelopmentSourceBinding.Capability, DevelopmentSourceBinding.UpdateCapability }
+                ProtocolMajor = 1, ProtocolMinor = DevelopmentSourceBinding.PreviousProtocolMinor,
+                Capabilities = { DevelopmentGitBinding.Capability, DevelopmentSourceBinding.Capability, DevelopmentSourceBinding.UpdateCapability,
+                    DevelopmentSourceBinding.PreviousCapability }
             });
     }
 
@@ -303,6 +361,33 @@ public sealed partial class ContainerUploadHttpTests
         public bool RejectLateWrite { get; set; }
         public bool LoseExchangeReply { get; set; }
         public int Exchanges { get; private set; }
+        public int Exports { get; private set; }
+        public string? ExportMode { get; set; }
+        public Task? ExportFooterGate { get; set; }
+
+        public override async Task ExportPrevious(WorkspaceSourceRequest request,
+            IServerStreamWriter<WorkspaceSourceExportFrame> response, ServerCallContext context)
+        {
+            Authorize(request, context);
+            Exports++;
+            var receipt = Find(request);
+            Assert.Equal("Published", receipt.State);
+            Assert.Equal(receipt.PreviousImportId, request.PreviousImportId);
+            Assert.Equal(receipt.PlanSha256, request.PlanSha256);
+            Assert.Equal(WorkspaceSourceConflictResolution.RetainAndReplace, request.ConflictResolution);
+            var mode = ExportMode;
+            ulong offset = mode == "bad-offset" ? 1UL : 0UL;
+            foreach (var chunk in expectedArchive.Chunk(DevelopmentSourceBinding.ChunkBytes))
+            {
+                await response.WriteAsync(new() { Offset = offset, Content = ByteString.CopyFrom(chunk) });
+                offset += (ulong)chunk.Length;
+                if (mode == "bad-offset") return;
+            }
+            if (ExportFooterGate is { } gate) await gate.WaitAsync(context.CancellationToken);
+            var hash = mode == "bad-digest" ? new string('0', 64) : Convert.ToHexStringLower(SHA256.HashData(expectedArchive));
+            await response.WriteAsync(new() { Offset = offset, ArchiveSha256 = hash });
+            if (mode == "failed-after-footer") throw new RpcException(new Status(StatusCode.Unavailable, "controlled export interruption"));
+        }
 
         public override async Task<WorkspaceSourceReceipt> StageUpdate(IAsyncStreamReader<WorkspaceSourceFrame> requestStream, ServerCallContext context)
         {
