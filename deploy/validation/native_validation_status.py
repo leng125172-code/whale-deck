@@ -10,7 +10,9 @@ import uuid
 
 class NativeValidationStatus:
     allowed = frozenset(('state', 'stage', 'sdkImageId', 'containerName', 'executedTests',
-        'passedTests', 'cleanupConfirmed', 'failureType', 'finishedAtUtc', 'nativePhases'))
+        'passedTests', 'cleanupConfirmed', 'failureType', 'finishedAtUtc', 'nativePhases',
+        'containerExitCode', 'containerOomKilled', 'restoredProjects', 'compiledProjects',
+        'testExecutionStarted', 'outOfMemoryReported', 'sdkMemoryLimitMiB'))
 
     def __init__(self, root: Path, suite: str, source_sha: str):
         if suite not in ('capacity', 'metrics', 'alerts', 'notifications', 'dispatch', 'snapshots'):

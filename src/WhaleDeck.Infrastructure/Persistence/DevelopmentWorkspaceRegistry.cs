@@ -28,7 +28,7 @@ public sealed class DevelopmentWorkspaceRegistry(PlatformDbContext db) : IDevelo
 
             if (await db.DevelopmentWorkspaces.AnyAsync(row => row.Slug == workspace.Slug, token))
                 throw new InvalidOperationException("WORKSPACE_SLUG_CONFLICT");
-            var totals = await db.DevelopmentWorkspaces.GroupBy(_ => 1).Select(rows => new
+            var totals = await db.DevelopmentWorkspaces.Where(row => !db.WorkspaceRetirementCompletions.Any(done => done.WorkspaceId == row.Id)).GroupBy(_ => 1).Select(rows => new
             {
                 Cpu = rows.Sum(row => (long)row.CpuMillis), Memory = rows.Sum(row => (long)row.MemoryMiB),
                 Disk = rows.Sum(row => (long)row.DiskMiB)

@@ -37,7 +37,7 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
         if (await db.WorkspaceLifecycleIntents.AnyAsync(row => row.WorkspaceId == workspace.Id && row.FinishedAtUtc == null, token) ||
             await db.WorkspaceRetirementIntents.AnyAsync(row => row.WorkspaceId == workspace.Id && row.FinishedAtUtc == null, token))
             throw new InvalidOperationException("WORKSPACE_RETIREMENT_ALREADY_PENDING");
-        _ = await Evidence(workspace, archiveId, token);
+        _ = await Evidence(db, workspace, archiveId, token);
         var now = Now();
         var job = new OperationJob { JobType = WorkspaceRetirementPreparations.JobType, ActorSubject = actor.Subject,
             ResourceId = workspace.Id, IdempotencyKey = key.ToString("D"), RequestJson = request, CreatedAtUtc = now, Phase = "Plan" };
@@ -72,7 +72,7 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
             !row.CancelRequested && row.PlanJson is not null) return null;
         var snapshot = RequireFence(workspace, row);
         if (row.CancelRequested) { Cancel(workspace, row, job, new(row.ExecutionSubject, null, [], row.LoginBinding, row.Id.ToString("N"), null), now); return null; }
-        _ = await Evidence(snapshot, row.ArchiveId, token);
+        _ = await Evidence(db, snapshot, row.ArchiveId, token);
         var lease = Guid.NewGuid(); row.Lease = lease; row.LeaseUntilUtc = now.AddSeconds(90);
         job.StartedAtUtc ??= now; job.State = "Running";
         return new(View(row, job), snapshot, new(row.ExecutionSubject, null, [], row.LoginBinding, row.Id.ToString("N"), null), lease);
@@ -85,7 +85,7 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
         if (row.FinishedAtUtc is not null || row.Lease != claim.Lease || row.LeaseUntilUtc <= Now()) return false;
         var snapshot = RequireFence(workspace, row); var job = await Job(row, token); var now = Now();
         if (row.CancelRequested) { Cancel(workspace, row, job, claim.Actor, now); return true; }
-        var evidence = await Evidence(snapshot, row.ArchiveId, token);
+        var evidence = await Evidence(db, snapshot, row.ArchiveId, token);
         if (!DevelopmentRetirementPlanBinding.Matches(evidence.Request, evidence.Receipt, hostPlanJson))
             throw new InvalidDataException("WORKSPACE_RETIREMENT_PLAN_INVALID");
         row.PlanJson = hostPlanJson; row.PlanExpiresAtUtc = now.AddMinutes(10); row.Lease = null; row.LeaseUntilUtc = null;
@@ -102,7 +102,7 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
         if (row.FinishedAtUtc is not null || row.CancelRequested || row.PlanJson is null || row.PlanExpiresAtUtc <= Now() ||
             !DevelopmentLifecycleBinding.Digest(planSha256) || Digest(row.PlanJson) != planSha256)
             throw new InvalidOperationException("WORKSPACE_RETIREMENT_PLAN_CHANGED");
-        _ = RequireFence(workspace, row); _ = await Evidence(ReadSnapshot(row), row.ArchiveId, token);
+        _ = RequireFence(workspace, row); _ = await Evidence(db, ReadSnapshot(row), row.ArchiveId, token);
         if (row.LeaseUntilUtc > Now()) throw new InvalidOperationException("WORKSPACE_RETIREMENT_WORKER_BUSY");
         if (row.ConfirmedAtUtc is not null) return View(row, job);
         // This acknowledges the preparation only. It cannot start a host task,
@@ -129,7 +129,7 @@ public sealed class WorkspaceRetirementPreparationRepository(PlatformDbContext d
         return View(row, job);
     }, token);
 
-    private async Task<(WorkspaceArchiveRequest Request, WorkspaceArchiveReceipt Receipt)> Evidence(WorkspaceDefinition workspace, Guid archiveId, CancellationToken token)
+    internal static async Task<(WorkspaceArchiveRequest Request, WorkspaceArchiveReceipt Receipt)> Evidence(PlatformDbContext db, WorkspaceDefinition workspace, Guid archiveId, CancellationToken token)
     {
         var archive = await db.WorkspaceArchiveIntents.AsNoTracking().SingleOrDefaultAsync(row => row.Id == archiveId && row.WorkspaceId == workspace.Id, token);
         var job = await db.OperationJobs.AsNoTracking().SingleOrDefaultAsync(row => row.Id == archiveId && row.JobType == WorkspaceArchives.JobType, token);

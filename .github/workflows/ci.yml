@@ -439,6 +439,7 @@ jobs:
           counters = next(item for item in tree.iter() if item.tag.endswith('Counters'))
           assert counters.attrib['executed'] == counters.attrib['passed'] == counters.attrib['total'] == '1', 'Native test did not actually execute and pass'
           assert 'workspace-retirement-preparation-postgres-replay-row-fence-lease-expiry-ack-cancel-budget-retained' in ''.join(tree.getroot().itertext()), 'Workspace retirement preparation boundaries were not executed'
+          assert 'workspace-retirement-execution-postgres-fixed-task-fence-proof-audit-rollback-tombstone-budget-history' in ''.join(tree.getroot().itertext()), 'Workspace retirement execution boundaries were not executed'
           PY
 
   native-valkey:

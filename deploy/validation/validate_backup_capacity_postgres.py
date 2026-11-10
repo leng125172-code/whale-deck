@@ -95,7 +95,7 @@ def run_native(suite, report):
                 if suite == 'metrics':
                     stream.write('WHALEDECK_METRIC_LOAD_VALIDATION=1\n')
             identity = command(['docker', 'create', '--name', container, '--read-only', '--cap-drop', 'ALL',
-                '--security-opt', 'no-new-privileges', '--memory', '1536m', '--cpus', '2', '--pids-limit', '256',
+                '--security-opt', 'no-new-privileges', '--memory', '4096m', '--cpus', '2', '--pids-limit', '256',
                 '--user', str(os.getuid()) + ':' + str(os.getgid()), '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m',
                 '--log-driver', 'local', '--log-opt', 'max-size=2m', '--log-opt', 'max-file=2',
                 '--env-file', str(environment), '--env', 'DOTNET_CLI_HOME=/scratch/home', '--env', 'NUGET_PACKAGES=/scratch/packages',
@@ -103,12 +103,13 @@ def run_native(suite, report):
                 '--mount', 'type=bind,source=' + str(public_source) + ',target=/repo,readonly',
                 '--mount', 'type=bind,source=' + scratch + ',target=/scratch', '--workdir', '/repo', sdk_identity,
                 'dotnet', 'test', 'tests/WhaleDeck.IntegrationTests/WhaleDeck.IntegrationTests.csproj',
+                '--disable-build-servers', '-m:1', '-p:UseSharedCompilation=false',
                 '--configuration', 'Release', '--artifacts-path', '/scratch/build', '--logger', 'console;verbosity=normal',
                 '--logger', 'trx;LogFileName=native.trx', '--results-directory', '/scratch/results', '--filter',
                 'FullyQualifiedName~' + {'capacity': 'NativeBackupCapacityTests', 'metrics': 'NativeMetricAggregationTests', 'alerts': 'NativeMonitoringAlertsTests', 'notifications': 'NativeNotificationInboxTests', 'dispatch': 'NativeNotificationDispatchTests', 'snapshots': 'NativeNotificationSnapshotTests'}[suite]]).strip()
             assert re.fullmatch(r'[a-f0-9]{64}', identity)
             command(['docker', 'network', 'connect', common[0], identity])
-            report.update(state='Running', stage='test', sdkImageId=sdk_identity, containerName=container)
+            report.update(state='Running', stage='test', sdkImageId=sdk_identity, containerName=container, sdkMemoryLimitMiB=4096)
             try:
                 completed = subprocess.run(['docker', 'start', '-a', identity], check=False, text=True,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
@@ -118,24 +119,39 @@ def run_native(suite, report):
                 phases = re.findall(r'INBOX_PHASE=([a-z-]+)', partial)
                 # Public progress only: never print the captured exception/SQL/connection payload.
                 progress = {'restoredProjects': partial.count('Restored '),
-                    'testExecutionStarted': 'Starting test execution' in partial,
+                    'testExecutionStarted': 'Starting test execution' in partial or 'test files matched' in partial,
                     'inboxPhases': phases[-8:]}
                 raise RuntimeError('Isolated native ' + suite + ' deadline expired; public progress=' + json.dumps(progress)) from None
             output = completed.stdout + completed.stderr
-            status = command(['docker', 'inspect', '--format', '{{.State.ExitCode}}', identity]).strip()
+            test_started = 'Starting test execution' in output or 'test files matched' in output
+            state = json.loads(command(['docker', 'inspect', '--format', '{{json .State}}', identity]))
+            status = str(state['ExitCode'])
+            report.update(containerExitCode=state['ExitCode'], containerOomKilled=state['OOMKilled'],
+                restoredProjects=output.count('Restored '), compiledProjects=output.count(' -> '),
+                testExecutionStarted=test_started,
+                outOfMemoryReported=any(marker in output for marker in ('Out of memory', 'out of memory', 'OutOfMemoryException')))
             if status != '0':
                 diagnostics = [line for line in output.splitlines() if re.search(r': error (?:CS|CA|IDE|NU|NETSDK|MSB)\d+', line)][:8]
+                if not test_started:
+                    diagnostics += [line for line in output.splitlines() if ': error :' in line][:4]
                 startup_failed = 'NuGet-Migrations' in output and 'System.Threading.Mutex' in output
                 # Only stable exception/code tokens; never connection strings or native SQL values.
                 error_types = sorted(set(re.findall(r'\b(?:[A-Za-z]+\.)*(?:PostgresException|InvalidOperationException|EqualException|TrueException|SingleException|NotNullException|NullException|InRangeException)\b', output)))
                 sql_states = sorted(set(re.findall(r'\b([0-9A-Z]{5}):\s', output)))
                 source_lines = re.findall(r'NativeNotification(?:Inbox|Dispatch|Snapshot)Tests(?:\.[A-Za-z0-9_-]{1,80})?\.cs:line ([0-9]+)', output)
-                source_locations = re.findall(r'(NativeNotification(?:Inbox|Dispatch|Snapshot)Tests(?:\.[A-Za-z0-9_-]{1,80})?\.cs):line ([0-9]+)', output)
+                source_locations = re.findall(r'((?:NativeNotification(?:Inbox|Dispatch|Snapshot)Tests|ContainerUploadHttpTests)(?:\.[A-Za-z0-9_-]{1,80})?\.cs):line ([0-9]+)', output)
                 constraints = sorted(set(re.findall(r'constraint "(ck_[a-z0-9_]{1,120})"', output)))
                 assertions = sorted(set(re.findall(r'Assert\.([A-Za-z]{1,40})\(\) Failure', output)))
+                assertion_no_exception = 'No exception was thrown' in output
+                exception_types = sorted(set(re.findall(r'(?:Expected|Actual):\s+typeof\(([A-Za-z0-9_.]{1,160})\)', output)))
+                sql_states += sorted(set(re.findall(r'SqlState:\s+([0-9A-Z]{5})\b', output)))
+                application_codes = sorted(set(re.findall(r'\bWORKSPACE_[A-Z_]{1,100}\b', output)))
                 raise RuntimeError('Isolated native ' + suite + ' test failed: ' + ('\n'.join(diagnostics) if diagnostics else
-                    'native failure types=' + ','.join(error_types) + ' sdkMutexStartupFailed=' + str(startup_failed) + ' SQLSTATE=' + ','.join(sql_states) +
+                    'native exit=' + status + ' oomKilled=' + str(state['OOMKilled']) + ' compiledProjects=' + str(output.count(' -> ')) +
+                    ' testStarted=' + str(test_started) + ' failure types=' + ','.join(error_types) + ' sdkMutexStartupFailed=' + str(startup_failed) + ' SQLSTATE=' + ','.join(sql_states) +
                     ' constraints=' + ','.join(constraints) + ' inboxSourceLines=' + ','.join(source_lines[:8]) + ' assertions=' + ','.join(assertions) +
+                    ' assertionNoException=' + str(assertion_no_exception) + ' exceptionTypes=' + ','.join(exception_types) +
+                    ' applicationCodes=' + ','.join(application_codes[:8]) +
                     ' sourceLocations=' + ','.join(name + ':' + line for name, line in source_locations[:8]) +
                     ' publicPhases=' + ','.join(re.findall(r'INBOX_PHASE=([a-z-]{1,160})', output)[-5:]) + '; private output withheld'))
             results = ET.parse(scratch_path / 'results/native.trx').getroot()
@@ -147,6 +163,7 @@ def run_native(suite, report):
             assert len(runs) == 1 and runs[0].get('outcome') == 'Passed', 'Native result is not one complete passed execution'
             phases = re.findall(r'INBOX_PHASE=([a-z-]{1,160})', output)
             if suite == 'dispatch':
+                assert 'workspace-retirement-execution-postgres-fixed-task-fence-proof-audit-rollback-tombstone-budget-history' in phases, 'Workspace retirement execution persistence boundaries were not executed'
                 assert 'workspace-retirement-preparation-postgres-replay-row-fence-lease-expiry-ack-cancel-budget-retained' in phases, 'Workspace retirement preparation persistence boundaries were not executed'
                 assert 'container-recycle-restore-job-safe-summary-source-attribution-nullable-audit-projection' in phases, 'Independent restore safe job summary was not executed'
                 assert 'container-recycle-restore-source-locked-persistent-nullable-unknown-fourteen-fences-audited' in phases, 'Independent recycle restore persistence boundaries were not executed'

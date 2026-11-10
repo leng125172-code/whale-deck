@@ -4924,7 +4924,7 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                     b.ToTable("development_workspaces", null, t =>
                         {
-                            t.HasCheckConstraint("ck_development_workspace_lifecycle", "lifecycle_version >= 1 AND\n(CASE lifecycle_state\n    WHEN 'Active' THEN lifecycle_version % 2 = 1\n    WHEN 'Stopping' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'\n    WHEN 'Stopped' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'\n    WHEN 'Retiring' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'\n    WHEN 'Resuming' THEN lifecycle_version >= 3 AND lifecycle_version % 2 = 1 AND state = 'StorageAllocated'\n    ELSE FALSE END) IS TRUE");
+                            t.HasCheckConstraint("ck_development_workspace_lifecycle", "lifecycle_version >= 1 AND\n(CASE lifecycle_state\n    WHEN 'Active' THEN lifecycle_version % 2 = 1\n    WHEN 'Stopping' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'\n    WHEN 'Stopped' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'\n    WHEN 'Retiring' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'\n    WHEN 'Retired' THEN lifecycle_version % 2 = 0 AND state = 'StorageAllocated'\n    WHEN 'Resuming' THEN lifecycle_version >= 3 AND lifecycle_version % 2 = 1 AND state = 'StorageAllocated'\n    ELSE FALSE END) IS TRUE");
 
                             t.HasCheckConstraint("ck_development_workspace_manifest", "octet_length(environment_json) BETWEEN 1 AND 4096 AND environment_sha256 = encode(sha256(convert_to(environment_json,'UTF8')),'hex') AND request_sha256 ~ '^[a-f0-9]{64}$'");
 
@@ -9223,6 +9223,35 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementCompletion", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.Property<DateTimeOffset>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<Guid>("ExecuteStepId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execute_step_id");
+
+                    b.Property<Guid>("RetirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("retirement_id");
+
+                    b.HasKey("WorkspaceId");
+
+                    b.HasIndex("ExecuteStepId")
+                        .IsUnique();
+
+                    b.HasIndex("RetirementId")
+                        .IsUnique();
+
+                    b.ToTable("development_workspace_retirement_completions", (string)null);
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementIntent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9310,6 +9339,180 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_workspace_retirement_plan", "(plan_json IS NULL) = (plan_expires_at_utc IS NULL) AND (confirmed_at_utc IS NULL OR plan_json IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_workspace_retirement_size", "octet_length(snapshot_json::text) BETWEEN 1 AND 16384 AND (plan_json IS NULL OR octet_length(plan_json::text) BETWEEN 1 AND 8192)");
+                        });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementStep", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("DispatchedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dispatched_at_utc");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("phase");
+
+                    b.Property<string>("ProofJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("proof_json");
+
+                    b.Property<string>("RequestJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("request_json");
+
+                    b.Property<Guid>("RetirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("retirement_id");
+
+                    b.Property<DateTimeOffset?>("SettledAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("settled_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RetirementId", "Phase")
+                        .IsUnique();
+
+                    b.ToTable("development_workspace_retirement_steps", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_retire_step_phase", "phase IN ('plan','execute')");
+
+                            t.HasCheckConstraint("ck_workspace_retire_step_proof", "proof_json IS NULL OR octet_length(proof_json::text) BETWEEN 1 AND 32768");
+
+                            t.HasCheckConstraint("ck_workspace_retire_step_request", "octet_length(request_json) BETWEEN 1 AND 4096");
+
+                            t.HasCheckConstraint("ck_workspace_retire_step_settled", "settled_at_utc IS NULL OR proof_json IS NOT NULL");
+                        });
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementWorkflow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ArchiveId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("archive_id");
+
+                    b.Property<string>("ArchivePlanSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("archive_plan_sha256");
+
+                    b.Property<bool>("AttentionRequired")
+                        .HasColumnType("boolean")
+                        .HasColumnName("attention_required");
+
+                    b.Property<bool>("AuthorizationRequired")
+                        .HasColumnType("boolean")
+                        .HasColumnName("authorization_required");
+
+                    b.Property<DateTimeOffset>("AvailableAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("available_at_utc");
+
+                    b.Property<bool>("CancelRequested")
+                        .HasColumnType("boolean")
+                        .HasColumnName("cancel_requested");
+
+                    b.Property<string>("CaptureReceiptSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("capture_receipt_sha256");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at_utc");
+
+                    b.Property<string>("ExecutionJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("execution_json");
+
+                    b.Property<string>("ExecutionSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("execution_subject");
+
+                    b.Property<long>("ExpectedEpoch")
+                        .HasColumnType("bigint")
+                        .HasColumnName("expected_epoch");
+
+                    b.Property<DateTimeOffset?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at_utc");
+
+                    b.Property<Guid?>("Lease")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease");
+
+                    b.Property<DateTimeOffset?>("LeaseUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until_utc");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("phase");
+
+                    b.Property<DateTimeOffset?>("PlanExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("plan_expires_at_utc");
+
+                    b.Property<string>("PlanJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("plan_json");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("snapshot_json");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArchiveId");
+
+                    b.HasIndex("WorkspaceId")
+                        .IsUnique()
+                        .HasFilter("finished_at_utc IS NULL");
+
+                    b.HasIndex("AvailableAtUtc", "Id")
+                        .HasFilter("finished_at_utc IS NULL");
+
+                    b.ToTable("development_workspace_retirement_workflows", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_retire_digests", "archive_plan_sha256 ~ '^[a-f0-9]{64}$' AND capture_receipt_sha256 ~ '^[a-f0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_workspace_retire_epoch", "expected_epoch >= 2 AND expected_epoch % 2 = 0");
+
+                            t.HasCheckConstraint("ck_workspace_retire_lease", "(lease IS NULL) = (lease_until_utc IS NULL) AND (finished_at_utc IS NULL OR lease IS NULL)");
+
+                            t.HasCheckConstraint("ck_workspace_retire_phase", "phase IN ('plan','execute') AND (phase <> 'execute' OR confirmed_at_utc IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_workspace_retire_plan", "(plan_json IS NULL) = (plan_expires_at_utc IS NULL) AND (confirmed_at_utc IS NULL OR plan_json IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_workspace_retire_size", "octet_length(snapshot_json::text) BETWEEN 1 AND 16384 AND (plan_json IS NULL OR octet_length(plan_json::text) BETWEEN 1 AND 8192) AND (execution_json IS NULL OR octet_length(execution_json::text) BETWEEN 1 AND 8192)");
                         });
                 });
 
@@ -10251,6 +10454,29 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementCompletion", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceRetirementStep", null)
+                        .WithOne()
+                        .HasForeignKey("WhaleDeck.Domain.Entities.WorkspaceRetirementCompletion", "ExecuteStepId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceRetirementWorkflow", null)
+                        .WithOne()
+                        .HasForeignKey("WhaleDeck.Domain.Entities.WorkspaceRetirementCompletion", "RetirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_development_workspace_retirement_completions_development_w~1");
+
+                    b.HasOne("WhaleDeck.Domain.Entities.DevelopmentWorkspaceRecord", null)
+                        .WithOne()
+                        .HasForeignKey("WhaleDeck.Domain.Entities.WorkspaceRetirementCompletion", "WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_development_workspace_retirement_completions_development_w~2");
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementIntent", b =>
                 {
                     b.HasOne("WhaleDeck.Domain.Entities.WorkspaceArchiveIntent", null)
@@ -10270,6 +10496,37 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementStep", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceRetirementWorkflow", null)
+                        .WithMany()
+                        .HasForeignKey("RetirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementWorkflow", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceArchiveIntent", null)
+                        .WithMany()
+                        .HasForeignKey("ArchiveId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
+                        .WithOne()
+                        .HasForeignKey("WhaleDeck.Domain.Entities.WorkspaceRetirementWorkflow", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.DevelopmentWorkspaceRecord", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_development_workspace_retirement_workflows_development_wor~1");
                 });
 
             modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRunIntent", b =>
