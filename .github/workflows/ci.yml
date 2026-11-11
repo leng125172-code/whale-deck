@@ -339,7 +339,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - name: Publish fixed self-contained maintenance candidate
@@ -366,7 +366,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - run: dotnet restore
@@ -408,7 +408,7 @@ jobs:
           --health-retries 12
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - name: Create isolated application-owned native database
@@ -460,7 +460,7 @@ jobs:
           --health-retries 12
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - name: Restrict the disposable session fixture to its own key namespace
