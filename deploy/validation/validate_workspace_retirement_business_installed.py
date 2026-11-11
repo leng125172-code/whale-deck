@@ -36,7 +36,8 @@ SOURCES = ('validate_workspace_retirement_business_installed.py', 'validate_deve
     'installed_recovery_authority.mjs', 'owned_recovery_authority.py',
     'installed_retirement_interruption.mjs', 'interrupt_qa_retirement_execution.py',
     'installed_retirement_stop.mjs', 'pause_qa_retirement_execution.py',
-    'installed_recovery_administrator.mjs', 'retirement_administrator_proof.py')
+    'installed_recovery_administrator.mjs', 'retirement_administrator_proof.py',
+    'installed_recovery_takeover.mjs', 'owned_recovery_takeover.py')
 
 
 def require_disks_preserved(before, after):
@@ -58,6 +59,9 @@ def main():
     interrupt = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE') == '1'
     stopped = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_STOP_PROBE') == '1'
     administrator = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_ADMINISTRATOR_PROBE') == '1'
+    takeover = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_PROBE') == '1'
+    if takeover:
+        assert administrator and not (interrupt or stopped)
     if administrator:
         assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1'
         assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') != '1'
@@ -107,7 +111,7 @@ def main():
                     save(evidence, f'attempt-{attempt}-source-sha256.json', sources)
                     payload = dict(revision=revision, evidence=str(evidence), slug=slug, accounts=accounts,
                         archive=str(archive), archiveSha256=hashlib.sha256(content).hexdigest(), retirementProbe=True,
-                        recoveryAdministrator=administrator,
+                        recoveryAdministrator=administrator, revokedOwnerTakeover=takeover,
                         authorityProbe=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1', authorityAttempt=attempt,
                         authorityKind=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_KIND', 'group-removal'))
                     # Browser process belongs to this wrapper; credentials only
@@ -116,15 +120,16 @@ def main():
                         result = subprocess.run(['node', str(Path(__file__).with_name('validate_development_installed_runtime.mjs'))],
                             input=json.dumps(payload), text=True, capture_output=True, timeout=1200)
                     finally:
-                        intent = evidence / f'authority-{attempt}-intent.json'
-                        restored = evidence / f'authority-{attempt}-restored.json'
-                        if intent.exists():
-                            deadline = time.monotonic() + 90
-                            while not restored.exists() and time.monotonic() < deadline:
-                                time.sleep(0.2)
-                            assert restored.exists(), 'OWNED_AUTHORITY_RESTORE_NOT_CONFIRMED'
-                            assert json.loads(restored.read_bytes())['originalGroupRestored']
-                            assert json.loads(restored.read_bytes())['originalAuthorityRestored']
+                        for prefix in ('authority', 'takeover'):
+                            intent = evidence / f'{prefix}-{attempt}-intent.json'
+                            restored = evidence / f'{prefix}-{attempt}-restored.json'
+                            if intent.exists():
+                                deadline = time.monotonic() + 90
+                                while not restored.exists() and time.monotonic() < deadline:
+                                    time.sleep(0.2)
+                                assert restored.exists(), 'OWNED_AUTHORITY_RESTORE_NOT_CONFIRMED'
+                                assert json.loads(restored.read_bytes())['originalGroupRestored']
+                                assert json.loads(restored.read_bytes())['originalAuthorityRestored']
                     save(evidence, f'browser-process-{attempt}.json', dict(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr))
                     if result.returncode == 0:
                         break
@@ -148,6 +153,13 @@ def main():
         assert state['retirementBusiness']['passed'] and state['budgetReuse']['passed']
         if administrator:
             save(evidence, 'persistent-administrator-recovery.json', observe_administrator_recovery(state, sql))
+        if takeover:
+            proof = state['retirementBusiness']['recovery']['takeover']
+            assert proof['passed'] and proof['recoveryStatus'] == proof['historyStatus'] == 403
+            assert proof['denial']['denialWindowUnchanged']
+            assert proof['originalOwnerAuthenticatedWithoutAdministrator']
+            assert proof['ownerStillWithoutAdministratorAfterBSuccess']
+            assert proof['whileRevoked']['originalGroupStillAbsent'] and proof['restoration']['originalAuthorityRestored']
         if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1':
             recovery = state['retirementBusiness']['recovery']
             assert recovery['passed'] and recovery['independentConsentRequired']

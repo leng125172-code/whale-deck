@@ -49,6 +49,20 @@ async function headers(context, contentType = 'application/json') {
 try {
   const input = JSON.parse(await readFile('/dev/stdin', 'utf8'))
   if (input.retirementProbe) assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_BUSINESS_PROBE, '1')
+  if (input.recoveryAdministrator) {
+    assert.equal(input.retirementProbe, true)
+    assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_ADMINISTRATOR_PROBE, '1')
+    assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE, '1')
+    assert.equal(input.accounts.length, 3)
+    assert.equal(input.accounts[2].role, 'administrator')
+    assert.notEqual(input.accounts[0].username, input.accounts[2].username)
+  }
+  if (input.revokedOwnerTakeover) {
+    assert.equal(input.recoveryAdministrator, true)
+    assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_PROBE, '1')
+    assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE, undefined)
+    assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_STOP_PROBE, undefined)
+  }
   if (input.authorityProbe) {
     assert.equal(input.retirementProbe, true)
     assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE, '1')
@@ -279,7 +293,8 @@ try {
     await save()
     await installedRetirementBusiness({ page, context, base, api, id, route, state, save, headers, poll, evidence,
       authorityProbe: input.authorityProbe, authorityUsername: input.accounts[0].username, authorityAttempt: input.authorityAttempt,
-      authorityKind: input.authorityKind, recoveryAdministrator: input.recoveryAdministrator ? input.accounts[2] : undefined })
+      authorityKind: input.authorityKind, recoveryAdministrator: input.recoveryAdministrator ? input.accounts[2] : undefined,
+      revokedOwnerTakeover: input.revokedOwnerTakeover })
   }
   phase = 'ordinary-owner-boundary'
   const other = await browser.newContext({ viewport: { width: 320, height: 800 } }), ordinary = await other.newPage()

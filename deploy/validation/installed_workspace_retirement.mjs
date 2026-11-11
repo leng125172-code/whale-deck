@@ -12,6 +12,7 @@ import { holdRetirementSource, recoverRetirement, finishRetirementRecovery } fro
 import { armRetirementInterruption } from './installed_retirement_interruption.mjs'
 import { armRetirementStop } from './installed_retirement_stop.mjs'
 import { withRecoveryAdministrator } from './installed_recovery_administrator.mjs'
+import { withRevokedOwnerTakeover, finishRevokedOwnerTakeover } from './installed_recovery_takeover.mjs'
 
 const execute = promisify(execFile)
 const inspector = fileURLToPath(new URL('./inspect_development_workspace_retirement.py', import.meta.url))
@@ -151,8 +152,9 @@ export async function installedRetirementBusiness(args) {
       retirement = await poll(context, prefix + '/retirements/' + retirement.retirementId, value => !!value.completedAtUtc || value.attentionRequired)
       if (recoveryProbe && retirement.attentionRequired) {
         const recovering = { ...args, workspace, record, retirement, held }
-        retirement = args.recoveryAdministrator
-          ? await withRecoveryAdministrator(recovering, recoverRetirement) : await recoverRetirement(recovering)
+        const recover = current => args.recoveryAdministrator
+          ? withRecoveryAdministrator(current, recoverRetirement) : recoverRetirement(current)
+        retirement = args.revokedOwnerTakeover ? await withRevokedOwnerTakeover(recovering, recover) : await recover(recovering)
       }
       if (recoveryProbe && retirement.completedAtUtc && record.recovery &&
           (!record.recovery.passed || (args.recoveryAdministrator && !record.recovery.administrator?.passed))) {
@@ -161,6 +163,8 @@ export async function installedRetirementBusiness(args) {
           ? await withRecoveryAdministrator(finishing, current => finishRetirementRecovery(current, retirement))
           : await finishRetirementRecovery(finishing, retirement)
       }
+      if (recoveryProbe && retirement.completedAtUtc && args.revokedOwnerTakeover && !record.recovery?.takeover?.passed)
+        retirement = await finishRevokedOwnerTakeover({ ...args, workspace, record }, retirement)
       } finally { await held?.close(); await interruption?.close(); await stopping?.close() }
       Object.assign(record.retirement, retirement)
       await save()
