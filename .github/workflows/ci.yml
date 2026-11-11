@@ -527,6 +527,8 @@ jobs:
           node --check ../deploy/validation/installed_retirement_stop.mjs
           node --check ../deploy/validation/installed_recovery_administrator.mjs
           node --check ../deploy/validation/installed_recovery_takeover.mjs
+          node --check ../deploy/validation/retirement_takeover_attempt.mjs
+          node --test ../deploy/validation/test_retirement_takeover_attempt.mjs
           node --check ../deploy/validation/validate_development_archive_installed.mjs
           node --check ../deploy/validation/validate_workspace_archive_business_installed.mjs
           node --check ../deploy/validation/validate_workspace_archive_faults_installed.mjs
@@ -539,6 +541,7 @@ jobs:
           python3 -W error -m py_compile ../deploy/validation/pause_qa_retirement_execution.py ../deploy/validation/validate_qa_retirement_stop_native.py
           python3 -W error -m py_compile ../deploy/validation/retirement_administrator_proof.py
           python3 -W error -m py_compile ../deploy/validation/owned_recovery_takeover.py
+          python3 -W error -m py_compile ../deploy/validation/takeover_retry_proof.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_qa_retirement_interruption.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_qa_retirement_stop.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_retirement_administrator_proof.py

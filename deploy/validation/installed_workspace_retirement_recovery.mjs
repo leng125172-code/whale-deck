@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { expect } from '../../web/node_modules/@playwright/test/index.mjs'
 import { installedRecoveryAuthority } from './installed_recovery_authority.mjs'
+import { abortTakeoverAfterRelease } from './retirement_takeover_attempt.mjs'
 
 export async function holdRetirementSource({ workspace, record, project, state, save }) {
   assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE, '1')
@@ -93,6 +94,7 @@ export async function recoverRetirement(args) {
     recovery.release = await held.release()
     await save()
   }
+  await abortTakeoverAfterRelease(args)
   if (args.authorityProbe) await installedRecoveryAuthority(args)
   const card = page.getByRole('region', { name: '开发空间退役' })
   await card.getByRole('button', { name: '刷新退役状态', exact: true }).click()

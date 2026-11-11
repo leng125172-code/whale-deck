@@ -63,6 +63,10 @@ try {
     assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE, undefined)
     assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_STOP_PROBE, undefined)
   }
+  if (input.takeoverRetryProbe) {
+    assert.equal(input.revokedOwnerTakeover, true)
+    assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_RETRY_PROBE, '1')
+  }
   if (input.authorityProbe) {
     assert.equal(input.retirementProbe, true)
     assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE, '1')
@@ -294,7 +298,7 @@ try {
     await installedRetirementBusiness({ page, context, base, api, id, route, state, save, headers, poll, evidence,
       authorityProbe: input.authorityProbe, authorityUsername: input.accounts[0].username, authorityAttempt: input.authorityAttempt,
       authorityKind: input.authorityKind, recoveryAdministrator: input.recoveryAdministrator ? input.accounts[2] : undefined,
-      revokedOwnerTakeover: input.revokedOwnerTakeover })
+      revokedOwnerTakeover: input.revokedOwnerTakeover, takeoverRetryProbe: input.takeoverRetryProbe })
   }
   phase = 'ordinary-owner-boundary'
   const other = await browser.newContext({ viewport: { width: 320, height: 800 } }), ordinary = await other.newPage()

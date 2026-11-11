@@ -25,6 +25,7 @@ from validate_platform_maintenance_browser import account, save
 from validate_development_installed_runtime import fixture
 from validate_workspace_archive_faults_installed import snapshot, sql
 from retirement_administrator_proof import observe_administrator_recovery
+from takeover_retry_proof import retry_ready, require_retry_success
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = ('validate_workspace_retirement_business_installed.py', 'validate_development_installed_runtime.py',
@@ -37,7 +38,8 @@ SOURCES = ('validate_workspace_retirement_business_installed.py', 'validate_deve
     'installed_retirement_interruption.mjs', 'interrupt_qa_retirement_execution.py',
     'installed_retirement_stop.mjs', 'pause_qa_retirement_execution.py',
     'installed_recovery_administrator.mjs', 'retirement_administrator_proof.py',
-    'installed_recovery_takeover.mjs', 'owned_recovery_takeover.py')
+    'installed_recovery_takeover.mjs', 'owned_recovery_takeover.py',
+    'retirement_takeover_attempt.mjs', 'takeover_retry_proof.py')
 
 
 def require_disks_preserved(before, after):
@@ -60,6 +62,9 @@ def main():
     stopped = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_STOP_PROBE') == '1'
     administrator = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_ADMINISTRATOR_PROBE') == '1'
     takeover = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_PROBE') == '1'
+    retry_probe = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_RETRY_PROBE') == '1'
+    if retry_probe:
+        assert takeover
     if takeover:
         assert administrator and not (interrupt or stopped)
     if administrator:
@@ -111,7 +116,7 @@ def main():
                     save(evidence, f'attempt-{attempt}-source-sha256.json', sources)
                     payload = dict(revision=revision, evidence=str(evidence), slug=slug, accounts=accounts,
                         archive=str(archive), archiveSha256=hashlib.sha256(content).hexdigest(), retirementProbe=True,
-                        recoveryAdministrator=administrator, revokedOwnerTakeover=takeover,
+                        recoveryAdministrator=administrator, revokedOwnerTakeover=takeover, takeoverRetryProbe=retry_probe,
                         authorityProbe=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1', authorityAttempt=attempt,
                         authorityKind=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_KIND', 'group-removal'))
                     # Browser process belongs to this wrapper; credentials only
@@ -133,6 +138,9 @@ def main():
                     save(evidence, f'browser-process-{attempt}.json', dict(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr))
                     if result.returncode == 0:
                         break
+                    if retry_probe and attempt == 1:
+                        failed_state = json.loads((evidence/'state.json').read_bytes())
+                        save(evidence, 'takeover-retry-ready.json', retry_ready(evidence, failed_state, client, accounts, group))
                     save(evidence, f'awaiting-repair-{attempt}.json', dict(attempt=attempt, retainsExactIntents=True,
                         noAutomaticMutationRetry=True, next='Inspect state/failure; explicitly retry same identities and intent after repair'))
                     print(json.dumps(dict(awaitingRepair=True, evidence=str(evidence), attempt=attempt)), flush=True)
@@ -149,6 +157,12 @@ def main():
             save(evidence, 'identity-cleanup.json', dict(removed=cleaned))
         assert sorted(cleaned) == sorted(roles)
         state = json.loads((evidence / 'state.json').read_bytes())
+        if retry_probe:
+            ready = json.loads((evidence/'takeover-retry-ready.json').read_bytes())
+            require_retry_success(state, ready)
+            save(evidence, 'takeover-retry-accepted.json', dict(passed=True, sameAccountsWorkspaceIntent=True,
+                noNewRunOrImport=True, originalFdEvidencePreserved=True, oldWindowRetained=True,
+                currentEvidenceWindow=2, originalProductFailureTaskPreserved=True, exactlyOneProductRecovery=True))
         assert state['passed'] and state['lifecycle']['passed'] and state['legacyLifecycleSkipped']
         assert state['retirementBusiness']['passed'] and state['budgetReuse']['passed']
         if administrator:

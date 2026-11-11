@@ -1,11 +1,12 @@
 // Only the new QA owner's group is removed, until B's recovery is verified.
 import assert from 'node:assert/strict'
-import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { beginTakeoverAttempt } from './retirement_takeover_attempt.mjs'
+import { logoutFromUserMenu } from './installed_ui_logout.mjs'
 
 export async function finishRevokedOwnerTakeover(args, result) {
   const { page, context, base, api, route, workspace, state, record, save, evidence } = args
@@ -33,8 +34,9 @@ export async function withRevokedOwnerTakeover(args, perform) {
   assert.ok(args.recoveryAdministrator)
   record.recovery ??= {}
   record.recovery.failedView ??= retirement
-  const proof = record.recovery.takeover ??= { deniedKey: randomUUID(), attempt: args.authorityAttempt }
-  assert.equal(proof.passed, undefined, 'NEVER_REPEAT_OWNER_REVOCATION')
+  const previous = record.recovery.takeover
+  const restored = previous ? JSON.parse(await readFile(join(evidence, `takeover-${previous.attempt}-restored.json`), 'utf8')) : undefined
+  const proof = beginTakeoverAttempt(record.recovery, args.authorityAttempt, restored)
   await save()
   const child = spawn('/usr/bin/python3', ['-B', fileURLToPath(new URL('./owned_recovery_takeover.py', import.meta.url))], { stdio: ['pipe', 'pipe', 'pipe'] })
   let stderr = '', spawnError
@@ -103,6 +105,18 @@ export async function withRevokedOwnerTakeover(args, perform) {
     // EOF restores the original group before the Python parent permits retry
     // or generated-account cleanup. Never SIGKILL an authority restorer.
     child.stdin.end()
-    await waitExit()
+    proof.childExit = await waitExit()
+    // Preserve the successful EOF restoration even when B/UI threw before a
+    // normal restore reply. The parent checks the same root-owned receipt.
+    const receipt = JSON.parse(await readFile(join(evidence, `takeover-${proof.attempt}-restored.json`), 'utf8'))
+    assert.equal(receipt.originalAuthorityRestored, true)
+    proof.restoration = { restored: true, originalAuthorityRestored: true }
+    if (args.takeoverRetryProbe && record.recovery.takeoverRetryAbort?.attempt === proof.attempt && !proof.passed) {
+      const endpoint = `${api}/${workspace.id}/retirements/${retirement.retirementId}`
+      assert.equal((await context.request.get(base+endpoint)).status(), 200)
+      await page.goto(`${base}${route}/${workspace.id}/environment`)
+      proof.ownerAbortLogout = await logoutFromUserMenu(page, context, base)
+    }
+    await save()
   }
 }
