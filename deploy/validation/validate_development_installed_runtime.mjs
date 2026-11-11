@@ -62,6 +62,8 @@ try {
     assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_PROBE, '1')
     assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE, undefined)
     assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_STOP_PROBE, undefined)
+    assert.ok(['group-removal', 'account-disable'].includes(input.takeoverKind))
+    assert.equal(input.takeoverKind, process.env.WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_KIND ?? 'group-removal')
   }
   if (input.takeoverRetryProbe) {
     assert.equal(input.revokedOwnerTakeover, true)
@@ -298,7 +300,7 @@ try {
     await installedRetirementBusiness({ page, context, base, api, id, route, state, save, headers, poll, evidence,
       authorityProbe: input.authorityProbe, authorityUsername: input.accounts[0].username, authorityAttempt: input.authorityAttempt,
       authorityKind: input.authorityKind, recoveryAdministrator: input.recoveryAdministrator ? input.accounts[2] : undefined,
-      revokedOwnerTakeover: input.revokedOwnerTakeover, takeoverRetryProbe: input.takeoverRetryProbe })
+      revokedOwnerTakeover: input.revokedOwnerTakeover, takeoverRetryProbe: input.takeoverRetryProbe, takeoverKind: input.takeoverKind })
   }
   phase = 'ordinary-owner-boundary'
   const other = await browser.newContext({ viewport: { width: 320, height: 800 } }), ordinary = await other.newPage()

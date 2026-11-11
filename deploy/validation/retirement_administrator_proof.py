@@ -9,8 +9,14 @@ def require_administrator_recovery(state, rows):
     assert str(uuid.UUID(owner)) == owner and str(uuid.UUID(actor)) == actor and owner != actor
     assert proof['ownerSubject'] == owner and proof['passed']
     for key in ('independentVisibleLogin', 'resourceOwnerPreserved',
-            'recoveryCompletedByIndependentSession', 'originalOwnerSessionPreserved'):
+            'recoveryCompletedByIndependentSession'):
         assert proof[key] is True
+    kind = recovery.get('takeover', {}).get('kind', 'group-removal')
+    assert kind in ('group-removal', 'account-disable')
+    if kind == 'account-disable':
+        assert proof['originalOwnerDeniedWhileDisabled'] is True and proof['ownerStatusWhileDisabled'] == 403
+    else:
+        assert proof['originalOwnerSessionPreserved'] is True
     assert proof['logout']['normalUiLogout'] and proof['logout']['bffStatus'] == 401
     assert proof['logout']['identityStatus'] in (401, 403)
     previous = recovery['attemptsBefore'][0]['taskId']

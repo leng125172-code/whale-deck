@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import { loginVisible } from './installed_ui_permission_session.mjs'
 import { logoutFromUserMenu } from './installed_ui_logout.mjs'
+import { requireRevokedOwnerIdentity } from './takeover_revocation_state.mjs'
 
 export async function withRecoveryAdministrator(args, perform) {
   const { context: ownerContext, base, api, route, workspace, state, record, save, recoveryAdministrator, authorityUsername } = args
@@ -55,9 +56,15 @@ export async function withRecoveryAdministrator(args, perform) {
   }
   // Signing out the second identity must preserve the original owner's login.
   const owner = await ownerContext.request.get(base+'/api/v1/auth/me')
-  assert.equal(owner.status(), 200)
-  assert.equal((await owner.json()).subject, state.ownerSubject)
-  proof.originalOwnerSessionPreserved = true
+  if (args.revokedOwnerTakeover && args.takeoverKind === 'account-disable') {
+    requireRevokedOwnerIdentity('account-disable', owner.status(), undefined, state.ownerSubject)
+    proof.originalOwnerDeniedWhileDisabled = true
+    proof.ownerStatusWhileDisabled = owner.status()
+  } else {
+    assert.equal(owner.status(), 200)
+    assert.equal((await owner.json()).subject, state.ownerSubject)
+    proof.originalOwnerSessionPreserved = true
+  }
   proof.passed = true
   await save()
   return result

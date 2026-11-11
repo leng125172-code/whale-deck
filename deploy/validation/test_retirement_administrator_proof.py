@@ -26,6 +26,18 @@ class AdministratorProofTests(unittest.TestCase):
     def test_second_actor_and_unchanged_owner_pair_is_accepted(self):
         require_administrator_recovery(*self.fixture())
 
+    def test_disabled_owner_requires_live_denial_instead_of_claiming_session_access(self):
+        state, rows = self.fixture(); rec = state['retirementBusiness']['recovery']
+        rec['takeover'] = dict(kind='account-disable')
+        proof = rec['administrator']; del proof['originalOwnerSessionPreserved']
+        proof.update(originalOwnerDeniedWhileDisabled=True, ownerStatusWhileDisabled=403)
+        require_administrator_recovery(state, rows)
+        for status in (200, 401):
+            proof['ownerStatusWhileDisabled'] = status
+            with self.subTest(status=status), self.assertRaises(AssertionError): require_administrator_recovery(state, rows)
+        proof['ownerStatusWhileDisabled'] = 403; proof['originalOwnerDeniedWhileDisabled'] = False
+        with self.assertRaises(AssertionError): require_administrator_recovery(state, rows)
+
     def test_owner_cannot_be_substituted_for_recovery_actor(self):
         for key in ('executionActor', 'recoveryActor'):
             state, rows = self.fixture(); rows[0][key] = OWNER

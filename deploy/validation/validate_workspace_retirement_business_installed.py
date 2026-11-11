@@ -39,7 +39,7 @@ SOURCES = ('validate_workspace_retirement_business_installed.py', 'validate_deve
     'installed_retirement_stop.mjs', 'pause_qa_retirement_execution.py',
     'installed_recovery_administrator.mjs', 'retirement_administrator_proof.py',
     'installed_recovery_takeover.mjs', 'owned_recovery_takeover.py',
-    'retirement_takeover_attempt.mjs', 'takeover_retry_proof.py')
+    'retirement_takeover_attempt.mjs', 'takeover_retry_proof.py', 'takeover_revocation_state.mjs')
 
 
 def require_disks_preserved(before, after):
@@ -62,6 +62,8 @@ def main():
     stopped = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_STOP_PROBE') == '1'
     administrator = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_ADMINISTRATOR_PROBE') == '1'
     takeover = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_PROBE') == '1'
+    takeover_kind = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_KIND', 'group-removal')
+    assert takeover_kind in ('group-removal', 'account-disable')
     retry_probe = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_RETRY_PROBE') == '1'
     if retry_probe:
         assert takeover
@@ -117,6 +119,7 @@ def main():
                     payload = dict(revision=revision, evidence=str(evidence), slug=slug, accounts=accounts,
                         archive=str(archive), archiveSha256=hashlib.sha256(content).hexdigest(), retirementProbe=True,
                         recoveryAdministrator=administrator, revokedOwnerTakeover=takeover, takeoverRetryProbe=retry_probe,
+                        takeoverKind=takeover_kind,
                         authorityProbe=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1', authorityAttempt=attempt,
                         authorityKind=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_KIND', 'group-removal'))
                     # Browser process belongs to this wrapper; credentials only
@@ -171,9 +174,15 @@ def main():
             proof = state['retirementBusiness']['recovery']['takeover']
             assert proof['passed'] and proof['recoveryStatus'] == proof['historyStatus'] == 403
             assert proof['denial']['denialWindowUnchanged']
-            assert proof['originalOwnerAuthenticatedWithoutAdministrator']
-            assert proof['ownerStillWithoutAdministratorAfterBSuccess']
-            assert proof['whileRevoked']['originalGroupStillAbsent'] and proof['restoration']['originalAuthorityRestored']
+            assert proof['kind'] == takeover_kind and proof['originalOwnerContextAcceptedAfterRestore']
+            if takeover_kind == 'account-disable':
+                assert proof['originalOwnerIdentityRejectedWhileDisabled'] and proof['ownerStillDisabledAfterBSuccess']
+                assert proof['ownerStatusBeforeB'] == proof['ownerStatusAfterB'] == 403
+                assert proof['whileRevoked']['originalAccountStillDisabled'] and proof['whileRevoked']['originalGroupsUnchanged']
+            else:
+                assert proof['originalOwnerAuthenticatedWithoutAdministrator'] and proof['ownerStillWithoutAdministratorAfterBSuccess']
+                assert proof['whileRevoked']['originalGroupStillAbsent']
+            assert proof['restoration']['originalAuthorityRestored']
         if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1':
             recovery = state['retirementBusiness']['recovery']
             assert recovery['passed'] and recovery['independentConsentRequired']

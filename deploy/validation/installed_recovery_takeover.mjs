@@ -1,4 +1,4 @@
-// Only the new QA owner's group is removed, until B's recovery is verified.
+// Only new QA owner authority is revoked until B's recovery is verified.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
@@ -7,22 +7,26 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { beginTakeoverAttempt } from './retirement_takeover_attempt.mjs'
 import { logoutFromUserMenu } from './installed_ui_logout.mjs'
+import { takeoverKind, requireRevokedOwnerIdentity, requireRevocationReceipt } from './takeover_revocation_state.mjs'
 
 export async function finishRevokedOwnerTakeover(args, result) {
   const { page, context, base, api, route, workspace, state, record, save, evidence } = args
   const proof = record.recovery.takeover
+  const kind = takeoverKind(proof.kind)
   const prefix = `takeover-${proof.attempt}`
   const verified = JSON.parse(await readFile(join(evidence, prefix+'-while-revoked.json'), 'utf8'))
   const restored = JSON.parse(await readFile(join(evidence, prefix+'-restored.json'), 'utf8'))
-  assert.equal(verified.passed, true); assert.equal(verified.originalGroupStillAbsent, true)
+  requireRevocationReceipt(kind, verified)
   assert.equal(restored.originalAuthorityRestored, true)
   assert.equal(result.state, 'Succeeded')
-  proof.whileRevoked = { takeoverVerified: true, originalGroupStillAbsent: true }
+  proof.whileRevoked = { takeoverVerified: true, kind, originalGroupStillAbsent: verified.originalGroupStillAbsent,
+    originalAccountStillDisabled: verified.originalAccountStillDisabled, originalGroupsUnchanged: verified.originalGroupsUnchanged }
   proof.restoration = { restored: true, originalAuthorityRestored: true }
   const endpoint = `${api}/${workspace.id}/retirements/${record.recovery.failedView.retirementId}`
   assert.equal((await context.request.get(base+endpoint)).status(), 200)
   const owner = await context.request.get(base+'/api/v1/auth/me'); assert.equal(owner.status(), 200)
   const profile = await owner.json(); assert.equal(profile.subject, state.ownerSubject); assert.equal(profile.isAdministrator, true)
+  proof.originalOwnerContextAcceptedAfterRestore = true
   await page.goto(`${base}${route}/${workspace.id}/environment`)
   proof.passed = true; await save()
   return result
@@ -37,6 +41,7 @@ export async function withRevokedOwnerTakeover(args, perform) {
   const previous = record.recovery.takeover
   const restored = previous ? JSON.parse(await readFile(join(evidence, `takeover-${previous.attempt}-restored.json`), 'utf8')) : undefined
   const proof = beginTakeoverAttempt(record.recovery, args.authorityAttempt, restored)
+  const kind = proof.kind = takeoverKind(args.takeoverKind)
   await save()
   const child = spawn('/usr/bin/python3', ['-B', fileURLToPath(new URL('./owned_recovery_takeover.py', import.meta.url))], { stdio: ['pipe', 'pipe', 'pipe'] })
   let stderr = '', spawnError
@@ -65,8 +70,9 @@ export async function withRevokedOwnerTakeover(args, perform) {
   }
   try {
     child.stdin.write(JSON.stringify({ evidence, username: authorityUsername, subject: state.ownerSubject,
-      workspaceId: workspace.id, retirementId: retirement.retirementId, attempt: args.authorityAttempt })+'\n')
+      workspaceId: workspace.id, retirementId: retirement.retirementId, attempt: args.authorityAttempt, kind })+'\n')
     proof.removal = await next(); assert.equal(proof.removal.removed, true)
+    assert.equal(proof.removal.kind, kind)
     await save()
     const endpoint = `${api}/${workspace.id}/retirements/${retirement.retirementId}`
     const denied = await context.request.post(base+endpoint+'/recover', {
@@ -80,24 +86,24 @@ export async function withRevokedOwnerTakeover(args, perform) {
     assert.equal(proof.recoveryStatus, 403); assert.equal(proof.historyStatus, 403)
     const currentOwner = async () => {
       const response = await context.request.get(base+'/api/v1/auth/me')
-      assert.equal(response.status(), 200)
-      const profile = await response.json()
-      assert.equal(profile.subject, state.ownerSubject); assert.equal(profile.isAdministrator, false)
+      requireRevokedOwnerIdentity(kind, response.status(), kind === 'group-removal' ? await response.json() : undefined, state.ownerSubject)
+      return response.status()
     }
-    await currentOwner()
-    proof.originalOwnerAuthenticatedWithoutAdministrator = true
+    proof.ownerStatusBeforeB = await currentOwner()
+    if (kind === 'group-removal') proof.originalOwnerAuthenticatedWithoutAdministrator = true
+    else proof.originalOwnerIdentityRejectedWhileDisabled = true
     child.stdin.write('check\n')
     proof.denial = await next(); assert.equal(proof.denial.denialWindowUnchanged, true)
     await save()
-    // The provider group is still absent throughout B's genuine login/recovery.
+    // The provider authority stays revoked throughout B's real login/recovery.
     const result = await perform(args)
     assert.equal(result.state, 'Succeeded')
-    await currentOwner()
-    proof.ownerStillWithoutAdministratorAfterBSuccess = true
+    proof.ownerStatusAfterB = await currentOwner()
+    if (kind === 'group-removal') proof.ownerStillWithoutAdministratorAfterBSuccess = true
+    else proof.ownerStillDisabledAfterBSuccess = true
     child.stdin.write('finish\n')
     proof.whileRevoked = await next()
-    assert.equal(proof.whileRevoked.takeoverVerified, true)
-    assert.equal(proof.whileRevoked.originalGroupStillAbsent, true)
+    requireRevocationReceipt(kind, proof.whileRevoked)
     proof.restoration = await next(); assert.equal(proof.restoration.originalAuthorityRestored, true)
     child.stdin.end(); proof.childExit = await waitExit(); assert.equal(proof.childExit.code, 0, stderr)
     return finishRevokedOwnerTakeover(args, result)

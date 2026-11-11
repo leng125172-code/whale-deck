@@ -528,6 +528,8 @@ jobs:
           node --check ../deploy/validation/installed_recovery_administrator.mjs
           node --check ../deploy/validation/installed_recovery_takeover.mjs
           node --check ../deploy/validation/retirement_takeover_attempt.mjs
+          node --check ../deploy/validation/takeover_revocation_state.mjs
+          node --test ../deploy/validation/test_takeover_revocation_state.mjs
           node --test ../deploy/validation/test_retirement_takeover_attempt.mjs
           node --check ../deploy/validation/validate_development_archive_installed.mjs
           node --check ../deploy/validation/validate_workspace_archive_business_installed.mjs

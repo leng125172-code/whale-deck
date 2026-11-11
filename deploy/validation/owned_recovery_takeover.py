@@ -1,7 +1,7 @@
-"""Keep only a declared generated owner's group revoked during B's recovery.
+"""Keep a declared generated owner moved out or disabled during B's recovery.
 
 Original proof/plan/time stay immutable while the current workflow is allowed
-to advance under the second actor. Restore only the original group, including
+to advance under the second actor. Restore only original authority, including
 EOF/failure; never write business SQL or export credentials/login bindings.
 """
 import json
@@ -41,7 +41,10 @@ def main():
     assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_ADMINISTRATOR_PROBE') == '1'
     raw = sys.stdin.readline(8193); assert len(raw) <= 8192 and raw.endswith('\n')
     payload = json.loads(raw)
-    assert set(payload) == {'evidence', 'username', 'subject', 'workspaceId', 'retirementId', 'attempt'}
+    assert set(payload) == {'evidence', 'username', 'subject', 'workspaceId', 'retirementId', 'attempt', 'kind'}
+    kind = payload['kind']
+    assert kind in ('group-removal', 'account-disable')
+    assert kind == os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_KIND', 'group-removal')
     evidence = Path(payload['evidence']).resolve(strict=True)
     assert evidence.is_relative_to(Path(__file__).resolve().parents[2]/'deploy/artifacts') and evidence.is_dir()
     state = json.loads((evidence/'state.json').read_bytes()); declaration = json.loads((evidence/'declaration.json').read_bytes())
@@ -60,12 +63,13 @@ def main():
         client.trust_env = False
         client.headers['Authorization'] = 'Bearer '+require(values, 'Authentication__Authentik__ApiToken')
         action = OwnedRecoveryAuthority(client, payload['username'], payload['subject'],
-            require(values, 'Authentication__Authentik__AdministratorGroupId'), kind='group-removal')
+            require(values, 'Authentication__Authentik__AdministratorGroupId'), kind=kind)
         try:
-            save('intent', dict(subject=payload['subject'], kind='group-removal', onlyOriginalGroupRestorable=True))
+            save('intent', dict(subject=payload['subject'], kind=kind, onlyOriginalAuthorityRestorable=True))
             action.remove()
-            save('removed', dict(passed=True, ownerSubject=payload['subject'], onlyOwnedGroupRemoved=True))
-            print(json.dumps(dict(removed=True)), flush=True)
+            save('removed', dict(passed=True, ownerSubject=payload['subject'], kind=kind,
+                onlyOwnedGroupRemoved=kind == 'group-removal', onlyOwnedActiveFlagChanged=kind == 'account-disable'))
+            print(json.dumps(dict(removed=True, kind=kind)), flush=True)
             command = sys.stdin.readline(32)
             if command == '':
                 return
@@ -81,13 +85,18 @@ def main():
             actor_proof = observe_administrator_recovery(state, sql)
             after = immutable_evidence(payload['retirementId'], before['executeStepId'])
             require_takeover_window(original, after, payload['subject'], action.current() == action.revoked, actor_proof)
-            save('while-revoked', dict(passed=True, originalGroupStillAbsent=True, before=original, after=after,
-                administratorProof=actor_proof))
-            print(json.dumps(dict(takeoverVerified=True, originalGroupStillAbsent=True)), flush=True)
+            current = action.current(); assert current == action.revoked
+            state_receipt = dict(kind=kind, originalAuthorityStillRevoked=True,
+                originalGroupStillAbsent=kind == 'group-removal',
+                originalAccountStillDisabled=not current['is_active'],
+                originalGroupsUnchanged=current['groups'] == action.before['groups'])
+            save('while-revoked', dict(passed=True, **state_receipt, before=original, after=after, administratorProof=actor_proof))
+            print(json.dumps(dict(takeoverVerified=True, **state_receipt)), flush=True)
         finally:
             action.restore()
-            save('restored', dict(passed=True, originalAuthorityRestored=True, originalGroupRestored=True))
-            print(json.dumps(dict(restored=True, originalAuthorityRestored=True)), flush=True)
+            save('restored', dict(passed=True, kind=kind, originalAuthorityRestored=True,
+                originalGroupRestored=True, originalActiveFlagRestored=True))
+            print(json.dumps(dict(restored=True, kind=kind, originalAuthorityRestored=True)), flush=True)
 
 
 if __name__ == '__main__':

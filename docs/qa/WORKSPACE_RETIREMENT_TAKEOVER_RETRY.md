@@ -1,5 +1,7 @@
 # 接管验收中止后的显式同意图重试
 
+接续：5a89dd65fa3aee79e24f28a4112fafe7534b9cf6准确CI42961015657现已全13成功，最终绑定收据另存 `deploy/artifacts/workspace-retirement-takeover-retry-record-20261111/exact-ci-final.json`；原TLS握手超时与只读查询原件保留，未重跑CI或重复部署产品。禁用owner期间的B接管已另批验收，见[实际证据与边界](WORKSPACE_RETIREMENT_DISABLED_OWNER_TAKEOVER.md)。以下保留原批次事实。
+
 2026-11-11，修复的是QA接管编排的窗口指针，不是新增产品恢复接口。实机继续使用356ba6c1，没有新产品部署或正式Agent授权扩展。前序703a68f1082fedddf7a8e56541c1bfa47b36db9e准确CI42958546300已全13成功，最终收据在 `deploy/artifacts/workspace-retirement-takeover-record-20261111/exact-ci-final.json`。
 
 ## 修复和回归
