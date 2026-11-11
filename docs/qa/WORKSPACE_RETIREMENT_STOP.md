@@ -1,5 +1,7 @@
 # 真实取消退役执行后的Stopped恢复
 
+接续：f735c2342e914b421a837c5f7a0458cfe5d50315准确CI42954293033现已全13成功，最终绑定收据另存 `deploy/artifacts/workspace-retirement-stop-record-20261111/exact-ci-final.json`；原EOF和只读查询记录保留，不改写封存目录，没有重复部署产品。另一管理员独立登录恢复已后续验收，见[实际证据及边界](WORKSPACE_RETIREMENT_ADMINISTRATOR.md)。以下保留原批次事实。
+
 2026-11-11，使用已部署且准确CI通过的产品356ba6c1。本批仅增加QA控制器、验证脚本与CI门禁，没有新产品部署，也没有扩大正式Agent权限。前序1b5cefd6准确CI42951997927在证据封存时仍运行中，后端、安装器及原生门禁已成功；查询传输失败另行保留，不重跑CI。
 
 封存后接续：1b5cefd62518e235ad419ba3c6594f3841714404的准确CI42951997927已全13成功，最终绑定收据保存于 `deploy/artifacts/workspace-retirement-interruption-record-20261111/exact-ci-final.json`。本批Stopped验证器自身提交CI仍另待，封存目录不追加改写。

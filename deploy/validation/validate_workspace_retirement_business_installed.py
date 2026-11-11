@@ -24,6 +24,7 @@ from run_with_ephemeral_admin import container_environment, require
 from validate_platform_maintenance_browser import account, save
 from validate_development_installed_runtime import fixture
 from validate_workspace_archive_faults_installed import snapshot, sql
+from retirement_administrator_proof import observe_administrator_recovery
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = ('validate_workspace_retirement_business_installed.py', 'validate_development_installed_runtime.py',
@@ -34,7 +35,8 @@ SOURCES = ('validate_workspace_retirement_business_installed.py', 'validate_deve
     'installed_workspace_retirement_recovery.mjs', 'hold_qa_workspace_source_fd.py',
     'installed_recovery_authority.mjs', 'owned_recovery_authority.py',
     'installed_retirement_interruption.mjs', 'interrupt_qa_retirement_execution.py',
-    'installed_retirement_stop.mjs', 'pause_qa_retirement_execution.py')
+    'installed_retirement_stop.mjs', 'pause_qa_retirement_execution.py',
+    'installed_recovery_administrator.mjs', 'retirement_administrator_proof.py')
 
 
 def require_disks_preserved(before, after):
@@ -55,6 +57,10 @@ def main():
     assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_BUSINESS_PROBE') == '1'
     interrupt = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE') == '1'
     stopped = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_STOP_PROBE') == '1'
+    administrator = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_ADMINISTRATOR_PROBE') == '1'
+    if administrator:
+        assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1'
+        assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') != '1'
     assert not (interrupt and stopped)
     if interrupt or stopped:
         assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1'
@@ -89,7 +95,9 @@ def main():
         group = require(values, 'Authentication__Authentik__AdministratorGroupId')
         try:
             with contextlib.ExitStack() as stack:
-                accounts = [stack.enter_context(account(client, role, group, cleaned)) for role in ('administrator', 'ordinary')]
+                roles = ('administrator', 'ordinary', 'administrator') if administrator else ('administrator', 'ordinary')
+                accounts = [stack.enter_context(account(client, role, group, cleaned)) for role in roles]
+                assert len({entry['username'] for entry in accounts}) == len(accounts)
                 for attempt in range(1, 5):
                     sources = {}
                     for name in SOURCES:
@@ -99,6 +107,7 @@ def main():
                     save(evidence, f'attempt-{attempt}-source-sha256.json', sources)
                     payload = dict(revision=revision, evidence=str(evidence), slug=slug, accounts=accounts,
                         archive=str(archive), archiveSha256=hashlib.sha256(content).hexdigest(), retirementProbe=True,
+                        recoveryAdministrator=administrator,
                         authorityProbe=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1', authorityAttempt=attempt,
                         authorityKind=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_KIND', 'group-removal'))
                     # Browser process belongs to this wrapper; credentials only
@@ -133,10 +142,12 @@ def main():
                 assert result.returncode == 0, 'INSTALLED_RETIREMENT_BUSINESS_FAILED'
         finally:
             save(evidence, 'identity-cleanup.json', dict(removed=cleaned))
-        assert sorted(cleaned) == ['administrator', 'ordinary']
+        assert sorted(cleaned) == sorted(roles)
         state = json.loads((evidence / 'state.json').read_bytes())
         assert state['passed'] and state['lifecycle']['passed'] and state['legacyLifecycleSkipped']
         assert state['retirementBusiness']['passed'] and state['budgetReuse']['passed']
+        if administrator:
+            save(evidence, 'persistent-administrator-recovery.json', observe_administrator_recovery(state, sql))
         if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1':
             recovery = state['retirementBusiness']['recovery']
             assert recovery['passed'] and recovery['independentConsentRequired']
@@ -199,7 +210,7 @@ def main():
         save(evidence, 'accepted.json', dict(passed=True, revision=revision, realIdentityUiApiWorkerAgent=True,
             workspaceIds=ids, successfulRuns=len(state['runs']), reportsReadableAfterRetirement=True,
             physicalKernelQuotaAndClaimsReleased=True, sameBudgetRegisteredAndRetired=True, originalSpacesPreserved=len(old_ids),
-            hddAndAuditsRetained=True, temporaryAccountsRemoved=2, originalResourcesUnchanged=True))
+            hddAndAuditsRetained=True, temporaryAccountsRemoved=len(roles), originalResourcesUnchanged=True))
         print(json.dumps(dict(passed=True, evidence=str(evidence), workspaceIds=ids)), flush=True)
     except BaseException as error:
         save(evidence, 'failed-wrapper.json', dict(failureType=type(error).__name__, cleanedRoles=cleaned,

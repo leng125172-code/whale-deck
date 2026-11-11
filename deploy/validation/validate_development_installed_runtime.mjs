@@ -279,7 +279,7 @@ try {
     await save()
     await installedRetirementBusiness({ page, context, base, api, id, route, state, save, headers, poll, evidence,
       authorityProbe: input.authorityProbe, authorityUsername: input.accounts[0].username, authorityAttempt: input.authorityAttempt,
-      authorityKind: input.authorityKind })
+      authorityKind: input.authorityKind, recoveryAdministrator: input.recoveryAdministrator ? input.accounts[2] : undefined })
   }
   phase = 'ordinary-owner-boundary'
   const other = await browser.newContext({ viewport: { width: 320, height: 800 } }), ordinary = await other.newPage()

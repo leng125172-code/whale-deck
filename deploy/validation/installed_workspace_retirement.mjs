@@ -11,6 +11,7 @@ import { installedLifecycle } from './installed_development_lifecycle.mjs'
 import { holdRetirementSource, recoverRetirement, finishRetirementRecovery } from './installed_workspace_retirement_recovery.mjs'
 import { armRetirementInterruption } from './installed_retirement_interruption.mjs'
 import { armRetirementStop } from './installed_retirement_stop.mjs'
+import { withRecoveryAdministrator } from './installed_recovery_administrator.mjs'
 
 const execute = promisify(execFile)
 const inspector = fileURLToPath(new URL('./inspect_development_workspace_retirement.py', import.meta.url))
@@ -148,10 +149,18 @@ export async function installedRetirementBusiness(args) {
         }
       }
       retirement = await poll(context, prefix + '/retirements/' + retirement.retirementId, value => !!value.completedAtUtc || value.attentionRequired)
-      if (recoveryProbe && retirement.attentionRequired)
-        retirement = await recoverRetirement({ ...args, workspace, record, retirement, held })
-      if (recoveryProbe && retirement.completedAtUtc && record.recovery && !record.recovery.passed)
-        retirement = await finishRetirementRecovery({ ...args, workspace, record }, retirement)
+      if (recoveryProbe && retirement.attentionRequired) {
+        const recovering = { ...args, workspace, record, retirement, held }
+        retirement = args.recoveryAdministrator
+          ? await withRecoveryAdministrator(recovering, recoverRetirement) : await recoverRetirement(recovering)
+      }
+      if (recoveryProbe && retirement.completedAtUtc && record.recovery &&
+          (!record.recovery.passed || (args.recoveryAdministrator && !record.recovery.administrator?.passed))) {
+        const finishing = { ...args, workspace, record }
+        retirement = args.recoveryAdministrator
+          ? await withRecoveryAdministrator(finishing, current => finishRetirementRecovery(current, retirement))
+          : await finishRetirementRecovery(finishing, retirement)
+      }
       } finally { await held?.close(); await interruption?.close(); await stopping?.close() }
       Object.assign(record.retirement, retirement)
       await save()

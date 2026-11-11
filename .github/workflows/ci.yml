@@ -525,6 +525,7 @@ jobs:
           node --check ../deploy/validation/installed_recovery_authority.mjs
           node --check ../deploy/validation/installed_retirement_interruption.mjs
           node --check ../deploy/validation/installed_retirement_stop.mjs
+          node --check ../deploy/validation/installed_recovery_administrator.mjs
           node --check ../deploy/validation/validate_development_archive_installed.mjs
           node --check ../deploy/validation/validate_workspace_archive_business_installed.mjs
           node --check ../deploy/validation/validate_workspace_archive_faults_installed.mjs
@@ -535,8 +536,10 @@ jobs:
           python3 -W error -m py_compile ../deploy/validation/owned_recovery_authority.py
           python3 -W error -m py_compile ../deploy/validation/interrupt_qa_retirement_execution.py ../deploy/validation/validate_qa_retirement_interruption_native.py
           python3 -W error -m py_compile ../deploy/validation/pause_qa_retirement_execution.py ../deploy/validation/validate_qa_retirement_stop_native.py
+          python3 -W error -m py_compile ../deploy/validation/retirement_administrator_proof.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_qa_retirement_interruption.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_qa_retirement_stop.py
+          python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_retirement_administrator_proof.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_owned_recovery_authority.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_retirement_disk_reservation_proof.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_standard_update_http_observer.py
