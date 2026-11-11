@@ -1,4 +1,4 @@
-"""Opt-in generated-QA identity group revocation, restored on stdin EOF.
+"""Opt-in generated-QA group removal or account disable, restored on EOF.
 
 No password/token crosses argv, stdout or evidence. This is never installed as
 a privileged product helper. Only the declared new QA owner can be changed.
@@ -16,7 +16,8 @@ from validate_workspace_archive_faults_installed import sql
 
 
 class OwnedRecoveryAuthority:
-    def __init__(self, client, username, subject, group):
+    def __init__(self, client, username, subject, group, *, kind='group-removal'):
+        assert kind in ('group-removal', 'account-disable')
         assert re.fullmatch('whaledeck-platform-ui-[a-f0-9]{32}', username)
         assert str(uuid.UUID(subject)) == subject and group
         self.client, self.username, self.subject, self.group = client, username, subject, group
@@ -28,6 +29,9 @@ class OwnedRecoveryAuthority:
         identifier = str(self.before['pk'])
         assert re.fullmatch('[1-9][0-9]{0,11}', identifier)
         assert self.before['is_active'] is True and self.before['groups'] == [group]
+        self.patch = {'groups': []} if kind == 'group-removal' else {'is_active': False}
+        self.original_patch = {'groups': [group]} if kind == 'group-removal' else {'is_active': True}
+        self.revoked = dict(self.before, **self.patch)
         self.url = AUTHENTIK_API+'core/users/'+identifier+'/'
         self.changed = False
 
@@ -44,18 +48,18 @@ class OwnedRecoveryAuthority:
     def remove(self):
         assert not self.changed and self.current() == self.before
         self.changed = True  # A lost PATCH reply is not permission to retry it.
-        response = self.client.patch(self.url, json={'groups': []}, timeout=10)
+        response = self.client.patch(self.url, json=self.patch, timeout=10)
         assert response.status_code == 200
-        assert self.facts(response.json()) == dict(self.before, groups=[])
-        assert self.current() == dict(self.before, groups=[])
+        assert self.facts(response.json()) == self.revoked
+        assert self.current() == self.revoked
 
     def restore(self):
         if not self.changed:
             return
         current = self.current()
-        assert current in (self.before, dict(self.before, groups=[]))
+        assert current in (self.before, self.revoked)
         if current != self.before:
-            response = self.client.patch(self.url, json={'groups': self.before['groups']}, timeout=10)
+            response = self.client.patch(self.url, json=self.original_patch, timeout=10)
             assert response.status_code == 200 and self.facts(response.json()) == self.before
         assert self.current() == self.before
 
@@ -81,7 +85,7 @@ def check_binding(payload, state, declaration, checkpoint):
 
 def checkpoint(identifier):
     assert str(uuid.UUID(identifier)) == identifier
-    rows = sql("SELECT json_build_object('workspaceId',w.id,'subject',w.owner_subject,'slug',w.slug,'lifecycle',w.lifecycle_state,'retirementId',r.id,'executeStepId',r.execute_step_id,'attention',r.attention_required,'lease',r.lease,'finished',r.finished_at_utc,'status',s.proof_json->>'status','settled',s.settled_at_utc,'workflowSha256',encode(sha256(convert_to(to_jsonb(r)::text,'utf8')),'hex'),'stepSha256',encode(sha256(convert_to(to_jsonb(s)::text,'utf8')),'hex'),'workspaceSha256',encode(sha256(convert_to(to_jsonb(w)::text,'utf8')),'hex'),'recoveries',(SELECT count(*) FROM development_workspace_retirement_recoveries a WHERE a.retirement_id=r.id),'completions',(SELECT count(*) FROM development_workspace_retirement_completions c WHERE c.retirement_id=r.id)) FROM development_workspace_retirement_workflows r JOIN development_workspaces w ON w.id=r.workspace_id JOIN development_workspace_retirement_steps s ON s.id=r.execute_step_id WHERE r.id='"+identifier+"';")
+    rows = sql("SELECT json_build_object('workspaceId',w.id,'subject',w.owner_subject,'slug',w.slug,'lifecycle',w.lifecycle_state,'retirementId',r.id,'executeStepId',r.execute_step_id,'attention',r.attention_required,'lease',r.lease,'finished',r.finished_at_utc,'status',s.proof_json->>'status','settled',s.settled_at_utc,'workflowSha256',encode(sha256(convert_to(to_jsonb(r)::text,'utf8')),'hex'),'stepSha256',encode(sha256(convert_to(to_jsonb(s)::text,'utf8')),'hex'),'workspaceSha256',encode(sha256(convert_to(to_jsonb(w)::text,'utf8')),'hex'),'jobSha256',encode(sha256(convert_to((SELECT to_jsonb(j) FROM operation_jobs j WHERE j.id=r.id)::text,'utf8')),'hex'),'recoveries',(SELECT count(*) FROM development_workspace_retirement_recoveries a WHERE a.retirement_id=r.id),'completions',(SELECT count(*) FROM development_workspace_retirement_completions c WHERE c.retirement_id=r.id)) FROM development_workspace_retirement_workflows r JOIN development_workspaces w ON w.id=r.workspace_id JOIN development_workspace_retirement_steps s ON s.id=r.execute_step_id WHERE r.id='"+identifier+"';")
     assert len(rows) == 1
     return rows[0]
 
@@ -92,7 +96,9 @@ def main():
     raw = sys.stdin.readline(8193)
     assert len(raw) <= 8192 and raw.endswith('\n')
     payload = json.loads(raw)
-    assert set(payload) == {'evidence', 'username', 'subject', 'workspaceId', 'retirementId', 'attempt'}
+    assert set(payload) == {'evidence', 'username', 'subject', 'workspaceId', 'retirementId', 'attempt', 'kind'}
+    assert payload['kind'] == os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_KIND', 'group-removal')
+    assert payload['kind'] in ('group-removal', 'account-disable')
     evidence = Path(payload['evidence']).resolve(strict=True)
     root = Path(__file__).resolve().parents[2]/'deploy/artifacts'
     assert evidence.is_relative_to(root) and evidence.is_dir()
@@ -117,12 +123,12 @@ def main():
         client.trust_env = False
         client.headers['Authorization'] = 'Bearer '+require(values, 'Authentication__Authentik__ApiToken')
         action = OwnedRecoveryAuthority(client, payload['username'], payload['subject'],
-            require(values, 'Authentication__Authentik__AdministratorGroupId'))
+            require(values, 'Authentication__Authentik__AdministratorGroupId'), kind=payload['kind'])
         try:
-            save('intent', dict(subject=payload['subject'], onlyOriginalGroupRestorable=True))
+            save('intent', dict(subject=payload['subject'], kind=payload['kind'], onlyOriginalAuthorityRestorable=True))
             action.remove()
-            save('removed', dict(passed=True, subject=payload['subject'], onlyOwnedGroupsRemoved=True))
-            print(json.dumps(dict(removed=True)), flush=True)
+            save('removed', dict(passed=True, subject=payload['subject'], kind=payload['kind'], onlyOwnedIdentityChanged=True))
+            print(json.dumps(dict(removed=True, kind=payload['kind'])), flush=True)
             command = sys.stdin.readline(32)
             assert command in ('restore\n', '')
         finally:
@@ -130,9 +136,9 @@ def main():
             # restoration. Account cleanup in the parent remains a final fence.
             action.restore()
             after = checkpoint(payload['retirementId'])
-            save('restored', dict(passed=before == after, originalGroupRestored=True,
+            save('restored', dict(passed=before == after, originalGroupRestored=True, originalAuthorityRestored=True, kind=payload['kind'],
                 before=before, after=after, workflowAndProofAndBudgetUnchanged=before == after))
-            print(json.dumps(dict(restored=True, unchanged=before == after)), flush=True)
+            print(json.dumps(dict(restored=True, unchanged=before == after, kind=payload['kind'])), flush=True)
             assert before == after, 'REVOKED_RECOVERY_CHANGED_LEDGER'
 
 

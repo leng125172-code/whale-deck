@@ -53,6 +53,7 @@ def main():
     assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_BUSINESS_PROBE') == '1'
     if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1':
         assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1'
+        assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_KIND', 'group-removal') in ('group-removal', 'account-disable')
     revision, package_feed, evidence = sys.argv[1], Path(sys.argv[2]).resolve(strict=True), Path(sys.argv[3]).resolve(strict=True)
     assert re.fullmatch('[a-f0-9]{40}', revision) and evidence.is_dir() and not (evidence / 'state.json').exists()
     os.umask(0o077)
@@ -90,7 +91,8 @@ def main():
                     save(evidence, f'attempt-{attempt}-source-sha256.json', sources)
                     payload = dict(revision=revision, evidence=str(evidence), slug=slug, accounts=accounts,
                         archive=str(archive), archiveSha256=hashlib.sha256(content).hexdigest(), retirementProbe=True,
-                        authorityProbe=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1', authorityAttempt=attempt)
+                        authorityProbe=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1', authorityAttempt=attempt,
+                        authorityKind=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_KIND', 'group-removal'))
                     # Browser process belongs to this wrapper; credentials only
                     # cross its private stdin, never argv or evidence.
                     try:
@@ -105,6 +107,7 @@ def main():
                                 time.sleep(0.2)
                             assert restored.exists(), 'OWNED_AUTHORITY_RESTORE_NOT_CONFIRMED'
                             assert json.loads(restored.read_bytes())['originalGroupRestored']
+                            assert json.loads(restored.read_bytes())['originalAuthorityRestored']
                     save(evidence, f'browser-process-{attempt}.json', dict(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr))
                     if result.returncode == 0:
                         break
@@ -131,6 +134,7 @@ def main():
             assert recovery['passed'] and recovery['independentConsentRequired']
             if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1':
                 assert recovery['authority']['passed']
+                assert recovery['authority']['kind'] == os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_KIND', 'group-removal')
                 assert recovery['authority']['recoveryStatus'] == recovery['authority']['historyStatus'] == 403
                 assert recovery['authority']['restoration']['unchanged']
             assert state['retirementRecoveryOrdinaryDenied']

@@ -1,4 +1,4 @@
-// One generated QA owner only; the child restores its original group on EOF.
+// One generated QA owner only; the child restores original authority on EOF.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
@@ -8,7 +8,11 @@ import { fileURLToPath } from 'node:url'
 export async function installedRecoveryAuthority(args) {
   const { page, context, base, api, route, workspace, state, record, retirement, headers, save, evidence, authorityUsername } = args
   assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE, '1')
-  const proof = record.recovery.authority ??= { deniedKey: randomUUID() }
+  const kind = args.authorityKind ?? 'group-removal'
+  assert.ok(['group-removal', 'account-disable'].includes(kind))
+  const proof = record.recovery.authority ??= { deniedKey: randomUUID(), kind }
+  proof.kind ??= 'group-removal'
+  assert.equal(proof.kind, kind)
   if (proof.passed) return
   await save()
   const child = spawn('/usr/bin/python3', ['-B', fileURLToPath(new URL('./owned_recovery_authority.py', import.meta.url))], { stdio: ['pipe', 'pipe', 'pipe'] })
@@ -28,9 +32,10 @@ export async function installedRecoveryAuthority(args) {
   }
   try {
     child.stdin.write(JSON.stringify({ evidence, username: authorityUsername, subject: state.ownerSubject,
-      workspaceId: workspace.id, retirementId: retirement.retirementId, attempt: args.authorityAttempt }) + '\n')
+      workspaceId: workspace.id, retirementId: retirement.retirementId, attempt: args.authorityAttempt, kind }) + '\n')
     proof.removal = await next()
     assert.equal(proof.removal.removed, true)
+    assert.equal(proof.removal.kind, kind)
     await save()
     const endpoint = `${api}/${workspace.id}/retirements/${retirement.retirementId}`
     const denied = await context.request.post(base + endpoint + '/recover', {
@@ -47,6 +52,7 @@ export async function installedRecoveryAuthority(args) {
     child.stdin.write('restore\n')
     proof.restoration = await next()
     assert.equal(proof.restoration.restored, true)
+    assert.equal(proof.restoration.kind, kind)
     assert.equal(proof.restoration.unchanged, true)
     child.stdin.end()
     proof.childExit = await exit

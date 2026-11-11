@@ -1,6 +1,7 @@
 """Offline mutation-scope and lost-response restoration safety checks."""
 import copy
 import unittest
+from unittest.mock import patch
 
 from owned_recovery_authority import OwnedRecoveryAuthority, check_binding
 
@@ -36,6 +37,36 @@ class Client:
 
 
 class ScopeTests(unittest.TestCase):
+    def test_disable_changes_only_active_flag_and_restores_original_groups(self):
+        client = Client(); action = OwnedRecoveryAuthority(client, NAME, SUBJECT, GROUP, kind='account-disable')
+        action.remove()
+        self.assertFalse(client.user['is_active']); self.assertEqual(client.user['groups'], [GROUP])
+        action.restore(); action.restore()
+        self.assertEqual(client.patches, [{'is_active': False}, {'is_active': True}])
+        self.assertEqual(client.user['groups'], [GROUP])
+
+    def test_disable_lost_reply_never_replays_and_can_restore(self):
+        client = Client(); action = OwnedRecoveryAuthority(client, NAME, SUBJECT, GROUP, kind='account-disable')
+        client.lose_reply = True
+        with self.assertRaises(TimeoutError): action.remove()
+        with self.assertRaises(AssertionError): action.remove()
+        action.restore()
+        self.assertEqual(client.patches, [{'is_active': False}, {'is_active': True}])
+
+    def test_disable_does_not_reactivate_a_concurrently_changed_identity(self):
+        for key, value in [('uuid', WORKSPACE), ('username', 'other'), ('groups', ['different'])]:
+            with self.subTest(key=key):
+                client = Client(); action = OwnedRecoveryAuthority(client, NAME, SUBJECT, GROUP, kind='account-disable')
+                action.remove(); client.user[key] = value
+                with self.assertRaises(AssertionError): action.restore()
+                self.assertEqual(client.patches, [{'is_active': False}])
+
+    def test_unsupported_authority_action_is_rejected_before_http(self):
+        client = Client()
+        with patch.object(client, 'get', side_effect=RuntimeError('no HTTP')) as lookup:
+            with self.assertRaises(AssertionError): OwnedRecoveryAuthority(client, NAME, SUBJECT, GROUP, kind='reset-password')
+            lookup.assert_not_called()
+
     def action(self, client): return OwnedRecoveryAuthority(client, NAME, SUBJECT, GROUP)
 
     def test_removes_and_restores_only_original_exact_group(self):
