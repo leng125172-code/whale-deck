@@ -27,6 +27,8 @@ jobs:
         run: sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT python3 -B deploy/ci/check-retirement-stop-systemd.py
       - name: Check archive task identity and cancellation with real systemd cgroups
         run: sudo python3 -B -W error::ResourceWarning deploy/validation/validate_development_archive_execution.py --run
+      - name: Check scoped QA interruption with real cgroup death and immutable journal
+        run: sudo python3 -B -W error::ResourceWarning deploy/validation/validate_qa_retirement_interruption_native.py --run
       - name: Check shell syntax and side-effect-free preview
         run: |
           bash -n install.sh
@@ -519,6 +521,7 @@ jobs:
           node --check ../deploy/validation/installed_workspace_retirement.mjs
           node --check ../deploy/validation/installed_workspace_retirement_recovery.mjs
           node --check ../deploy/validation/installed_recovery_authority.mjs
+          node --check ../deploy/validation/installed_retirement_interruption.mjs
           node --check ../deploy/validation/validate_development_archive_installed.mjs
           node --check ../deploy/validation/validate_workspace_archive_business_installed.mjs
           node --check ../deploy/validation/validate_workspace_archive_faults_installed.mjs
@@ -527,6 +530,8 @@ jobs:
           python3 -W error -m py_compile ../deploy/validation/validate_workspace_retirement_business_installed.py ../deploy/validation/inspect_development_workspace_retirement.py
           python3 -W error -m py_compile ../deploy/validation/hold_qa_workspace_source_fd.py ../deploy/validation/standard_update_http_observer.py
           python3 -W error -m py_compile ../deploy/validation/owned_recovery_authority.py
+          python3 -W error -m py_compile ../deploy/validation/interrupt_qa_retirement_execution.py ../deploy/validation/validate_qa_retirement_interruption_native.py
+          python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_qa_retirement_interruption.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_owned_recovery_authority.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_retirement_disk_reservation_proof.py
           python3 -B -W error::ResourceWarning -m unittest discover -s ../deploy/validation -p test_standard_update_http_observer.py

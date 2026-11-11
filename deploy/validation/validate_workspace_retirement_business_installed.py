@@ -32,7 +32,8 @@ SOURCES = ('validate_workspace_retirement_business_installed.py', 'validate_deve
     'inspect_development_workspace_lifecycle.py', 'validate_workspace_archive_faults_installed.py',
     'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs',
     'installed_workspace_retirement_recovery.mjs', 'hold_qa_workspace_source_fd.py',
-    'installed_recovery_authority.mjs', 'owned_recovery_authority.py')
+    'installed_recovery_authority.mjs', 'owned_recovery_authority.py',
+    'installed_retirement_interruption.mjs', 'interrupt_qa_retirement_execution.py')
 
 
 def require_disks_preserved(before, after):
@@ -51,6 +52,10 @@ def require_disks_preserved(before, after):
 def main():
     assert os.geteuid() == 0 and __debug__ and len(sys.argv) == 4
     assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_BUSINESS_PROBE') == '1'
+    interrupt = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE') == '1'
+    if interrupt:
+        assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1'
+        assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') != '1'
     if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1':
         assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1'
         assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_KIND', 'group-removal') in ('group-removal', 'account-disable')
@@ -138,10 +143,16 @@ def main():
                 assert recovery['authority']['recoveryStatus'] == recovery['authority']['historyStatus'] == 403
                 assert recovery['authority']['restoration']['unchanged']
             assert state['retirementRecoveryOrdinaryDenied']
-            assert recovery['openUnlinked']['links'] == 0 and recovery['release']['released']
+            if interrupt:
+                fault = recovery['interruption']
+                assert fault['interrupted'] and fault['exactExecutionSettled']
+                assert fault['cancellationAbsent'] and fault['resultAbsent']
+                assert recovery['attemptsBefore'][0]['status'] == 'Interrupted'
+            else:
+                assert recovery['openUnlinked']['links'] == 0 and recovery['release']['released']
             assert recovery['attemptsBefore'][0] == recovery['attemptsAfter'][0]
             assert recovery['attemptsAfter'][1]['previousTaskId'] == recovery['failedView']['executeTaskId']
-            original = recovery['openUnlinked']['attempts']
+            original = recovery['interruption']['original'] if interrupt else recovery['openUnlinked']['attempts']
             assert len(original) == 1 and original[0]['taskId'] == recovery['failedView']['executeTaskId']
             old_task = str(uuid.UUID(original[0]['taskId']))
             unchanged = sql("SELECT json_build_object('retirementId',r.id,'taskId',s.id,'requestSha256',encode(sha256(convert_to(s.request_json,'utf8')),'hex'),'proofSha256',encode(sha256(convert_to(s.proof_json::text,'utf8')),'hex'),'dispatchedAtUtc',s.dispatched_at_utc,'settledAtUtc',s.settled_at_utc,'planSha256',encode(sha256(convert_to(r.plan_json::text,'utf8')),'hex'),'confirmedAtUtc',r.confirmed_at_utc,'planExpiresAtUtc',r.plan_expires_at_utc) FROM development_workspace_retirement_steps s JOIN development_workspace_retirement_workflows r ON r.id=s.retirement_id WHERE s.id='" + old_task + "';")

@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { expect } from '../../web/node_modules/@playwright/test/index.mjs'
 import { installedLifecycle } from './installed_development_lifecycle.mjs'
 import { holdRetirementSource, recoverRetirement, finishRetirementRecovery } from './installed_workspace_retirement_recovery.mjs'
+import { armRetirementInterruption } from './installed_retirement_interruption.mjs'
 
 const execute = promisify(execFile)
 const inspector = fileURLToPath(new URL('./inspect_development_workspace_retirement.py', import.meta.url))
@@ -104,7 +105,10 @@ export async function installedRetirementBusiness(args) {
       Object.assign(record.retirement, retirement)
       await save()
       const recoveryProbe = process.env.WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE === '1' && workspace.id === state.workspace.id
-      const held = recoveryProbe && retirement.awaitingConfirmation
+      const interruptProbe = recoveryProbe && process.env.WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE === '1'
+      const interruption = interruptProbe && retirement.awaitingConfirmation
+        ? await armRetirementInterruption({ ...args, workspace, record }) : undefined
+      const held = recoveryProbe && !interruptProbe && retirement.awaitingConfirmation
         ? await holdRetirementSource({ ...args, workspace, record, project }) : undefined
       try {
       if (retirement.awaitingConfirmation) {
@@ -129,13 +133,17 @@ export async function installedRetirementBusiness(args) {
         assert.equal(record.confirmation.deleteSourceAndReleaseBudget, true)
         assert.equal(record.confirmation.planSha256, plan.retirementPlanSha256)
         assert.equal(response.status(), 202)
+        if (interruption) {
+          const accepted = await response.json()
+          await interruption.interrupt(accepted.executeTaskId)
+        }
       }
       retirement = await poll(context, prefix + '/retirements/' + retirement.retirementId, value => !!value.completedAtUtc || value.attentionRequired)
       if (recoveryProbe && retirement.attentionRequired)
         retirement = await recoverRetirement({ ...args, workspace, record, retirement, held })
       if (recoveryProbe && retirement.completedAtUtc && record.recovery && !record.recovery.passed)
         retirement = await finishRetirementRecovery({ ...args, workspace, record }, retirement)
-      } finally { await held?.close() }
+      } finally { await held?.close(); await interruption?.close() }
       Object.assign(record.retirement, retirement)
       await save()
       assert.equal(retirement.state, 'Succeeded')

@@ -1,5 +1,7 @@
 # 实施状态与恢复入口
 
+2026-11-11，892e7958准确CI42948605633全13成功。356ba6c1实机新QA真实存活退役执行按完整request/boot/cgroup inode精确终止，无cancel/result写入；宿主及Worker结算Interrupted，预算保留，UI独立新键创建attempt1并成功退役，原失败证明/时间/计划保持。Node2/2、.NET独立构建及测试2/2、重新启用Node共4运行通过，两空间产品归档退役/配额八项归零/预算复用、HDD/8报告及两账号收尾首次通过；19178原行/13登记含5活动分配/34报告与120GB/300GB保持，91文件封存。新增控制器4边界/真实隔离systemd门禁，未新增产品部署；自身提交准确CI、删除已开始后的中断、真实Stopped/另一管理员及其余目标继续，完整主任务0/59，17项移出不算完成且不恢复。见[真实Interrupted及显式恢复](qa/WORKSPACE_RETIREMENT_INTERRUPTION.md)。
+
 2026-11-11，5205143e准确CI42944649886全13成功。356ba6c1实机新QA完成真实账号禁用：仅is_active变false、组密码保留，同一登录恢复/历史403，恢复原活动状态后workflow/step/workspace/job摘要与恢复/completion计数保持，独立UI新键接续成功。4真实运行成功（Node2/2、.NET独立构建与测试2/2），两空间配额八项归零/claim释放、预算复用、HDD/8报告与账号收尾通过；19014原行/11登记含5活动分配/30报告和120GB/300GB保持，完整wrapper首次通过，71文件封存。仅新增验证器/测试，无新产品部署；自身准确CI、另一管理员/真实Interrupted/Stopped等矩阵及其余目标继续，完整主任务0/59，17项移出不算完成且不恢复。见[账号禁用恢复实机证据](qa/WORKSPACE_RETIREMENT_ACCOUNT_DISABLE.md)。
 
 2026-11-11，94d3ceca记录提交准确CI42939990642全13成功。已部署356ba6c1上新QA完成真实当前组撤权：同一登录恢复POST/历史GET均403，原组恢复后workflow/step/workspace摘要及恢复/completion计数保持，独立UI确认新task接续成功。Node2/2、.NET独立构建与测试2/2及重新启用Node共4运行通过，两空间配额八项归零/claim释放、预算复用、HDD与8报告读取及账号收尾通过。18850原记录/9登记含5活动分配/26报告及120GB/300GB保持。最终st_blocks增加4096字节误拒已修正严格比较器并对同一证据只读复验通过，原失败与只读复验导入错误保留，81文件封存。仅新增验证器/CI门禁，无新产品部署；自身提交CI另待，真实Interrupted/Stopped/禁用账号/其他管理员及其余门槛继续，完整主任务0/59，17项移出不算完成且不恢复。见[真实撤权恢复证据](qa/WORKSPACE_RETIREMENT_AUTHORITY.md)。
