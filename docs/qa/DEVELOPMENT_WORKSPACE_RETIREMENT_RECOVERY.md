@@ -1,5 +1,7 @@
 # 开发空间退役：显式恢复与真实拒绝恢复验收
 
+接续：2026-11-11，356ba6c1新QA真实部分删除后中断：4文件已删/502仍在、缺失均具原意图，原716条manifest绑定；真实Interrupted保留预算，UI新task沿原日志恢复及两空间退役、预算复用、报告和账号收尾首次通过。a90bc7d2准确CI全13，本批新提交CI另待。见[实机部分删除与恢复证据](WORKSPACE_RETIREMENT_PARTIAL_DELETION.md)。
+
 接续：2026-11-11，356ba6c1新QA owner A禁用（组密码不变）期间由B独立UI新键恢复成功；A me在B成功后仍403，身份源核对inactive/原组后才恢复active，原A上下文随后200，不重新登录。两空间产品退役、预算复用、报告及三个账号收尾首次通过；不推定全部票据销毁，见[实机禁用接管证据](WORKSPACE_RETIREMENT_DISABLED_OWNER_TAKEOVER.md)。
 
 接续：2026-11-11，接管验收窗口指针修复经真实本地中止与显式同意图重试通过：同三个账号/空间/原失败task，旧窗口/B退出证明保留、当前窗口2，原FD/run/import证据保持，只一次产品恢复；两空间产品退役及账号/会话收尾通过。703a68f1准确CI全13，新修复自身CI另待；见[实际重试及边界](WORKSPACE_RETIREMENT_TAKEOVER_RETRY.md)。

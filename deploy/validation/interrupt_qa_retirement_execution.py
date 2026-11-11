@@ -49,7 +49,7 @@ def check_scope(payload, state, declaration, row, *, task=None):
         assert request['prerequisite']['archiveId'] == plan['archiveId']
 
 
-def interrupt_locked(tasks, value, save):
+def interrupt_locked(tasks, value, save, *, progress=None):
     """Return None until execution is live; never cancel or restart a task."""
     with tasks.entry(value) as directory:
         tasks.require_dispatch(directory, value)
@@ -66,6 +66,9 @@ def interrupt_locked(tasks, value, save):
         digest = hashlib.sha256(tasks.d.canonical(value)).hexdigest()
         before = dict(taskId=value['taskId'], requestSha256=digest, execution=proof,
             resultAbsent=True, cancellationAbsent=True, liveExecution=True)
+        if progress is not None:
+            before['deletionProgress'] = progress.wait(tasks, value)
+            assert not tasks.execution.settled(proof), 'QA_EXECUTION_GONE_BEFORE_PROGRESS_KILL'
         save('before-kill', before)  # Fail closed if evidence cannot be committed.
         assert tasks.execution.settled(proof, stop=True)
         assert tasks.completed(directory, value) is None
@@ -75,6 +78,9 @@ def interrupt_locked(tasks, value, save):
         assert receipt['requestSha256'] == digest
         result = dict(interrupted=True, before=before, receipt=receipt,
             exactExecutionSettled=True, cancellationAbsent=True, resultAbsent=True)
+        if progress is not None:
+            save('execution-stopped', result)
+            result['deletionProgress'] = progress.stopped(tasks, value)
         save('after-kill', result)
         return result
 
@@ -130,6 +136,10 @@ def main():
     declaration = json.loads((evidence/'declaration.json').read_bytes())
     check_scope(payload, state, declaration, checkpoint(payload['retirementId']))
     tasks = installed_tasks()
+    progress = None
+    if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_DELETE_PROGRESS_PROBE') == '1':
+        from retirement_deletion_progress import InstalledDeletionProgress
+        progress = InstalledDeletionProgress()
     os.umask(0o077)
     def save(suffix, value):
         target = evidence/f'interruption-{attempt}-{suffix}.json'
@@ -150,7 +160,7 @@ def main():
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         try:
-            result = interrupt_locked(tasks, value, save)
+            result = interrupt_locked(tasks, value, save, progress=progress)
         except FileNotFoundError:
             result = None
         except tasks.d.files.Rejected as error:

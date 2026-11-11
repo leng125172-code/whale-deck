@@ -35,7 +35,7 @@ SOURCES = ('validate_workspace_retirement_business_installed.py', 'validate_deve
     'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs',
     'installed_workspace_retirement_recovery.mjs', 'hold_qa_workspace_source_fd.py',
     'installed_recovery_authority.mjs', 'owned_recovery_authority.py',
-    'installed_retirement_interruption.mjs', 'interrupt_qa_retirement_execution.py',
+    'installed_retirement_interruption.mjs', 'interrupt_qa_retirement_execution.py', 'retirement_deletion_progress.py',
     'installed_retirement_stop.mjs', 'pause_qa_retirement_execution.py',
     'installed_recovery_administrator.mjs', 'retirement_administrator_proof.py',
     'installed_recovery_takeover.mjs', 'owned_recovery_takeover.py',
@@ -59,6 +59,8 @@ def main():
     assert os.geteuid() == 0 and __debug__ and len(sys.argv) == 4
     assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_BUSINESS_PROBE') == '1'
     interrupt = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE') == '1'
+    delete_progress = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_DELETE_PROGRESS_PROBE') == '1'
+    assert not delete_progress or interrupt
     stopped = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_STOP_PROBE') == '1'
     administrator = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_ADMINISTRATOR_PROBE') == '1'
     takeover = os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_TAKEOVER_PROBE') == '1'
@@ -203,6 +205,11 @@ def main():
                 assert fault['interrupted'] and fault['exactExecutionSettled']
                 assert fault['cancellationAbsent'] and fault['resultAbsent']
                 assert recovery['attemptsBefore'][0]['status'] == 'Interrupted'
+                if delete_progress:
+                    progress = fault['deletionProgress']
+                    assert progress['partialDeletion'] and progress['executionAlreadySettled']
+                    assert progress['removedFiles'] > 0 and progress['remainingFiles'] > 0
+                    assert progress['everyAbsenceHasExactIntent'] and progress['noStorageLockOrWrites']
             else:
                 assert recovery['openUnlinked']['links'] == 0 and recovery['release']['released']
             assert recovery['attemptsBefore'][0] == recovery['attemptsAfter'][0]

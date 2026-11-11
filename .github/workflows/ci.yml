@@ -29,6 +29,10 @@ jobs:
         run: sudo python3 -B -W error::ResourceWarning deploy/validation/validate_development_archive_execution.py --run
       - name: Check scoped QA interruption with real cgroup death and immutable journal
         run: sudo python3 -B -W error::ResourceWarning deploy/validation/validate_qa_retirement_interruption_native.py --run
+      - name: Check partial source deletion with real cgroup death and same manifest continuation
+        run: |
+          sudo python3 -B -W error::ResourceWarning -m unittest discover -s deploy/validation -p test_retirement_deletion_progress.py
+          sudo python3 -B -W error::ResourceWarning deploy/validation/validate_qa_retirement_deletion_native.py --run
       - name: Check frozen QA cancellation and bounded alarm thaw with real cgroups
         run: sudo python3 -B -W error::ResourceWarning deploy/validation/validate_qa_retirement_stop_native.py --run
       - name: Check shell syntax and side-effect-free preview
