@@ -1,5 +1,9 @@
 # 实施状态与恢复入口
 
+接续：1b5cefd6准确CI42951997927已全13成功，最终绑定收据另存，封存证据不改写；以下Stopped批次仅自身新提交CI待完成。
+
+2026-11-11，356ba6c1实机新QA首个存活execute按完整request/boot/cgroup inode绑定，在20秒解冻保护的冻结窗口由真实页面取消202→签名Cancel→原Stopped证明及AttentionRequired/预算保留；UI独立新键attempt1清取消标志并成功恢复，原失败证明/计划/时间保持。4真实运行成功（Node2/2、.NET独立构建和测试2/2），两空间产品归档退役/配额八项归零/预算复用、8报告、两账号及冻结窗口收尾首次通过；19342原行/15登记含5活动分配/38报告与120GB/300GB保持，98文件封存。6新边界/真实systemd冻结Cancel及实际闹钟解冻通过，未新部署产品；前序1b5cefd6封存时CI未完，本批自身CI、删除途中故障/另一管理员及其余目标继续，完整主任务0/59，17项移出不算完成且不恢复。见[真实Stopped及显式恢复](qa/WORKSPACE_RETIREMENT_STOP.md)。
+
 2026-11-11，892e7958准确CI42948605633全13成功。356ba6c1实机新QA真实存活退役执行按完整request/boot/cgroup inode精确终止，无cancel/result写入；宿主及Worker结算Interrupted，预算保留，UI独立新键创建attempt1并成功退役，原失败证明/时间/计划保持。Node2/2、.NET独立构建及测试2/2、重新启用Node共4运行通过，两空间产品归档退役/配额八项归零/预算复用、HDD/8报告及两账号收尾首次通过；19178原行/13登记含5活动分配/34报告与120GB/300GB保持，91文件封存。新增控制器4边界/真实隔离systemd门禁，未新增产品部署；自身提交准确CI、删除已开始后的中断、真实Stopped/另一管理员及其余目标继续，完整主任务0/59，17项移出不算完成且不恢复。见[真实Interrupted及显式恢复](qa/WORKSPACE_RETIREMENT_INTERRUPTION.md)。
 
 2026-11-11，5205143e准确CI42944649886全13成功。356ba6c1实机新QA完成真实账号禁用：仅is_active变false、组密码保留，同一登录恢复/历史403，恢复原活动状态后workflow/step/workspace/job摘要与恢复/completion计数保持，独立UI新键接续成功。4真实运行成功（Node2/2、.NET独立构建与测试2/2），两空间配额八项归零/claim释放、预算复用、HDD/8报告与账号收尾通过；19014原行/11登记含5活动分配/30报告和120GB/300GB保持，完整wrapper首次通过，71文件封存。仅新增验证器/测试，无新产品部署；自身准确CI、另一管理员/真实Interrupted/Stopped等矩阵及其余目标继续，完整主任务0/59，17项移出不算完成且不恢复。见[账号禁用恢复实机证据](qa/WORKSPACE_RETIREMENT_ACCOUNT_DISABLE.md)。

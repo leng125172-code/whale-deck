@@ -1,5 +1,7 @@
 # 真实退役执行中断与显式新任务恢复
 
+接续：1b5cefd62518e235ad419ba3c6594f3841714404准确CI42951997927现已全13成功，最终收据另存 `deploy/artifacts/workspace-retirement-interruption-record-20261111/exact-ci-final.json`；连接器传输失败及后续只读查询记录保留。没有重复发布产品。真实Stopped与独立恢复也已后续验收，见[Stopped实机证据](WORKSPACE_RETIREMENT_STOP.md)。以下保留原批次边界。
+
 2026-11-11，使用已部署产品356ba6c1。前序892e79583c1cfd134a1af4f936b5d386049fd754准确CI42948605633全13成功；本批只有QA验证器、CI门禁及记录，没有新产品部署，也没有扩大正式Agent授权。
 
 ## 实际验收

@@ -87,10 +87,11 @@ def checkpoint(retirement):
     return rows[0]
 
 
-def settled_snapshot(task):
+def settled_snapshot(task, status='Interrupted'):
     from validate_workspace_archive_faults_installed import sql
     identifier(task)
-    return sql("SELECT json_build_object('retirementId',r.id,'taskId',s.id,'requestSha256',encode(sha256(convert_to(s.request_json,'utf8')),'hex'),'proofSha256',encode(sha256(convert_to(s.proof_json::text,'utf8')),'hex'),'dispatchedAtUtc',s.dispatched_at_utc,'settledAtUtc',s.settled_at_utc,'planSha256',encode(sha256(convert_to(r.plan_json::text,'utf8')),'hex'),'confirmedAtUtc',r.confirmed_at_utc,'planExpiresAtUtc',r.plan_expires_at_utc) FROM development_workspace_retirement_steps s JOIN development_workspace_retirement_workflows r ON r.id=s.retirement_id WHERE s.id='"+task+"' AND s.proof_json->>'status'='Interrupted' AND s.settled_at_utc IS NOT NULL AND r.attention_required AND r.finished_at_utc IS NULL AND r.execution_attempt=0;")
+    assert status in ('Interrupted', 'Stopped')
+    return sql("SELECT json_build_object('retirementId',r.id,'taskId',s.id,'requestSha256',encode(sha256(convert_to(s.request_json,'utf8')),'hex'),'proofSha256',encode(sha256(convert_to(s.proof_json::text,'utf8')),'hex'),'dispatchedAtUtc',s.dispatched_at_utc,'settledAtUtc',s.settled_at_utc,'planSha256',encode(sha256(convert_to(r.plan_json::text,'utf8')),'hex'),'confirmedAtUtc',r.confirmed_at_utc,'planExpiresAtUtc',r.plan_expires_at_utc) FROM development_workspace_retirement_steps s JOIN development_workspace_retirement_workflows r ON r.id=s.retirement_id WHERE s.id='"+task+"' AND s.proof_json->>'status'='"+status+"' AND s.settled_at_utc IS NOT NULL AND r.attention_required AND r.finished_at_utc IS NULL AND r.execution_attempt=0;")
 
 
 def installed_tasks():

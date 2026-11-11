@@ -63,7 +63,8 @@ export async function recoverRetirement(args) {
   const endpoint = `${api}/${workspace.id}/retirements/${retirement.retirementId}`
   const recovery = record.recovery
   const interrupted = process.env.WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE === '1'
-  assert.ok(interrupted ? recovery?.interruption?.interrupted : recovery?.held?.ready, 'NO_REAL_RETIREMENT_FAULT')
+  const stopped = process.env.WHALEDECK_INSTALLED_RETIREMENT_STOP_PROBE === '1'
+  assert.ok(stopped ? recovery?.stop?.stopped : interrupted ? recovery?.interruption?.interrupted : recovery?.held?.ready, 'NO_REAL_RETIREMENT_FAULT')
   assert.equal(retirement.attentionRequired, true)
   assert.equal(retirement.completedAtUtc, null)
   assert.equal(retirement.budgetReleased, false)
@@ -72,8 +73,12 @@ export async function recoverRetirement(args) {
   assert.equal(old.length, 1)
   assert.equal(old[0].attempt, 0)
   assert.equal(old[0].taskId, retirement.executeTaskId)
-  assert.equal(old[0].status, interrupted ? 'Interrupted' : 'Rejected')
-  if (!interrupted) assert.equal(old[0].code, 'WORKSPACE_STORAGE_RETIREMENT_QUOTA_STILL_REFERENCED')
+  assert.equal(old[0].status, stopped ? 'Stopped' : interrupted ? 'Interrupted' : 'Rejected')
+  if (!interrupted && !stopped) assert.equal(old[0].code, 'WORKSPACE_STORAGE_RETIREMENT_QUOTA_STILL_REFERENCED')
+  if (stopped) {
+    assert.equal(retirement.cancelRequested, true)
+    assert.equal(recovery.stopUiCancellation?.status, 202)
+  }
   assert.ok(old[0].settledAtUtc && old[0].proofSha256)
   recovery.failedView ??= retirement
   recovery.attemptsBefore ??= old
@@ -147,7 +152,12 @@ export async function finishRetirementRecovery(args, result) {
   const recovery = record.recovery, retirement = recovery.failedView
   const endpoint = `${api}/${workspace.id}/retirements/${retirement.retirementId}`
   const card = page.getByRole('region', { name: '开发空间退役' })
-  if (process.env.WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE === '1') {
+  if (process.env.WHALEDECK_INSTALLED_RETIREMENT_STOP_PROBE === '1') {
+    assert.equal(recovery.stop?.exactExecutionSettled, true)
+    assert.equal(recovery.stop?.cancellationPresent, true)
+    assert.equal(recovery.stop?.resultAbsent, true)
+    assert.equal(result.cancelRequested, false)
+  } else if (process.env.WHALEDECK_INSTALLED_RETIREMENT_INTERRUPT_PROBE === '1') {
     assert.equal(recovery.interruption?.exactExecutionSettled, true)
     assert.equal(recovery.interruption?.cancellationAbsent, true)
     assert.equal(recovery.interruption?.resultAbsent, true)
