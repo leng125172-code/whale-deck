@@ -155,6 +155,8 @@ public sealed partial class ContainerUploadHttpTests
         Assert.Equal("WORKSPACE_SLUG_CONFLICT", (await Assert.ThrowsAsync<InvalidOperationException>(() => Register(duplicate))).Message);
         var down = await Assert.ThrowsAsync<PostgresException>(() => inspect.GetService<IMigrator>().MigrateAsync("20261110171841_WorkspaceRetirementPreparation"));
         Assert.Equal("workspace_retirement_execution_history_present", down.MessageText);
+        await inspect.Database.MigrateAsync();
+        Assert.Equal(observer.Task.TaskId, (await Get(execution)).ExecuteTaskId);
         Assert.Equal(1, await Completions());
 
         // An interrupted destructive phase is not proof of an intact source.
@@ -199,6 +201,7 @@ public sealed partial class ContainerUploadHttpTests
         Assert.True((await Store(s => s.ReauthorizeAsync(actor, workspace.Id, interrupted.RetirementId, default))).AttentionRequired);
         await Store(s => s.CancelAsync(actor, workspace.Id, interrupted.RetirementId, default)); Assert.Equal("Retiring", await State());
         await SqlFence($"UPDATE development_workspace_retirement_workflows SET finished_at_utc=now() WHERE id='{interrupted.RetirementId:D}'; UPDATE development_workspaces SET lifecycle_state='Stopped' WHERE id='{workspace.Id:D}'", "ck_workspace_retirement_completion");
+        await RecoverInterruptedRetirementInPostgres(options, workspace, interrupted, destructive, plan, actor, clock);
         Console.WriteLine("INBOX_PHASE=workspace-retirement-execution-postgres-fixed-task-fence-proof-audit-rollback-tombstone-budget-history");
 
         Task<WorkspaceRetirementView> Begin(Guid key) => Store(s => s.BeginAsync(actor, workspace, key, archive.Id, workspace.LifecycleVersion, default));

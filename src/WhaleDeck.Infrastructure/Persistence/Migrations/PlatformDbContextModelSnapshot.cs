@@ -9342,11 +9342,79 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementRecovery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActorSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("actor_subject");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt");
+
+                    b.Property<DateTimeOffset>("ConfirmedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at_utc");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("LoginBinding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("login_binding");
+
+                    b.Property<string>("PlanSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("plan_sha256");
+
+                    b.Property<string>("PreviousProofSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("previous_proof_sha256");
+
+                    b.Property<Guid>("PreviousStepId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("previous_step_id");
+
+                    b.Property<Guid>("RetirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("retirement_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreviousStepId")
+                        .IsUnique();
+
+                    b.HasIndex("RetirementId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("development_workspace_retirement_recoveries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_retire_recovery_binding", "attempt BETWEEN 1 AND 1024 AND id <> previous_step_id AND idempotency_key <> '00000000-0000-0000-0000-000000000000'::uuid AND length(btrim(actor_subject)) > 0 AND login_binding ~ '^[a-fA-F0-9]{64}$' AND previous_proof_sha256 ~ '^[a-f0-9]{64}$' AND plan_sha256 ~ '^[a-f0-9]{64}$'");
+                        });
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementStep", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt");
 
                     b.Property<DateTimeOffset?>("DispatchedAtUtc")
                         .HasColumnType("timestamp with time zone")
@@ -9377,11 +9445,13 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RetirementId", "Phase")
+                    b.HasIndex("RetirementId", "Phase", "Attempt")
                         .IsUnique();
 
                     b.ToTable("development_workspace_retirement_steps", null, t =>
                         {
+                            t.HasCheckConstraint("ck_workspace_retire_step_attempt", "attempt BETWEEN 0 AND 1024 AND (phase <> 'plan' OR attempt = 0)");
+
                             t.HasCheckConstraint("ck_workspace_retire_step_phase", "phase IN ('plan','execute')");
 
                             t.HasCheckConstraint("ck_workspace_retire_step_proof", "proof_json IS NULL OR octet_length(proof_json::text) BETWEEN 1 AND 32768");
@@ -9433,6 +9503,14 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("ConfirmedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("confirmed_at_utc");
+
+                    b.Property<Guid?>("ExecuteStepId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execute_step_id");
+
+                    b.Property<int>("ExecutionAttempt")
+                        .HasColumnType("integer")
+                        .HasColumnName("execution_attempt");
 
                     b.Property<string>("ExecutionJson")
                         .HasColumnType("jsonb")
@@ -9493,6 +9571,8 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ArchiveId");
 
+                    b.HasIndex("ExecuteStepId");
+
                     b.HasIndex("WorkspaceId")
                         .IsUnique()
                         .HasFilter("finished_at_utc IS NULL");
@@ -9502,6 +9582,8 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
 
                     b.ToTable("development_workspace_retirement_workflows", null, t =>
                         {
+                            t.HasCheckConstraint("ck_workspace_retire_attempt", "execution_attempt BETWEEN 0 AND 1024");
+
                             t.HasCheckConstraint("ck_workspace_retire_digests", "archive_plan_sha256 ~ '^[a-f0-9]{64}$' AND capture_receipt_sha256 ~ '^[a-f0-9]{64}$'");
 
                             t.HasCheckConstraint("ck_workspace_retire_epoch", "expected_epoch >= 2 AND expected_epoch % 2 = 0");
@@ -10498,6 +10580,29 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementRecovery", b =>
+                {
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceRetirementStep", null)
+                        .WithOne()
+                        .HasForeignKey("WhaleDeck.Domain.Entities.WorkspaceRetirementRecovery", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceRetirementStep", null)
+                        .WithOne()
+                        .HasForeignKey("WhaleDeck.Domain.Entities.WorkspaceRetirementRecovery", "PreviousStepId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_development_workspace_retirement_recoveries_development_wo~1");
+
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceRetirementWorkflow", null)
+                        .WithMany()
+                        .HasForeignKey("RetirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_development_workspace_retirement_recoveries_development_wo~2");
+                });
+
             modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRetirementStep", b =>
                 {
                     b.HasOne("WhaleDeck.Domain.Entities.WorkspaceRetirementWorkflow", null)
@@ -10515,6 +10620,12 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("WhaleDeck.Domain.Entities.WorkspaceRetirementStep", null)
+                        .WithMany()
+                        .HasForeignKey("ExecuteStepId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_development_workspace_retirement_workflows_development_wor~1");
+
                     b.HasOne("WhaleDeck.Domain.Entities.OperationJob", null)
                         .WithOne()
                         .HasForeignKey("WhaleDeck.Domain.Entities.WorkspaceRetirementWorkflow", "Id")
@@ -10526,7 +10637,7 @@ namespace WhaleDeck.Infrastructure.Persistence.Migrations
                         .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("FK_development_workspace_retirement_workflows_development_wor~1");
+                        .HasConstraintName("FK_development_workspace_retirement_workflows_development_wor~2");
                 });
 
             modelBuilder.Entity("WhaleDeck.Domain.Entities.WorkspaceRunIntent", b =>

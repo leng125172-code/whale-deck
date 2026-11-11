@@ -9,6 +9,7 @@ public sealed partial class PlatformDbContext
     public DbSet<WorkspaceRetirementWorkflow> WorkspaceRetirementWorkflows => Set<WorkspaceRetirementWorkflow>();
     public DbSet<WorkspaceRetirementStep> WorkspaceRetirementSteps => Set<WorkspaceRetirementStep>();
     public DbSet<WorkspaceRetirementCompletion> WorkspaceRetirementCompletions => Set<WorkspaceRetirementCompletion>();
+    public DbSet<WorkspaceRetirementRecovery> WorkspaceRetirementRecoveries => Set<WorkspaceRetirementRecovery>();
     private static void ConfigureWorkspaceRetirements(ModelBuilder builder)
     {
         builder.Entity<WorkspaceRetirementIntent>(entity =>
@@ -38,6 +39,7 @@ public sealed partial class PlatformDbContext
             {
                 table.HasCheckConstraint("ck_workspace_retire_epoch", "expected_epoch >= 2 AND expected_epoch % 2 = 0");
                 table.HasCheckConstraint("ck_workspace_retire_digests", "archive_plan_sha256 ~ '^[a-f0-9]{64}$' AND capture_receipt_sha256 ~ '^[a-f0-9]{64}$'");
+                table.HasCheckConstraint("ck_workspace_retire_attempt", "execution_attempt BETWEEN 0 AND 1024");
                 table.HasCheckConstraint("ck_workspace_retire_phase", "phase IN ('plan','execute') AND (phase <> 'execute' OR confirmed_at_utc IS NOT NULL)");
                 table.HasCheckConstraint("ck_workspace_retire_lease", "(lease IS NULL) = (lease_until_utc IS NULL) AND (finished_at_utc IS NULL OR lease IS NULL)");
                 table.HasCheckConstraint("ck_workspace_retire_plan", "(plan_json IS NULL) = (plan_expires_at_utc IS NULL) AND (confirmed_at_utc IS NULL OR plan_json IS NOT NULL)");
@@ -52,6 +54,7 @@ public sealed partial class PlatformDbContext
             entity.HasOne<DevelopmentWorkspaceRecord>().WithMany().HasForeignKey(row => row.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<WorkspaceArchiveIntent>().WithMany().HasForeignKey(row => row.ArchiveId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<OperationJob>().WithOne().HasForeignKey<WorkspaceRetirementWorkflow>(row => row.Id).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WorkspaceRetirementStep>().WithMany().HasForeignKey(row => row.ExecuteStepId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(row => row.WorkspaceId).IsUnique().HasFilter("finished_at_utc IS NULL");
             entity.HasIndex(row => new { row.AvailableAtUtc, row.Id }).HasFilter("finished_at_utc IS NULL");
         });
@@ -60,6 +63,7 @@ public sealed partial class PlatformDbContext
             entity.ToTable("development_workspace_retirement_steps", table =>
             {
                 table.HasCheckConstraint("ck_workspace_retire_step_phase", "phase IN ('plan','execute')");
+                table.HasCheckConstraint("ck_workspace_retire_step_attempt", "attempt BETWEEN 0 AND 1024 AND (phase <> 'plan' OR attempt = 0)");
                 table.HasCheckConstraint("ck_workspace_retire_step_request", "octet_length(request_json) BETWEEN 1 AND 4096");
                 table.HasCheckConstraint("ck_workspace_retire_step_proof", "proof_json IS NULL OR octet_length(proof_json::text) BETWEEN 1 AND 32768");
                 table.HasCheckConstraint("ck_workspace_retire_step_settled", "settled_at_utc IS NULL OR proof_json IS NOT NULL");
@@ -68,7 +72,21 @@ public sealed partial class PlatformDbContext
             entity.Property(row => row.Phase).HasMaxLength(8); entity.Property(row => row.RequestJson).HasColumnType("text");
             entity.Property(row => row.ProofJson).HasColumnType("jsonb");
             entity.HasOne<WorkspaceRetirementWorkflow>().WithMany().HasForeignKey(row => row.RetirementId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasIndex(row => new { row.RetirementId, row.Phase }).IsUnique();
+            entity.HasIndex(row => new { row.RetirementId, row.Phase, row.Attempt }).IsUnique();
+        });
+        builder.Entity<WorkspaceRetirementRecovery>(entity =>
+        {
+            entity.ToTable("development_workspace_retirement_recoveries", table =>
+            {
+                table.HasCheckConstraint("ck_workspace_retire_recovery_binding", "attempt BETWEEN 1 AND 1024 AND id <> previous_step_id AND idempotency_key <> '00000000-0000-0000-0000-000000000000'::uuid AND length(btrim(actor_subject)) > 0 AND login_binding ~ '^[a-fA-F0-9]{64}$' AND previous_proof_sha256 ~ '^[a-f0-9]{64}$' AND plan_sha256 ~ '^[a-f0-9]{64}$'");
+            });
+            entity.HasKey(row => row.Id); entity.Property(row => row.Id).ValueGeneratedNever();
+            entity.Property(row => row.ActorSubject).HasMaxLength(256); entity.Property(row => row.LoginBinding).HasMaxLength(64);
+            entity.Property(row => row.PreviousProofSha256).HasMaxLength(64); entity.Property(row => row.PlanSha256).HasMaxLength(64);
+            entity.HasOne<WorkspaceRetirementStep>().WithOne().HasForeignKey<WorkspaceRetirementRecovery>(row => row.Id).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WorkspaceRetirementStep>().WithOne().HasForeignKey<WorkspaceRetirementRecovery>(row => row.PreviousStepId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WorkspaceRetirementWorkflow>().WithMany().HasForeignKey(row => row.RetirementId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(row => new { row.RetirementId, row.IdempotencyKey }).IsUnique();
         });
         builder.Entity<WorkspaceRetirementCompletion>(entity =>
         {

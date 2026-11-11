@@ -196,6 +196,98 @@ it('keeps interrupted execution charged without automatic retry or cancel contro
   expect(wrapper.text()).not.toContain('应用资源预算已释放')
   expect(wrapper.findAll('button').map((value) => value.text())).not.toContain('取消退役')
 })
+it('requires new recovery consent and reuses its key and failed task after a lost reply', async () => {
+  const failedTask = '44444444-4444-4444-8444-444444444444'
+  const attention = {
+    ...ready(),
+    phase: 'AttentionRequired',
+    awaitingConfirmation: false,
+    attentionRequired: true,
+    executeTaskId: failedTask,
+    executionAttempt: 0,
+  }
+  request
+    .mockResolvedValueOnce(attention)
+    .mockRejectedValueOnce(new Error('lost recovery reply'))
+    .mockResolvedValueOnce({
+      ...attention,
+      phase: 'Execute',
+      attentionRequired: false,
+      executeTaskId: '55555555-5555-4555-8555-555555555555',
+      executionAttempt: 1,
+    })
+  const wrapper = render()
+  await flushPromises()
+  expect(button(wrapper, '确认接续退役').attributes('disabled')).toBeDefined()
+  expect(request.mock.calls.filter(([, input]) => input?.method === 'POST')).toHaveLength(0)
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  await button(wrapper, '确认接续退役').trigger('click')
+  await flushPromises()
+  await button(wrapper, '重连原恢复请求').trigger('click')
+  await flushPromises()
+  const calls = request.mock.calls.filter(([path]) => path.endsWith('/recover'))
+  expect(calls).toHaveLength(2)
+  expect(calls[0]?.[1]?.headers).toEqual(calls[1]?.[1]?.headers)
+  expect(calls[0]?.[1]?.body).toBe(calls[1]?.[1]?.body)
+  expect(JSON.parse(String(calls[0]?.[1]?.body))).toEqual({
+    previousTaskId: failedTask,
+    planSha256: digest,
+    continueDeletionAndReleaseBudget: true,
+  })
+  expect(wrapper.text()).toContain('恢复次数 1')
+  expect(wrapper.text()).not.toContain('应用资源预算已释放')
+})
+it('clears recovery consent when the current failed attempt changes', async () => {
+  const attention = {
+    ...ready(),
+    phase: 'AttentionRequired',
+    awaitingConfirmation: false,
+    attentionRequired: true,
+    executeTaskId: '44444444-4444-4444-8444-444444444444',
+    executionAttempt: 0,
+  }
+  request.mockResolvedValueOnce(attention).mockResolvedValueOnce({
+    ...attention,
+    executeTaskId: '55555555-5555-4555-8555-555555555555',
+    executionAttempt: 1,
+  })
+  const wrapper = render()
+  await flushPromises()
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  await button(wrapper, '刷新退役状态').trigger('click')
+  await flushPromises()
+  expect(button(wrapper, '确认接续退役').attributes('disabled')).toBeDefined()
+  expect(request.mock.calls.filter(([, input]) => input?.method === 'POST')).toHaveLength(0)
+})
+it('shows retained failed and new execution attempts only after an explicit history read', async () => {
+  const task = '44444444-4444-4444-8444-444444444444'
+  request
+    .mockResolvedValueOnce({
+      ...ready(),
+      phase: 'AttentionRequired',
+      awaitingConfirmation: false,
+      attentionRequired: true,
+      executeTaskId: task,
+      executionAttempt: 0,
+    })
+    .mockResolvedValueOnce([
+      {
+        taskId: task,
+        attempt: 0,
+        previousTaskId: null,
+        status: 'Interrupted',
+        proofSha256: 'c'.repeat(64),
+      },
+    ])
+  const wrapper = render()
+  await flushPromises()
+  expect(request).toHaveBeenCalledTimes(1)
+  await button(wrapper, '查看执行尝试').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[aria-label=退役执行尝试]').text()).toContain('原执行：执行中断')
+  expect(wrapper.text()).toContain('c'.repeat(64))
+  expect(request.mock.calls[1]?.[0]).toContain('/attempts')
+})
 it.each([false, true])(
   'announces release only with a complete bound receipt: %s',
   async (valid) => {

@@ -103,6 +103,33 @@ public sealed partial class ContainerUploadHttpTests
         clock.Advance(91); await Tick(); Assert.Equal(starts, host.Starts);
         await Change(admin, adminCsrf, revoked, "authorize"); await Change(admin, adminCsrf, revoked, "cancel");
         Assert.True((await Get(revoked)).AttentionRequired); Assert.Equal("Retiring", await State(workspace.Id));
+        var oldTask = host.LastTask!.TaskId;
+        var recoveryPath = path + $"/{revoked.RetirementId:D}/recover";
+        var recoveryInput = new WorkspaceRetirementRecoveryConfirmation(oldTask, ReadDigest((await Get(revoked)).PlanJson!, "retirementPlanSha256"), true);
+        var resumeKey = Guid.NewGuid();
+        using (var response = await Send(admin, recoveryPath, null, recoveryInput, resumeKey)) Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using (var response = await Send(admin, recoveryPath, adminCsrf, recoveryInput)) Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using (var response = await Send(admin, recoveryPath, adminCsrf, recoveryInput with { ContinueDeletionAndReleaseBudget = false }, resumeKey)) Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using (var response = await Send(admin, recoveryPath, adminCsrf, recoveryInput with { PreviousTaskId = Guid.NewGuid() }, resumeKey)) Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using (var response = await Send(recovery, recoveryPath, recoveryCsrf, recoveryInput, resumeKey)) Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        using (var request = Write(admin, HttpMethod.Post, recoveryPath, adminCsrf, JsonContent.Create(recoveryInput), resumeKey.ToString("D")))
+        {
+            request.Headers.Remove("Origin"); request.Headers.Add("Origin", "https://foreign.invalid");
+            using var response = await admin.SendAsync(request); Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+        using (var response = await outsider.GetAsync(path + $"/{revoked.RetirementId:D}/attempts")) Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        host.Status = "Succeeded";
+        for (var attempt = 0; attempt < 2; attempt++)
+        { using var response = await Send(admin, recoveryPath, adminCsrf, recoveryInput, resumeKey); Assert.Equal(HttpStatusCode.Accepted, response.StatusCode); }
+        var resuming = await Get(revoked); Assert.Equal(1, resuming.ExecutionAttempt); Assert.NotEqual(oldTask, resuming.ExecuteTaskId);
+        Assert.False(resuming.AttentionRequired || resuming.CancelRequested || resuming.AuthorizationRequired || resuming.BudgetReleased);
+        host.LoseNextStartReply = true; clock.Advance(4); await Tick();
+        Assert.Equal(starts + 1, host.Starts); Assert.Equal(resuming.ExecuteTaskId, host.LastTask!.TaskId); Assert.Equal("admin-subject", host.LastActor);
+        clock.Advance(4); await Tick(); Assert.Equal(starts + 1, host.Starts); Assert.True((await Get(revoked)).BudgetReleased);
+        var history = (await admin.GetFromJsonAsync<WorkspaceRetirementAttemptView[]>(path + $"/{revoked.RetirementId:D}/attempts"))!;
+        Assert.Equal(2, history.Length); Assert.Equal("Stopped", history[0].Status); Assert.Equal("Succeeded", history[1].Status);
+        Assert.Equal(oldTask, history[1].PreviousTaskId); Assert.NotNull(history[0].ProofSha256);
+        Console.WriteLine("INBOX_PHASE=workspace-retirement-recovery-real-http-postgres-csrf-current-admin-explicit-delete-history-lost-reply");
         Console.WriteLine("INBOX_PHASE=workspace-retirement-real-http-postgres-csrf-explicit-delete-fixed-task-lost-reply-live-revocation");
 
         async Task Tick() { await using var scope = server.Scope(); await scope.ServiceProvider.GetRequiredService<WorkspaceRetirementDispatcher>().TickAsync(default); }

@@ -14,6 +14,8 @@ const id = '784bbbe8-e60d-4f2a-a839-c64c9f474504'
 const runId = 'c42e390c-8cdd-4371-8afe-b20994d209ef'
 const archiveId = 'a44984f7-2960-458b-91a5-4bb96f553d77'
 const retirementId = 'b44984f7-2960-458b-91a5-4bb96f553d77'
+const failedRetirementTaskId = 'c44984f7-2960-458b-91a5-4bb96f553d77'
+const recoveredRetirementTaskId = 'd44984f7-2960-458b-91a5-4bb96f553d77'
 const digest = 'a'.repeat(64)
 const planDigest = 'b'.repeat(64)
 const markdown = '# 开发空间运行报告\n\n已取消\n'
@@ -68,6 +70,9 @@ async function fixture(page: Page, developer = true) {
     retirement: null as WorkspaceRetirement | null,
     retirementKeys: [] as string[],
     retirementConfirmations: [] as unknown[],
+    retirementRecoveryKeys: [] as string[],
+    retirementRecoveryRequests: [] as unknown[],
+    loseRetirementRecoveryReply: false,
     archiveKeys: [] as string[],
     archiveConfirmations: [] as string[],
     archiveReads: 0,
@@ -154,7 +159,52 @@ async function fixture(page: Page, developer = true) {
       }
       if (suffix === `/${id}`) return fulfill(workspace())
       if (suffix.startsWith(`/${id}/retirements`)) {
+        if (request.method() === 'GET' && suffix.endsWith('/attempts'))
+          return fulfill([
+            {
+              taskId: failedRetirementTaskId,
+              attempt: 0,
+              previousTaskId: null,
+              status: 'Interrupted',
+              proofSha256: digest,
+            },
+            ...(state.retirement?.executionAttempt
+              ? [
+                  {
+                    taskId: recoveredRetirementTaskId,
+                    attempt: 1,
+                    previousTaskId: failedRetirementTaskId,
+                    status: 'Running',
+                    proofSha256: null,
+                  },
+                ]
+              : []),
+          ])
         if (request.method() === 'GET') return fulfill(state.retirement)
+        if (suffix.endsWith('/recover') && state.retirement) {
+          const key = request.headers()['idempotency-key'] ?? ''
+          expect(key).toMatch(/^[a-f0-9-]{36}$/)
+          expect(request.postDataJSON()).toEqual({
+            previousTaskId: failedRetirementTaskId,
+            planSha256: planDigest,
+            continueDeletionAndReleaseBudget: true,
+          })
+          state.retirementRecoveryRequests.push(request.postDataJSON())
+          if (!state.retirementRecoveryKeys.includes(key)) {
+            state.retirementRecoveryKeys.push(key)
+            Object.assign(state.retirement, {
+              phase: 'Execute',
+              attentionRequired: false,
+              executionAttempt: 1,
+              executeTaskId: recoveredRetirementTaskId,
+            })
+          }
+          if (state.loseRetirementRecoveryReply) {
+            state.loseRetirementRecoveryReply = false
+            return route.abort('failed')
+          }
+          return fulfill(state.retirement, 202)
+        }
         if (suffix === `/${id}/retirements`) {
           const key = request.headers()['idempotency-key'] ?? ''
           expect(key).toMatch(/^[a-f0-9-]{36}$/)
@@ -871,6 +921,50 @@ function retirementView(epoch: number): WorkspaceRetirement {
 }
 for (const width of [320, 1440])
   for (const colorScheme of ['light', 'dark'] as const) {
+    test(`workspace retirement recovery ${width} ${colorScheme}: new consent, lost reply and original history`, async ({
+      page,
+    }, testInfo) => {
+      const state = await fixture(page)
+      state.registered = state.allocated = true
+      state.lifecycleState = 'Retiring'
+      state.lifecycleVersion = 2
+      state.retirement = {
+        ...retirementView(2),
+        phase: 'AttentionRequired',
+        awaitingConfirmation: false,
+        attentionRequired: true,
+        executeTaskId: failedRetirementTaskId,
+        executionAttempt: 0,
+      }
+      state.loseRetirementRecoveryReply = true
+      await page.setViewportSize({ width, height: 900 })
+      await page.emulateMedia({ colorScheme })
+      await page.goto(`${workspacePath}/${id}/environment`)
+      const card = page.getByRole('region', { name: '开发空间退役', exact: true })
+      await expect(card.getByRole('button', { name: '确认接续退役', exact: true })).toBeDisabled()
+      await expect(card.getByText(/空间继续隔离并占用预算/)).toBeVisible()
+      expect(state.retirementRecoveryRequests).toHaveLength(0)
+      await card.locator('label.el-checkbox').click()
+      await card.getByRole('button', { name: '确认接续退役', exact: true }).click()
+      await card.getByRole('button', { name: '重连原恢复请求', exact: true }).click()
+      await expect(card.getByText('正在退役源码和释放配额', { exact: true })).toBeVisible()
+      expect(state.retirementRecoveryKeys).toHaveLength(1)
+      expect(state.retirementRecoveryRequests).toHaveLength(2)
+      await page.reload()
+      await expect(card.getByText('正在退役源码和释放配额', { exact: true })).toBeVisible()
+      expect(state.retirementRecoveryKeys).toHaveLength(1)
+      await card.getByRole('button', { name: '查看执行尝试', exact: true }).click()
+      await expect(card.getByLabel('退役执行尝试')).toContainText(failedRetirementTaskId)
+      await expect(card.getByLabel('退役执行尝试')).toContainText(recoveredRetirementTaskId)
+      await expect(card.getByText(/应用资源预算已释放/)).toHaveCount(0)
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true)
+      await page.screenshot({
+        path: testInfo.outputPath(`retirement-recovery-${width}-${colorScheme}.png`),
+        fullPage: true,
+      })
+    })
     test(`workspace retirement ${width} ${colorScheme}: independent delete consent, reload and retained history`, async ({
       page,
     }, testInfo) => {
@@ -935,7 +1029,9 @@ for (const width of [320, 1440])
       ).toBeVisible()
       await expect(page.getByRole('link', { name: '运行记录', exact: true })).toBeVisible()
       await expect(page.getByRole('button', { name: '核对恢复计划', exact: true })).toHaveCount(0)
-      await expect(page.getByRole('button', { name: '核验 Runner 存储', exact: true })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: '核验 Runner 存储', exact: true })).toHaveCount(
+        0,
+      )
       await expect(page.getByText('已释放，原登记：')).toBeVisible()
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),

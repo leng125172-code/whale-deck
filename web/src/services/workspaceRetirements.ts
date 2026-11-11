@@ -19,6 +19,19 @@ export interface WorkspaceRetirement {
   sourceRetired: boolean
   budgetReleased: boolean
   retainsHdd: boolean
+  executeTaskId?: string | null
+  executionAttempt?: number
+}
+export interface WorkspaceRetirementAttempt {
+  taskId: string
+  attempt: number
+  previousTaskId: string | null
+  status: string
+  code: string | null
+  recoveryConfirmedAtUtc: string | null
+  dispatchedAtUtc: string | null
+  settledAtUtc: string | null
+  proofSha256: string | null
 }
 const scope = (id: string) => 'development/workspaces/' + encodeURIComponent(id) + '/retirements'
 const post = (signal: AbortSignal, body?: object, key?: string): RequestInit => ({
@@ -28,6 +41,23 @@ const post = (signal: AbortSignal, body?: object, key?: string): RequestInit => 
   headers: key ? { 'Idempotency-Key': key } : undefined,
 })
 export const workspaceRetirements = {
+  attempts: (id: string, retirementId: string, signal: AbortSignal) =>
+    apiRequest<WorkspaceRetirementAttempt[]>(
+      scope(id) + '/' + encodeURIComponent(retirementId) + '/attempts',
+      { signal },
+    ),
+  recover: (
+    id: string,
+    retirementId: string,
+    previousTaskId: string,
+    planSha256: string,
+    key: string,
+    signal: AbortSignal,
+  ) =>
+    apiRequest<WorkspaceRetirement>(
+      scope(id) + '/' + encodeURIComponent(retirementId) + '/recover',
+      post(signal, { previousTaskId, planSha256, continueDeletionAndReleaseBudget: true }, key),
+    ),
   current: (id: string, signal: AbortSignal) =>
     apiRequest<WorkspaceRetirement | null>(scope(id), { signal }),
   begin: (id: string, archiveId: string, expectedEpoch: number, key: string, signal: AbortSignal) =>

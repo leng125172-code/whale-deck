@@ -10,7 +10,7 @@ using WhaleDeck.Infrastructure.Agent;
 
 namespace WhaleDeck.Infrastructure.Persistence;
 
-public sealed class WorkspaceRetirementRepository(PlatformDbContext db, TimeProvider clock,
+public sealed partial class WorkspaceRetirementRepository(PlatformDbContext db, TimeProvider clock,
     IWorkspaceLifecycleStore lifecycle) : IWorkspaceRetirementStore
 {
     private static readonly string[] ExecutionDigests = ["storageProofSha256", "sourceManifestSha256", "captureReceiptSha256"];
@@ -89,7 +89,7 @@ public sealed class WorkspaceRetirementRepository(PlatformDbContext db, TimeProv
             Event(job, "WORKSPACE_RETIREMENT_CANCEL_REQUESTED", Now()); Audit(actor, row, "cancel", Now());
         }
         var step = await Step(row, token);
-        if ((row.LeaseUntilUtc is null || row.LeaseUntilUtc <= Now()) &&
+        if (row.ExecutionAttempt == 0 && (row.LeaseUntilUtc is null || row.LeaseUntilUtc <= Now()) &&
             (step.DispatchedAtUtc is null || row.Phase == "plan" && step.SettledAtUtc is not null))
         {
             current.LifecycleState = WorkspaceLifecycle.Stopped;
@@ -121,7 +121,7 @@ public sealed class WorkspaceRetirementRepository(PlatformDbContext db, TimeProv
             !row.CancelRequested && (row.AuthorizationRequired || row.Phase == "plan" && row.PlanJson != null)) return null;
         var workspace = RequireFence(current, row); var step = await Step(row, token); var task = ReadTask(row, step); ValidateRequest(workspace, task, step);
         var job = await Job(row, token);
-        if (row.CancelRequested && (step.DispatchedAtUtc is null || row.Phase == "plan" && step.SettledAtUtc is not null))
+        if (row.ExecutionAttempt == 0 && row.CancelRequested && (step.DispatchedAtUtc is null || row.Phase == "plan" && step.SettledAtUtc is not null))
         {
             current.LifecycleState = WorkspaceLifecycle.Stopped;
             Finish(row, job, "Canceled", "CanceledBeforeDispatch", null, now); Release(row, now);
@@ -232,7 +232,9 @@ public sealed class WorkspaceRetirementRepository(PlatformDbContext db, TimeProv
     {
         var id = Guid.NewGuid(); var task = new WorkspaceRetirementTask(id, row.Id, row.ArchiveId, row.Phase, row.ExpectedEpoch,
             row.ArchivePlanSha256, row.CaptureReceiptSha256, row.Phase == "execute" ? Property(row.PlanJson!, "retirementPlanSha256") : "");
-        db.WorkspaceRetirementSteps.Add(new() { Id = id, RetirementId = row.Id, Phase = row.Phase, RequestJson = Canonical(ReadSnapshot(row), task) });
+        db.WorkspaceRetirementSteps.Add(new() { Id = id, RetirementId = row.Id, Phase = row.Phase,
+            Attempt = row.Phase == "execute" ? row.ExecutionAttempt : 0, RequestJson = Canonical(ReadSnapshot(row), task) });
+        if (row.Phase == "execute") row.ExecuteStepId = id;
     }
     private static WorkspaceRetirementTask ReadTask(WorkspaceRetirementWorkflow row, WorkspaceRetirementStep step) => new(step.Id, row.Id, row.ArchiveId, step.Phase,
         row.ExpectedEpoch, row.ArchivePlanSha256, row.CaptureReceiptSha256, step.Phase == "execute" ? Property(row.PlanJson!, "retirementPlanSha256") : "");
@@ -268,15 +270,18 @@ public sealed class WorkspaceRetirementRepository(PlatformDbContext db, TimeProv
     private async Task<WorkspaceRetirementWorkflow> LockIntent(Guid workspaceId, Guid id, CancellationToken token) =>
         (await db.WorkspaceRetirementWorkflows.FromSqlInterpolated($"SELECT * FROM development_workspace_retirement_workflows WHERE id={id} AND workspace_id={workspaceId} FOR UPDATE").ToArrayAsync(token))
             .SingleOrDefault() ?? throw new KeyNotFoundException("WORKSPACE_RETIREMENT_NOT_FOUND");
-    private Task<WorkspaceRetirementStep> Step(WorkspaceRetirementWorkflow row, CancellationToken token) => db.WorkspaceRetirementSteps.SingleAsync(step => step.RetirementId == row.Id && step.Phase == row.Phase, token);
+    private Task<WorkspaceRetirementStep> Step(WorkspaceRetirementWorkflow row, CancellationToken token) => db.WorkspaceRetirementSteps.SingleAsync(step =>
+        step.RetirementId == row.Id && step.Phase == row.Phase && step.Attempt == (row.Phase == "execute" ? row.ExecutionAttempt : 0), token);
     private Task<OperationJob> Job(WorkspaceRetirementWorkflow row, CancellationToken token) => db.OperationJobs.SingleAsync(job => job.Id == row.Id && job.JobType == WorkspaceRetirements.JobType, token);
     private static string Property(string json, string name) { using var value = JsonDocument.Parse(json); return value.RootElement.GetProperty(name).GetString()!; }
-    private bool Owns(WorkspaceRetirementWorkflow row, WorkspaceRetirementClaim claim) => row.FinishedAtUtc is null && row.Lease == claim.Lease && row.LeaseUntilUtc > Now() && row.Phase == claim.Task.Phase;
+    private bool Owns(WorkspaceRetirementWorkflow row, WorkspaceRetirementClaim claim) => row.FinishedAtUtc is null && row.Lease == claim.Lease &&
+        row.LeaseUntilUtc > Now() && row.Phase == claim.Task.Phase && (row.Phase != "execute" || row.ExecuteStepId == claim.Task.TaskId);
     private void RequireNoLease(WorkspaceRetirementWorkflow row) { if (row.LeaseUntilUtc > Now()) throw new InvalidOperationException("WORKSPACE_RETIREMENT_WORKER_BUSY"); }
     private static void Release(WorkspaceRetirementWorkflow row, DateTimeOffset now) { row.Lease = null; row.LeaseUntilUtc = null; row.AvailableAtUtc = now.AddSeconds(3); }
     private static WorkspaceRetirementView View(WorkspaceRetirementWorkflow row, OperationJob job) => new(row.Id, row.WorkspaceId, row.ArchiveId, job.State, job.Phase, job.ErrorCode,
         row.Phase == "plan" && row.PlanJson != null && row.FinishedAtUtc == null && !row.CancelRequested, row.AuthorizationRequired, row.CancelRequested, row.AttentionRequired,
-        row.PlanJson, row.PlanExpiresAtUtc, row.ConfirmedAtUtc, row.ExecutionJson, row.FinishedAtUtc);
+        row.PlanJson, row.PlanExpiresAtUtc, row.ConfirmedAtUtc, row.ExecutionJson, row.FinishedAtUtc)
+        { ExecuteTaskId = row.ExecuteStepId, ExecutionAttempt = row.ExecutionAttempt };
     private DateTimeOffset Now() { var now = clock.GetUtcNow(); return new(now.UtcTicks - now.UtcTicks % TimeSpan.TicksPerMicrosecond, TimeSpan.Zero); }
     private void Finish(WorkspaceRetirementWorkflow row, OperationJob job, string state, string phase, string? code, DateTimeOffset now)
     {

@@ -7,6 +7,7 @@ import { workspaceArchives } from '@/services/workspaceArchives'
 import {
   workspaceRetirements as api,
   type WorkspaceRetirement,
+  type WorkspaceRetirementAttempt,
 } from '@/services/workspaceRetirements'
 
 const props = defineProps<{ workspace: Workspace; archivePending?: boolean }>()
@@ -19,6 +20,9 @@ const confirmed = ref(false),
   uncertain = ref(true),
   error = ref('')
 const pendingBegin = ref<{ key: string; archiveId: string; epoch: number } | null>(null)
+const pendingRecovery = ref<{ key: string; taskId: string; digest: string } | null>(null)
+const recoveryConfirmed = ref(false),
+  attempts = ref<WorkspaceRetirementAttempt[]>([])
 let lifetime: AbortController
 const pending = computed(
   () => uncertain.value || (!!operation.value && !operation.value.completedAtUtc),
@@ -34,6 +38,15 @@ const labels: Record<string, string> = {
   Canceled: '退役已取消',
   Rejected: '退役条件不满足',
   Interrupted: '退役执行中断',
+}
+const attemptLabels: Record<string, string> = {
+  Pending: '等待执行',
+  Running: '正在执行',
+  Finishing: '正在收尾',
+  Succeeded: '执行成功',
+  Interrupted: '执行中断',
+  Stopped: '执行已停止',
+  Rejected: '执行被拒绝',
 }
 const plan = computed(() => {
   if (!operation.value?.planJson) return null
@@ -104,6 +117,16 @@ function accept(value: WorkspaceRetirement | null) {
     !!value?.completedAtUtc && value.completedAtUtc !== operation.value?.completedAtUtc
   if (changed || completed || value?.authorizationRequired || value?.cancelRequested)
     confirmed.value = false
+  if (
+    changed ||
+    completed ||
+    value?.executeTaskId !== operation.value?.executeTaskId ||
+    value?.authorizationRequired ||
+    value?.cancelRequested
+  )
+    recoveryConfirmed.value = false
+  if (value && pendingRecovery.value && value.executeTaskId !== pendingRecovery.value.taskId)
+    pendingRecovery.value = null
   if (value && !value.completedAtUtc && value.archiveId === pendingBegin.value?.archiveId)
     pendingBegin.value = null
   operation.value = value
@@ -126,6 +149,9 @@ async function perform(action: (signal: AbortSignal) => Promise<void>) {
         archiveId.value = null
         confirmed.value = false
         pendingBegin.value = null
+        pendingRecovery.value = null
+        recoveryConfirmed.value = false
+        attempts.value = []
         uncertain.value = true
         emit('pending', true)
         error.value = '登录或权限已变化，已停止自动刷新。请重新登录或恢复权限后刷新退役状态。'
@@ -175,6 +201,9 @@ watch(
       operation.value = null
       archiveId.value = null
       pendingBegin.value = null
+      pendingRecovery.value = null
+      recoveryConfirmed.value = false
+      attempts.value = []
       confirmed.value = false
       error.value = ''
     }
@@ -267,6 +296,47 @@ function change(action: 'cancel' | 'authorize') {
     if (!signal.aborted) accept(result)
   })
 }
+function recover() {
+  const value = operation.value,
+    selected = plan.value
+  if (
+    !value?.attentionRequired ||
+    !value.executeTaskId ||
+    !selected ||
+    denied.value ||
+    (!recoveryConfirmed.value && !pendingRecovery.value)
+  )
+    return
+  void perform(async (signal) => {
+    pendingRecovery.value ??= {
+      key: createIdempotencyKey(),
+      taskId: value.executeTaskId!,
+      digest: selected.digest,
+    }
+    const original = pendingRecovery.value
+    const result = await api.recover(
+      props.workspace.id,
+      value.retirementId,
+      original.taskId,
+      original.digest,
+      original.key,
+      signal,
+    )
+    if (!signal.aborted) {
+      accept(result)
+      pendingRecovery.value = null
+      recoveryConfirmed.value = false
+    }
+  })
+}
+function history() {
+  const value = operation.value
+  if (!value || denied.value) return
+  void perform(async (signal) => {
+    const result = await api.attempts(props.workspace.id, value.retirementId, signal)
+    if (!signal.aborted) attempts.value = result
+  })
+}
 </script>
 
 <template>
@@ -332,8 +402,25 @@ function change(action: 'cancel' | 'authorize') {
         :closable="false"
         show-icon
       />
+      <div v-if="operation.attentionRequired && operation.executeTaskId && plan">
+        <p>恢复会创建新的执行尝试，核对原 HDD 归档并接续原删除日志。原失败任务与证明继续保留。</p>
+        <p>
+          原计划 <code>{{ plan.digest }}</code>
+        </p>
+        <el-checkbox v-model="recoveryConfirmed" :disabled="busy || !!pendingRecovery">
+          我确认接续删除此空间的剩余源码并释放配额与预算，保留 HDD 归档和原失败历史
+        </el-checkbox>
+        <div class="retirement-actions">
+          <el-button
+            type="danger"
+            :disabled="busy || denied || (!recoveryConfirmed && !pendingRecovery)"
+            @click="recover"
+            >{{ pendingRecovery ? '重连原恢复请求' : '确认接续退役' }}</el-button
+          >
+        </div>
+      </div>
       <el-alert
-        v-else-if="operation.code"
+        v-if="!operation.attentionRequired && operation.code"
         :title="
           operation.authorizationRequired
             ? '当前登录或权限已失效。未派发的任务可重新授权；已派发的任务只会停止原执行。'
@@ -347,6 +434,31 @@ function change(action: 'cancel' | 'authorize') {
         源码和磁盘配额已退役，应用资源预算已释放。HDD 留存、历史记录和报告仍可读取。
       </p>
       <p v-else-if="operation.completedAtUtc">此退役请求已结束，源码和预算继续保留。</p>
+      <template v-if="operation.executeTaskId">
+        <p>
+          当前执行任务 <code>{{ operation.executeTaskId }}</code
+          >，恢复次数 {{ operation.executionAttempt ?? 0 }}。
+        </p>
+        <el-button :disabled="busy || denied" @click="history">查看执行尝试</el-button>
+        <ul v-if="attempts.length" aria-label="退役执行尝试">
+          <li v-for="attempt in attempts" :key="attempt.taskId">
+            <p>
+              {{ attempt.attempt === 0 ? '原执行' : `恢复 ${attempt.attempt}` }}：{{
+                attemptLabels[attempt.status] ?? attempt.status
+              }}
+            </p>
+            <p>
+              任务 <code>{{ attempt.taskId }}</code>
+            </p>
+            <p v-if="attempt.previousTaskId">
+              接续 <code>{{ attempt.previousTaskId }}</code>
+            </p>
+            <p v-if="attempt.proofSha256">
+              证明摘要 <code>{{ attempt.proofSha256 }}</code>
+            </p>
+          </li>
+        </ul>
+      </template>
       <div v-if="pending && !operation.attentionRequired" class="retirement-actions">
         <el-button :disabled="busy || operation.cancelRequested" @click="change('cancel')">{{
           operation.cancelRequested ? '等待原任务停止确认' : '取消退役'

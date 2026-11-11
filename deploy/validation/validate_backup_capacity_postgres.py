@@ -164,6 +164,8 @@ def run_native(suite, report):
             phases = re.findall(r'INBOX_PHASE=([a-z-]{1,160})', output)
             if suite == 'dispatch':
                 assert 'workspace-retirement-execution-postgres-fixed-task-fence-proof-audit-rollback-tombstone-budget-history' in phases, 'Workspace retirement execution persistence boundaries were not executed'
+                assert 'workspace-retirement-recovery-postgres-new-task-immutable-proof-cancel-fence-replay-lease-budget' in phases, 'Workspace retirement recovery ledger boundaries were not executed'
+                assert 'workspace-retirement-recovery-real-http-postgres-csrf-current-admin-explicit-delete-history-lost-reply' in phases, 'Workspace retirement recovery HTTP boundaries were not executed'
                 assert 'workspace-retirement-real-http-postgres-csrf-explicit-delete-fixed-task-lost-reply-live-revocation' in phases, 'Workspace retirement HTTP dispatcher boundaries were not executed'
                 assert 'workspace-retirement-preparation-postgres-replay-row-fence-lease-expiry-ack-cancel-budget-retained' in phases, 'Workspace retirement preparation persistence boundaries were not executed'
                 assert 'container-recycle-restore-job-safe-summary-source-attribution-nullable-audit-projection' in phases, 'Independent restore safe job summary was not executed'
