@@ -42,6 +42,8 @@ class DevelopmentRetirementExecution:
 
     def write(self, parent, name, value):
         """Immutable, prefix-recoverable publication, bounded before any write."""
+        if not isinstance(name, str) or not name or '/' in name or '\x00' in name or name.startswith('.'):
+            self.reject('JOURNAL_CONFLICT')
         raw = self.d.canonical(value)
         if len(raw) > MAX_RECORD:
             self.reject('JOURNAL_LIMIT')
@@ -54,7 +56,10 @@ class DevelopmentRetirementExecution:
         try:
             fd = os.open(pending, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent)
         except FileExistsError:
-            fd = self.d.files.open_at(parent, pending, os.O_RDWR | os.O_NOFOLLOW)
+            # This trusted, single-component journal leaf needs write access.
+            # The public file accessor deliberately permits read-only flags.
+            # Validate private ownership, type, links and prefix before writing.
+            fd = os.open(pending, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent)
         with os.fdopen(fd, 'r+b') as stream:
             info = os.fstat(stream.fileno())
             if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1

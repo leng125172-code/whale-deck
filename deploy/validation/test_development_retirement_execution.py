@@ -5,12 +5,62 @@ import os
 import signal
 import unittest
 import uuid
+import tempfile
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import test_development_retirement as fixture
 
 execution = fixture.fixture.fixture.load('retirement_execution_test', 'whaledeck-development-retirement-execution.py')
 files = fixture.files
+
+
+@unittest.skipUnless(os.geteuid() == 0, 'Private root-owned journal fixtures')
+class RetirementJournalPrefixTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.driver = fixture.fixture.fixture.storage.WorkspaceStorage(files)
+        self.executor = execution.DevelopmentRetirementExecution(SimpleNamespace(d=self.driver), None)
+
+    def test_empty_partial_and_complete_pending_prefixes_resume_without_public_write_access(self):
+        value = dict(schemaVersion=1, checkpoint='原日志')
+        raw = self.driver.canonical(value)
+        for index,prefix in enumerate((b'',raw[:5],raw)):
+            name = f'receipt-{index}.json'; pending = self.root/('.'+name+'.pending')
+            pending.write_bytes(prefix); pending.chmod(0o600)
+            with self.driver.absolute(self.root) as parent:
+                with self.assertRaises(files.Rejected):files.open_at(parent,pending.name,os.O_RDWR | os.O_NOFOLLOW)
+                self.executor.write(parent,name,value)
+                self.executor.write(parent,name,value)
+            self.assertEqual(raw,(self.root/name).read_bytes()); self.assertFalse(pending.exists())
+
+    def test_conflicting_or_unsafe_pending_is_preserved_and_never_published(self):
+        value = dict(schemaVersion=1,checkpoint='valid')
+        pending = self.root/'.receipt.json.pending'
+        for mode,raw in ((0o600,b'bad'),(0o644,b''),(0o600,b'x'*1000)):
+            pending.write_bytes(raw); pending.chmod(mode)
+            with self.driver.absolute(self.root) as parent:
+                with self.assertRaises(files.Rejected):self.executor.write(parent,'receipt.json',value)
+            self.assertEqual(raw,pending.read_bytes());self.assertFalse((self.root/'receipt.json').exists())
+            pending.unlink()
+
+        protected=self.root/'protected';protected.write_bytes(b'untouched');protected.chmod(0o600)
+        for link in ('symlink','hardlink'):
+            if link=='symlink':pending.symlink_to(protected)
+            else:os.link(protected,pending)
+            with self.driver.absolute(self.root) as parent:
+                with self.assertRaises((OSError,files.Rejected)):self.executor.write(parent,'receipt.json',value)
+            self.assertEqual(b'untouched',protected.read_bytes());self.assertFalse((self.root/'receipt.json').exists())
+            pending.unlink()
+
+    def test_journal_names_must_be_single_private_metadata_leaves(self):
+        with self.driver.absolute(self.root) as parent:
+            for name in ('', '../outside.json', 'sub/inside.json', '.hidden.json', 'null\x00.json'):
+                with self.subTest(name=name),self.assertRaises(files.Rejected):
+                    self.executor.write(parent,name,dict(checkpoint=True))
+        self.assertEqual([],list(self.root.iterdir()))
 
 
 @unittest.skipUnless(os.geteuid() == 0, 'Requires disposable private root fixtures')
