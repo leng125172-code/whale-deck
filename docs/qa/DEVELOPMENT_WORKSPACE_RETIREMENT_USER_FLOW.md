@@ -1,5 +1,7 @@
 # 开发空间退役用户流程：API、Worker 与 Vue
 
+接续：2026-11-11，9df7f108准确CI13/13、标准部署及新QA真实Rejected→独立同意→新task恢复→配额/预算释放→报告/HDD留存→同预算复用退役已通过。旧失败证明/时间/计划保持，账号/任务/锁收尾；升级HTTP连续性仍未通过，真实Interrupted/Stopped及恢复专属撤权未签。见[实际拒绝恢复与剩余门槛](DEVELOPMENT_WORKSPACE_RETIREMENT_RECOVERY.md)，以下按原批次保留。
+
 接续：2026-11-11，显式中断恢复的独立尝试账本、当前授权、API/Vue确认及隔离PostgreSQL/HTTP验证已补入候选，尚待准确CI、标准部署及真实身份/物理恢复；见[恢复候选](DEVELOPMENT_WORKSPACE_RETIREMENT_RECOVERY.md)。以下旧批次边界按原事实保留。
 
 接续：2026-11-11，`6d87fde1` 准确 CI 全 13 成功、标准更新和真实正常退役/预算复用已完成；本次升级有 1 次 HTTP502，连续性仍未通过。完整后续证据和剩余边界见[真实部署退役闭环](DEVELOPMENT_WORKSPACE_RETIREMENT_INSTALLED.md)。以下保留本批最初的隔离验证及当时状态。

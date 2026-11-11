@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { expect } from '../../web/node_modules/@playwright/test/index.mjs'
 import { installedLifecycle } from './installed_development_lifecycle.mjs'
+import { holdRetirementSource, recoverRetirement, finishRetirementRecovery } from './installed_workspace_retirement_recovery.mjs'
 
 const execute = promisify(execFile)
 const inspector = fileURLToPath(new URL('./inspect_development_workspace_retirement.py', import.meta.url))
@@ -99,9 +100,13 @@ export async function installedRetirementBusiness(args) {
       record.retirement ??= {}
       if (!record.retirement.retirementId)
         await genuineBegin(card, prefix + '/retirements', '核对空间退役计划', record.retirement)
-      let retirement = await poll(context, prefix + '/retirements/' + record.retirement.retirementId, value => value.awaitingConfirmation || value.phase === 'Execute' || !!value.completedAtUtc)
+      let retirement = await poll(context, prefix + '/retirements/' + record.retirement.retirementId, value => value.awaitingConfirmation || value.attentionRequired || value.phase === 'Execute' || !!value.completedAtUtc)
       Object.assign(record.retirement, retirement)
       await save()
+      const recoveryProbe = process.env.WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE === '1' && workspace.id === state.workspace.id
+      const held = recoveryProbe && retirement.awaitingConfirmation
+        ? await holdRetirementSource({ ...args, workspace, record, project }) : undefined
+      try {
       if (retirement.awaitingConfirmation) {
         await card.getByRole('button', { name: '刷新退役状态' }).click()
         const confirm = card.getByRole('button', { name: '确认删除源码并退役空间', exact: true })
@@ -125,7 +130,12 @@ export async function installedRetirementBusiness(args) {
         assert.equal(record.confirmation.planSha256, plan.retirementPlanSha256)
         assert.equal(response.status(), 202)
       }
-      retirement = await poll(context, prefix + '/retirements/' + retirement.retirementId, value => !!value.completedAtUtc)
+      retirement = await poll(context, prefix + '/retirements/' + retirement.retirementId, value => !!value.completedAtUtc || value.attentionRequired)
+      if (recoveryProbe && retirement.attentionRequired)
+        retirement = await recoverRetirement({ ...args, workspace, record, retirement, held })
+      if (recoveryProbe && retirement.completedAtUtc && record.recovery && !record.recovery.passed)
+        retirement = await finishRetirementRecovery({ ...args, workspace, record }, retirement)
+      } finally { await held?.close() }
       Object.assign(record.retirement, retirement)
       await save()
       assert.equal(retirement.state, 'Succeeded')

@@ -30,7 +30,8 @@ SOURCES = ('validate_workspace_retirement_business_installed.py', 'validate_deve
     'validate_development_installed_runtime.mjs', 'installed_workspace_retirement.mjs',
     'inspect_development_workspace_retirement.py', 'installed_development_lifecycle.mjs',
     'inspect_development_workspace_lifecycle.py', 'validate_workspace_archive_faults_installed.py',
-    'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs')
+    'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs',
+    'installed_workspace_retirement_recovery.mjs', 'hold_qa_workspace_source_fd.py')
 
 
 def main():
@@ -98,6 +99,19 @@ def main():
         state = json.loads((evidence / 'state.json').read_bytes())
         assert state['passed'] and state['lifecycle']['passed'] and state['legacyLifecycleSkipped']
         assert state['retirementBusiness']['passed'] and state['budgetReuse']['passed']
+        if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1':
+            recovery = state['retirementBusiness']['recovery']
+            assert recovery['passed'] and recovery['independentConsentRequired']
+            assert state['retirementRecoveryOrdinaryDenied']
+            assert recovery['openUnlinked']['links'] == 0 and recovery['release']['released']
+            assert recovery['attemptsBefore'][0] == recovery['attemptsAfter'][0]
+            assert recovery['attemptsAfter'][1]['previousTaskId'] == recovery['failedView']['executeTaskId']
+            original = recovery['openUnlinked']['attempts']
+            assert len(original) == 1 and original[0]['taskId'] == recovery['failedView']['executeTaskId']
+            old_task = str(uuid.UUID(original[0]['taskId']))
+            unchanged = sql("SELECT json_build_object('retirementId',r.id,'taskId',s.id,'requestSha256',encode(sha256(convert_to(s.request_json,'utf8')),'hex'),'proofSha256',encode(sha256(convert_to(s.proof_json::text,'utf8')),'hex'),'dispatchedAtUtc',s.dispatched_at_utc,'settledAtUtc',s.settled_at_utc,'planSha256',encode(sha256(convert_to(r.plan_json::text,'utf8')),'hex'),'confirmedAtUtc',r.confirmed_at_utc,'planExpiresAtUtc',r.plan_expires_at_utc) FROM development_workspace_retirement_steps s JOIN development_workspace_retirement_workflows r ON r.id=s.retirement_id WHERE s.id='" + old_task + "';")
+            assert unchanged == original
+            save(evidence, 'persistent-original-failure-preserved.json', dict(passed=True, before=original, after=unchanged))
         assert state['retirementOrdinaryDenied'] and not state['retainedForProductDecommission']
         ids = [state['workspace']['id'], state['budgetReuse']['workspace']['id']]
         assert len(set(ids)) == 2 and not set(ids) & set(before['physical'])

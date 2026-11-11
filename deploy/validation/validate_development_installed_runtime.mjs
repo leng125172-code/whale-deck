@@ -283,6 +283,16 @@ try {
   assert.equal((await other.request.get(`${base}${api}/${id}/lifecycle/${state.lifecycle.stop.operationId}`)).status(), 404)
   if (input.retirementProbe) {
     assert.equal((await other.request.get(`${base}${api}/${id}/retirements`)).status(), 403)
+    if (process.env.WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE === '1') {
+      const recovered = state.retirementBusiness.retirement
+      assert.equal((await other.request.get(`${base}${api}/${id}/retirements/${recovered.retirementId}/attempts`)).status(), 403)
+      const denied = await other.request.post(`${base}${api}/${id}/retirements/${recovered.retirementId}/recover`, {
+        headers: { ...await headers(other), 'Idempotency-Key': randomUUID() },
+        data: state.retirementBusiness.recovery.command,
+      })
+      assert.equal(denied.status(), 403)
+      state.retirementRecoveryOrdinaryDenied = true
+    }
     state.retirementOrdinaryDenied = true
   }
   const ordinaryLogout = await logoutFromUserMenu(ordinary, other, base)
@@ -297,7 +307,7 @@ try {
   browser = undefined
   console.log(JSON.stringify({ installedRuntime: 'passed', workspaceId: id, retainedForProductDecommission: state.retainedForProductDecommission }))
 } catch (error) {
-  const frame = error?.stack?.split('\n').find(line => ['validate_development_installed_runtime.mjs:', 'installed_development_lifecycle.mjs:', 'installed_workspace_retirement.mjs:'].some(file => line.includes(file)))?.trim()
+  const frame = error?.stack?.split('\n').find(line => ['validate_development_installed_runtime.mjs:', 'installed_development_lifecycle.mjs:', 'installed_workspace_retirement.mjs:', 'installed_workspace_retirement_recovery.mjs:'].some(file => line.includes(file)))?.trim()
   if (state && evidence) {
     state.failureHistory ??= state.lastFailure ? [state.lastFailure] : []
     state.lastFailure = { phase, failureType: error?.name, frame,
