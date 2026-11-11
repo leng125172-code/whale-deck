@@ -49,6 +49,11 @@ async function headers(context, contentType = 'application/json') {
 try {
   const input = JSON.parse(await readFile('/dev/stdin', 'utf8'))
   if (input.retirementProbe) assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_BUSINESS_PROBE, '1')
+  if (input.authorityProbe) {
+    assert.equal(input.retirementProbe, true)
+    assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE, '1')
+    assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE, '1')
+  }
   evidence = input.evidence
   try { state = JSON.parse(await readFile(join(evidence, 'state.json'), 'utf8')) }
   catch (error) { if (error.code !== 'ENOENT') throw error; state = { slug: input.slug, imports: [], runs: [] } }
@@ -272,7 +277,8 @@ try {
     state.retirementStarted = true
     state.legacyLifecycleSkipped = true
     await save()
-    await installedRetirementBusiness({ page, context, base, api, id, route, state, save, headers, poll, evidence })
+    await installedRetirementBusiness({ page, context, base, api, id, route, state, save, headers, poll, evidence,
+      authorityProbe: input.authorityProbe, authorityUsername: input.accounts[0].username, authorityAttempt: input.authorityAttempt })
   }
   phase = 'ordinary-owner-boundary'
   const other = await browser.newContext({ viewport: { width: 320, height: 800 } }), ordinary = await other.newPage()
@@ -307,7 +313,7 @@ try {
   browser = undefined
   console.log(JSON.stringify({ installedRuntime: 'passed', workspaceId: id, retainedForProductDecommission: state.retainedForProductDecommission }))
 } catch (error) {
-  const frame = error?.stack?.split('\n').find(line => ['validate_development_installed_runtime.mjs:', 'installed_development_lifecycle.mjs:', 'installed_workspace_retirement.mjs:', 'installed_workspace_retirement_recovery.mjs:'].some(file => line.includes(file)))?.trim()
+  const frame = error?.stack?.split('\n').find(line => ['validate_development_installed_runtime.mjs:', 'installed_development_lifecycle.mjs:', 'installed_workspace_retirement.mjs:', 'installed_workspace_retirement_recovery.mjs:', 'installed_recovery_authority.mjs:'].some(file => line.includes(file)))?.trim()
   if (state && evidence) {
     state.failureHistory ??= state.lastFailure ? [state.lastFailure] : []
     state.lastFailure = { phase, failureType: error?.name, frame,

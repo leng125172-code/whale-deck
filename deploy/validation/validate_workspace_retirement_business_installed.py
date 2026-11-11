@@ -31,12 +31,28 @@ SOURCES = ('validate_workspace_retirement_business_installed.py', 'validate_deve
     'inspect_development_workspace_retirement.py', 'installed_development_lifecycle.mjs',
     'inspect_development_workspace_lifecycle.py', 'validate_workspace_archive_faults_installed.py',
     'installed_ui_permission_session.mjs', 'installed_ui_logout.mjs',
-    'installed_workspace_retirement_recovery.mjs', 'hold_qa_workspace_source_fd.py')
+    'installed_workspace_retirement_recovery.mjs', 'hold_qa_workspace_source_fd.py',
+    'installed_recovery_authority.mjs', 'owned_recovery_authority.py')
+
+
+def require_disks_preserved(before, after):
+    assert set(before) == set(after)
+    for name, original in before.items():
+        current = after[name]
+        # st_blocks also charges the host filesystem's extent metadata. Keep
+        # the exact logical cap/inode/mount/UUID/filesystem capacity, and never
+        # allow reservation loss; allocating an extent metadata block is valid.
+        assert {k: v for k, v in original.items() if k != 'reservedBytes'} == {
+            k: v for k, v in current.items() if k != 'reservedBytes'}, name
+        assert type(original['reservedBytes']) is type(current['reservedBytes']) is int
+        assert current['reservedBytes'] >= original['reservedBytes'] >= original['bytes'], name
 
 
 def main():
     assert os.geteuid() == 0 and __debug__ and len(sys.argv) == 4
     assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_BUSINESS_PROBE') == '1'
+    if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1':
+        assert os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1'
     revision, package_feed, evidence = sys.argv[1], Path(sys.argv[2]).resolve(strict=True), Path(sys.argv[3]).resolve(strict=True)
     assert re.fullmatch('[a-f0-9]{40}', revision) and evidence.is_dir() and not (evidence / 'state.json').exists()
     os.umask(0o077)
@@ -73,11 +89,22 @@ def main():
                         sources[name] = hashlib.sha256(raw).hexdigest()
                     save(evidence, f'attempt-{attempt}-source-sha256.json', sources)
                     payload = dict(revision=revision, evidence=str(evidence), slug=slug, accounts=accounts,
-                        archive=str(archive), archiveSha256=hashlib.sha256(content).hexdigest(), retirementProbe=True)
+                        archive=str(archive), archiveSha256=hashlib.sha256(content).hexdigest(), retirementProbe=True,
+                        authorityProbe=os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1', authorityAttempt=attempt)
                     # Browser process belongs to this wrapper; credentials only
                     # cross its private stdin, never argv or evidence.
-                    result = subprocess.run(['node', str(Path(__file__).with_name('validate_development_installed_runtime.mjs'))],
-                        input=json.dumps(payload), text=True, capture_output=True, timeout=1200)
+                    try:
+                        result = subprocess.run(['node', str(Path(__file__).with_name('validate_development_installed_runtime.mjs'))],
+                            input=json.dumps(payload), text=True, capture_output=True, timeout=1200)
+                    finally:
+                        intent = evidence / f'authority-{attempt}-intent.json'
+                        restored = evidence / f'authority-{attempt}-restored.json'
+                        if intent.exists():
+                            deadline = time.monotonic() + 90
+                            while not restored.exists() and time.monotonic() < deadline:
+                                time.sleep(0.2)
+                            assert restored.exists(), 'OWNED_AUTHORITY_RESTORE_NOT_CONFIRMED'
+                            assert json.loads(restored.read_bytes())['originalGroupRestored']
                     save(evidence, f'browser-process-{attempt}.json', dict(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr))
                     if result.returncode == 0:
                         break
@@ -102,6 +129,10 @@ def main():
         if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE') == '1':
             recovery = state['retirementBusiness']['recovery']
             assert recovery['passed'] and recovery['independentConsentRequired']
+            if os.environ.get('WHALEDECK_INSTALLED_RETIREMENT_AUTHORITY_PROBE') == '1':
+                assert recovery['authority']['passed']
+                assert recovery['authority']['recoveryStatus'] == recovery['authority']['historyStatus'] == 403
+                assert recovery['authority']['restoration']['unchanged']
             assert state['retirementRecoveryOrdinaryDenied']
             assert recovery['openUnlinked']['links'] == 0 and recovery['release']['released']
             assert recovery['attemptsBefore'][0] == recovery['attemptsAfter'][0]
@@ -117,7 +148,8 @@ def main():
         assert len(set(ids)) == 2 and not set(ids) & set(before['physical'])
         after = snapshot()
         save(evidence, 'after.json', after)
-        for key in ('protected', 'disks', 'physical', 'runtime'):
+        require_disks_preserved(before['disks'], after['disks'])
+        for key in ('protected', 'physical', 'runtime'):
             assert before[key] == after[key], key
         for key in ('hdd', 'journal'):
             assert all(after[key].get(name) == value for name, value in before[key].items()), key

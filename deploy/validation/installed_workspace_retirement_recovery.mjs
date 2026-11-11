@@ -7,6 +7,7 @@ import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { expect } from '../../web/node_modules/@playwright/test/index.mjs'
+import { installedRecoveryAuthority } from './installed_recovery_authority.mjs'
 
 export async function holdRetirementSource({ workspace, record, project, state, save }) {
   assert.equal(process.env.WHALEDECK_INSTALLED_RETIREMENT_RECOVERY_PROBE, '1')
@@ -86,6 +87,7 @@ export async function recoverRetirement(args) {
     recovery.release = await held.release()
     await save()
   }
+  if (args.authorityProbe) await installedRecoveryAuthority(args)
   const card = page.getByRole('region', { name: '开发空间退役' })
   await card.getByRole('button', { name: '刷新退役状态', exact: true }).click()
   await expect(card.getByText('恢复会创建新的执行尝试，核对原 HDD 归档并接续原删除日志。原失败任务与证明继续保留。', { exact: true })).toBeVisible()
