@@ -363,7 +363,7 @@ jobs:
           if test -d deploy/artifacts; then
             sudo tar -czf - deploy/artifacts/maintenance-socket-native-* > maintenance-socket-native-evidence.tgz
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: maintenance-socket-native-evidence
