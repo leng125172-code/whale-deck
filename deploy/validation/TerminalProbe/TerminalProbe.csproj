@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Grpc.Net.Client" Version="2.84.0" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.85.0" />
     <ProjectReference Include="../../../src/WhaleDeck.Contracts/WhaleDeck.Contracts.csproj" />
   </ItemGroup>
 </Project>
