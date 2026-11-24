@@ -43,7 +43,8 @@ public static class MetricAggregation
             WHERE window_start_utc < {end} AND date_bin(INTERVAL '1 hour', window_start_utc, TIMESTAMPTZ '1970-01-01') = ANY({hours})
             """).AsNoTracking().ToArrayAsync(cancellationToken);
         // Snapshot revisions BEFORE reading raw data: racing inserts remain dirty, even when their raw data is visible.
-        await RebuildAsync(db, hours, cutoff, end, cancellationToken);
+        foreach (var hour in hours)
+            await RebuildHourAsync(db, hour, cutoff, end, cancellationToken);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO metric_aggregation_windows(window_start_utc, completed_through_utc)
             SELECT start, LEAST(start + INTERVAL '1 hour', {end}) FROM unnest({hours}) AS start
@@ -64,30 +65,33 @@ public static class MetricAggregation
         return hours.Length;
     }
 
-    private static async Task RebuildAsync(PlatformDbContext db, DateTimeOffset[] hours, DateTimeOffset cutoff, DateTimeOffset end, CancellationToken cancellationToken)
+    private static async Task RebuildHourAsync(PlatformDbContext db, DateTimeOffset hour, DateTimeOffset cutoff, DateTimeOffset end, CancellationToken cancellationToken)
     {
+        var nextHour = hour.AddHours(1);
+        var start = hour > cutoff ? hour : cutoff;
+        var finish = nextHour < end ? nextHour : end;
         // Only replace selected windows, within this transaction. Readers see either the old or the committed new set.
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            DELETE FROM metric_rollups r USING unnest({hours}) AS h(start)
-            WHERE r.resolution IN ('1m', '1h') AND r.window_start_utc >= h.start
-                AND r.window_start_utc < LEAST(h.start + INTERVAL '1 hour', {end})
+            DELETE FROM metric_rollups
+            WHERE resolution IN ('1m', '1h') AND window_start_utc >= {hour} AND window_start_utc < {finish}
             """, cancellationToken);
+        // Direct UTC bounds on both scans let PostgreSQL prune daily partitions before joining samples.
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             WITH samples AS MATERIALIZED (
                 SELECT sample.*, source.metric_kind,
                     date_bin(INTERVAL '1 minute', sample.sampled_at_utc, TIMESTAMPTZ '1970-01-01') AS minute,
-                    h.start AS hour,
+                    {hour}::timestamptz AS hour,
                     sample.quality = 'Good' AND sample.value_double > '-Infinity'::float8 AND sample.value_double < 'Infinity'::float8
                         AND (source.metric_kind NOT IN ('disk.read.latency', 'disk.write.latency')
                             OR (weight.quality = 'Good' AND weight.value_double > 0 AND weight.value_double < 'Infinity'::float8)) AS valid,
                     CASE WHEN source.metric_kind IN ('disk.read.latency', 'disk.write.latency') THEN weight.value_double ELSE 1.0 END AS weight
-                FROM unnest({hours}) AS h(start)
-                JOIN metric_samples sample ON sample.sampled_at_utc >= GREATEST(h.start, {cutoff})
-                    AND sample.sampled_at_utc < LEAST(h.start + INTERVAL '1 hour', {end})
+                FROM metric_samples sample
                 JOIN metric_series source ON source.id = sample.series_id
                 LEFT JOIN metric_series weights ON weights.resource_id = source.resource_id AND weights.dimensions_json = source.dimensions_json
                     AND weights.metric_kind = CASE source.metric_kind WHEN 'disk.read.latency' THEN 'disk.read.iops' WHEN 'disk.write.latency' THEN 'disk.write.iops' END
                 LEFT JOIN metric_samples weight ON weight.series_id = weights.id AND weight.sampled_at_utc = sample.sampled_at_utc
+                    AND weight.sampled_at_utc >= {start} AND weight.sampled_at_utc < {finish}
+                WHERE sample.sampled_at_utc >= {start} AND sample.sampled_at_utc < {finish}
             )
             INSERT INTO metric_rollups(series_id, window_start_utc, resolution, minimum, maximum, average, sum, sample_count,
                 observed_sample_count, idle_count, warmup_count, unavailable_count, first, last, first_sampled_at_utc, last_sampled_at_utc, weighted_sum, weight_sum)

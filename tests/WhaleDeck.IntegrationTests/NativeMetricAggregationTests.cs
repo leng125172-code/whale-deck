@@ -178,6 +178,19 @@ public sealed class NativeMetricAggregationTests
             Assert.True(timer.Elapsed < TimeSpan.FromSeconds(25), "Cold seven-day history exceeded its bounded query budget.");
             Assert.True(loaded.Count >= 32); Assert.All(loaded, item => Assert.Equal(169, item.Points.Count));
             Console.WriteLine($"METRIC_QUERY_BENCH_MS={timer.ElapsedMilliseconds}");
+
+            timer.Restart();
+            Assert.Equal(3, await MetricAggregation.ApplyAsync(db, now, default));
+            timer.Stop();
+            Assert.True(timer.Elapsed < TimeSpan.FromSeconds(15), "A rollup pass across separated dirty and backfill dates exceeded its budget.");
+            var rebuilt = await db.MetricRollups
+                .Where(rollup => rollup.WindowStartUtc == loadStart && rollup.Resolution == "1h")
+                .Join(db.MetricSeries.Where(series => series.ResourceId == loadResource), rollup => rollup.SeriesId, series => series.Id,
+                    (rollup, _) => rollup.ObservedSampleCount)
+                .ToArrayAsync();
+            Assert.Equal(32, rebuilt.Length);
+            Assert.All(rebuilt, count => Assert.Equal(600, count));
+            Console.WriteLine($"METRIC_ROLLUP_BENCH_MS={timer.ElapsedMilliseconds}");
         }
         await VerifyCanonicalReplayAsync(options, connection.ConnectionString);
     }
